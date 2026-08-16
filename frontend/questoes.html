@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Questões e Simulados - Leitor PDF</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#1e1e2e">
+  <link rel="manifest" href="/manifest.json">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: sans-serif; background: #1e1e2e; color: #cdd6f4; min-height: 100vh; padding: 24px; }
+    a { color: #89b4fa; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    h1 { font-size: 1.4rem; color: #cba6f7; }
+    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .header-links { display: flex; gap: 12px; font-size: 0.9rem; }
+
+    /* Tab navigation */
+    .qtab-bar { display: flex; gap: 0; background: #313244; border-radius: 10px 10px 0 0; margin-bottom: 20px; overflow: hidden; }
+    .qtab-btn {
+      flex: 1; padding: 12px 16px; border: none; background: transparent;
+      color: #6c7086; font-size: 0.92rem; font-weight: 600; cursor: pointer;
+      border-bottom: 3px solid transparent; transition: all 0.2s;
+    }
+    .qtab-btn:hover { color: #cdd6f4; background: #45475a; }
+    .qtab-btn.active { color: #cdd6f4; border-bottom-color: #cba6f7; background: #45475a; }
+    .qtab-content { display: none; }
+    .qtab-content.active { display: block; }
+
+    /* Panels */
+    .panel { background: #313244; border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+    .panel h2 { font-size: 1.05rem; color: #cba6f7; margin-bottom: 12px; }
+    .panel h3 { font-size: 0.95rem; color: #89b4fa; margin-bottom: 8px; }
+
+    /* Forms */
+    .form-row { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+    .form-row input, .form-row select, .form-row textarea {
+      background: #1e1e2e; border: 1px solid #45475a; border-radius: 6px;
+      padding: 8px 12px; color: #cdd6f4; font-size: 0.88rem; flex: 1; min-width: 120px;
+    }
+    .form-row textarea { min-height: 60px; resize: vertical; font-family: sans-serif; }
+    .form-row input::placeholder, .form-row textarea::placeholder { color: #6c7086; }
+    .btn {
+      border: none; border-radius: 6px; padding: 8px 16px;
+      font-size: 0.85rem; font-weight: 600; cursor: pointer;
+    }
+    .btn-primary { background: #cba6f7; color: #1e1e2e; }
+    .btn-primary:hover { background: #b4befe; }
+    .btn-success { background: #a6e3a1; color: #1e1e2e; }
+    .btn-success:hover { background: #94e2d5; }
+    .btn-danger { background: #f38ba8; color: #1e1e2e; }
+    .btn-danger:hover { background: #eba0ac; }
+    .btn-secondary { background: #45475a; color: #cdd6f4; }
+    .btn-secondary:hover { background: #585b70; }
+
+    /* Resolver questão */
+    .questao-card {
+      background: #1e1e2e; border-radius: 10px; padding: 20px; margin-bottom: 12px;
+    }
+    .questao-enunciado { font-size: 1rem; line-height: 1.6; margin-bottom: 16px; }
+    .questao-alternativas { display: flex; flex-direction: column; gap: 8px; }
+    .alternativa {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px; background: #313244; border-radius: 8px;
+      cursor: pointer; border: 2px solid transparent; transition: all 0.15s;
+    }
+    .alternativa:hover { border-color: #89b4fa; }
+    .alternativa.selected { border-color: #cba6f7; background: #45475a; }
+    .alternativa.correct { border-color: #a6e3a1; background: #a6e3a133; }
+    .alternativa.wrong { border-color: #f38ba8; background: #f38ba833; }
+    .alt-letter { font-weight: 700; color: #cba6f7; min-width: 20px; }
+    .alt-text { flex: 1; font-size: 0.9rem; }
+
+    .explicacao-box {
+      margin-top: 12px; padding: 12px; background: #1e1e2e;
+      border-left: 3px solid #a6e3a1; border-radius: 0 8px 8px 0;
+      font-size: 0.88rem; display: none;
+    }
+    .explicacao-box.show { display: block; }
+
+    .questao-meta { font-size: 0.8rem; color: #6c7086; margin-bottom: 8px; display: flex; gap: 12px; }
+    .questao-meta span { background: #45475a; padding: 2px 8px; border-radius: 4px; }
+
+    /* Stats */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 16px; }
+    .stat-card { background: #1e1e2e; border-radius: 8px; padding: 12px; text-align: center; }
+    .stat-card .stat-num { font-size: 1.4rem; font-weight: 700; }
+    .stat-card .stat-lbl { font-size: 0.75rem; color: #6c7086; }
+
+    /* Simulado */
+    .sim-card {
+      background: #1e1e2e; border-radius: 10px; padding: 16px; margin-bottom: 10px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .sim-card .sim-title { flex: 1; font-weight: 600; }
+    .sim-card .sim-status {
+      font-size: 0.75rem; padding: 3px 8px; border-radius: 4px; font-weight: 600;
+    }
+    .sim-card .sim-status.pendente { background: #fab387; color: #1e1e2e; }
+    .sim-card .sim-status.finalizado { background: #a6e3a1; color: #1e1e2e; }
+    .sim-card .sim-nota { font-size: 1.1rem; font-weight: 700; color: #a6e3a1; min-width: 50px; text-align: right; }
+
+    /* Accordion genérico */
+    .acc-group { margin-bottom: 4px; }
+    .acc-header {
+      display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+      background: #1e1e2e; border-radius: 8px; cursor: pointer; user-select: none;
+      border: 1px solid #45475a; transition: all 0.15s;
+    }
+    .acc-header:hover { border-color: #89b4fa; }
+    .acc-header.open { border-color: #cba6f7; border-radius: 8px 8px 0 0; }
+    .acc-chevron { transition: transform 0.2s; font-size: 0.75rem; color: #6c7086; }
+    .acc-header.open .acc-chevron { transform: rotate(90deg); color: #cba6f7; }
+    .acc-name { flex: 1; font-weight: 600; font-size: 0.9rem; }
+    .acc-count { font-size: 0.75rem; color: #a6adc8; }
+    .acc-body {
+      display: none; border: 1px solid #45475a; border-top: none;
+      border-radius: 0 0 8px 8px; overflow: hidden; max-height: 400px; overflow-y: auto;
+    }
+    .acc-body.open { display: block; }
+
+    /* Caderno de erros */
+    .erro-item {
+      padding: 12px 14px; background: #1e1e2e; margin: 0;
+      border-bottom: 1px solid #313244;
+    }
+    .erro-item:last-child { border-bottom: none; }
+    .erro-item .erro-enunciado { font-size: 0.88rem; margin-bottom: 6px; line-height: 1.4; }
+    .erro-item .erro-meta { font-size: 0.76rem; color: #6c7086; display: flex; gap: 10px; }
+
+    /* Lista de questões */
+    .q-list-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px; border-bottom: 1px solid #313244;
+      font-size: 0.85rem;
+    }
+    .q-list-item:last-child { border-bottom: none; }
+    .q-list-item:hover { background: #45475a; }
+    .q-list-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .q-list-delete { background: none; border: none; color: #f38ba8; cursor: pointer; font-size: 1rem; }
+
+    /* Timer simulado */
+    .sim-timer {
+      font-size: 1.4rem; font-weight: 700; color: #f38ba8;
+      text-align: center; margin-bottom: 12px;
+    }
+    .sim-timer.warning { color: #fab387; }
+    .sim-timer.danger { animation: pulse 1s infinite; }
+    @keyframes pulse { 50% { opacity: 0.5; } }
+
+    .sim-progress { font-size: 0.85rem; color: #a6adc8; text-align: center; margin-bottom: 12px; }
+
+    /* Filtros */
+    .filter-bar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+    .filter-bar select, .filter-bar input {
+      background: #1e1e2e; border: 1px solid #45475a; border-radius: 6px;
+      padding: 6px 10px; color: #cdd6f4; font-size: 0.85rem;
+    }
+
+    body.light-theme { background: #eff1f5; color: #4c4f69; }
+    body.light-theme .panel, body.light-theme .chart-box, body.light-theme .card,
+    body.light-theme .streak-bar, body.light-theme .relatorio, body.light-theme .pratica-panel,
+    body.light-theme .metas-section .meta-row { background: #e6e9ef; }
+    body.light-theme .qtab-bar { background: #e6e9ef; }
+    body.light-theme .questao-card, body.light-theme .sim-card, body.light-theme .erro-item,
+    body.light-theme .acc-header, body.light-theme .stat-card { background: #dce0e8; border-color: #bcc0cc; }
+    body.light-theme .alternativa { background: #e6e9ef; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>❓ Banco de Questões & Simulados</h1>
+    <div class="header-links">
+      <a href="/">📚 PDFs</a>
+      <a href="/dashboard.html">📊 Dashboard</a>
+    </div>
+  </div>
+
+  <div class="qtab-bar">
+    <button class="qtab-btn active" data-tab="tab-resolver">Resolver</button>
+    <button class="qtab-btn" data-tab="tab-simulados">Simulados</button>
+    <button class="qtab-btn" data-tab="tab-erros">Caderno de Erros</button>
+    <button class="qtab-btn" data-tab="tab-cadastrar">Cadastrar</button>
+    <button class="qtab-btn" data-tab="tab-banco">Banco (Todas)</button>
+  </div>
+
+  <!-- Tab: Resolver Questões -->
+  <div id="tab-resolver" class="qtab-content active">
+    <div class="panel">
+      <h2>🎯 Resolver Questões</h2>
+      <div class="filter-bar">
+        <select id="filtro-materia" onchange="loadQuestoesResolver()">
+          <option value="">Todas as matérias</option>
+        </select>
+        <select id="filtro-dificuldade" onchange="loadQuestoesResolver()">
+          <option value="">Todas dificuldades</option>
+          <option value="Fácil">Fácil</option>
+          <option value="Médio">Médio</option>
+          <option value="Difícil">Difícil</option>
+        </select>
+        <button class="btn btn-primary" onclick="loadQuestoesResolver()">🔄 Nova Questão</button>
+      </div>
+      <div id="resolver-area">
+        <p style="color:#6c7086;">Selecione uma matéria ou clique em "Nova Questão" para começar.</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>📈 Estatísticas Rápidas</h2>
+      <div class="stats-grid" id="stats-grid"></div>
+    </div>
+  </div>
+
+  <!-- Tab: Simulados -->
+  <div id="tab-simulados" class="qtab-content">
+    <div class="panel">
+      <h2>📝 Criar Simulado</h2>
+      <div class="form-row">
+        <input type="text" id="sim-titulo" placeholder="Título do simulado">
+        <input type="number" id="sim-tempo" placeholder="Tempo (min)" value="60" min="5" max="300" style="max-width:100px;">
+        <select id="sim-materia-filtro">
+          <option value="">Todas as matérias</option>
+        </select>
+        <input type="number" id="sim-qtd" placeholder="Qtd questões" value="10" min="1" max="100" style="max-width:110px;">
+        <button class="btn btn-primary" onclick="criarSimulado()">Criar Simulado</button>
+      </div>
+    </div>
+
+    <div class="panel" id="simulado-ativo-panel" style="display:none;">
+      <h2>📋 Simulado em Andamento</h2>
+      <div class="sim-timer" id="sim-timer">00:00:00</div>
+      <div class="sim-progress" id="sim-progress"></div>
+      <div id="sim-questao-area"></div>
+      <div style="display:flex;gap:8px;justify-content:center;margin-top:16px;">
+        <button class="btn btn-secondary" id="sim-prev-btn" onclick="simPrev()">← Anterior</button>
+        <button class="btn btn-primary" id="sim-next-btn" onclick="simNext()">Próxima →</button>
+        <button class="btn btn-danger" onclick="finalizarSimulado()">Finalizar</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>📚 Histórico de Simulados</h2>
+      <div id="simulados-list"></div>
+    </div>
+  </div>
+
+  <!-- Tab: Caderno de Erros -->
+  <div id="tab-erros" class="qtab-content">
+    <div class="panel">
+      <h2>❌ Caderno de Erros</h2>
+      <p style="font-size:0.85rem;color:#6c7086;margin-bottom:12px;">Questões que você errou, agrupadas para revisão focada.</p>
+      <div id="erros-list"></div>
+    </div>
+  </div>
+
+  <!-- Tab: Cadastrar Questão -->
+  <div id="tab-cadastrar" class="qtab-content">
+    <div class="panel">
+      <h2>➕ Cadastrar Nova Questão</h2>
+      <div class="form-row">
+        <input type="text" id="cad-materia" placeholder="Matéria *">
+        <input type="text" id="cad-topico" placeholder="Tópico (opcional)">
+        <select id="cad-dificuldade">
+          <option value="Fácil">Fácil</option>
+          <option value="Médio" selected>Médio</option>
+          <option value="Difícil">Difícil</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <textarea id="cad-enunciado" placeholder="Enunciado da questão *" rows="3"></textarea>
+      </div>
+      <div class="form-row">
+        <input type="text" id="cad-a" placeholder="A) Alternativa A *">
+      </div>
+      <div class="form-row">
+        <input type="text" id="cad-b" placeholder="B) Alternativa B *">
+      </div>
+      <div class="form-row">
+        <input type="text" id="cad-c" placeholder="C) Alternativa C *">
+      </div>
+      <div class="form-row">
+        <input type="text" id="cad-d" placeholder="D) Alternativa D *">
+      </div>
+      <div class="form-row">
+        <input type="text" id="cad-e" placeholder="E) Alternativa E (opcional)">
+      </div>
+      <div class="form-row">
+        <select id="cad-resposta" style="max-width:160px;">
+          <option value="">Resposta correta *</option>
+          <option value="A">A</option>
+          <option value="B">B</option>
+          <option value="C">C</option>
+          <option value="D">D</option>
+          <option value="E">E</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <textarea id="cad-explicacao" placeholder="Explicação (opcional)" rows="2"></textarea>
+      </div>
+      <button class="btn btn-success" onclick="cadastrarQuestao()">✓ Salvar Questão</button>
+    </div>
+  </div>
+
+  <!-- Tab: Banco completo -->
+  <div id="tab-banco" class="qtab-content">
+    <div class="panel">
+      <h2>📦 Todas as Questões</h2>
+      <div class="filter-bar">
+        <select id="banco-filtro-materia" onchange="loadBanco()">
+          <option value="">Todas</option>
+        </select>
+        <span style="font-size:0.85rem;color:#6c7086;" id="banco-count"></span>
+      </div>
+      <div id="banco-list"></div>
+    </div>
+  </div>
+
+  <script>
+    if (localStorage.getItem('theme') === 'light') document.body.classList.add('light-theme');
+
+    // Tab navigation
+    document.querySelectorAll('.qtab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.qtab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.qtab-content').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(btn.dataset.tab).classList.add('active');
+      });
+    });
+
+    // State
+    let questoesPool = [];
+    let currentQuestao = null;
+    let respondida = false;
+
+    // Simulado state
+    let simAtivo = null;
+    let simQuestoes = [];
+    let simIndex = 0;
+    let simTimer = null;
+    let simStartTime = null;
+    let simLimite = 0;
+
+    // ==================== RESOLVER ====================
+    async function loadMaterias() {
+      const materias = await fetch('/api/questoes/materias').then(r => r.json());
+      const selects = ['filtro-materia', 'sim-materia-filtro', 'banco-filtro-materia'];
+      selects.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const val = el.value;
+        // Keep first option
+        while (el.options.length > 1) el.remove(1);
+        materias.forEach(m => {
+          const opt = document.createElement('option');
+          opt.value = m;
+          opt.textContent = m;
+          el.appendChild(opt);
+        });
+        el.value = val;
+      });
+    }
+
+    async function loadQuestoesResolver() {
+      const materia = document.getElementById('filtro-materia').value;
+      const url = materia ? `/api/questoes?materia=${encodeURIComponent(materia)}` : '/api/questoes';
+      questoesPool = await fetch(url).then(r => r.json());
+
+      const dificuldade = document.getElementById('filtro-dificuldade').value;
+      if (dificuldade) {
+        questoesPool = questoesPool.filter(q => q.dificuldade === dificuldade);
+      }
+
+      if (questoesPool.length === 0) {
+        document.getElementById('resolver-area').innerHTML = '<p style="color:#6c7086;">Nenhuma questão encontrada. Cadastre questões na aba "Cadastrar".</p>';
+        return;
+      }
+
+      // Sortear uma questão aleatória
+      const rand = Math.floor(Math.random() * questoesPool.length);
+      showQuestao(questoesPool[rand]);
+    }
+
+    function showQuestao(q) {
+      currentQuestao = q;
+      respondida = false;
+      const area = document.getElementById('resolver-area');
+
+      const alternativas = [
+        { letter: 'A', text: q.alternativa_a },
+        { letter: 'B', text: q.alternativa_b },
+        { letter: 'C', text: q.alternativa_c },
+        { letter: 'D', text: q.alternativa_d },
+      ];
+      if (q.alternativa_e) alternativas.push({ letter: 'E', text: q.alternativa_e });
+
+      area.innerHTML = `
+        <div class="questao-card">
+          <div class="questao-meta">
+            <span>${q.materia}</span>
+            ${q.topico ? `<span>${q.topico}</span>` : ''}
+            <span>${q.dificuldade}</span>
+          </div>
+          <div class="questao-enunciado">${q.enunciado}</div>
+          <div class="questao-alternativas">
+            ${alternativas.map(a => `
+              <div class="alternativa" data-letter="${a.letter}" onclick="selecionarAlternativa(this, '${a.letter}')">
+                <span class="alt-letter">${a.letter})</span>
+                <span class="alt-text">${a.text}</span>
+              </div>
+            `).join('')}
+          </div>
+          <div style="margin-top:12px;display:flex;gap:8px;">
+            <button class="btn btn-success" id="btn-confirmar" onclick="confirmarResposta()">Confirmar Resposta</button>
+            <button class="btn btn-primary" id="btn-proxima" style="display:none;" onclick="loadQuestoesResolver()">Próxima →</button>
+          </div>
+          <div class="explicacao-box" id="explicacao-box">
+            <strong>Explicação:</strong> ${q.explicacao || 'Sem explicação cadastrada.'}
+          </div>
+        </div>
+      `;
+    }
+
+    function selecionarAlternativa(el, letter) {
+      if (respondida) return;
+      document.querySelectorAll('.alternativa').forEach(a => a.classList.remove('selected'));
+      el.classList.add('selected');
+    }
+
+    async function confirmarResposta() {
+      if (respondida) return;
+      const selected = document.querySelector('.alternativa.selected');
+      if (!selected) { alert('Selecione uma alternativa.'); return; }
+
+      const letra = selected.dataset.letter;
+      const res = await fetch(`/api/questoes/${currentQuestao.id}/responder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resposta: letra, tempo_segundos: 0 })
+      }).then(r => r.json());
+
+      respondida = true;
+
+      // Marcar correta/errada
+      document.querySelectorAll('.alternativa').forEach(a => {
+        if (a.dataset.letter === res.resposta_correta) a.classList.add('correct');
+        if (a.dataset.letter === letra && !res.acertou) a.classList.add('wrong');
+      });
+
+      document.getElementById('explicacao-box').classList.add('show');
+      document.getElementById('btn-confirmar').style.display = 'none';
+      document.getElementById('btn-proxima').style.display = 'inline-block';
+
+      loadStats();
+    }
+
+    async function loadStats() {
+      const stats = await fetch('/api/questoes/stats/geral').then(r => r.json());
+      const grid = document.getElementById('stats-grid');
+      grid.innerHTML = `
+        <div class="stat-card"><div class="stat-num" style="color:#89b4fa">${stats.total_resolvidas}</div><div class="stat-lbl">Resolvidas</div></div>
+        <div class="stat-card"><div class="stat-num" style="color:#a6e3a1">${stats.total_acertos}</div><div class="stat-lbl">Acertos</div></div>
+        <div class="stat-card"><div class="stat-num" style="color:#fab387">${stats.percentual}%</div><div class="stat-lbl">Aproveitamento</div></div>
+      `;
+    }
+
+    // ==================== SIMULADOS ====================
+    async function criarSimulado() {
+      const titulo = document.getElementById('sim-titulo').value.trim() || `Simulado ${new Date().toLocaleDateString('pt-BR')}`;
+      const tempo = parseInt(document.getElementById('sim-tempo').value) || 60;
+      const materia = document.getElementById('sim-materia-filtro').value;
+      const qtd = parseInt(document.getElementById('sim-qtd').value) || 10;
+
+      // Buscar questões
+      const url = materia ? `/api/questoes?materia=${encodeURIComponent(materia)}` : '/api/questoes';
+      let pool = await fetch(url).then(r => r.json());
+
+      if (pool.length === 0) { alert('Nenhuma questão disponível.'); return; }
+
+      // Shufflar e pegar qtd
+      pool = pool.sort(() => Math.random() - 0.5).slice(0, qtd);
+      const ids = pool.map(q => q.id);
+
+      const res = await fetch('/api/simulados', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ titulo, tempo_limite_min: tempo, questao_ids: ids })
+      }).then(r => r.json());
+
+      // Iniciar simulado
+      iniciarSimulado(res.id);
+    }
+
+    async function iniciarSimulado(id) {
+      const data = await fetch(`/api/simulados/${id}`).then(r => r.json());
+      simAtivo = data.simulado;
+      simQuestoes = data.questoes;
+      simIndex = 0;
+      simLimite = simAtivo.tempo_limite_min * 60;
+      simStartTime = Date.now();
+
+      document.getElementById('simulado-ativo-panel').style.display = 'block';
+      clearInterval(simTimer);
+      simTimer = setInterval(updateSimTimer, 1000);
+
+      showSimQuestao();
+    }
+
+    function updateSimTimer() {
+      const elapsed = Math.floor((Date.now() - simStartTime) / 1000);
+      const remaining = Math.max(0, simLimite - elapsed);
+      const h = String(Math.floor(remaining / 3600)).padStart(2, '0');
+      const m = String(Math.floor((remaining % 3600) / 60)).padStart(2, '0');
+      const s = String(remaining % 60).padStart(2, '0');
+      const el = document.getElementById('sim-timer');
+      el.textContent = `${h}:${m}:${s}`;
+      el.className = 'sim-timer' + (remaining < 300 ? ' danger' : remaining < 600 ? ' warning' : '');
+
+      if (remaining <= 0) {
+        finalizarSimulado();
+      }
+    }
+
+    function showSimQuestao() {
+      const q = simQuestoes[simIndex];
+      document.getElementById('sim-progress').textContent = `Questão ${simIndex + 1} de ${simQuestoes.length}`;
+
+      const alternativas = [
+        { letter: 'A', text: q.alternativa_a },
+        { letter: 'B', text: q.alternativa_b },
+        { letter: 'C', text: q.alternativa_c },
+        { letter: 'D', text: q.alternativa_d },
+      ];
+      if (q.alternativa_e) alternativas.push({ letter: 'E', text: q.alternativa_e });
+
+      const selected = q.resposta_usuario || '';
+      document.getElementById('sim-questao-area').innerHTML = `
+        <div class="questao-card">
+          <div class="questao-meta"><span>${q.materia}</span></div>
+          <div class="questao-enunciado">${q.enunciado}</div>
+          <div class="questao-alternativas">
+            ${alternativas.map(a => `
+              <div class="alternativa ${selected === a.letter ? 'selected' : ''}" data-letter="${a.letter}" onclick="simSelectAlt(this, '${a.letter}')">
+                <span class="alt-letter">${a.letter})</span>
+                <span class="alt-text">${a.text}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+
+      document.getElementById('sim-prev-btn').disabled = simIndex === 0;
+      document.getElementById('sim-next-btn').textContent = simIndex === simQuestoes.length - 1 ? 'Finalizar →' : 'Próxima →';
+    }
+
+    async function simSelectAlt(el, letter) {
+      document.querySelectorAll('#sim-questao-area .alternativa').forEach(a => a.classList.remove('selected'));
+      el.classList.add('selected');
+
+      simQuestoes[simIndex].resposta_usuario = letter;
+
+      await fetch(`/api/simulados/${simAtivo.id}/responder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ questao_id: simQuestoes[simIndex].questao_id, resposta: letter })
+      });
+    }
+
+    function simNext() {
+      if (simIndex < simQuestoes.length - 1) {
+        simIndex++;
+        showSimQuestao();
+      } else {
+        finalizarSimulado();
+      }
+    }
+
+    function simPrev() {
+      if (simIndex > 0) {
+        simIndex--;
+        showSimQuestao();
+      }
+    }
+
+    async function finalizarSimulado() {
+      clearInterval(simTimer);
+      const tempo = Math.floor((Date.now() - simStartTime) / 1000);
+
+      const res = await fetch(`/api/simulados/${simAtivo.id}/finalizar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tempo_gasto_seg: tempo })
+      }).then(r => r.json());
+
+      document.getElementById('simulado-ativo-panel').style.display = 'none';
+      alert(`Simulado finalizado!\nNota: ${res.nota}%\nAcertos: ${res.acertos}/${res.total}`);
+      simAtivo = null;
+      loadSimulados();
+    }
+
+    async function loadSimulados() {
+      const sims = await fetch('/api/simulados').then(r => r.json());
+      const list = document.getElementById('simulados-list');
+      if (sims.length === 0) {
+        list.innerHTML = '<p style="color:#6c7086;font-size:0.85rem;">Nenhum simulado realizado ainda.</p>';
+        return;
+      }
+      list.innerHTML = sims.map(s => `
+        <div class="sim-card">
+          <span class="sim-title">${s.titulo}</span>
+          <span class="sim-status ${s.status}">${s.status}</span>
+          ${s.status === 'finalizado' ? `<span class="sim-nota">${s.nota}%</span>` : `<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 10px;" onclick="iniciarSimulado(${s.id})">Continuar</button>`}
+          <button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 8px;" onclick="deleteSimulado(${s.id})">🗑</button>
+        </div>
+      `).join('');
+    }
+
+    async function deleteSimulado(id) {
+      if (!confirm('Excluir este simulado?')) return;
+      await fetch(`/api/simulados/${id}`, { method: 'DELETE' });
+      loadSimulados();
+    }
+
+    // ==================== CADERNO DE ERROS ====================
+    async function loadErros() {
+      const erros = await fetch('/api/questoes/erros/caderno').then(r => r.json());
+      const list = document.getElementById('erros-list');
+      if (erros.length === 0) {
+        list.innerHTML = '<p style="color:#6c7086;font-size:0.85rem;">Nenhum erro registrado. Continue resolvendo questões!</p>';
+        return;
+      }
+
+      // Agrupar por matéria
+      const grouped = {};
+      erros.forEach(e => {
+        if (!grouped[e.materia]) grouped[e.materia] = [];
+        grouped[e.materia].push(e);
+      });
+
+      let html = '';
+      const materias = Object.keys(grouped).sort();
+      for (const materia of materias) {
+        const items = grouped[materia];
+        html += `<div class="acc-group">
+          <div class="acc-header" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
+            <span class="acc-chevron">▶</span>
+            <span class="acc-name">${materia}</span>
+            <span class="acc-count">${items.length} erro(s)</span>
+          </div>
+          <div class="acc-body">`;
+        items.forEach(e => {
+          html += `
+            <div class="erro-item">
+              <div class="erro-enunciado">${e.enunciado.substring(0, 150)}${e.enunciado.length > 150 ? '...' : ''}</div>
+              <div class="erro-meta">
+                <span>Sua: ${e.resposta_usuario}</span>
+                <span>Correta: ${e.resposta_correta}</span>
+                <span>${e.data}</span>
+              </div>
+            </div>`;
+        });
+        html += `</div></div>`;
+      }
+      list.innerHTML = html;
+    }
+
+    // ==================== CADASTRAR ====================
+    async function cadastrarQuestao() {
+      const materia = document.getElementById('cad-materia').value.trim();
+      const enunciado = document.getElementById('cad-enunciado').value.trim();
+      const a = document.getElementById('cad-a').value.trim();
+      const b = document.getElementById('cad-b').value.trim();
+      const c = document.getElementById('cad-c').value.trim();
+      const d = document.getElementById('cad-d').value.trim();
+      const resposta = document.getElementById('cad-resposta').value;
+
+      if (!materia || !enunciado || !a || !b || !c || !d || !resposta) {
+        alert('Preencha todos os campos obrigatórios (*).');
+        return;
+      }
+
+      await fetch('/api/questoes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          materia,
+          topico: document.getElementById('cad-topico').value.trim(),
+          enunciado,
+          alternativa_a: a,
+          alternativa_b: b,
+          alternativa_c: c,
+          alternativa_d: d,
+          alternativa_e: document.getElementById('cad-e').value.trim(),
+          resposta_correta: resposta,
+          explicacao: document.getElementById('cad-explicacao').value.trim(),
+          dificuldade: document.getElementById('cad-dificuldade').value
+        })
+      });
+
+      alert('Questão cadastrada com sucesso!');
+      // Limpar form
+      ['cad-materia', 'cad-topico', 'cad-enunciado', 'cad-a', 'cad-b', 'cad-c', 'cad-d', 'cad-e', 'cad-explicacao'].forEach(id => {
+        document.getElementById(id).value = '';
+      });
+      document.getElementById('cad-resposta').value = '';
+      loadMaterias();
+    }
+
+    // ==================== BANCO COMPLETO ====================
+    async function loadBanco() {
+      const materia = document.getElementById('banco-filtro-materia').value;
+      const url = materia ? `/api/questoes?materia=${encodeURIComponent(materia)}` : '/api/questoes';
+      const questoes = await fetch(url).then(r => r.json());
+
+      document.getElementById('banco-count').textContent = `${questoes.length} questão(ões)`;
+      const list = document.getElementById('banco-list');
+
+      if (questoes.length === 0) {
+        list.innerHTML = '<p style="color:#6c7086;font-size:0.85rem;">Nenhuma questão cadastrada.</p>';
+        return;
+      }
+
+      // Agrupar por matéria
+      const grouped = {};
+      questoes.forEach(q => {
+        if (!grouped[q.materia]) grouped[q.materia] = [];
+        grouped[q.materia].push(q);
+      });
+
+      const materias = Object.keys(grouped).sort();
+      let html = '';
+      for (const mat of materias) {
+        const items = grouped[mat];
+        html += `<div class="acc-group">
+          <div class="acc-header" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
+            <span class="acc-chevron">▶</span>
+            <span class="acc-name">${mat}</span>
+            <span class="acc-count">${items.length} questão(ões)</span>
+          </div>
+          <div class="acc-body">`;
+        items.forEach(q => {
+          html += `<div class="q-list-item">
+            <span class="q-list-text">${q.enunciado.substring(0, 100)}${q.enunciado.length > 100 ? '...' : ''}</span>
+            <button class="q-list-delete" onclick="deleteQuestao(${q.id})" title="Excluir">🗑</button>
+          </div>`;
+        });
+        html += `</div></div>`;
+      }
+      list.innerHTML = html;
+    }
+
+    async function deleteQuestao(id) {
+      if (!confirm('Excluir esta questão?')) return;
+      await fetch(`/api/questoes/${id}`, { method: 'DELETE' });
+      loadBanco();
+      loadMaterias();
+    }
+
+    // ==================== INIT ====================
+    loadMaterias();
+    loadStats();
+    loadSimulados();
+    loadErros();
+    loadBanco();
+    loadQuestoesResolver();
+  </script>
+</body>
+</html>

@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Leitor PDF - Concurseiro OS</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#1e1e2e">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: sans-serif; background: #1e1e2e; color: #cdd6f4; min-height: 100vh; padding: 24px; }
+    a { color: #89b4fa; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    h1 { font-size: 1.4rem; color: #cba6f7; }
+    #header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; flex-wrap: wrap; gap: 8px; }
+    .header-left { display: flex; align-items: center; gap: 12px; }
+    .header-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+    /* Streak badge */
+    .streak-badge {
+      display: flex; align-items: center; gap: 4px;
+      background: #313244; border-radius: 20px; padding: 4px 12px;
+      font-size: 0.82rem; font-weight: 700;
+    }
+    .streak-badge .fire { color: #fab387; }
+    .streak-badge .num { color: #f9e2af; }
+
+    /* Metas mini */
+    .metas-mini {
+      display: flex; gap: 6px; align-items: center;
+    }
+    .meta-dot {
+      width: 10px; height: 10px; border-radius: 50%; border: 2px solid #45475a;
+      transition: all 0.3s;
+    }
+    .meta-dot.done { background: #a6e3a1; border-color: #a6e3a1; }
+    .meta-dot.partial { background: #fab387; border-color: #fab387; }
+
+    /* Nav links */
+    .nav-links { display: flex; gap: 10px; margin-bottom: 12px; font-size: 0.88rem; }
+    .nav-links a {
+      padding: 4px 12px; background: #313244; border-radius: 6px;
+      color: #cdd6f4; font-weight: 600; font-size: 0.82rem;
+    }
+    .nav-links a:hover { background: #45475a; text-decoration: none; }
+
+    /* Timer */
+    #timer-box { display: flex; align-items: center; gap: 8px; }
+    #timer-display { font-size: 1rem; font-weight: 700; color: #f38ba8; min-width: 72px; text-align: center; }
+    #timer-display.done { color: #a6e3a1; }
+    select#timer-select {
+      background: #313244; color: #cdd6f4; border: 1px solid #45475a;
+      border-radius: 6px; padding: 4px 8px; font-size: 0.85rem; cursor: pointer;
+    }
+    .tbtn {
+      border: none; border-radius: 6px; padding: 5px 12px;
+      font-size: 0.82rem; cursor: pointer; font-weight: 600;
+    }
+    .tbtn:disabled { opacity: 0.35; cursor: default; }
+    #btn-start { background: #a6e3a1; color: #1e1e2e; }
+    #btn-pause { background: #fab387; color: #1e1e2e; }
+    #btn-stop  { background: #f38ba8; color: #1e1e2e; }
+
+    /* Tabs */
+    #tab-bar {
+      display: flex; gap: 0; background: #313244; border-radius: 10px 10px 0 0;
+      margin-bottom: 20px; overflow: hidden;
+    }
+    .tab-btn {
+      flex: 1; padding: 12px 10px; border: none; background: transparent;
+      color: #6c7086; font-size: 0.88rem; font-weight: 600; cursor: pointer;
+      border-bottom: 3px solid transparent; transition: all 0.2s;
+    }
+    .tab-btn:hover { color: #cdd6f4; background: #45475a; }
+    .tab-btn.active { color: #cdd6f4; border-bottom-color: #cba6f7; background: #45475a; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* PDF tab */
+    #io-box { display: flex; gap: 8px; margin-bottom: 16px; justify-content: flex-end; }
+    .iobtn { border: none; border-radius: 6px; padding: 5px 14px; font-size: 0.82rem; cursor: pointer; font-weight: 600; background: #45475a; color: #cdd6f4; }
+    .iobtn:hover { background: #585b70; }
+    .folder { margin-bottom: 8px; }
+    .folder-header { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px 12px; background: #313244; border-radius: 8px; user-select: none; }
+    .folder-header:hover { background: #45475a; }
+    .folder-icon { font-size: 1.1rem; }
+    .folder-name { flex: 1; font-weight: 600; }
+    .folder-progress { font-size: 0.78rem; color: #a6e3a1; white-space: nowrap; }
+    .folder-bar { height: 4px; background: #45475a; border-radius: 2px; margin: 2px 0 0 36px; }
+    .folder-bar-fill { height: 100%; background: #a6e3a1; border-radius: 2px; transition: width 0.3s; }
+    .folder-children { padding-left: 16px; margin-top: 4px; display: none; }
+    .folder-children.open { display: block; }
+    .pdf-item { display: flex; align-items: center; gap: 10px; padding: 7px 12px; margin: 3px 0; background: #1e1e2e; border-radius: 6px; cursor: pointer; border: 1px solid #313244; }
+    .pdf-item:hover { background: #313244; border-color: #89b4fa; }
+    .pdf-name { flex: 1; font-size: 0.9rem; }
+    .pdf-progress { font-size: 0.75rem; color: #89dceb; white-space: nowrap; }
+    .pdf-bar { height: 3px; background: #313244; border-radius: 2px; margin: 2px 0 0 22px; }
+    .pdf-bar-fill { height: 100%; background: #89dceb; border-radius: 2px; transition: width 0.3s; }
+    .badge-done { font-size: 0.7rem; background: #a6e3a1; color: #1e1e2e; border-radius: 4px; padding: 1px 5px; }
+
+    /* Edital tab - Tree Hierárquico */
+    .panel { background: #313244; border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+    .panel h2 { font-size: 1.05rem; color: #cba6f7; margin-bottom: 12px; }
+
+    .tree-l1 { margin-bottom: 8px; }
+    .tree-l2 { margin-left: 16px; margin-bottom: 4px; }
+    .tree-l3 { margin-left: 16px; margin-bottom: 2px; }
+
+    .tree-node {
+      display: flex; align-items: center; gap: 6px; padding: 8px 12px;
+      border-radius: 6px; cursor: pointer; user-select: none; transition: background 0.1s;
+    }
+    .tree-node:hover { background: #45475a; }
+    .tree-node-l1 { background: #1e1e2e; border: 1px solid #45475a; padding: 10px 14px; border-radius: 8px; }
+    .tree-node-l1:hover { border-color: #89b4fa; }
+    .tree-node-l1.open { border-color: #cba6f7; }
+    .tree-node-l2 { background: #1e1e2e; border-left: 3px solid #89b4fa; border-radius: 0 6px 6px 0; padding: 8px 12px; }
+    .tree-node-l2.open { border-left-color: #cba6f7; }
+    .tree-node-l3 { padding: 6px 12px; border-left: 2px solid #45475a; border-radius: 0; margin-left: 4px; }
+    .tree-node-l3.open { border-left-color: #a6e3a1; }
+
+    .tree-chevron { font-size: 0.7rem; color: #6c7086; transition: transform 0.2s; min-width: 12px; }
+    .tree-node.open > .tree-chevron { transform: rotate(90deg); color: #cba6f7; }
+    .tree-icon { font-size: 0.9rem; }
+    .tree-label { flex: 1; font-weight: 600; font-size: 0.88rem; }
+    .tree-node-l1 .tree-label { font-size: 0.95rem; }
+    .tree-stats { font-size: 0.73rem; color: #a6adc8; white-space: nowrap; }
+    .tree-bar { height: 3px; width: 50px; background: #45475a; border-radius: 2px; overflow: hidden; }
+    .tree-bar-fill { height: 100%; background: #a6e3a1; border-radius: 2px; transition: width 0.3s; }
+
+    .tree-children { display: none; padding-top: 4px; }
+    .tree-children.open { display: block; }
+
+    .tree-leaf {
+      display: flex; align-items: center; gap: 6px;
+      padding: 5px 12px 5px 36px; margin-left: 20px;
+      font-size: 0.83rem; cursor: pointer;
+      border-left: 1px solid #45475a; transition: background 0.1s;
+    }
+    .tree-leaf:hover { background: #45475a; }
+    .tree-leaf.selected { background: #45475a; border-left-color: #cba6f7; border-left-width: 3px; padding-left: 34px; }
+    .tree-status {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 18px; height: 18px; border-radius: 50%; font-size: 0.7rem;
+      cursor: pointer; font-weight: 700; flex-shrink: 0;
+    }
+    .tree-status.status-nao-iniciado { background: #45475a; color: #6c7086; }
+    .tree-status.status-em-andamento { background: #fab387; color: #1e1e2e; }
+    .tree-status.status-concluido { background: #a6e3a1; color: #1e1e2e; }
+    .tree-topic { flex: 1; color: #cdd6f4; line-height: 1.3; }
+    .tree-hours { font-size: 0.72rem; color: #89b4fa; white-space: nowrap; }
+    .tree-del { background: none; border: none; color: #f38ba8; cursor: pointer; font-size: 0.9rem; opacity: 0; transition: opacity 0.15s; padding: 0 4px; }
+    .tree-leaf:hover .tree-del { opacity: 1; }
+
+    .tree-info-badge { display: flex; gap: 6px; font-size: 0.7rem; color: #89dceb; flex-wrap: wrap; }
+    .tree-info-badge span { background: #1e1e2e; padding: 1px 6px; border-radius: 3px; white-space: nowrap; }
+    .tree-info-card {
+      margin: 4px 0 8px 28px; padding: 10px 14px;
+      background: #1e1e2e; border-radius: 8px; border-left: 3px solid #89b4fa;
+      font-size: 0.8rem; line-height: 1.7; color: #a6adc8;
+    }
+    .tree-info-card strong { color: #cdd6f4; }
+    #edital-timer-box { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    #edital-timer-display { font-size: 1.6rem; font-weight: 700; color: #89b4fa; min-width: 100px; }
+    #edital-materia-label { font-size: 0.9rem; color: #fab387; font-style: italic; }
+    .edital-timer-btn { border: none; border-radius: 6px; padding: 6px 14px; font-size: 0.85rem; cursor: pointer; font-weight: 600; }
+    #edital-btn-start { background: #a6e3a1; color: #1e1e2e; }
+    #edital-btn-stop { background: #f38ba8; color: #1e1e2e; }
+    /* (accordion styles são definidos acima) */
+    .status-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; cursor: pointer; user-select: none; }
+    .status-nao-iniciado { background: #45475a; color: #cdd6f4; }
+    .status-em-andamento { background: #fab387; color: #1e1e2e; }
+    .status-concluido { background: #a6e3a1; color: #1e1e2e; }
+    .edital-delete-btn { background: none; border: none; color: #f38ba8; cursor: pointer; font-size: 1rem; padding: 2px 6px; border-radius: 4px; }
+    .edital-delete-btn:hover { background: #45475a; }
+    .edital-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .edital-form input, .edital-form select { background: #1e1e2e; border: 1px solid #45475a; border-radius: 6px; padding: 8px 12px; color: #cdd6f4; font-size: 0.88rem; flex: 1; min-width: 140px; }
+    .edital-form input::placeholder { color: #6c7086; }
+    .edital-form button { background: #cba6f7; color: #1e1e2e; border: none; border-radius: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
+    .edital-form button:hover { background: #b4befe; }
+
+    /* Ciclo tab */
+    .ciclo-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid #45475a; }
+    .ciclo-item:last-child { border-bottom: none; }
+    .ciclo-materia { flex: 1; font-weight: 600; font-size: 0.9rem; }
+    .ciclo-bar { flex: 2; height: 8px; background: #45475a; border-radius: 4px; overflow: hidden; }
+    .ciclo-bar-fill { height: 100%; background: #89b4fa; border-radius: 4px; transition: width 0.3s; }
+    .ciclo-hours { font-size: 0.8rem; color: #a6adc8; min-width: 80px; text-align: right; }
+    .ciclo-delete { background: none; border: none; color: #f38ba8; cursor: pointer; font-size: 0.9rem; }
+    .ciclo-next { background: #1e1e2e; border-radius: 8px; padding: 12px; margin-bottom: 12px; display: flex; align-items: center; gap: 12px; }
+    .ciclo-next .icon { font-size: 1.5rem; }
+    .ciclo-next .info { flex: 1; }
+    .ciclo-next .info .title { font-weight: 700; color: #a6e3a1; }
+    .ciclo-next .info .sub { font-size: 0.82rem; color: #a6adc8; }
+
+    /* Flashcards tab */
+    .flash-panel { background: #313244; border-radius: 12px; padding: 24px; margin-bottom: 16px; text-align: center; }
+    .flash-panel h2 { font-size: 1.05rem; color: #cba6f7; margin-bottom: 16px; text-align: left; }
+    #flash-card-area { min-height: 180px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    #flash-question { font-size: 1.3rem; font-weight: 600; color: #cdd6f4; margin-bottom: 16px; line-height: 1.5; }
+    #flash-answer { font-size: 1.1rem; color: #a6e3a1; margin-bottom: 20px; padding: 12px 20px; background: #1e1e2e; border-radius: 8px; display: none; line-height: 1.5; }
+    #flash-reveal-btn { background: #89b4fa; color: #1e1e2e; border: none; border-radius: 8px; padding: 10px 24px; font-size: 0.95rem; font-weight: 600; cursor: pointer; }
+    #flash-reveal-btn:hover { background: #b4befe; }
+    .flash-review-btns { display: flex; gap: 12px; justify-content: center; margin-top: 8px; }
+    .flash-review-btns button { border: none; border-radius: 8px; padding: 10px 24px; font-size: 0.95rem; font-weight: 600; cursor: pointer; }
+    #flash-btn-wrong { background: #f38ba8; color: #1e1e2e; }
+    #flash-btn-right { background: #a6e3a1; color: #1e1e2e; }
+    .flash-add-form { text-align: left; }
+    .flash-add-form textarea { width: 100%; background: #1e1e2e; border: 1px solid #45475a; border-radius: 8px; padding: 10px 12px; color: #cdd6f4; font-size: 0.9rem; resize: vertical; min-height: 60px; margin-bottom: 8px; font-family: sans-serif; }
+    .flash-add-form textarea::placeholder { color: #6c7086; }
+    .flash-add-form button { background: #cba6f7; color: #1e1e2e; border: none; border-radius: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
+    .flash-list-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #45475a; font-size: 0.85rem; }
+    .flash-list-item:hover { background: #45475a; border-radius: 6px; }
+    .flash-list-delete { background: none; border: none; color: #f38ba8; cursor: pointer; font-size: 1rem; }
+    .flash-count { font-size: 0.82rem; color: #6c7086; margin-bottom: 8px; }
+
+    /* Metas config */
+    .metas-config { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+    .metas-config label { font-size: 0.82rem; color: #a6adc8; display: flex; align-items: center; gap: 4px; }
+    .metas-config input { width: 60px; background: #1e1e2e; border: 1px solid #45475a; border-radius: 4px; padding: 4px 6px; color: #cdd6f4; font-size: 0.82rem; text-align: center; }
+
+    /* Import edital */
+    .import-edital { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+    .import-edital input[type="file"] { font-size: 0.82rem; }
+
+    /* Light Theme */
+    body.light-theme { background: #eff1f5; color: #4c4f69; }
+    body.light-theme .panel { background: #e6e9ef; }
+    body.light-theme .tree-node-l1 { background: #dce0e8; border-color: #bcc0cc; }
+    body.light-theme .tree-node-l2 { background: #dce0e8; }
+    body.light-theme .tree-node-l3 { border-left-color: #bcc0cc; }
+    body.light-theme .tree-leaf { border-left-color: #bcc0cc; }
+    body.light-theme .tree-leaf:hover, body.light-theme .tree-node:hover { background: #ccd0da; }
+    body.light-theme .tree-topic { color: #4c4f69; }
+    body.light-theme .tree-info-card { background: #dce0e8; }
+    body.light-theme #tab-bar { background: #e6e9ef; }
+    body.light-theme .tab-btn.active { background: #ccd0da; }
+    body.light-theme .edital-form input, body.light-theme .edital-form select { background: #dce0e8; border-color: #bcc0cc; color: #4c4f69; }
+    body.light-theme .nav-links a { background: #e6e9ef; color: #4c4f69; }
+    body.light-theme .streak-badge { background: #e6e9ef; }
+    body.light-theme .iobtn { background: #ccd0da; color: #4c4f69; }
+    body.light-theme .flash-panel, body.light-theme .flash-add-form textarea { background: #e6e9ef; border-color: #bcc0cc; color: #4c4f69; }
+    body.light-theme #overlay > div { background: #e6e9ef; }
+    body.light-theme .countdown-badge { background: #e6e9ef; }
+
+    /* Countdown badge */
+    .countdown-badge { display: flex; align-items: center; gap: 4px; background: #313244; border-radius: 20px; padding: 4px 12px; font-size: 0.78rem; }
+    .countdown-badge:empty { display: none; }
+    .countdown-icon { font-size: 0.9rem; }
+    .countdown-text { color: #f9e2af; }
+    .countdown-text strong { color: #f38ba8; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <!-- Overlay pausa -->
+  <div id="overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:999;align-items:center;justify-content:center;">
+    <div style="background:#313244;border-radius:16px;padding:40px 48px;text-align:center;max-width:360px;">
+      <div style="font-size:2.5rem;margin-bottom:12px;">☕</div>
+      <div style="font-size:1.2rem;font-weight:700;color:#cba6f7;margin-bottom:8px;">Hora de descansar!</div>
+      <div style="font-size:0.9rem;color:#cdd6f4;margin-bottom:24px;">Faça uma pausa e volte descansado para continuar seus estudos.</div>
+      <button onclick="document.getElementById('overlay').style.display='none'" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:8px;padding:8px 24px;font-size:0.95rem;font-weight:700;cursor:pointer;">OK, entendido!</button>
+    </div>
+  </div>
+
+  <div id="header">
+    <div class="header-left">
+      <h1>📚 Leitor PDF</h1>
+      <div class="streak-badge">
+        <span class="fire">🔥</span>
+        <span class="num" id="streak-num">0</span>
+      </div>
+      <div class="metas-mini" title="Metas do dia: Horas | Questões | Flashcards">
+        <div class="meta-dot" id="meta-dot-h"></div>
+        <div class="meta-dot" id="meta-dot-q"></div>
+        <div class="meta-dot" id="meta-dot-f"></div>
+      </div>
+      <div id="countdown-badge" class="countdown-badge"></div>
+    </div>
+    <div class="header-right">
+      <button class="tbtn" onclick="toggleTheme()" title="Alternar tema" style="background:#45475a;color:#cdd6f4;font-size:0.9rem;">🌓</button>
+      <div id="timer-box">
+        <span id="timer-display">00:00:00</span>
+        <select id="timer-select">
+          <option value="5">5 min</option>
+          <option value="10">10 min</option>
+          <option value="15" selected>15 min</option>
+          <option value="20">20 min</option>
+          <option value="25">25 min</option>
+          <option value="30">30 min</option>
+          <option value="35">35 min</option>
+          <option value="40">40 min</option>
+          <option value="45">45 min</option>
+          <option value="50">50 min</option>
+          <option value="55">55 min</option>
+          <option value="60">60 min</option>
+        </select>
+        <button id="btn-start" class="tbtn">▶ Iniciar</button>
+        <button id="btn-pause" class="tbtn" disabled>⏸ Pausar</button>
+        <button id="btn-stop" class="tbtn" disabled>⏹ Parar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Navigation links -->
+  <div class="nav-links">
+    <a href="/dashboard.html">📊 Dashboard</a>
+    <a href="/questoes.html">❓ Questões & Simulados</a>
+  </div>
+
+  <!-- Tabs -->
+  <div id="tab-bar">
+    <button class="tab-btn active" data-tab="tab-pdfs">📚 PDFs</button>
+    <button class="tab-btn" data-tab="tab-edital">📊 Edital</button>
+    <button class="tab-btn" data-tab="tab-ciclo">🔄 Ciclo</button>
+    <button class="tab-btn" data-tab="tab-flashcards">🧠 Flashcards</button>
+    <button class="tab-btn" data-tab="tab-metas">🎯 Metas</button>
+  </div>
+
+  <!-- Tab: PDFs -->
+  <div id="tab-pdfs" class="tab-content active">
+    <div id="io-box">
+      <button class="iobtn" onclick="exportProgress()">⬇ Exportar progresso</button>
+      <button class="iobtn" onclick="document.getElementById('import-input').click()">⬆ Importar progresso</button>
+      <input id="import-input" type="file" accept=".json" style="display:none" onchange="importProgress(this)">
+    </div>
+    <div id="tree"></div>
+  </div>
+
+  <!-- Tab: Edital -->
+  <div id="tab-edital" class="tab-content">
+    <div class="panel">
+      <h2>⏱ Cronômetro de Horas Líquidas</h2>
+      <div id="edital-timer-box">
+        <span id="edital-timer-display">00:00:00</span>
+        <button id="edital-btn-start" class="edital-timer-btn">▶ Iniciar</button>
+        <button id="edital-btn-stop" class="edital-timer-btn" style="display:none;">⏹ Parar</button>
+        <span id="edital-materia-label">Nenhuma matéria selecionada</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>📋 Edital Verticalizado</h2>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
+        <button class="iobtn" onclick="toggleAllEdital(true)">▼ Expandir tudo</button>
+        <button class="iobtn" onclick="toggleAllEdital(false)">▲ Colapsar tudo</button>
+        <span id="edital-stats" style="font-size:0.8rem;color:#6c7086;margin-left:auto;"></span>
+      </div>
+      <div id="edital-accordion"></div>
+    </div>
+
+    <div class="panel">
+      <h2>➕ Adicionar Matéria/Tópico</h2>
+      <div class="edital-form">
+        <input type="text" id="edital-nome-input" placeholder="Concurso (ex: TCE-MA 2026)" style="min-width:160px;">
+        <input type="text" id="edital-cargo-input" placeholder="Cargo (ex: Auditor)">
+        <input type="text" id="edital-materia-input" placeholder="Disciplina">
+        <input type="text" id="edital-topico-input" placeholder="Tópico">
+        <button onclick="addEdital()">Adicionar</button>
+      </div>
+      <div class="import-edital">
+        <input type="text" id="edital-pdf-nome" placeholder="Nome do concurso" style="background:#1e1e2e;border:1px solid #45475a;border-radius:6px;padding:6px 10px;color:#cdd6f4;font-size:0.85rem;width:180px;">
+        <button class="iobtn" onclick="document.getElementById('edital-pdf-input').click()">📄 Importar PDF</button>
+        <input id="edital-pdf-input" type="file" accept=".pdf" style="display:none" onchange="importEditalPdf(this)">
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Ciclo de Estudos -->
+  <div id="tab-ciclo" class="tab-content">
+    <div class="panel">
+      <h2>🔄 Ciclo de Estudos</h2>
+      <p style="font-size:0.85rem;color:#6c7086;margin-bottom:12px;">O ciclo distribui seu tempo entre as matérias de forma equilibrada. A próxima matéria é sempre a que tem menos progresso relativo.</p>
+      <div class="ciclo-next" id="ciclo-next"></div>
+      <div id="ciclo-list"></div>
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="iobtn" onclick="resetarCiclo()">🔁 Resetar Ciclo</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>➕ Adicionar ao Ciclo</h2>
+      <div class="edital-form">
+        <input type="text" id="ciclo-materia-input" placeholder="Matéria">
+        <input type="number" id="ciclo-horas-input" placeholder="Horas alvo" value="2" min="0.5" step="0.5" style="max-width:100px;">
+        <button onclick="addCiclo()">Adicionar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Flashcards -->
+  <div id="tab-flashcards" class="tab-content">
+    <div class="flash-panel">
+      <h2>🧠 Revisão de Hoje</h2>
+      <div id="flash-card-area">
+        <div id="flash-question"></div>
+        <div id="flash-answer"></div>
+        <button id="flash-reveal-btn" style="display:none;" onclick="revealAnswer()">Revelar Resposta</button>
+        <div class="flash-review-btns" id="flash-review-btns" style="display:none;">
+          <button id="flash-btn-wrong" onclick="reviewFlashcard(false)">Errei ❌</button>
+          <button id="flash-btn-right" onclick="reviewFlashcard(true)">Acertei ✓</button>
+        </div>
+      </div>
+    </div>
+    <div class="flash-panel flash-add-form">
+      <h2>➕ Adicionar Flashcard</h2>
+      <textarea id="flash-pergunta" placeholder="Pergunta..." rows="2"></textarea>
+      <textarea id="flash-resposta" placeholder="Resposta..." rows="2"></textarea>
+      <button onclick="addFlashcard()">Adicionar</button>
+    </div>
+    <div class="flash-panel">
+      <h2>📦 Todos os Flashcards</h2>
+      <div class="flash-count" id="flash-count"></div>
+      <div id="flash-list"></div>
+    </div>
+  </div>
+
+  <!-- Tab: Metas -->
+  <div id="tab-metas" class="tab-content">
+    <div class="panel">
+      <h2>🎯 Configurar Metas Diárias</h2>
+      <p style="font-size:0.85rem;color:#6c7086;margin-bottom:12px;">Defina suas metas diárias. O progresso aparece no cabeçalho e no Dashboard.</p>
+      <div class="metas-config">
+        <label>⏱ Horas: <input type="number" id="meta-horas" min="0.5" step="0.5" value="3"></label>
+        <label>❓ Questões: <input type="number" id="meta-questoes" min="1" step="1" value="30"></label>
+        <label>🧠 Flashcards: <input type="number" id="meta-flashcards" min="1" step="1" value="10"></label>
+        <label>📄 Páginas: <input type="number" id="meta-paginas" min="1" step="1" value="20"></label>
+        <button class="iobtn" onclick="salvarMetas()">💾 Salvar</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>📊 Progresso de Hoje</h2>
+      <div id="metas-progresso"></div>
+    </div>
+    <div class="panel">
+      <h2>🔥 Streak</h2>
+      <div id="metas-streak"></div>
+    </div>
+  </div>
+
+  <script>
+    // ==================== TAB NAVIGATION ====================
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(btn.dataset.tab).classList.add('active');
+      });
+    });
+
+    // ==================== TAB 1: PDFs ====================
+    const API = '';
+    const OPEN_KEY = 'folders_open';
+    const TIMER_KEY = 'leitor_timer_state';
+    const TIMER_LIMIT_KEY = 'leitor_timer_limit_min';
+
+    function getOpenFolders() {
+      try { return new Set(JSON.parse(sessionStorage.getItem(OPEN_KEY)) || []); } catch { return new Set(); }
+    }
+    function saveOpenFolders(set) { sessionStorage.setItem(OPEN_KEY, JSON.stringify([...set])); }
+
+    async function load() {
+      const [tree, bulk] = await Promise.all([
+        fetch(`${API}/api/tree`).then(r => r.json()),
+        fetch(`${API}/api/progress-bulk`).then(r => r.json())
+      ]);
+      document.getElementById('tree').innerHTML = '';
+      renderNodes(tree, document.getElementById('tree'), bulk, '');
+    }
+
+    function calcFolderProgress(children, bulk, prefix) {
+      let read = 0, total = 0;
+      for (const n of children) {
+        if (n.type === 'pdf') {
+          const p = prefix ? `${prefix}/${n.name}` : n.name;
+          const prog = bulk[p];
+          const tp = prog ? prog.total_pages : 1;
+          const cp = prog ? prog.current_page : 1;
+          total += tp; read += cp - 1;
+        } else if (n.type === 'folder') {
+          const sub = calcFolderProgress(n.children, bulk, prefix ? `${prefix}/${n.name}` : n.name);
+          total += sub.total; read += sub.read;
+        }
+      }
+      return { read, total };
+    }
+
+    function renderNodes(nodes, container, bulk, prefix) {
+      for (const node of nodes) {
+        const path = prefix ? `${prefix}/${node.name}` : node.name;
+        if (node.type === 'folder') {
+          const { read, total } = calcFolderProgress(node.children, bulk, path);
+          const pct = total > 0 ? Math.round((read / total) * 100) : 0;
+          const div = document.createElement('div');
+          div.className = 'folder';
+          div.innerHTML = `
+            <div class="folder-header"><span class="folder-icon">📁</span><span class="folder-name">${node.name}</span><span class="folder-progress">${pct}% concluído</span>${pct === 100 ? '<span class="badge-done">✓</span>' : ''}</div>
+            <div class="folder-bar"><div class="folder-bar-fill" style="width:${pct}%"></div></div>
+            <div class="folder-children"></div>
+          `;
+          const header = div.querySelector('.folder-header');
+          const children = div.querySelector('.folder-children');
+          if (getOpenFolders().has(path)) children.classList.add('open');
+          header.addEventListener('click', () => {
+            children.classList.toggle('open');
+            const updated = getOpenFolders();
+            if (children.classList.contains('open')) updated.add(path); else updated.delete(path);
+            saveOpenFolders(updated);
+          });
+          renderNodes(node.children, children, bulk, path);
+          container.appendChild(div);
+        } else if (node.type === 'pdf') {
+          const prog = bulk[path];
+          const tp = prog ? prog.total_pages : null;
+          const cp = prog ? prog.current_page : 1;
+          const pct = tp ? Math.round(((cp - 1) / tp) * 100) : 0;
+          const label = tp ? `pág. ${cp}/${tp} (${pct}%)` : 'não lido';
+          const div = document.createElement('div');
+          div.innerHTML = `
+            <div class="pdf-item" data-path="${path}"><span>📄</span><span class="pdf-name">${node.name.replace(/_/g,' ')}</span><span class="pdf-progress">${label}</span>${pct === 100 ? '<span class="badge-done">✓</span>' : ''}</div>
+            <div class="pdf-bar"><div class="pdf-bar-fill" style="width:${pct}%"></div></div>
+          `;
+          div.querySelector('.pdf-item').addEventListener('click', () => { window.open(`viewer.html?path=${encodeURIComponent(path)}`, '_blank'); });
+          container.appendChild(div);
+        }
+      }
+    }
+
+    load();
+    window.addEventListener('storage', (e) => {
+      if (e.key === 'leitor_progress_updated') load();
+      if (e.key === 'leitor_timer_finished' || e.key === 'leitor_timer_state') { clearInterval(timerInterval); timerInterval = null; restoreTimer(); }
+    });
+    window.addEventListener('focus', () => load());
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') load(); });
+
+    // --- Pomodoro Timer ---
+    let timerInterval = null, elapsed = 0, paused = false, limitSeconds = 0, startedAt = null;
+    const display = document.getElementById('timer-display');
+    const select = document.getElementById('timer-select');
+    const btnStart = document.getElementById('btn-start');
+    const btnPause = document.getElementById('btn-pause');
+    const btnStop = document.getElementById('btn-stop');
+    const savedLimit = localStorage.getItem(TIMER_LIMIT_KEY);
+    if (savedLimit) select.value = savedLimit;
+    select.addEventListener('change', () => { localStorage.setItem(TIMER_LIMIT_KEY, select.value); });
+
+    function fmt(s) { return `${String(Math.floor(s/3600)).padStart(2,'0')}:${String(Math.floor((s%3600)/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; }
+    function saveState() { localStorage.setItem(TIMER_KEY, JSON.stringify({ elapsed, paused, limitSeconds, startedAt, running: !!timerInterval })); }
+    function loadState() { try { const r = localStorage.getItem(TIMER_KEY); return r ? JSON.parse(r) : null; } catch { return null; } }
+    function clearState() { localStorage.removeItem(TIMER_KEY); }
+    function updateDisplay() { display.textContent = fmt(elapsed); display.classList.toggle('done', limitSeconds > 0 && elapsed >= limitSeconds); }
+
+    function tick() { if (paused || !startedAt) return; elapsed = Math.floor((Date.now() - startedAt) / 1000); updateDisplay(); saveState(); if (elapsed >= limitSeconds) stopTimer(true); }
+
+    function startTimer(fromContinue = false) {
+      limitSeconds = fromContinue ? limitSeconds : parseInt(select.value, 10) * 60;
+      if (!fromContinue) { localStorage.setItem(TIMER_LIMIT_KEY, select.value); elapsed = 0; startedAt = Date.now(); } else { startedAt = Date.now() - (elapsed * 1000); }
+      paused = false; select.disabled = true; btnStart.disabled = true; btnPause.disabled = false; btnStop.disabled = false;
+      btnPause.textContent = '⏸ Pausar'; btnStart.textContent = '▶ Iniciar';
+      clearInterval(timerInterval); timerInterval = setInterval(tick, 250); tick(); saveState();
+    }
+
+    function pauseTimer() {
+      if (!timerInterval) return; clearInterval(timerInterval); timerInterval = null; paused = true;
+      if (startedAt) elapsed = Math.floor((Date.now() - startedAt) / 1000); startedAt = null;
+      btnPause.disabled = true; btnStart.textContent = '▶ Continuar'; btnStart.disabled = false; updateDisplay(); saveState();
+    }
+
+    function stopTimer(showOverlay = false) {
+      clearInterval(timerInterval); timerInterval = null; elapsed = 0; paused = false; startedAt = null; limitSeconds = 0;
+      display.textContent = '00:00:00'; display.classList.remove('done'); select.disabled = false;
+      btnStart.textContent = '▶ Iniciar'; btnStart.disabled = false; btnPause.textContent = '⏸ Pausar'; btnPause.disabled = true; btnStop.disabled = true;
+      clearState(); localStorage.setItem('leitor_timer_finished', Date.now().toString());
+      if (showOverlay) document.getElementById('overlay').style.display = 'flex';
+    }
+
+    function restoreTimer() {
+      const state = loadState();
+      if (!state) { elapsed=0; paused=false; startedAt=null; limitSeconds=0; display.textContent='00:00:00'; display.classList.remove('done'); select.disabled=false; btnStart.textContent='▶ Iniciar'; btnStart.disabled=false; btnPause.disabled=true; btnStop.disabled=true; return; }
+      elapsed = state.elapsed||0; paused = state.paused||false; limitSeconds = state.limitSeconds||0; startedAt = state.startedAt||null;
+      if (state.running && !paused && startedAt) { select.disabled=true; btnStart.disabled=true; btnPause.disabled=false; btnStop.disabled=false; elapsed=Math.floor((Date.now()-startedAt)/1000); updateDisplay(); if(elapsed>=limitSeconds){stopTimer(true);return;} clearInterval(timerInterval); timerInterval=setInterval(tick,250); }
+      else if (paused && limitSeconds > 0) { select.disabled=true; btnStart.disabled=false; btnStart.textContent='▶ Continuar'; btnPause.disabled=true; btnStop.disabled=false; updateDisplay(); }
+      else { updateDisplay(); }
+    }
+
+    btnStart.addEventListener('click', () => { btnStart.textContent.includes('Continuar') ? startTimer(true) : startTimer(false); });
+    btnPause.addEventListener('click', pauseTimer);
+    btnStop.addEventListener('click', () => stopTimer(false));
+    restoreTimer();
+
+    // Export/Import
+    function exportProgress() { const a = document.createElement('a'); a.href='/api/export'; a.download='leitor_progress.json'; a.click(); }
+    async function importProgress(input) {
+      const file = input.files[0]; if (!file) return;
+      const form = new FormData(); form.append('file', file);
+      const res = await fetch('/api/import', { method: 'POST', body: form });
+      const data = await res.json(); input.value = '';
+      if (data.ok) { alert(`Importado! ${data.imported} registro(s).`); load(); } else { alert('Erro ao importar.'); }
+    }
+
+    // ==================== TAB 2: EDITAL ====================
+    let editalTimer = null, editalStartedAt = null, editalElapsed = 0, editalPaused = false, editalSelectedId = null, editalData = [];
+    const editalDisplay = document.getElementById('edital-timer-display');
+    const editalMateriaLabel = document.getElementById('edital-materia-label');
+    const editalBtnStart = document.getElementById('edital-btn-start');
+    const editalBtnStop = document.getElementById('edital-btn-stop');
+    const EDITAL_OPEN_KEY = 'edital_accordion_state';
+
+    function editalFmt(s) { return `${String(Math.floor(s/3600)).padStart(2,'0')}:${String(Math.floor((s%3600)/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; }
+    function editalTick() { if (editalPaused || !editalStartedAt) return; editalElapsed = Math.floor((Date.now() - editalStartedAt) / 1000); editalDisplay.textContent = editalFmt(editalElapsed); }
+
+    editalBtnStart.addEventListener('click', () => {
+      if (!editalSelectedId) { alert('Selecione um tópico no accordion abaixo.'); return; }
+      if (editalTimer) { clearInterval(editalTimer); editalTimer=null; editalPaused=true; editalElapsed=Math.floor((Date.now()-editalStartedAt)/1000); editalStartedAt=null; editalBtnStart.textContent='▶ Iniciar'; editalBtnStop.style.display='inline-block'; }
+      else { if (editalPaused) { editalStartedAt=Date.now()-(editalElapsed*1000); } else { editalStartedAt=Date.now(); editalElapsed=0; } editalPaused=false; editalTimer=setInterval(editalTick,250); editalBtnStart.textContent='⏸ Pausar'; editalBtnStop.style.display='inline-block'; editalTick(); }
+    });
+
+    editalBtnStop.addEventListener('click', async () => {
+      clearInterval(editalTimer); editalTimer=null;
+      if (editalStartedAt) editalElapsed = Math.floor((Date.now()-editalStartedAt)/1000);
+      const hours = editalElapsed / 3600;
+      if (editalSelectedId && editalElapsed > 0) {
+        await fetch(`/api/edital/${editalSelectedId}/horas`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({horas:hours}) });
+        loadEdital(); loadStreakBadge();
+      }
+      editalElapsed=0; editalStartedAt=null; editalPaused=false; editalDisplay.textContent='00:00:00'; editalBtnStart.textContent='▶ Iniciar'; editalBtnStop.style.display='none';
+    });
+
+    function getAccordionState() {
+      try { return JSON.parse(sessionStorage.getItem(EDITAL_OPEN_KEY)) || {}; } catch { return {}; }
+    }
+    function saveAccordionState(state) { sessionStorage.setItem(EDITAL_OPEN_KEY, JSON.stringify(state)); }
+
+    let editalInfo = [];
+
+    async function loadEdital() {
+      const [dataRes, infoRes] = await Promise.all([
+        fetch('/api/edital').then(r => r.json()),
+        fetch('/api/edital/info').then(r => r.json())
+      ]);
+      editalData = dataRes;
+      editalInfo = infoRes;
+      renderEditalTree();
+    }
+
+    function getStatusClass(s) { return s==='Em Andamento'?'status-em-andamento':s==='Concluído'?'status-concluido':'status-nao-iniciado'; }
+    function formatHours(h) { const hrs=Math.floor(h); const mins=Math.round((h-hrs)*60); if(hrs===0&&mins===0)return'—'; if(hrs===0)return`${mins}m`; if(mins===0)return`${hrs}h`; return`${hrs}h${mins}m`; }
+
+    function renderEditalTree() {
+      const container = document.getElementById('edital-accordion');
+      const state = getAccordionState();
+
+      if (editalData.length === 0) {
+        container.innerHTML = '<p style="color:#6c7086;font-size:0.9rem;text-align:center;padding:20px;">Nenhum tópico cadastrado.</p>';
+        return;
+      }
+
+      // Construir tree: Concurso > Cargo > Matéria > Tópicos
+      const tree = {};
+      for (const item of editalData) {
+        const concurso = item.edital_nome || 'Geral';
+        const cargo = item.cargo || 'Geral';
+        const mat = item.materia;
+        if (!tree[concurso]) tree[concurso] = {};
+        if (!tree[concurso][cargo]) tree[concurso][cargo] = {};
+        if (!tree[concurso][cargo][mat]) tree[concurso][cargo][mat] = [];
+        tree[concurso][cargo][mat].push(item);
+      }
+
+      const total = editalData.length;
+      const concluidos = editalData.filter(i => i.status === 'Concluído').length;
+      document.getElementById('edital-stats').textContent = `${total} tópicos • ${concluidos} concluídos (${total > 0 ? Math.round(concluidos/total*100) : 0}%)`;
+
+      let html = '';
+      const concursos = Object.keys(tree).sort();
+
+      for (const concurso of concursos) {
+        const concKey = `c_${concurso}`;
+        const concOpen = state[concKey] !== false;
+        const concItems = editalData.filter(i => i.edital_nome === concurso);
+        const concDone = concItems.filter(i => i.status === 'Concluído').length;
+        const concPct = concItems.length > 0 ? Math.round(concDone / concItems.length * 100) : 0;
+
+        html += `<div class="tree-l1">
+          <div class="tree-node tree-node-l1 ${concOpen ? 'open' : ''}" data-key="${concKey}" onclick="toggleTree(this)">
+            <span class="tree-chevron">▶</span>
+            <span class="tree-icon">📋</span>
+            <span class="tree-label">${concurso}</span>
+            <span class="tree-stats">${concDone}/${concItems.length} (${concPct}%)</span>
+            <div class="tree-bar"><div class="tree-bar-fill" style="width:${concPct}%"></div></div>
+          </div>
+          <div class="tree-children ${concOpen ? 'open' : ''}">`;
+
+        const cargos = Object.keys(tree[concurso]).sort();
+        for (const cargo of cargos) {
+          const cargoKey = `cr_${concurso}_${cargo}`;
+          const cargoOpen = state[cargoKey] === true;
+          const cargoItems = concItems.filter(i => (i.cargo||'Geral') === cargo);
+          const cargoDone = cargoItems.filter(i => i.status === 'Concluído').length;
+          const cargoPct = cargoItems.length > 0 ? Math.round(cargoDone / cargoItems.length * 100) : 0;
+
+          // Nível 2: Cargo - buscar metadados
+          const info = editalInfo.find(i => i.edital_nome === concurso && i.cargo === cargo);
+          const infoHtml = info ? `<div class="tree-info-badge" title="${info.local_prova || ''}">
+            ${info.data_prova_objetiva ? `<span>📅 ${info.data_prova_objetiva}</span>` : ''}
+            ${info.subsidio ? `<span>💰 ${info.subsidio}</span>` : ''}
+            ${info.vagas ? `<span>🎯 ${info.vagas}</span>` : ''}
+          </div>` : '';
+
+          html += `<div class="tree-l2">
+            <div class="tree-node tree-node-l2 ${cargoOpen ? 'open' : ''}" data-key="${cargoKey}" onclick="toggleTree(this)">
+              <span class="tree-chevron">▶</span>
+              <span class="tree-icon">👤</span>
+              <span class="tree-label">${cargo}</span>
+              ${infoHtml}
+              <span class="tree-stats">${cargoDone}/${cargoItems.length}</span>
+              <div class="tree-bar"><div class="tree-bar-fill" style="width:${cargoPct}%"></div></div>
+            </div>
+            <div class="tree-children ${cargoOpen ? 'open' : ''}">`;
+
+          // Se há info detalhada, mostrar card expandido dentro
+          if (info && cargoOpen) {
+            html += `<div class="tree-info-card">
+              ${info.data_prova_objetiva ? `<div><strong>📅 Objetiva:</strong> ${info.data_prova_objetiva}</div>` : ''}
+              ${info.data_prova_discursiva ? `<div><strong>📝 Discursiva:</strong> ${info.data_prova_discursiva}</div>` : ''}
+              ${info.horario ? `<div><strong>🕐 Horário:</strong> ${info.horario}</div>` : ''}
+              ${info.local_prova ? `<div><strong>📍 Local:</strong> ${info.local_prova}</div>` : ''}
+              ${info.vagas ? `<div><strong>🎯 Vagas:</strong> ${info.vagas}</div>` : ''}
+              ${info.subsidio ? `<div><strong>💰 Subsídio:</strong> ${info.subsidio}</div>` : ''}
+              ${info.inscricoes ? `<div><strong>📋 Inscrições:</strong> ${info.inscricoes}</div>` : ''}
+              ${info.link_edital ? `<div><a href="${info.link_edital}" target="_blank" style="color:#89b4fa;font-size:0.8rem;">🔗 Abrir edital no Cebraspe</a></div>` : ''}
+            </div>`;
+          }
+
+          const materias = Object.keys(tree[concurso][cargo]).sort();
+          for (const matNome of materias) {
+            const matKey = `m_${concurso}_${cargo}_${matNome}`;
+            const matOpen = state[matKey] === true;
+            const items = tree[concurso][cargo][matNome];
+            const matDone = items.filter(i => i.status === 'Concluído').length;
+            const matPct = items.length > 0 ? Math.round(matDone / items.length * 100) : 0;
+            const matHoras = items.reduce((a, i) => a + i.horas_estudadas, 0);
+
+            html += `<div class="tree-l3">
+              <div class="tree-node tree-node-l3 ${matOpen ? 'open' : ''}" data-key="${matKey}" onclick="toggleTree(this)">
+                <span class="tree-chevron">▶</span>
+                <span class="tree-icon">📚</span>
+                <span class="tree-label">${matNome}</span>
+                <span class="tree-stats">${matDone}/${items.length}${matHoras > 0 ? ' • '+formatHours(matHoras) : ''}</span>
+                <div class="tree-bar"><div class="tree-bar-fill" style="width:${matPct}%"></div></div>
+              </div>
+              <div class="tree-children ${matOpen ? 'open' : ''}">`;
+
+            for (const item of items) {
+              const sel = item.id === editalSelectedId ? ' selected' : '';
+              const safeMateria = item.materia.replace(/'/g, "\\'");
+              const safeTopico = item.topico.replace(/'/g, "\\'");
+              html += `<div class="tree-leaf${sel}" data-id="${item.id}" onclick="selectEditalTopic(${item.id}, '${safeMateria}', '${safeTopico}')">
+                <span class="tree-status ${getStatusClass(item.status)}" onclick="event.stopPropagation();toggleEditalStatus(${item.id})">${item.status === 'Concluído' ? '✓' : item.status === 'Em Andamento' ? '◐' : '○'}</span>
+                <span class="tree-topic">${item.topico}</span>
+                ${item.horas_estudadas > 0 ? `<span class="tree-hours">${formatHours(item.horas_estudadas)}</span>` : ''}
+                <button class="tree-del" onclick="event.stopPropagation();deleteEditalItem(${item.id})">×</button>
+              </div>`;
+            }
+            html += `</div></div>`;
+          }
+          html += `</div></div>`;
+        }
+        html += `</div></div>`;
+      }
+      container.innerHTML = html;
+    }
+
+    function toggleTree(el) {
+      const key = el.dataset.key;
+      const state = getAccordionState();
+      const isOpen = el.classList.contains('open');
+      el.classList.toggle('open');
+      const body = el.nextElementSibling;
+      if (body) body.classList.toggle('open');
+      state[key] = !isOpen;
+      saveAccordionState(state);
+    }
+
+    function toggleAllEdital(expand) {
+      const state = getAccordionState();
+      document.querySelectorAll('.tree-node').forEach(h => {
+        const key = h.dataset.key;
+        if (expand) { h.classList.add('open'); h.nextElementSibling?.classList.add('open'); state[key] = true; }
+        else { h.classList.remove('open'); h.nextElementSibling?.classList.remove('open'); state[key] = false; }
+      });
+      saveAccordionState(state);
+    }
+
+    function selectEditalTopic(id, materia, topico) {
+      editalSelectedId = id;
+      editalMateriaLabel.textContent = `📖 ${materia} — ${topico}`;
+      document.querySelectorAll('.tree-leaf').forEach(r => r.classList.remove('selected'));
+      const row = document.querySelector(`.tree-leaf[data-id="${id}"]`);
+      if (row) row.classList.add('selected');
+    }
+
+    async function toggleEditalStatus(id) { await fetch(`/api/edital/${id}/status`, { method: 'PUT' }); loadEdital(); }
+
+    async function deleteEditalItem(id) {
+      if (!confirm('Excluir?')) return;
+      await fetch(`/api/edital/${id}`, { method: 'DELETE' });
+      if (editalSelectedId == id) { editalSelectedId = null; editalMateriaLabel.textContent = 'Nenhuma matéria selecionada'; }
+      loadEdital();
+    }
+
+    async function addEdital() {
+      const concurso = document.getElementById('edital-nome-input').value.trim() || 'Geral';
+      const cargo = document.getElementById('edital-cargo-input').value.trim() || '';
+      const m = document.getElementById('edital-materia-input').value.trim();
+      const t = document.getElementById('edital-topico-input').value.trim();
+      if (!m || !t) { alert('Preencha matéria e tópico.'); return; }
+      await fetch('/api/edital', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({edital_nome:concurso, cargo:cargo, materia:m, topico:t}) });
+      document.getElementById('edital-materia-input').value=''; document.getElementById('edital-topico-input').value='';
+      loadEdital();
+    }
+
+    async function importEditalPdf(input) {
+      const file = input.files[0]; if (!file) return;
+      const nome = document.getElementById('edital-pdf-nome').value.trim() || 'Importado';
+      const form = new FormData(); form.append('file', file);
+      const res = await fetch(`/api/edital/importar-pdf?edital_nome=${encodeURIComponent(nome)}`, { method:'POST', body:form }).then(r=>r.json());
+      input.value = '';
+      if (res.ok) { alert(`Importados ${res.importados} itens!`); loadEdital(); } else { alert('Erro.'); }
+    }
+
+    loadEdital();
+
+    // ==================== TAB 3: CICLO ====================
+    async function loadCiclo() {
+      const [ciclo, proximo] = await Promise.all([
+        fetch('/api/ciclo').then(r=>r.json()),
+        fetch('/api/ciclo/proximo').then(r=>r.json())
+      ]);
+      // Próxima matéria
+      const nextEl = document.getElementById('ciclo-next');
+      nextEl.innerHTML = `<span class="icon">▶</span><div class="info"><div class="title">Próxima: ${proximo.materia}</div><div class="sub">${proximo.horas_cumpridas?.toFixed(1) || 0}h / ${proximo.horas_alvo?.toFixed(1) || 0}h cumpridas</div></div>`;
+
+      // Lista
+      const list = document.getElementById('ciclo-list');
+      if (ciclo.length === 0) { list.innerHTML = '<p style="color:#6c7086;font-size:0.85rem;">Adicione matérias ao ciclo abaixo.</p>'; return; }
+      list.innerHTML = ciclo.map(c => {
+        const pct = c.horas_alvo > 0 ? Math.min(100, (c.horas_cumpridas / c.horas_alvo) * 100) : 0;
+        return `<div class="ciclo-item">
+          <span class="ciclo-materia">${c.materia}</span>
+          <div class="ciclo-bar"><div class="ciclo-bar-fill" style="width:${pct}%"></div></div>
+          <span class="ciclo-hours">${c.horas_cumpridas.toFixed(1)}h / ${c.horas_alvo.toFixed(1)}h</span>
+          <button class="ciclo-delete" onclick="deleteCiclo(${c.id})">🗑</button>
+        </div>`;
+      }).join('');
+    }
+
+    async function addCiclo() {
+      const m=document.getElementById('ciclo-materia-input').value.trim();
+      const h=parseFloat(document.getElementById('ciclo-horas-input').value)||2;
+      if(!m){alert('Preencha a matéria.');return;}
+      await fetch('/api/ciclo',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({materia:m,horas_alvo:h})});
+      document.getElementById('ciclo-materia-input').value=''; loadCiclo();
+    }
+
+    async function deleteCiclo(id) { if(confirm('Remover do ciclo?')){await fetch(`/api/ciclo/${id}`,{method:'DELETE'});loadCiclo();} }
+    async function resetarCiclo() { if(confirm('Resetar todas as horas cumpridas?')){await fetch('/api/ciclo/resetar',{method:'POST'});loadCiclo();} }
+    loadCiclo();
+
+    // ==================== TAB 4: FLASHCARDS ====================
+    let flashcardsToday = [], currentFlashIndex = 0;
+
+    async function loadFlashcardsToday() {
+      flashcardsToday = await fetch('/api/flashcards/today').then(r=>r.json());
+      currentFlashIndex = 0; showCurrentFlashcard();
+    }
+
+    function showCurrentFlashcard() {
+      const q=document.getElementById('flash-question'), a=document.getElementById('flash-answer');
+      const rb=document.getElementById('flash-reveal-btn'), rv=document.getElementById('flash-review-btns');
+      if (currentFlashIndex >= flashcardsToday.length) { q.innerHTML='<span style="color:#a6e3a1;font-size:1.3rem;font-weight:600;">🎉 Não há revisões pendentes para hoje!</span>'; a.style.display='none'; rb.style.display='none'; rv.style.display='none'; return; }
+      const card = flashcardsToday[currentFlashIndex];
+      q.textContent = card.pergunta; a.textContent = card.resposta; a.style.display='none'; rb.style.display='inline-block'; rv.style.display='none';
+    }
+
+    function revealAnswer() { document.getElementById('flash-answer').style.display='block'; document.getElementById('flash-reveal-btn').style.display='none'; document.getElementById('flash-review-btns').style.display='flex'; }
+
+    async function reviewFlashcard(acertou) {
+      const card = flashcardsToday[currentFlashIndex];
+      await fetch(`/api/flashcards/${card.id}/review`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({acertou})});
+      currentFlashIndex++; showCurrentFlashcard(); loadAllFlashcards(); loadStreakBadge();
+    }
+
+    async function addFlashcard() {
+      const p=document.getElementById('flash-pergunta').value.trim(), r=document.getElementById('flash-resposta').value.trim();
+      if(!p||!r){alert('Preencha pergunta e resposta.');return;}
+      await fetch('/api/flashcards',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pergunta:p,resposta:r})});
+      document.getElementById('flash-pergunta').value=''; document.getElementById('flash-resposta').value='';
+      loadFlashcardsToday(); loadAllFlashcards();
+    }
+
+    async function loadAllFlashcards() {
+      const all = await fetch('/api/flashcards').then(r=>r.json());
+      document.getElementById('flash-count').textContent = `Total: ${all.length} flashcard(s)`;
+      document.getElementById('flash-list').innerHTML = all.map(c => `
+        <div class="flash-list-item"><span style="flex:1;color:#cdd6f4;">${c.pergunta}</span><button class="flash-list-delete" onclick="deleteFlashcard(${c.id})">🗑</button></div>
+      `).join('');
+    }
+
+    async function deleteFlashcard(id) { if(confirm('Excluir?')){await fetch(`/api/flashcards/${id}`,{method:'DELETE'});loadAllFlashcards();loadFlashcardsToday();} }
+    loadFlashcardsToday(); loadAllFlashcards();
+
+    // ==================== TAB 5: METAS ====================
+    async function loadMetas() {
+      const data = await fetch('/api/metas').then(r=>r.json());
+      const cfg = data.config; const prog = data.progresso;
+
+      document.getElementById('meta-horas').value = cfg.meta_horas;
+      document.getElementById('meta-questoes').value = cfg.meta_questoes;
+      document.getElementById('meta-flashcards').value = cfg.meta_flashcards;
+      document.getElementById('meta-paginas').value = cfg.meta_paginas;
+
+      const progEl = document.getElementById('metas-progresso');
+      const items = [
+        { icon:'⏱', label:'Horas', val:prog.horas.toFixed(1), meta:cfg.meta_horas, pct:Math.min(100,(prog.horas/cfg.meta_horas)*100), color:'#89b4fa' },
+        { icon:'❓', label:'Questões', val:prog.questoes, meta:cfg.meta_questoes, pct:Math.min(100,(prog.questoes/cfg.meta_questoes)*100), color:'#a6e3a1' },
+        { icon:'🧠', label:'Flashcards', val:prog.flashcards, meta:cfg.meta_flashcards, pct:Math.min(100,(prog.flashcards/cfg.meta_flashcards)*100), color:'#cba6f7' },
+      ];
+      progEl.innerHTML = items.map(m => `
+        <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #45475a;">
+          <span style="font-size:1.2rem;">${m.icon}</span>
+          <span style="min-width:80px;font-size:0.88rem;">${m.label}</span>
+          <div style="flex:1;height:8px;background:#45475a;border-radius:4px;overflow:hidden;"><div style="height:100%;width:${m.pct}%;background:${m.color};border-radius:4px;"></div></div>
+          <span style="font-size:0.85rem;font-weight:700;color:${m.color};min-width:70px;text-align:right;">${m.val}/${m.meta}</span>
+        </div>
+      `).join('');
+
+      // Mini dots no header
+      document.getElementById('meta-dot-h').className = 'meta-dot' + (items[0].pct >= 100 ? ' done' : items[0].pct > 0 ? ' partial' : '');
+      document.getElementById('meta-dot-q').className = 'meta-dot' + (items[1].pct >= 100 ? ' done' : items[1].pct > 0 ? ' partial' : '');
+      document.getElementById('meta-dot-f').className = 'meta-dot' + (items[2].pct >= 100 ? ' done' : items[2].pct > 0 ? ' partial' : '');
+    }
+
+    async function salvarMetas() {
+      await fetch('/api/metas',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        meta_horas:parseFloat(document.getElementById('meta-horas').value),
+        meta_questoes:parseInt(document.getElementById('meta-questoes').value),
+        meta_flashcards:parseInt(document.getElementById('meta-flashcards').value),
+        meta_paginas:parseInt(document.getElementById('meta-paginas').value),
+      })});
+      alert('Metas salvas!'); loadMetas();
+    }
+
+    async function loadStreakBadge() {
+      const data = await fetch('/api/streaks').then(r=>r.json());
+      document.getElementById('streak-num').textContent = data.streak_atual;
+
+      const streakEl = document.getElementById('metas-streak');
+      if (streakEl) {
+        streakEl.innerHTML = `
+          <div style="display:flex;align-items:center;gap:16px;">
+            <span style="font-size:2.5rem;">🔥</span>
+            <div><div style="font-size:1.6rem;font-weight:700;color:#fab387;">${data.streak_atual} dias</div><div style="font-size:0.85rem;color:#6c7086;">consecutivos de estudo</div></div>
+            <div style="margin-left:auto;text-align:right;"><div style="font-size:1.2rem;font-weight:700;color:#a6e3a1;">${data.melhor_streak}</div><div style="font-size:0.75rem;color:#6c7086;">recorde</div></div>
+          </div>
+        `;
+      }
+    }
+
+    loadMetas(); loadStreakBadge();
+
+    // ==================== PWA ====================
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+
+    // ==================== COUNTDOWN ====================
+    async function loadCountdown() {
+      try {
+        const provas = await fetch('/api/countdown').then(r => r.json());
+        if (!provas.length) return;
+        const now = new Date();
+        let nearest = null;
+        let nearestDays = Infinity;
+        for (const p of provas) {
+          // Parse dd/mm/yyyy or yyyy-mm-dd
+          let parts = p.data_objetiva.match(/(\d+)[\/\-](\d+)[\/\-](\d+)/);
+          if (!parts) continue;
+          let d;
+          if (parts[3].length === 4) d = new Date(parts[3], parts[2]-1, parts[1]);
+          else d = new Date(parts[1], parts[2]-1, parts[3]);
+          const diff = Math.ceil((d - now) / 86400000);
+          if (diff > 0 && diff < nearestDays) { nearestDays = diff; nearest = { ...p, date: d, days: diff }; }
+        }
+        if (nearest) {
+          const el = document.getElementById('countdown-badge');
+          if (el) el.innerHTML = `<span class="countdown-icon">⏳</span><span class="countdown-text">${nearest.cargo}: <strong>${nearest.days}d</strong></span>`;
+        }
+      } catch(e) {}
+    }
+    loadCountdown();
+    setInterval(loadCountdown, 60000);
+
+    // ==================== THEME TOGGLE ====================
+    function toggleTheme() {
+      const body = document.body;
+      const isDark = body.classList.toggle('light-theme');
+      localStorage.setItem('theme', isDark ? 'light' : 'dark');
+      document.querySelector('meta[name=theme-color]').content = isDark ? '#eff1f5' : '#1e1e2e';
+    }
+    if (localStorage.getItem('theme') === 'light') document.body.classList.add('light-theme');
+  </script>
+</body>
+</html>

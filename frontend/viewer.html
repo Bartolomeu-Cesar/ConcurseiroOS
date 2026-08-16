@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Visualizador PDF</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #1e1e2e; color: #cdd6f4; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; }
+    #toolbar {
+      display: flex; align-items: center; gap: 12px;
+      padding: 8px 16px; background: #313244; flex-shrink: 0;
+    }
+    #toolbar a { color: #89b4fa; text-decoration: none; font-size: 0.9rem; }
+    #toolbar a:hover { text-decoration: underline; }
+    #title { flex: 1; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #page-info { font-size: 0.85rem; color: #a6e3a1; white-space: nowrap; }
+    #timer-display {
+      font-size: 0.95rem; font-weight: 700; color: #f38ba8;
+      min-width: 72px; text-align: center;
+      background: #1e1e2e; padding: 4px 10px; border-radius: 6px;
+    }
+    #timer-display.done { color: #a6e3a1; }
+    #viewer { flex: 1; overflow: hidden; }
+    iframe { width: 100%; height: 100%; border: none; }
+    #overlay {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+      z-index: 999; align-items: center; justify-content: center;
+    }
+    #overlay.show { display: flex; }
+  </style>
+</head>
+<body>
+  <div id="overlay">
+    <div style="background:#313244;border-radius:16px;padding:40px 48px;text-align:center;max-width:360px;">
+      <div style="font-size:2.5rem;margin-bottom:12px;">☕</div>
+      <div style="font-size:1.2rem;font-weight:700;color:#cba6f7;margin-bottom:8px;">Hora de descansar!</div>
+      <div style="font-size:0.9rem;color:#cdd6f4;margin-bottom:24px;">Faça uma pausa e volte descansado para continuar seus estudos.</div>
+      <button id="btn-overlay-ok" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:8px;padding:8px 24px;font-size:0.95rem;font-weight:700;cursor:pointer;">OK, entendido!</button>
+    </div>
+  </div>
+
+  <div id="toolbar">
+    <a href="/" id="btn-voltar">← Voltar</a>
+    <span id="title"></span>
+    <span id="timer-display">00:00:00</span>
+    <span id="page-info"></span>
+  </div>
+
+  <div id="viewer">
+    <iframe id="pdf-frame" allowfullscreen></iframe>
+  </div>
+
+  <script>
+    const API = '';
+    const TIMER_KEY = 'leitor_timer_state';
+    const TIMER_LIMIT_KEY = 'leitor_timer_limit_min';
+
+    const params = new URLSearchParams(location.search);
+    const path = params.get('path');
+    if (!path) { location.href = '/'; }
+
+    function encodePath(p) {
+      return p.split('/').map(encodeURIComponent).join('/');
+    }
+
+    const name = path.split('/').pop().replace('.pdf', '').replace(/_/g, ' ');
+    document.title = name;
+    document.getElementById('title').textContent = name;
+
+    // ---------- Progresso ----------
+    let totalPages = 1;
+    let currentPage = 1;
+    let saveTimer = null;
+    let lastSavedPage = null;
+    let saving = false;
+
+    async function initProgress() {
+      const prog = await fetch(`${API}/api/progress/${encodePath(path)}`).then(r => r.json());
+      totalPages = prog.total_pages || 1;
+      currentPage = prog.current_page || 1;
+      lastSavedPage = currentPage;
+      updateInfo();
+
+      const pdfUrl = encodeURIComponent(`${location.origin}/pdf/${encodePath(path)}`);
+      const frame = document.getElementById('pdf-frame');
+      frame.src = `/pdfjs/web/viewer.html?file=${pdfUrl}#page=${currentPage}`;
+
+      frame.addEventListener('load', () => {
+        let tries = 0;
+        const wait = setInterval(() => {
+          tries++;
+          if (readPageFromViewer() || tries > 40) clearInterval(wait);
+        }, 250);
+      });
+
+      setInterval(() => readPageFromViewer(), 400);
+    }
+
+    function readPageFromViewer() {
+      const frame = document.getElementById('pdf-frame');
+      try {
+        const win = frame.contentWindow;
+        if (!win) return false;
+
+        const app = win.PDFViewerApplication;
+        if (app && app.pdfDocument) {
+          if (app.pagesCount && app.pagesCount !== totalPages) {
+            totalPages = app.pagesCount;
+          }
+          const p = app.page;
+          if (p && p !== currentPage) setPage(p);
+          return true;
+        }
+
+        const doc = frame.contentDocument;
+        if (doc) {
+          const input = doc.getElementById('pageNumber');
+          if (input && input.value) {
+            const p = parseInt(input.value, 10);
+            if (p && p !== currentPage) setPage(p);
+            return true;
+          }
+        }
+
+        const hash = win.location.hash || '';
+        const match = hash.match(/page=(\d+)/i);
+        if (match) {
+          const p = parseInt(match[1], 10);
+          if (p && p !== currentPage) setPage(p);
+          return true;
+        }
+      } catch (e) {}
+      return false;
+    }
+
+    function setPage(p) {
+      if (!p || p < 1) return;
+      currentPage = p;
+      updateInfo();
+      scheduleSave();
+    }
+
+    function updateInfo() {
+      const pct = totalPages > 1
+        ? Math.round(((currentPage - 1) / (totalPages - 1)) * 100)
+        : (currentPage >= 1 ? 100 : 0);
+      document.getElementById('page-info').textContent =
+        `Página ${currentPage} / ${totalPages} (${pct}%)`;
+    }
+
+    function scheduleSave() {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(saveProgress, 600);
+    }
+
+    async function saveProgress() {
+      if (saving || currentPage === lastSavedPage) return;
+      saving = true;
+      try {
+        const res = await fetch(`${API}/api/progress/${encodePath(path)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ current_page: currentPage, total_pages: totalPages }),
+          keepalive: true
+        });
+        if (res.ok) {
+          lastSavedPage = currentPage;
+          localStorage.setItem('leitor_progress_updated', Date.now().toString());
+        }
+      } catch (e) {}
+      finally { saving = false; }
+    }
+
+    function saveOnExit() {
+      readPageFromViewer();
+      if (currentPage === lastSavedPage) return;
+
+      const body = JSON.stringify({ current_page: currentPage, total_pages: totalPages });
+      const url = `${API}/api/progress/${encodePath(path)}`;
+
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        keepalive: true
+      });
+      try {
+        navigator.sendBeacon(url, new Blob([body], { type: 'application/json' }));
+      } catch (e) {}
+      localStorage.setItem('leitor_progress_updated', Date.now().toString());
+    }
+
+    // ---------- Timer ----------
+    let timerInterval = null;
+    let elapsed = 0;
+    let paused = false;
+    let limitSeconds = 15 * 60;
+    let startedAt = null;
+
+    const display = document.getElementById('timer-display');
+
+    function fmt(s) {
+      const h = String(Math.floor(s / 3600)).padStart(2, '0');
+      const m = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+      const sec = String(s % 60).padStart(2, '0');
+      return `${h}:${m}:${sec}`;
+    }
+
+    function saveTimerState() {
+      localStorage.setItem(TIMER_KEY, JSON.stringify({
+        elapsed,
+        paused,
+        limitSeconds,
+        startedAt,
+        running: !!timerInterval
+      }));
+    }
+
+    function loadTimerState() {
+      try {
+        const raw = localStorage.getItem(TIMER_KEY);
+        return raw ? JSON.parse(raw) : null;
+      } catch {
+        return null;
+      }
+    }
+
+    function clearTimerState() {
+      localStorage.removeItem(TIMER_KEY);
+    }
+
+    function updateTimerDisplay() {
+      display.textContent = fmt(elapsed);
+      display.classList.toggle('done', limitSeconds > 0 && elapsed >= limitSeconds);
+    }
+
+    function tick() {
+      if (paused || !startedAt) return;
+      elapsed = Math.floor((Date.now() - startedAt) / 1000);
+      updateTimerDisplay();
+      saveTimerState();
+      if (elapsed >= limitSeconds) {
+        finishTimer(true);
+      }
+    }
+
+    function startTimer(limitMin, resumeElapsed = 0) {
+      limitSeconds = limitMin * 60;
+      elapsed = resumeElapsed;
+      startedAt = Date.now() - (elapsed * 1000);
+      paused = false;
+      clearInterval(timerInterval);
+      timerInterval = setInterval(tick, 250);
+      tick();
+      saveTimerState();
+    }
+
+    function finishTimer(showOverlay = false) {
+      clearInterval(timerInterval);
+      timerInterval = null;
+      paused = false;
+      startedAt = null;
+      elapsed = 0;
+      updateTimerDisplay();
+      clearTimerState();
+      localStorage.setItem('leitor_timer_finished', Date.now().toString());
+
+      if (showOverlay) {
+        document.getElementById('overlay').classList.add('show');
+      }
+    }
+
+    function initTimer() {
+      const state = loadTimerState();
+      const minutes = parseInt(localStorage.getItem(TIMER_LIMIT_KEY) || '15', 10);
+
+      if (state && state.running && !state.paused && state.startedAt) {
+        limitSeconds = state.limitSeconds || minutes * 60;
+        startedAt = state.startedAt;
+        elapsed = Math.floor((Date.now() - startedAt) / 1000);
+        if (elapsed >= limitSeconds) {
+          finishTimer(true);
+          return;
+        }
+        paused = false;
+        clearInterval(timerInterval);
+        timerInterval = setInterval(tick, 250);
+        tick();
+      } else if (state && state.paused && state.limitSeconds > 0) {
+        startTimer(Math.round(state.limitSeconds / 60), state.elapsed || 0);
+      } else {
+        startTimer(minutes, 0);
+      }
+    }
+
+    document.getElementById('btn-overlay-ok').addEventListener('click', () => {
+      document.getElementById('overlay').classList.remove('show');
+    });
+
+    function onLeave() {
+      saveOnExit();
+      finishTimer(false);
+    }
+
+    document.getElementById('btn-voltar').addEventListener('click', (e) => {
+      e.preventDefault();
+      onLeave();
+      location.href = '/';
+    });
+
+    window.addEventListener('beforeunload', onLeave);
+    window.addEventListener('pagehide', onLeave);
+
+    initProgress();
+    initTimer();
+  </script>
+</body>
+</html>

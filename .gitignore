@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.env
+
+# Database (dados locais do usuário)
+backend/progress.db
+backend/_progress.db
+
+# PDFs (muito grandes para o git)
+backend/pdfs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

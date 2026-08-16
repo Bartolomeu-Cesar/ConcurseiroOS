@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Visualizador PDF</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #1e1e2e; color: #cdd6f4; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; }
+    #toolbar {
+      display: flex; align-items: center; gap: 12px;
+      padding: 8px 16px; background: #313244; flex-shrink: 0;
+    }
+    #toolbar a { color: #89b4fa; text-decoration: none; font-size: 0.9rem; }
+    #toolbar a:hover { text-decoration: underline; }
+    #title { flex: 1; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #page-info { font-size: 0.85rem; color: #a6e3a1; white-space: nowrap; }
+    #viewer { flex: 1; overflow: hidden; }
+    iframe { width: 100%; height: 100%; border: none; }
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <a href="/">← Voltar</a>
+    <span id="title"></span>
+    <span id="page-info"></span>
+  </div>
+  <div id="viewer">
+    <iframe id="pdf-frame" allowfullscreen></iframe>
+  </div>
+
+  <script>
+    const API = '';
+    const params = new URLSearchParams(location.search);
+    const path = params.get('path');
+
+    if (!path) { location.href = '/'; }
+
+    const name = path.split('/').pop().replace('.pdf', '').replace(/_/g, ' ');
+    document.title = name;
+    document.getElementById('title').textContent = name;
+
+    let totalPages = 1;
+    let currentPage = 1;
+    let saveTimer = null;
+
+    async function init() {
+      const prog = await fetch(`${API}/api/progress/${path}`).then(r => r.json());
+      totalPages = prog.total_pages;
+      currentPage = prog.current_page;
+      updateInfo();
+
+      const pdfUrl = encodeURIComponent(`${location.origin}${API}/pdf/${path}`);
+      document.getElementById('pdf-frame').src =
+        `/pdfjs/web/viewer.html?file=${pdfUrl}#page=${currentPage}`;
+
+      window.addEventListener('message', (e) => {
+        if (!e.data) return;
+        // PDF.js emite pagechanging com pageNumber
+        if (e.data.type === 'pagechanging' || e.data.type === 'pagechange') {
+          const p = e.data.pageNumber ?? e.data.page;
+          if (p) setPage(p);
+        }
+      });
+    }
+
+    function setPage(p) {
+      if (p < 1) return;
+      currentPage = p;
+      updateInfo();
+      scheduleSave();
+    }
+
+    function updateInfo() {
+      const pct = totalPages > 1 ? Math.round(((currentPage - 1) / (totalPages - 1)) * 100) : 100;
+      document.getElementById('page-info').textContent =
+        `Página ${currentPage} / ${totalPages} (${pct}%)`;
+    }
+
+    function scheduleSave() {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(saveProgress, 1500);
+    }
+
+    async function saveProgress() {
+      await fetch(`${API}/api/progress/${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ current_page: currentPage, total_pages: totalPages })
+      });
+    }
+
+    window.addEventListener('beforeunload', () => {
+      navigator.sendBeacon(`${API}/api/progress/${path}`,
+        new Blob([JSON.stringify({ current_page: currentPage, total_pages: totalPages })],
+        { type: 'application/json' }));
+    });
+
+    init();
+  </script>
+</body>
+</html>

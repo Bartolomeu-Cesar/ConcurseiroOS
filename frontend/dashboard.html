@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Dashboard - Leitor PDF</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#1e1e2e">
+  <link rel="manifest" href="/manifest.json">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: sans-serif; background: #1e1e2e; color: #cdd6f4; min-height: 100vh; padding: 24px; }
+    a { color: #89b4fa; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    h1 { font-size: 1.4rem; color: #cba6f7; margin-bottom: 4px; }
+    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+    .header-links { display: flex; gap: 12px; font-size: 0.9rem; }
+
+    /* Cards de resumo */
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px; }
+    .card {
+      background: #313244; border-radius: 12px; padding: 16px;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .card-label { font-size: 0.78rem; color: #6c7086; text-transform: uppercase; font-weight: 600; }
+    .card-value { font-size: 1.6rem; font-weight: 700; color: #cdd6f4; }
+    .card-value.green { color: #a6e3a1; }
+    .card-value.blue { color: #89b4fa; }
+    .card-value.pink { color: #f38ba8; }
+    .card-value.peach { color: #fab387; }
+    .card-sub { font-size: 0.78rem; color: #a6adc8; }
+
+    /* Gráficos */
+    .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+    .chart-box {
+      background: #313244; border-radius: 12px; padding: 20px;
+    }
+    .chart-box h3 { font-size: 0.95rem; color: #cba6f7; margin-bottom: 12px; }
+    .chart-box canvas { max-height: 220px; }
+
+    /* Streak */
+    .streak-bar {
+      background: #313244; border-radius: 12px; padding: 16px 20px;
+      display: flex; align-items: center; gap: 16px; margin-bottom: 24px;
+    }
+    .streak-fire { font-size: 2rem; }
+    .streak-info { flex: 1; }
+    .streak-info .streak-num { font-size: 1.4rem; font-weight: 700; color: #fab387; }
+    .streak-info .streak-label { font-size: 0.82rem; color: #a6adc8; }
+    .streak-best { text-align: right; }
+    .streak-best .num { font-size: 1.1rem; font-weight: 700; color: #a6e3a1; }
+    .streak-best .lbl { font-size: 0.75rem; color: #6c7086; }
+
+    /* Metas */
+    .metas-section { margin-bottom: 24px; }
+    .metas-section h2 { font-size: 1.1rem; color: #cba6f7; margin-bottom: 12px; }
+    .meta-row {
+      display: flex; align-items: center; gap: 12px;
+      background: #313244; border-radius: 8px; padding: 12px 16px; margin-bottom: 8px;
+    }
+    .meta-icon { font-size: 1.3rem; }
+    .meta-info { flex: 1; }
+    .meta-info .meta-title { font-size: 0.88rem; font-weight: 600; }
+    .meta-info .meta-progress-bar {
+      height: 6px; background: #45475a; border-radius: 3px; margin-top: 4px; overflow: hidden;
+    }
+    .meta-info .meta-progress-fill { height: 100%; border-radius: 3px; transition: width 0.4s; }
+    .meta-pct { font-size: 0.85rem; font-weight: 700; min-width: 48px; text-align: right; }
+
+    /* Relatório semanal */
+    .relatorio {
+      background: #313244; border-radius: 12px; padding: 20px; margin-bottom: 24px;
+    }
+    .relatorio h2 { font-size: 1.1rem; color: #cba6f7; margin-bottom: 12px; }
+    .relatorio-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+    .relatorio-item { padding: 8px 0; }
+    .relatorio-item .r-label { font-size: 0.78rem; color: #6c7086; }
+    .relatorio-item .r-value { font-size: 1.1rem; font-weight: 600; }
+    .sugestao-box {
+      background: #1e1e2e; border-radius: 8px; padding: 12px; margin-top: 12px;
+    }
+    .sugestao-box h4 { font-size: 0.85rem; color: #fab387; margin-bottom: 6px; }
+    .sugestao-box ul { padding-left: 16px; font-size: 0.85rem; color: #cdd6f4; }
+    .sugestao-box li { margin-bottom: 4px; }
+
+    /* Prática deliberada */
+    .pratica-panel {
+      background: #313244; border-radius: 12px; padding: 20px; margin-bottom: 24px;
+    }
+    .pratica-panel h2 { font-size: 1.1rem; color: #cba6f7; margin-bottom: 12px; }
+    .pratica-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 12px; border-bottom: 1px solid #45475a;
+    }
+    .pratica-item:last-child { border-bottom: none; }
+    .pratica-badge {
+      font-size: 0.72rem; font-weight: 700; padding: 3px 8px; border-radius: 4px;
+    }
+    .pratica-badge.alta { background: #f38ba8; color: #1e1e2e; }
+    .pratica-badge.media { background: #fab387; color: #1e1e2e; }
+    .pratica-materia { flex: 1; font-size: 0.9rem; }
+    .pratica-pct { font-size: 0.85rem; font-weight: 700; }
+
+    /* Exportar */
+    .export-btn {
+      background: #45475a; color: #cdd6f4; border: none; border-radius: 8px;
+      padding: 10px 20px; font-size: 0.9rem; font-weight: 600; cursor: pointer;
+    }
+    .export-btn:hover { background: #585b70; }
+
+    @media (max-width: 768px) {
+      .charts { grid-template-columns: 1fr; }
+      .cards { grid-template-columns: repeat(2, 1fr); }
+      .relatorio-grid { grid-template-columns: 1fr; }
+    }
+
+    body.light-theme { background: #eff1f5; color: #4c4f69; }
+    body.light-theme .panel, body.light-theme .chart-box, body.light-theme .card,
+    body.light-theme .streak-bar, body.light-theme .relatorio, body.light-theme .pratica-panel,
+    body.light-theme .metas-section .meta-row { background: #e6e9ef; }
+    body.light-theme .qtab-bar { background: #e6e9ef; }
+    body.light-theme .questao-card, body.light-theme .sim-card, body.light-theme .erro-item,
+    body.light-theme .acc-header, body.light-theme .stat-card { background: #dce0e8; border-color: #bcc0cc; }
+    body.light-theme .alternativa { background: #e6e9ef; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1>📊 Dashboard de Desempenho</h1>
+      <span style="font-size:0.82rem;color:#6c7086;" id="date-label"></span>
+    </div>
+    <div class="header-links">
+      <a href="/">📚 PDFs</a>
+      <a href="/questoes.html">❓ Questões</a>
+      <button class="export-btn" onclick="exportStats()">⬇ Exportar Estatísticas</button>
+    </div>
+  </div>
+
+  <!-- Streak -->
+  <div class="streak-bar">
+    <span class="streak-fire">🔥</span>
+    <div class="streak-info">
+      <span class="streak-num" id="streak-atual">0</span>
+      <span class="streak-label"> dias consecutivos</span>
+    </div>
+    <div class="streak-best">
+      <div class="num" id="streak-best">0</div>
+      <div class="lbl">recorde</div>
+    </div>
+  </div>
+
+  <!-- Cards resumo -->
+  <div class="cards" id="cards"></div>
+
+  <!-- Metas do dia -->
+  <div class="metas-section">
+    <h2>🎯 Metas de Hoje</h2>
+    <div id="metas-container"></div>
+  </div>
+
+  <!-- Gráficos -->
+  <div class="charts">
+    <div class="chart-box">
+      <h3>📈 Horas de Estudo (14 dias)</h3>
+      <canvas id="chart-horas"></canvas>
+    </div>
+    <div class="chart-box">
+      <h3>✅ Evolução de Acertos (14 dias)</h3>
+      <canvas id="chart-acertos"></canvas>
+    </div>
+    <div class="chart-box">
+      <h3>📚 Horas por Matéria</h3>
+      <canvas id="chart-materias"></canvas>
+    </div>
+    <div class="chart-box">
+      <h3>📋 Progresso do Edital</h3>
+      <canvas id="chart-edital"></canvas>
+    </div>
+  </div>
+
+  <!-- Prática Deliberada -->
+  <div class="pratica-panel">
+    <h2>🎯 Prática Deliberada — Matérias para Focar</h2>
+    <div id="pratica-list"></div>
+  </div>
+
+  <!-- Relatório Semanal -->
+  <div class="relatorio">
+    <h2>📋 Relatório Semanal</h2>
+    <div class="relatorio-grid" id="relatorio-grid"></div>
+    <div class="sugestao-box" id="sugestao-box"></div>
+  </div>
+
+  <script>
+    if (localStorage.getItem('theme') === 'light') document.body.classList.add('light-theme');
+
+    document.getElementById('date-label').textContent = new Date().toLocaleDateString('pt-BR', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+
+    const COLORS = {
+      green: '#a6e3a1', blue: '#89b4fa', pink: '#f38ba8',
+      peach: '#fab387', mauve: '#cba6f7', teal: '#89dceb',
+      yellow: '#f9e2af', text: '#cdd6f4', surface: '#45475a'
+    };
+
+    // Chart.js defaults
+    Chart.defaults.color = '#a6adc8';
+    Chart.defaults.borderColor = '#45475a';
+
+    async function loadDashboard() {
+      const [dashboard, streaks, metas, pratica, relatorio] = await Promise.all([
+        fetch('/api/dashboard').then(r => r.json()),
+        fetch('/api/streaks').then(r => r.json()),
+        fetch('/api/metas').then(r => r.json()),
+        fetch('/api/pratica-deliberada').then(r => r.json()),
+        fetch('/api/relatorio-semanal').then(r => r.json())
+      ]);
+
+      renderStreak(streaks);
+      renderCards(dashboard, streaks);
+      renderMetas(metas);
+      renderChartHoras(dashboard.horas_por_dia);
+      renderChartAcertos(dashboard.acertos_por_dia);
+      renderChartMaterias(dashboard.horas_por_materia);
+      renderChartEdital(dashboard.edital);
+      renderPratica(pratica);
+      renderRelatorio(relatorio);
+    }
+
+    function renderStreak(data) {
+      document.getElementById('streak-atual').textContent = data.streak_atual;
+      document.getElementById('streak-best').textContent = data.melhor_streak;
+    }
+
+    function renderCards(dash, streaks) {
+      const cards = document.getElementById('cards');
+      cards.innerHTML = `
+        <div class="card">
+          <span class="card-label">Total de Horas</span>
+          <span class="card-value blue">${dash.total_horas}h</span>
+          <span class="card-sub">acumulado</span>
+        </div>
+        <div class="card">
+          <span class="card-label">Questões Resolvidas</span>
+          <span class="card-value green">${dash.questoes.total}</span>
+          <span class="card-sub">${dash.questoes.percentual}% de acerto</span>
+        </div>
+        <div class="card">
+          <span class="card-label">Edital Concluído</span>
+          <span class="card-value peach">${dash.edital.total > 0 ? Math.round(dash.edital.concluido / dash.edital.total * 100) : 0}%</span>
+          <span class="card-sub">${dash.edital.concluido}/${dash.edital.total} tópicos</span>
+        </div>
+        <div class="card">
+          <span class="card-label">Flashcards Pendentes</span>
+          <span class="card-value pink">${dash.flashcards.pendentes}</span>
+          <span class="card-sub">${dash.flashcards.total} total</span>
+        </div>
+        <div class="card">
+          <span class="card-label">Hoje</span>
+          <span class="card-value">${(streaks.hoje.horas_estudadas || 0).toFixed(1)}h</span>
+          <span class="card-sub">${streaks.hoje.questoes_resolvidas || 0} questões</span>
+        </div>
+      `;
+    }
+
+    function renderMetas(data) {
+      const container = document.getElementById('metas-container');
+      const cfg = data.config;
+      const prog = data.progresso;
+
+      const metas = [
+        { icon: '⏱', title: `Horas de estudo: ${prog.horas.toFixed(1)}h / ${cfg.meta_horas}h`, pct: Math.min(100, (prog.horas / cfg.meta_horas) * 100), color: COLORS.blue },
+        { icon: '❓', title: `Questões: ${prog.questoes} / ${cfg.meta_questoes}`, pct: Math.min(100, (prog.questoes / cfg.meta_questoes) * 100), color: COLORS.green },
+        { icon: '🧠', title: `Flashcards: ${prog.flashcards} / ${cfg.meta_flashcards}`, pct: Math.min(100, (prog.flashcards / cfg.meta_flashcards) * 100), color: COLORS.mauve },
+      ];
+
+      container.innerHTML = metas.map(m => `
+        <div class="meta-row">
+          <span class="meta-icon">${m.icon}</span>
+          <div class="meta-info">
+            <div class="meta-title">${m.title}</div>
+            <div class="meta-progress-bar">
+              <div class="meta-progress-fill" style="width:${m.pct}%;background:${m.color};"></div>
+            </div>
+          </div>
+          <span class="meta-pct" style="color:${m.color}">${Math.round(m.pct)}%</span>
+        </div>
+      `).join('');
+    }
+
+    function renderChartHoras(data) {
+      const ctx = document.getElementById('chart-horas').getContext('2d');
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: data.map(d => d.data.slice(5)),
+          datasets: [{
+            label: 'Horas',
+            data: data.map(d => d.total_horas),
+            backgroundColor: COLORS.blue + '99',
+            borderColor: COLORS.blue,
+            borderWidth: 1,
+            borderRadius: 4,
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true } }
+        }
+      });
+    }
+
+    function renderChartAcertos(data) {
+      const ctx = document.getElementById('chart-acertos').getContext('2d');
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: data.map(d => d.data.slice(5)),
+          datasets: [{
+            label: '% Acerto',
+            data: data.map(d => d.total > 0 ? Math.round(d.acertos / d.total * 100) : 0),
+            borderColor: COLORS.green,
+            backgroundColor: COLORS.green + '33',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 4,
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true, max: 100 } }
+        }
+      });
+    }
+
+    function renderChartMaterias(data) {
+      const ctx = document.getElementById('chart-materias').getContext('2d');
+      const colors = [COLORS.blue, COLORS.green, COLORS.peach, COLORS.pink, COLORS.mauve, COLORS.teal, COLORS.yellow];
+      new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: data.map(d => d.materia),
+          datasets: [{
+            data: data.map(d => d.total),
+            backgroundColor: data.map((_, i) => colors[i % colors.length] + 'CC'),
+            borderColor: '#1e1e2e',
+            borderWidth: 2,
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { position: 'right', labels: { boxWidth: 12, padding: 8, font: { size: 11 } } } }
+        }
+      });
+    }
+
+    function renderChartEdital(data) {
+      const ctx = document.getElementById('chart-edital').getContext('2d');
+      const pendente = data.total - data.concluido;
+      new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Concluído', 'Pendente'],
+          datasets: [{
+            data: [data.concluido, pendente],
+            backgroundColor: [COLORS.green + 'CC', COLORS.surface],
+            borderColor: '#1e1e2e',
+            borderWidth: 2,
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { position: 'bottom' } }
+        }
+      });
+    }
+
+    function renderPratica(data) {
+      const list = document.getElementById('pratica-list');
+      if (data.materias_para_focar.length === 0 && data.materias_nao_estudadas.length === 0) {
+        list.innerHTML = '<p style="color:#6c7086;font-size:0.9rem;padding:12px;">Resolva mais questões para obter recomendações de prática deliberada.</p>';
+        return;
+      }
+
+      let html = '';
+      for (const m of data.materias_para_focar) {
+        html += `
+          <div class="pratica-item">
+            <span class="pratica-badge ${m.prioridade === 'ALTA' ? 'alta' : 'media'}">${m.prioridade}</span>
+            <span class="pratica-materia">${m.materia}</span>
+            <span class="pratica-pct" style="color:${m.percentual < 50 ? COLORS.pink : COLORS.peach}">${m.percentual}%</span>
+          </div>
+        `;
+      }
+      if (data.materias_nao_estudadas.length > 0) {
+        html += `<div style="padding:10px 12px;font-size:0.85rem;color:#6c7086;border-top:1px solid #45475a;margin-top:8px;">
+          ⚠ Matérias sem questões respondidas: ${data.materias_nao_estudadas.join(', ')}
+        </div>`;
+      }
+      list.innerHTML = html;
+    }
+
+    function renderRelatorio(data) {
+      const grid = document.getElementById('relatorio-grid');
+      grid.innerHTML = `
+        <div class="relatorio-item"><div class="r-label">Período</div><div class="r-value">${data.periodo}</div></div>
+        <div class="relatorio-item"><div class="r-label">Dias Estudados</div><div class="r-value">${data.dias_estudados}/7</div></div>
+        <div class="relatorio-item"><div class="r-label">Horas Totais</div><div class="r-value" style="color:${COLORS.blue}">${data.total_horas}h</div></div>
+        <div class="relatorio-item"><div class="r-label">Questões</div><div class="r-value">${data.questoes_total} (${data.questoes_percentual}% acerto)</div></div>
+      `;
+
+      const box = document.getElementById('sugestao-box');
+      if (data.sugestao_foco.length > 0) {
+        box.innerHTML = `
+          <h4>💡 Sugestão de Foco para a Próxima Semana:</h4>
+          <ul>${data.sugestao_foco.map(s => `<li>${s}</li>`).join('')}</ul>
+        `;
+      } else {
+        box.innerHTML = '<h4>💡 Continue estudando para gerar sugestões personalizadas!</h4>';
+      }
+    }
+
+    function exportStats() {
+      const a = document.createElement('a');
+      a.href = '/api/exportar-stats';
+      a.download = 'estatisticas_completas.json';
+      a.click();
+    }
+
+    loadDashboard();
+  </script>
+</body>
+</html>
