@@ -1723,6 +1723,366 @@ def get_notificacoes():
 
 
 # ============================================================
+# LOTE 2: CALENDÁRIO SEMANAL + FILTROS + NOTAS POR TÓPICO
+# ============================================================
+
+class PlanejadorItem(BaseModel):
+    dia_semana: int  # 0=seg, 6=dom
+    materia: str
+    horas: float = 1.0
+
+
+@app.get("/api/planejador")
+def get_planejador():
+    conn = get_db()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS planejador_semanal (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            dia_semana INTEGER NOT NULL,
+            materia TEXT NOT NULL,
+            horas REAL DEFAULT 1.0
+        )
+    """)
+    conn.commit()
+    rows = conn.execute("SELECT id, dia_semana, materia, horas FROM planejador_semanal ORDER BY dia_semana, id").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+@app.post("/api/planejador")
+def add_planejador(body: PlanejadorItem):
+    conn = get_db()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS planejador_semanal (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            dia_semana INTEGER NOT NULL,
+            materia TEXT NOT NULL,
+            horas REAL DEFAULT 1.0
+        )
+    """)
+    cur = conn.execute("INSERT INTO planejador_semanal (dia_semana, materia, horas) VALUES (?, ?, ?)",
+                       (body.dia_semana, body.materia, body.horas))
+    conn.commit()
+    conn.close()
+    return {"id": cur.lastrowid, "ok": True}
+
+
+@app.delete("/api/planejador/{id}")
+def delete_planejador(id: int):
+    conn = get_db()
+    conn.execute("DELETE FROM planejador_semanal WHERE id = ?", (id,))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+# Notas por tópico do edital
+class NotaTopicoCreate(BaseModel):
+    edital_id: int
+    conteudo: str
+
+
+@app.get("/api/edital/{id}/notas")
+def get_notas_topico(id: int):
+    conn = get_db()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS notas_topico (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            edital_id INTEGER NOT NULL,
+            conteudo TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+    rows = conn.execute("SELECT * FROM notas_topico WHERE edital_id = ? ORDER BY created_at DESC", (id,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+@app.post("/api/edital/{id}/notas")
+def add_nota_topico(id: int, body: NotaTopicoCreate):
+    conn = get_db()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS notas_topico (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            edital_id INTEGER NOT NULL,
+            conteudo TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    """)
+    cur = conn.execute("INSERT INTO notas_topico (edital_id, conteudo, created_at) VALUES (?, ?, ?)",
+                       (id, body.conteudo, datetime.now().isoformat()))
+    conn.commit()
+    conn.close()
+    return {"id": cur.lastrowid, "ok": True}
+
+
+@app.delete("/api/notas-topico/{id}")
+def delete_nota_topico(id: int):
+    conn = get_db()
+    conn.execute("DELETE FROM notas_topico WHERE id = ?", (id,))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+# ============================================================
+# LOTE 3: CADERNOS + PLANEJADOR APROVAÇÃO + COMPARADOR
+# ============================================================
+
+class CadernoCreate(BaseModel):
+    nome: str
+    descricao: str = ""
+
+
+class CadernoAddItem(BaseModel):
+    tipo: str  # 'questao' ou 'topico'
+    item_id: int
+
+
+@app.get("/api/cadernos")
+def list_cadernos():
+    conn = get_db()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS cadernos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            descricao TEXT DEFAULT '',
+            created_at TEXT NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS caderno_itens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            caderno_id INTEGER NOT NULL,
+            tipo TEXT NOT NULL,
+            item_id INTEGER NOT NULL,
+            FOREIGN KEY (caderno_id) REFERENCES cadernos(id)
+        )
+    """)
+    conn.commit()
+    cadernos = conn.execute("SELECT * FROM cadernos ORDER BY created_at DESC").fetchall()
+    result = []
+    for c in cadernos:
+        count = conn.execute("SELECT COUNT(*) FROM caderno_itens WHERE caderno_id = ?", (c[0],)).fetchone()[0]
+        d = dict(c)
+        d["total_itens"] = count
+        result.append(d)
+    conn.close()
+    return result
+
+
+@app.post("/api/cadernos")
+def create_caderno(body: CadernoCreate):
+    conn = get_db()
+    conn.execute("CREATE TABLE IF NOT EXISTS cadernos (id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL, descricao TEXT DEFAULT '', created_at TEXT NOT NULL)")
+    cur = conn.execute("INSERT INTO cadernos (nome, descricao, created_at) VALUES (?, ?, ?)",
+                       (body.nome, body.descricao, datetime.now().isoformat()))
+    conn.commit()
+    conn.close()
+    return {"id": cur.lastrowid, "ok": True}
+
+
+@app.post("/api/cadernos/{id}/adicionar")
+def add_to_caderno(id: int, body: CadernoAddItem):
+    conn = get_db()
+    conn.execute("CREATE TABLE IF NOT EXISTS caderno_itens (id INTEGER PRIMARY KEY AUTOINCREMENT, caderno_id INTEGER NOT NULL, tipo TEXT NOT NULL, item_id INTEGER NOT NULL)")
+    conn.execute("INSERT INTO caderno_itens (caderno_id, tipo, item_id) VALUES (?, ?, ?)",
+                 (id, body.tipo, body.item_id))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+@app.get("/api/cadernos/{id}")
+def get_caderno(id: int):
+    conn = get_db()
+    caderno = conn.execute("SELECT * FROM cadernos WHERE id = ?", (id,)).fetchone()
+    if not caderno:
+        conn.close()
+        raise HTTPException(404)
+    itens = conn.execute("SELECT * FROM caderno_itens WHERE caderno_id = ?", (id,)).fetchall()
+    conn.close()
+    return {"caderno": dict(caderno), "itens": [dict(i) for i in itens]}
+
+
+@app.delete("/api/cadernos/{id}")
+def delete_caderno(id: int):
+    conn = get_db()
+    conn.execute("DELETE FROM caderno_itens WHERE caderno_id = ?", (id,))
+    conn.execute("DELETE FROM cadernos WHERE id = ?", (id,))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+@app.get("/api/planejador-aprovacao")
+def planejador_aprovacao(edital_nome: str = "", cargo: str = ""):
+    """Calcula o que falta para atingir meta de aprovação por matéria"""
+    conn = get_db()
+    query = "SELECT materia, COUNT(*) as total, SUM(CASE WHEN status='Concluído' THEN 1 ELSE 0 END) as done, SUM(horas_estudadas) as horas FROM edital WHERE 1=1"
+    params = []
+    if edital_nome:
+        query += " AND edital_nome = ?"
+        params.append(edital_nome)
+    if cargo:
+        query += " AND cargo = ?"
+        params.append(cargo)
+    query += " GROUP BY materia ORDER BY materia"
+    materias = conn.execute(query, params).fetchall()
+    
+    # Acertos por matéria
+    q_stats = conn.execute("""
+        SELECT q.materia, COUNT(*) as total, SUM(qr.acertou) as acertos
+        FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id
+        GROUP BY q.materia
+    """).fetchall()
+    q_map = {r[0]: {"total": r[1], "acertos": r[2] or 0} for r in q_stats}
+    conn.close()
+    
+    META_EDITAL = 70  # % mínimo do edital concluído
+    META_QUESTOES = 70  # % mínimo de acerto
+    
+    plano = []
+    for m in materias:
+        materia, total, done, horas = m[0], m[1], m[2] or 0, m[3] or 0
+        pct_edital = (done / total * 100) if total > 0 else 0
+        q = q_map.get(materia, {"total": 0, "acertos": 0})
+        pct_questoes = (q["acertos"] / q["total"] * 100) if q["total"] > 0 else 0
+        
+        topicos_faltam = max(0, int(total * META_EDITAL / 100) - done)
+        questoes_precisa = max(0, 20 - q["total"])  # mínimo 20 questões por matéria
+        
+        status = "ok" if pct_edital >= META_EDITAL and pct_questoes >= META_QUESTOES else "atencao" if pct_edital >= 50 or pct_questoes >= 50 else "critico"
+        
+        plano.append({
+            "materia": materia,
+            "pct_edital": round(pct_edital, 1),
+            "pct_questoes": round(pct_questoes, 1),
+            "topicos_faltam": topicos_faltam,
+            "questoes_precisa": questoes_precisa,
+            "horas_estudadas": round(horas, 1),
+            "status": status
+        })
+    
+    return {"meta_edital": META_EDITAL, "meta_questoes": META_QUESTOES, "materias": plano}
+
+
+@app.get("/api/comparador-progresso")
+def comparador_progresso():
+    """Compara progresso entre todos os editais/cargos"""
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT edital_nome, cargo, COUNT(*) as total,
+               SUM(CASE WHEN status='Concluído' THEN 1 ELSE 0 END) as done,
+               SUM(horas_estudadas) as horas
+        FROM edital GROUP BY edital_nome, cargo ORDER BY edital_nome, cargo
+    """).fetchall()
+    conn.close()
+    return [{
+        "edital": r[0], "cargo": r[1], "total": r[2],
+        "concluidos": r[3] or 0,
+        "pct": round((r[3] or 0) / r[2] * 100, 1) if r[2] > 0 else 0,
+        "horas": round(r[4] or 0, 1)
+    } for r in rows]
+
+
+# ============================================================
+# LOTE 4: BOOKMARKS PDF + MODO FOCO + REVISÃO ESPAÇADA TÓPICOS
+# ============================================================
+
+class BookmarkCreate(BaseModel):
+    pdf_path: str
+    pagina: int
+    label: str = ""
+    cor: str = "blue"
+
+
+@app.get("/api/bookmarks/{path:path}")
+def get_bookmarks(path: str):
+    conn = get_db()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS bookmarks_pdf (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            pdf_path TEXT NOT NULL,
+            pagina INTEGER NOT NULL,
+            label TEXT DEFAULT '',
+            cor TEXT DEFAULT 'blue',
+            created_at TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+    rows = conn.execute("SELECT * FROM bookmarks_pdf WHERE pdf_path = ? ORDER BY pagina", (path,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+@app.post("/api/bookmarks")
+def create_bookmark(body: BookmarkCreate):
+    conn = get_db()
+    conn.execute("CREATE TABLE IF NOT EXISTS bookmarks_pdf (id INTEGER PRIMARY KEY AUTOINCREMENT, pdf_path TEXT NOT NULL, pagina INTEGER NOT NULL, label TEXT DEFAULT '', cor TEXT DEFAULT 'blue', created_at TEXT NOT NULL)")
+    cur = conn.execute("INSERT INTO bookmarks_pdf (pdf_path, pagina, label, cor, created_at) VALUES (?, ?, ?, ?, ?)",
+                       (body.pdf_path, body.pagina, body.label, body.cor, datetime.now().isoformat()))
+    conn.commit()
+    conn.close()
+    return {"id": cur.lastrowid, "ok": True}
+
+
+@app.delete("/api/bookmarks/{id}")
+def delete_bookmark(id: int):
+    conn = get_db()
+    conn.execute("DELETE FROM bookmarks_pdf WHERE id = ?", (id,))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+# Revisão espaçada de tópicos do edital
+@app.post("/api/edital/{id}/agendar-revisao")
+def agendar_revisao_topico(id: int):
+    """Agenda revisão do tópico usando SRS (dobra intervalo a cada revisão)"""
+    conn = get_db()
+    # Adicionar colunas de SRS se não existirem
+    try:
+        conn.execute("SELECT proxima_revisao FROM edital LIMIT 1")
+    except Exception:
+        conn.execute("ALTER TABLE edital ADD COLUMN proxima_revisao TEXT DEFAULT ''")
+        conn.execute("ALTER TABLE edital ADD COLUMN intervalo_revisao INTEGER DEFAULT 1")
+        conn.commit()
+    
+    row = conn.execute("SELECT intervalo_revisao FROM edital WHERE id = ?", (id,)).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(404)
+    
+    intervalo = (row[0] or 1) * 2
+    proxima = (date.today() + timedelta(days=intervalo)).isoformat()
+    conn.execute("UPDATE edital SET proxima_revisao = ?, intervalo_revisao = ? WHERE id = ?",
+                 (proxima, intervalo, id))
+    conn.commit()
+    conn.close()
+    return {"proxima_revisao": proxima, "intervalo": intervalo}
+
+
+@app.get("/api/edital/revisoes-pendentes")
+def revisoes_pendentes():
+    """Lista tópicos com revisão pendente (SRS)"""
+    conn = get_db()
+    try:
+        rows = conn.execute("""
+            SELECT id, edital_nome, cargo, materia, topico, proxima_revisao
+            FROM edital
+            WHERE proxima_revisao != '' AND proxima_revisao <= ?
+            ORDER BY proxima_revisao
+        """, (today_str(),)).fetchall()
+    except Exception:
+        rows = []
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+
+# ============================================================
 # CORREÇÃO DO MIME TYPE PARA .mjs / .js (PDF.js)
 # ============================================================
 from starlette.staticfiles import StaticFiles

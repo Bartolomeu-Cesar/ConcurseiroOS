@@ -152,6 +152,24 @@
     .tree-hours { font-size: 0.72rem; color: #89b4fa; white-space: nowrap; }
     .tree-del { background: none; border: none; color: #f38ba8; cursor: pointer; font-size: 0.9rem; opacity: 0; transition: opacity 0.15s; padding: 0 4px; }
     .tree-leaf:hover .tree-del { opacity: 1; }
+    .tree-note { background: none; border: none; cursor: pointer; font-size: 0.8rem; opacity: 0; transition: opacity 0.15s; padding: 0 4px; }
+    .tree-leaf:hover .tree-note { opacity: 0.7; }
+    .tree-note:hover { opacity: 1 !important; }
+
+    /* Modal de notas */
+    .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:1000; align-items:center; justify-content:center; }
+    .modal-overlay.show { display:flex; }
+    .modal-box { background:#313244; border-radius:12px; padding:24px; width:90%; max-width:500px; max-height:80vh; overflow-y:auto; }
+    .modal-box h3 { color:#cba6f7; margin-bottom:12px; font-size:1rem; }
+    .modal-box textarea { width:100%; background:#1e1e2e; border:1px solid #45475a; border-radius:8px; padding:10px; color:#cdd6f4; font-size:0.88rem; min-height:80px; resize:vertical; margin-bottom:8px; font-family:sans-serif; }
+    .modal-box textarea::placeholder { color:#9399b2; }
+    .modal-box .modal-btns { display:flex; gap:8px; justify-content:flex-end; }
+    .modal-box .nota-item { padding:8px; background:#1e1e2e; border-radius:6px; margin-bottom:6px; font-size:0.85rem; display:flex; align-items:start; gap:8px; }
+    .modal-box .nota-item .nota-text { flex:1; color:#cdd6f4; white-space:pre-wrap; }
+    .modal-box .nota-item .nota-del { background:none; border:none; color:#f38ba8; cursor:pointer; }
+    body.light-theme .modal-box { background:#e6e9ef; }
+    body.light-theme .modal-box textarea { background:#dce0e8; border-color:#bcc0cc; color:#4c4f69; }
+    body.light-theme .modal-box .nota-item { background:#dce0e8; }
 
     .tree-info-badge { display: flex; gap: 6px; font-size: 0.7rem; color: #89dceb; flex-wrap: wrap; }
     .tree-info-badge span { background: #1e1e2e; padding: 1px 6px; border-radius: 3px; white-space: nowrap; }
@@ -325,6 +343,18 @@
       <div style="font-size:1.2rem;font-weight:700;color:#cba6f7;margin-bottom:8px;">Hora de descansar!</div>
       <div style="font-size:0.9rem;color:#cdd6f4;margin-bottom:24px;">Faça uma pausa e volte descansado para continuar seus estudos.</div>
       <button onclick="document.getElementById('overlay').style.display='none'" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:8px;padding:8px 24px;font-size:0.95rem;font-weight:700;cursor:pointer;">OK, entendido!</button>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="note-modal">
+    <div class="modal-box">
+      <h3 id="note-modal-title">📝 Notas</h3>
+      <div id="note-modal-list"></div>
+      <textarea id="note-modal-input" placeholder="Escreva sua nota/resumo..."></textarea>
+      <div class="modal-btns">
+        <button class="iobtn" onclick="closeNoteModal()">Fechar</button>
+        <button class="iobtn" style="background:#cba6f7;color:#1e1e2e;" onclick="saveNote()">Salvar</button>
+      </div>
     </div>
   </div>
 
@@ -834,6 +864,7 @@
                 <span class="tree-status ${getStatusClass(item.status)}" onclick="event.stopPropagation();toggleEditalStatus(${item.id})">${item.status === 'Concluído' ? '✓' : item.status === 'Em Andamento' ? '◐' : '○'}</span>
                 <span class="tree-topic">${item.topico}</span>
                 ${item.horas_estudadas > 0 ? `<span class="tree-hours">${formatHours(item.horas_estudadas)}</span>` : ''}
+                <button class="tree-note" onclick="event.stopPropagation();openNoteModal(${item.id})" title="Notas">📝</button>
                 <button class="tree-del" onclick="event.stopPropagation();deleteEditalItem(${item.id})">×</button>
               </div>`;
             }
@@ -1114,6 +1145,46 @@
       } catch(e) {}
     }
     setTimeout(checkNotifications, 3000);
+
+    // ==================== NOTAS POR TÓPICO ====================
+    let noteCurrentId = null;
+    function openNoteModal(id) {
+      noteCurrentId = id;
+      document.getElementById('note-modal').classList.add('show');
+      loadNotesForTopic(id);
+    }
+    function closeNoteModal() {
+      document.getElementById('note-modal').classList.remove('show');
+      noteCurrentId = null;
+    }
+    async function loadNotesForTopic(id) {
+      const notes = await fetch(`/api/edital/${id}/notas`).then(r => r.json());
+      const list = document.getElementById('note-modal-list');
+      list.innerHTML = notes.map(n => `
+        <div class="nota-item">
+          <span class="nota-text">${n.conteudo}</span>
+          <button class="nota-del" onclick="deleteNote(${n.id})">×</button>
+        </div>
+      `).join('');
+    }
+    async function saveNote() {
+      const text = document.getElementById('note-modal-input').value.trim();
+      if (!text) return;
+      await fetch(`/api/edital/${noteCurrentId}/notas`, {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({edital_id: noteCurrentId, conteudo: text})
+      });
+      document.getElementById('note-modal-input').value = '';
+      loadNotesForTopic(noteCurrentId);
+    }
+    async function deleteNote(id) {
+      await fetch(`/api/notas-topico/${id}`, {method:'DELETE'});
+      loadNotesForTopic(noteCurrentId);
+    }
+    // Close modal on outside click
+    document.getElementById('note-modal').addEventListener('click', (e) => {
+      if (e.target.classList.contains('modal-overlay')) closeNoteModal();
+    });
   </script>
 </body>
 </html>
