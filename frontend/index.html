@@ -303,6 +303,18 @@
     .countdown-icon { font-size: 0.9rem; }
     .countdown-text { color: #f9e2af; }
     .countdown-text strong { color: #f38ba8; font-size: 0.9rem; }
+
+    /* XP Badge */
+    .xp-badge { display: flex; align-items: center; gap: 4px; background: #313244; border-radius: 20px; padding: 4px 12px; font-size: 0.78rem; }
+    .xp-badge:empty { display: none; }
+    .xp-level { font-weight: 700; color: #cba6f7; }
+    .xp-bar-mini { width: 40px; height: 4px; background: #45475a; border-radius: 2px; overflow: hidden; }
+    .xp-bar-mini-fill { height: 100%; background: linear-gradient(90deg, #cba6f7, #89b4fa); border-radius: 2px; }
+    body.light-theme .xp-badge { background: #e6e9ef; border: 1px solid #bcc0cc; }
+
+    /* Notification bell */
+    .notif-bell { position: relative; cursor: pointer; font-size: 1.1rem; }
+    .notif-dot { position: absolute; top: -2px; right: -4px; width: 8px; height: 8px; background: #f38ba8; border-radius: 50%; }
   </style>
 </head>
 <body>
@@ -329,6 +341,7 @@
         <div class="meta-dot" id="meta-dot-f"></div>
       </div>
       <div id="countdown-badge" class="countdown-badge"></div>
+      <div id="xp-badge" class="xp-badge"></div>
     </div>
     <div class="header-right">
       <button class="tbtn" onclick="toggleTheme()" title="Alternar tema" style="background:#45475a;color:#cdd6f4;font-size:0.9rem;">🌓</button>
@@ -1071,6 +1084,36 @@
       document.querySelector('meta[name=theme-color]').content = isDark ? '#eff1f5' : '#1e1e2e';
     }
     if (localStorage.getItem('theme') === 'light') document.body.classList.add('light-theme');
+
+    // ==================== GAMIFICATION BADGE ====================
+    async function loadXpBadge() {
+      try {
+        const data = await fetch('/api/gamification').then(r => r.json());
+        const el = document.getElementById('xp-badge');
+        if (el) el.innerHTML = `<span class="xp-level">Lv.${data.nivel}</span><div class="xp-bar-mini"><div class="xp-bar-mini-fill" style="width:${data.pct_nivel}%"></div></div><span style="color:#9399b2;">${data.xp}xp</span>`;
+      } catch(e) {}
+    }
+    loadXpBadge();
+
+    // ==================== BROWSER NOTIFICATIONS ====================
+    async function checkNotifications() {
+      if (!('Notification' in window)) return;
+      if (Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+      if (Notification.permission !== 'granted') return;
+      try {
+        const notifs = await fetch('/api/notificacoes').then(r => r.json());
+        if (notifs.length > 0 && !sessionStorage.getItem('notif_shown_today')) {
+          const alta = notifs.find(n => n.prioridade === 'alta');
+          if (alta) {
+            new Notification('ConcurseiroOS', { body: alta.msg, icon: '/icon.svg' });
+            sessionStorage.setItem('notif_shown_today', '1');
+          }
+        }
+      } catch(e) {}
+    }
+    setTimeout(checkNotifications, 3000);
   </script>
 </body>
 </html>

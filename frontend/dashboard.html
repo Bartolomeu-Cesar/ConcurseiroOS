@@ -144,6 +144,22 @@
     body.light-theme .export-btn { background: #dce0e8; color: #4c4f69; border: 1px solid #bcc0cc; }
     body.light-theme .export-btn:hover { background: #ccd0da; }
     body.light-theme .metas-section h2 { color: #8839ef; }
+
+    .gam-level { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+    .gam-level .level-num { font-size: 1.8rem; font-weight: 700; color: #cba6f7; }
+    .gam-level .level-info { flex: 1; }
+    .gam-level .level-title { font-size: 0.85rem; color: #a6adc8; }
+    .gam-xp-bar { height: 8px; background: #45475a; border-radius: 4px; overflow: hidden; margin-bottom: 4px; }
+    .gam-xp-fill { height: 100%; background: linear-gradient(90deg, #cba6f7, #89b4fa); border-radius: 4px; transition: width 0.5s; }
+    .gam-xp-text { font-size: 0.75rem; color: #9399b2; text-align: right; }
+    .gam-badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .gam-badge { display: flex; align-items: center; gap: 4px; background: #45475a; padding: 4px 10px; border-radius: 16px; font-size: 0.78rem; }
+    .gam-badge .badge-icon { font-size: 1.1rem; }
+    .gam-badge .badge-name { color: #cdd6f4; }
+    .gam-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 12px; }
+    .gam-stat { text-align: center; padding: 6px; background: #45475a; border-radius: 6px; }
+    .gam-stat .num { font-size: 1rem; font-weight: 700; color: #89b4fa; }
+    .gam-stat .lbl { font-size: 0.68rem; color: #9399b2; }
   </style>
 </head>
 <body>
@@ -198,6 +214,18 @@
     <div class="chart-box">
       <h3>📋 Progresso do Edital</h3>
       <canvas id="chart-edital"></canvas>
+    </div>
+  </div>
+
+  <!-- Radar + Gamificação -->
+  <div class="charts">
+    <div class="chart-box">
+      <h3>🎯 Radar de Desempenho por Matéria</h3>
+      <canvas id="chart-radar"></canvas>
+    </div>
+    <div class="chart-box">
+      <h3>🏅 Gamificação</h3>
+      <div id="gamification-box"></div>
     </div>
   </div>
 
@@ -453,7 +481,59 @@
       a.click();
     }
 
+    async function loadRadar() {
+      const data = await fetch('/api/radar').then(r => r.json());
+      if (!data.length) return;
+      const ctx = document.getElementById('chart-radar').getContext('2d');
+      // Limit to top 10 materias by topic count
+      const sorted = data.sort((a,b) => b.topicos_total - a.topicos_total).slice(0, 10);
+      new Chart(ctx, {
+        type: 'radar',
+        data: {
+          labels: sorted.map(d => d.materia.length > 20 ? d.materia.substring(0,20)+'...' : d.materia),
+          datasets: [{
+            label: 'Score (%)',
+            data: sorted.map(d => d.score),
+            borderColor: '#cba6f7',
+            backgroundColor: '#cba6f733',
+            pointBackgroundColor: '#cba6f7',
+            pointRadius: 4,
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false } },
+          scales: { r: { beginAtZero: true, max: 100, grid: { color: '#45475a' }, angleLines: { color: '#45475a' }, pointLabels: { font: { size: 9 }, color: '#a6adc8' }, ticks: { display: false } } }
+        }
+      });
+    }
+
+    async function loadGamification() {
+      const data = await fetch('/api/gamification').then(r => r.json());
+      const box = document.getElementById('gamification-box');
+      box.innerHTML = `
+        <div class="gam-level">
+          <span class="level-num">Lv.${data.nivel}</span>
+          <div class="level-info">
+            <div class="gam-xp-bar"><div class="gam-xp-fill" style="width:${data.pct_nivel}%"></div></div>
+            <div class="gam-xp-text">${data.xp_no_nivel} / ${data.xp_para_proximo} XP</div>
+          </div>
+        </div>
+        <div class="gam-stats">
+          <div class="gam-stat"><div class="num">${data.xp}</div><div class="lbl">XP Total</div></div>
+          <div class="gam-stat"><div class="num">${data.stats.streak}🔥</div><div class="lbl">Streak</div></div>
+          <div class="gam-stat"><div class="num">${data.badges_earned.length}/${data.badges_total}</div><div class="lbl">Badges</div></div>
+        </div>
+        <div class="gam-badges">
+          ${data.badges_earned.map(b => `<div class="gam-badge" title="${b.desc}"><span class="badge-icon">${b.icon}</span><span class="badge-name">${b.name}</span></div>`).join('')}
+          ${data.badges_earned.length === 0 ? '<span style="color:#9399b2;font-size:0.82rem;">Continue estudando para desbloquear badges!</span>' : ''}
+        </div>
+      `;
+    }
+
     loadDashboard();
+    loadRadar();
+    loadGamification();
   </script>
 </body>
 </html>

@@ -1488,6 +1488,241 @@ def exportar_resumo():
 
 
 # ============================================================
+# GAMIFICAÇÃO (XP + NÍVEIS + BADGES)
+# ============================================================
+
+# XP rewards:
+# - Estudar 1 hora = 100 XP
+# - Resolver questão = 10 XP (acertar = +5 bonus)
+# - Revisar flashcard = 5 XP
+# - Completar tópico do edital = 25 XP
+# - Completar simulado = 50 XP
+# - Streak de 7 dias = 200 XP bonus
+
+# Levels: cada 500 XP = 1 nível
+LEVEL_XP = 500
+
+BADGES = [
+    {"id": "first_hour", "name": "Primeira Hora", "desc": "Estudou 1 hora no total", "icon": "⏱", "condition": "horas >= 1"},
+    {"id": "ten_hours", "name": "Maratonista", "desc": "Estudou 10 horas no total", "icon": "🏃", "condition": "horas >= 10"},
+    {"id": "fifty_hours", "name": "Dedicado", "desc": "Estudou 50 horas no total", "icon": "💪", "condition": "horas >= 50"},
+    {"id": "first_question", "name": "Primeira Questão", "desc": "Resolveu a primeira questão", "icon": "❓", "condition": "questoes >= 1"},
+    {"id": "hundred_questions", "name": "Centurião", "desc": "Resolveu 100 questões", "icon": "💯", "condition": "questoes >= 100"},
+    {"id": "five_hundred_questions", "name": "Mestre das Questões", "desc": "Resolveu 500 questões", "icon": "🎓", "condition": "questoes >= 500"},
+    {"id": "streak_7", "name": "Semana Perfeita", "desc": "7 dias consecutivos de estudo", "icon": "🔥", "condition": "streak >= 7"},
+    {"id": "streak_30", "name": "Mês de Ferro", "desc": "30 dias consecutivos de estudo", "icon": "⚡", "condition": "streak >= 30"},
+    {"id": "first_simulado", "name": "Simulador", "desc": "Completou o primeiro simulado", "icon": "📝", "condition": "simulados >= 1"},
+    {"id": "accuracy_80", "name": "Precisão Cirúrgica", "desc": "80%+ de acerto em questões", "icon": "🎯", "condition": "accuracy >= 80"},
+    {"id": "ten_topics", "name": "Explorador", "desc": "Concluiu 10 tópicos do edital", "icon": "🗺", "condition": "topicos >= 10"},
+    {"id": "fifty_topics", "name": "Conquistador", "desc": "Concluiu 50 tópicos do edital", "icon": "🏆", "condition": "topicos >= 50"},
+    {"id": "all_flashcards", "name": "Memória de Elefante", "desc": "Revisou todos os flashcards do dia", "icon": "🧠", "condition": "flashcards_dia_ok"},
+    {"id": "night_owl", "name": "Coruja Noturna", "desc": "Estudou após as 22h", "icon": "🦉", "condition": "special"},
+    {"id": "early_bird", "name": "Madrugador", "desc": "Estudou antes das 6h", "icon": "🌅", "condition": "special"},
+]
+
+
+@app.get("/api/gamification")
+def get_gamification():
+    """Retorna XP, nível, badges e progresso do usuário"""
+    conn = get_db()
+    
+    # Calcular XP baseado nas atividades
+    horas = conn.execute("SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo").fetchone()[0]
+    questoes_total = conn.execute("SELECT COUNT(*) FROM questoes_respostas").fetchone()[0]
+    questoes_certas = conn.execute("SELECT COUNT(*) FROM questoes_respostas WHERE acertou = 1").fetchone()[0]
+    flashcards_rev = conn.execute("SELECT COALESCE(SUM(flashcards_revisados), 0) FROM streaks").fetchone()[0]
+    topicos_concluidos = conn.execute("SELECT COUNT(*) FROM edital WHERE status = 'Concluído'").fetchone()[0]
+    simulados_feitos = conn.execute("SELECT COUNT(*) FROM simulados WHERE status = 'finalizado'").fetchone()[0]
+    
+    # Streak atual
+    streak_rows = conn.execute("SELECT data FROM streaks WHERE horas_estudadas > 0 OR questoes_resolvidas > 0 ORDER BY data DESC").fetchall()
+    streak = 0
+    check_date = date.today()
+    for row in streak_rows:
+        if row[0] == check_date.isoformat():
+            streak += 1
+            check_date -= timedelta(days=1)
+        else:
+            break
+    
+    conn.close()
+    
+    # Calcular XP
+    xp = int(
+        horas * 100 +
+        questoes_total * 10 +
+        questoes_certas * 5 +
+        flashcards_rev * 5 +
+        topicos_concluidos * 25 +
+        simulados_feitos * 50 +
+        (streak // 7) * 200
+    )
+    
+    nivel = (xp // LEVEL_XP) + 1
+    xp_no_nivel = xp % LEVEL_XP
+    xp_para_proximo = LEVEL_XP
+    
+    # Verificar badges
+    accuracy = (questoes_certas / questoes_total * 100) if questoes_total > 0 else 0
+    badges_earned = []
+    for badge in BADGES:
+        earned = False
+        cond = badge["condition"]
+        if cond == "horas >= 1" and horas >= 1: earned = True
+        elif cond == "horas >= 10" and horas >= 10: earned = True
+        elif cond == "horas >= 50" and horas >= 50: earned = True
+        elif cond == "questoes >= 1" and questoes_total >= 1: earned = True
+        elif cond == "questoes >= 100" and questoes_total >= 100: earned = True
+        elif cond == "questoes >= 500" and questoes_total >= 500: earned = True
+        elif cond == "streak >= 7" and streak >= 7: earned = True
+        elif cond == "streak >= 30" and streak >= 30: earned = True
+        elif cond == "simulados >= 1" and simulados_feitos >= 1: earned = True
+        elif cond == "accuracy >= 80" and accuracy >= 80 and questoes_total >= 20: earned = True
+        elif cond == "topicos >= 10" and topicos_concluidos >= 10: earned = True
+        elif cond == "topicos >= 50" and topicos_concluidos >= 50: earned = True
+        
+        if earned:
+            badges_earned.append(badge)
+    
+    return {
+        "xp": xp,
+        "nivel": nivel,
+        "xp_no_nivel": xp_no_nivel,
+        "xp_para_proximo": xp_para_proximo,
+        "pct_nivel": round(xp_no_nivel / xp_para_proximo * 100),
+        "badges_earned": badges_earned,
+        "badges_total": len(BADGES),
+        "stats": {
+            "horas": round(horas, 1),
+            "questoes": questoes_total,
+            "acertos": questoes_certas,
+            "accuracy": round(accuracy, 1),
+            "streak": streak,
+            "topicos": topicos_concluidos,
+            "simulados": simulados_feitos,
+            "flashcards": flashcards_rev
+        }
+    }
+
+
+# ============================================================
+# GRÁFICO RADAR - DESEMPENHO POR MATÉRIA
+# ============================================================
+
+@app.get("/api/radar")
+def get_radar(edital_nome: str = "", cargo: str = ""):
+    """Retorna dados para gráfico radar de desempenho por matéria"""
+    conn = get_db()
+    
+    # Progresso do edital por matéria
+    query = """
+        SELECT materia,
+               COUNT(*) as total,
+               SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) as concluidos,
+               SUM(horas_estudadas) as horas
+        FROM edital WHERE 1=1
+    """
+    params = []
+    if edital_nome:
+        query += " AND edital_nome = ?"
+        params.append(edital_nome)
+    if cargo:
+        query += " AND cargo = ?"
+        params.append(cargo)
+    query += " GROUP BY materia ORDER BY materia"
+    
+    materias_edital = conn.execute(query, params).fetchall()
+    
+    # Acerto em questões por matéria
+    questoes_por_mat = conn.execute("""
+        SELECT q.materia,
+               COUNT(*) as total,
+               SUM(qr.acertou) as acertos
+        FROM questoes_respostas qr
+        JOIN questoes q ON q.id = qr.questao_id
+        GROUP BY q.materia
+    """).fetchall()
+    q_map = {r[0]: {"total": r[1], "acertos": r[2]} for r in questoes_por_mat}
+    
+    conn.close()
+    
+    # Montar dados do radar
+    radar_data = []
+    for m in materias_edital:
+        materia = m[0]
+        total = m[1]
+        concluidos = m[2]
+        horas = m[3] or 0
+        
+        # Score do edital (0-100)
+        pct_edital = (concluidos / total * 100) if total > 0 else 0
+        
+        # Score de questões (0-100)
+        q_data = q_map.get(materia, {"total": 0, "acertos": 0})
+        pct_questoes = (q_data["acertos"] / q_data["total"] * 100) if q_data["total"] > 0 else 0
+        
+        # Score composto (média)
+        score = (pct_edital + pct_questoes) / 2 if q_data["total"] > 0 else pct_edital
+        
+        radar_data.append({
+            "materia": materia,
+            "score": round(score, 1),
+            "pct_edital": round(pct_edital, 1),
+            "pct_questoes": round(pct_questoes, 1),
+            "horas": round(horas, 1),
+            "topicos_total": total,
+            "topicos_concluidos": concluidos
+        })
+    
+    return radar_data
+
+
+# ============================================================
+# NOTIFICAÇÕES DE REVISÃO
+# ============================================================
+
+@app.get("/api/notificacoes")
+def get_notificacoes():
+    """Retorna lembretes/notificações pendentes"""
+    conn = get_db()
+    notifs = []
+    
+    # Flashcards pendentes
+    flash_pendentes = conn.execute(
+        "SELECT COUNT(*) FROM flashcards WHERE proxima_revisao <= ?", (today_str(),)
+    ).fetchone()[0]
+    if flash_pendentes > 0:
+        notifs.append({
+            "tipo": "flashcard",
+            "icon": "🧠",
+            "msg": f"Você tem {flash_pendentes} flashcard(s) para revisar hoje!",
+            "prioridade": "alta"
+        })
+    
+    # Metas não cumpridas
+    config = conn.execute("SELECT meta_horas, meta_questoes, meta_flashcards FROM metas_config WHERE id = 1").fetchone()
+    hoje = conn.execute("SELECT * FROM streaks WHERE data = ?", (today_str(),)).fetchone()
+    if config and hoje:
+        if hoje[1] < config[0]:  # horas
+            falta = config[0] - hoje[1]
+            notifs.append({"tipo": "meta", "icon": "⏱", "msg": f"Faltam {falta:.1f}h para bater a meta de hoje", "prioridade": "media"})
+        if hoje[2] < config[1]:  # questões
+            falta = config[1] - hoje[2]
+            notifs.append({"tipo": "meta", "icon": "❓", "msg": f"Faltam {falta} questões para a meta de hoje", "prioridade": "media"})
+    elif config:
+        notifs.append({"tipo": "meta", "icon": "📖", "msg": "Você ainda não estudou hoje! Que tal começar?", "prioridade": "alta"})
+    
+    # Streak em risco
+    ontem = (date.today() - timedelta(days=1)).isoformat()
+    streak_ontem = conn.execute("SELECT * FROM streaks WHERE data = ?", (ontem,)).fetchone()
+    if not hoje and streak_ontem:
+        notifs.append({"tipo": "streak", "icon": "🔥", "msg": "Seu streak está em risco! Estude hoje para não perder.", "prioridade": "alta"})
+    
+    conn.close()
+    return notifs
+
+
+# ============================================================
 # CORREÇÃO DO MIME TYPE PARA .mjs / .js (PDF.js)
 # ============================================================
 from starlette.staticfiles import StaticFiles
