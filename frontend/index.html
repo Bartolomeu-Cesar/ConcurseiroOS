@@ -335,6 +335,8 @@
     .countdown-icon { font-size: 0.9rem; }
     .countdown-text { color: #f9e2af; }
     .countdown-text strong { color: #f38ba8; font-size: 0.9rem; }
+    .countdown-fav { font-size: 0.7rem; cursor: pointer; opacity: 0.5; transition: opacity 0.15s; }
+    .countdown-badge:hover .countdown-fav { opacity: 1; }
 
     /* XP Badge */
     .xp-badge { display: flex; align-items: center; gap: 4px; background: #313244; border-radius: 20px; padding: 4px 12px; font-size: 0.78rem; }
@@ -1121,24 +1123,54 @@
         const provas = await fetch('/api/countdown').then(r => r.json());
         if (!provas.length) return;
         const now = new Date();
-        let nearest = null;
-        let nearestDays = Infinity;
-        for (const p of provas) {
-          // Parse dd/mm/yyyy or yyyy-mm-dd
+        const favorito = localStorage.getItem('countdown_favorito'); // "edital|cargo"
+
+        // Parsear datas
+        const parsed = provas.map(p => {
           let parts = p.data_objetiva.match(/(\d+)[\/\-](\d+)[\/\-](\d+)/);
-          if (!parts) continue;
+          if (!parts) return null;
           let d;
           if (parts[3].length === 4) d = new Date(parts[3], parts[2]-1, parts[1]);
           else d = new Date(parts[1], parts[2]-1, parts[3]);
           const diff = Math.ceil((d - now) / 86400000);
-          if (diff > 0 && diff < nearestDays) { nearestDays = diff; nearest = { ...p, date: d, days: diff }; }
+          return diff > 0 ? { ...p, date: d, days: diff } : null;
+        }).filter(Boolean);
+
+        if (!parsed.length) return;
+
+        // Usar favorito ou a mais próxima
+        let selected = null;
+        if (favorito) {
+          selected = parsed.find(p => `${p.edital}|${p.cargo}` === favorito);
         }
-        if (nearest) {
-          const el = document.getElementById('countdown-badge');
-          if (el) el.innerHTML = `<span class="countdown-icon">⏳</span><span class="countdown-text">${nearest.cargo}: <strong>${nearest.days}d</strong></span>`;
+        if (!selected) {
+          selected = parsed.sort((a, b) => a.days - b.days)[0];
+        }
+
+        const el = document.getElementById('countdown-badge');
+        if (el) {
+          el.innerHTML = `<span class="countdown-icon">⏳</span><span class="countdown-text">${selected.cargo}: <strong>${selected.days}d</strong></span><span class="countdown-fav" title="Alterar cargo favorito">⭐</span>`;
+          el.onclick = () => showCountdownPicker(parsed);
         }
       } catch(e) {}
     }
+
+    function showCountdownPicker(provas) {
+      let msg = 'Escolha o cargo para exibir no countdown:\n\n';
+      provas.forEach((p, i) => { msg += `${i+1}. ${p.edital} - ${p.cargo} (${p.days} dias)\n`; });
+      msg += '\nDigite o número (ou 0 para usar o mais próximo):';
+      const choice = prompt(msg);
+      if (choice === null) return;
+      const num = parseInt(choice);
+      if (num === 0) {
+        localStorage.removeItem('countdown_favorito');
+      } else if (num > 0 && num <= provas.length) {
+        const p = provas[num - 1];
+        localStorage.setItem('countdown_favorito', `${p.edital}|${p.cargo}`);
+      }
+      loadCountdown();
+    }
+
     loadCountdown();
     setInterval(loadCountdown, 60000);
 
