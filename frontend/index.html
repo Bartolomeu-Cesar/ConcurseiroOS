@@ -155,6 +155,11 @@
     .tree-note { background: none; border: none; cursor: pointer; font-size: 0.8rem; opacity: 0; transition: opacity 0.15s; padding: 0 4px; }
     .tree-leaf:hover .tree-note { opacity: 0.7; }
     .tree-note:hover { opacity: 1 !important; }
+    .tree-pdf-btn { text-decoration: none; font-size: 0.85rem; opacity: 0.7; transition: opacity 0.15s; padding: 0 3px; }
+    .tree-leaf:hover .tree-pdf-btn { opacity: 1; }
+    .tree-pdf-link-btn { background: none; border: none; cursor: pointer; font-size: 0.75rem; opacity: 0; transition: opacity 0.15s; padding: 0 3px; }
+    .tree-leaf:hover .tree-pdf-link-btn { opacity: 0.6; }
+    .tree-pdf-link-btn:hover { opacity: 1 !important; }
 
     /* Modal de notas */
     .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:1000; align-items:center; justify-content:center; }
@@ -858,6 +863,7 @@
                 <span class="tree-label">${matNome}</span>
                 <span class="tree-stats">${matDone}/${items.length}${matHoras > 0 ? ' • '+formatHours(matHoras) : ''}</span>
                 <div class="tree-bar"><div class="tree-bar-fill" style="width:${matPct}%"></div></div>
+                <button class="tree-pdf-link-btn" style="font-size:0.7rem;" onclick="event.stopPropagation();linkPdfToMateria('${matNome.replace(/'/g,"\\\\'")}','${concurso}','${cargo}')" title="Vincular PDF à matéria">🔗</button>
               </div>
               <div class="tree-children ${matOpen ? 'open' : ''}">`;
 
@@ -865,10 +871,14 @@
               const sel = item.id === editalSelectedId ? ' selected' : '';
               const safeMateria = item.materia.replace(/'/g, "\\'");
               const safeTopico = item.topico.replace(/'/g, "\\'");
+              const pdfBtn = item.pdf_link
+                ? `<a class="tree-pdf-btn" href="viewer.html?path=${encodeURIComponent(item.pdf_link)}${item.pdf_pagina ? '#page='+item.pdf_pagina : ''}" target="_blank" onclick="event.stopPropagation()" title="Abrir PDF">📖</a>`
+                : `<button class="tree-pdf-link-btn" onclick="event.stopPropagation();linkPdfToTopic(${item.id},'${safeMateria}')" title="Vincular PDF">🔗</button>`;
               html += `<div class="tree-leaf${sel}" data-id="${item.id}" onclick="selectEditalTopic(${item.id}, '${safeMateria}', '${safeTopico}')">
                 <span class="tree-status ${getStatusClass(item.status)}" onclick="event.stopPropagation();toggleEditalStatus(${item.id})">${item.status === 'Concluído' ? '✓' : item.status === 'Em Andamento' ? '◐' : '○'}</span>
                 <span class="tree-topic">${item.topico}</span>
                 ${item.horas_estudadas > 0 ? `<span class="tree-hours">${formatHours(item.horas_estudadas)}</span>` : ''}
+                ${pdfBtn}
                 <button class="tree-note" onclick="event.stopPropagation();openNoteModal(${item.id})" title="Notas">📝</button>
                 <button class="tree-del" onclick="event.stopPropagation();deleteEditalItem(${item.id})">×</button>
               </div>`;
@@ -1153,6 +1163,74 @@
 
     // ==================== NOTAS POR TÓPICO ====================
     let noteCurrentId = null;
+
+    // ==================== VINCULAR PDF A TÓPICO ====================
+    async function linkPdfToTopic(id, materia) {
+      // Buscar PDFs disponíveis
+      const tree = await fetch('/api/tree').then(r => r.json());
+      const pdfs = [];
+      function extractPdfs(nodes, prefix) {
+        for (const n of nodes) {
+          if (n.type === 'pdf') pdfs.push(prefix ? `${prefix}/${n.name}` : n.name);
+          else if (n.type === 'folder') extractPdfs(n.children, prefix ? `${prefix}/${n.name}` : n.name);
+        }
+      }
+      extractPdfs(tree, '');
+
+      if (pdfs.length === 0) { alert('Nenhum PDF disponível na pasta. Adicione PDFs na pasta backend/pdfs/'); return; }
+
+      // Montar lista para seleção
+      let msg = `Vincular PDF ao tópico de "${materia}"\n\nPDFs disponíveis:\n`;
+      pdfs.forEach((p, i) => { msg += `${i + 1}. ${p}\n`; });
+      msg += `\nDigite o número do PDF (ou o caminho completo):`;
+
+      const choice = prompt(msg);
+      if (!choice) return;
+
+      let pdfPath;
+      const num = parseInt(choice);
+      if (num > 0 && num <= pdfs.length) {
+        pdfPath = pdfs[num - 1];
+      } else {
+        pdfPath = choice.trim();
+      }
+
+      const pagina = parseInt(prompt('Página inicial (ou deixe vazio para pág. 1):', '1')) || 1;
+
+      await fetch(`/api/edital/${id}/pdf`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pdf_link: pdfPath, pdf_pagina: pagina })
+      });
+
+      loadEdital();
+    }
+
+    // Vincular PDF em bulk (toda a matéria de uma vez)
+    async function linkPdfToMateria(materia, editalNome, cargo) {
+      const tree = await fetch('/api/tree').then(r => r.json());
+      const pdfs = [];
+      function extractPdfs(nodes, prefix) {
+        for (const n of nodes) {
+          if (n.type === 'pdf') pdfs.push(prefix ? `${prefix}/${n.name}` : n.name);
+          else if (n.type === 'folder') extractPdfs(n.children, prefix ? `${prefix}/${n.name}` : n.name);
+        }
+      }
+      extractPdfs(tree, '');
+
+      let msg = `Vincular PDF a TODOS os tópicos de "${materia}"\n\n`;
+      pdfs.forEach((p, i) => { msg += `${i + 1}. ${p}\n`; });
+      msg += `\nDigite o número:`;
+
+      const choice = prompt(msg);
+      if (!choice) return;
+      const num = parseInt(choice);
+      const pdfPath = (num > 0 && num <= pdfs.length) ? pdfs[num - 1] : choice.trim();
+
+      await fetch(`/api/edital/vincular-bulk?materia=${encodeURIComponent(materia)}&pdf_link=${encodeURIComponent(pdfPath)}&edital_nome=${encodeURIComponent(editalNome||'')}&cargo=${encodeURIComponent(cargo||'')}`, { method: 'PUT' });
+      alert(`PDF vinculado a todos os tópicos de ${materia}!`);
+      loadEdital();
+    }
     function openNoteModal(id) {
       noteCurrentId = id;
       document.getElementById('note-modal').classList.add('show');

@@ -68,6 +68,14 @@ def get_db():
         conn.execute("SELECT cargo FROM edital LIMIT 1")
     except Exception:
         conn.execute("ALTER TABLE edital ADD COLUMN cargo TEXT DEFAULT ''")
+    try:
+        conn.execute("SELECT pdf_link FROM edital LIMIT 1")
+    except Exception:
+        conn.execute("ALTER TABLE edital ADD COLUMN pdf_link TEXT DEFAULT ''")
+    try:
+        conn.execute("SELECT pdf_pagina FROM edital LIMIT 1")
+    except Exception:
+        conn.execute("ALTER TABLE edital ADD COLUMN pdf_pagina INTEGER DEFAULT 0")
 
     # Flashcards SRS
     conn.execute("""
@@ -395,7 +403,7 @@ def get_edital_info(edital_nome: str = ""):
 @app.get("/api/edital")
 def list_edital(edital_nome: str = "", cargo: str = ""):
     conn = get_db()
-    query = "SELECT id, edital_nome, cargo, materia, topico, status, horas_estudadas FROM edital WHERE 1=1"
+    query = "SELECT id, edital_nome, cargo, materia, topico, status, horas_estudadas, pdf_link, pdf_pagina FROM edital WHERE 1=1"
     params = []
     if edital_nome:
         query += " AND edital_nome = ?"
@@ -464,6 +472,41 @@ def delete_edital(id: int):
     conn.commit()
     conn.close()
     return {"ok": True}
+
+
+class EditalPdfLink(BaseModel):
+    pdf_link: str
+    pdf_pagina: int = 1
+
+
+@app.put("/api/edital/{id}/pdf")
+def link_pdf_to_edital(id: int, body: EditalPdfLink):
+    """Vincula um PDF (e página) a um tópico do edital"""
+    conn = get_db()
+    conn.execute("UPDATE edital SET pdf_link = ?, pdf_pagina = ? WHERE id = ?",
+                 (body.pdf_link, body.pdf_pagina, id))
+    conn.commit()
+    conn.close()
+    return {"ok": True, "pdf_link": body.pdf_link, "pdf_pagina": body.pdf_pagina}
+
+
+@app.put("/api/edital/vincular-bulk")
+def vincular_pdf_bulk(materia: str, pdf_link: str, edital_nome: str = "", cargo: str = ""):
+    """Vincula um PDF a todos os tópicos de uma matéria de uma vez"""
+    conn = get_db()
+    query = "UPDATE edital SET pdf_link = ? WHERE materia = ?"
+    params = [pdf_link, materia]
+    if edital_nome:
+        query += " AND edital_nome = ?"
+        params.append(edital_nome)
+    if cargo:
+        query += " AND cargo = ?"
+        params.append(cargo)
+    result = conn.execute(query, params)
+    conn.commit()
+    count = result.rowcount
+    conn.close()
+    return {"ok": True, "atualizados": count}
 
 
 # ============================================================
