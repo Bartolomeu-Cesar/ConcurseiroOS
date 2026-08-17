@@ -20,8 +20,40 @@
       background: #1e1e2e; padding: 4px 10px; border-radius: 6px;
     }
     #timer-display.done { color: #a6e3a1; }
-    #viewer { flex: 1; overflow: hidden; }
-    iframe { width: 100%; height: 100%; border: none; }
+    #viewer { flex: 1; overflow: hidden; display: flex; }
+    #viewer iframe { flex: 1; height: 100%; border: none; }
+    #side-panel {
+      width: 0; overflow: hidden; transition: width 0.3s; background: #313244;
+      display: flex; flex-direction: column; border-left: 1px solid #45475a;
+    }
+    #side-panel.open { width: 380px; }
+    #side-panel-header {
+      padding: 10px 14px; background: #1e1e2e; display: flex; align-items: center; gap: 8px;
+      border-bottom: 1px solid #45475a; flex-shrink: 0;
+    }
+    #side-panel-header h3 { font-size: 0.9rem; color: #cba6f7; flex: 1; margin: 0; }
+    #side-panel-header button { background: none; border: none; color: #f38ba8; cursor: pointer; font-size: 1.1rem; }
+    #side-panel-body { flex: 1; overflow-y: auto; padding: 12px; }
+    .sp-question { background: #1e1e2e; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+    .sp-question .sp-enunciado { font-size: 0.85rem; line-height: 1.5; margin-bottom: 10px; }
+    .sp-question .sp-alt {
+      display: flex; align-items: center; gap: 8px; padding: 7px 10px;
+      border-radius: 6px; cursor: pointer; font-size: 0.82rem; margin-bottom: 4px;
+      border: 1px solid #45475a; transition: all 0.15s;
+    }
+    .sp-question .sp-alt:hover { border-color: #89b4fa; }
+    .sp-question .sp-alt.selected { border-color: #cba6f7; background: #45475a; }
+    .sp-question .sp-alt.correct { border-color: #a6e3a1; background: #a6e3a122; }
+    .sp-question .sp-alt.wrong { border-color: #f38ba8; background: #f38ba822; }
+    .sp-question .sp-alt .letter { font-weight: 700; color: #cba6f7; min-width: 16px; }
+    .sp-question .sp-feedback { margin-top: 8px; padding: 8px; background: #45475a; border-radius: 6px; font-size: 0.8rem; display: none; }
+    .sp-question .sp-feedback.show { display: block; }
+    .sp-meta { font-size: 0.75rem; color: #9399b2; margin-bottom: 6px; }
+    .sp-empty { color: #9399b2; font-size: 0.85rem; text-align: center; padding: 20px; }
+    #btn-toggle-panel {
+      background: #cba6f7; color: #1e1e2e; border: none; border-radius: 6px;
+      padding: 4px 10px; font-size: 0.8rem; font-weight: 600; cursor: pointer;
+    }
     #overlay {
       display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7);
       z-index: 999; align-items: center; justify-content: center;
@@ -44,10 +76,20 @@
     <span id="title"></span>
     <span id="timer-display">00:00:00</span>
     <span id="page-info"></span>
+    <button id="btn-toggle-panel" onclick="toggleSidePanel()">❓ Questões</button>
   </div>
 
   <div id="viewer">
     <iframe id="pdf-frame" allowfullscreen></iframe>
+    <div id="side-panel">
+      <div id="side-panel-header">
+        <h3>❓ Questões da Disciplina</h3>
+        <button onclick="toggleSidePanel()">✕</button>
+      </div>
+      <div id="side-panel-body">
+        <div class="sp-empty">Carregando questões...</div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -310,6 +352,113 @@
 
     window.addEventListener('beforeunload', onLeave);
     window.addEventListener('pagehide', onLeave);
+
+    // ---------- Painel Lateral de Questões ----------
+    let sidePanelQuestions = [];
+    let sidePanelMateria = '';
+
+    function toggleSidePanel() {
+      const panel = document.getElementById('side-panel');
+      panel.classList.toggle('open');
+      if (panel.classList.contains('open') && sidePanelQuestions.length === 0) {
+        loadSidePanelQuestions();
+      }
+    }
+
+    async function loadSidePanelQuestions() {
+      const body = document.getElementById('side-panel-body');
+      
+      // Tentar identificar a matéria pelo nome do PDF
+      const pdfName = name.toLowerCase();
+      
+      // Buscar matérias vinculadas a este PDF
+      try {
+        const editalData = await fetch('/api/edital').then(r => r.json());
+        const vinculados = editalData.filter(e => e.pdf_link === path);
+        
+        if (vinculados.length > 0) {
+          sidePanelMateria = vinculados[0].materia;
+        } else {
+          // Tentar identificar pela nome do arquivo
+          const materias = await fetch('/api/questoes/materias').then(r => r.json());
+          sidePanelMateria = materias.find(m => pdfName.includes(m.toLowerCase().split(' ')[0]?.toLowerCase())) || '';
+        }
+      } catch(e) {}
+
+      // Buscar questões
+      let url = '/api/questoes';
+      if (sidePanelMateria) {
+        url += `?materia=${encodeURIComponent(sidePanelMateria)}`;
+        document.querySelector('#side-panel-header h3').textContent = `❓ ${sidePanelMateria}`;
+      }
+
+      try {
+        const questoes = await fetch(url).then(r => r.json());
+        sidePanelQuestions = questoes;
+
+        if (questoes.length === 0) {
+          body.innerHTML = `<div class="sp-empty">Nenhuma questão encontrada${sidePanelMateria ? ' para "'+sidePanelMateria+'"' : ''}.<br><br><a href="/questoes.html" style="color:#89b4fa;">Cadastrar questões →</a></div>`;
+          return;
+        }
+
+        // Sortear 5 questões aleatórias
+        const shuffled = questoes.sort(() => Math.random() - 0.5).slice(0, 5);
+        renderSidePanelQuestions(shuffled);
+      } catch(e) {
+        body.innerHTML = '<div class="sp-empty">Erro ao carregar questões.</div>';
+      }
+    }
+
+    function renderSidePanelQuestions(questoes) {
+      const body = document.getElementById('side-panel-body');
+      body.innerHTML = questoes.map((q, idx) => {
+        const alts = [
+          { letter: 'A', text: q.alternativa_a },
+          { letter: 'B', text: q.alternativa_b },
+          { letter: 'C', text: q.alternativa_c },
+          { letter: 'D', text: q.alternativa_d },
+        ];
+        if (q.alternativa_e) alts.push({ letter: 'E', text: q.alternativa_e });
+
+        return `<div class="sp-question" data-id="${q.id}" data-correct="${q.resposta_correta}">
+          <div class="sp-meta">${q.materia}${q.topico ? ' • '+q.topico : ''}</div>
+          <div class="sp-enunciado">${q.enunciado}</div>
+          ${alts.map(a => `<div class="sp-alt" data-letter="${a.letter}" onclick="selectSideAlt(this)"><span class="letter">${a.letter})</span> ${a.text}</div>`).join('')}
+          <div class="sp-feedback" id="fb-${q.id}"></div>
+        </div>`;
+      }).join('') + `<div style="text-align:center;padding:12px;"><button onclick="loadSidePanelQuestions()" style="background:#45475a;border:none;color:#cdd6f4;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:0.82rem;">🔄 Novas questões</button></div>`;
+    }
+
+    async function selectSideAlt(el) {
+      const question = el.closest('.sp-question');
+      if (question.dataset.answered) return;
+      question.dataset.answered = '1';
+
+      const letter = el.dataset.letter;
+      const correct = question.dataset.correct;
+      const qId = question.dataset.id;
+
+      // Marcar seleção
+      el.classList.add('selected');
+
+      // Enviar resposta ao backend
+      const res = await fetch(`/api/questoes/${qId}/responder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resposta: letter, tempo_segundos: 0 })
+      }).then(r => r.json());
+
+      // Mostrar resultado
+      question.querySelectorAll('.sp-alt').forEach(a => {
+        if (a.dataset.letter === correct) a.classList.add('correct');
+        if (a.dataset.letter === letter && !res.acertou) a.classList.add('wrong');
+      });
+
+      const fb = document.getElementById(`fb-${qId}`);
+      fb.textContent = res.acertou ? '✓ Correto!' : `✗ Errado. Resposta: ${correct}`;
+      fb.style.color = res.acertou ? '#a6e3a1' : '#f38ba8';
+      fb.classList.add('show');
+    }
 
     initProgress();
     initTimer();
