@@ -242,6 +242,30 @@
     <div class="sugestao-box" id="sugestao-box"></div>
   </div>
 
+  <!-- Planejador + Comparador + Revisões -->
+  <div class="charts">
+    <div class="chart-box">
+      <h3>🎯 Planejador de Aprovação</h3>
+      <div id="planejador-aprov"></div>
+    </div>
+    <div class="chart-box">
+      <h3>📊 Comparador de Progresso</h3>
+      <div id="comparador-prog"></div>
+    </div>
+  </div>
+
+  <div class="charts">
+    <div class="chart-box">
+      <h3>🔄 Revisões Pendentes (SRS)</h3>
+      <div id="revisoes-pend"></div>
+    </div>
+    <div class="chart-box">
+      <h3>📅 Planejador Semanal</h3>
+      <div id="planejador-sem"></div>
+      <p style="font-size:0.78rem;color:#9399b2;margin-top:8px;">Configure na aba Edital ou via API /api/planejador</p>
+    </div>
+  </div>
+
   <script>
     if (localStorage.getItem('theme') === 'light') document.body.classList.add('light-theme');
 
@@ -531,9 +555,57 @@
       `;
     }
 
+    async function loadPlanejadorAprovacao() {
+      const data = await fetch('/api/planejador-aprovacao').then(r => r.json());
+      const container = document.getElementById('planejador-aprov');
+      if (!container) return;
+      if (!data.materias.length) { container.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Estude e resolva questões para gerar o planejador.</p>'; return; }
+      let html = `<p style="font-size:0.82rem;color:#9399b2;margin-bottom:8px;">Meta: ${data.meta_edital}% edital + ${data.meta_questoes}% questões por matéria</p>`;
+      data.materias.slice(0, 12).forEach(m => {
+        const color = m.status === 'ok' ? '#a6e3a1' : m.status === 'atencao' ? '#fab387' : '#f38ba8';
+        html += `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #45475a;font-size:0.82rem;">
+          <span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0;"></span>
+          <span style="flex:1;">${m.materia}</span>
+          <span style="color:#9399b2;">${m.pct_edital}%ed</span>
+          <span style="color:#9399b2;">${m.pct_questoes}%q</span>
+        </div>`;
+      });
+      container.innerHTML = html;
+    }
+
+    async function loadComparador() {
+      const data = await fetch('/api/comparador-progresso').then(r => r.json());
+      const container = document.getElementById('comparador-prog');
+      if (!container) return;
+      if (!data.length) { container.innerHTML = '<p style="color:#9399b2;">Sem dados.</p>'; return; }
+      let html = '';
+      data.forEach(d => {
+        html += `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #45475a;font-size:0.82rem;">
+          <span style="flex:1;font-weight:600;">${d.cargo}</span>
+          <span style="color:#9399b2;">${d.horas}h</span>
+          <div style="width:60px;height:6px;background:#45475a;border-radius:3px;overflow:hidden;"><div style="height:100%;width:${d.pct}%;background:#a6e3a1;border-radius:3px;"></div></div>
+          <span style="min-width:36px;text-align:right;color:#a6e3a1;font-weight:700;">${d.pct}%</span>
+        </div>`;
+      });
+      container.innerHTML = html;
+    }
+
+    async function loadRevisoesPendentes() {
+      try {
+        const data = await fetch('/api/edital/revisoes-pendentes').then(r => r.json());
+        const container = document.getElementById('revisoes-pend');
+        if (!container) return;
+        if (!data.length) { container.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Nenhuma revisão pendente. Agende revisões nos tópicos do edital.</p>'; return; }
+        container.innerHTML = data.slice(0, 10).map(d => `<div style="padding:6px 0;border-bottom:1px solid #45475a;font-size:0.83rem;"><span style="color:#fab387;">${d.materia}</span> — ${d.topico}</div>`).join('');
+      } catch(e) {}
+    }
+
     loadDashboard();
     loadRadar();
     loadGamification();
+    loadPlanejadorAprovacao();
+    loadComparador();
+    loadRevisoesPendentes();
   </script>
 </body>
 </html>

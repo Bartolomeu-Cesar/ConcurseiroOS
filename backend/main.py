@@ -2083,6 +2083,45 @@ def revisoes_pendentes():
 
 
 # ============================================================
+# GERADOR DE QUESTÕES (TEMPLATE A PARTIR DO EDITAL)
+# ============================================================
+
+@app.get("/api/gerar-questao/{edital_id}")
+def gerar_questao_template(edital_id: int):
+    """Gera um template de questão baseado no tópico do edital"""
+    conn = get_db()
+    topico = conn.execute("SELECT materia, topico FROM edital WHERE id = ?", (edital_id,)).fetchone()
+    conn.close()
+    if not topico:
+        raise HTTPException(404)
+    return {
+        "materia": topico[0],
+        "topico": topico[1],
+        "template": {
+            "enunciado": f"Sobre {topico[1].lower()}, assinale a alternativa correta:",
+            "alternativa_a": "",
+            "alternativa_b": "",
+            "alternativa_c": "",
+            "alternativa_d": "",
+            "alternativa_e": "",
+            "resposta_correta": "",
+            "explicacao": "",
+            "dificuldade": "Médio"
+        }
+    }
+
+
+# ============================================================
+# MODO FOCO
+# ============================================================
+
+@app.get("/api/modo-foco/status")
+def get_modo_foco():
+    """Retorna status do modo foco (controlado pelo frontend)"""
+    return {"disponivel": True, "dica": "Use F11 para tela cheia + o botão Modo Foco na interface"}
+
+
+# ============================================================
 # CORREÇÃO DO MIME TYPE PARA .mjs / .js (PDF.js)
 # ============================================================
 from starlette.staticfiles import StaticFiles

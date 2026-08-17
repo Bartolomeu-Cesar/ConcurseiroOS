@@ -315,6 +315,10 @@
     body.light-theme .pdf-bar { background: #e6e9ef; }
     body.light-theme .import-edital input[type="text"] { background: #dce0e8; border-color: #bcc0cc; color: #4c4f69; }
 
+    /* Modo Foco */
+    body.focus-mode { padding: 12px; }
+    body.focus-mode .panel { margin-bottom: 8px; }
+
     /* Countdown badge */
     .countdown-badge { display: flex; align-items: center; gap: 4px; background: #313244; border-radius: 20px; padding: 4px 12px; font-size: 0.78rem; }
     .countdown-badge:empty { display: none; }
@@ -402,6 +406,7 @@
   <div class="nav-links">
     <a href="/dashboard.html">📊 Dashboard</a>
     <a href="/questoes.html">❓ Questões & Simulados</a>
+    <a href="#" onclick="enterFocusMode();return false;">🎯 Modo Foco</a>
   </div>
 
   <!-- Tabs -->
@@ -1184,6 +1189,59 @@
     // Close modal on outside click
     document.getElementById('note-modal').addEventListener('click', (e) => {
       if (e.target.classList.contains('modal-overlay')) closeNoteModal();
+    });
+
+    // ==================== MODO FOCO ====================
+    function enterFocusMode() {
+      const el = document.documentElement;
+      if (el.requestFullscreen) el.requestFullscreen();
+      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+      document.body.classList.add('focus-mode');
+      // Show only the edital tab
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      document.querySelector('[data-tab="tab-edital"]').classList.add('active');
+      document.getElementById('tab-edital').classList.add('active');
+      // Hide non-essential elements
+      document.getElementById('header').style.display = 'none';
+      document.querySelector('.nav-links').style.display = 'none';
+      document.getElementById('tab-bar').style.display = 'none';
+      // Show exit button
+      if (!document.getElementById('exit-focus-btn')) {
+        const btn = document.createElement('button');
+        btn.id = 'exit-focus-btn';
+        btn.className = 'iobtn';
+        btn.style.cssText = 'position:fixed;top:12px;right:12px;z-index:9999;background:#f38ba8;color:#1e1e2e;';
+        btn.textContent = '✕ Sair do Foco';
+        btn.onclick = exitFocusMode;
+        document.body.appendChild(btn);
+      }
+    }
+    function exitFocusMode() {
+      if (document.exitFullscreen) document.exitFullscreen();
+      else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+      document.body.classList.remove('focus-mode');
+      document.getElementById('header').style.display = '';
+      document.querySelector('.nav-links').style.display = '';
+      document.getElementById('tab-bar').style.display = '';
+      const btn = document.getElementById('exit-focus-btn');
+      if (btn) btn.remove();
+    }
+    document.addEventListener('fullscreenchange', () => {
+      if (!document.fullscreenElement) exitFocusMode();
+    });
+
+    // ==================== REVISÃO ESPAÇADA UI ====================
+    // Add SRS button to tree topics (enhance the existing tree-leaf render)
+    document.addEventListener('dblclick', async (e) => {
+      const leaf = e.target.closest('.tree-leaf');
+      if (!leaf) return;
+      const id = leaf.dataset.id;
+      if (!id) return;
+      if (confirm('Agendar revisão espaçada para este tópico?')) {
+        const res = await fetch(`/api/edital/${id}/agendar-revisao`, {method:'POST'}).then(r=>r.json());
+        alert(`Revisão agendada para: ${res.proxima_revisao} (intervalo: ${res.intervalo} dias)`);
+      }
     });
   </script>
 </body>
