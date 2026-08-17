@@ -1746,11 +1746,13 @@ def get_notificacoes():
     config = conn.execute("SELECT meta_horas, meta_questoes, meta_flashcards FROM metas_config WHERE id = 1").fetchone()
     hoje = conn.execute("SELECT * FROM streaks WHERE data = ?", (today_str(),)).fetchone()
     if config and hoje:
-        if hoje[1] < config[0]:  # horas
-            falta = config[0] - hoje[1]
+        horas_hoje = float(hoje["horas_estudadas"] or 0)
+        questoes_hoje = int(hoje["questoes_resolvidas"] or 0)
+        if horas_hoje < float(config["meta_horas"]):
+            falta = float(config["meta_horas"]) - horas_hoje
             notifs.append({"tipo": "meta", "icon": "⏱", "msg": f"Faltam {falta:.1f}h para bater a meta de hoje", "prioridade": "media"})
-        if hoje[2] < config[1]:  # questões
-            falta = config[1] - hoje[2]
+        if questoes_hoje < int(config["meta_questoes"]):
+            falta = int(config["meta_questoes"]) - questoes_hoje
             notifs.append({"tipo": "meta", "icon": "❓", "msg": f"Faltam {falta} questões para a meta de hoje", "prioridade": "media"})
     elif config:
         notifs.append({"tipo": "meta", "icon": "📖", "msg": "Você ainda não estudou hoje! Que tal começar?", "prioridade": "alta"})
