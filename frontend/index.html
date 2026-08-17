@@ -1286,6 +1286,28 @@
 
     // Vincular PDF a uma disciplina (da tela de PDFs)
     async function linkPdfToDisc(pdfPath) {
+      // Verificar se já está vinculado
+      const jaVinculado = editalData.find(e => e.pdf_link === pdfPath);
+      
+      if (jaVinculado) {
+        const acao = prompt(
+          `Este PDF já está vinculado a "${jaVinculado.materia}" (${jaVinculado.edital_nome} - ${jaVinculado.cargo}).\n\n` +
+          `1. Desvincular (remover link)\n` +
+          `2. Vincular a outra disciplina\n` +
+          `0. Cancelar\n\nEscolha:`
+        );
+        if (!acao || acao === '0') return;
+        if (acao === '1') {
+          // Desvincular: limpar pdf_link de todos os tópicos com este PDF
+          await fetch(`/api/edital/desvincular-pdf?pdf_link=${encodeURIComponent(pdfPath)}`, { method: 'PUT' });
+          alert('PDF desvinculado!');
+          loadEdital();
+          load();
+          return;
+        }
+        // Se escolheu 2, continua para vincular a outra
+      }
+
       // Buscar disciplinas disponíveis
       const materias = [...new Set(editalData.map(e => e.materia))].sort();
       if (materias.length === 0) { alert('Nenhuma disciplina cadastrada no edital. Adicione primeiro na aba Edital.'); return; }
@@ -1300,12 +1322,33 @@
       if (num < 1 || num > materias.length) { alert('Número inválido.'); return; }
 
       const materia = materias[num - 1];
-      
+
+      // Perguntar de qual edital/cargo
+      const editaisCargos = [...new Set(editalData.filter(e => e.materia === materia).map(e => `${e.edital_nome}|${e.cargo}`))];
+      let editalNome = '', cargo = '';
+      if (editaisCargos.length > 1) {
+        let msg2 = `"${materia}" existe em vários editais:\n\n`;
+        editaisCargos.forEach((ec, i) => { const [e,c] = ec.split('|'); msg2 += `${i+1}. ${e} - ${c}\n`; });
+        msg2 += `\nDigite o número (ou Enter para todos):`;
+        const ch2 = prompt(msg2);
+        if (ch2) {
+          const n2 = parseInt(ch2);
+          if (n2 > 0 && n2 <= editaisCargos.length) {
+            [editalNome, cargo] = editaisCargos[n2-1].split('|');
+          }
+        }
+      }
+
+      // Desvincular o antigo primeiro (se estava em outra matéria)
+      if (jaVinculado) {
+        await fetch(`/api/edital/desvincular-pdf?pdf_link=${encodeURIComponent(pdfPath)}`, { method: 'PUT' });
+      }
+
       // Vincular o PDF a todos os tópicos dessa matéria
-      await fetch(`/api/edital/vincular-bulk?materia=${encodeURIComponent(materia)}&pdf_link=${encodeURIComponent(pdfPath)}`, { method: 'PUT' });
+      await fetch(`/api/edital/vincular-bulk?materia=${encodeURIComponent(materia)}&pdf_link=${encodeURIComponent(pdfPath)}&edital_nome=${encodeURIComponent(editalNome)}&cargo=${encodeURIComponent(cargo)}`, { method: 'PUT' });
       alert(`"${pdfPath.split('/').pop()}" vinculado a ${materia}!`);
       loadEdital();
-      load(); // Recarregar PDFs para mostrar a tag
+      load();
     }
     function openNoteModal(id) {
       noteCurrentId = id;

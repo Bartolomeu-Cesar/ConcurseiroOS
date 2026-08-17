@@ -509,6 +509,17 @@ def vincular_pdf_bulk(materia: str, pdf_link: str, edital_nome: str = "", cargo:
     return {"ok": True, "atualizados": count}
 
 
+@app.put("/api/edital/desvincular-pdf")
+def desvincular_pdf(pdf_link: str):
+    """Remove o vínculo de um PDF de todos os tópicos"""
+    conn = get_db()
+    result = conn.execute("UPDATE edital SET pdf_link = '', pdf_pagina = 0 WHERE pdf_link = ?", (pdf_link,))
+    conn.commit()
+    count = result.rowcount
+    conn.close()
+    return {"ok": True, "desvinculados": count}
+
+
 # ============================================================
 # FLASHCARDS SRS
 # ============================================================
