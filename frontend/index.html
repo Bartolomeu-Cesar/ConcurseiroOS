@@ -99,6 +99,8 @@
     .pdf-link-disc-btn { background: none; border: none; cursor: pointer; font-size: 0.75rem; opacity: 0; transition: opacity 0.15s; }
     .pdf-item:hover .pdf-link-disc-btn { opacity: 0.7; }
     .pdf-link-disc-btn:hover { opacity: 1 !important; }
+    .pdf-link-disc-btn.pdf-unlink { opacity: 0.5; font-size: 0.7rem; }
+    .pdf-item:hover .pdf-link-disc-btn.pdf-unlink { opacity: 1; }
     body.light-theme .pdf-materia-tag { background: #ccd0da; color: #8839ef; }
     .pdf-bar { height: 3px; background: #313244; border-radius: 2px; margin: 2px 0 0 22px; }
     .pdf-bar-fill { height: 100%; background: #89dceb; border-radius: 2px; transition: width 0.3s; }
@@ -636,6 +638,9 @@
           // Verificar se este PDF está vinculado a alguma disciplina
           const vinculado = editalData.find(e => e.pdf_link === path);
           const materiaTag = vinculado ? `<span class="pdf-materia-tag">${vinculado.materia}</span>` : '';
+          const linkBtn = vinculado
+            ? `<button class="pdf-link-disc-btn pdf-unlink" onclick="event.stopPropagation();unlinkPdf('${path.replace(/'/g,"\\'")}')" title="Desvincular disciplina">❌</button>`
+            : `<button class="pdf-link-disc-btn" onclick="event.stopPropagation();linkPdfToDisc('${path.replace(/'/g,"\\'")}')" title="Vincular a disciplina">🔗</button>`;
           const div = document.createElement('div');
           div.innerHTML = `
             <div class="pdf-item" data-path="${path}">
@@ -644,7 +649,7 @@
               ${materiaTag}
               <span class="pdf-progress">${label}</span>
               ${pct === 100 ? '<span class="badge-done">✓</span>' : ''}
-              <button class="pdf-link-disc-btn" onclick="event.stopPropagation();linkPdfToDisc('${path.replace(/'/g,"\\'")}')" title="Vincular a disciplina">🔗</button>
+              ${linkBtn}
             </div>
             <div class="pdf-bar"><div class="pdf-bar-fill" style="width:${pct}%"></div></div>
           `;
@@ -1284,29 +1289,17 @@
       loadEdital();
     }
 
+    // Desvincular PDF diretamente (botão ❌ na tela de PDFs)
+    async function unlinkPdf(pdfPath) {
+      const vinculado = editalData.find(e => e.pdf_link === pdfPath);
+      if (!confirm(`Desvincular "${pdfPath.split('/').pop()}" de "${vinculado?.materia || 'disciplina'}"?`)) return;
+      await fetch(`/api/edital/desvincular-pdf?pdf_link=${encodeURIComponent(pdfPath)}`, { method: 'PUT' });
+      loadEdital();
+      load();
+    }
+
     // Vincular PDF a uma disciplina (da tela de PDFs)
     async function linkPdfToDisc(pdfPath) {
-      // Verificar se já está vinculado
-      const jaVinculado = editalData.find(e => e.pdf_link === pdfPath);
-      
-      if (jaVinculado) {
-        const acao = prompt(
-          `Este PDF já está vinculado a "${jaVinculado.materia}" (${jaVinculado.edital_nome} - ${jaVinculado.cargo}).\n\n` +
-          `1. Desvincular (remover link)\n` +
-          `2. Vincular a outra disciplina\n` +
-          `0. Cancelar\n\nEscolha:`
-        );
-        if (!acao || acao === '0') return;
-        if (acao === '1') {
-          // Desvincular: limpar pdf_link de todos os tópicos com este PDF
-          await fetch(`/api/edital/desvincular-pdf?pdf_link=${encodeURIComponent(pdfPath)}`, { method: 'PUT' });
-          alert('PDF desvinculado!');
-          loadEdital();
-          load();
-          return;
-        }
-        // Se escolheu 2, continua para vincular a outra
-      }
 
       // Buscar disciplinas disponíveis
       const materias = [...new Set(editalData.map(e => e.materia))].sort();
@@ -1337,11 +1330,6 @@
             [editalNome, cargo] = editaisCargos[n2-1].split('|');
           }
         }
-      }
-
-      // Desvincular o antigo primeiro (se estava em outra matéria)
-      if (jaVinculado) {
-        await fetch(`/api/edital/desvincular-pdf?pdf_link=${encodeURIComponent(pdfPath)}`, { method: 'PUT' });
       }
 
       // Vincular o PDF a todos os tópicos dessa matéria
