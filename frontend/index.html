@@ -1294,8 +1294,8 @@
       const vinculado = editalData.find(e => e.pdf_link === pdfPath);
       if (!confirm(`Desvincular "${pdfPath.split('/').pop()}" de "${vinculado?.materia || 'disciplina'}"?`)) return;
       await fetch(`/api/edital/desvincular-pdf?pdf_link=${encodeURIComponent(pdfPath)}`, { method: 'PUT' });
-      loadEdital();
-      load();
+      editalData = await fetch('/api/edital').then(r => r.json());
+      await load();
     }
 
     // Vincular PDF a uma disciplina (da tela de PDFs)
@@ -1335,8 +1335,8 @@
       // Vincular o PDF a todos os tópicos dessa matéria
       await fetch(`/api/edital/vincular-bulk?materia=${encodeURIComponent(materia)}&pdf_link=${encodeURIComponent(pdfPath)}&edital_nome=${encodeURIComponent(editalNome)}&cargo=${encodeURIComponent(cargo)}`, { method: 'PUT' });
       alert(`"${pdfPath.split('/').pop()}" vinculado a ${materia}!`);
-      loadEdital();
-      load();
+      editalData = await fetch('/api/edital').then(r => r.json());
+      await load();
     }
     function openNoteModal(id) {
       noteCurrentId = id;
