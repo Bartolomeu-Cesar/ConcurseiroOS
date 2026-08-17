@@ -95,6 +95,11 @@
     .pdf-item:hover { background: #313244; border-color: #89b4fa; }
     .pdf-name { flex: 1; font-size: 0.9rem; }
     .pdf-progress { font-size: 0.75rem; color: #89dceb; white-space: nowrap; }
+    .pdf-materia-tag { font-size: 0.7rem; background: #45475a; color: #cba6f7; padding: 1px 8px; border-radius: 10px; white-space: nowrap; }
+    .pdf-link-disc-btn { background: none; border: none; cursor: pointer; font-size: 0.75rem; opacity: 0; transition: opacity 0.15s; }
+    .pdf-item:hover .pdf-link-disc-btn { opacity: 0.7; }
+    .pdf-link-disc-btn:hover { opacity: 1 !important; }
+    body.light-theme .pdf-materia-tag { background: #ccd0da; color: #8839ef; }
     .pdf-bar { height: 3px; background: #313244; border-radius: 2px; margin: 2px 0 0 22px; }
     .pdf-bar-fill { height: 100%; background: #89dceb; border-radius: 2px; transition: width 0.3s; }
     .badge-done { font-size: 0.7rem; background: #a6e3a1; color: #1e1e2e; border-radius: 4px; padding: 1px 5px; }
@@ -559,6 +564,7 @@
     const OPEN_KEY = 'folders_open';
     const TIMER_KEY = 'leitor_timer_state';
     const TIMER_LIMIT_KEY = 'leitor_timer_limit_min';
+    var editalData = []; // Declaração global (usada por PDFs e Edital)
 
     function getOpenFolders() {
       try { return new Set(JSON.parse(sessionStorage.getItem(OPEN_KEY)) || []); } catch { return new Set(); }
@@ -570,6 +576,10 @@
         fetch(`${API}/api/tree`).then(r => r.json()),
         fetch(`${API}/api/progress-bulk`).then(r => r.json())
       ]);
+      // Garantir editalData carregado para mostrar tags de disciplina nos PDFs
+      if (!editalData || editalData.length === 0) {
+        try { editalData = await fetch('/api/edital').then(r => r.json()); } catch(e) {}
+      }
       document.getElementById('tree').innerHTML = '';
       renderNodes(tree, document.getElementById('tree'), bulk, '');
     }
@@ -621,9 +631,19 @@
           const cp = prog ? prog.current_page : 1;
           const pct = tp ? Math.round(((cp - 1) / tp) * 100) : 0;
           const label = tp ? `pág. ${cp}/${tp} (${pct}%)` : 'não lido';
+          // Verificar se este PDF está vinculado a alguma disciplina
+          const vinculado = editalData.find(e => e.pdf_link === path);
+          const materiaTag = vinculado ? `<span class="pdf-materia-tag">${vinculado.materia}</span>` : '';
           const div = document.createElement('div');
           div.innerHTML = `
-            <div class="pdf-item" data-path="${path}"><span>📄</span><span class="pdf-name">${node.name.replace(/_/g,' ')}</span><span class="pdf-progress">${label}</span>${pct === 100 ? '<span class="badge-done">✓</span>' : ''}</div>
+            <div class="pdf-item" data-path="${path}">
+              <span>📄</span>
+              <span class="pdf-name">${node.name.replace(/_/g,' ')}</span>
+              ${materiaTag}
+              <span class="pdf-progress">${label}</span>
+              ${pct === 100 ? '<span class="badge-done">✓</span>' : ''}
+              <button class="pdf-link-disc-btn" onclick="event.stopPropagation();linkPdfToDisc('${path.replace(/'/g,"\\'")}')" title="Vincular a disciplina">🔗</button>
+            </div>
             <div class="pdf-bar"><div class="pdf-bar-fill" style="width:${pct}%"></div></div>
           `;
           div.querySelector('.pdf-item').addEventListener('click', () => { window.open(`viewer.html?path=${encodeURIComponent(path)}`, '_blank'); });
@@ -706,7 +726,7 @@
     }
 
     // ==================== TAB 2: EDITAL ====================
-    let editalTimer = null, editalStartedAt = null, editalElapsed = 0, editalPaused = false, editalSelectedId = null, editalData = [];
+    let editalTimer = null, editalStartedAt = null, editalElapsed = 0, editalPaused = false, editalSelectedId = null;
     const editalDisplay = document.getElementById('edital-timer-display');
     const editalMateriaLabel = document.getElementById('edital-materia-label');
     const editalBtnStart = document.getElementById('edital-btn-start');
@@ -1230,6 +1250,30 @@
       await fetch(`/api/edital/vincular-bulk?materia=${encodeURIComponent(materia)}&pdf_link=${encodeURIComponent(pdfPath)}&edital_nome=${encodeURIComponent(editalNome||'')}&cargo=${encodeURIComponent(cargo||'')}`, { method: 'PUT' });
       alert(`PDF vinculado a todos os tópicos de ${materia}!`);
       loadEdital();
+    }
+
+    // Vincular PDF a uma disciplina (da tela de PDFs)
+    async function linkPdfToDisc(pdfPath) {
+      // Buscar disciplinas disponíveis
+      const materias = [...new Set(editalData.map(e => e.materia))].sort();
+      if (materias.length === 0) { alert('Nenhuma disciplina cadastrada no edital. Adicione primeiro na aba Edital.'); return; }
+
+      let msg = `Vincular "${pdfPath.split('/').pop()}" a qual disciplina?\n\n`;
+      materias.forEach((m, i) => { msg += `${i + 1}. ${m}\n`; });
+      msg += `\nDigite o número:`;
+
+      const choice = prompt(msg);
+      if (!choice) return;
+      const num = parseInt(choice);
+      if (num < 1 || num > materias.length) { alert('Número inválido.'); return; }
+
+      const materia = materias[num - 1];
+      
+      // Vincular o PDF a todos os tópicos dessa matéria
+      await fetch(`/api/edital/vincular-bulk?materia=${encodeURIComponent(materia)}&pdf_link=${encodeURIComponent(pdfPath)}`, { method: 'PUT' });
+      alert(`"${pdfPath.split('/').pop()}" vinculado a ${materia}!`);
+      loadEdital();
+      load(); // Recarregar PDFs para mostrar a tag
     }
     function openNoteModal(id) {
       noteCurrentId = id;
