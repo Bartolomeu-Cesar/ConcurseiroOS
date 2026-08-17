@@ -204,6 +204,27 @@ def get_db():
         VALUES (1, 3.0, 30, 10, 20)
     """)
 
+    # Metadados dos editais (datas, locais, horários)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS edital_info (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            edital_nome TEXT NOT NULL,
+            cargo TEXT DEFAULT '',
+            orgao TEXT DEFAULT '',
+            banca TEXT DEFAULT '',
+            vagas TEXT DEFAULT '',
+            subsidio TEXT DEFAULT '',
+            inscricoes TEXT DEFAULT '',
+            data_prova_objetiva TEXT DEFAULT '',
+            data_prova_discursiva TEXT DEFAULT '',
+            horario TEXT DEFAULT '',
+            local_prova TEXT DEFAULT '',
+            taxa_inscricao TEXT DEFAULT '',
+            link_edital TEXT DEFAULT '',
+            observacoes TEXT DEFAULT ''
+        )
+    """)
+
     conn.commit()
     return conn
 
@@ -363,26 +384,6 @@ def list_edital_nomes():
 def get_edital_info(edital_nome: str = ""):
     """Retorna metadados dos editais (datas, locais, horários)"""
     conn = get_db()
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS edital_info (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            edital_nome TEXT NOT NULL,
-            cargo TEXT DEFAULT '',
-            orgao TEXT DEFAULT '',
-            banca TEXT DEFAULT '',
-            vagas TEXT DEFAULT '',
-            subsidio TEXT DEFAULT '',
-            inscricoes TEXT DEFAULT '',
-            data_prova_objetiva TEXT DEFAULT '',
-            data_prova_discursiva TEXT DEFAULT '',
-            horario TEXT DEFAULT '',
-            local_prova TEXT DEFAULT '',
-            taxa_inscricao TEXT DEFAULT '',
-            link_edital TEXT DEFAULT '',
-            observacoes TEXT DEFAULT ''
-        )
-    """)
-    conn.commit()
     if edital_nome:
         rows = conn.execute("SELECT * FROM edital_info WHERE edital_nome = ?", (edital_nome,)).fetchall()
     else:

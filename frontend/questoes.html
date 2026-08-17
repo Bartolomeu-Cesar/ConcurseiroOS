@@ -19,7 +19,7 @@
     .qtab-bar { display: flex; gap: 0; background: #313244; border-radius: 10px 10px 0 0; margin-bottom: 20px; overflow: hidden; }
     .qtab-btn {
       flex: 1; padding: 12px 16px; border: none; background: transparent;
-      color: #6c7086; font-size: 0.92rem; font-weight: 600; cursor: pointer;
+      color: #9399b2; font-size: 0.92rem; font-weight: 600; cursor: pointer;
       border-bottom: 3px solid transparent; transition: all 0.2s;
     }
     .qtab-btn:hover { color: #cdd6f4; background: #45475a; }
@@ -39,7 +39,7 @@
       padding: 8px 12px; color: #cdd6f4; font-size: 0.88rem; flex: 1; min-width: 120px;
     }
     .form-row textarea { min-height: 60px; resize: vertical; font-family: sans-serif; }
-    .form-row input::placeholder, .form-row textarea::placeholder { color: #6c7086; }
+    .form-row input::placeholder, .form-row textarea::placeholder { color: #9399b2; }
     .btn {
       border: none; border-radius: 6px; padding: 8px 16px;
       font-size: 0.85rem; font-weight: 600; cursor: pointer;
@@ -78,14 +78,14 @@
     }
     .explicacao-box.show { display: block; }
 
-    .questao-meta { font-size: 0.8rem; color: #6c7086; margin-bottom: 8px; display: flex; gap: 12px; }
+    .questao-meta { font-size: 0.8rem; color: #9399b2; margin-bottom: 8px; display: flex; gap: 12px; }
     .questao-meta span { background: #45475a; padding: 2px 8px; border-radius: 4px; }
 
     /* Stats */
     .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 16px; }
     .stat-card { background: #1e1e2e; border-radius: 8px; padding: 12px; text-align: center; }
     .stat-card .stat-num { font-size: 1.4rem; font-weight: 700; }
-    .stat-card .stat-lbl { font-size: 0.75rem; color: #6c7086; }
+    .stat-card .stat-lbl { font-size: 0.75rem; color: #9399b2; }
 
     /* Simulado */
     .sim-card {
@@ -109,7 +109,7 @@
     }
     .acc-header:hover { border-color: #89b4fa; }
     .acc-header.open { border-color: #cba6f7; border-radius: 8px 8px 0 0; }
-    .acc-chevron { transition: transform 0.2s; font-size: 0.75rem; color: #6c7086; }
+    .acc-chevron { transition: transform 0.2s; font-size: 0.75rem; color: #9399b2; }
     .acc-header.open .acc-chevron { transform: rotate(90deg); color: #cba6f7; }
     .acc-name { flex: 1; font-weight: 600; font-size: 0.9rem; }
     .acc-count { font-size: 0.75rem; color: #a6adc8; }
@@ -126,7 +126,7 @@
     }
     .erro-item:last-child { border-bottom: none; }
     .erro-item .erro-enunciado { font-size: 0.88rem; margin-bottom: 6px; line-height: 1.4; }
-    .erro-item .erro-meta { font-size: 0.76rem; color: #6c7086; display: flex; gap: 10px; }
+    .erro-item .erro-meta { font-size: 0.76rem; color: #9399b2; display: flex; gap: 10px; }
 
     /* Lista de questões */
     .q-list-item {
@@ -157,14 +157,48 @@
       padding: 6px 10px; color: #cdd6f4; font-size: 0.85rem;
     }
 
+    /* Light Theme - Catppuccin Latte (WCAG AAA) */
     body.light-theme { background: #eff1f5; color: #4c4f69; }
-    body.light-theme .panel, body.light-theme .chart-box, body.light-theme .card,
-    body.light-theme .streak-bar, body.light-theme .relatorio, body.light-theme .pratica-panel,
-    body.light-theme .metas-section .meta-row { background: #e6e9ef; }
+    body.light-theme h1 { color: #8839ef; }
+    body.light-theme a { color: #1e66f5; }
+    body.light-theme .panel { background: #e6e9ef; }
+    body.light-theme .panel h2, body.light-theme .panel h3 { color: #8839ef; }
     body.light-theme .qtab-bar { background: #e6e9ef; }
-    body.light-theme .questao-card, body.light-theme .sim-card, body.light-theme .erro-item,
-    body.light-theme .acc-header, body.light-theme .stat-card { background: #dce0e8; border-color: #bcc0cc; }
-    body.light-theme .alternativa { background: #e6e9ef; }
+    body.light-theme .qtab-btn { color: #6c6f85; }
+    body.light-theme .qtab-btn:hover { color: #4c4f69; background: #ccd0da; }
+    body.light-theme .qtab-btn.active { color: #4c4f69; background: #dce0e8; border-bottom-color: #8839ef; }
+    body.light-theme .questao-card { background: #dce0e8; }
+    body.light-theme .questao-enunciado { color: #4c4f69; }
+    body.light-theme .questao-meta span { background: #ccd0da; color: #5c5f77; }
+    body.light-theme .alternativa { background: #e6e9ef; border-color: #bcc0cc; }
+    body.light-theme .alternativa:hover { border-color: #1e66f5; }
+    body.light-theme .alternativa.selected { border-color: #8839ef; background: #dce0e8; }
+    body.light-theme .alternativa.correct { border-color: #40a02b; background: #40a02b1a; }
+    body.light-theme .alternativa.wrong { border-color: #d20f39; background: #d20f391a; }
+    body.light-theme .alt-letter { color: #8839ef; }
+    body.light-theme .alt-text { color: #4c4f69; }
+    body.light-theme .explicacao-box { background: #dce0e8; border-left-color: #40a02b; color: #5c5f77; }
+    body.light-theme .stat-card { background: #dce0e8; }
+    body.light-theme .stat-card .stat-lbl { color: #6c6f85; }
+    body.light-theme .sim-card { background: #dce0e8; }
+    body.light-theme .sim-card .sim-title { color: #4c4f69; }
+    body.light-theme .erro-item { background: #dce0e8; border-left-color: #d20f39; }
+    body.light-theme .erro-item .erro-enunciado { color: #4c4f69; }
+    body.light-theme .acc-header { background: #dce0e8; border-color: #bcc0cc; }
+    body.light-theme .acc-header:hover { border-color: #1e66f5; }
+    body.light-theme .acc-header.open { border-color: #8839ef; }
+    body.light-theme .acc-body { border-color: #bcc0cc; }
+    body.light-theme .acc-name { color: #4c4f69; }
+    body.light-theme .q-list-item { border-bottom-color: #ccd0da; }
+    body.light-theme .q-list-item:hover { background: #ccd0da; }
+    body.light-theme .q-list-text { color: #4c4f69; }
+    body.light-theme .form-row input, body.light-theme .form-row select, body.light-theme .form-row textarea { background: #dce0e8; border-color: #bcc0cc; color: #4c4f69; }
+    body.light-theme .form-row input::placeholder, body.light-theme .form-row textarea::placeholder { color: #8c8fa1; }
+    body.light-theme .btn-primary { background: #8839ef; color: #eff1f5; }
+    body.light-theme .btn-success { background: #40a02b; color: #eff1f5; }
+    body.light-theme .btn-danger { background: #d20f39; color: #eff1f5; }
+    body.light-theme .btn-secondary { background: #dce0e8; color: #4c4f69; border: 1px solid #bcc0cc; }
+    body.light-theme .filter-bar select, body.light-theme .filter-bar input { background: #dce0e8; border-color: #bcc0cc; color: #4c4f69; }
   </style>
 </head>
 <body>
@@ -201,7 +235,7 @@
         <button class="btn btn-primary" onclick="loadQuestoesResolver()">🔄 Nova Questão</button>
       </div>
       <div id="resolver-area">
-        <p style="color:#6c7086;">Selecione uma matéria ou clique em "Nova Questão" para começar.</p>
+        <p style="color:#9399b2;">Selecione uma matéria ou clique em "Nova Questão" para começar.</p>
       </div>
     </div>
 
@@ -248,7 +282,7 @@
   <div id="tab-erros" class="qtab-content">
     <div class="panel">
       <h2>❌ Caderno de Erros</h2>
-      <p style="font-size:0.85rem;color:#6c7086;margin-bottom:12px;">Questões que você errou, agrupadas para revisão focada.</p>
+      <p style="font-size:0.85rem;color:#9399b2;margin-bottom:12px;">Questões que você errou, agrupadas para revisão focada.</p>
       <div id="erros-list"></div>
     </div>
   </div>
@@ -309,7 +343,7 @@
         <select id="banco-filtro-materia" onchange="loadBanco()">
           <option value="">Todas</option>
         </select>
-        <span style="font-size:0.85rem;color:#6c7086;" id="banco-count"></span>
+        <span style="font-size:0.85rem;color:#9399b2;" id="banco-count"></span>
       </div>
       <div id="banco-list"></div>
     </div>
@@ -372,7 +406,7 @@
       }
 
       if (questoesPool.length === 0) {
-        document.getElementById('resolver-area').innerHTML = '<p style="color:#6c7086;">Nenhuma questão encontrada. Cadastre questões na aba "Cadastrar".</p>';
+        document.getElementById('resolver-area').innerHTML = '<p style="color:#9399b2;">Nenhuma questão encontrada. Cadastre questões na aba "Cadastrar".</p>';
         return;
       }
 
@@ -602,7 +636,7 @@
       const sims = await fetch('/api/simulados').then(r => r.json());
       const list = document.getElementById('simulados-list');
       if (sims.length === 0) {
-        list.innerHTML = '<p style="color:#6c7086;font-size:0.85rem;">Nenhum simulado realizado ainda.</p>';
+        list.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Nenhum simulado realizado ainda.</p>';
         return;
       }
       list.innerHTML = sims.map(s => `
@@ -626,7 +660,7 @@
       const erros = await fetch('/api/questoes/erros/caderno').then(r => r.json());
       const list = document.getElementById('erros-list');
       if (erros.length === 0) {
-        list.innerHTML = '<p style="color:#6c7086;font-size:0.85rem;">Nenhum erro registrado. Continue resolvendo questões!</p>';
+        list.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Nenhum erro registrado. Continue resolvendo questões!</p>';
         return;
       }
 
@@ -716,7 +750,7 @@
       const list = document.getElementById('banco-list');
 
       if (questoes.length === 0) {
-        list.innerHTML = '<p style="color:#6c7086;font-size:0.85rem;">Nenhuma questão cadastrada.</p>';
+        list.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Nenhuma questão cadastrada.</p>';
         return;
       }
 

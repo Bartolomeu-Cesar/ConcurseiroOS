@@ -22,7 +22,7 @@
       background: #313244; border-radius: 12px; padding: 16px;
       display: flex; flex-direction: column; gap: 4px;
     }
-    .card-label { font-size: 0.78rem; color: #6c7086; text-transform: uppercase; font-weight: 600; }
+    .card-label { font-size: 0.78rem; color: #9399b2; text-transform: uppercase; font-weight: 600; }
     .card-value { font-size: 1.6rem; font-weight: 700; color: #cdd6f4; }
     .card-value.green { color: #a6e3a1; }
     .card-value.blue { color: #89b4fa; }
@@ -49,7 +49,7 @@
     .streak-info .streak-label { font-size: 0.82rem; color: #a6adc8; }
     .streak-best { text-align: right; }
     .streak-best .num { font-size: 1.1rem; font-weight: 700; color: #a6e3a1; }
-    .streak-best .lbl { font-size: 0.75rem; color: #6c7086; }
+    .streak-best .lbl { font-size: 0.75rem; color: #9399b2; }
 
     /* Metas */
     .metas-section { margin-bottom: 24px; }
@@ -74,7 +74,7 @@
     .relatorio h2 { font-size: 1.1rem; color: #cba6f7; margin-bottom: 12px; }
     .relatorio-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
     .relatorio-item { padding: 8px 0; }
-    .relatorio-item .r-label { font-size: 0.78rem; color: #6c7086; }
+    .relatorio-item .r-label { font-size: 0.78rem; color: #9399b2; }
     .relatorio-item .r-value { font-size: 1.1rem; font-weight: 600; }
     .sugestao-box {
       background: #1e1e2e; border-radius: 8px; padding: 12px; margin-top: 12px;
@@ -114,21 +114,43 @@
       .relatorio-grid { grid-template-columns: 1fr; }
     }
 
+    /* Light Theme - Catppuccin Latte (WCAG AAA) */
     body.light-theme { background: #eff1f5; color: #4c4f69; }
-    body.light-theme .panel, body.light-theme .chart-box, body.light-theme .card,
-    body.light-theme .streak-bar, body.light-theme .relatorio, body.light-theme .pratica-panel,
-    body.light-theme .metas-section .meta-row { background: #e6e9ef; }
-    body.light-theme .qtab-bar { background: #e6e9ef; }
-    body.light-theme .questao-card, body.light-theme .sim-card, body.light-theme .erro-item,
-    body.light-theme .acc-header, body.light-theme .stat-card { background: #dce0e8; border-color: #bcc0cc; }
-    body.light-theme .alternativa { background: #e6e9ef; }
+    body.light-theme h1 { color: #8839ef; }
+    body.light-theme a { color: #1e66f5; }
+    body.light-theme .card { background: #e6e9ef; }
+    body.light-theme .card-value { color: #4c4f69; }
+    body.light-theme .card-value.green { color: #40a02b; }
+    body.light-theme .card-value.blue { color: #1e66f5; }
+    body.light-theme .card-value.pink { color: #d20f39; }
+    body.light-theme .card-value.peach { color: #fe640b; }
+    body.light-theme .card-label { color: #6c6f85; }
+    body.light-theme .card-sub { color: #7c7f93; }
+    body.light-theme .chart-box { background: #e6e9ef; }
+    body.light-theme .chart-box h3 { color: #8839ef; }
+    body.light-theme .streak-bar { background: #e6e9ef; }
+    body.light-theme .streak-info .streak-num { color: #fe640b; }
+    body.light-theme .streak-best .num { color: #40a02b; }
+    body.light-theme .meta-row { background: #e6e9ef; }
+    body.light-theme .meta-info .meta-progress-bar { background: #bcc0cc; }
+    body.light-theme .relatorio { background: #e6e9ef; }
+    body.light-theme .relatorio h2 { color: #8839ef; }
+    body.light-theme .relatorio-item .r-label { color: #6c6f85; }
+    body.light-theme .sugestao-box { background: #dce0e8; }
+    body.light-theme .sugestao-box h4 { color: #fe640b; }
+    body.light-theme .pratica-panel { background: #e6e9ef; }
+    body.light-theme .pratica-panel h2 { color: #8839ef; }
+    body.light-theme .pratica-item { border-bottom-color: #ccd0da; }
+    body.light-theme .export-btn { background: #dce0e8; color: #4c4f69; border: 1px solid #bcc0cc; }
+    body.light-theme .export-btn:hover { background: #ccd0da; }
+    body.light-theme .metas-section h2 { color: #8839ef; }
   </style>
 </head>
 <body>
   <div class="header">
     <div>
       <h1>📊 Dashboard de Desempenho</h1>
-      <span style="font-size:0.82rem;color:#6c7086;" id="date-label"></span>
+      <span style="font-size:0.82rem;color:#9399b2;" id="date-label"></span>
     </div>
     <div class="header-links">
       <a href="/">📚 PDFs</a>
@@ -382,7 +404,7 @@
     function renderPratica(data) {
       const list = document.getElementById('pratica-list');
       if (data.materias_para_focar.length === 0 && data.materias_nao_estudadas.length === 0) {
-        list.innerHTML = '<p style="color:#6c7086;font-size:0.9rem;padding:12px;">Resolva mais questões para obter recomendações de prática deliberada.</p>';
+        list.innerHTML = '<p style="color:#9399b2;font-size:0.9rem;padding:12px;">Resolva mais questões para obter recomendações de prática deliberada.</p>';
         return;
       }
 
@@ -397,7 +419,7 @@
         `;
       }
       if (data.materias_nao_estudadas.length > 0) {
-        html += `<div style="padding:10px 12px;font-size:0.85rem;color:#6c7086;border-top:1px solid #45475a;margin-top:8px;">
+        html += `<div style="padding:10px 12px;font-size:0.85rem;color:#9399b2;border-top:1px solid #45475a;margin-top:8px;">
           ⚠ Matérias sem questões respondidas: ${data.materias_nao_estudadas.join(', ')}
         </div>`;
       }

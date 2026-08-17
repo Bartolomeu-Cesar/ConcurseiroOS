@@ -1,15 +1,15 @@
 <#
 .SYNOPSIS
-    Script de setup e inicialização do LeitorPDF.
-    Verifica dependências, instala o que falta e inicia a aplicação.
+    ConcurseiroOS - Setup e Inicialização
+    Verifica dependências, instala o que falta e inicia a aplicação com hot-reload.
 #>
 
 Set-Location $PSScriptRoot
 
 # --- Configurações ---
-$BackendDir    = Join-Path $PSScriptRoot "backend"
+$BackendDir       = Join-Path $PSScriptRoot "backend"
 $RequirementsFile = Join-Path $BackendDir "requirements.txt"
-$AppUrl        = "http://localhost:8000"
+$AppUrl           = "http://localhost:8000"
 $PythonMinVersion = [version]"3.10"
 
 # --- Funções auxiliares ---
@@ -25,31 +25,24 @@ function Write-Status {
 }
 
 function Get-PythonCommand {
-    <#
-    .DESCRIPTION
-        Tenta localizar um interpretador Python real (não o alias do Windows Store).
-        Retorna $null se nenhum for encontrado.
-    #>
     foreach ($cmd in @("python", "python3", "py")) {
         try {
             $output = & $cmd --version 2>&1
-            # Verifica se a saída realmente contém "Python X.Y.Z"
             if ($output -match "^Python (\d+\.\d+\.\d+)") {
                 return @{ Command = $cmd; Version = $Matches[1] }
             }
         }
-        catch {
-            # Comando não existe ou falhou, tentar próximo
-        }
+        catch {}
     }
     return $null
 }
 
 # --- Banner ---
 Write-Host ""
-Write-Host "=========================================" -ForegroundColor Cyan
-Write-Host "   LeitorPDF - Setup e Inicializacao     " -ForegroundColor Cyan
-Write-Host "=========================================" -ForegroundColor Cyan
+Write-Host "=================================================" -ForegroundColor Magenta
+Write-Host "   ConcurseiroOS - Plataforma de Estudos         " -ForegroundColor Magenta
+Write-Host "   Setup e Inicializacao                          " -ForegroundColor Magenta
+Write-Host "=================================================" -ForegroundColor Magenta
 Write-Host ""
 
 # --- 1. Verificar Python ---
@@ -82,12 +75,11 @@ if (-not $pythonInfo) {
     # Atualizar PATH na sessão atual
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
 
-    # Re-verificar
     $pythonInfo = Get-PythonCommand
     if (-not $pythonInfo) {
         Write-Host ""
-        Write-Status "Python foi instalado mas nao foi encontrado no PATH atual." "ERRO"
-        Write-Status "Feche este terminal, abra um novo e execute o script novamente." "ERRO"
+        Write-Status "Python instalado mas nao encontrado no PATH." "ERRO"
+        Write-Status "Feche este terminal, abra um novo e execute novamente." "ERRO"
         Write-Host ""
         Read-Host "Pressione Enter para sair"
         exit 1
@@ -100,7 +92,7 @@ $pyVersionStr = $pythonInfo.Version
 $pyVersion = [version]$pyVersionStr
 
 if ($pyVersion -lt $PythonMinVersion) {
-    Write-Status "Python $pyVersionStr encontrado, mas e necessario 3.10+. Atualize o Python." "ERRO"
+    Write-Status "Python $pyVersionStr encontrado, mas e necessario 3.10+." "ERRO"
     Write-Status "Baixe em: https://www.python.org/downloads/" "ERRO"
     Read-Host "Pressione Enter para sair"
     exit 1
@@ -116,18 +108,18 @@ if ($LASTEXITCODE -ne 0) {
     Write-Status "pip nao encontrado. Instalando..." "AVISO"
     & $pythonCmd -m ensurepip --upgrade 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) {
-        Write-Status "Falha ao instalar pip. Tente: $pythonCmd -m ensurepip --upgrade" "ERRO"
+        Write-Status "Falha ao instalar pip." "ERRO"
         Read-Host "Pressione Enter para sair"
         exit 1
     }
-    Write-Status "pip instalado com sucesso." "OK"
+    Write-Status "pip instalado." "OK"
 }
 else {
     $pipVersionInfo = if ($pipVersionRaw -match "pip (\S+)") { $Matches[1] } else { "?" }
     Write-Status "pip $pipVersionInfo disponivel." "OK"
 }
 
-# --- 3. Instalar dependências Python ---
+# --- 3. Instalar dependências ---
 Write-Status "Verificando dependencias Python..."
 
 $requirements = Get-Content $RequirementsFile | Where-Object { $_ -match '\S' }
@@ -137,39 +129,38 @@ foreach ($pacote in $requirements) {
     $checkResult = & $pythonCmd -m pip show $pacote 2>&1
     if ($LASTEXITCODE -ne 0) {
         $todasInstaladas = $false
-        Write-Status "Pacote '$pacote' nao encontrado. Sera instalado." "AVISO"
-    }
-    else {
-        $versaoInstalada = if ($checkResult -match "Version: (.+)") { $Matches[1] } else { "?" }
-        Write-Status "Pacote '$pacote' ($versaoInstalada) ja instalado." "OK"
     }
 }
 
 if (-not $todasInstaladas) {
-    Write-Status "Instalando dependencias faltantes..."
-    $pipOutput = & $pythonCmd -m pip install -r $RequirementsFile --quiet 2>&1
-    $pipErrors = $pipOutput | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] -and $_.Exception.Message -notmatch "\[notice\]" }
-    if ($LASTEXITCODE -ne 0 -and $pipErrors) {
-        Write-Status "Erro ao instalar dependencias. Verifique sua conexao com a internet." "ERRO"
-        $pipErrors | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+    Write-Status "Instalando dependencias..."
+    & $pythonCmd -m pip install -r $RequirementsFile --quiet 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Status "Erro ao instalar dependencias." "ERRO"
         Read-Host "Pressione Enter para sair"
         exit 1
     }
-    Write-Status "Todas as dependencias instaladas com sucesso." "OK"
+    Write-Status "Dependencias instaladas." "OK"
 }
 else {
-    Write-Status "Todas as dependencias ja estao instaladas." "OK"
+    Write-Status "Todas as dependencias ja instaladas." "OK"
 }
 
-# --- 4. Verificar se a porta 8000 está livre ---
+# --- 4. Limpar cache Python (garante código atualizado) ---
+$cacheDir = Join-Path $BackendDir "__pycache__"
+if (Test-Path $cacheDir) {
+    Remove-Item $cacheDir -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Status "Cache Python limpo (__pycache__ removido)." "OK"
+}
+
+# --- 5. Verificar porta 8000 ---
 Write-Status "Verificando porta 8000..."
 
 $portaEmUso = Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue
 if ($portaEmUso) {
     $processoId = ($portaEmUso | Select-Object -First 1).OwningProcess
     $processo = Get-Process -Id $processoId -ErrorAction SilentlyContinue
-    Write-Status "Porta 8000 em uso pelo processo '$($processo.ProcessName)' (PID: $processoId)." "AVISO"
-    Write-Status "Encerrando processo existente..."
+    Write-Status "Porta 8000 em uso por '$($processo.ProcessName)' (PID: $processoId). Encerrando..." "AVISO"
     Stop-Process -Id $processoId -Force -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 1
     Write-Status "Processo encerrado." "OK"
@@ -178,22 +169,33 @@ else {
     Write-Status "Porta 8000 livre." "OK"
 }
 
-# --- 5. Iniciar a aplicação ---
+# --- 6. Iniciar aplicação ---
 Write-Host ""
-Write-Host "=========================================" -ForegroundColor Green
-Write-Host "   Iniciando LeitorPDF...                " -ForegroundColor Green
-Write-Host "=========================================" -ForegroundColor Green
+Write-Host "=================================================" -ForegroundColor Green
+Write-Host "   ConcurseiroOS iniciando...                     " -ForegroundColor Green
+Write-Host "=================================================" -ForegroundColor Green
 Write-Host ""
-Write-Status "Abrindo navegador em $AppUrl em 2 segundos..."
+Write-Host "  URL: $AppUrl" -ForegroundColor Cyan
+Write-Host "  Modo: Hot-reload (detecta alteracoes no codigo)" -ForegroundColor Cyan
+Write-Host "  Parar: Ctrl+C" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "  Funcionalidades:" -ForegroundColor White
+Write-Host "    - Leitor PDF com progresso" -ForegroundColor Gray
+Write-Host "    - Edital verticalizado (tree hierarquico)" -ForegroundColor Gray
+Write-Host "    - Flashcards SRS (repeticao espacada)" -ForegroundColor Gray
+Write-Host "    - Banco de questoes + simulados" -ForegroundColor Gray
+Write-Host "    - Dashboard com graficos" -ForegroundColor Gray
+Write-Host "    - Ciclo de estudos + cronometro" -ForegroundColor Gray
+Write-Host "    - Streaks, metas, countdown para provas" -ForegroundColor Gray
+Write-Host "    - Tema claro/escuro (WCAG acessivel)" -ForegroundColor Gray
+Write-Host ""
 
-# Abre o navegador após um pequeno delay (em background)
+# Abrir navegador após delay
 Start-Job -ScriptBlock {
     Start-Sleep -Seconds 2
     Start-Process $using:AppUrl
 } | Out-Null
 
-# Inicia o servidor (bloqueia o terminal)
+# Iniciar servidor com --reload
 Set-Location $BackendDir
-Write-Status "Servidor iniciando. Pressione Ctrl+C para encerrar." "INFO"
-Write-Host ""
-& $pythonCmd -m uvicorn main:app --host 0.0.0.0 --port 8000
+& $pythonCmd -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload

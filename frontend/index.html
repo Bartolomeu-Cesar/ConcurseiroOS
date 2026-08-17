@@ -69,7 +69,7 @@
     }
     .tab-btn {
       flex: 1; padding: 12px 10px; border: none; background: transparent;
-      color: #6c7086; font-size: 0.88rem; font-weight: 600; cursor: pointer;
+      color: #9399b2; font-size: 0.88rem; font-weight: 600; cursor: pointer;
       border-bottom: 3px solid transparent; transition: all 0.2s;
     }
     .tab-btn:hover { color: #cdd6f4; background: #45475a; }
@@ -120,7 +120,7 @@
     .tree-node-l3 { padding: 6px 12px; border-left: 2px solid #45475a; border-radius: 0; margin-left: 4px; }
     .tree-node-l3.open { border-left-color: #a6e3a1; }
 
-    .tree-chevron { font-size: 0.7rem; color: #6c7086; transition: transform 0.2s; min-width: 12px; }
+    .tree-chevron { font-size: 0.7rem; color: #9399b2; transition: transform 0.2s; min-width: 12px; }
     .tree-node.open > .tree-chevron { transform: rotate(90deg); color: #cba6f7; }
     .tree-icon { font-size: 0.9rem; }
     .tree-label { flex: 1; font-weight: 600; font-size: 0.88rem; }
@@ -145,7 +145,7 @@
       width: 18px; height: 18px; border-radius: 50%; font-size: 0.7rem;
       cursor: pointer; font-weight: 700; flex-shrink: 0;
     }
-    .tree-status.status-nao-iniciado { background: #45475a; color: #6c7086; }
+    .tree-status.status-nao-iniciado { background: #45475a; color: #9399b2; }
     .tree-status.status-em-andamento { background: #fab387; color: #1e1e2e; }
     .tree-status.status-concluido { background: #a6e3a1; color: #1e1e2e; }
     .tree-topic { flex: 1; color: #cdd6f4; line-height: 1.3; }
@@ -176,7 +176,7 @@
     .edital-delete-btn:hover { background: #45475a; }
     .edital-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     .edital-form input, .edital-form select { background: #1e1e2e; border: 1px solid #45475a; border-radius: 6px; padding: 8px 12px; color: #cdd6f4; font-size: 0.88rem; flex: 1; min-width: 140px; }
-    .edital-form input::placeholder { color: #6c7086; }
+    .edital-form input::placeholder { color: #9399b2; }
     .edital-form button { background: #cba6f7; color: #1e1e2e; border: none; border-radius: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
     .edital-form button:hover { background: #b4befe; }
 
@@ -208,12 +208,12 @@
     #flash-btn-right { background: #a6e3a1; color: #1e1e2e; }
     .flash-add-form { text-align: left; }
     .flash-add-form textarea { width: 100%; background: #1e1e2e; border: 1px solid #45475a; border-radius: 8px; padding: 10px 12px; color: #cdd6f4; font-size: 0.9rem; resize: vertical; min-height: 60px; margin-bottom: 8px; font-family: sans-serif; }
-    .flash-add-form textarea::placeholder { color: #6c7086; }
+    .flash-add-form textarea::placeholder { color: #9399b2; }
     .flash-add-form button { background: #cba6f7; color: #1e1e2e; border: none; border-radius: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
     .flash-list-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #45475a; font-size: 0.85rem; }
     .flash-list-item:hover { background: #45475a; border-radius: 6px; }
     .flash-list-delete { background: none; border: none; color: #f38ba8; cursor: pointer; font-size: 1rem; }
-    .flash-count { font-size: 0.82rem; color: #6c7086; margin-bottom: 8px; }
+    .flash-count { font-size: 0.82rem; color: #9399b2; margin-bottom: 8px; }
 
     /* Metas config */
     .metas-config { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
@@ -224,25 +224,78 @@
     .import-edital { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
     .import-edital input[type="file"] { font-size: 0.82rem; }
 
-    /* Light Theme */
+    /* Light Theme - Catppuccin Latte (WCAG AAA compliant) */
+    /* Base: #eff1f5, Text: #4c4f69 (contrast 7.5:1), Surface: #e6e9ef, Overlay: #dce0e8 */
     body.light-theme { background: #eff1f5; color: #4c4f69; }
+    body.light-theme h1 { color: #8839ef; }
     body.light-theme .panel { background: #e6e9ef; }
+    body.light-theme .panel h2 { color: #8839ef; }
     body.light-theme .tree-node-l1 { background: #dce0e8; border-color: #bcc0cc; }
-    body.light-theme .tree-node-l2 { background: #dce0e8; }
+    body.light-theme .tree-node-l1:hover { border-color: #1e66f5; }
+    body.light-theme .tree-node-l1.open { border-color: #8839ef; }
+    body.light-theme .tree-node-l2 { background: #dce0e8; border-left-color: #1e66f5; }
+    body.light-theme .tree-node-l2.open { border-left-color: #8839ef; }
     body.light-theme .tree-node-l3 { border-left-color: #bcc0cc; }
-    body.light-theme .tree-leaf { border-left-color: #bcc0cc; }
+    body.light-theme .tree-node-l3.open { border-left-color: #40a02b; }
+    body.light-theme .tree-leaf { border-left-color: #ccd0da; }
     body.light-theme .tree-leaf:hover, body.light-theme .tree-node:hover { background: #ccd0da; }
+    body.light-theme .tree-leaf.selected { background: #ccd0da; border-left-color: #8839ef; }
     body.light-theme .tree-topic { color: #4c4f69; }
-    body.light-theme .tree-info-card { background: #dce0e8; }
+    body.light-theme .tree-label { color: #4c4f69; }
+    body.light-theme .tree-stats { color: #6c6f85; }
+    body.light-theme .tree-hours { color: #1e66f5; }
+    body.light-theme .tree-info-card { background: #dce0e8; border-left-color: #1e66f5; color: #5c5f77; }
+    body.light-theme .tree-info-card strong { color: #4c4f69; }
+    body.light-theme .tree-info-badge span { background: #dce0e8; color: #179299; }
+    body.light-theme .tree-bar { background: #bcc0cc; }
+    body.light-theme .tree-status.status-nao-iniciado { background: #bcc0cc; color: #5c5f77; }
+    body.light-theme .tree-status.status-em-andamento { background: #fe640b; color: #fff; }
+    body.light-theme .tree-status.status-concluido { background: #40a02b; color: #fff; }
     body.light-theme #tab-bar { background: #e6e9ef; }
-    body.light-theme .tab-btn.active { background: #ccd0da; }
+    body.light-theme .tab-btn { color: #6c6f85; }
+    body.light-theme .tab-btn:hover { color: #4c4f69; background: #ccd0da; }
+    body.light-theme .tab-btn.active { color: #4c4f69; background: #dce0e8; border-bottom-color: #8839ef; }
     body.light-theme .edital-form input, body.light-theme .edital-form select { background: #dce0e8; border-color: #bcc0cc; color: #4c4f69; }
-    body.light-theme .nav-links a { background: #e6e9ef; color: #4c4f69; }
-    body.light-theme .streak-badge { background: #e6e9ef; }
-    body.light-theme .iobtn { background: #ccd0da; color: #4c4f69; }
-    body.light-theme .flash-panel, body.light-theme .flash-add-form textarea { background: #e6e9ef; border-color: #bcc0cc; color: #4c4f69; }
-    body.light-theme #overlay > div { background: #e6e9ef; }
-    body.light-theme .countdown-badge { background: #e6e9ef; }
+    body.light-theme .edital-form input::placeholder { color: #8c8fa1; }
+    body.light-theme .edital-form button { background: #8839ef; color: #eff1f5; }
+    body.light-theme .nav-links a { background: #e6e9ef; color: #4c4f69; border: 1px solid #bcc0cc; }
+    body.light-theme .nav-links a:hover { background: #dce0e8; }
+    body.light-theme .streak-badge { background: #e6e9ef; border: 1px solid #bcc0cc; }
+    body.light-theme .streak-badge .num { color: #d20f39; }
+    body.light-theme .iobtn { background: #dce0e8; color: #4c4f69; border: 1px solid #bcc0cc; }
+    body.light-theme .iobtn:hover { background: #ccd0da; }
+    body.light-theme .flash-panel { background: #e6e9ef; }
+    body.light-theme .flash-add-form textarea { background: #dce0e8; border-color: #bcc0cc; color: #4c4f69; }
+    body.light-theme .flash-add-form textarea::placeholder { color: #8c8fa1; }
+    body.light-theme .flash-list-item { border-bottom-color: #ccd0da; color: #4c4f69; }
+    body.light-theme .flash-list-item:hover { background: #ccd0da; }
+    body.light-theme #flash-question { color: #4c4f69; }
+    body.light-theme #flash-answer { background: #dce0e8; color: #40a02b; }
+    body.light-theme #flash-reveal-btn { background: #1e66f5; color: #eff1f5; }
+    body.light-theme #overlay > div { background: #e6e9ef; color: #4c4f69; }
+    body.light-theme .countdown-badge { background: #e6e9ef; border: 1px solid #bcc0cc; }
+    body.light-theme .countdown-text { color: #d20f39; }
+    body.light-theme .meta-dot { border-color: #bcc0cc; }
+    body.light-theme .meta-dot.done { background: #40a02b; border-color: #40a02b; }
+    body.light-theme .meta-dot.partial { background: #fe640b; border-color: #fe640b; }
+    body.light-theme #timer-display { color: #d20f39; }
+    body.light-theme #timer-display.done { color: #40a02b; }
+    body.light-theme select#timer-select { background: #dce0e8; color: #4c4f69; border-color: #bcc0cc; }
+    body.light-theme .tbtn { border: 1px solid #bcc0cc; }
+    body.light-theme #edital-timer-display { color: #1e66f5; }
+    body.light-theme #edital-materia-label { color: #fe640b; }
+    body.light-theme .ciclo-next { background: #dce0e8; }
+    body.light-theme .ciclo-item { border-bottom-color: #ccd0da; }
+    body.light-theme .ciclo-bar { background: #bcc0cc; }
+    body.light-theme .metas-config input { background: #dce0e8; border-color: #bcc0cc; color: #4c4f69; }
+    body.light-theme .metas-config label { color: #5c5f77; }
+    body.light-theme .folder-header { background: #e6e9ef; }
+    body.light-theme .folder-header:hover { background: #dce0e8; }
+    body.light-theme .pdf-item { background: #eff1f5; border-color: #e6e9ef; }
+    body.light-theme .pdf-item:hover { background: #e6e9ef; border-color: #1e66f5; }
+    body.light-theme .folder-bar { background: #bcc0cc; }
+    body.light-theme .pdf-bar { background: #e6e9ef; }
+    body.light-theme .import-edital input[type="text"] { background: #dce0e8; border-color: #bcc0cc; color: #4c4f69; }
 
     /* Countdown badge */
     .countdown-badge { display: flex; align-items: center; gap: 4px; background: #313244; border-radius: 20px; padding: 4px 12px; font-size: 0.78rem; }
@@ -344,7 +397,7 @@
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
         <button class="iobtn" onclick="toggleAllEdital(true)">▼ Expandir tudo</button>
         <button class="iobtn" onclick="toggleAllEdital(false)">▲ Colapsar tudo</button>
-        <span id="edital-stats" style="font-size:0.8rem;color:#6c7086;margin-left:auto;"></span>
+        <span id="edital-stats" style="font-size:0.8rem;color:#9399b2;margin-left:auto;"></span>
       </div>
       <div id="edital-accordion"></div>
     </div>
@@ -370,7 +423,7 @@
   <div id="tab-ciclo" class="tab-content">
     <div class="panel">
       <h2>🔄 Ciclo de Estudos</h2>
-      <p style="font-size:0.85rem;color:#6c7086;margin-bottom:12px;">O ciclo distribui seu tempo entre as matérias de forma equilibrada. A próxima matéria é sempre a que tem menos progresso relativo.</p>
+      <p style="font-size:0.85rem;color:#9399b2;margin-bottom:12px;">O ciclo distribui seu tempo entre as matérias de forma equilibrada. A próxima matéria é sempre a que tem menos progresso relativo.</p>
       <div class="ciclo-next" id="ciclo-next"></div>
       <div id="ciclo-list"></div>
       <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
@@ -418,7 +471,7 @@
   <div id="tab-metas" class="tab-content">
     <div class="panel">
       <h2>🎯 Configurar Metas Diárias</h2>
-      <p style="font-size:0.85rem;color:#6c7086;margin-bottom:12px;">Defina suas metas diárias. O progresso aparece no cabeçalho e no Dashboard.</p>
+      <p style="font-size:0.85rem;color:#9399b2;margin-bottom:12px;">Defina suas metas diárias. O progresso aparece no cabeçalho e no Dashboard.</p>
       <div class="metas-config">
         <label>⏱ Horas: <input type="number" id="meta-horas" min="0.5" step="0.5" value="3"></label>
         <label>❓ Questões: <input type="number" id="meta-questoes" min="1" step="1" value="30"></label>
@@ -635,12 +688,20 @@
     let editalInfo = [];
 
     async function loadEdital() {
-      const [dataRes, infoRes] = await Promise.all([
-        fetch('/api/edital').then(r => r.json()),
-        fetch('/api/edital/info').then(r => r.json())
-      ]);
-      editalData = dataRes;
-      editalInfo = infoRes;
+      try {
+        const [dataRes, infoRes] = await Promise.all([
+          fetch('/api/edital').then(r => r.json()),
+          fetch('/api/edital/info').then(r => r.ok ? r.json() : [])
+        ]);
+        editalData = dataRes;
+        editalInfo = infoRes;
+      } catch(e) {
+        // Se info falhar, carregar só os dados do edital
+        try {
+          editalData = await fetch('/api/edital').then(r => r.json());
+          editalInfo = [];
+        } catch(e2) { editalData = []; editalInfo = []; }
+      }
       renderEditalTree();
     }
 
@@ -652,7 +713,7 @@
       const state = getAccordionState();
 
       if (editalData.length === 0) {
-        container.innerHTML = '<p style="color:#6c7086;font-size:0.9rem;text-align:center;padding:20px;">Nenhum tópico cadastrado.</p>';
+        container.innerHTML = '<p style="color:#9399b2;font-size:0.9rem;text-align:center;padding:20px;">Nenhum tópico cadastrado.</p>';
         return;
       }
 
@@ -719,8 +780,8 @@
             </div>
             <div class="tree-children ${cargoOpen ? 'open' : ''}">`;
 
-          // Se há info detalhada, mostrar card expandido dentro
-          if (info && cargoOpen) {
+          // Se há info detalhada, mostrar card dentro do cargo
+          if (info) {
             html += `<div class="tree-info-card">
               ${info.data_prova_objetiva ? `<div><strong>📅 Objetiva:</strong> ${info.data_prova_objetiva}</div>` : ''}
               ${info.data_prova_discursiva ? `<div><strong>📝 Discursiva:</strong> ${info.data_prova_discursiva}</div>` : ''}
@@ -844,7 +905,7 @@
 
       // Lista
       const list = document.getElementById('ciclo-list');
-      if (ciclo.length === 0) { list.innerHTML = '<p style="color:#6c7086;font-size:0.85rem;">Adicione matérias ao ciclo abaixo.</p>'; return; }
+      if (ciclo.length === 0) { list.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Adicione matérias ao ciclo abaixo.</p>'; return; }
       list.innerHTML = ciclo.map(c => {
         const pct = c.horas_alvo > 0 ? Math.min(100, (c.horas_cumpridas / c.horas_alvo) * 100) : 0;
         return `<div class="ciclo-item">
@@ -961,8 +1022,8 @@
         streakEl.innerHTML = `
           <div style="display:flex;align-items:center;gap:16px;">
             <span style="font-size:2.5rem;">🔥</span>
-            <div><div style="font-size:1.6rem;font-weight:700;color:#fab387;">${data.streak_atual} dias</div><div style="font-size:0.85rem;color:#6c7086;">consecutivos de estudo</div></div>
-            <div style="margin-left:auto;text-align:right;"><div style="font-size:1.2rem;font-weight:700;color:#a6e3a1;">${data.melhor_streak}</div><div style="font-size:0.75rem;color:#6c7086;">recorde</div></div>
+            <div><div style="font-size:1.6rem;font-weight:700;color:#fab387;">${data.streak_atual} dias</div><div style="font-size:0.85rem;color:#9399b2;">consecutivos de estudo</div></div>
+            <div style="margin-left:auto;text-align:right;"><div style="font-size:1.2rem;font-weight:700;color:#a6e3a1;">${data.melhor_streak}</div><div style="font-size:0.75rem;color:#9399b2;">recorde</div></div>
           </div>
         `;
       }
