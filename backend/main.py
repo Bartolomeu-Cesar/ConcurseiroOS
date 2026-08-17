@@ -2122,6 +2122,360 @@ def get_modo_foco():
 
 
 # ============================================================
+# EFICIÊNCIA: TÉCNICA FEYNMAN + ACTIVE RECALL + DAILY CHALLENGE
+# ============================================================
+
+class FeynmanCreate(BaseModel):
+    edital_id: int
+    explicacao: str
+
+
+@app.get("/api/feynman/{edital_id}")
+def get_feynman(edital_id: int):
+    """Retorna explicações Feynman de um tópico"""
+    conn = get_db()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS feynman (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            edital_id INTEGER NOT NULL,
+            explicacao TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+    rows = conn.execute("SELECT * FROM feynman WHERE edital_id = ? ORDER BY created_at DESC", (edital_id,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+@app.post("/api/feynman")
+def create_feynman(body: FeynmanCreate):
+    conn = get_db()
+    conn.execute("CREATE TABLE IF NOT EXISTS feynman (id INTEGER PRIMARY KEY AUTOINCREMENT, edital_id INTEGER NOT NULL, explicacao TEXT NOT NULL, created_at TEXT NOT NULL)")
+    cur = conn.execute("INSERT INTO feynman (edital_id, explicacao, created_at) VALUES (?, ?, ?)",
+                       (body.edital_id, body.explicacao, datetime.now().isoformat()))
+    conn.commit()
+    conn.close()
+    return {"id": cur.lastrowid, "ok": True}
+
+
+@app.get("/api/daily-challenge")
+def daily_challenge():
+    """Retorna a questão do dia (uma aleatória não respondida hoje)"""
+    import random
+    conn = get_db()
+    # Buscar questões não respondidas hoje
+    respondidas_hoje = conn.execute(
+        "SELECT questao_id FROM questoes_respostas WHERE data = ?", (today_str(),)
+    ).fetchall()
+    ids_hoje = [r[0] for r in respondidas_hoje]
+    
+    if ids_hoje:
+        placeholders = ','.join('?' * len(ids_hoje))
+        rows = conn.execute(f"SELECT * FROM questoes WHERE id NOT IN ({placeholders})", ids_hoje).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM questoes").fetchall()
+    
+    conn.close()
+    if not rows:
+        return {"message": "Parabéns! Você já respondeu todas as questões disponíveis hoje.", "questao": None}
+    
+    chosen = random.choice(rows)
+    return {"questao": dict(chosen)}
+
+
+@app.get("/api/active-recall/{materia}")
+def active_recall_session(materia: str):
+    """Gera uma sessão de active recall: questões aleatórias de uma matéria"""
+    import random
+    conn = get_db()
+    rows = conn.execute("SELECT * FROM questoes WHERE materia = ?", (materia,)).fetchall()
+    conn.close()
+    if not rows:
+        return {"questoes": [], "message": "Nenhuma questão disponível para esta matéria."}
+    sample = random.sample([dict(r) for r in rows], min(5, len(rows)))
+    return {"questoes": sample, "materia": materia, "total": len(sample)}
+
+
+@app.get("/api/intercalacao")
+def intercalacao_forcada():
+    """Sorteia tópicos de matérias DIFERENTES para estudo intercalado"""
+    import random
+    conn = get_db()
+    materias = conn.execute("SELECT DISTINCT materia FROM edital WHERE status != 'Concluído'").fetchall()
+    if len(materias) < 2:
+        conn.close()
+        return {"topicos": [], "message": "Precisa de pelo menos 2 matérias não concluídas."}
+    
+    selected_mats = random.sample([r[0] for r in materias], min(3, len(materias)))
+    topicos = []
+    for mat in selected_mats:
+        rows = conn.execute("SELECT id, materia, topico FROM edital WHERE materia = ? AND status != 'Concluído' ORDER BY RANDOM() LIMIT 2", (mat,)).fetchall()
+        topicos.extend([dict(r) for r in rows])
+    conn.close()
+    random.shuffle(topicos)
+    return {"topicos": topicos, "materias": selected_mats}
+
+
+@app.get("/api/previsao-data-aprovacao")
+def previsao_data_aprovacao(edital_nome: str = "", cargo: str = ""):
+    """Calcula previsão de data de aprovação baseado no ritmo atual"""
+    conn = get_db()
+    # Topicos restantes
+    query = "SELECT COUNT(*) FROM edital WHERE status != 'Concluído'"
+    params = []
+    if edital_nome:
+        query += " AND edital_nome = ?"
+        params.append(edital_nome)
+    if cargo:
+        query += " AND cargo = ?"
+        params.append(cargo)
+    restantes = conn.execute(query, params).fetchone()[0]
+    
+    # Ritmo: tópicos concluídos por semana (média das últimas 4 semanas)
+    quatro_semanas = (date.today() - timedelta(days=28)).isoformat()
+    total_horas_4sem = conn.execute("SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE data >= ?", (quatro_semanas,)).fetchone()[0]
+    
+    conn.close()
+    
+    horas_por_semana = total_horas_4sem / 4 if total_horas_4sem > 0 else 0
+    # Estimativa: ~2 tópicos por hora de estudo
+    topicos_por_semana = horas_por_semana * 2
+    
+    if topicos_por_semana <= 0:
+        return {"semanas_restantes": None, "data_prevista": None, "message": "Estude mais para gerar previsão.", "restantes": restantes}
+    
+    semanas = restantes / topicos_por_semana
+    data_prevista = (date.today() + timedelta(weeks=semanas)).isoformat()
+    
+    return {
+        "semanas_restantes": round(semanas, 1),
+        "data_prevista": data_prevista,
+        "restantes": restantes,
+        "ritmo_semanal": round(topicos_por_semana, 1),
+        "horas_semana": round(horas_por_semana, 1)
+    }
+
+
+@app.get("/api/analise-erros")
+def analise_padroes_erro():
+    """Analisa padrões de erro para sugerir o que revisar"""
+    conn = get_db()
+    # Top matérias com mais erros
+    erros_por_materia = conn.execute("""
+        SELECT q.materia, COUNT(*) as erros,
+               (SELECT COUNT(*) FROM questoes_respostas qr2 JOIN questoes q2 ON q2.id=qr2.questao_id WHERE q2.materia=q.materia) as total
+        FROM questoes_respostas qr
+        JOIN questoes q ON q.id = qr.questao_id
+        WHERE qr.acertou = 0
+        GROUP BY q.materia
+        ORDER BY erros DESC
+    """).fetchall()
+    
+    # Top tópicos mais errados
+    erros_por_topico = conn.execute("""
+        SELECT q.materia, q.enunciado, COUNT(*) as vezes_errado
+        FROM questoes_respostas qr
+        JOIN questoes q ON q.id = qr.questao_id
+        WHERE qr.acertou = 0
+        GROUP BY qr.questao_id
+        ORDER BY vezes_errado DESC
+        LIMIT 10
+    """).fetchall()
+    
+    conn.close()
+    
+    sugestoes = []
+    for r in erros_por_materia:
+        pct_erro = (r[1] / r[2] * 100) if r[2] > 0 else 0
+        if pct_erro > 40:
+            sugestoes.append(f"Revise {r[0]} — {pct_erro:.0f}% de erro ({r[1]} erros em {r[2]} questões)")
+    
+    return {
+        "erros_por_materia": [{"materia": r[0], "erros": r[1], "total": r[2], "pct_erro": round(r[1]/r[2]*100, 1) if r[2]>0 else 0} for r in erros_por_materia],
+        "questoes_mais_erradas": [{"materia": r[0], "enunciado": r[1][:100], "vezes": r[2]} for r in erros_por_topico],
+        "sugestoes": sugestoes
+    }
+
+
+@app.get("/api/simulado-inteligente")
+def simulado_inteligente(qtd: int = 10):
+    """Monta simulado priorizando matérias com pior desempenho"""
+    import random
+    conn = get_db()
+    # Matérias ordenadas por % erro (pior primeiro)
+    materias = conn.execute("""
+        SELECT q.materia,
+               CAST(SUM(CASE WHEN qr.acertou=0 THEN 1 ELSE 0 END) AS FLOAT) / COUNT(*) as pct_erro
+        FROM questoes_respostas qr
+        JOIN questoes q ON q.id = qr.questao_id
+        GROUP BY q.materia
+        ORDER BY pct_erro DESC
+    """).fetchall()
+    
+    questoes_ids = []
+    if materias:
+        # 60% das questões das matérias fracas, 40% aleatórias
+        fracas = [r[0] for r in materias[:3]]
+        qtd_fracas = int(qtd * 0.6)
+        qtd_aleatorio = qtd - qtd_fracas
+        
+        for mat in fracas:
+            rows = conn.execute("SELECT id FROM questoes WHERE materia = ? ORDER BY RANDOM() LIMIT ?",
+                               (mat, qtd_fracas // len(fracas) + 1)).fetchall()
+            questoes_ids.extend([r[0] for r in rows])
+        
+        rows_rand = conn.execute("SELECT id FROM questoes ORDER BY RANDOM() LIMIT ?", (qtd_aleatorio,)).fetchall()
+        questoes_ids.extend([r[0] for r in rows_rand])
+    else:
+        rows = conn.execute("SELECT id FROM questoes ORDER BY RANDOM() LIMIT ?", (qtd,)).fetchall()
+        questoes_ids = [r[0] for r in rows]
+    
+    # Deduplicate and limit
+    questoes_ids = list(dict.fromkeys(questoes_ids))[:qtd]
+    conn.close()
+    
+    return {"questao_ids": questoes_ids, "total": len(questoes_ids), "estrategia": "60% matérias fracas + 40% aleatório"}
+
+
+@app.get("/api/resumo-diario")
+def resumo_diario():
+    """Resumo do dia: o que foi feito + sugestão para amanhã"""
+    conn = get_db()
+    hoje = conn.execute("SELECT * FROM streaks WHERE data = ?", (today_str(),)).fetchone()
+    
+    # Sessões de hoje
+    sessoes = conn.execute("SELECT materia, SUM(horas) FROM sessoes_estudo WHERE data = ? GROUP BY materia", (today_str(),)).fetchall()
+    
+    # Questões de hoje
+    q_hoje = conn.execute("""
+        SELECT q.materia, COUNT(*) as total, SUM(qr.acertou) as acertos
+        FROM questoes_respostas qr JOIN questoes q ON q.id=qr.questao_id
+        WHERE qr.data = ? GROUP BY q.materia
+    """, (today_str(),)).fetchall()
+    
+    # Sugestão para amanhã: matéria menos estudada
+    menos_estudada = conn.execute("""
+        SELECT materia, SUM(horas_estudadas) as h FROM edital
+        WHERE status != 'Concluído'
+        GROUP BY materia ORDER BY h ASC LIMIT 3
+    """).fetchall()
+    
+    conn.close()
+    
+    return {
+        "data": today_str(),
+        "horas": hoje[1] if hoje else 0,
+        "questoes": hoje[2] if hoje else 0,
+        "flashcards": hoje[3] if hoje else 0,
+        "sessoes": [{"materia": r[0], "horas": round(r[1], 1)} for r in sessoes],
+        "questoes_detalhes": [{"materia": r[0], "total": r[1], "acertos": r[2] or 0} for r in q_hoje],
+        "sugestao_amanha": [r[0] for r in menos_estudada],
+        "mensagem": "Continue assim! Amanhã foque nas matérias sugeridas." if hoje else "Você não estudou hoje. Começar é o mais difícil!"
+    }
+
+
+@app.get("/api/speed-review")
+def speed_review():
+    """Retorna 20 flashcards para revisão relâmpago (modo rápido)"""
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT id, pergunta, resposta FROM flashcards
+        WHERE proxima_revisao <= ?
+        ORDER BY intervalo_dias ASC
+        LIMIT 20
+    """, (today_str(),)).fetchall()
+    conn.close()
+    return [{"id": r[0], "pergunta": r[1], "resposta": r[2]} for r in rows]
+
+
+class DesafioCreate(BaseModel):
+    titulo: str
+    meta_tipo: str  # 'questoes', 'horas', 'topicos'
+    meta_valor: int
+    materia: str = ""
+    dias: int = 7
+
+
+@app.get("/api/desafios")
+def list_desafios():
+    conn = get_db()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS desafios (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            titulo TEXT NOT NULL,
+            meta_tipo TEXT NOT NULL,
+            meta_valor INTEGER NOT NULL,
+            materia TEXT DEFAULT '',
+            progresso INTEGER DEFAULT 0,
+            dias INTEGER DEFAULT 7,
+            created_at TEXT NOT NULL,
+            finalizado INTEGER DEFAULT 0
+        )
+    """)
+    conn.commit()
+    rows = conn.execute("SELECT * FROM desafios ORDER BY finalizado ASC, created_at DESC").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+@app.post("/api/desafios")
+def create_desafio(body: DesafioCreate):
+    conn = get_db()
+    conn.execute("CREATE TABLE IF NOT EXISTS desafios (id INTEGER PRIMARY KEY AUTOINCREMENT, titulo TEXT NOT NULL, meta_tipo TEXT NOT NULL, meta_valor INTEGER NOT NULL, materia TEXT DEFAULT '', progresso INTEGER DEFAULT 0, dias INTEGER DEFAULT 7, created_at TEXT NOT NULL, finalizado INTEGER DEFAULT 0)")
+    cur = conn.execute("INSERT INTO desafios (titulo, meta_tipo, meta_valor, materia, dias, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                       (body.titulo, body.meta_tipo, body.meta_valor, body.materia, body.dias, today_str()))
+    conn.commit()
+    conn.close()
+    return {"id": cur.lastrowid, "ok": True}
+
+
+@app.get("/api/questoes-vinculadas/{edital_id}")
+def questoes_vinculadas(edital_id: int):
+    """Busca questões que correspondem ao tópico de um item do edital"""
+    conn = get_db()
+    topico = conn.execute("SELECT materia, topico FROM edital WHERE id = ?", (edital_id,)).fetchone()
+    if not topico:
+        conn.close()
+        raise HTTPException(404)
+    # Buscar questões da mesma matéria
+    rows = conn.execute("SELECT id, enunciado, resposta_correta FROM questoes WHERE materia = ? LIMIT 10", (topico[0],)).fetchall()
+    conn.close()
+    return {"materia": topico[0], "topico": topico[1], "questoes": [dict(r) for r in rows]}
+
+
+@app.get("/api/widget")
+def widget_resumo():
+    """Resumo ultra-leve para mobile/widget: streak, próxima revisão, countdown"""
+    conn = get_db()
+    # Streak
+    hoje = conn.execute("SELECT * FROM streaks WHERE data = ?", (today_str(),)).fetchone()
+    
+    # Flashcards pendentes
+    flash = conn.execute("SELECT COUNT(*) FROM flashcards WHERE proxima_revisao <= ?", (today_str(),)).fetchone()[0]
+    
+    # Próxima prova
+    try:
+        prova = conn.execute("""
+            SELECT cargo, data_prova_objetiva FROM edital_info
+            WHERE data_prova_objetiva != '' AND data_prova_objetiva != 'Consultar edital'
+            ORDER BY data_prova_objetiva LIMIT 1
+        """).fetchone()
+    except Exception:
+        prova = None
+    
+    conn.close()
+    
+    return {
+        "streak_hoje": bool(hoje),
+        "horas_hoje": hoje[1] if hoje else 0,
+        "questoes_hoje": hoje[2] if hoje else 0,
+        "flashcards_pendentes": flash,
+        "proxima_prova": {"cargo": prova[0], "data": prova[1]} if prova else None
+    }
+
+
+# ============================================================
 # CORREÇÃO DO MIME TYPE PARA .mjs / .js (PDF.js)
 # ============================================================
 from starlette.staticfiles import StaticFiles

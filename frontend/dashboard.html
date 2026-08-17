@@ -266,6 +266,40 @@
     </div>
   </div>
 
+  <!-- Eficiência -->
+  <div class="charts">
+    <div class="chart-box">
+      <h3>⚡ Questão do Dia (Daily Challenge)</h3>
+      <div id="daily-challenge"></div>
+    </div>
+    <div class="chart-box">
+      <h3>📊 Análise de Padrões de Erro</h3>
+      <div id="analise-erros"></div>
+    </div>
+  </div>
+
+  <div class="charts">
+    <div class="chart-box">
+      <h3>📅 Previsão de Data de Aprovação</h3>
+      <div id="previsao-data"></div>
+    </div>
+    <div class="chart-box">
+      <h3>🏆 Desafios Semanais</h3>
+      <div id="desafios-box"></div>
+    </div>
+  </div>
+
+  <div class="charts">
+    <div class="chart-box">
+      <h3>📝 Resumo Diário</h3>
+      <div id="resumo-diario"></div>
+    </div>
+    <div class="chart-box">
+      <h3>🔀 Intercalação Forçada (Sugestão)</h3>
+      <div id="intercalacao-box"></div>
+    </div>
+  </div>
+
   <script>
     if (localStorage.getItem('theme') === 'light') document.body.classList.add('light-theme');
 
@@ -600,12 +634,83 @@
       } catch(e) {}
     }
 
+    async function loadDailyChallenge() {
+      try {
+        const data = await fetch('/api/daily-challenge').then(r => r.json());
+        const el = document.getElementById('daily-challenge');
+        if (!data.questao) { el.innerHTML = `<p style="color:#a6e3a1;font-size:0.9rem;">${data.message}</p>`; return; }
+        const q = data.questao;
+        el.innerHTML = `<div style="font-size:0.88rem;line-height:1.5;margin-bottom:8px;">${q.enunciado.substring(0,200)}...</div><div style="font-size:0.78rem;color:#9399b2;">${q.materia}</div><a href="/questoes.html" style="font-size:0.82rem;">Ir resolver →</a>`;
+      } catch(e) {}
+    }
+
+    async function loadAnaliseErros() {
+      try {
+        const data = await fetch('/api/analise-erros').then(r => r.json());
+        const el = document.getElementById('analise-erros');
+        if (!data.erros_por_materia.length) { el.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Resolva questões para gerar análise.</p>'; return; }
+        let html = '';
+        data.erros_por_materia.slice(0, 5).forEach(m => {
+          const color = m.pct_erro > 60 ? '#f38ba8' : m.pct_erro > 40 ? '#fab387' : '#a6e3a1';
+          html += `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:0.82rem;"><span style="flex:1;">${m.materia}</span><span style="color:${color};font-weight:700;">${m.pct_erro}% erro</span></div>`;
+        });
+        if (data.sugestoes.length) html += `<div style="margin-top:8px;padding:8px;background:#45475a;border-radius:6px;font-size:0.78rem;color:#fab387;">💡 ${data.sugestoes[0]}</div>`;
+        el.innerHTML = html;
+      } catch(e) {}
+    }
+
+    async function loadPrevisaoData() {
+      try {
+        const data = await fetch('/api/previsao-data-aprovacao').then(r => r.json());
+        const el = document.getElementById('previsao-data');
+        if (!data.data_prevista) { el.innerHTML = `<p style="color:#9399b2;font-size:0.85rem;">${data.message}</p>`; return; }
+        el.innerHTML = `<div style="text-align:center;"><div style="font-size:1.5rem;font-weight:700;color:#a6e3a1;">${data.data_prevista}</div><div style="font-size:0.82rem;color:#9399b2;margin-top:4px;">${data.semanas_restantes} semanas restantes</div><div style="font-size:0.78rem;color:#9399b2;margin-top:4px;">Ritmo: ${data.ritmo_semanal} tópicos/semana (${data.horas_semana}h/sem)</div><div style="font-size:0.78rem;color:#9399b2;">${data.restantes} tópicos restantes</div></div>`;
+      } catch(e) {}
+    }
+
+    async function loadDesafios() {
+      try {
+        const data = await fetch('/api/desafios').then(r => r.json());
+        const el = document.getElementById('desafios-box');
+        if (!data.length) { el.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Nenhum desafio ativo. Use a API para criar.</p>'; return; }
+        el.innerHTML = data.slice(0, 4).map(d => {
+          const pct = Math.min(100, (d.progresso / d.meta_valor) * 100);
+          const done = d.finalizado ? '✅' : '';
+          return `<div style="padding:6px 0;border-bottom:1px solid #45475a;font-size:0.82rem;"><div style="display:flex;align-items:center;gap:6px;"><span>${done}</span><span style="flex:1;">${d.titulo}</span><span style="color:#9399b2;">${d.progresso}/${d.meta_valor}</span></div><div style="height:4px;background:#45475a;border-radius:2px;margin-top:4px;"><div style="height:100%;width:${pct}%;background:#a6e3a1;border-radius:2px;"></div></div></div>`;
+        }).join('');
+      } catch(e) {}
+    }
+
+    async function loadResumoDiario() {
+      try {
+        const data = await fetch('/api/resumo-diario').then(r => r.json());
+        const el = document.getElementById('resumo-diario');
+        el.innerHTML = `<div style="font-size:0.85rem;line-height:1.8;"><div>⏱ <strong>${data.horas?.toFixed?.(1) || 0}h</strong> estudadas</div><div>❓ <strong>${data.questoes || 0}</strong> questões resolvidas</div><div>🧠 <strong>${data.flashcards || 0}</strong> flashcards revisados</div>${data.sugestao_amanha?.length ? `<div style="margin-top:8px;padding:8px;background:#45475a;border-radius:6px;font-size:0.78rem;">💡 Amanhã foque em: <strong>${data.sugestao_amanha.join(', ')}</strong></div>` : ''}</div>`;
+      } catch(e) {}
+    }
+
+    async function loadIntercalacao() {
+      try {
+        const data = await fetch('/api/intercalacao').then(r => r.json());
+        const el = document.getElementById('intercalacao-box');
+        if (!data.topicos?.length) { el.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Estudo intercalado requer tópicos não concluídos.</p>'; return; }
+        el.innerHTML = `<p style="font-size:0.78rem;color:#9399b2;margin-bottom:8px;">Estude estes tópicos misturados (interleaving):</p>` +
+          data.topicos.map(t => `<div style="padding:5px 0;border-bottom:1px solid #45475a;font-size:0.82rem;"><span style="color:#89b4fa;">${t.materia}</span> — ${t.topico}</div>`).join('');
+      } catch(e) {}
+    }
+
     loadDashboard();
     loadRadar();
     loadGamification();
     loadPlanejadorAprovacao();
     loadComparador();
     loadRevisoesPendentes();
+    loadDailyChallenge();
+    loadAnaliseErros();
+    loadPrevisaoData();
+    loadDesafios();
+    loadResumoDiario();
+    loadIntercalacao();
   </script>
 </body>
 </html>
