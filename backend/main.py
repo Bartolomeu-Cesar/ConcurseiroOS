@@ -2277,32 +2277,37 @@ def intercalacao_forcada():
 def previsao_data_aprovacao(edital_nome: str = "", cargo: str = ""):
     """Calcula previsão de data de aprovação baseado no ritmo atual"""
     conn = get_db()
-    # Topicos restantes
-    query = "SELECT COUNT(*) FROM edital WHERE status != 'Concluído'"
-    params = []
-    if edital_nome:
-        query += " AND edital_nome = ?"
-        params.append(edital_nome)
-    if cargo:
-        query += " AND cargo = ?"
-        params.append(cargo)
-    restantes = conn.execute(query, params).fetchone()[0]
-    
-    # Ritmo: tópicos concluídos por semana (média das últimas 4 semanas)
-    quatro_semanas = (date.today() - timedelta(days=28)).isoformat()
-    total_horas_4sem = conn.execute("SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE data >= ?", (quatro_semanas,)).fetchone()[0]
+    try:
+        # Topicos restantes
+        query = "SELECT COUNT(*) FROM edital WHERE status != 'Concluído'"
+        params = []
+        if edital_nome:
+            query += " AND edital_nome = ?"
+            params.append(edital_nome)
+        if cargo:
+            query += " AND cargo = ?"
+            params.append(cargo)
+        restantes = int(conn.execute(query, params).fetchone()[0] or 0)
+        
+        # Ritmo: horas nas últimas 4 semanas
+        quatro_semanas = (date.today() - timedelta(days=28)).isoformat()
+        total_horas_4sem = float(conn.execute("SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE data >= ?", (quatro_semanas,)).fetchone()[0] or 0)
+    except Exception:
+        conn.close()
+        return {"semanas_restantes": None, "data_prevista": None, "message": "Erro ao calcular. Estude mais para gerar previsão.", "restantes": 0}
     
     conn.close()
     
     horas_por_semana = total_horas_4sem / 4 if total_horas_4sem > 0 else 0
-    # Estimativa: ~2 tópicos por hora de estudo
     topicos_por_semana = horas_por_semana * 2
     
-    if topicos_por_semana <= 0:
+    if topicos_por_semana <= 0 or restantes <= 0:
         return {"semanas_restantes": None, "data_prevista": None, "message": "Estude mais para gerar previsão.", "restantes": restantes}
     
     semanas = restantes / topicos_por_semana
-    data_prevista = (date.today() + timedelta(weeks=semanas)).isoformat()
+    # Limitar a no máximo 520 semanas (10 anos) para evitar overflow
+    semanas = min(semanas, 520)
+    data_prevista = (date.today() + timedelta(weeks=int(semanas))).isoformat()
     
     return {
         "semanas_restantes": round(semanas, 1),
