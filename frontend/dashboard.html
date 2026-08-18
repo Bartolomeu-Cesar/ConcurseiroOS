@@ -145,6 +145,18 @@
     body.light-theme .export-btn:hover { background: #ccd0da; }
     body.light-theme .metas-section h2 { color: #8839ef; }
 
+    .heatmap-grid { display: flex; gap: 2px; flex-wrap: wrap; }
+    .heatmap-cell { width: 12px; height: 12px; border-radius: 2px; background: #313244; }
+    .heatmap-cell.l1 { background: #1e4620; }
+    .heatmap-cell.l2 { background: #2d6a30; }
+    .heatmap-cell.l3 { background: #3da140; }
+    .heatmap-cell.l4 { background: #a6e3a1; }
+    .heatmap-months { display: flex; gap: 2px; font-size: 0.6rem; color: #9399b2; margin-bottom: 2px; }
+    .share-card { background: linear-gradient(135deg, #1e1e2e, #313244); border: 1px solid #45475a; border-radius: 12px; padding: 16px; text-align: center; }
+    .share-card .share-text { font-size: 0.85rem; color: #cdd6f4; margin-bottom: 12px; line-height: 1.6; }
+    .share-btns { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+    .share-btns button { border: none; border-radius: 6px; padding: 6px 14px; font-size: 0.78rem; cursor: pointer; font-weight: 600; }
+
     .gam-level { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
     .gam-level .level-num { font-size: 1.8rem; font-weight: 700; color: #cba6f7; }
     .gam-level .level-info { flex: 1; }
@@ -297,6 +309,40 @@
     <div class="chart-box">
       <h3>🔀 Intercalação Forçada (Sugestão)</h3>
       <div id="intercalacao-box"></div>
+    </div>
+  </div>
+
+  <!-- Premium -->
+  <div class="charts">
+    <div class="chart-box">
+      <h3>🟩 Heatmap de Estudos (ano)</h3>
+      <div id="heatmap-box" style="overflow-x:auto;"></div>
+    </div>
+    <div class="chart-box">
+      <h3>📊 Projeção de Nota na Prova</h3>
+      <div id="projecao-nota"></div>
+    </div>
+  </div>
+
+  <div class="charts">
+    <div class="chart-box">
+      <h3>📅 Plano de Estudo Automático</h3>
+      <div id="plano-auto"></div>
+    </div>
+    <div class="chart-box">
+      <h3>⏱ Linha do Tempo</h3>
+      <div id="linha-tempo"></div>
+    </div>
+  </div>
+
+  <div class="charts">
+    <div class="chart-box">
+      <h3>🎯 Missões Diárias</h3>
+      <div id="missoes-box"></div>
+    </div>
+    <div class="chart-box">
+      <h3>📤 Compartilhar & Backup</h3>
+      <div id="share-box"></div>
     </div>
   </div>
 
@@ -699,6 +745,72 @@
       } catch(e) {}
     }
 
+    async function loadHeatmap() {
+      try {
+        const data = await fetch('/api/heatmap').then(r => r.json());
+        const el = document.getElementById('heatmap-box');
+        if (!data.length) { el.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Estude para gerar o heatmap.</p>'; return; }
+        const dateMap = {};
+        data.forEach(d => { dateMap[d.data] = d.intensidade; });
+        let html = '<div class="heatmap-grid">';
+        const today = new Date();
+        for (let i = 365; i >= 0; i--) {
+          const d = new Date(today); d.setDate(d.getDate() - i);
+          const key = d.toISOString().split('T')[0];
+          const level = dateMap[key] || 0;
+          html += `<div class="heatmap-cell ${level > 0 ? 'l'+level : ''}" title="${key}: ${level > 0 ? 'estudou' : 'sem estudo'}"></div>`;
+        }
+        html += '</div>';
+        el.innerHTML = html;
+      } catch(e) {}
+    }
+
+    async function loadProjecaoNota() {
+      try {
+        const data = await fetch('/api/projecao-nota').then(r => r.json());
+        const el = document.getElementById('projecao-nota');
+        const color = data.aprovado_estimado ? '#a6e3a1' : '#f38ba8';
+        let html = `<div style="text-align:center;margin-bottom:12px;"><div style="font-size:2rem;font-weight:700;color:${color};">${data.nota_projetada}%</div><div style="font-size:0.8rem;color:#9399b2;">Nota projetada (corte: ${data.nota_corte_estimada}%)</div><div style="font-size:0.85rem;color:${color};font-weight:600;">${data.aprovado_estimado ? '\u2705 Dentro da zona de aprova\u00e7\u00e3o' : '\u26a0\ufe0f Abaixo do corte estimado'}</div></div>`;
+        html += data.materias.slice(0,6).map(m => `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:0.78rem;"><span style="flex:1;">${m.materia}</span><span style="color:${m.pct_acerto>=60?'#a6e3a1':'#f38ba8'};font-weight:600;">${m.pct_acerto}%</span></div>`).join('');
+        el.innerHTML = html;
+      } catch(e) {}
+    }
+
+    async function loadPlanoAuto() {
+      try {
+        const data = await fetch('/api/plano-automatico').then(r => r.json());
+        const el = document.getElementById('plano-auto');
+        let html = `<div style="font-size:0.82rem;color:#9399b2;margin-bottom:8px;">${data.dias_ate_prova} dias | ${data.horas_dia}h/dia | ${data.topicos_restantes} t\u00f3picos</div>`;
+        html += data.plano.slice(0,8).map(p => `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid #45475a;font-size:0.8rem;"><span style="flex:1;">${p.materia}</span><span style="color:#89b4fa;">${p.horas_semana}h/sem</span></div>`).join('');
+        el.innerHTML = html;
+      } catch(e) {}
+    }
+
+    async function loadLinhaTempo() {
+      try {
+        const data = await fetch('/api/linha-tempo').then(r => r.json());
+        const el = document.getElementById('linha-tempo');
+        if (!data.length) { el.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Sem sess\u00f5es registradas.</p>'; return; }
+        el.innerHTML = data.slice(0,8).map(s => `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #45475a;font-size:0.8rem;"><span style="color:#9399b2;min-width:70px;">${s.data}</span><span style="flex:1;">${s.materia}</span><span style="color:#89b4fa;">${s.horas?.toFixed?.(1) || s.horas}h</span></div>`).join('');
+      } catch(e) {}
+    }
+
+    async function loadMissoes() {
+      try {
+        const data = await fetch('/api/conquistas-diarias').then(r => r.json());
+        const el = document.getElementById('missoes-box');
+        el.innerHTML = data.map(m => `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #45475a;font-size:0.85rem;"><span style="font-size:1.1rem;">\u2b50</span><span style="flex:1;">${m.titulo}</span><span style="color:#f9e2af;font-size:0.75rem;">+${m.xp}xp</span></div>`).join('');
+      } catch(e) {}
+    }
+
+    async function loadShareBox() {
+      try {
+        const data = await fetch('/api/compartilhar').then(r => r.json());
+        const el = document.getElementById('share-box');
+        el.innerHTML = `<div class="share-card"><div class="share-text">${data.texto}</div><div class="share-btns"><button style="background:#a6e3a1;color:#1e1e2e;" onclick="navigator.clipboard.writeText('${data.texto.replace(/'/g,"\\'")}')">\ud83d\udccb Copiar</button><button style="background:#45475a;color:#cdd6f4;" onclick="window.open('/api/exportar-tudo')">\u2b07 Backup JSON</button></div></div>`;
+      } catch(e) {}
+    }
+
     loadDashboard();
     loadRadar();
     loadGamification();
@@ -711,6 +823,12 @@
     loadDesafios();
     loadResumoDiario();
     loadIntercalacao();
+    loadHeatmap();
+    loadProjecaoNota();
+    loadPlanoAuto();
+    loadLinhaTempo();
+    loadMissoes();
+    loadShareBox();
   </script>
 </body>
 </html>

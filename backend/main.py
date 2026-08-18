@@ -2532,6 +2532,351 @@ def widget_resumo():
 
 
 # ============================================================
+# PREMIUM: HEATMAP + SIMULADO ADAPTATIVO + PROJEÇÃO NOTA + PLANO AUTO
+# ============================================================
+
+@app.get("/api/heatmap")
+def get_heatmap():
+    """Retorna dados para heatmap de estudos (365 dias)"""
+    conn = get_db()
+    inicio = (date.today() - timedelta(days=365)).isoformat()
+    rows = conn.execute("""
+        SELECT data, horas_estudadas, questoes_resolvidas, flashcards_revisados
+        FROM streaks WHERE data >= ? ORDER BY data
+    """, (inicio,)).fetchall()
+    conn.close()
+    return [{"data": r[0], "horas": r[1] or 0, "questoes": r[2] or 0, "flashcards": r[3] or 0,
+             "intensidade": min(4, int((r[1] or 0) / 0.5))} for r in rows]
+
+
+@app.get("/api/simulado-adaptativo")
+def simulado_adaptativo(materia: str = "", qtd: int = 10):
+    """Monta simulado adaptativo baseado no nível do usuário"""
+    import random
+    conn = get_db()
+    # Verificar nível por acertos recentes
+    recentes = conn.execute("""
+        SELECT qr.acertou, q.dificuldade FROM questoes_respostas qr
+        JOIN questoes q ON q.id = qr.questao_id
+        ORDER BY qr.id DESC LIMIT 20
+    """).fetchall()
+    
+    # Calcular taxa de acerto recente
+    if recentes:
+        taxa = sum(1 for r in recentes if r[0]) / len(recentes)
+    else:
+        taxa = 0.5
+    
+    # Definir dificuldade alvo
+    if taxa >= 0.8:
+        dificuldades = ['Difícil', 'Médio', 'Difícil']
+    elif taxa >= 0.5:
+        dificuldades = ['Médio', 'Difícil', 'Fácil']
+    else:
+        dificuldades = ['Fácil', 'Médio', 'Fácil']
+    
+    query = "SELECT id FROM questoes WHERE 1=1"
+    params = []
+    if materia:
+        query += " AND materia = ?"
+        params.append(materia)
+    
+    # Buscar questoes por dificuldade
+    ids = []
+    for dif in dificuldades:
+        rows = conn.execute(query + " AND dificuldade = ? ORDER BY RANDOM() LIMIT ?",
+                           params + [dif, qtd // len(dificuldades) + 1]).fetchall()
+        ids.extend([r[0] for r in rows])
+    
+    # Completar com aleatórias se não tiver suficiente
+    if len(ids) < qtd:
+        extras = conn.execute(query + " ORDER BY RANDOM() LIMIT ?", params + [qtd]).fetchall()
+        ids.extend([r[0] for r in extras])
+    
+    conn.close()
+    ids = list(dict.fromkeys(ids))[:qtd]
+    return {"questao_ids": ids, "total": len(ids), "nivel_detectado": round(taxa*100), "dificuldade_alvo": dificuldades[0]}
+
+
+@app.get("/api/projecao-nota")
+def projecao_nota(edital_nome: str = "", cargo: str = ""):
+    """Projeta nota na prova baseado em desempenho por matéria"""
+    conn = get_db()
+    # Buscar matérias do edital com pesos estimados
+    query = "SELECT DISTINCT materia FROM edital WHERE 1=1"
+    params = []
+    if edital_nome:
+        query += " AND edital_nome = ?"
+        params.append(edital_nome)
+    if cargo:
+        query += " AND cargo = ?"
+        params.append(cargo)
+    materias = [r[0] for r in conn.execute(query, params).fetchall()]
+    
+    # Acerto por matéria
+    total_pontos = 0
+    total_possiveis = 0
+    detalhes = []
+    for mat in materias:
+        q = conn.execute("""
+            SELECT COUNT(*) as total, SUM(acertou) as acertos
+            FROM questoes_respostas qr JOIN questoes q ON q.id=qr.questao_id
+            WHERE q.materia = ?
+        """, (mat,)).fetchone()
+        total_q = q[0] or 0
+        acertos = q[1] or 0
+        pct = (acertos / total_q * 100) if total_q > 0 else 50  # 50% default se sem dados
+        peso = 1  # peso igual por matéria (simplificado)
+        pontos = pct * peso
+        total_pontos += pontos
+        total_possiveis += 100 * peso
+        detalhes.append({"materia": mat, "pct_acerto": round(pct, 1), "questoes": total_q})
+    
+    conn.close()
+    nota_projetada = (total_pontos / total_possiveis * 100) if total_possiveis > 0 else 0
+    
+    return {
+        "nota_projetada": round(nota_projetada, 1),
+        "nota_corte_estimada": 60.0,
+        "aprovado_estimado": nota_projetada >= 60,
+        "materias": sorted(detalhes, key=lambda x: x['pct_acerto']),
+        "total_materias": len(materias)
+    }
+
+
+@app.get("/api/plano-automatico")
+def plano_automatico(edital_nome: str = "", cargo: str = "", horas_dia: float = 3.0):
+    """Gera plano de estudo automático baseado no edital e data da prova"""
+    conn = get_db()
+    
+    # Buscar data da prova
+    try:
+        prova = conn.execute("""
+            SELECT data_prova_objetiva FROM edital_info
+            WHERE edital_nome = ? AND cargo = ? AND data_prova_objetiva != '' AND data_prova_objetiva != 'Consultar edital'
+        """, (edital_nome, cargo)).fetchone()
+    except:
+        prova = None
+    
+    # Matérias com progresso
+    query = "SELECT materia, COUNT(*) as total, SUM(CASE WHEN status='Concluído' THEN 1 ELSE 0 END) as done FROM edital WHERE 1=1"
+    params = []
+    if edital_nome:
+        query += " AND edital_nome = ?"
+        params.append(edital_nome)
+    if cargo:
+        query += " AND cargo = ?"
+        params.append(cargo)
+    query += " GROUP BY materia ORDER BY materia"
+    materias = conn.execute(query, params).fetchall()
+    conn.close()
+    
+    # Calcular dias até a prova
+    dias_ate_prova = 90  # default
+    if prova and prova[0]:
+        import re
+        parts = re.match(r'(\d+)[/\-](\d+)[/\-](\d+)', prova[0])
+        if parts:
+            if len(parts.group(3)) == 4:
+                d = date(int(parts.group(3)), int(parts.group(2)), int(parts.group(1)))
+            else:
+                d = date(int(parts.group(1)), int(parts.group(2)), int(parts.group(3)))
+            dias_ate_prova = max(1, (d - date.today()).days)
+    
+    total_horas_disponiveis = dias_ate_prova * horas_dia
+    total_topicos_restantes = sum(m[1] - (m[2] or 0) for m in materias)
+    
+    # Distribuir horas proporcionalmente aos tópicos restantes
+    plano = []
+    for m in materias:
+        restantes = m[1] - (m[2] or 0)
+        if restantes <= 0:
+            continue
+        proporcao = restantes / total_topicos_restantes if total_topicos_restantes > 0 else 0
+        horas_materia = round(total_horas_disponiveis * proporcao, 1)
+        horas_semana = round(horas_materia / (dias_ate_prova / 7), 1)
+        plano.append({
+            "materia": m[0],
+            "topicos_restantes": restantes,
+            "horas_total": horas_materia,
+            "horas_semana": horas_semana
+        })
+    
+    return {
+        "dias_ate_prova": dias_ate_prova,
+        "horas_dia": horas_dia,
+        "total_horas": round(total_horas_disponiveis, 0),
+        "topicos_restantes": total_topicos_restantes,
+        "plano": sorted(plano, key=lambda x: -x['topicos_restantes'])
+    }
+
+
+@app.get("/api/linha-tempo")
+def linha_tempo():
+    """Histórico de sessões de estudo (timeline)"""
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT data, materia, horas, tipo FROM sessoes_estudo
+        ORDER BY data DESC, id DESC LIMIT 50
+    """).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+@app.get("/api/conquistas-diarias")
+def conquistas_diarias():
+    """Gera missões diárias baseadas no progresso"""
+    import random
+    conn = get_db()
+    
+    # Buscar matérias menos estudadas
+    mat_fraca = conn.execute("""
+        SELECT materia FROM edital WHERE status != 'Concluído'
+        GROUP BY materia ORDER BY SUM(horas_estudadas) ASC LIMIT 5
+    """).fetchall()
+    
+    # Dados de hoje
+    hoje = conn.execute("SELECT * FROM streaks WHERE data = ?", (today_str(),)).fetchone()
+    conn.close()
+    
+    missoes = []
+    materias_fracas = [r[0] for r in mat_fraca] if mat_fraca else ['Geral']
+    mat = random.choice(materias_fracas)
+    
+    missoes.append({"titulo": f"Resolver 5 questões de {mat}", "tipo": "questoes", "meta": 5, "materia": mat, "xp": 50})
+    missoes.append({"titulo": "Estudar 1 hora hoje", "tipo": "horas", "meta": 1, "materia": "", "xp": 100})
+    missoes.append({"titulo": "Revisar todos os flashcards pendentes", "tipo": "flashcards", "meta": 0, "materia": "", "xp": 30})
+    
+    if hoje:
+        missoes.append({"titulo": "Concluir 3 tópicos do edital", "tipo": "topicos", "meta": 3, "materia": "", "xp": 75})
+    
+    return missoes
+
+
+@app.get("/api/compartilhar")
+def gerar_compartilhamento():
+    """Gera dados para compartilhamento de progresso em redes sociais"""
+    conn = get_db()
+    horas = conn.execute("SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo").fetchone()[0]
+    questoes = conn.execute("SELECT COUNT(*) FROM questoes_respostas").fetchone()[0]
+    acertos = conn.execute("SELECT COUNT(*) FROM questoes_respostas WHERE acertou = 1").fetchone()[0]
+    topicos = conn.execute("SELECT COUNT(*) FROM edital WHERE status = 'Concluído'").fetchone()[0]
+    total_topicos = conn.execute("SELECT COUNT(*) FROM edital").fetchone()[0]
+    
+    streak_rows = conn.execute("SELECT data FROM streaks WHERE horas_estudadas > 0 OR questoes_resolvidas > 0 ORDER BY data DESC").fetchall()
+    streak = 0
+    check_date = date.today()
+    for row in streak_rows:
+        if row[0] == check_date.isoformat():
+            streak += 1
+            check_date -= timedelta(days=1)
+        else:
+            break
+    conn.close()
+    
+    pct = round(topicos / total_topicos * 100, 1) if total_topicos > 0 else 0
+    accuracy = round(acertos / questoes * 100, 1) if questoes > 0 else 0
+    
+    return {
+        "texto": f"📚 ConcurseiroOS | {streak}🔥 dias | {round(horas,1)}h estudadas | {questoes} questões ({accuracy}%) | {pct}% do edital",
+        "stats": {
+            "horas": round(horas, 1),
+            "questoes": questoes,
+            "accuracy": accuracy,
+            "streak": streak,
+            "topicos": topicos,
+            "total_topicos": total_topicos,
+            "pct_edital": pct
+        }
+    }
+
+
+@app.get("/api/exportar-tudo")
+def exportar_tudo():
+    """Exporta TODOS os dados do usuário em JSON"""
+    conn = get_db()
+    data = {
+        "exportado_em": datetime.now().isoformat(),
+        "versao": "2.0",
+        "edital": [dict(r) for r in conn.execute("SELECT * FROM edital").fetchall()],
+        "questoes": [dict(r) for r in conn.execute("SELECT * FROM questoes").fetchall()],
+        "flashcards": [dict(r) for r in conn.execute("SELECT * FROM flashcards").fetchall()],
+        "questoes_respostas": [dict(r) for r in conn.execute("SELECT * FROM questoes_respostas").fetchall()],
+        "sessoes_estudo": [dict(r) for r in conn.execute("SELECT * FROM sessoes_estudo").fetchall()],
+        "streaks": [dict(r) for r in conn.execute("SELECT * FROM streaks").fetchall()],
+        "simulados": [dict(r) for r in conn.execute("SELECT * FROM simulados").fetchall()],
+        "ciclo_estudos": [dict(r) for r in conn.execute("SELECT * FROM ciclo_estudos").fetchall()],
+        "metas_config": [dict(r) for r in conn.execute("SELECT * FROM metas_config").fetchall()],
+    }
+    conn.close()
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".json", mode="w", encoding="utf-8")
+    json.dump(data, tmp, ensure_ascii=False, indent=2)
+    tmp.close()
+    return FileResponse(tmp.name, media_type="application/json", filename="concurseiro_backup_completo.json", background=None)
+
+
+@app.post("/api/importar-tudo")
+async def importar_tudo(file: UploadFile = File(...)):
+    """Importa backup completo de dados"""
+    content = await file.read()
+    try:
+        data = json.loads(content)
+    except:
+        raise HTTPException(400, "JSON inválido")
+    
+    conn = get_db()
+    count = 0
+    
+    # Importar flashcards
+    for item in data.get("flashcards", []):
+        conn.execute("INSERT OR IGNORE INTO flashcards (pergunta, resposta, proxima_revisao, intervalo_dias) VALUES (?, ?, ?, ?)",
+                     (item["pergunta"], item["resposta"], item.get("proxima_revisao", today_str()), item.get("intervalo_dias", 1)))
+        count += 1
+    
+    # Importar questões
+    for item in data.get("questoes", []):
+        conn.execute("""INSERT OR IGNORE INTO questoes (materia, topico, enunciado, alternativa_a, alternativa_b, alternativa_c, alternativa_d, alternativa_e, resposta_correta, explicacao, dificuldade, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (item.get("materia",""), item.get("topico",""), item.get("enunciado",""), item.get("alternativa_a",""), item.get("alternativa_b",""), item.get("alternativa_c",""), item.get("alternativa_d",""), item.get("alternativa_e",""), item.get("resposta_correta",""), item.get("explicacao",""), item.get("dificuldade","Médio"), item.get("created_at", today_str())))
+        count += 1
+    
+    conn.commit()
+    conn.close()
+    return {"ok": True, "importados": count}
+
+
+@app.get("/api/status-rapido")
+def status_rapido():
+    """Página de status ultra-leve para mobile"""
+    conn = get_db()
+    hoje = conn.execute("SELECT * FROM streaks WHERE data = ?", (today_str(),)).fetchone()
+    flash = conn.execute("SELECT COUNT(*) FROM flashcards WHERE proxima_revisao <= ?", (today_str(),)).fetchone()[0]
+    topicos_done = conn.execute("SELECT COUNT(*) FROM edital WHERE status = 'Concluído'").fetchone()[0]
+    topicos_total = conn.execute("SELECT COUNT(*) FROM edital").fetchone()[0]
+    
+    # Streak
+    streak_rows = conn.execute("SELECT data FROM streaks WHERE horas_estudadas > 0 OR questoes_resolvidas > 0 ORDER BY data DESC").fetchall()
+    streak = 0
+    check_date = date.today()
+    for row in streak_rows:
+        if row[0] == check_date.isoformat():
+            streak += 1
+            check_date -= timedelta(days=1)
+        else:
+            break
+    
+    conn.close()
+    return {
+        "streak": streak,
+        "horas_hoje": hoje["horas_estudadas"] if hoje else 0,
+        "questoes_hoje": hoje["questoes_resolvidas"] if hoje else 0,
+        "flashcards_pendentes": flash,
+        "edital_pct": round(topicos_done / topicos_total * 100, 1) if topicos_total > 0 else 0,
+        "topicos": f"{topicos_done}/{topicos_total}"
+    }
+
+
+# ============================================================
 # CORREÇÃO DO MIME TYPE PARA .mjs / .js (PDF.js)
 # ============================================================
 from starlette.staticfiles import StaticFiles
