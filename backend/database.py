@@ -1,6 +1,8 @@
 import sqlite3
 from contextlib import contextmanager
 
+from logger import log
+
 DB_PATH = "./progress.db"
 
 
@@ -12,6 +14,46 @@ def get_db():
         yield conn
     finally:
         conn.close()
+
+
+def rebuild_search_index(conn):
+    """Reconstrói o índice FTS5 com todos os dados."""
+    conn.execute("DELETE FROM search_index")
+
+    # Tópicos do edital
+    rows = conn.execute("SELECT id, materia, topico FROM edital").fetchall()
+    for r in rows:
+        conn.execute(
+            "INSERT INTO search_index (source, source_id, title, content) VALUES (?, ?, ?, ?)",
+            ("edital", str(r[0]), r[1], r[2])
+        )
+
+    # Questões
+    rows = conn.execute("SELECT id, materia, enunciado FROM questoes").fetchall()
+    for r in rows:
+        conn.execute(
+            "INSERT INTO search_index (source, source_id, title, content) VALUES (?, ?, ?, ?)",
+            ("questao", str(r[0]), r[1], r[2])
+        )
+
+    # Flashcards
+    rows = conn.execute("SELECT id, pergunta, resposta FROM flashcards").fetchall()
+    for r in rows:
+        conn.execute(
+            "INSERT INTO search_index (source, source_id, title, content) VALUES (?, ?, ?, ?)",
+            ("flashcard", str(r[0]), r[1], r[2])
+        )
+
+    # Notas
+    rows = conn.execute("SELECT id, conteudo FROM notas_pdf").fetchall()
+    for r in rows:
+        conn.execute(
+            "INSERT INTO search_index (source, source_id, title, content) VALUES (?, ?, ?, ?)",
+            ("nota", str(r[0]), "", r[1])
+        )
+
+    conn.commit()
+    log.info("Search index rebuilt")
 
 
 def init_db():
@@ -324,5 +366,22 @@ def init_db():
     conn.execute("CREATE INDEX IF NOT EXISTS idx_bookmarks_pdf_path ON bookmarks_pdf(pdf_path)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_edital_materia ON edital(materia)")
 
+    # ========== FTS5 FULL-TEXT SEARCH ==========
+
+    conn.execute("""
+        CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
+            source,
+            source_id,
+            title,
+            content,
+            tokenize='unicode61'
+        )
+    """)
+
     conn.commit()
+
+    # Rebuild search index
+    rebuild_search_index(conn)
+
     conn.close()
+    log.info("Database initialized")

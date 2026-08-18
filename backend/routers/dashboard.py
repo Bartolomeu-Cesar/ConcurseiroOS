@@ -1,19 +1,22 @@
 import json
 import re
+import math
 import random
 import tempfile
 from datetime import date, datetime, timedelta
+from typing import Optional
 
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, UploadFile, File, Query
 from fastapi.responses import FileResponse
 
 from database import get_db
+from logger import log
 from utils import today_str, calculate_streak
 
-router = APIRouter()
+router = APIRouter(prefix="", tags=["Dashboard & Analytics"])
 
 
-@router.get("/api/dashboard")
+@router.get("/api/dashboard", summary="Dashboard principal", description="Retorna métricas consolidadas: horas, progresso, questões, flashcards")
 def get_dashboard():
     with get_db() as conn:
         # Horas por dia (últimos 14 dias)
@@ -75,7 +78,7 @@ def get_dashboard():
     }
 
 
-@router.get("/api/relatorio-semanal")
+@router.get("/api/relatorio-semanal", summary="Relatório semanal", description="Relatório consolidado da semana: horas, questões, matérias fracas e sugestões")
 def relatorio_semanal():
     with get_db() as conn:
         inicio_semana = (date.today() - timedelta(days=date.today().weekday())).isoformat()
@@ -635,15 +638,33 @@ def plano_automatico(edital_nome: str = "", cargo: str = "", horas_dia: float = 
     }
 
 
-@router.get("/api/linha-tempo")
-def linha_tempo():
+@router.get("/api/linha-tempo", summary="Linha do tempo", description="Histórico de sessões de estudo com paginação opcional")
+def linha_tempo(page: Optional[int] = Query(None), limit: int = 50):
     """Histórico de sessões de estudo (timeline)"""
     with get_db() as conn:
         rows = conn.execute("""
             SELECT data, materia, horas, tipo FROM sessoes_estudo
-            ORDER BY data DESC, id DESC LIMIT 50
+            ORDER BY data DESC, id DESC
         """).fetchall()
-    return [dict(r) for r in rows]
+
+    items = [dict(r) for r in rows]
+
+    # Se page não fornecido, retorna array completo (retrocompatibilidade)
+    if page is None:
+        return items[:50]  # Mantém o limite original de 50
+
+    # Paginação
+    total = len(items)
+    pages = math.ceil(total / limit) if limit > 0 else 1
+    start = (page - 1) * limit
+    end = start + limit
+    return {
+        "items": items[start:end],
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "pages": pages
+    }
 
 
 @router.get("/api/exportar-stats")

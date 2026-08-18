@@ -1,19 +1,40 @@
+import math
 from datetime import date, timedelta
+from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from database import get_db
+from logger import log
 from models import FlashcardCreate, FlashcardReview
 from utils import today_str
 
-router = APIRouter()
+router = APIRouter(prefix="", tags=["Flashcards"])
 
 
-@router.get("/api/flashcards")
-def list_flashcards():
+@router.get("/api/flashcards", summary="Listar flashcards", description="Lista todos os flashcards com paginação opcional")
+def list_flashcards(page: Optional[int] = Query(None), limit: int = 50):
     with get_db() as conn:
         rows = conn.execute("SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias FROM flashcards").fetchall()
-    return [dict(r) for r in rows]
+
+    items = [dict(r) for r in rows]
+
+    # Se page não fornecido, retorna array completo (retrocompatibilidade)
+    if page is None:
+        return items
+
+    # Paginação
+    total = len(items)
+    pages = math.ceil(total / limit) if limit > 0 else 1
+    start = (page - 1) * limit
+    end = start + limit
+    return {
+        "items": items[start:end],
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "pages": pages
+    }
 
 
 @router.get("/api/flashcards/today")
@@ -26,7 +47,7 @@ def get_flashcards_today():
     return [dict(r) for r in rows]
 
 
-@router.post("/api/flashcards")
+@router.post("/api/flashcards", summary="Criar flashcard", description="Cria um novo flashcard com revisão SRS")
 def create_flashcard(body: FlashcardCreate):
     with get_db() as conn:
         cur = conn.execute(
@@ -35,6 +56,7 @@ def create_flashcard(body: FlashcardCreate):
         )
         conn.commit()
         new_id = cur.lastrowid
+    log.info(f"Flashcard created: id={new_id}")
     return {"id": new_id, "pergunta": body.pergunta, "resposta": body.resposta,
             "proxima_revisao": today_str(), "intervalo_dias": 1}
 
@@ -63,6 +85,7 @@ def delete_flashcard(id: int):
     with get_db() as conn:
         conn.execute("DELETE FROM flashcards WHERE id = ?", (id,))
         conn.commit()
+    log.info(f"Flashcard deleted: id={id}")
     return {"ok": True}
 
 

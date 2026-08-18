@@ -12,6 +12,10 @@ backend/_progress.db
 # PDFs (muito grandes para o git)
 backend/pdfs/
 
+# Backups
+backend/backups/
+backups/
+
 # OS
 .DS_Store
 Thumbs.db

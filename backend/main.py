@@ -1,5 +1,6 @@
 import mimetypes
 import os
+import time
 
 # Força o MIME type correto para arquivos .mjs e .js (necessário para PDF.js)
 mimetypes.add_type("application/javascript", ".mjs", strict=True)
@@ -16,6 +17,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
 from database import init_db
+from logger import log
 from routers import pdf, edital, flashcards, questoes, simulados, ciclo, streaks, dashboard, misc
 
 # ============================================================
@@ -24,6 +26,9 @@ from routers import pdf, edital, flashcards, questoes, simulados, ciclo, streaks
 
 PDF_ROOT = os.environ.get("PDF_ROOT", "./pdfs")
 DB_PATH = "./progress.db"
+
+# Registrar tempo de início para o health check
+APP_START_TIME = time.time()
 
 # Atualizar DB_PATH no módulo database
 import database
@@ -56,7 +61,13 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 # APP SETUP
 # ============================================================
 
-app = FastAPI()
+app = FastAPI(
+    title="ConcurseiroOS API",
+    description="API do sistema de estudos para concursos públicos",
+    version="2.1.0",
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(
     CORSMiddleware,
@@ -69,7 +80,16 @@ app.add_middleware(
 # INICIALIZAÇÃO DO BANCO
 # ============================================================
 
+log.info("ConcurseiroOS starting...")
 init_db()
+
+# Auto-backup diário
+from backup import auto_backup_if_needed
+auto_backup_if_needed(DB_PATH)
+
+# Disponibilizar APP_START_TIME para o router misc
+misc.APP_START_TIME = APP_START_TIME
+misc.DB_PATH = DB_PATH
 
 # ============================================================
 # CONFIGURAR PDF_ROOT NOS ROUTERS

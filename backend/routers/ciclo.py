@@ -1,10 +1,11 @@
 from fastapi import APIRouter, HTTPException
 
 from database import get_db
+from logger import log
 from models import CicloCreate, CicloUpdate, CicloHoras
 from utils import today_str
 
-router = APIRouter()
+router = APIRouter(prefix="", tags=["Ciclo de Estudos"])
 
 
 @router.get("/api/ciclo")

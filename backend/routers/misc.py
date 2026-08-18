@@ -1,16 +1,148 @@
 import random
+import time
+import sqlite3
 from datetime import date, datetime, timedelta
+from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
 
-from database import get_db
+from database import get_db, rebuild_search_index
+from logger import log
 from models import (
     NotaCreate, PlanejadorItem, CadernoCreate, CadernoAddItem,
     BookmarkCreate, FeynmanCreate
 )
 from utils import today_str
+from backup import create_backup, list_backups, restore_backup
 
-router = APIRouter()
+router = APIRouter(prefix="", tags=["Utilidades"])
+
+# Set from main.py
+APP_START_TIME = None
+DB_PATH = "./progress.db"
+
+
+# ============================================================
+# HEALTH CHECK
+# ============================================================
+
+@router.get("/api/health", summary="Health Check", description="Verifica o status da aplicação, conexão com banco e métricas básicas")
+def health_check():
+    """Retorna status do sistema, uptime, estado do banco de dados e métricas."""
+    db_status = "connected"
+    tables_count = 0
+    edital_count = 0
+
+    try:
+        with get_db() as conn:
+            conn.execute("SELECT 1")
+            tables_count = conn.execute(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table'"
+            ).fetchone()[0]
+            edital_count = conn.execute("SELECT COUNT(*) FROM edital").fetchone()[0]
+    except Exception as e:
+        db_status = "error"
+        log.error(f"Health check DB error: {e}")
+
+    uptime = time.time() - APP_START_TIME if APP_START_TIME else 0
+
+    return {
+        "status": "ok",
+        "uptime_seconds": round(uptime, 1),
+        "database": db_status,
+        "version": "2.1.0",
+        "tables_count": tables_count,
+        "edital_count": edital_count,
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+# ============================================================
+# BACKUP ENDPOINTS
+# ============================================================
+
+class RestoreRequest(BaseModel):
+    filename: str
+
+
+@router.get("/api/backups", summary="Listar backups", description="Lista todos os backups disponíveis com tamanho e data de criação")
+def get_backups():
+    """Lista backups disponíveis."""
+    return list_backups()
+
+
+@router.post("/api/backups", summary="Criar backup", description="Cria um backup manual do banco de dados")
+def create_backup_endpoint():
+    """Cria backup manual do banco de dados."""
+    path = create_backup(DB_PATH)
+    log.info(f"Manual backup created: {path}")
+    return {"ok": True, "path": path}
+
+
+@router.post("/api/backups/restore", summary="Restaurar backup", description="Restaura o banco de dados a partir de um backup específico")
+def restore_backup_endpoint(body: RestoreRequest):
+    """Restaura um backup específico."""
+    success = restore_backup(body.filename, DB_PATH)
+    if not success:
+        raise HTTPException(404, "Backup não encontrado")
+    log.info(f"Backup restored: {body.filename}")
+    return {"ok": True, "restored": body.filename}
+
+
+# ============================================================
+# BUSCA GLOBAL (FTS5)
+# ============================================================
+
+@router.get("/api/search", summary="Busca global", description="Busca full-text em todos os conteúdos (edital, questões, flashcards, notas)")
+def global_search(q: str = Query(..., min_length=1)):
+    """Busca full-text usando FTS5 em todos os conteúdos indexados."""
+    with get_db() as conn:
+        try:
+            rows = conn.execute("""
+                SELECT source, source_id, title,
+                       snippet(search_index, 3, '<b>', '</b>', '...', 32) as snippet,
+                       rank
+                FROM search_index
+                WHERE search_index MATCH ?
+                ORDER BY rank
+                LIMIT 50
+            """, (q,)).fetchall()
+        except Exception as e:
+            log.error(f"Search error: {e}")
+            # Fallback: try with quoted query
+            try:
+                rows = conn.execute("""
+                    SELECT source, source_id, title,
+                           snippet(search_index, 3, '<b>', '</b>', '...', 32) as snippet,
+                           rank
+                    FROM search_index
+                    WHERE search_index MATCH ?
+                    ORDER BY rank
+                    LIMIT 50
+                """, (f'"{q}"',)).fetchall()
+            except Exception:
+                return []
+
+    return [
+        {
+            "source": r[0],
+            "source_id": int(r[1]) if r[1] else None,
+            "title": r[2],
+            "snippet": r[3],
+            "rank": r[4]
+        }
+        for r in rows
+    ]
+
+
+@router.post("/api/search/reindex", summary="Reindexar busca", description="Reconstrói o índice de busca full-text com todos os dados atuais")
+def reindex_search():
+    """Reconstrói o índice de busca FTS5."""
+    with get_db() as conn:
+        rebuild_search_index(conn)
+    log.info("Search index manually rebuilt")
+    return {"ok": True, "message": "Índice reconstruído com sucesso"}
 
 
 # ============================================================
@@ -76,6 +208,7 @@ def add_planejador(body: PlanejadorItem):
         cur = conn.execute("INSERT INTO planejador_semanal (dia_semana, materia, horas) VALUES (?, ?, ?)",
                            (body.dia_semana, body.materia, body.horas))
         conn.commit()
+    log.info(f"Planejador item added: {body.materia} dia {body.dia_semana}")
     return {"id": cur.lastrowid, "ok": True}
 
 
@@ -84,6 +217,7 @@ def delete_planejador(id: int):
     with get_db() as conn:
         conn.execute("DELETE FROM planejador_semanal WHERE id = ?", (id,))
         conn.commit()
+    log.info(f"Planejador item deleted: {id}")
     return {"ok": True}
 
 
@@ -110,6 +244,7 @@ def create_caderno(body: CadernoCreate):
         cur = conn.execute("INSERT INTO cadernos (nome, descricao, created_at) VALUES (?, ?, ?)",
                            (body.nome, body.descricao, datetime.now().isoformat()))
         conn.commit()
+    log.info(f"Caderno created: {body.nome}")
     return {"id": cur.lastrowid, "ok": True}
 
 
@@ -138,6 +273,7 @@ def delete_caderno(id: int):
         conn.execute("DELETE FROM caderno_itens WHERE caderno_id = ?", (id,))
         conn.execute("DELETE FROM cadernos WHERE id = ?", (id,))
         conn.commit()
+    log.info(f"Caderno deleted: {id}")
     return {"ok": True}
 
 
@@ -158,6 +294,7 @@ def create_bookmark(body: BookmarkCreate):
         cur = conn.execute("INSERT INTO bookmarks_pdf (pdf_path, pagina, label, cor, created_at) VALUES (?, ?, ?, ?, ?)",
                            (body.pdf_path, body.pagina, body.label, body.cor, datetime.now().isoformat()))
         conn.commit()
+    log.info(f"Bookmark created: {body.pdf_path} p.{body.pagina}")
     return {"id": cur.lastrowid, "ok": True}
 
 
@@ -187,6 +324,7 @@ def create_feynman(body: FeynmanCreate):
         cur = conn.execute("INSERT INTO feynman (edital_id, explicacao, created_at) VALUES (?, ?, ?)",
                            (body.edital_id, body.explicacao, datetime.now().isoformat()))
         conn.commit()
+    log.info(f"Feynman explanation added for edital_id={body.edital_id}")
     return {"id": cur.lastrowid, "ok": True}
 
 
@@ -207,6 +345,7 @@ def create_nota(body: NotaCreate):
         cur = conn.execute("INSERT INTO notas_pdf (pdf_path, pagina, conteudo, created_at) VALUES (?, ?, ?, ?)",
                            (body.pdf_path, body.pagina, body.conteudo, datetime.now().isoformat()))
         conn.commit()
+    log.info(f"Nota created: {body.pdf_path} p.{body.pagina}")
     return {"id": cur.lastrowid, "ok": True}
 
 

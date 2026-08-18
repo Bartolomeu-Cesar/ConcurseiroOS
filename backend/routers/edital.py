@@ -1,18 +1,21 @@
 import os
 import tempfile
+import math
 from datetime import date, timedelta
+from typing import Optional
 
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, UploadFile, File, Query
 from pypdf import PdfReader
 
 from database import get_db
+from logger import log
 from models import EditalCreate, EditalHoras, EditalPdfLink, NotaTopicoCreate
 from utils import today_str
 
-router = APIRouter()
+router = APIRouter(prefix="", tags=["Edital"])
 
 
-@router.get("/api/edital/nomes")
+@router.get("/api/edital/nomes", summary="Hierarquia de editais", description="Lista todos os concursos e cargos com contagens de tópicos")
 def list_edital_nomes():
     """Lista hierarquia: concursos > cargos com contagens"""
     with get_db() as conn:
@@ -58,8 +61,8 @@ def list_editais_arquivados():
     return [{"edital_nome": r[0], "cargo": r[1], "total": r[2]} for r in rows]
 
 
-@router.get("/api/edital")
-def list_edital(edital_nome: str = "", cargo: str = "", incluir_arquivados: bool = False):
+@router.get("/api/edital", summary="Listar tópicos do edital", description="Retorna todos os tópicos do edital, com filtros opcionais e paginação")
+def list_edital(edital_nome: str = "", cargo: str = "", incluir_arquivados: bool = False, page: Optional[int] = Query(None), limit: int = 50):
     with get_db() as conn:
         query = "SELECT id, edital_nome, cargo, materia, topico, status, horas_estudadas, pdf_link, pdf_pagina FROM edital WHERE 1=1"
         params = []
@@ -73,16 +76,35 @@ def list_edital(edital_nome: str = "", cargo: str = "", incluir_arquivados: bool
             params.append(cargo)
         query += " ORDER BY edital_nome, cargo, materia, id"
         rows = conn.execute(query, params).fetchall()
-    return [dict(r) for r in rows]
+
+    items = [dict(r) for r in rows]
+
+    # Se page não fornecido, retorna array completo (retrocompatibilidade)
+    if page is None:
+        return items
+
+    # Paginação
+    total = len(items)
+    pages = math.ceil(total / limit) if limit > 0 else 1
+    start = (page - 1) * limit
+    end = start + limit
+    return {
+        "items": items[start:end],
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "pages": pages
+    }
 
 
-@router.post("/api/edital")
+@router.post("/api/edital", summary="Criar tópico", description="Adiciona um novo tópico ao edital verticalizado")
 def create_edital(body: EditalCreate):
     with get_db() as conn:
         cur = conn.execute("INSERT INTO edital (edital_nome, cargo, materia, topico) VALUES (?, ?, ?, ?)",
                            (body.edital_nome, body.cargo, body.materia, body.topico))
         conn.commit()
         new_id = cur.lastrowid
+    log.info(f"Edital topic created: id={new_id} materia={body.materia}")
     return {"id": new_id, "edital_nome": body.edital_nome, "cargo": body.cargo, "materia": body.materia,
             "topico": body.topico, "status": "Não Iniciado", "horas_estudadas": 0.0}
 
@@ -126,6 +148,7 @@ def delete_edital(id: int):
     with get_db() as conn:
         conn.execute("DELETE FROM edital WHERE id = ?", (id,))
         conn.commit()
+    log.info(f"Edital topic deleted: id={id}")
     return {"ok": True}
 
 

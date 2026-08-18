@@ -6,10 +6,11 @@ from fastapi import APIRouter, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse
 
 from database import get_db
+from logger import log
 from models import ProgressUpdate
 from utils import get_pdf_pages, build_tree
 
-router = APIRouter()
+router = APIRouter(prefix="", tags=["PDFs"])
 
 PDF_ROOT = None  # Set from main.py
 
@@ -19,7 +20,7 @@ def set_pdf_root(root: str):
     PDF_ROOT = root
 
 
-@router.get("/api/tree")
+@router.get("/api/tree", summary="Árvore de PDFs", description="Retorna a estrutura de diretórios e arquivos PDF disponíveis")
 def get_tree():
     if not Path(PDF_ROOT).exists():
         return []

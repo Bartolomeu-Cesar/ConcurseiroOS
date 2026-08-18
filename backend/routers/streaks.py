@@ -4,10 +4,11 @@ from datetime import date, timedelta
 from fastapi import APIRouter
 
 from database import get_db
+from logger import log
 from models import MetasUpdate, DesafioCreate
 from utils import today_str, calculate_streak
 
-router = APIRouter()
+router = APIRouter(prefix="", tags=["Gamificação"])
 
 # XP rewards:
 # - Estudar 1 hora = 100 XP
@@ -39,7 +40,7 @@ BADGES = [
 ]
 
 
-@router.get("/api/streaks")
+@router.get("/api/streaks", summary="Streak e gamificação", description="Retorna streak atual, dados de hoje, XP e conquistas")
 def get_streaks():
     """Retorna streak atual (dias consecutivos) e dados de hoje"""
     with get_db() as conn:

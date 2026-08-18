@@ -4,10 +4,11 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException
 
 from database import get_db
+from logger import log
 from models import SimuladoCreate, SimuladoResponder, SimuladoFinalizar
 from utils import today_str
 
-router = APIRouter()
+router = APIRouter(prefix="", tags=["Simulados"])
 
 
 @router.get("/api/simulados")

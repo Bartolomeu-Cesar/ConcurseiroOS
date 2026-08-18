@@ -1,16 +1,19 @@
 import random
+import math
+from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from database import get_db
+from logger import log
 from models import QuestaoCreate, QuestaoResposta
 from utils import today_str
 
-router = APIRouter()
+router = APIRouter(prefix="", tags=["Questões"])
 
 
-@router.get("/api/questoes")
-def list_questoes(materia: str = "", topico: str = ""):
+@router.get("/api/questoes", summary="Listar questões", description="Lista todas as questões do banco, com filtros por matéria/tópico e paginação opcional")
+def list_questoes(materia: str = "", topico: str = "", page: Optional[int] = Query(None), limit: int = 50):
     with get_db() as conn:
         query = "SELECT * FROM questoes WHERE 1=1"
         params = []
@@ -22,7 +25,25 @@ def list_questoes(materia: str = "", topico: str = ""):
             params.append(topico)
         query += " ORDER BY id DESC"
         rows = conn.execute(query, params).fetchall()
-    return [dict(r) for r in rows]
+
+    items = [dict(r) for r in rows]
+
+    # Se page não fornecido, retorna array completo (retrocompatibilidade)
+    if page is None:
+        return items
+
+    # Paginação
+    total = len(items)
+    pages = math.ceil(total / limit) if limit > 0 else 1
+    start = (page - 1) * limit
+    end = start + limit
+    return {
+        "items": items[start:end],
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "pages": pages
+    }
 
 
 @router.get("/api/questoes/materias")
@@ -78,7 +99,7 @@ def get_questao(id: int):
     return dict(row)
 
 
-@router.post("/api/questoes")
+@router.post("/api/questoes", summary="Criar questão", description="Adiciona uma nova questão ao banco de questões")
 def create_questao(body: QuestaoCreate):
     with get_db() as conn:
         cur = conn.execute("""
@@ -90,10 +111,11 @@ def create_questao(body: QuestaoCreate):
               body.explicacao, body.dificuldade, today_str()))
         conn.commit()
         new_id = cur.lastrowid
+    log.info(f"Questão created: id={new_id} materia={body.materia}")
     return {"id": new_id, "ok": True}
 
 
-@router.post("/api/questoes/{id}/responder")
+@router.post("/api/questoes/{id}/responder", summary="Responder questão", description="Registra a resposta do usuário e retorna se acertou ou errou")
 def responder_questao(id: int, body: QuestaoResposta):
     with get_db() as conn:
         questao = conn.execute("SELECT resposta_correta FROM questoes WHERE id = ?", (id,)).fetchone()
@@ -119,6 +141,7 @@ def delete_questao(id: int):
         conn.execute("DELETE FROM questoes_respostas WHERE questao_id = ?", (id,))
         conn.execute("DELETE FROM questoes WHERE id = ?", (id,))
         conn.commit()
+    log.info(f"Questão deleted: id={id}")
     return {"ok": True}
 
 
