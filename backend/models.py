@@ -68,6 +68,7 @@ class QuestaoCreate(BaseModel):
     resposta_correta: str
     explicacao: str = ""
     dificuldade: str = "Médio"
+    banca: str = ""
 
 
 class QuestaoResposta(BaseModel):
@@ -92,6 +93,13 @@ class SimuladoResponder(BaseModel):
 
 class SimuladoFinalizar(BaseModel):
     tempo_gasto_seg: int = 0
+
+
+class SimuladoProvaReal(BaseModel):
+    titulo: str = "Simulado Prova Real"
+    edital_nome: str = ""
+    cargo: str = ""
+    tempo_limite_min: int = 180
 
 
 # ============================================================
@@ -193,3 +201,12 @@ class DesafioCreate(BaseModel):
     meta_valor: int
     materia: str = ""
     dias: int = 7
+
+
+# ============================================================
+# Resumos (Elaboration Strategy)
+# ============================================================
+
+class ResumoCreate(BaseModel):
+    resumo: str
+    tipo: str = "livre"  # '3frases', 'mapa', 'livre'

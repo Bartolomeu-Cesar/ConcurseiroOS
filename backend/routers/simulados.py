@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException
 
 from database import get_db
 from logger import log
-from models import SimuladoCreate, SimuladoResponder, SimuladoFinalizar
+from models import SimuladoCreate, SimuladoResponder, SimuladoFinalizar, SimuladoProvaReal
 from utils import today_str
 
 router = APIRouter(prefix="", tags=["Simulados"])
@@ -91,6 +91,90 @@ def delete_simulado(id: int):
         conn.execute("DELETE FROM simulados WHERE id = ?", (id,))
         conn.commit()
     return {"ok": True}
+
+
+@router.post("/api/simulados/prova-real")
+def simulado_prova_real(body: SimuladoProvaReal):
+    """Monta simulado baseado na distribuição real do edital (proporção de tópicos por matéria)"""
+    log.info(f"POST /api/simulados/prova-real edital={body.edital_nome} cargo={body.cargo}")
+    with get_db() as conn:
+        # Buscar matérias do edital com contagem de tópicos
+        query = "SELECT materia, COUNT(*) as topicos FROM edital WHERE 1=1"
+        params = []
+        if body.edital_nome:
+            query += " AND edital_nome = ?"
+            params.append(body.edital_nome)
+        if body.cargo:
+            query += " AND cargo = ?"
+            params.append(body.cargo)
+        query += " GROUP BY materia ORDER BY topicos DESC"
+        materias = conn.execute(query, params).fetchall()
+
+        if not materias:
+            from fastapi import HTTPException
+            raise HTTPException(400, "Nenhuma matéria encontrada no edital. Cadastre tópicos primeiro.")
+
+        # Calcular total de tópicos (proxy para peso)
+        total_topicos = sum(r[1] for r in materias)
+
+        # Determinar total de questões (entre 60-120 dependendo do disponível)
+        total_questoes_banco = conn.execute("SELECT COUNT(*) FROM questoes").fetchone()[0]
+        total_desejado = min(120, max(60, total_questoes_banco))
+
+        # Calcular distribuição proporcional
+        distribuicao = []
+        questoes_selecionadas = []
+        for r in materias:
+            mat = r[0]
+            peso = r[1] / total_topicos
+            qtd_alvo = max(1, round(total_desejado * peso))
+
+            # Buscar questões disponíveis dessa matéria
+            rows = conn.execute(
+                "SELECT id FROM questoes WHERE materia = ? ORDER BY RANDOM() LIMIT ?",
+                (mat, qtd_alvo)
+            ).fetchall()
+
+            ids = [row[0] for row in rows]
+            questoes_selecionadas.extend(ids)
+            distribuicao.append({
+                "materia": mat,
+                "topicos": r[1],
+                "peso_pct": round(peso * 100, 1),
+                "questoes_alvo": qtd_alvo,
+                "questoes_selecionadas": len(ids)
+            })
+
+        # Deduplicate
+        questoes_selecionadas = list(dict.fromkeys(questoes_selecionadas))
+
+        if not questoes_selecionadas:
+            from fastapi import HTTPException
+            raise HTTPException(400, "Nenhuma questão disponível no banco para as matérias do edital.")
+
+        # Criar simulado
+        cur = conn.execute("""
+            INSERT INTO simulados (titulo, tempo_limite_min, total_questoes, created_at)
+            VALUES (?, ?, ?, ?)
+        """, (body.titulo, body.tempo_limite_min, len(questoes_selecionadas), today_str()))
+        sim_id = cur.lastrowid
+
+        # Vincular questões
+        random.shuffle(questoes_selecionadas)
+        for i, qid in enumerate(questoes_selecionadas):
+            conn.execute("INSERT INTO simulado_questoes (simulado_id, questao_id, ordem) VALUES (?, ?, ?)",
+                         (sim_id, qid, i))
+        conn.commit()
+
+    log.info(f"Simulado prova-real criado: id={sim_id} questoes={len(questoes_selecionadas)}")
+    return {
+        "id": sim_id,
+        "ok": True,
+        "titulo": body.titulo,
+        "total_questoes": len(questoes_selecionadas),
+        "tempo_limite_min": body.tempo_limite_min,
+        "distribuicao": distribuicao
+    }
 
 
 @router.get("/api/simulado-inteligente")

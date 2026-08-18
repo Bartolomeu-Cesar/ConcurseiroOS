@@ -1013,3 +1013,160 @@ def raio_x_edital(edital_nome: str = "", cargo: str = ""):
         "total_questoes": total_questoes,
         "materias": materias
     }
+
+
+@router.get("/api/heatmap-erros")
+def heatmap_erros():
+    """Mapa de calor de erros por tópico — agrupa erros por matéria e tópico com intensidade"""
+    log.info("GET /api/heatmap-erros")
+    with get_db() as conn:
+        rows = conn.execute("""
+            SELECT q.materia, q.topico, COUNT(*) as total,
+                   SUM(CASE WHEN qr.acertou=0 THEN 1 ELSE 0 END) as erros
+            FROM questoes_respostas qr
+            JOIN questoes q ON q.id = qr.questao_id
+            GROUP BY q.materia, q.topico
+            ORDER BY q.materia, erros DESC
+        """).fetchall()
+
+    # Agrupar por matéria
+    materias_map = {}
+    for r in rows:
+        mat = r[0]
+        topico = r[1] or "(sem tópico)"
+        total = r[2]
+        erros = r[3] or 0
+        pct_erro = round((erros / total * 100) if total > 0 else 0, 1)
+
+        # Calcular intensidade (0-4): 0=0%, 1=1-20%, 2=21-40%, 3=41-60%, 4=61%+
+        if pct_erro == 0:
+            intensidade = 0
+        elif pct_erro <= 20:
+            intensidade = 1
+        elif pct_erro <= 40:
+            intensidade = 2
+        elif pct_erro <= 60:
+            intensidade = 3
+        else:
+            intensidade = 4
+
+        if mat not in materias_map:
+            materias_map[mat] = {"materia": mat, "total_erros": 0, "total_questoes": 0, "topicos": []}
+
+        materias_map[mat]["total_erros"] += erros
+        materias_map[mat]["total_questoes"] += total
+        materias_map[mat]["topicos"].append({
+            "topico": topico,
+            "erros": erros,
+            "total": total,
+            "pct_erro": pct_erro,
+            "intensidade": intensidade
+        })
+
+    # Calcular pct_erro por matéria
+    materias = []
+    for mat_data in materias_map.values():
+        total_q = mat_data["total_questoes"]
+        total_e = mat_data["total_erros"]
+        mat_data["pct_erro"] = round((total_e / total_q * 100) if total_q > 0 else 0, 1)
+        materias.append(mat_data)
+
+    # Ordenar por pct_erro desc
+    materias.sort(key=lambda x: x["pct_erro"], reverse=True)
+
+    return {"materias": materias}
+
+
+@router.get("/api/evolucao")
+def evolucao_semanal(semanas: int = 12):
+    """Histórico de evolução por matéria, semana a semana com tendência"""
+    log.info(f"GET /api/evolucao semanas={semanas}")
+    with get_db() as conn:
+        # Buscar todas as respostas no período
+        inicio = (date.today() - timedelta(weeks=semanas)).isoformat()
+        rows = conn.execute("""
+            SELECT qr.data, q.materia, qr.acertou
+            FROM questoes_respostas qr
+            JOIN questoes q ON q.id = qr.questao_id
+            WHERE qr.data >= ?
+            ORDER BY qr.data
+        """, (inicio,)).fetchall()
+
+    # Organizar por semana ISO
+    semanas_map = {}
+    for r in rows:
+        try:
+            d = date.fromisoformat(r[0])
+        except (ValueError, TypeError):
+            continue
+        iso = d.isocalendar()
+        semana_key = f"{iso[0]}-W{iso[1]:02d}"
+        # Início da semana (segunda)
+        inicio_semana = (d - timedelta(days=d.weekday())).isoformat()
+
+        if semana_key not in semanas_map:
+            semanas_map[semana_key] = {"semana": semana_key, "inicio": inicio_semana, "materias": {}, "geral": {"questoes": 0, "acertos": 0}}
+
+        mat = r[1]
+        acertou = r[2]
+
+        if mat not in semanas_map[semana_key]["materias"]:
+            semanas_map[semana_key]["materias"][mat] = {"questoes": 0, "acertos": 0}
+
+        semanas_map[semana_key]["materias"][mat]["questoes"] += 1
+        semanas_map[semana_key]["materias"][mat]["acertos"] += (acertou or 0)
+        semanas_map[semana_key]["geral"]["questoes"] += 1
+        semanas_map[semana_key]["geral"]["acertos"] += (acertou or 0)
+
+    # Formatar evolução
+    evolucao = []
+    for key in sorted(semanas_map.keys()):
+        sem = semanas_map[key]
+        materias_list = []
+        for mat, dados in sem["materias"].items():
+            pct = round((dados["acertos"] / dados["questoes"] * 100) if dados["questoes"] > 0 else 0, 1)
+            materias_list.append({"materia": mat, "questoes": dados["questoes"], "acertos": dados["acertos"], "pct": pct})
+        geral = sem["geral"]
+        geral["pct"] = round((geral["acertos"] / geral["questoes"] * 100) if geral["questoes"] > 0 else 0, 1)
+        evolucao.append({"semana": sem["semana"], "inicio": sem["inicio"], "materias": materias_list, "geral": geral})
+
+    # Calcular tendência: comparar média das últimas 4 semanas vs anteriores
+    tendencia = []
+    if len(evolucao) >= 2:
+        # Coletar todas as matérias
+        todas_materias = set()
+        for sem in evolucao:
+            for m in sem["materias"]:
+                todas_materias.add(m["materia"])
+
+        ultimas_4 = evolucao[-4:] if len(evolucao) >= 4 else evolucao[-len(evolucao):]
+        anteriores = evolucao[:-4] if len(evolucao) > 4 else []
+
+        for mat in sorted(todas_materias):
+            # Média últimas 4 semanas
+            pcts_recentes = []
+            for sem in ultimas_4:
+                for m in sem["materias"]:
+                    if m["materia"] == mat:
+                        pcts_recentes.append(m["pct"])
+            media_recente = sum(pcts_recentes) / len(pcts_recentes) if pcts_recentes else 0
+
+            # Média anteriores
+            pcts_anteriores = []
+            for sem in anteriores:
+                for m in sem["materias"]:
+                    if m["materia"] == mat:
+                        pcts_anteriores.append(m["pct"])
+            media_anterior = sum(pcts_anteriores) / len(pcts_anteriores) if pcts_anteriores else media_recente
+
+            delta = round(media_recente - media_anterior, 1)
+            if delta > 3:
+                tendencia_str = "melhorando"
+            elif delta < -3:
+                tendencia_str = "piorando"
+            else:
+                tendencia_str = "estavel"
+
+            tendencia.append({"materia": mat, "tendencia": tendencia_str, "delta": delta})
+
+    return {"semanas": semanas, "evolucao": evolucao, "tendencia": tendencia}

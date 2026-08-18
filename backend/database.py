@@ -312,6 +312,17 @@ def init_db():
         )
     """)
 
+    # Resumos (Elaboration Strategy)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS resumos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            edital_id INTEGER NOT NULL,
+            resumo TEXT NOT NULL,
+            tipo TEXT DEFAULT 'livre',
+            created_at TEXT NOT NULL
+        )
+    """)
+
     # ========== MIGRAÇÕES ==========
 
     # Adicionar colunas no edital se não existirem
@@ -345,6 +356,12 @@ def init_db():
     except Exception:
         conn.execute("ALTER TABLE edital ADD COLUMN proxima_revisao TEXT DEFAULT ''")
         conn.execute("ALTER TABLE edital ADD COLUMN intervalo_revisao INTEGER DEFAULT 1")
+
+    # Lote E: coluna banca nas questões
+    try:
+        conn.execute("SELECT banca FROM questoes LIMIT 1")
+    except Exception:
+        conn.execute("ALTER TABLE questoes ADD COLUMN banca TEXT DEFAULT ''")
 
     # Lote D: SM-2 para flashcards
     try:

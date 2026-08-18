@@ -17,6 +17,7 @@ def list_questoes(
     materia: str = "",
     topico: str = "",
     dificuldade: str = "",
+    banca: str = "",
     acertou: Optional[int] = Query(None),
     respondidas: Optional[int] = Query(None),
     data_inicio: str = "",
@@ -43,6 +44,9 @@ def list_questoes(
             if dificuldade:
                 query += " AND q.dificuldade = ?"
                 params.append(dificuldade)
+            if banca:
+                query += " AND q.banca = ?"
+                params.append(banca)
         elif needs_join or respondidas == 1:
             # Questões com filtro por respostas (acertou/errou, datas)
             query = "SELECT DISTINCT q.* FROM questoes q JOIN questoes_respostas qr ON qr.questao_id = q.id WHERE 1=1"
@@ -55,6 +59,9 @@ def list_questoes(
             if dificuldade:
                 query += " AND q.dificuldade = ?"
                 params.append(dificuldade)
+            if banca:
+                query += " AND q.banca = ?"
+                params.append(banca)
             if acertou is not None:
                 query += " AND qr.acertou = ?"
                 params.append(acertou)
@@ -76,6 +83,9 @@ def list_questoes(
             if dificuldade:
                 query += " AND dificuldade = ?"
                 params.append(dificuldade)
+            if banca:
+                query += " AND banca = ?"
+                params.append(banca)
 
         query += " ORDER BY q.id DESC" if (needs_join or needs_not_in or respondidas == 1) else " ORDER BY id DESC"
         rows = conn.execute(query, params).fetchall()
@@ -144,6 +154,125 @@ def questoes_stats():
     }
 
 
+@router.get("/api/questoes/stats/por-banca")
+def questoes_stats_por_banca():
+    """Retorna estatísticas de acerto agrupadas por banca examinadora"""
+    log.info("GET /api/questoes/stats/por-banca")
+    with get_db() as conn:
+        rows = conn.execute("""
+            SELECT q.banca,
+                   COUNT(*) as total,
+                   SUM(qr.acertou) as acertos
+            FROM questoes_respostas qr
+            JOIN questoes q ON q.id = qr.questao_id
+            WHERE q.banca != '' AND q.banca IS NOT NULL
+            GROUP BY q.banca
+            ORDER BY total DESC
+        """).fetchall()
+    return [
+        {
+            "banca": r[0],
+            "total": r[1],
+            "acertos": r[2] or 0,
+            "pct_acerto": round(((r[2] or 0) / r[1] * 100) if r[1] > 0 else 0, 1)
+        }
+        for r in rows
+    ]
+
+
+@router.get("/api/questoes/stats/tempo")
+def questoes_stats_tempo():
+    """Retorna tempo médio por questão com análise por matéria e dificuldade"""
+    log.info("GET /api/questoes/stats/tempo")
+    with get_db() as conn:
+        # Tempo médio geral (excluindo tempo_segundos = 0)
+        geral = conn.execute("""
+            SELECT AVG(tempo_segundos) as media, COUNT(*) as total
+            FROM questoes_respostas
+            WHERE tempo_segundos > 0
+        """).fetchone()
+        tempo_medio = int(geral[0]) if geral[0] else 0
+
+        # Por matéria
+        por_materia = conn.execute("""
+            SELECT q.materia, AVG(qr.tempo_segundos) as media, COUNT(*) as questoes
+            FROM questoes_respostas qr
+            JOIN questoes q ON q.id = qr.questao_id
+            WHERE qr.tempo_segundos > 0
+            GROUP BY q.materia
+            ORDER BY media DESC
+        """).fetchall()
+
+        # Por dificuldade
+        por_dificuldade = conn.execute("""
+            SELECT q.dificuldade, AVG(qr.tempo_segundos) as media
+            FROM questoes_respostas qr
+            JOIN questoes q ON q.id = qr.questao_id
+            WHERE qr.tempo_segundos > 0
+            GROUP BY q.dificuldade
+            ORDER BY media ASC
+        """).fetchall()
+
+        # Buscar dados do edital_info para análise
+        try:
+            edital_info = conn.execute("""
+                SELECT data_prova_objetiva FROM edital_info
+                WHERE data_prova_objetiva != '' LIMIT 1
+            """).fetchone()
+        except Exception:
+            edital_info = None
+
+    # Estimativa padrão: 180 min, 120 questões
+    tempo_prova_min = 180
+    questoes_prova = 120
+    tempo_por_questao_prova = int(tempo_prova_min * 60 / questoes_prova)  # 90s
+
+    # Análise
+    if tempo_medio > 0 and tempo_medio <= tempo_por_questao_prova:
+        status = "dentro_do_limite"
+        mensagem = f"Seu tempo médio ({tempo_medio}s/questão) está dentro do limite da prova ({tempo_por_questao_prova}s/questão). Bom ritmo!"
+    elif tempo_medio > tempo_por_questao_prova:
+        status = "acima_do_limite"
+        mensagem = f"Seu tempo médio ({tempo_medio}s/questão) está acima do limite da prova ({tempo_por_questao_prova}s/questão). Tente ser mais objetivo!"
+    else:
+        status = "sem_dados"
+        mensagem = "Responda mais questões registrando o tempo para obter análise."
+
+    # Formatar tempo
+    minutos = tempo_medio // 60
+    segundos = tempo_medio % 60
+    tempo_formatado = f"{minutos}:{segundos:02d}"
+
+    return {
+        "tempo_medio_seg": tempo_medio,
+        "tempo_medio_formatado": tempo_formatado,
+        "por_materia": [
+            {"materia": r[0], "tempo_medio_seg": int(r[1]), "questoes": r[2]}
+            for r in por_materia
+        ],
+        "por_dificuldade": [
+            {"dificuldade": r[0], "tempo_medio_seg": int(r[1])}
+            for r in por_dificuldade
+        ],
+        "analise": {
+            "tempo_prova_estimado_min": tempo_prova_min,
+            "questoes_estimadas_prova": questoes_prova,
+            "tempo_por_questao_prova_seg": tempo_por_questao_prova,
+            "seu_tempo_vs_prova": status,
+            "mensagem": mensagem
+        }
+    }
+
+
+@router.get("/api/questoes/bancas")
+def list_questoes_bancas():
+    """Lista bancas disponíveis no banco de questões"""
+    log.info("GET /api/questoes/bancas")
+    with get_db() as conn:
+        rows = conn.execute("SELECT DISTINCT banca FROM questoes WHERE banca != '' AND banca IS NOT NULL ORDER BY banca").fetchall()
+    return [r[0] for r in rows]
+
+
 @router.get("/api/questoes/{id}")
 def get_questao(id: int):
     with get_db() as conn:
@@ -158,11 +287,11 @@ def create_questao(body: QuestaoCreate):
     with get_db() as conn:
         cur = conn.execute("""
             INSERT INTO questoes (materia, topico, enunciado, alternativa_a, alternativa_b,
-                alternativa_c, alternativa_d, alternativa_e, resposta_correta, explicacao, dificuldade, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                alternativa_c, alternativa_d, alternativa_e, resposta_correta, explicacao, dificuldade, banca, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (body.materia, body.topico, body.enunciado, body.alternativa_a, body.alternativa_b,
               body.alternativa_c, body.alternativa_d, body.alternativa_e, body.resposta_correta,
-              body.explicacao, body.dificuldade, today_str()))
+              body.explicacao, body.dificuldade, body.banca, today_str()))
         conn.commit()
         new_id = cur.lastrowid
     log.info(f"Questão created: id={new_id} materia={body.materia}")

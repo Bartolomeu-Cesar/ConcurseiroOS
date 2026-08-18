@@ -1,7 +1,7 @@
 import os
 import tempfile
 import math
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Query
@@ -9,7 +9,7 @@ from pypdf import PdfReader
 
 from database import get_db
 from logger import log
-from models import EditalCreate, EditalHoras, EditalPdfLink, NotaTopicoCreate, EditalReviewSM2
+from models import EditalCreate, EditalHoras, EditalPdfLink, NotaTopicoCreate, EditalReviewSM2, ResumoCreate
 from utils import today_str
 
 router = APIRouter(prefix="", tags=["Edital"])
@@ -417,3 +417,70 @@ def revisoes_pendentes():
         except Exception:
             rows = []
     return [dict(r) for r in rows]
+
+
+# ============================================================
+# Resumos (Elaboration Strategy)
+# ============================================================
+
+@router.get("/api/edital/{id}/resumo")
+def get_resumos(id: int):
+    """Retorna resumos do tópico do edital"""
+    log.info(f"GET /api/edital/{id}/resumo")
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM resumos WHERE edital_id = ? ORDER BY created_at DESC", (id,)
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@router.post("/api/edital/{id}/resumo")
+def create_resumo(id: int, body: ResumoCreate):
+    """Cria resumo para um tópico do edital"""
+    log.info(f"POST /api/edital/{id}/resumo tipo={body.tipo}")
+    with get_db() as conn:
+        # Verificar se edital_id existe
+        row = conn.execute("SELECT id FROM edital WHERE id = ?", (id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Tópico do edital não encontrado")
+        cur = conn.execute(
+            "INSERT INTO resumos (edital_id, resumo, tipo, created_at) VALUES (?, ?, ?, ?)",
+            (id, body.resumo, body.tipo, datetime.now().isoformat())
+        )
+        conn.commit()
+        new_id = cur.lastrowid
+    return {"id": new_id, "ok": True}
+
+
+@router.delete("/api/resumos/{id}")
+def delete_resumo(id: int):
+    """Exclui um resumo"""
+    log.info(f"DELETE /api/resumos/{id}")
+    with get_db() as conn:
+        conn.execute("DELETE FROM resumos WHERE id = ?", (id,))
+        conn.commit()
+    return {"ok": True}
+
+
+@router.get("/api/edital/{id}/prompt-resumo")
+def prompt_resumo(id: int):
+    """Retorna um prompt para o usuário escrever um resumo usando elaboration strategy"""
+    log.info(f"GET /api/edital/{id}/prompt-resumo")
+    with get_db() as conn:
+        row = conn.execute("SELECT materia, topico FROM edital WHERE id = ?", (id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Tópico do edital não encontrado")
+
+    materia = row[0]
+    topico = row[1]
+
+    return {
+        "materia": materia,
+        "topico": topico,
+        "prompt": f"Explique em 3 frases simples o que você aprendeu sobre '{topico}'. Imagine que está explicando para alguém que nunca estudou o assunto.",
+        "dicas": [
+            "Use suas próprias palavras",
+            "Inclua um exemplo prático",
+            "Conecte com outro conceito que você conhece"
+        ]
+    }
