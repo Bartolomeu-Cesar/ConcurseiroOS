@@ -172,6 +172,44 @@
     .gam-stat { text-align: center; padding: 6px; background: #45475a; border-radius: 6px; }
     .gam-stat .num { font-size: 1rem; font-weight: 700; color: #89b4fa; }
     .gam-stat .lbl { font-size: 0.68rem; color: #9399b2; }
+
+    /* Dashboard Tabs */
+    .dash-tabs {
+      display: flex;
+      gap: 0;
+      background: #313244;
+      border-radius: 10px;
+      margin-bottom: 20px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .dash-tabs::-webkit-scrollbar { display: none; }
+    .dash-tab {
+      flex: 1;
+      min-width: max-content;
+      padding: 12px 16px;
+      border: none;
+      background: transparent;
+      color: #9399b2;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .dash-tab:hover { color: #cdd6f4; background: #45475a; }
+    .dash-tab.active { color: #cdd6f4; border-bottom-color: #cba6f7; background: #45475a; }
+    .dash-panel { display: none; }
+    .dash-panel.active { display: block; }
+    body.light-theme .dash-tabs { background: #e6e9ef; }
+    body.light-theme .dash-tab { color: #6c6f85; }
+    body.light-theme .dash-tab:hover { color: #4c4f69; background: #dce0e8; }
+    body.light-theme .dash-tab.active { color: #4c4f69; border-bottom-color: #8839ef; background: #dce0e8; }
+
+    @media (max-width: 768px) {
+      .dash-tab { padding: 10px 12px; font-size: 0.78rem; }
+    }
   </style>
 </head>
 <body>
@@ -187,202 +225,254 @@
     </div>
   </div>
 
-  <!-- Streak -->
-  <div class="streak-bar">
-    <span class="streak-fire">🔥</span>
-    <div class="streak-info">
-      <span class="streak-num" id="streak-atual">0</span>
-      <span class="streak-label"> dias consecutivos</span>
+  <!-- Dashboard Tabs -->
+  <div class="dash-tabs">
+    <button class="dash-tab active" data-panel="panel-overview">📊 Visão Geral</button>
+    <button class="dash-tab" data-panel="panel-treinador">🧠 Treinador</button>
+    <button class="dash-tab" data-panel="panel-analytics">📈 Analytics</button>
+    <button class="dash-tab" data-panel="panel-gamification">🏆 Gamificação</button>
+    <button class="dash-tab" data-panel="panel-plans">📋 Planos</button>
+  </div>
+
+  <!-- Tab 1: Visão Geral -->
+  <div id="panel-overview" class="dash-panel active">
+    <!-- Cards resumo -->
+    <div class="cards" id="cards"></div>
+
+    <!-- Streak -->
+    <div class="streak-bar">
+      <span class="streak-fire">🔥</span>
+      <div class="streak-info">
+        <span class="streak-num" id="streak-atual">0</span>
+        <span class="streak-label"> dias consecutivos</span>
+      </div>
+      <div class="streak-best">
+        <div class="num" id="streak-best">0</div>
+        <div class="lbl">recorde</div>
+      </div>
     </div>
-    <div class="streak-best">
-      <div class="num" id="streak-best">0</div>
-      <div class="lbl">recorde</div>
+
+    <!-- Metas do dia -->
+    <div class="metas-section">
+      <h2>🎯 Metas de Hoje</h2>
+      <div id="metas-container"></div>
+    </div>
+
+    <!-- Gráficos de Horas e Acertos -->
+    <div class="charts">
+      <div class="chart-box">
+        <h3>📈 Horas de Estudo (14 dias)</h3>
+        <canvas id="chart-horas"></canvas>
+      </div>
+      <div class="chart-box">
+        <h3>✅ Evolução de Acertos (14 dias)</h3>
+        <canvas id="chart-acertos"></canvas>
+      </div>
+    </div>
+
+    <!-- Resumo Diário -->
+    <div class="charts">
+      <div class="chart-box">
+        <h3>📝 Resumo Diário</h3>
+        <div id="resumo-diario"></div>
+      </div>
+      <div class="chart-box">
+        <h3>🟩 Heatmap de Estudos (ano)</h3>
+        <div id="heatmap-box" style="overflow-x:auto;"></div>
+      </div>
     </div>
   </div>
 
-  <!-- Cards resumo -->
-  <div class="cards" id="cards"></div>
+  <!-- Tab 2: Treinador -->
+  <div id="panel-treinador" class="dash-panel">
+    <!-- Treinador Inteligente -->
+    <div class="charts">
+      <div class="chart-box" style="grid-column: span 2;">
+        <h3>🧠 Treinador Inteligente</h3>
+        <div id="treinador-box"></div>
+      </div>
+    </div>
 
-  <!-- Metas do dia -->
-  <div class="metas-section">
-    <h2>🎯 Metas de Hoje</h2>
-    <div id="metas-container"></div>
-  </div>
+    <!-- Trilha + Curva -->
+    <div class="charts">
+      <div class="chart-box">
+        <h3>🚩 Trilha do Dia</h3>
+        <div id="trilha-box"></div>
+      </div>
+      <div class="chart-box">
+        <h3>📉 Curva de Esquecimento</h3>
+        <div id="curva-box"></div>
+      </div>
+    </div>
 
-  <!-- Gráficos -->
-  <div class="charts">
-    <div class="chart-box">
-      <h3>📈 Horas de Estudo (14 dias)</h3>
-      <canvas id="chart-horas"></canvas>
+    <!-- Revisões + Daily Challenge -->
+    <div class="charts">
+      <div class="chart-box">
+        <h3>🔄 Revisões Pendentes (SRS)</h3>
+        <div id="revisoes-pend"></div>
+      </div>
+      <div class="chart-box">
+        <h3>⚡ Questão do Dia (Daily Challenge)</h3>
+        <div id="daily-challenge"></div>
+      </div>
     </div>
-    <div class="chart-box">
-      <h3>✅ Evolução de Acertos (14 dias)</h3>
-      <canvas id="chart-acertos"></canvas>
-    </div>
-    <div class="chart-box">
-      <h3>📚 Horas por Matéria</h3>
-      <canvas id="chart-materias"></canvas>
-    </div>
-    <div class="chart-box">
-      <h3>📋 Progresso do Edital</h3>
-      <canvas id="chart-edital"></canvas>
-    </div>
-  </div>
 
-  <!-- Radar + Gamificação -->
-  <div class="charts">
-    <div class="chart-box">
-      <h3>🎯 Radar de Desempenho por Matéria</h3>
-      <canvas id="chart-radar"></canvas>
-    </div>
-    <div class="chart-box">
-      <h3>🏅 Gamificação</h3>
-      <div id="gamification-box"></div>
-    </div>
-  </div>
-
-  <!-- Prática Deliberada -->
-  <div class="pratica-panel">
-    <h2>🎯 Prática Deliberada — Matérias para Focar</h2>
-    <div id="pratica-list"></div>
-  </div>
-
-  <!-- Relatório Semanal -->
-  <div class="relatorio">
-    <h2>📋 Relatório Semanal</h2>
-    <div class="relatorio-grid" id="relatorio-grid"></div>
-    <div class="sugestao-box" id="sugestao-box"></div>
-  </div>
-
-  <!-- Planejador + Comparador + Revisões -->
-  <div class="charts">
-    <div class="chart-box">
-      <h3>🎯 Planejador de Aprovação</h3>
-      <div id="planejador-aprov"></div>
-    </div>
-    <div class="chart-box">
-      <h3>📊 Comparador de Progresso</h3>
-      <div id="comparador-prog"></div>
+    <!-- Intercalação -->
+    <div class="charts">
+      <div class="chart-box">
+        <h3>🔀 Intercalação Forçada (Sugestão)</h3>
+        <div id="intercalacao-box"></div>
+      </div>
     </div>
   </div>
 
-  <div class="charts">
-    <div class="chart-box">
-      <h3>🔄 Revisões Pendentes (SRS)</h3>
-      <div id="revisoes-pend"></div>
+  <!-- Tab 3: Analytics -->
+  <div id="panel-analytics" class="dash-panel">
+    <!-- Evolução Semanal -->
+    <div class="charts">
+      <div class="chart-box" style="grid-column: span 2;">
+        <h3>📈 Evolução Semanal</h3>
+        <canvas id="evolucao-chart" height="180"></canvas>
+      </div>
     </div>
-    <div class="chart-box">
-      <h3>📅 Planejador Semanal</h3>
-      <div id="planejador-sem"></div>
-      <p style="font-size:0.78rem;color:#9399b2;margin-top:8px;">Configure na aba Edital ou via API /api/planejador</p>
+
+    <!-- Radar + Heatmap Erros -->
+    <div class="charts">
+      <div class="chart-box">
+        <h3>🎯 Radar de Desempenho por Matéria</h3>
+        <canvas id="chart-radar"></canvas>
+      </div>
+      <div class="chart-box">
+        <h3>🔥 Mapa de Erros por Tópico</h3>
+        <div id="heatmap-erros-box"></div>
+      </div>
+    </div>
+
+    <!-- Raio-X + Análise Erros -->
+    <div class="charts">
+      <div class="chart-box">
+        <h3>📊 Raio-X do Edital</h3>
+        <div id="raio-x-box"></div>
+      </div>
+      <div class="chart-box">
+        <h3>📊 Análise de Padrões de Erro</h3>
+        <div id="analise-erros"></div>
+      </div>
+    </div>
+
+    <!-- Prática Deliberada -->
+    <div class="pratica-panel">
+      <h2>🎯 Prática Deliberada — Matérias para Focar</h2>
+      <div id="pratica-list"></div>
+    </div>
+
+    <!-- Horas por Matéria + Progresso Edital -->
+    <div class="charts">
+      <div class="chart-box">
+        <h3>📚 Horas por Matéria</h3>
+        <canvas id="chart-materias"></canvas>
+      </div>
+      <div class="chart-box">
+        <h3>📋 Progresso do Edital</h3>
+        <canvas id="chart-edital"></canvas>
+      </div>
+    </div>
+
+    <!-- Projeção de Nota -->
+    <div class="charts">
+      <div class="chart-box">
+        <h3>📊 Projeção de Nota na Prova</h3>
+        <div id="projecao-nota"></div>
+      </div>
     </div>
   </div>
 
-  <!-- Eficiência -->
-  <div class="charts">
-    <div class="chart-box">
-      <h3>⚡ Questão do Dia (Daily Challenge)</h3>
-      <div id="daily-challenge"></div>
+  <!-- Tab 4: Gamificação -->
+  <div id="panel-gamification" class="dash-panel">
+    <!-- Gamificação -->
+    <div class="charts">
+      <div class="chart-box">
+        <h3>🏅 Gamificação</h3>
+        <div id="gamification-box"></div>
+      </div>
+      <div class="chart-box">
+        <h3>🎯 Missões Diárias</h3>
+        <div id="missoes-box"></div>
+      </div>
     </div>
-    <div class="chart-box">
-      <h3>📊 Análise de Padrões de Erro</h3>
-      <div id="analise-erros"></div>
+
+    <!-- Desafios + Compartilhar -->
+    <div class="charts">
+      <div class="chart-box">
+        <h3>🏆 Desafios Semanais</h3>
+        <div id="desafios-box"></div>
+      </div>
+      <div class="chart-box">
+        <h3>📤 Compartilhar & Backup</h3>
+        <div id="share-box"></div>
+      </div>
     </div>
   </div>
 
-  <div class="charts">
-    <div class="chart-box">
-      <h3>📅 Previsão de Data de Aprovação</h3>
-      <div id="previsao-data"></div>
+  <!-- Tab 5: Planos -->
+  <div id="panel-plans" class="dash-panel">
+    <!-- Planejador + Comparador -->
+    <div class="charts">
+      <div class="chart-box">
+        <h3>🎯 Planejador de Aprovação</h3>
+        <div id="planejador-aprov"></div>
+      </div>
+      <div class="chart-box">
+        <h3>📅 Plano de Estudo Automático</h3>
+        <div id="plano-auto"></div>
+      </div>
     </div>
-    <div class="chart-box">
-      <h3>🏆 Desafios Semanais</h3>
-      <div id="desafios-box"></div>
-    </div>
-  </div>
 
-  <div class="charts">
-    <div class="chart-box">
-      <h3>📝 Resumo Diário</h3>
-      <div id="resumo-diario"></div>
+    <!-- Previsão + Comparador -->
+    <div class="charts">
+      <div class="chart-box">
+        <h3>📅 Previsão de Data de Aprovação</h3>
+        <div id="previsao-data"></div>
+      </div>
+      <div class="chart-box">
+        <h3>📊 Comparador de Progresso</h3>
+        <div id="comparador-prog"></div>
+      </div>
     </div>
-    <div class="chart-box">
-      <h3>🔀 Intercalação Forçada (Sugestão)</h3>
-      <div id="intercalacao-box"></div>
-    </div>
-  </div>
 
-  <!-- Treinador Inteligente + Trilha -->
-  <div class="charts">
-    <div class="chart-box" style="grid-column: span 2;">
-      <h3>🧠 Treinador Inteligente</h3>
-      <div id="treinador-box"></div>
+    <!-- Relatório Semanal -->
+    <div class="relatorio">
+      <h2>📋 Relatório Semanal</h2>
+      <div class="relatorio-grid" id="relatorio-grid"></div>
+      <div class="sugestao-box" id="sugestao-box"></div>
     </div>
-  </div>
-  <div class="charts">
-    <div class="chart-box">
-      <h3>🚩 Trilha do Dia</h3>
-      <div id="trilha-box"></div>
-    </div>
-    <div class="chart-box">
-      <h3>📉 Curva de Esquecimento</h3>
-      <div id="curva-box"></div>
-    </div>
-  </div>
 
-  <!-- Premium -->
-  <div class="charts">
-    <div class="chart-box">
-      <h3>🟩 Heatmap de Estudos (ano)</h3>
-      <div id="heatmap-box" style="overflow-x:auto;"></div>
-    </div>
-    <div class="chart-box">
-      <h3>📊 Projeção de Nota na Prova</h3>
-      <div id="projecao-nota"></div>
-    </div>
-  </div>
-
-  <div class="charts">
-    <div class="chart-box">
-      <h3>📅 Plano de Estudo Automático</h3>
-      <div id="plano-auto"></div>
-    </div>
-    <div class="chart-box">
-      <h3>⏱ Linha do Tempo</h3>
-      <div id="linha-tempo"></div>
-    </div>
-  </div>
-
-  <!-- Evolução + Heatmap Erros + Raio-X -->
-  <div class="charts">
-    <div class="chart-box" style="grid-column: span 2;">
-      <h3>📈 Evolução Semanal</h3>
-      <canvas id="evolucao-chart" height="180"></canvas>
-    </div>
-  </div>
-  <div class="charts">
-    <div class="chart-box">
-      <h3>🔥 Mapa de Erros por Tópico</h3>
-      <div id="heatmap-erros-box"></div>
-    </div>
-    <div class="chart-box">
-      <h3>📊 Raio-X do Edital</h3>
-      <div id="raio-x-box"></div>
-    </div>
-  </div>
-
-  <div class="charts">
-    <div class="chart-box">
-      <h3>🎯 Missões Diárias</h3>
-      <div id="missoes-box"></div>
-    </div>
-    <div class="chart-box">
-      <h3>📤 Compartilhar & Backup</h3>
-      <div id="share-box"></div>
+    <!-- Linha do Tempo + Planejador Semanal -->
+    <div class="charts">
+      <div class="chart-box">
+        <h3>⏱ Linha do Tempo</h3>
+        <div id="linha-tempo"></div>
+      </div>
+      <div class="chart-box">
+        <h3>📅 Planejador Semanal</h3>
+        <div id="planejador-sem"></div>
+        <p style="font-size:0.78rem;color:#9399b2;margin-top:8px;">Configure na aba Edital ou via API /api/planejador</p>
+      </div>
     </div>
   </div>
 
   <script>
+    // Dashboard Tab Navigation
+    document.querySelectorAll('.dash-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.dash-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.dash-panel').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(tab.dataset.panel).classList.add('active');
+        loadActivePanel();
+      });
+    });
+
     if (localStorage.getItem('theme') === 'light') document.body.classList.add('light-theme');
 
     document.getElementById('date-label').textContent = new Date().toLocaleDateString('pt-BR', {
@@ -1010,30 +1100,59 @@
       } catch(e) { console.error('RaioX error:', e); }
     }
 
-    loadDashboard();
-    loadRadar();
-    loadGamification();
-    loadPlanejadorAprovacao();
-    loadComparador();
-    loadRevisoesPendentes();
-    loadDailyChallenge();
-    loadAnaliseErros();
-    loadPrevisaoData();
-    loadDesafios();
-    loadResumoDiario();
-    loadIntercalacao();
-    loadHeatmap();
-    loadProjecaoNota();
-    loadPlanoAuto();
-    loadLinhaTempo();
-    loadMissoes();
-    loadShareBox();
-    loadTreinador();
-    loadTrilha();
-    loadCurvaEsquecimento();
-    loadEvolucao();
-    loadHeatmapErros();
-    loadRaioX();
+    // Carregar dados da aba ativa
+    function loadActivePanel() {
+      const active = document.querySelector('.dash-panel.active')?.id;
+      switch(active) {
+        case 'panel-overview':
+          loadDashboard();
+          loadResumoDiario();
+          loadHeatmap();
+          break;
+        case 'panel-treinador':
+          loadTreinador();
+          loadTrilha();
+          loadCurvaEsquecimento();
+          loadRevisoesPendentes();
+          loadDailyChallenge();
+          loadIntercalacao();
+          break;
+        case 'panel-analytics':
+          loadEvolucao();
+          loadRadar();
+          loadHeatmapErros();
+          loadRaioX();
+          loadAnaliseErros();
+          loadPraticaDeliberada();
+          loadProjecaoNota();
+          break;
+        case 'panel-gamification':
+          loadGamification();
+          loadMissoes();
+          loadDesafios();
+          loadShareBox();
+          break;
+        case 'panel-plans':
+          loadPlanejadorAprovacao();
+          loadPlanoAuto();
+          loadPrevisaoData();
+          loadComparador();
+          loadLinhaTempo();
+          loadRelatorioSemanal();
+          break;
+      }
+    }
+
+    // Alias para manter compatibilidade (loadDashboard já carrega pratica e relatorio)
+    function loadPraticaDeliberada() {
+      fetch('/api/pratica-deliberada').then(r => r.json()).then(renderPratica).catch(() => {});
+    }
+    function loadRelatorioSemanal() {
+      fetch('/api/relatorio-semanal').then(r => r.json()).then(renderRelatorio).catch(() => {});
+    }
+
+    // Carga inicial
+    loadActivePanel();
   </script>
 </body>
 </html>
