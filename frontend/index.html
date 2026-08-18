@@ -159,6 +159,10 @@
     .tree-hours { font-size: 0.72rem; color: #89b4fa; white-space: nowrap; }
     .tree-del { background: none; border: none; color: #f38ba8; cursor: pointer; font-size: 0.9rem; opacity: 0; transition: opacity 0.15s; padding: 0 4px; }
     .tree-leaf:hover .tree-del { opacity: 1; }
+    .tree-archive-btn { background: none; border: none; cursor: pointer; font-size: 0.7rem; opacity: 0; transition: opacity 0.15s; padding: 0 2px; }
+    .tree-node-l2:hover .tree-archive-btn { opacity: 0.6; }
+    .tree-archive-btn:hover { opacity: 1 !important; }
+    .tree-excluir-btn { font-size: 0.65rem; }
     .tree-note { background: none; border: none; cursor: pointer; font-size: 0.8rem; opacity: 0; transition: opacity 0.15s; padding: 0 4px; }
     .tree-leaf:hover .tree-note { opacity: 0.7; }
     .tree-note:hover { opacity: 1 !important; }
@@ -510,6 +514,7 @@
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
         <button class="iobtn" onclick="toggleAllEdital(true)">▼ Expandir tudo</button>
         <button class="iobtn" onclick="toggleAllEdital(false)">▲ Colapsar tudo</button>
+        <button class="iobtn" onclick="showArquivados()">📦 Arquivados</button>
         <span id="edital-stats" style="font-size:0.8rem;color:#9399b2;margin-left:auto;"></span>
       </div>
       <div id="edital-accordion"></div>
@@ -929,6 +934,8 @@
               ${infoHtml}
               <span class="tree-stats">${cargoDone}/${cargoItems.length}</span>
               <div class="tree-bar"><div class="tree-bar-fill" style="width:${cargoPct}%"></div></div>
+              <button class="tree-archive-btn" onclick="event.stopPropagation();arquivarCargo('${concurso}','${cargo}')" title="Arquivar">📦</button>
+              <button class="tree-archive-btn tree-excluir-btn" onclick="event.stopPropagation();excluirCargo('${concurso}','${cargo}')" title="Excluir permanentemente">🗑</button>
             </div>
             <div class="tree-children ${cargoOpen ? 'open' : ''}">`;
 
@@ -1582,6 +1589,39 @@
     document.getElementById('select-modal').addEventListener('click', (e) => {
       if (e.target.classList.contains('modal-overlay')) closeSelectModal();
     });
+
+    // ==================== ARQUIVAR / EXCLUIR EDITAIS ====================
+    async function arquivarCargo(editalNome, cargo) {
+      if (!confirm(`Arquivar "${cargo}" de "${editalNome}"?\n\nOs tópicos não serão excluídos, apenas ocultados.`)) return;
+      await fetch(`/api/edital/arquivar?edital_nome=${encodeURIComponent(editalNome)}&cargo=${encodeURIComponent(cargo)}`, { method: 'PUT' });
+      editalData = await fetch('/api/edital').then(r => r.json());
+      renderEditalTree();
+    }
+
+    async function excluirCargo(editalNome, cargo) {
+      if (!confirm(`⚠️ EXCLUIR PERMANENTEMENTE "${cargo}" de "${editalNome}"?\n\nEsta ação não pode ser desfeita!`)) return;
+      if (!confirm(`Tem certeza? Todos os tópicos, notas e vínculos serão perdidos.`)) return;
+      await fetch(`/api/edital/excluir-edital?edital_nome=${encodeURIComponent(editalNome)}&cargo=${encodeURIComponent(cargo)}`, { method: 'DELETE' });
+      editalData = await fetch('/api/edital').then(r => r.json());
+      renderEditalTree();
+    }
+
+    async function showArquivados() {
+      const arquivados = await fetch('/api/edital/arquivados').then(r => r.json());
+      if (arquivados.length === 0) { alert('Nenhum edital arquivado.'); return; }
+
+      openSelectModal('📦 Editais Arquivados — Desarquivar', arquivados.map(a => ({
+        icon: '📦',
+        label: `${a.edital_nome} - ${a.cargo}`,
+        sub: `${a.total} tópicos`,
+        value: a
+      })), async (choice) => {
+        const a = choice.value;
+        await fetch(`/api/edital/desarquivar?edital_nome=${encodeURIComponent(a.edital_nome)}&cargo=${encodeURIComponent(a.cargo)}`, { method: 'PUT' });
+        editalData = await fetch('/api/edital').then(r => r.json());
+        renderEditalTree();
+      });
+    }
 
     // ==================== MODO FOCO ====================
     function enterFocusMode() {

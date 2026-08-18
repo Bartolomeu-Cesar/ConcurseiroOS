@@ -76,6 +76,10 @@ def get_db():
         conn.execute("SELECT pdf_pagina FROM edital LIMIT 1")
     except Exception:
         conn.execute("ALTER TABLE edital ADD COLUMN pdf_pagina INTEGER DEFAULT 0")
+    try:
+        conn.execute("SELECT arquivado FROM edital LIMIT 1")
+    except Exception:
+        conn.execute("ALTER TABLE edital ADD COLUMN arquivado INTEGER DEFAULT 0")
 
     # Flashcards SRS
     conn.execute("""
@@ -400,11 +404,29 @@ def get_edital_info(edital_nome: str = ""):
     return [dict(r) for r in rows]
 
 
+@app.get("/api/edital/arquivados")
+def list_editais_arquivados():
+    """Lista editais/cargos que foram arquivados"""
+    conn = get_db()
+    try:
+        rows = conn.execute("""
+            SELECT edital_nome, cargo, COUNT(*) as total
+            FROM edital WHERE arquivado = 1
+            GROUP BY edital_nome, cargo ORDER BY edital_nome, cargo
+        """).fetchall()
+    except Exception:
+        rows = []
+    conn.close()
+    return [{"edital_nome": r[0], "cargo": r[1], "total": r[2]} for r in rows]
+
+
 @app.get("/api/edital")
-def list_edital(edital_nome: str = "", cargo: str = ""):
+def list_edital(edital_nome: str = "", cargo: str = "", incluir_arquivados: bool = False):
     conn = get_db()
     query = "SELECT id, edital_nome, cargo, materia, topico, status, horas_estudadas, pdf_link, pdf_pagina FROM edital WHERE 1=1"
     params = []
+    if not incluir_arquivados:
+        query += " AND (arquivado IS NULL OR arquivado = 0)"
     if edital_nome:
         query += " AND edital_nome = ?"
         params.append(edital_nome)
@@ -518,6 +540,68 @@ def desvincular_pdf(pdf_link: str):
     count = result.rowcount
     conn.close()
     return {"ok": True, "desvinculados": count}
+
+
+@app.put("/api/edital/arquivar")
+def arquivar_edital(edital_nome: str, cargo: str = ""):
+    """Arquiva um edital/cargo inteiro (marca como arquivado)"""
+    conn = get_db()
+    # Adicionar coluna arquivado se não existir
+    try:
+        conn.execute("SELECT arquivado FROM edital LIMIT 1")
+    except Exception:
+        conn.execute("ALTER TABLE edital ADD COLUMN arquivado INTEGER DEFAULT 0")
+        conn.commit()
+    
+    query = "UPDATE edital SET arquivado = 1 WHERE edital_nome = ?"
+    params = [edital_nome]
+    if cargo:
+        query += " AND cargo = ?"
+        params.append(cargo)
+    result = conn.execute(query, params)
+    conn.commit()
+    count = result.rowcount
+    conn.close()
+    return {"ok": True, "arquivados": count}
+
+
+@app.put("/api/edital/desarquivar")
+def desarquivar_edital(edital_nome: str, cargo: str = ""):
+    """Desarquiva um edital/cargo"""
+    conn = get_db()
+    query = "UPDATE edital SET arquivado = 0 WHERE edital_nome = ?"
+    params = [edital_nome]
+    if cargo:
+        query += " AND cargo = ?"
+        params.append(cargo)
+    result = conn.execute(query, params)
+    conn.commit()
+    count = result.rowcount
+    conn.close()
+    return {"ok": True, "desarquivados": count}
+
+
+@app.delete("/api/edital/excluir-edital")
+def excluir_edital_inteiro(edital_nome: str, cargo: str = ""):
+    """Exclui permanentemente todos os tópicos de um edital/cargo"""
+    conn = get_db()
+    query = "DELETE FROM edital WHERE edital_nome = ?"
+    params = [edital_nome]
+    if cargo:
+        query += " AND cargo = ?"
+        params.append(cargo)
+    result = conn.execute(query, params)
+    # Também remover info
+    query2 = "DELETE FROM edital_info WHERE edital_nome = ?"
+    params2 = [edital_nome]
+    if cargo:
+        query2 += " AND cargo = ?"
+        params2.append(cargo)
+    conn.execute(query2, params2)
+    conn.commit()
+    count = result.rowcount
+    conn.close()
+    return {"ok": True, "excluidos": count}
 
 
 # ============================================================
