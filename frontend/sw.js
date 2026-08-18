@@ -1,5 +1,5 @@
-const CACHE_NAME = 'concurseiro-v1';
-const ASSETS = ['/', '/dashboard.html', '/questoes.html', '/manifest.json'];
+const CACHE_NAME = 'concurseiro-v2';
+const ASSETS = ['/', '/styles.css', '/app.js', '/dashboard.html', '/questoes.html', '/manifest.json'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)));

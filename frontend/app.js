@@ -1,0 +1,1062 @@
+// ==================== TAB NAVIGATION ====================
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.tab).classList.add('active');
+  });
+});
+
+// ==================== TAB 1: PDFs ====================
+const API = '';
+const OPEN_KEY = 'folders_open';
+const TIMER_KEY = 'leitor_timer_state';
+const TIMER_LIMIT_KEY = 'leitor_timer_limit_min';
+var editalData = []; // Declaração global (usada por PDFs e Edital)
+
+function getOpenFolders() {
+  try { return new Set(JSON.parse(sessionStorage.getItem(OPEN_KEY)) || []); } catch { return new Set(); }
+}
+function saveOpenFolders(set) { sessionStorage.setItem(OPEN_KEY, JSON.stringify([...set])); }
+
+async function load() {
+  const [tree, bulk] = await Promise.all([
+    fetch(`${API}/api/tree`).then(r => r.json()),
+    fetch(`${API}/api/progress-bulk`).then(r => r.json())
+  ]);
+  // Garantir editalData carregado para mostrar tags de disciplina nos PDFs
+  if (!editalData || editalData.length === 0) {
+    try { editalData = await fetch('/api/edital').then(r => r.json()); } catch(e) {}
+  }
+  document.getElementById('tree').innerHTML = '';
+  renderNodes(tree, document.getElementById('tree'), bulk, '');
+}
+
+function calcFolderProgress(children, bulk, prefix) {
+  let read = 0, total = 0;
+  for (const n of children) {
+    if (n.type === 'pdf') {
+      const p = prefix ? `${prefix}/${n.name}` : n.name;
+      const prog = bulk[p];
+      const tp = prog ? prog.total_pages : 1;
+      const cp = prog ? prog.current_page : 1;
+      total += tp; read += cp - 1;
+    } else if (n.type === 'folder') {
+      const sub = calcFolderProgress(n.children, bulk, prefix ? `${prefix}/${n.name}` : n.name);
+      total += sub.total; read += sub.read;
+    }
+  }
+  return { read, total };
+}
+
+function renderNodes(nodes, container, bulk, prefix) {
+  for (const node of nodes) {
+    const path = prefix ? `${prefix}/${node.name}` : node.name;
+    if (node.type === 'folder') {
+      const { read, total } = calcFolderProgress(node.children, bulk, path);
+      const pct = total > 0 ? Math.round((read / total) * 100) : 0;
+      const div = document.createElement('div');
+      div.className = 'folder';
+      div.innerHTML = `
+        <div class="folder-header"><span class="folder-icon">📁</span><span class="folder-name">${node.name}</span><span class="folder-progress">${pct}% concluído</span>${pct === 100 ? '<span class="badge-done">✓</span>' : ''}</div>
+        <div class="folder-bar"><div class="folder-bar-fill" style="width:${pct}%"></div></div>
+        <div class="folder-children"></div>
+      `;
+      const header = div.querySelector('.folder-header');
+      const children = div.querySelector('.folder-children');
+      if (getOpenFolders().has(path)) children.classList.add('open');
+      header.addEventListener('click', () => {
+        children.classList.toggle('open');
+        const updated = getOpenFolders();
+        if (children.classList.contains('open')) updated.add(path); else updated.delete(path);
+        saveOpenFolders(updated);
+      });
+      renderNodes(node.children, children, bulk, path);
+      container.appendChild(div);
+    } else if (node.type === 'pdf') {
+      const prog = bulk[path];
+      const tp = prog ? prog.total_pages : null;
+      const cp = prog ? prog.current_page : 1;
+      const pct = tp ? Math.round(((cp - 1) / tp) * 100) : 0;
+      const label = tp ? `pág. ${cp}/${tp} (${pct}%)` : 'não lido';
+      // Verificar se este PDF está vinculado a alguma disciplina
+      const vinculado = editalData.find(e => e.pdf_link === path);
+      const materiaTag = vinculado ? `<span class="pdf-materia-tag">${vinculado.materia}</span>` : '';
+      const linkBtn = vinculado
+        ? `<button class="pdf-link-disc-btn pdf-unlink" onclick="event.stopPropagation();unlinkPdf('${path.replace(/'/g,"\\'")}')" title="Desvincular disciplina">❌</button>`
+        : `<button class="pdf-link-disc-btn" onclick="event.stopPropagation();linkPdfToDisc('${path.replace(/'/g,"\\'")}')" title="Vincular a disciplina">🔗</button>`;
+      const div = document.createElement('div');
+      div.innerHTML = `
+        <div class="pdf-item" data-path="${path}">
+          <span>📄</span>
+          <span class="pdf-name">${node.name.replace(/_/g,' ')}</span>
+          ${materiaTag}
+          <span class="pdf-progress">${label}</span>
+          ${pct === 100 ? '<span class="badge-done">✓</span>' : ''}
+          ${linkBtn}
+        </div>
+        <div class="pdf-bar"><div class="pdf-bar-fill" style="width:${pct}%"></div></div>
+      `;
+      div.querySelector('.pdf-item').addEventListener('click', () => { window.open(`viewer.html?path=${encodeURIComponent(path)}`, '_blank'); });
+      container.appendChild(div);
+    }
+  }
+}
+
+load();
+window.addEventListener('storage', (e) => {
+  if (e.key === 'leitor_progress_updated') load();
+  if (e.key === 'leitor_timer_finished' || e.key === 'leitor_timer_state') { clearInterval(timerInterval); timerInterval = null; restoreTimer(); }
+});
+window.addEventListener('focus', () => load());
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') load(); });
+
+// --- Pomodoro Timer ---
+let timerInterval = null, elapsed = 0, paused = false, limitSeconds = 0, startedAt = null;
+const display = document.getElementById('timer-display');
+const select = document.getElementById('timer-select');
+const btnStart = document.getElementById('btn-start');
+const btnPause = document.getElementById('btn-pause');
+const btnStop = document.getElementById('btn-stop');
+const savedLimit = localStorage.getItem(TIMER_LIMIT_KEY);
+if (savedLimit) select.value = savedLimit;
+select.addEventListener('change', () => { localStorage.setItem(TIMER_LIMIT_KEY, select.value); });
+
+function fmt(s) { return `${String(Math.floor(s/3600)).padStart(2,'0')}:${String(Math.floor((s%3600)/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; }
+function saveState() { localStorage.setItem(TIMER_KEY, JSON.stringify({ elapsed, paused, limitSeconds, startedAt, running: !!timerInterval })); }
+function loadState() { try { const r = localStorage.getItem(TIMER_KEY); return r ? JSON.parse(r) : null; } catch { return null; } }
+function clearState() { localStorage.removeItem(TIMER_KEY); }
+function updateDisplay() { display.textContent = fmt(elapsed); display.classList.toggle('done', limitSeconds > 0 && elapsed >= limitSeconds); }
+
+function tick() { if (paused || !startedAt) return; elapsed = Math.floor((Date.now() - startedAt) / 1000); updateDisplay(); saveState(); if (elapsed >= limitSeconds) stopTimer(true); }
+
+function startTimer(fromContinue = false) {
+  limitSeconds = fromContinue ? limitSeconds : parseInt(select.value, 10) * 60;
+  if (!fromContinue) { localStorage.setItem(TIMER_LIMIT_KEY, select.value); elapsed = 0; startedAt = Date.now(); } else { startedAt = Date.now() - (elapsed * 1000); }
+  paused = false; select.disabled = true; btnStart.disabled = true; btnPause.disabled = false; btnStop.disabled = false;
+  btnPause.textContent = '⏸ Pausar'; btnStart.textContent = '▶ Iniciar';
+  clearInterval(timerInterval); timerInterval = setInterval(tick, 250); tick(); saveState();
+}
+
+function pauseTimer() {
+  if (!timerInterval) return; clearInterval(timerInterval); timerInterval = null; paused = true;
+  if (startedAt) elapsed = Math.floor((Date.now() - startedAt) / 1000); startedAt = null;
+  btnPause.disabled = true; btnStart.textContent = '▶ Continuar'; btnStart.disabled = false; updateDisplay(); saveState();
+}
+
+function stopTimer(showOverlay = false) {
+  clearInterval(timerInterval); timerInterval = null; elapsed = 0; paused = false; startedAt = null; limitSeconds = 0;
+  display.textContent = '00:00:00'; display.classList.remove('done'); select.disabled = false;
+  btnStart.textContent = '▶ Iniciar'; btnStart.disabled = false; btnPause.textContent = '⏸ Pausar'; btnPause.disabled = true; btnStop.disabled = true;
+  clearState(); localStorage.setItem('leitor_timer_finished', Date.now().toString());
+  if (showOverlay) document.getElementById('overlay').style.display = 'flex';
+}
+
+function restoreTimer() {
+  const state = loadState();
+  if (!state) { elapsed=0; paused=false; startedAt=null; limitSeconds=0; display.textContent='00:00:00'; display.classList.remove('done'); select.disabled=false; btnStart.textContent='▶ Iniciar'; btnStart.disabled=false; btnPause.disabled=true; btnStop.disabled=true; return; }
+  elapsed = state.elapsed||0; paused = state.paused||false; limitSeconds = state.limitSeconds||0; startedAt = state.startedAt||null;
+  if (state.running && !paused && startedAt) { select.disabled=true; btnStart.disabled=true; btnPause.disabled=false; btnStop.disabled=false; elapsed=Math.floor((Date.now()-startedAt)/1000); updateDisplay(); if(elapsed>=limitSeconds){stopTimer(true);return;} clearInterval(timerInterval); timerInterval=setInterval(tick,250); }
+  else if (paused && limitSeconds > 0) { select.disabled=true; btnStart.disabled=false; btnStart.textContent='▶ Continuar'; btnPause.disabled=true; btnStop.disabled=false; updateDisplay(); }
+  else { updateDisplay(); }
+}
+
+btnStart.addEventListener('click', () => { btnStart.textContent.includes('Continuar') ? startTimer(true) : startTimer(false); });
+btnPause.addEventListener('click', pauseTimer);
+btnStop.addEventListener('click', () => stopTimer(false));
+restoreTimer();
+
+// Export/Import
+function exportProgress() { const a = document.createElement('a'); a.href='/api/export'; a.download='leitor_progress.json'; a.click(); }
+async function importProgress(input) {
+  const file = input.files[0]; if (!file) return;
+  const form = new FormData(); form.append('file', file);
+  const res = await fetch('/api/import', { method: 'POST', body: form });
+  const data = await res.json(); input.value = '';
+  if (data.ok) { alert(`Importado! ${data.imported} registro(s).`); load(); } else { alert('Erro ao importar.'); }
+}
+
+// ==================== TAB 2: EDITAL ====================
+let editalTimer = null, editalStartedAt = null, editalElapsed = 0, editalPaused = false, editalSelectedId = null;
+const editalDisplay = document.getElementById('edital-timer-display');
+const editalMateriaLabel = document.getElementById('edital-materia-label');
+const editalBtnStart = document.getElementById('edital-btn-start');
+const editalBtnStop = document.getElementById('edital-btn-stop');
+const EDITAL_OPEN_KEY = 'edital_accordion_state';
+
+function editalFmt(s) { return `${String(Math.floor(s/3600)).padStart(2,'0')}:${String(Math.floor((s%3600)/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; }
+function editalTick() { if (editalPaused || !editalStartedAt) return; editalElapsed = Math.floor((Date.now() - editalStartedAt) / 1000); editalDisplay.textContent = editalFmt(editalElapsed); }
+
+editalBtnStart.addEventListener('click', () => {
+  if (!editalSelectedId) { alert('Selecione um tópico no accordion abaixo.'); return; }
+  if (editalTimer) { clearInterval(editalTimer); editalTimer=null; editalPaused=true; editalElapsed=Math.floor((Date.now()-editalStartedAt)/1000); editalStartedAt=null; editalBtnStart.textContent='▶ Iniciar'; editalBtnStop.style.display='inline-block'; }
+  else { if (editalPaused) { editalStartedAt=Date.now()-(editalElapsed*1000); } else { editalStartedAt=Date.now(); editalElapsed=0; } editalPaused=false; editalTimer=setInterval(editalTick,250); editalBtnStart.textContent='⏸ Pausar'; editalBtnStop.style.display='inline-block'; editalTick(); }
+});
+
+editalBtnStop.addEventListener('click', async () => {
+  clearInterval(editalTimer); editalTimer=null;
+  if (editalStartedAt) editalElapsed = Math.floor((Date.now()-editalStartedAt)/1000);
+  const hours = editalElapsed / 3600;
+  if (editalSelectedId && editalElapsed > 0) {
+    await fetch(`/api/edital/${editalSelectedId}/horas`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({horas:hours}) });
+    loadEdital(); loadStreakBadge();
+  }
+  editalElapsed=0; editalStartedAt=null; editalPaused=false; editalDisplay.textContent='00:00:00'; editalBtnStart.textContent='▶ Iniciar'; editalBtnStop.style.display='none';
+});
+
+function getAccordionState() {
+  try { return JSON.parse(sessionStorage.getItem(EDITAL_OPEN_KEY)) || {}; } catch { return {}; }
+}
+function saveAccordionState(state) { sessionStorage.setItem(EDITAL_OPEN_KEY, JSON.stringify(state)); }
+
+let editalInfo = [];
+
+async function loadEdital() {
+  try {
+    const [dataRes, infoRes] = await Promise.all([
+      fetch('/api/edital').then(r => r.json()),
+      fetch('/api/edital/info').then(r => r.ok ? r.json() : [])
+    ]);
+    editalData = dataRes;
+    editalInfo = infoRes;
+  } catch(e) {
+    // Se info falhar, carregar só os dados do edital
+    try {
+      editalData = await fetch('/api/edital').then(r => r.json());
+      editalInfo = [];
+    } catch(e2) { editalData = []; editalInfo = []; }
+  }
+  renderEditalTree();
+}
+
+function getStatusClass(s) { return s==='Em Andamento'?'status-em-andamento':s==='Concluído'?'status-concluido':'status-nao-iniciado'; }
+function formatHours(h) { const hrs=Math.floor(h); const mins=Math.round((h-hrs)*60); if(hrs===0&&mins===0)return'—'; if(hrs===0)return`${mins}m`; if(mins===0)return`${hrs}h`; return`${hrs}h${mins}m`; }
+
+function renderEditalTree() {
+  const container = document.getElementById('edital-accordion');
+  const state = getAccordionState();
+
+  if (editalData.length === 0) {
+    container.innerHTML = '<p style="color:#9399b2;font-size:0.9rem;text-align:center;padding:20px;">Nenhum tópico cadastrado.</p>';
+    return;
+  }
+
+  // Construir tree: Concurso > Cargo > Matéria > Tópicos
+  const tree = {};
+  for (const item of editalData) {
+    const concurso = item.edital_nome || 'Geral';
+    const cargo = item.cargo || 'Geral';
+    const mat = item.materia;
+    if (!tree[concurso]) tree[concurso] = {};
+    if (!tree[concurso][cargo]) tree[concurso][cargo] = {};
+    if (!tree[concurso][cargo][mat]) tree[concurso][cargo][mat] = [];
+    tree[concurso][cargo][mat].push(item);
+  }
+
+  const total = editalData.length;
+  const concluidos = editalData.filter(i => i.status === 'Concluído').length;
+  document.getElementById('edital-stats').textContent = `${total} tópicos • ${concluidos} concluídos (${total > 0 ? Math.round(concluidos/total*100) : 0}%)`;
+
+  let html = '';
+  const concursos = Object.keys(tree).sort();
+
+  for (const concurso of concursos) {
+    const concKey = `c_${concurso}`;
+    const concOpen = state[concKey] !== false;
+    const concItems = editalData.filter(i => i.edital_nome === concurso);
+    const concDone = concItems.filter(i => i.status === 'Concluído').length;
+    const concPct = concItems.length > 0 ? Math.round(concDone / concItems.length * 100) : 0;
+
+    html += `<div class="tree-l1">
+      <div class="tree-node tree-node-l1 ${concOpen ? 'open' : ''}" data-key="${concKey}" onclick="toggleTree(this)">
+        <span class="tree-chevron">▶</span>
+        <span class="tree-icon">📋</span>
+        <span class="tree-label">${concurso}</span>
+        <span class="tree-stats">${concDone}/${concItems.length} (${concPct}%)</span>
+        <div class="tree-bar"><div class="tree-bar-fill" style="width:${concPct}%"></div></div>
+        <button class="tree-archive-btn" onclick="event.stopPropagation();arquivarConcurso('${concurso}')" title="Arquivar concurso inteiro">📦</button>
+        <button class="tree-archive-btn tree-excluir-btn" onclick="event.stopPropagation();excluirConcurso('${concurso}')" title="Excluir concurso inteiro">🗑</button>
+      </div>
+      <div class="tree-children ${concOpen ? 'open' : ''}">`;
+
+    const cargos = Object.keys(tree[concurso]).sort();
+    for (const cargo of cargos) {
+      const cargoKey = `cr_${concurso}_${cargo}`;
+      const cargoOpen = state[cargoKey] === true;
+      const cargoItems = concItems.filter(i => (i.cargo||'Geral') === cargo);
+      const cargoDone = cargoItems.filter(i => i.status === 'Concluído').length;
+      const cargoPct = cargoItems.length > 0 ? Math.round(cargoDone / cargoItems.length * 100) : 0;
+
+      // Nível 2: Cargo - buscar metadados
+      const info = editalInfo.find(i => i.edital_nome === concurso && i.cargo === cargo);
+      const infoHtml = info ? `<div class="tree-info-badge" title="${info.local_prova || ''}">
+        ${info.data_prova_objetiva ? `<span>📅 ${info.data_prova_objetiva}</span>` : ''}
+        ${info.subsidio ? `<span>💰 ${info.subsidio}</span>` : ''}
+        ${info.vagas ? `<span>🎯 ${info.vagas}</span>` : ''}
+      </div>` : '';
+
+      html += `<div class="tree-l2">
+        <div class="tree-node tree-node-l2 ${cargoOpen ? 'open' : ''}" data-key="${cargoKey}" onclick="toggleTree(this)">
+          <span class="tree-chevron">▶</span>
+          <span class="tree-icon">👤</span>
+          <span class="tree-label">${cargo}</span>
+          ${infoHtml}
+          <span class="tree-stats">${cargoDone}/${cargoItems.length}</span>
+          <div class="tree-bar"><div class="tree-bar-fill" style="width:${cargoPct}%"></div></div>
+          <button class="tree-archive-btn" onclick="event.stopPropagation();arquivarCargo('${concurso}','${cargo}')" title="Arquivar">📦</button>
+          <button class="tree-archive-btn tree-excluir-btn" onclick="event.stopPropagation();excluirCargo('${concurso}','${cargo}')" title="Excluir permanentemente">🗑</button>
+        </div>
+        <div class="tree-children ${cargoOpen ? 'open' : ''}">`;
+
+      // Se há info detalhada, mostrar card dentro do cargo
+      if (info) {
+        html += `<div class="tree-info-card">
+          ${info.data_prova_objetiva ? `<div><strong>📅 Objetiva:</strong> ${info.data_prova_objetiva}</div>` : ''}
+          ${info.data_prova_discursiva ? `<div><strong>📝 Discursiva:</strong> ${info.data_prova_discursiva}</div>` : ''}
+          ${info.horario ? `<div><strong>🕐 Horário:</strong> ${info.horario}</div>` : ''}
+          ${info.local_prova ? `<div><strong>📍 Local:</strong> ${info.local_prova}</div>` : ''}
+          ${info.vagas ? `<div><strong>🎯 Vagas:</strong> ${info.vagas}</div>` : ''}
+          ${info.subsidio ? `<div><strong>💰 Subsídio:</strong> ${info.subsidio}</div>` : ''}
+          ${info.inscricoes ? `<div><strong>📋 Inscrições:</strong> ${info.inscricoes}</div>` : ''}
+          ${info.link_edital ? `<div><a href="${info.link_edital}" target="_blank" style="color:#89b4fa;font-size:0.8rem;">🔗 Abrir edital no Cebraspe</a></div>` : ''}
+        </div>`;
+      }
+
+      const materias = Object.keys(tree[concurso][cargo]).sort();
+      for (const matNome of materias) {
+        const matKey = `m_${concurso}_${cargo}_${matNome}`;
+        const matOpen = state[matKey] === true;
+        const items = tree[concurso][cargo][matNome];
+        const matDone = items.filter(i => i.status === 'Concluído').length;
+        const matPct = items.length > 0 ? Math.round(matDone / items.length * 100) : 0;
+        const matHoras = items.reduce((a, i) => a + i.horas_estudadas, 0);
+
+        html += `<div class="tree-l3">
+          <div class="tree-node tree-node-l3 ${matOpen ? 'open' : ''}" data-key="${matKey}" onclick="toggleTree(this)">
+            <span class="tree-chevron">▶</span>
+            <span class="tree-icon">📚</span>
+            <span class="tree-label">${matNome}</span>
+            <span class="tree-stats">${matDone}/${items.length}${matHoras > 0 ? ' • '+formatHours(matHoras) : ''}</span>
+            <div class="tree-bar"><div class="tree-bar-fill" style="width:${matPct}%"></div></div>
+            <button class="tree-pdf-link-btn" style="font-size:0.7rem;" onclick="event.stopPropagation();linkPdfToMateria('${matNome.replace(/'/g,"\\\\'")}','${concurso}','${cargo}')" title="Vincular PDF à matéria">🔗</button>
+          </div>
+          <div class="tree-children ${matOpen ? 'open' : ''}">`;
+
+        for (const item of items) {
+          const sel = item.id === editalSelectedId ? ' selected' : '';
+          const safeMateria = item.materia.replace(/'/g, "\\'");
+          const safeTopico = item.topico.replace(/'/g, "\\'");
+          const pdfBtn = item.pdf_link
+            ? `<a class="tree-pdf-btn" href="viewer.html?path=${encodeURIComponent(item.pdf_link)}${item.pdf_pagina ? '#page='+item.pdf_pagina : ''}" target="_blank" onclick="event.stopPropagation()" title="Abrir PDF">📖</a>`
+            : `<button class="tree-pdf-link-btn" onclick="event.stopPropagation();linkPdfToTopic(${item.id},'${safeMateria}')" title="Vincular PDF">🔗</button>`;
+          html += `<div class="tree-leaf${sel}" data-id="${item.id}" onclick="selectEditalTopic(${item.id}, '${safeMateria}', '${safeTopico}')">
+            <span class="tree-status ${getStatusClass(item.status)}" onclick="event.stopPropagation();toggleEditalStatus(${item.id})">${item.status === 'Concluído' ? '✓' : item.status === 'Em Andamento' ? '◐' : '○'}</span>
+            <span class="tree-topic">${item.topico}</span>
+            ${item.horas_estudadas > 0 ? `<span class="tree-hours">${formatHours(item.horas_estudadas)}</span>` : ''}
+            ${pdfBtn}
+            <button class="tree-note" onclick="event.stopPropagation();openNoteModal(${item.id})" title="Notas">📝</button>
+            <button class="tree-del" onclick="event.stopPropagation();deleteEditalItem(${item.id})">×</button>
+          </div>`;
+        }
+        html += `</div></div>`;
+      }
+      html += `</div></div>`;
+    }
+    html += `</div></div>`;
+  }
+  container.innerHTML = html;
+}
+
+function toggleTree(el) {
+  const key = el.dataset.key;
+  const state = getAccordionState();
+  const isOpen = el.classList.contains('open');
+  el.classList.toggle('open');
+  const body = el.nextElementSibling;
+  if (body) body.classList.toggle('open');
+  state[key] = !isOpen;
+  saveAccordionState(state);
+}
+
+function toggleAllEdital(expand) {
+  const state = getAccordionState();
+  document.querySelectorAll('.tree-node').forEach(h => {
+    const key = h.dataset.key;
+    if (expand) { h.classList.add('open'); h.nextElementSibling?.classList.add('open'); state[key] = true; }
+    else { h.classList.remove('open'); h.nextElementSibling?.classList.remove('open'); state[key] = false; }
+  });
+  saveAccordionState(state);
+}
+
+function selectEditalTopic(id, materia, topico) {
+  editalSelectedId = id;
+  editalMateriaLabel.textContent = `📖 ${materia} — ${topico}`;
+  document.querySelectorAll('.tree-leaf').forEach(r => r.classList.remove('selected'));
+  const row = document.querySelector(`.tree-leaf[data-id="${id}"]`);
+  if (row) row.classList.add('selected');
+}
+
+async function toggleEditalStatus(id) { await fetch(`/api/edital/${id}/status`, { method: 'PUT' }); loadEdital(); }
+
+async function deleteEditalItem(id) {
+  if (!confirm('Excluir?')) return;
+  await fetch(`/api/edital/${id}`, { method: 'DELETE' });
+  if (editalSelectedId == id) { editalSelectedId = null; editalMateriaLabel.textContent = 'Nenhuma matéria selecionada'; }
+  loadEdital();
+}
+
+async function addEdital() {
+  const concurso = document.getElementById('edital-nome-input').value.trim() || 'Geral';
+  const cargo = document.getElementById('edital-cargo-input').value.trim() || '';
+  const m = document.getElementById('edital-materia-input').value.trim();
+  const t = document.getElementById('edital-topico-input').value.trim();
+  if (!m || !t) { alert('Preencha matéria e tópico.'); return; }
+  await fetch('/api/edital', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({edital_nome:concurso, cargo:cargo, materia:m, topico:t}) });
+  document.getElementById('edital-materia-input').value=''; document.getElementById('edital-topico-input').value='';
+  loadEdital();
+}
+
+async function importEditalPdf(input) {
+  const file = input.files[0]; if (!file) return;
+  const nome = document.getElementById('edital-pdf-nome').value.trim() || 'Importado';
+  const form = new FormData(); form.append('file', file);
+  const res = await fetch(`/api/edital/importar-pdf?edital_nome=${encodeURIComponent(nome)}`, { method:'POST', body:form }).then(r=>r.json());
+  input.value = '';
+  if (res.ok) { alert(`Importados ${res.importados} itens!`); loadEdital(); } else { alert('Erro.'); }
+}
+
+loadEdital();
+
+// ==================== TAB 3: CICLO ====================
+let cicloTimerInterval = null, cicloStartedAt = null, cicloElapsed = 0, cicloPaused = false;
+let cicloProximoId = null, cicloProximoMateria = '';
+
+async function loadCiclo() {
+  const [ciclo, proximo] = await Promise.all([
+    fetch('/api/ciclo').then(r=>r.json()),
+    fetch('/api/ciclo/proximo').then(r=>r.json())
+  ]);
+
+  // Card de foco
+  cicloProximoId = proximo.id || null;
+  cicloProximoMateria = proximo.materia || '—';
+  document.getElementById('ciclo-focus-materia').textContent = cicloProximoMateria;
+  const pctProx = proximo.horas_alvo > 0 ? Math.round((proximo.horas_cumpridas || 0) / proximo.horas_alvo * 100) : 0;
+  document.getElementById('ciclo-focus-sub').textContent = `${(proximo.horas_cumpridas||0).toFixed(1)}h / ${(proximo.horas_alvo||0).toFixed(1)}h (${pctProx}%)`;
+
+  // Lista
+  const list = document.getElementById('ciclo-list');
+  if (ciclo.length === 0) { list.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Adicione matérias ao ciclo abaixo ou importe do edital.</p>'; return; }
+
+  const totalHoras = ciclo.reduce((a, c) => a + c.horas_alvo, 0);
+  const totalCumpridas = ciclo.reduce((a, c) => a + c.horas_cumpridas, 0);
+  const pctGeral = totalHoras > 0 ? Math.round(totalCumpridas / totalHoras * 100) : 0;
+
+  let html = `<div style="font-size:0.8rem;color:#9399b2;margin-bottom:8px;display:flex;justify-content:space-between;"><span>${ciclo.length} matérias no ciclo</span><span>Progresso geral: ${pctGeral}% (${totalCumpridas.toFixed(1)}h / ${totalHoras.toFixed(1)}h)</span></div>`;
+
+  html += ciclo.map(c => {
+    const pct = c.horas_alvo > 0 ? Math.min(100, (c.horas_cumpridas / c.horas_alvo) * 100) : 0;
+    const isNext = c.id === cicloProximoId;
+    return `<div class="ciclo-item ${isNext ? 'is-next' : ''}">
+      ${isNext ? '<span style="color:#a6e3a1;font-size:0.8rem;">▶</span>' : '<span style="width:14px;"></span>'}
+      <span class="ciclo-materia">${c.materia}</span>
+      <div class="ciclo-bar"><div class="ciclo-bar-fill" style="width:${pct}%;${pct >= 100 ? 'background:#a6e3a1;' : ''}"></div></div>
+      <span class="ciclo-pct">${Math.round(pct)}%</span>
+      <span class="ciclo-hours">${c.horas_cumpridas.toFixed(1)}h / ${c.horas_alvo.toFixed(1)}h</span>
+      <button class="ciclo-delete" onclick="deleteCiclo(${c.id})">🗑</button>
+    </div>`;
+  }).join('');
+  list.innerHTML = html;
+}
+
+function cicloTimerToggle() {
+  if (!cicloProximoId) { alert('Adicione matérias ao ciclo primeiro.'); return; }
+  const btn = document.getElementById('ciclo-btn-start');
+  const stopBtn = document.getElementById('ciclo-btn-stop');
+
+  if (cicloTimerInterval) {
+    // Pausar
+    clearInterval(cicloTimerInterval);
+    cicloTimerInterval = null;
+    cicloPaused = true;
+    cicloElapsed = Math.floor((Date.now() - cicloStartedAt) / 1000);
+    cicloStartedAt = null;
+    btn.textContent = '▶ Continuar';
+    btn.style.background = '#fab387';
+  } else {
+    // Iniciar/Continuar
+    if (cicloPaused) {
+      cicloStartedAt = Date.now() - (cicloElapsed * 1000);
+    } else {
+      cicloStartedAt = Date.now();
+      cicloElapsed = 0;
+    }
+    cicloPaused = false;
+    cicloTimerInterval = setInterval(cicloTimerTick, 250);
+    btn.textContent = '⏸ Pausar';
+    btn.style.background = '#fab387';
+    stopBtn.style.display = 'inline-block';
+    cicloTimerTick();
+  }
+}
+
+function cicloTimerTick() {
+  if (!cicloStartedAt) return;
+  cicloElapsed = Math.floor((Date.now() - cicloStartedAt) / 1000);
+  const h = String(Math.floor(cicloElapsed/3600)).padStart(2,'0');
+  const m = String(Math.floor((cicloElapsed%3600)/60)).padStart(2,'0');
+  const s = String(cicloElapsed%60).padStart(2,'0');
+  document.getElementById('ciclo-timer-display').textContent = `${h}:${m}:${s}`;
+}
+
+async function cicloTimerStop() {
+  clearInterval(cicloTimerInterval);
+  cicloTimerInterval = null;
+  if (cicloStartedAt) cicloElapsed = Math.floor((Date.now() - cicloStartedAt) / 1000);
+  const hours = cicloElapsed / 3600;
+
+  if (cicloProximoId && cicloElapsed > 30) { // Mínimo 30 segundos
+    await fetch(`/api/ciclo/${cicloProximoId}/horas`, {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ horas: hours })
+    });
+  }
+
+  cicloElapsed = 0; cicloStartedAt = null; cicloPaused = false;
+  document.getElementById('ciclo-timer-display').textContent = '00:00:00';
+  document.getElementById('ciclo-btn-start').textContent = '▶ Estudar';
+  document.getElementById('ciclo-btn-start').style.background = '#a6e3a1';
+  document.getElementById('ciclo-btn-stop').style.display = 'none';
+  loadCiclo();
+  loadStreakBadge();
+}
+
+async function importarCicloDoEdital() {
+  // Buscar matérias do edital e oferecer seleção
+  const materias = [...new Set(editalData.map(e => e.materia))].sort();
+  if (materias.length === 0) { alert('Nenhuma matéria no edital.'); return; }
+
+  // Verificar quais já estão no ciclo
+  const cicloAtual = await fetch('/api/ciclo').then(r=>r.json());
+  const jaNoCliclo = new Set(cicloAtual.map(c => c.materia));
+  const novas = materias.filter(m => !jaNoCliclo.has(m));
+
+  if (novas.length === 0) { alert('Todas as matérias do edital já estão no ciclo.'); return; }
+
+  if (!confirm(`Importar ${novas.length} matérias do edital para o ciclo?\n\n${novas.slice(0,10).join('\n')}${novas.length > 10 ? '\n...' : ''}`)) return;
+
+  for (const m of novas) {
+    await fetch('/api/ciclo', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ materia: m, horas_alvo: 2.0 })
+    });
+  }
+  loadCiclo();
+}
+
+async function addCiclo() {
+  const m=document.getElementById('ciclo-materia-input').value.trim();
+  const h=parseFloat(document.getElementById('ciclo-horas-input').value)||2;
+  if(!m){alert('Preencha a matéria.');return;}
+  await fetch('/api/ciclo',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({materia:m,horas_alvo:h})});
+  document.getElementById('ciclo-materia-input').value=''; loadCiclo();
+}
+
+async function deleteCiclo(id) { if(confirm('Remover do ciclo?')){await fetch(`/api/ciclo/${id}`,{method:'DELETE'});loadCiclo();} }
+async function resetarCiclo() { if(confirm('Resetar todas as horas cumpridas?')){await fetch('/api/ciclo/resetar',{method:'POST'});loadCiclo();} }
+loadCiclo();
+
+// ==================== TAB 4: FLASHCARDS ====================
+let flashcardsToday = [], currentFlashIndex = 0;
+
+async function loadFlashcardsToday() {
+  flashcardsToday = await fetch('/api/flashcards/today').then(r=>r.json());
+  currentFlashIndex = 0; showCurrentFlashcard();
+}
+
+function showCurrentFlashcard() {
+  const q=document.getElementById('flash-question'), a=document.getElementById('flash-answer');
+  const rb=document.getElementById('flash-reveal-btn'), rv=document.getElementById('flash-review-btns');
+  if (currentFlashIndex >= flashcardsToday.length) { q.innerHTML='<span style="color:#a6e3a1;font-size:1.3rem;font-weight:600;">🎉 Não há revisões pendentes para hoje!</span>'; a.style.display='none'; rb.style.display='none'; rv.style.display='none'; return; }
+  const card = flashcardsToday[currentFlashIndex];
+  q.textContent = card.pergunta; a.textContent = card.resposta; a.style.display='none'; rb.style.display='inline-block'; rv.style.display='none';
+}
+
+function revealAnswer() { document.getElementById('flash-answer').style.display='block'; document.getElementById('flash-reveal-btn').style.display='none'; document.getElementById('flash-review-btns').style.display='flex'; }
+
+async function reviewFlashcard(acertou) {
+  const card = flashcardsToday[currentFlashIndex];
+  await fetch(`/api/flashcards/${card.id}/review`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({acertou})});
+  currentFlashIndex++; showCurrentFlashcard(); loadAllFlashcards(); loadStreakBadge();
+}
+
+async function addFlashcard() {
+  const p=document.getElementById('flash-pergunta').value.trim(), r=document.getElementById('flash-resposta').value.trim();
+  if(!p||!r){alert('Preencha pergunta e resposta.');return;}
+  await fetch('/api/flashcards',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pergunta:p,resposta:r})});
+  document.getElementById('flash-pergunta').value=''; document.getElementById('flash-resposta').value='';
+  loadFlashcardsToday(); loadAllFlashcards();
+}
+
+async function loadAllFlashcards() {
+  const all = await fetch('/api/flashcards').then(r=>r.json());
+  document.getElementById('flash-count').textContent = `Total: ${all.length} flashcard(s)`;
+  document.getElementById('flash-list').innerHTML = all.map(c => `
+    <div class="flash-list-item"><span style="flex:1;color:#cdd6f4;">${c.pergunta}</span><button class="flash-list-delete" onclick="deleteFlashcard(${c.id})">🗑</button></div>
+  `).join('');
+}
+
+async function deleteFlashcard(id) { if(confirm('Excluir?')){await fetch(`/api/flashcards/${id}`,{method:'DELETE'});loadAllFlashcards();loadFlashcardsToday();} }
+loadFlashcardsToday(); loadAllFlashcards();
+
+// ==================== TAB 5: METAS ====================
+async function loadMetas() {
+  const data = await fetch('/api/metas').then(r=>r.json());
+  const cfg = data.config; const prog = data.progresso;
+
+  document.getElementById('meta-horas').value = cfg.meta_horas;
+  document.getElementById('meta-questoes').value = cfg.meta_questoes;
+  document.getElementById('meta-flashcards').value = cfg.meta_flashcards;
+  document.getElementById('meta-paginas').value = cfg.meta_paginas;
+
+  const progEl = document.getElementById('metas-progresso');
+  const items = [
+    { icon:'⏱', label:'Horas', val:prog.horas.toFixed(1), meta:cfg.meta_horas, pct:Math.min(100,(prog.horas/cfg.meta_horas)*100), color:'#89b4fa' },
+    { icon:'❓', label:'Questões', val:prog.questoes, meta:cfg.meta_questoes, pct:Math.min(100,(prog.questoes/cfg.meta_questoes)*100), color:'#a6e3a1' },
+    { icon:'🧠', label:'Flashcards', val:prog.flashcards, meta:cfg.meta_flashcards, pct:Math.min(100,(prog.flashcards/cfg.meta_flashcards)*100), color:'#cba6f7' },
+  ];
+  progEl.innerHTML = items.map(m => `
+    <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #45475a;">
+      <span style="font-size:1.2rem;">${m.icon}</span>
+      <span style="min-width:80px;font-size:0.88rem;">${m.label}</span>
+      <div style="flex:1;height:8px;background:#45475a;border-radius:4px;overflow:hidden;"><div style="height:100%;width:${m.pct}%;background:${m.color};border-radius:4px;"></div></div>
+      <span style="font-size:0.85rem;font-weight:700;color:${m.color};min-width:70px;text-align:right;">${m.val}/${m.meta}</span>
+    </div>
+  `).join('');
+
+  // Mini dots no header
+  document.getElementById('meta-dot-h').className = 'meta-dot' + (items[0].pct >= 100 ? ' done' : items[0].pct > 0 ? ' partial' : '');
+  document.getElementById('meta-dot-q').className = 'meta-dot' + (items[1].pct >= 100 ? ' done' : items[1].pct > 0 ? ' partial' : '');
+  document.getElementById('meta-dot-f').className = 'meta-dot' + (items[2].pct >= 100 ? ' done' : items[2].pct > 0 ? ' partial' : '');
+}
+
+async function salvarMetas() {
+  await fetch('/api/metas',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    meta_horas:parseFloat(document.getElementById('meta-horas').value),
+    meta_questoes:parseInt(document.getElementById('meta-questoes').value),
+    meta_flashcards:parseInt(document.getElementById('meta-flashcards').value),
+    meta_paginas:parseInt(document.getElementById('meta-paginas').value),
+  })});
+  alert('Metas salvas!'); loadMetas();
+}
+
+async function loadStreakBadge() {
+  const data = await fetch('/api/streaks').then(r=>r.json());
+  document.getElementById('streak-num').textContent = data.streak_atual;
+
+  const streakEl = document.getElementById('metas-streak');
+  if (streakEl) {
+    streakEl.innerHTML = `
+      <div style="display:flex;align-items:center;gap:16px;">
+        <span style="font-size:2.5rem;">🔥</span>
+        <div><div style="font-size:1.6rem;font-weight:700;color:#fab387;">${data.streak_atual} dias</div><div style="font-size:0.85rem;color:#9399b2;">consecutivos de estudo</div></div>
+        <div style="margin-left:auto;text-align:right;"><div style="font-size:1.2rem;font-weight:700;color:#a6e3a1;">${data.melhor_streak}</div><div style="font-size:0.75rem;color:#9399b2;">recorde</div></div>
+      </div>
+    `;
+  }
+}
+
+loadMetas(); loadStreakBadge();
+
+// ==================== PWA ====================
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
+
+// ==================== COUNTDOWN ====================
+async function loadCountdown() {
+  try {
+    const provas = await fetch('/api/countdown').then(r => r.json());
+    if (!provas.length) return;
+    const now = new Date();
+    const favorito = localStorage.getItem('countdown_favorito'); // "edital|cargo"
+
+    // Parsear datas
+    const parsed = provas.map(p => {
+      let parts = p.data_objetiva.match(/(\d+)[\/\-](\d+)[\/\-](\d+)/);
+      if (!parts) return null;
+      let d;
+      if (parts[3].length === 4) d = new Date(parts[3], parts[2]-1, parts[1]);
+      else d = new Date(parts[1], parts[2]-1, parts[3]);
+      const diff = Math.ceil((d - now) / 86400000);
+      return diff > 0 ? { ...p, date: d, days: diff } : null;
+    }).filter(Boolean);
+
+    if (!parsed.length) return;
+
+    // Usar favorito ou a mais próxima
+    let selected = null;
+    if (favorito) {
+      selected = parsed.find(p => `${p.edital}|${p.cargo}` === favorito);
+    }
+    if (!selected) {
+      selected = parsed.sort((a, b) => a.days - b.days)[0];
+    }
+
+    const el = document.getElementById('countdown-badge');
+    if (el) {
+      el.innerHTML = `<span class="countdown-icon">⏳</span><span class="countdown-text">${selected.cargo}: <strong>${selected.days}d</strong></span><span class="countdown-fav" title="Alterar cargo favorito">⭐</span>`;
+      el.onclick = () => showCountdownPicker(parsed);
+    }
+  } catch(e) {}
+}
+
+function showCountdownPicker(provas) {
+  openSelectModal('⏳ Escolher prova para countdown', provas.map((p, i) => ({
+    icon: '📅',
+    label: `${p.edital} - ${p.cargo}`,
+    sub: `${p.days} dias restantes`,
+    value: i
+  })).concat([{icon: '🔄', label: 'Automático (mais próxima)', sub: 'Seleciona sempre a prova mais próxima', value: -1}]),
+  (choice) => {
+    if (choice.value === -1) {
+      localStorage.removeItem('countdown_favorito');
+    } else {
+      const p = provas[choice.value];
+      localStorage.setItem('countdown_favorito', `${p.edital}|${p.cargo}`);
+    }
+    loadCountdown();
+  });
+}
+
+loadCountdown();
+setInterval(loadCountdown, 60000);
+
+// ==================== THEME TOGGLE ====================
+function toggleTheme() {
+  const body = document.body;
+  const isDark = body.classList.toggle('light-theme');
+  localStorage.setItem('theme', isDark ? 'light' : 'dark');
+  document.querySelector('meta[name=theme-color]').content = isDark ? '#eff1f5' : '#1e1e2e';
+}
+if (localStorage.getItem('theme') === 'light') document.body.classList.add('light-theme');
+
+// ==================== GAMIFICATION BADGE ====================
+async function loadXpBadge() {
+  try {
+    const data = await fetch('/api/gamification').then(r => r.json());
+    const el = document.getElementById('xp-badge');
+    if (el) el.innerHTML = `<span class="xp-level">Lv.${data.nivel}</span><div class="xp-bar-mini"><div class="xp-bar-mini-fill" style="width:${data.pct_nivel}%"></div></div><span style="color:#9399b2;">${data.xp}xp</span>`;
+  } catch(e) {}
+}
+loadXpBadge();
+
+// ==================== BROWSER NOTIFICATIONS ====================
+async function checkNotifications() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+  if (Notification.permission !== 'granted') return;
+  try {
+    const notifs = await fetch('/api/notificacoes').then(r => r.json());
+    if (notifs.length > 0 && !sessionStorage.getItem('notif_shown_today')) {
+      const alta = notifs.find(n => n.prioridade === 'alta');
+      if (alta) {
+        new Notification('ConcurseiroOS', { body: alta.msg, icon: '/icon.svg' });
+        sessionStorage.setItem('notif_shown_today', '1');
+      }
+    }
+  } catch(e) {}
+}
+setTimeout(checkNotifications, 3000);
+
+// ==================== NOTAS POR TÓPICO ====================
+let noteCurrentId = null;
+
+// ==================== VINCULAR PDF A TÓPICO ====================
+async function linkPdfToTopic(id, materia) {
+  const tree = await fetch('/api/tree').then(r => r.json());
+  const pdfs = [];
+  function extractPdfs(nodes, prefix) {
+    for (const n of nodes) {
+      if (n.type === 'pdf') pdfs.push(prefix ? `${prefix}/${n.name}` : n.name);
+      else if (n.type === 'folder') extractPdfs(n.children, prefix ? `${prefix}/${n.name}` : n.name);
+    }
+  }
+  extractPdfs(tree, '');
+
+  if (pdfs.length === 0) { alert('Nenhum PDF disponível. Adicione PDFs na pasta backend/pdfs/'); return; }
+
+  openSelectModal(`📖 Vincular PDF a "${materia}"`, pdfs.map(p => ({
+    icon: '📄',
+    label: p.split('/').pop().replace(/_/g, ' ').replace('.pdf', ''),
+    sub: p.includes('/') ? p.split('/').slice(0,-1).join('/') : '',
+    value: p
+  })), async (choice) => {
+    const pdfPath = choice.value;
+    const pagina = 1;
+    await fetch(`/api/edital/${id}/pdf`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pdf_link: pdfPath, pdf_pagina: pagina })
+    });
+    loadEdital();
+  });
+}
+
+// Vincular PDF em bulk (toda a matéria de uma vez)
+async function linkPdfToMateria(materia, editalNome, cargo) {
+  const tree = await fetch('/api/tree').then(r => r.json());
+  const pdfs = [];
+  function extractPdfs(nodes, prefix) {
+    for (const n of nodes) {
+      if (n.type === 'pdf') pdfs.push(prefix ? `${prefix}/${n.name}` : n.name);
+      else if (n.type === 'folder') extractPdfs(n.children, prefix ? `${prefix}/${n.name}` : n.name);
+    }
+  }
+  extractPdfs(tree, '');
+
+  if (pdfs.length === 0) { alert('Nenhum PDF disponível.'); return; }
+
+  openSelectModal(`🔗 Vincular PDF a "${materia}"`, pdfs.map(p => ({
+    icon: '📄',
+    label: p.split('/').pop().replace(/_/g, ' ').replace('.pdf', ''),
+    sub: p.includes('/') ? p.split('/').slice(0,-1).join('/') : '',
+    value: p
+  })), async (choice) => {
+    await fetch(`/api/edital/vincular-bulk?materia=${encodeURIComponent(materia)}&pdf_link=${encodeURIComponent(choice.value)}&edital_nome=${encodeURIComponent(editalNome||'')}&cargo=${encodeURIComponent(cargo||'')}`, { method: 'PUT' });
+    loadEdital();
+  });
+}
+
+// Desvincular PDF diretamente (botão ❌ na tela de PDFs)
+async function unlinkPdf(pdfPath) {
+  const vinculado = editalData.find(e => e.pdf_link === pdfPath);
+  if (!confirm(`Desvincular "${pdfPath.split('/').pop()}" de "${vinculado?.materia || 'disciplina'}"?`)) return;
+  await fetch(`/api/edital/desvincular-pdf?pdf_link=${encodeURIComponent(pdfPath)}`, { method: 'PUT' });
+  editalData = await fetch('/api/edital').then(r => r.json());
+  await load();
+}
+
+// Vincular PDF a uma disciplina (da tela de PDFs)
+async function linkPdfToDisc(pdfPath) {
+  const materias = [...new Set(editalData.map(e => e.materia))].sort();
+  if (materias.length === 0) { alert('Nenhuma disciplina cadastrada no edital.'); return; }
+
+  openSelectModal(`🔗 Vincular "${pdfPath.split('/').pop()}"`, materias.map(m => ({
+    icon: '📚',
+    label: m,
+    sub: `${editalData.filter(e => e.materia === m).length} tópicos`,
+    value: m
+  })), async (choice) => {
+    const materia = choice.value;
+    // Verificar se precisa escolher edital/cargo
+    const editaisCargos = [...new Set(editalData.filter(e => e.materia === materia).map(e => `${e.edital_nome}|${e.cargo}`))];
+    let editalNome = '', cargo = '';
+
+    if (editaisCargos.length > 1) {
+      openSelectModal(`📋 "${materia}" existe em vários editais`, editaisCargos.map(ec => {
+        const [e, c] = ec.split('|');
+        return { icon: '👤', label: `${e} - ${c}`, sub: '', value: ec };
+      }).concat([{icon: '📌', label: 'Todos os editais', sub: 'Vincular em todas as ocorrências', value: ''}]),
+      async (ch2) => {
+        if (ch2.value) { [editalNome, cargo] = ch2.value.split('|'); }
+        await fetch(`/api/edital/vincular-bulk?materia=${encodeURIComponent(materia)}&pdf_link=${encodeURIComponent(pdfPath)}&edital_nome=${encodeURIComponent(editalNome)}&cargo=${encodeURIComponent(cargo)}`, { method: 'PUT' });
+        editalData = await fetch('/api/edital').then(r => r.json());
+        await load();
+      });
+    } else {
+      await fetch(`/api/edital/vincular-bulk?materia=${encodeURIComponent(materia)}&pdf_link=${encodeURIComponent(pdfPath)}`, { method: 'PUT' });
+      editalData = await fetch('/api/edital').then(r => r.json());
+      await load();
+    }
+  });
+}
+function openNoteModal(id) {
+  noteCurrentId = id;
+  document.getElementById('note-modal').classList.add('show');
+  loadNotesForTopic(id);
+}
+function closeNoteModal() {
+  document.getElementById('note-modal').classList.remove('show');
+  noteCurrentId = null;
+}
+async function loadNotesForTopic(id) {
+  const notes = await fetch(`/api/edital/${id}/notas`).then(r => r.json());
+  const list = document.getElementById('note-modal-list');
+  list.innerHTML = notes.map(n => `
+    <div class="nota-item">
+      <span class="nota-text">${n.conteudo}</span>
+      <button class="nota-del" onclick="deleteNote(${n.id})">×</button>
+    </div>
+  `).join('');
+}
+async function saveNote() {
+  const text = document.getElementById('note-modal-input').value.trim();
+  if (!text) return;
+  await fetch(`/api/edital/${noteCurrentId}/notas`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({edital_id: noteCurrentId, conteudo: text})
+  });
+  document.getElementById('note-modal-input').value = '';
+  loadNotesForTopic(noteCurrentId);
+}
+async function deleteNote(id) {
+  await fetch(`/api/notas-topico/${id}`, {method:'DELETE'});
+  loadNotesForTopic(noteCurrentId);
+}
+// Close modal on outside click
+document.getElementById('note-modal').addEventListener('click', (e) => {
+  if (e.target.classList.contains('modal-overlay')) closeNoteModal();
+});
+
+// ==================== MODAL DE SELEÇÃO GENÉRICO ====================
+let selectModalCallback = null;
+
+function openSelectModal(title, items, callback) {
+  selectModalCallback = callback;
+  document.getElementById('select-modal-title').textContent = title;
+  document.getElementById('select-modal-search').value = '';
+  renderSelectItems(items);
+  document.getElementById('select-modal').classList.add('show');
+  setTimeout(() => document.getElementById('select-modal-search').focus(), 100);
+
+  // Filtro de busca
+  document.getElementById('select-modal-search').oninput = (e) => {
+    const q = e.target.value.toLowerCase();
+    const filtered = items.filter(i => i.label.toLowerCase().includes(q) || (i.sub||'').toLowerCase().includes(q));
+    renderSelectItems(filtered);
+  };
+}
+
+function renderSelectItems(items) {
+  const list = document.getElementById('select-modal-list');
+  list.innerHTML = items.map((item, i) => `
+    <div class="select-item" data-index="${i}" onclick="selectModalChoice(${i})">
+      <span class="si-icon">${item.icon || ''}</span>
+      <span class="si-label">${item.label}</span>
+      <span class="si-sub">${item.sub || ''}</span>
+    </div>
+  `).join('');
+  // Guardar items para referência
+  list._items = items;
+}
+
+function selectModalChoice(index) {
+  const list = document.getElementById('select-modal-list');
+  const item = list._items[index];
+  closeSelectModal();
+  if (selectModalCallback) selectModalCallback(item);
+}
+
+function closeSelectModal() {
+  document.getElementById('select-modal').classList.remove('show');
+  selectModalCallback = null;
+}
+
+document.getElementById('select-modal').addEventListener('click', (e) => {
+  if (e.target.classList.contains('modal-overlay')) closeSelectModal();
+});
+
+// ==================== ARQUIVAR / EXCLUIR EDITAIS ====================
+async function arquivarCargo(editalNome, cargo) {
+  if (!confirm(`Arquivar "${cargo}" de "${editalNome}"?\n\nOs tópicos não serão excluídos, apenas ocultados.`)) return;
+  await fetch(`/api/edital/arquivar?edital_nome=${encodeURIComponent(editalNome)}&cargo=${encodeURIComponent(cargo)}`, { method: 'PUT' });
+  editalData = await fetch('/api/edital').then(r => r.json());
+  renderEditalTree();
+}
+
+async function excluirCargo(editalNome, cargo) {
+  if (!confirm(`⚠️ EXCLUIR PERMANENTEMENTE "${cargo}" de "${editalNome}"?\n\nEsta ação não pode ser desfeita!`)) return;
+  if (!confirm(`Tem certeza? Todos os tópicos, notas e vínculos serão perdidos.`)) return;
+  await fetch(`/api/edital/excluir-edital?edital_nome=${encodeURIComponent(editalNome)}&cargo=${encodeURIComponent(cargo)}`, { method: 'DELETE' });
+  editalData = await fetch('/api/edital').then(r => r.json());
+  renderEditalTree();
+}
+
+async function arquivarConcurso(editalNome) {
+  if (!confirm(`Arquivar TODO o concurso "${editalNome}" (todos os cargos)?\n\nOs dados não serão excluídos, apenas ocultados.`)) return;
+  await fetch(`/api/edital/arquivar?edital_nome=${encodeURIComponent(editalNome)}`, { method: 'PUT' });
+  editalData = await fetch('/api/edital').then(r => r.json());
+  renderEditalTree();
+}
+
+async function excluirConcurso(editalNome) {
+  if (!confirm(`⚠️ EXCLUIR PERMANENTEMENTE TODO o concurso "${editalNome}"?\n\nTodos os cargos, tópicos, notas e vínculos serão perdidos!`)) return;
+  if (!confirm(`ÚLTIMA CONFIRMAÇÃO: excluir "${editalNome}" por completo? Isso é irreversível.`)) return;
+  await fetch(`/api/edital/excluir-edital?edital_nome=${encodeURIComponent(editalNome)}`, { method: 'DELETE' });
+  editalData = await fetch('/api/edital').then(r => r.json());
+  renderEditalTree();
+}
+
+async function showArquivados() {
+  const arquivados = await fetch('/api/edital/arquivados').then(r => r.json());
+  if (arquivados.length === 0) { alert('Nenhum edital arquivado.'); return; }
+
+  openSelectModal('📦 Editais Arquivados — Desarquivar', arquivados.map(a => ({
+    icon: '📦',
+    label: `${a.edital_nome} - ${a.cargo}`,
+    sub: `${a.total} tópicos`,
+    value: a
+  })), async (choice) => {
+    const a = choice.value;
+    await fetch(`/api/edital/desarquivar?edital_nome=${encodeURIComponent(a.edital_nome)}&cargo=${encodeURIComponent(a.cargo)}`, { method: 'PUT' });
+    editalData = await fetch('/api/edital').then(r => r.json());
+    renderEditalTree();
+  });
+}
+
+// ==================== MODO FOCO ====================
+function enterFocusMode() {
+  const el = document.documentElement;
+  if (el.requestFullscreen) el.requestFullscreen();
+  else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+  document.body.classList.add('focus-mode');
+  // Show only the edital tab
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.querySelector('[data-tab="tab-edital"]').classList.add('active');
+  document.getElementById('tab-edital').classList.add('active');
+  // Hide non-essential elements
+  document.getElementById('header').style.display = 'none';
+  document.querySelector('.nav-links').style.display = 'none';
+  document.getElementById('tab-bar').style.display = 'none';
+  // Show exit button
+  if (!document.getElementById('exit-focus-btn')) {
+    const btn = document.createElement('button');
+    btn.id = 'exit-focus-btn';
+    btn.className = 'iobtn';
+    btn.style.cssText = 'position:fixed;top:12px;right:12px;z-index:9999;background:#f38ba8;color:#1e1e2e;';
+    btn.textContent = '✕ Sair do Foco';
+    btn.onclick = exitFocusMode;
+    document.body.appendChild(btn);
+  }
+}
+function exitFocusMode() {
+  if (document.exitFullscreen) document.exitFullscreen();
+  else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+  document.body.classList.remove('focus-mode');
+  document.getElementById('header').style.display = '';
+  document.querySelector('.nav-links').style.display = '';
+  document.getElementById('tab-bar').style.display = '';
+  const btn = document.getElementById('exit-focus-btn');
+  if (btn) btn.remove();
+}
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement) exitFocusMode();
+});
+
+// ==================== REVISÃO ESPAÇADA UI ====================
+// Add SRS button to tree topics (enhance the existing tree-leaf render)
+document.addEventListener('dblclick', async (e) => {
+  const leaf = e.target.closest('.tree-leaf');
+  if (!leaf) return;
+  const id = leaf.dataset.id;
+  if (!id) return;
+  if (confirm('Agendar revisão espaçada para este tópico?')) {
+    const res = await fetch(`/api/edital/${id}/agendar-revisao`, {method:'POST'}).then(r=>r.json());
+    alert(`Revisão agendada para: ${res.proxima_revisao} (intervalo: ${res.intervalo} dias)`);
+  }
+});
