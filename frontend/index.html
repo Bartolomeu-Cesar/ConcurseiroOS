@@ -234,11 +234,29 @@
     /* Ciclo tab */
     .ciclo-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid #45475a; }
     .ciclo-item:last-child { border-bottom: none; }
+    .ciclo-item.is-next { background: #45475a; border-radius: 8px; border-left: 3px solid #a6e3a1; }
     .ciclo-materia { flex: 1; font-weight: 600; font-size: 0.9rem; }
     .ciclo-bar { flex: 2; height: 8px; background: #45475a; border-radius: 4px; overflow: hidden; }
     .ciclo-bar-fill { height: 100%; background: #89b4fa; border-radius: 4px; transition: width 0.3s; }
     .ciclo-hours { font-size: 0.8rem; color: #a6adc8; min-width: 80px; text-align: right; }
-    .ciclo-delete { background: none; border: none; color: #f38ba8; cursor: pointer; font-size: 0.9rem; }
+    .ciclo-pct { font-size: 0.75rem; color: #a6e3a1; min-width: 36px; text-align: right; font-weight: 700; }
+    .ciclo-delete { background: none; border: none; color: #f38ba8; cursor: pointer; font-size: 0.9rem; opacity: 0; transition: opacity 0.15s; }
+    .ciclo-item:hover .ciclo-delete { opacity: 1; }
+
+    .ciclo-focus-card {
+      display: flex; align-items: center; gap: 16px; padding: 16px 20px;
+      background: linear-gradient(135deg, #1e1e2e, #313244); border: 1px solid #45475a;
+      border-radius: 12px; margin-bottom: 16px;
+    }
+    .ciclo-focus-left { flex: 1; }
+    .ciclo-focus-label { font-size: 0.7rem; text-transform: uppercase; color: #9399b2; letter-spacing: 1px; margin-bottom: 4px; }
+    .ciclo-focus-materia { font-size: 1.2rem; font-weight: 700; color: #a6e3a1; }
+    .ciclo-focus-sub { font-size: 0.82rem; color: #9399b2; margin-top: 2px; }
+    .ciclo-focus-right { text-align: center; }
+    .ciclo-focus-timer { font-size: 1.8rem; font-weight: 700; color: #89b4fa; margin-bottom: 8px; font-family: monospace; }
+    body.light-theme .ciclo-focus-card { background: linear-gradient(135deg, #dce0e8, #e6e9ef); border-color: #bcc0cc; }
+    body.light-theme .ciclo-focus-materia { color: #40a02b; }
+    body.light-theme .ciclo-focus-timer { color: #1e66f5; }
     .ciclo-next { background: #1e1e2e; border-radius: 8px; padding: 12px; margin-bottom: 12px; display: flex; align-items: center; gap: 12px; }
     .ciclo-next .icon { font-size: 1.5rem; }
     .ciclo-next .info { flex: 1; }
@@ -518,13 +536,34 @@
   <div id="tab-ciclo" class="tab-content">
     <div class="panel">
       <h2>🔄 Ciclo de Estudos</h2>
-      <p style="font-size:0.85rem;color:#9399b2;margin-bottom:12px;">O ciclo distribui seu tempo entre as matérias de forma equilibrada. A próxima matéria é sempre a que tem menos progresso relativo.</p>
-      <div class="ciclo-next" id="ciclo-next"></div>
+      <p style="font-size:0.85rem;color:#9399b2;margin-bottom:12px;">Estudo intercalado: o sistema indica a próxima matéria (menor progresso relativo). Inicie o timer e ao parar, as horas são registradas automaticamente.</p>
+
+      <!-- Próxima matéria + Timer integrado -->
+      <div class="ciclo-focus-card" id="ciclo-focus">
+        <div class="ciclo-focus-left">
+          <div class="ciclo-focus-label">PRÓXIMA MATÉRIA</div>
+          <div class="ciclo-focus-materia" id="ciclo-focus-materia">—</div>
+          <div class="ciclo-focus-sub" id="ciclo-focus-sub">Carregando...</div>
+        </div>
+        <div class="ciclo-focus-right">
+          <div class="ciclo-focus-timer" id="ciclo-timer-display">00:00:00</div>
+          <div style="display:flex;gap:6px;">
+            <button class="edital-timer-btn" id="ciclo-btn-start" onclick="cicloTimerToggle()" style="background:#a6e3a1;color:#1e1e2e;">▶ Estudar</button>
+            <button class="edital-timer-btn" id="ciclo-btn-stop" onclick="cicloTimerStop()" style="background:#f38ba8;color:#1e1e2e;display:none;">⏹ Parar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Lista do ciclo -->
       <div id="ciclo-list"></div>
+
+      <!-- Ações -->
       <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
         <button class="iobtn" onclick="resetarCiclo()">🔁 Resetar Ciclo</button>
+        <button class="iobtn" onclick="importarCicloDoEdital()">📋 Importar do Edital</button>
       </div>
     </div>
+
     <div class="panel">
       <h2>➕ Adicionar ao Ciclo</h2>
       <div class="edital-form">
@@ -1013,27 +1052,130 @@
     loadEdital();
 
     // ==================== TAB 3: CICLO ====================
+    let cicloTimerInterval = null, cicloStartedAt = null, cicloElapsed = 0, cicloPaused = false;
+    let cicloProximoId = null, cicloProximoMateria = '';
+
     async function loadCiclo() {
       const [ciclo, proximo] = await Promise.all([
         fetch('/api/ciclo').then(r=>r.json()),
         fetch('/api/ciclo/proximo').then(r=>r.json())
       ]);
-      // Próxima matéria
-      const nextEl = document.getElementById('ciclo-next');
-      nextEl.innerHTML = `<span class="icon">▶</span><div class="info"><div class="title">Próxima: ${proximo.materia}</div><div class="sub">${proximo.horas_cumpridas?.toFixed(1) || 0}h / ${proximo.horas_alvo?.toFixed(1) || 0}h cumpridas</div></div>`;
+
+      // Card de foco
+      cicloProximoId = proximo.id || null;
+      cicloProximoMateria = proximo.materia || '—';
+      document.getElementById('ciclo-focus-materia').textContent = cicloProximoMateria;
+      const pctProx = proximo.horas_alvo > 0 ? Math.round((proximo.horas_cumpridas || 0) / proximo.horas_alvo * 100) : 0;
+      document.getElementById('ciclo-focus-sub').textContent = `${(proximo.horas_cumpridas||0).toFixed(1)}h / ${(proximo.horas_alvo||0).toFixed(1)}h (${pctProx}%)`;
 
       // Lista
       const list = document.getElementById('ciclo-list');
-      if (ciclo.length === 0) { list.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Adicione matérias ao ciclo abaixo.</p>'; return; }
-      list.innerHTML = ciclo.map(c => {
+      if (ciclo.length === 0) { list.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Adicione matérias ao ciclo abaixo ou importe do edital.</p>'; return; }
+
+      const totalHoras = ciclo.reduce((a, c) => a + c.horas_alvo, 0);
+      const totalCumpridas = ciclo.reduce((a, c) => a + c.horas_cumpridas, 0);
+      const pctGeral = totalHoras > 0 ? Math.round(totalCumpridas / totalHoras * 100) : 0;
+
+      let html = `<div style="font-size:0.8rem;color:#9399b2;margin-bottom:8px;display:flex;justify-content:space-between;"><span>${ciclo.length} matérias no ciclo</span><span>Progresso geral: ${pctGeral}% (${totalCumpridas.toFixed(1)}h / ${totalHoras.toFixed(1)}h)</span></div>`;
+
+      html += ciclo.map(c => {
         const pct = c.horas_alvo > 0 ? Math.min(100, (c.horas_cumpridas / c.horas_alvo) * 100) : 0;
-        return `<div class="ciclo-item">
+        const isNext = c.id === cicloProximoId;
+        return `<div class="ciclo-item ${isNext ? 'is-next' : ''}">
+          ${isNext ? '<span style="color:#a6e3a1;font-size:0.8rem;">▶</span>' : '<span style="width:14px;"></span>'}
           <span class="ciclo-materia">${c.materia}</span>
-          <div class="ciclo-bar"><div class="ciclo-bar-fill" style="width:${pct}%"></div></div>
+          <div class="ciclo-bar"><div class="ciclo-bar-fill" style="width:${pct}%;${pct >= 100 ? 'background:#a6e3a1;' : ''}"></div></div>
+          <span class="ciclo-pct">${Math.round(pct)}%</span>
           <span class="ciclo-hours">${c.horas_cumpridas.toFixed(1)}h / ${c.horas_alvo.toFixed(1)}h</span>
           <button class="ciclo-delete" onclick="deleteCiclo(${c.id})">🗑</button>
         </div>`;
       }).join('');
+      list.innerHTML = html;
+    }
+
+    function cicloTimerToggle() {
+      if (!cicloProximoId) { alert('Adicione matérias ao ciclo primeiro.'); return; }
+      const btn = document.getElementById('ciclo-btn-start');
+      const stopBtn = document.getElementById('ciclo-btn-stop');
+
+      if (cicloTimerInterval) {
+        // Pausar
+        clearInterval(cicloTimerInterval);
+        cicloTimerInterval = null;
+        cicloPaused = true;
+        cicloElapsed = Math.floor((Date.now() - cicloStartedAt) / 1000);
+        cicloStartedAt = null;
+        btn.textContent = '▶ Continuar';
+        btn.style.background = '#fab387';
+      } else {
+        // Iniciar/Continuar
+        if (cicloPaused) {
+          cicloStartedAt = Date.now() - (cicloElapsed * 1000);
+        } else {
+          cicloStartedAt = Date.now();
+          cicloElapsed = 0;
+        }
+        cicloPaused = false;
+        cicloTimerInterval = setInterval(cicloTimerTick, 250);
+        btn.textContent = '⏸ Pausar';
+        btn.style.background = '#fab387';
+        stopBtn.style.display = 'inline-block';
+        cicloTimerTick();
+      }
+    }
+
+    function cicloTimerTick() {
+      if (!cicloStartedAt) return;
+      cicloElapsed = Math.floor((Date.now() - cicloStartedAt) / 1000);
+      const h = String(Math.floor(cicloElapsed/3600)).padStart(2,'0');
+      const m = String(Math.floor((cicloElapsed%3600)/60)).padStart(2,'0');
+      const s = String(cicloElapsed%60).padStart(2,'0');
+      document.getElementById('ciclo-timer-display').textContent = `${h}:${m}:${s}`;
+    }
+
+    async function cicloTimerStop() {
+      clearInterval(cicloTimerInterval);
+      cicloTimerInterval = null;
+      if (cicloStartedAt) cicloElapsed = Math.floor((Date.now() - cicloStartedAt) / 1000);
+      const hours = cicloElapsed / 3600;
+
+      if (cicloProximoId && cicloElapsed > 30) { // Mínimo 30 segundos
+        await fetch(`/api/ciclo/${cicloProximoId}/horas`, {
+          method: 'PUT', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ horas: hours })
+        });
+      }
+
+      cicloElapsed = 0; cicloStartedAt = null; cicloPaused = false;
+      document.getElementById('ciclo-timer-display').textContent = '00:00:00';
+      document.getElementById('ciclo-btn-start').textContent = '▶ Estudar';
+      document.getElementById('ciclo-btn-start').style.background = '#a6e3a1';
+      document.getElementById('ciclo-btn-stop').style.display = 'none';
+      loadCiclo();
+      loadStreakBadge();
+    }
+
+    async function importarCicloDoEdital() {
+      // Buscar matérias do edital e oferecer seleção
+      const materias = [...new Set(editalData.map(e => e.materia))].sort();
+      if (materias.length === 0) { alert('Nenhuma matéria no edital.'); return; }
+
+      // Verificar quais já estão no ciclo
+      const cicloAtual = await fetch('/api/ciclo').then(r=>r.json());
+      const jaNoCliclo = new Set(cicloAtual.map(c => c.materia));
+      const novas = materias.filter(m => !jaNoCliclo.has(m));
+
+      if (novas.length === 0) { alert('Todas as matérias do edital já estão no ciclo.'); return; }
+
+      if (!confirm(`Importar ${novas.length} matérias do edital para o ciclo?\n\n${novas.slice(0,10).join('\n')}${novas.length > 10 ? '\n...' : ''}`)) return;
+
+      for (const m of novas) {
+        await fetch('/api/ciclo', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ materia: m, horas_alvo: 2.0 })
+        });
+      }
+      loadCiclo();
     }
 
     async function addCiclo() {
