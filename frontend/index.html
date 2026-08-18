@@ -183,6 +183,27 @@
     body.light-theme .modal-box textarea { background:#dce0e8; border-color:#bcc0cc; color:#4c4f69; }
     body.light-theme .modal-box .nota-item { background:#dce0e8; }
 
+    /* Modal de seleção */
+    .select-search {
+      width: 100%; background: #1e1e2e; border: 1px solid #45475a; border-radius: 8px;
+      padding: 10px 12px; color: #cdd6f4; font-size: 0.9rem; margin-bottom: 10px; font-family: sans-serif;
+    }
+    .select-search::placeholder { color: #9399b2; }
+    .select-list { max-height: 320px; overflow-y: auto; }
+    .select-item {
+      display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+      border-bottom: 1px solid #45475a; cursor: pointer; border-radius: 6px;
+      transition: background 0.1s; font-size: 0.88rem;
+    }
+    .select-item:hover { background: #45475a; }
+    .select-item:active { background: #585b70; }
+    .select-item .si-icon { font-size: 1.1rem; }
+    .select-item .si-label { flex: 1; color: #cdd6f4; }
+    .select-item .si-sub { font-size: 0.75rem; color: #9399b2; }
+    body.light-theme .select-search { background: #dce0e8; border-color: #bcc0cc; color: #4c4f69; }
+    body.light-theme .select-item:hover { background: #ccd0da; }
+    body.light-theme .select-item .si-label { color: #4c4f69; }
+
     .tree-info-badge { display: flex; gap: 6px; font-size: 0.7rem; color: #89dceb; flex-wrap: wrap; }
     .tree-info-badge span { background: #1e1e2e; padding: 1px 6px; border-radius: 3px; white-space: nowrap; }
     .tree-info-card {
@@ -372,6 +393,18 @@
       <div class="modal-btns">
         <button class="iobtn" onclick="closeNoteModal()">Fechar</button>
         <button class="iobtn" style="background:#cba6f7;color:#1e1e2e;" onclick="saveNote()">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de seleção genérico -->
+  <div class="modal-overlay" id="select-modal">
+    <div class="modal-box">
+      <h3 id="select-modal-title">Selecione</h3>
+      <input type="text" id="select-modal-search" placeholder="Buscar..." class="select-search">
+      <div id="select-modal-list" class="select-list"></div>
+      <div class="modal-btns">
+        <button class="iobtn" onclick="closeSelectModal()">Cancelar</button>
       </div>
     </div>
   </div>
@@ -1161,19 +1194,21 @@
     }
 
     function showCountdownPicker(provas) {
-      let msg = 'Escolha o cargo para exibir no countdown:\n\n';
-      provas.forEach((p, i) => { msg += `${i+1}. ${p.edital} - ${p.cargo} (${p.days} dias)\n`; });
-      msg += '\nDigite o número (ou 0 para usar o mais próximo):';
-      const choice = prompt(msg);
-      if (choice === null) return;
-      const num = parseInt(choice);
-      if (num === 0) {
-        localStorage.removeItem('countdown_favorito');
-      } else if (num > 0 && num <= provas.length) {
-        const p = provas[num - 1];
-        localStorage.setItem('countdown_favorito', `${p.edital}|${p.cargo}`);
-      }
-      loadCountdown();
+      openSelectModal('⏳ Escolher prova para countdown', provas.map((p, i) => ({
+        icon: '📅',
+        label: `${p.edital} - ${p.cargo}`,
+        sub: `${p.days} dias restantes`,
+        value: i
+      })).concat([{icon: '🔄', label: 'Automático (mais próxima)', sub: 'Seleciona sempre a prova mais próxima', value: -1}]),
+      (choice) => {
+        if (choice.value === -1) {
+          localStorage.removeItem('countdown_favorito');
+        } else {
+          const p = provas[choice.value];
+          localStorage.setItem('countdown_favorito', `${p.edital}|${p.cargo}`);
+        }
+        loadCountdown();
+      });
     }
 
     loadCountdown();
@@ -1223,7 +1258,6 @@
 
     // ==================== VINCULAR PDF A TÓPICO ====================
     async function linkPdfToTopic(id, materia) {
-      // Buscar PDFs disponíveis
       const tree = await fetch('/api/tree').then(r => r.json());
       const pdfs = [];
       function extractPdfs(nodes, prefix) {
@@ -1234,33 +1268,23 @@
       }
       extractPdfs(tree, '');
 
-      if (pdfs.length === 0) { alert('Nenhum PDF disponível na pasta. Adicione PDFs na pasta backend/pdfs/'); return; }
+      if (pdfs.length === 0) { alert('Nenhum PDF disponível. Adicione PDFs na pasta backend/pdfs/'); return; }
 
-      // Montar lista para seleção
-      let msg = `Vincular PDF ao tópico de "${materia}"\n\nPDFs disponíveis:\n`;
-      pdfs.forEach((p, i) => { msg += `${i + 1}. ${p}\n`; });
-      msg += `\nDigite o número do PDF (ou o caminho completo):`;
-
-      const choice = prompt(msg);
-      if (!choice) return;
-
-      let pdfPath;
-      const num = parseInt(choice);
-      if (num > 0 && num <= pdfs.length) {
-        pdfPath = pdfs[num - 1];
-      } else {
-        pdfPath = choice.trim();
-      }
-
-      const pagina = parseInt(prompt('Página inicial (ou deixe vazio para pág. 1):', '1')) || 1;
-
-      await fetch(`/api/edital/${id}/pdf`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pdf_link: pdfPath, pdf_pagina: pagina })
+      openSelectModal(`📖 Vincular PDF a "${materia}"`, pdfs.map(p => ({
+        icon: '📄',
+        label: p.split('/').pop().replace(/_/g, ' ').replace('.pdf', ''),
+        sub: p.includes('/') ? p.split('/').slice(0,-1).join('/') : '',
+        value: p
+      })), async (choice) => {
+        const pdfPath = choice.value;
+        const pagina = 1;
+        await fetch(`/api/edital/${id}/pdf`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pdf_link: pdfPath, pdf_pagina: pagina })
+        });
+        loadEdital();
       });
-
-      loadEdital();
     }
 
     // Vincular PDF em bulk (toda a matéria de uma vez)
@@ -1275,18 +1299,17 @@
       }
       extractPdfs(tree, '');
 
-      let msg = `Vincular PDF a TODOS os tópicos de "${materia}"\n\n`;
-      pdfs.forEach((p, i) => { msg += `${i + 1}. ${p}\n`; });
-      msg += `\nDigite o número:`;
+      if (pdfs.length === 0) { alert('Nenhum PDF disponível.'); return; }
 
-      const choice = prompt(msg);
-      if (!choice) return;
-      const num = parseInt(choice);
-      const pdfPath = (num > 0 && num <= pdfs.length) ? pdfs[num - 1] : choice.trim();
-
-      await fetch(`/api/edital/vincular-bulk?materia=${encodeURIComponent(materia)}&pdf_link=${encodeURIComponent(pdfPath)}&edital_nome=${encodeURIComponent(editalNome||'')}&cargo=${encodeURIComponent(cargo||'')}`, { method: 'PUT' });
-      alert(`PDF vinculado a todos os tópicos de ${materia}!`);
-      loadEdital();
+      openSelectModal(`🔗 Vincular PDF a "${materia}"`, pdfs.map(p => ({
+        icon: '📄',
+        label: p.split('/').pop().replace(/_/g, ' ').replace('.pdf', ''),
+        sub: p.includes('/') ? p.split('/').slice(0,-1).join('/') : '',
+        value: p
+      })), async (choice) => {
+        await fetch(`/api/edital/vincular-bulk?materia=${encodeURIComponent(materia)}&pdf_link=${encodeURIComponent(choice.value)}&edital_nome=${encodeURIComponent(editalNome||'')}&cargo=${encodeURIComponent(cargo||'')}`, { method: 'PUT' });
+        loadEdital();
+      });
     }
 
     // Desvincular PDF diretamente (botão ❌ na tela de PDFs)
@@ -1300,43 +1323,37 @@
 
     // Vincular PDF a uma disciplina (da tela de PDFs)
     async function linkPdfToDisc(pdfPath) {
-
-      // Buscar disciplinas disponíveis
       const materias = [...new Set(editalData.map(e => e.materia))].sort();
-      if (materias.length === 0) { alert('Nenhuma disciplina cadastrada no edital. Adicione primeiro na aba Edital.'); return; }
+      if (materias.length === 0) { alert('Nenhuma disciplina cadastrada no edital.'); return; }
 
-      let msg = `Vincular "${pdfPath.split('/').pop()}" a qual disciplina?\n\n`;
-      materias.forEach((m, i) => { msg += `${i + 1}. ${m}\n`; });
-      msg += `\nDigite o número:`;
+      openSelectModal(`🔗 Vincular "${pdfPath.split('/').pop()}"`, materias.map(m => ({
+        icon: '📚',
+        label: m,
+        sub: `${editalData.filter(e => e.materia === m).length} tópicos`,
+        value: m
+      })), async (choice) => {
+        const materia = choice.value;
+        // Verificar se precisa escolher edital/cargo
+        const editaisCargos = [...new Set(editalData.filter(e => e.materia === materia).map(e => `${e.edital_nome}|${e.cargo}`))];
+        let editalNome = '', cargo = '';
 
-      const choice = prompt(msg);
-      if (!choice) return;
-      const num = parseInt(choice);
-      if (num < 1 || num > materias.length) { alert('Número inválido.'); return; }
-
-      const materia = materias[num - 1];
-
-      // Perguntar de qual edital/cargo
-      const editaisCargos = [...new Set(editalData.filter(e => e.materia === materia).map(e => `${e.edital_nome}|${e.cargo}`))];
-      let editalNome = '', cargo = '';
-      if (editaisCargos.length > 1) {
-        let msg2 = `"${materia}" existe em vários editais:\n\n`;
-        editaisCargos.forEach((ec, i) => { const [e,c] = ec.split('|'); msg2 += `${i+1}. ${e} - ${c}\n`; });
-        msg2 += `\nDigite o número (ou Enter para todos):`;
-        const ch2 = prompt(msg2);
-        if (ch2) {
-          const n2 = parseInt(ch2);
-          if (n2 > 0 && n2 <= editaisCargos.length) {
-            [editalNome, cargo] = editaisCargos[n2-1].split('|');
-          }
+        if (editaisCargos.length > 1) {
+          openSelectModal(`📋 "${materia}" existe em vários editais`, editaisCargos.map(ec => {
+            const [e, c] = ec.split('|');
+            return { icon: '👤', label: `${e} - ${c}`, sub: '', value: ec };
+          }).concat([{icon: '📌', label: 'Todos os editais', sub: 'Vincular em todas as ocorrências', value: ''}]),
+          async (ch2) => {
+            if (ch2.value) { [editalNome, cargo] = ch2.value.split('|'); }
+            await fetch(`/api/edital/vincular-bulk?materia=${encodeURIComponent(materia)}&pdf_link=${encodeURIComponent(pdfPath)}&edital_nome=${encodeURIComponent(editalNome)}&cargo=${encodeURIComponent(cargo)}`, { method: 'PUT' });
+            editalData = await fetch('/api/edital').then(r => r.json());
+            await load();
+          });
+        } else {
+          await fetch(`/api/edital/vincular-bulk?materia=${encodeURIComponent(materia)}&pdf_link=${encodeURIComponent(pdfPath)}`, { method: 'PUT' });
+          editalData = await fetch('/api/edital').then(r => r.json());
+          await load();
         }
-      }
-
-      // Vincular o PDF a todos os tópicos dessa matéria
-      await fetch(`/api/edital/vincular-bulk?materia=${encodeURIComponent(materia)}&pdf_link=${encodeURIComponent(pdfPath)}&edital_nome=${encodeURIComponent(editalNome)}&cargo=${encodeURIComponent(cargo)}`, { method: 'PUT' });
-      alert(`"${pdfPath.split('/').pop()}" vinculado a ${materia}!`);
-      editalData = await fetch('/api/edital').then(r => r.json());
-      await load();
+      });
     }
     function openNoteModal(id) {
       noteCurrentId = id;
@@ -1374,6 +1391,54 @@
     // Close modal on outside click
     document.getElementById('note-modal').addEventListener('click', (e) => {
       if (e.target.classList.contains('modal-overlay')) closeNoteModal();
+    });
+
+    // ==================== MODAL DE SELEÇÃO GENÉRICO ====================
+    let selectModalCallback = null;
+
+    function openSelectModal(title, items, callback) {
+      selectModalCallback = callback;
+      document.getElementById('select-modal-title').textContent = title;
+      document.getElementById('select-modal-search').value = '';
+      renderSelectItems(items);
+      document.getElementById('select-modal').classList.add('show');
+      setTimeout(() => document.getElementById('select-modal-search').focus(), 100);
+
+      // Filtro de busca
+      document.getElementById('select-modal-search').oninput = (e) => {
+        const q = e.target.value.toLowerCase();
+        const filtered = items.filter(i => i.label.toLowerCase().includes(q) || (i.sub||'').toLowerCase().includes(q));
+        renderSelectItems(filtered);
+      };
+    }
+
+    function renderSelectItems(items) {
+      const list = document.getElementById('select-modal-list');
+      list.innerHTML = items.map((item, i) => `
+        <div class="select-item" data-index="${i}" onclick="selectModalChoice(${i})">
+          <span class="si-icon">${item.icon || ''}</span>
+          <span class="si-label">${item.label}</span>
+          <span class="si-sub">${item.sub || ''}</span>
+        </div>
+      `).join('');
+      // Guardar items para referência
+      list._items = items;
+    }
+
+    function selectModalChoice(index) {
+      const list = document.getElementById('select-modal-list');
+      const item = list._items[index];
+      closeSelectModal();
+      if (selectModalCallback) selectModalCallback(item);
+    }
+
+    function closeSelectModal() {
+      document.getElementById('select-modal').classList.remove('show');
+      selectModalCallback = null;
+    }
+
+    document.getElementById('select-modal').addEventListener('click', (e) => {
+      if (e.target.classList.contains('modal-overlay')) closeSelectModal();
     });
 
     // ==================== MODO FOCO ====================
