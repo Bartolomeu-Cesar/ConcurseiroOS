@@ -18,7 +18,7 @@ from starlette.requests import Request
 
 from database import init_db
 from logger import log
-from routers import pdf, edital, flashcards, questoes, simulados, ciclo, streaks, dashboard, misc
+from routers import pdf, edital, flashcards, questoes, simulados, ciclo, streaks, dashboard, misc, treinador
 
 # ============================================================
 # CONFIGURAÇÃO
@@ -109,6 +109,7 @@ app.include_router(simulados.router)
 app.include_router(ciclo.router)
 app.include_router(streaks.router)
 app.include_router(dashboard.router)
+app.include_router(treinador.router)
 app.include_router(misc.router)
 
 

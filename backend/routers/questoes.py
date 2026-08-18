@@ -13,17 +13,71 @@ router = APIRouter(prefix="", tags=["Questões"])
 
 
 @router.get("/api/questoes", summary="Listar questões", description="Lista todas as questões do banco, com filtros por matéria/tópico e paginação opcional")
-def list_questoes(materia: str = "", topico: str = "", page: Optional[int] = Query(None), limit: int = 50):
+def list_questoes(
+    materia: str = "",
+    topico: str = "",
+    dificuldade: str = "",
+    acertou: Optional[int] = Query(None),
+    respondidas: Optional[int] = Query(None),
+    data_inicio: str = "",
+    data_fim: str = "",
+    page: Optional[int] = Query(None),
+    limit: int = 50
+):
     with get_db() as conn:
-        query = "SELECT * FROM questoes WHERE 1=1"
         params = []
-        if materia:
-            query += " AND materia = ?"
-            params.append(materia)
-        if topico:
-            query += " AND topico = ?"
-            params.append(topico)
-        query += " ORDER BY id DESC"
+
+        # Determinar tipo de query baseado nos filtros
+        needs_join = acertou is not None or data_inicio or data_fim
+        needs_not_in = respondidas == 0
+
+        if needs_not_in:
+            # Questões NÃO respondidas
+            query = "SELECT q.* FROM questoes q WHERE q.id NOT IN (SELECT questao_id FROM questoes_respostas)"
+            if materia:
+                query += " AND q.materia = ?"
+                params.append(materia)
+            if topico:
+                query += " AND q.topico = ?"
+                params.append(topico)
+            if dificuldade:
+                query += " AND q.dificuldade = ?"
+                params.append(dificuldade)
+        elif needs_join or respondidas == 1:
+            # Questões com filtro por respostas (acertou/errou, datas)
+            query = "SELECT DISTINCT q.* FROM questoes q JOIN questoes_respostas qr ON qr.questao_id = q.id WHERE 1=1"
+            if materia:
+                query += " AND q.materia = ?"
+                params.append(materia)
+            if topico:
+                query += " AND q.topico = ?"
+                params.append(topico)
+            if dificuldade:
+                query += " AND q.dificuldade = ?"
+                params.append(dificuldade)
+            if acertou is not None:
+                query += " AND qr.acertou = ?"
+                params.append(acertou)
+            if data_inicio:
+                query += " AND qr.data >= ?"
+                params.append(data_inicio)
+            if data_fim:
+                query += " AND qr.data <= ?"
+                params.append(data_fim)
+        else:
+            # Query simples sem filtros de resposta
+            query = "SELECT * FROM questoes WHERE 1=1"
+            if materia:
+                query += " AND materia = ?"
+                params.append(materia)
+            if topico:
+                query += " AND topico = ?"
+                params.append(topico)
+            if dificuldade:
+                query += " AND dificuldade = ?"
+                params.append(dificuldade)
+
+        query += " ORDER BY q.id DESC" if (needs_join or needs_not_in or respondidas == 1) else " ORDER BY id DESC"
         rows = conn.execute(query, params).fetchall()
 
     items = [dict(r) for r in rows]

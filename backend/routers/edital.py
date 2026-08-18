@@ -9,7 +9,7 @@ from pypdf import PdfReader
 
 from database import get_db
 from logger import log
-from models import EditalCreate, EditalHoras, EditalPdfLink, NotaTopicoCreate
+from models import EditalCreate, EditalHoras, EditalPdfLink, NotaTopicoCreate, EditalReviewSM2
 from utils import today_str
 
 router = APIRouter(prefix="", tags=["Edital"])
@@ -314,17 +314,93 @@ def delete_nota_topico(id: int):
 
 @router.post("/api/edital/{id}/agendar-revisao")
 def agendar_revisao_topico(id: int):
-    """Agenda revisão do tópico usando SRS (dobra intervalo a cada revisão)"""
+    """Agenda revisão do tópico usando SM-2 com quality=4 (acertou) por default"""
     with get_db() as conn:
-        row = conn.execute("SELECT intervalo_revisao FROM edital WHERE id = ?", (id,)).fetchone()
+        row = conn.execute(
+            "SELECT intervalo_revisao, easiness_factor_edital, repetitions_edital FROM edital WHERE id = ?", (id,)
+        ).fetchone()
         if not row:
             raise HTTPException(404)
-        intervalo = (row[0] or 1) * 2
+
+        intervalo = row[0] or 1
+        ef = row[1] if row[1] is not None else 2.5
+        reps = row[2] if row[2] is not None else 0
+        quality = 4  # default: acertou
+
+        # SM-2 Algorithm
+        if reps == 0:
+            intervalo = 1
+        elif reps == 1:
+            intervalo = 6
+        else:
+            intervalo = round(intervalo * ef)
+        reps += 1
+
+        # Atualizar EF
+        ef = ef + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02))
+        ef = max(1.3, ef)
+
         proxima = (date.today() + timedelta(days=intervalo)).isoformat()
-        conn.execute("UPDATE edital SET proxima_revisao = ?, intervalo_revisao = ? WHERE id = ?",
-                     (proxima, intervalo, id))
+        conn.execute(
+            "UPDATE edital SET proxima_revisao = ?, intervalo_revisao = ?, easiness_factor_edital = ?, repetitions_edital = ? WHERE id = ?",
+            (proxima, intervalo, round(ef, 4), reps, id)
+        )
         conn.commit()
-    return {"proxima_revisao": proxima, "intervalo": intervalo}
+    log.info(f"Edital SM-2 revisao: id={id} quality=4 ef={ef:.4f} reps={reps} interval={intervalo}")
+    return {"proxima_revisao": proxima, "intervalo": intervalo, "easiness_factor": round(ef, 4), "repetitions": reps}
+
+
+@router.post("/api/edital/{id}/revisar-sm2")
+def revisar_topico_sm2(id: int, body: EditalReviewSM2):
+    """Revisão de tópico do edital usando SM-2 com quality variável (0-5)"""
+    if body.quality < 0 or body.quality > 5:
+        raise HTTPException(400, "quality deve ser entre 0 e 5")
+
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT intervalo_revisao, easiness_factor_edital, repetitions_edital FROM edital WHERE id = ?", (id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(404)
+
+        intervalo = row[0] or 1
+        ef = row[1] if row[1] is not None else 2.5
+        reps = row[2] if row[2] is not None else 0
+        quality = body.quality
+
+        # SM-2 Algorithm
+        if quality >= 3:
+            if reps == 0:
+                intervalo = 1
+            elif reps == 1:
+                intervalo = 6
+            else:
+                intervalo = round(intervalo * ef)
+            reps += 1
+        else:
+            reps = 0
+            intervalo = 1
+
+        # Atualizar EF
+        ef = ef + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02))
+        ef = max(1.3, ef)
+
+        proxima = (date.today() + timedelta(days=intervalo)).isoformat()
+        conn.execute(
+            "UPDATE edital SET proxima_revisao = ?, intervalo_revisao = ?, easiness_factor_edital = ?, repetitions_edital = ? WHERE id = ?",
+            (proxima, intervalo, round(ef, 4), reps, id)
+        )
+        conn.commit()
+
+    log.info(f"Edital SM-2 revisar: id={id} quality={quality} ef={ef:.4f} reps={reps} interval={intervalo}")
+    return {
+        "id": id,
+        "intervalo_dias": intervalo,
+        "proxima_revisao": proxima,
+        "easiness_factor": round(ef, 4),
+        "repetitions": reps,
+        "quality": quality
+    }
 
 
 @router.get("/api/edital/revisoes-pendentes")

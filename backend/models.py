@@ -44,6 +44,14 @@ class FlashcardReview(BaseModel):
     acertou: bool
 
 
+class FlashcardReviewSM2(BaseModel):
+    quality: int  # 0-5
+
+
+class EditalReviewSM2(BaseModel):
+    quality: int  # 0-5
+
+
 # ============================================================
 # Questões
 # ============================================================

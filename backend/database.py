@@ -346,6 +346,20 @@ def init_db():
         conn.execute("ALTER TABLE edital ADD COLUMN proxima_revisao TEXT DEFAULT ''")
         conn.execute("ALTER TABLE edital ADD COLUMN intervalo_revisao INTEGER DEFAULT 1")
 
+    # Lote D: SM-2 para flashcards
+    try:
+        conn.execute("SELECT easiness_factor FROM flashcards LIMIT 1")
+    except Exception:
+        conn.execute("ALTER TABLE flashcards ADD COLUMN easiness_factor REAL DEFAULT 2.5")
+        conn.execute("ALTER TABLE flashcards ADD COLUMN repetitions INTEGER DEFAULT 0")
+
+    # Lote D: SM-2 para edital (revisão de tópicos)
+    try:
+        conn.execute("SELECT easiness_factor_edital FROM edital LIMIT 1")
+    except Exception:
+        conn.execute("ALTER TABLE edital ADD COLUMN easiness_factor_edital REAL DEFAULT 2.5")
+        conn.execute("ALTER TABLE edital ADD COLUMN repetitions_edital INTEGER DEFAULT 0")
+
     # ========== DADOS PADRÃO ==========
 
     # Inserir config padrão de metas se não existir

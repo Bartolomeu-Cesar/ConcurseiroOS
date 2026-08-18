@@ -883,3 +883,133 @@ def widget_resumo():
         "flashcards_pendentes": flash,
         "proxima_prova": {"cargo": prova[0], "data": prova[1]} if prova else None
     }
+
+
+@router.get("/api/curva-esquecimento")
+def curva_esquecimento(edital_nome: str = "", cargo: str = "", materia: str = ""):
+    """Calcula a retenção estimada de cada tópico usando curva de esquecimento (e^(-t/S))"""
+    with get_db() as conn:
+        query = """
+            SELECT id, edital_nome, cargo, materia, topico, proxima_revisao,
+                   intervalo_revisao, easiness_factor_edital
+            FROM edital
+            WHERE proxima_revisao != '' AND proxima_revisao IS NOT NULL
+        """
+        params = []
+        if edital_nome:
+            query += " AND edital_nome = ?"
+            params.append(edital_nome)
+        if cargo:
+            query += " AND cargo = ?"
+            params.append(cargo)
+        if materia:
+            query += " AND materia = ?"
+            params.append(materia)
+        query += " ORDER BY materia, topico"
+        rows = conn.execute(query, params).fetchall()
+
+    resultado = []
+    hoje = date.today()
+    for r in rows:
+        proxima_revisao = r[5]
+        intervalo = r[6] or 1
+        ef = r[7] if r[7] is not None else 2.5
+
+        # Calcular dias desde última revisão
+        # última revisão = proxima_revisao - intervalo
+        try:
+            prox = date.fromisoformat(proxima_revisao)
+            ultima_revisao = prox - timedelta(days=intervalo)
+            t = (hoje - ultima_revisao).days
+        except (ValueError, TypeError):
+            continue
+
+        if t < 0:
+            t = 0
+
+        # S = estabilidade baseada no intervalo e EF
+        S = intervalo * ef
+        if S <= 0:
+            S = 1
+
+        # Retenção = e^(-t/S)
+        retencao = math.exp(-t / S)
+        retencao_pct = round(retencao * 100, 1)
+
+        resultado.append({
+            "id": r[0],
+            "materia": r[3],
+            "topico": r[4],
+            "retencao_pct": retencao_pct,
+            "dias_desde_revisao": t,
+            "proxima_revisao": proxima_revisao,
+            "urgente": retencao_pct < 50
+        })
+
+    # Ordenar por retenção (mais urgentes primeiro)
+    resultado.sort(key=lambda x: x["retencao_pct"])
+    return resultado
+
+
+@router.get("/api/raio-x")
+def raio_x_edital(edital_nome: str = "", cargo: str = ""):
+    """Raio-X do edital: peso estimado de cada matéria vs horas estudadas"""
+    with get_db() as conn:
+        # Total de questões no banco
+        total_questoes = conn.execute("SELECT COUNT(*) FROM questoes").fetchone()[0]
+
+        # Questões por matéria
+        questoes_por_mat = conn.execute("""
+            SELECT materia, COUNT(*) as qtd FROM questoes GROUP BY materia ORDER BY qtd DESC
+        """).fetchall()
+
+        # Horas estudadas por matéria
+        horas_por_mat = conn.execute("""
+            SELECT materia, SUM(horas) as total FROM sessoes_estudo GROUP BY materia
+        """).fetchall()
+        horas_map = {r[0]: r[1] for r in horas_por_mat}
+
+        # Acerto por matéria
+        acertos_por_mat = conn.execute("""
+            SELECT q.materia, COUNT(*) as total, SUM(qr.acertou) as acertos
+            FROM questoes_respostas qr
+            JOIN questoes q ON q.id = qr.questao_id
+            GROUP BY q.materia
+        """).fetchall()
+        acerto_map = {r[0]: round((r[2] or 0) / r[1] * 100, 1) if r[1] > 0 else 0 for r in acertos_por_mat}
+
+    # Total de horas estudadas
+    total_horas = sum(horas_map.values()) if horas_map else 0
+
+    materias = []
+    for r in questoes_por_mat:
+        mat = r[0]
+        qtd = r[1]
+        peso_pct = round(qtd / total_questoes * 100, 1) if total_questoes > 0 else 0
+        horas_est = round(horas_map.get(mat, 0), 1)
+        pct_horas = round(horas_est / total_horas * 100, 1) if total_horas > 0 else 0
+        pct_acerto = acerto_map.get(mat, 0)
+
+        # Diagnóstico de balanceamento
+        if total_horas == 0 or peso_pct == 0:
+            balanceamento = "sem_dados"
+        elif pct_horas >= peso_pct * 1.5:
+            balanceamento = "superestudado"
+        elif pct_horas <= peso_pct * 0.5:
+            balanceamento = "subestudado"
+        else:
+            balanceamento = "equilibrado"
+
+        materias.append({
+            "materia": mat,
+            "questoes": qtd,
+            "peso_pct": peso_pct,
+            "horas_estudadas": horas_est,
+            "pct_acerto": pct_acerto,
+            "balanceamento": balanceamento
+        })
+
+    return {
+        "total_questoes": total_questoes,
+        "materias": materias
+    }
