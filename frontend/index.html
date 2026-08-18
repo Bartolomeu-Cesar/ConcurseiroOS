@@ -160,7 +160,7 @@
     .tree-del { background: none; border: none; color: #f38ba8; cursor: pointer; font-size: 0.9rem; opacity: 0; transition: opacity 0.15s; padding: 0 4px; }
     .tree-leaf:hover .tree-del { opacity: 1; }
     .tree-archive-btn { background: none; border: none; cursor: pointer; font-size: 0.7rem; opacity: 0; transition: opacity 0.15s; padding: 0 2px; }
-    .tree-node-l2:hover .tree-archive-btn { opacity: 0.6; }
+    .tree-node-l2:hover .tree-archive-btn, .tree-node-l1:hover .tree-archive-btn { opacity: 0.6; }
     .tree-archive-btn:hover { opacity: 1 !important; }
     .tree-excluir-btn { font-size: 0.65rem; }
     .tree-note { background: none; border: none; cursor: pointer; font-size: 0.8rem; opacity: 0; transition: opacity 0.15s; padding: 0 4px; }
@@ -907,6 +907,8 @@
             <span class="tree-label">${concurso}</span>
             <span class="tree-stats">${concDone}/${concItems.length} (${concPct}%)</span>
             <div class="tree-bar"><div class="tree-bar-fill" style="width:${concPct}%"></div></div>
+            <button class="tree-archive-btn" onclick="event.stopPropagation();arquivarConcurso('${concurso}')" title="Arquivar concurso inteiro">📦</button>
+            <button class="tree-archive-btn tree-excluir-btn" onclick="event.stopPropagation();excluirConcurso('${concurso}')" title="Excluir concurso inteiro">🗑</button>
           </div>
           <div class="tree-children ${concOpen ? 'open' : ''}">`;
 
@@ -1602,6 +1604,21 @@
       if (!confirm(`⚠️ EXCLUIR PERMANENTEMENTE "${cargo}" de "${editalNome}"?\n\nEsta ação não pode ser desfeita!`)) return;
       if (!confirm(`Tem certeza? Todos os tópicos, notas e vínculos serão perdidos.`)) return;
       await fetch(`/api/edital/excluir-edital?edital_nome=${encodeURIComponent(editalNome)}&cargo=${encodeURIComponent(cargo)}`, { method: 'DELETE' });
+      editalData = await fetch('/api/edital').then(r => r.json());
+      renderEditalTree();
+    }
+
+    async function arquivarConcurso(editalNome) {
+      if (!confirm(`Arquivar TODO o concurso "${editalNome}" (todos os cargos)?\n\nOs dados não serão excluídos, apenas ocultados.`)) return;
+      await fetch(`/api/edital/arquivar?edital_nome=${encodeURIComponent(editalNome)}`, { method: 'PUT' });
+      editalData = await fetch('/api/edital').then(r => r.json());
+      renderEditalTree();
+    }
+
+    async function excluirConcurso(editalNome) {
+      if (!confirm(`⚠️ EXCLUIR PERMANENTEMENTE TODO o concurso "${editalNome}"?\n\nTodos os cargos, tópicos, notas e vínculos serão perdidos!`)) return;
+      if (!confirm(`ÚLTIMA CONFIRMAÇÃO: excluir "${editalNome}" por completo? Isso é irreversível.`)) return;
+      await fetch(`/api/edital/excluir-edital?edital_nome=${encodeURIComponent(editalNome)}`, { method: 'DELETE' });
       editalData = await fetch('/api/edital').then(r => r.json());
       renderEditalTree();
     }
