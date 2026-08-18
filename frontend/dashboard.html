@@ -490,12 +490,10 @@
     Chart.defaults.borderColor = '#45475a';
 
     async function loadDashboard() {
-      const [dashboard, streaks, metas, pratica, relatorio] = await Promise.all([
+      const [dashboard, streaks, metas] = await Promise.all([
         fetch('/api/dashboard').then(r => r.json()),
         fetch('/api/streaks').then(r => r.json()),
-        fetch('/api/metas').then(r => r.json()),
-        fetch('/api/pratica-deliberada').then(r => r.json()),
-        fetch('/api/relatorio-semanal').then(r => r.json())
+        fetch('/api/metas').then(r => r.json())
       ]);
 
       renderStreak(streaks);
@@ -505,8 +503,6 @@
       renderChartAcertos(dashboard.acertos_por_dia);
       renderChartMaterias(dashboard.horas_por_materia);
       renderChartEdital(dashboard.edital);
-      renderPratica(pratica);
-      renderRelatorio(relatorio);
     }
 
     function renderStreak(data) {
