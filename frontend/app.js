@@ -1,3 +1,277 @@
+// ==================== TOAST NOTIFICATION SYSTEM ====================
+const toastContainer = document.createElement('div');
+toastContainer.id = 'toast-container';
+document.body.appendChild(toastContainer);
+
+function toast(message, type = 'info', duration = 4000, action = null) {
+  // type: 'success' | 'error' | 'warning' | 'info'
+  // action: { label: string, onClick: function } para botão de ação (ex: Desfazer)
+  const icons = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.innerHTML = `
+    <span class="toast-icon">${icons[type] || icons.info}</span>
+    <span class="toast-msg">${message}</span>
+    ${action ? `<button class="toast-action">${action.label}</button>` : ''}
+    <button class="toast-close">×</button>
+    <div class="toast-progress"><div class="toast-progress-bar"></div></div>
+  `;
+  toastContainer.appendChild(el);
+  // Trigger animation
+  requestAnimationFrame(() => el.classList.add('toast-show'));
+  // Action button
+  if (action) {
+    el.querySelector('.toast-action').onclick = () => { action.onClick(); removeToast(el); };
+  }
+  // Close button
+  el.querySelector('.toast-close').onclick = () => removeToast(el);
+  // Progress bar animation
+  const bar = el.querySelector('.toast-progress-bar');
+  bar.style.transition = `width ${duration}ms linear`;
+  requestAnimationFrame(() => bar.style.width = '0%');
+  // Auto dismiss
+  const timer = setTimeout(() => removeToast(el), duration);
+  el._timer = timer;
+  return el;
+}
+
+function removeToast(el) {
+  if (!el || !el.parentNode) return;
+  clearTimeout(el._timer);
+  el.classList.add('toast-hide');
+  setTimeout(() => el.remove(), 300);
+}
+
+// ==================== LOADING STATES ====================
+function showLoading(container) {
+  if (typeof container === 'string') container = document.getElementById(container);
+  if (!container) return;
+  container.innerHTML = `<div class="skeleton-group">
+    <div class="skeleton skeleton-line" style="width:80%"></div>
+    <div class="skeleton skeleton-line" style="width:60%"></div>
+    <div class="skeleton skeleton-line" style="width:70%"></div>
+    <div class="skeleton skeleton-line" style="width:50%"></div>
+  </div>`;
+}
+
+function showSpinner(container) {
+  if (typeof container === 'string') container = document.getElementById(container);
+  if (!container) return;
+  container.innerHTML = '<div class="spinner-wrapper"><div class="spinner"></div></div>';
+}
+
+function showEmpty(container, icon = '📚', message = 'Nenhum item encontrado') {
+  if (typeof container === 'string') container = document.getElementById(container);
+  if (!container) return;
+  container.innerHTML = `<div class="empty-state"><div class="empty-icon">${icon}</div><div class="empty-msg">${message}</div></div>`;
+}
+
+// ==================== ERROR HANDLING & FETCH WRAPPER ====================
+let isOffline = false;
+
+function showOfflineBanner() {
+  if (document.getElementById('offline-banner')) return;
+  const banner = document.createElement('div');
+  banner.id = 'offline-banner';
+  banner.innerHTML = '⚠️ Sem conexão com o servidor. Algumas funções podem não funcionar.';
+  document.body.prepend(banner);
+}
+
+function hideOfflineBanner() {
+  const b = document.getElementById('offline-banner');
+  if (b) b.remove();
+}
+
+window.addEventListener('online', () => { isOffline = false; hideOfflineBanner(); toast('Conexão restaurada!', 'success', 3000); });
+window.addEventListener('offline', () => { isOffline = true; showOfflineBanner(); toast('Você está offline', 'warning', 5000); });
+
+async function api(url, options = {}) {
+  const { method = 'GET', body = null, retries = 2, timeout = 10000 } = options;
+  const fetchOptions = { method, headers: {} };
+  if (body) { fetchOptions.headers['Content-Type'] = 'application/json'; fetchOptions.body = JSON.stringify(body); }
+  
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+      fetchOptions.signal = controller.signal;
+      const res = await fetch(url, fetchOptions);
+      clearTimeout(timeoutId);
+      if (isOffline) { isOffline = false; hideOfflineBanner(); }
+      if (!res.ok) {
+        const errText = await res.text().catch(() => 'Erro desconhecido');
+        throw new Error(`HTTP ${res.status}: ${errText}`);
+      }
+      return await res.json();
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        if (attempt === retries) { toast('Servidor demorou para responder', 'error'); throw err; }
+      } else if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+        isOffline = true; showOfflineBanner();
+        if (attempt === retries) { toast('Sem conexão com servidor', 'error'); throw err; }
+      } else {
+        if (attempt === retries) { toast(err.message || 'Erro ao comunicar com servidor', 'error'); throw err; }
+      }
+      await new Promise(r => setTimeout(r, 1000 * (attempt + 1))); // backoff
+    }
+  }
+}
+
+// ==================== KEYBOARD SHORTCUTS ====================
+const shortcuts = [
+  { key: 'Escape', desc: 'Fechar modal/overlay', action: closeActiveOverlay },
+  { key: 'k', ctrl: true, desc: 'Busca rápida (Ctrl+K)', action: openQuickSearch },
+  { key: '1', alt: true, desc: 'Tab PDFs', action: () => switchTab('tab-pdfs') },
+  { key: '2', alt: true, desc: 'Tab Edital', action: () => switchTab('tab-edital') },
+  { key: '3', alt: true, desc: 'Tab Ciclo', action: () => switchTab('tab-ciclo') },
+  { key: '4', alt: true, desc: 'Tab Flashcards', action: () => switchTab('tab-flashcards') },
+  { key: '5', alt: true, desc: 'Tab Metas', action: () => switchTab('tab-metas') },
+  { key: '?', shift: true, desc: 'Mostrar atalhos', action: showShortcutsPanel },
+];
+
+document.addEventListener('keydown', (e) => {
+  // Ignorar se estiver digitando em input/textarea
+  if (e.target.matches('input, textarea, select, [contenteditable]')) {
+    if (e.key === 'Escape') e.target.blur();
+    return;
+  }
+  for (const s of shortcuts) {
+    if (s.key === e.key && !!s.ctrl === (e.ctrlKey || e.metaKey) && !!s.alt === e.altKey && !!s.shift === e.shiftKey) {
+      e.preventDefault();
+      s.action();
+      return;
+    }
+  }
+});
+
+function closeActiveOverlay() {
+  // Fechar modais abertos
+  const modals = document.querySelectorAll('.modal-overlay');
+  modals.forEach(m => { if (m.style.display !== 'none' && m.style.display !== '') m.style.display = 'none'; });
+  // Fechar overlay de pausa
+  const ov = document.getElementById('overlay');
+  if (ov) ov.style.display = 'none';
+  // Fechar quick search
+  const qs = document.getElementById('quick-search-overlay');
+  if (qs) qs.remove();
+  // Fechar shortcuts panel
+  const sp = document.getElementById('shortcuts-panel');
+  if (sp) sp.remove();
+}
+
+function switchTab(tabId) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  const btn = document.querySelector(`.tab-btn[data-tab="${tabId}"]`);
+  if (btn) btn.classList.add('active');
+  const tab = document.getElementById(tabId);
+  if (tab) tab.classList.add('active');
+}
+
+function openQuickSearch() {
+  if (document.getElementById('quick-search-overlay')) return;
+  const overlay = document.createElement('div');
+  overlay.id = 'quick-search-overlay';
+  overlay.className = 'modal-overlay';
+  overlay.style.display = 'flex';
+  overlay.innerHTML = `
+    <div class="quick-search-box">
+      <input type="text" id="quick-search-input" placeholder="Buscar tópico, matéria, PDF..." autofocus>
+      <div id="quick-search-results" class="quick-search-results"></div>
+      <div class="quick-search-hint">Esc para fechar • Enter para abrir • ↑↓ para navegar</div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  const input = document.getElementById('quick-search-input');
+  input.addEventListener('input', debounce(() => quickSearchQuery(input.value), 200));
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') overlay.remove();
+    if (e.key === 'Enter') { const first = document.querySelector('.qs-result.active, .qs-result'); if (first) first.click(); }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const results = [...document.querySelectorAll('.qs-result')];
+      const current = results.findIndex(r => r.classList.contains('active'));
+      results.forEach(r => r.classList.remove('active'));
+      const next = e.key === 'ArrowDown' ? Math.min(current + 1, results.length - 1) : Math.max(current - 1, 0);
+      if (results[next]) { results[next].classList.add('active'); results[next].scrollIntoView({block:'nearest'}); }
+    }
+  });
+}
+
+function quickSearchQuery(query) {
+  const container = document.getElementById('quick-search-results');
+  if (!container) return;
+  if (!query || query.length < 2) { container.innerHTML = ''; return; }
+  const q = query.toLowerCase();
+  // Buscar em editalData (tópicos/matérias)
+  const results = (editalData || []).filter(e =>
+    e.materia.toLowerCase().includes(q) || e.topico.toLowerCase().includes(q)
+  ).slice(0, 10);
+  if (results.length === 0) { container.innerHTML = '<div class="qs-empty">Nenhum resultado</div>'; return; }
+  container.innerHTML = results.map((r, i) => `
+    <div class="qs-result ${i===0?'active':''}" onclick="goToEditalItem(${r.id})">
+      <span class="qs-materia">${r.materia}</span>
+      <span class="qs-topico">${r.topico}</span>
+    </div>
+  `).join('');
+}
+
+function goToEditalItem(id) {
+  closeActiveOverlay();
+  switchTab('tab-edital');
+  // Highlight the item
+  setTimeout(() => {
+    const el = document.querySelector(`[data-id="${id}"]`);
+    if (el) { el.scrollIntoView({behavior:'smooth', block:'center'}); el.classList.add('highlight-flash'); setTimeout(() => el.classList.remove('highlight-flash'), 2000); }
+  }, 200);
+}
+
+function debounce(fn, ms) {
+  let timer; return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), ms); };
+}
+
+function showShortcutsPanel() {
+  if (document.getElementById('shortcuts-panel')) { document.getElementById('shortcuts-panel').remove(); return; }
+  const panel = document.createElement('div');
+  panel.id = 'shortcuts-panel';
+  panel.className = 'modal-overlay';
+  panel.style.display = 'flex';
+  panel.innerHTML = `
+    <div class="modal-box" style="max-width:400px;">
+      <h3>⌨️ Atalhos de Teclado</h3>
+      <div class="shortcuts-list">
+        ${shortcuts.map(s => `<div class="shortcut-row"><kbd>${s.ctrl?'Ctrl+':''}${s.alt?'Alt+':''}${s.shift?'Shift+':''}${s.key}</kbd><span>${s.desc}</span></div>`).join('')}
+      </div>
+      <div class="modal-btns"><button class="iobtn" onclick="this.closest('.modal-overlay').remove()">Fechar</button></div>
+    </div>
+  `;
+  document.body.appendChild(panel);
+  panel.addEventListener('click', (e) => { if (e.target === panel) panel.remove(); });
+}
+
+// ==================== UNDO SYSTEM ====================
+let pendingDeletions = [];
+
+function undoableDelete(itemDesc, deleteUrl, onComplete) {
+  // Mostra toast com botão Desfazer, só executa delete após timeout
+  let cancelled = false;
+  const toastEl = toast(`${itemDesc} excluído`, 'warning', 5000, {
+    label: '↩ Desfazer',
+    onClick: () => { cancelled = true; toast('Exclusão cancelada!', 'success', 2000); if (onComplete) onComplete(false); }
+  });
+  setTimeout(async () => {
+    if (!cancelled) {
+      try {
+        await fetch(deleteUrl, { method: 'DELETE' });
+        if (onComplete) onComplete(true);
+      } catch (e) {
+        toast('Erro ao excluir', 'error');
+      }
+    }
+  }, 5200);
+}
+
 // ==================== TAB NAVIGATION ====================
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -21,16 +295,22 @@ function getOpenFolders() {
 function saveOpenFolders(set) { sessionStorage.setItem(OPEN_KEY, JSON.stringify([...set])); }
 
 async function load() {
-  const [tree, bulk] = await Promise.all([
-    fetch(`${API}/api/tree`).then(r => r.json()),
-    fetch(`${API}/api/progress-bulk`).then(r => r.json())
-  ]);
-  // Garantir editalData carregado para mostrar tags de disciplina nos PDFs
-  if (!editalData || editalData.length === 0) {
-    try { editalData = await fetch('/api/edital').then(r => r.json()); } catch(e) {}
+  showLoading('tree');
+  try {
+    const [tree, bulk] = await Promise.all([
+      fetch(`${API}/api/tree`).then(r => r.json()),
+      fetch(`${API}/api/progress-bulk`).then(r => r.json())
+    ]);
+    // Garantir editalData carregado para mostrar tags de disciplina nos PDFs
+    if (!editalData || editalData.length === 0) {
+      try { editalData = await fetch('/api/edital').then(r => r.json()); } catch(e) {}
+    }
+    document.getElementById('tree').innerHTML = '';
+    renderNodes(tree, document.getElementById('tree'), bulk, '');
+  } catch (e) {
+    toast('Erro ao carregar PDFs', 'error');
+    showEmpty('tree', '📄', 'Erro ao carregar. Tente novamente.');
   }
-  document.getElementById('tree').innerHTML = '';
-  renderNodes(tree, document.getElementById('tree'), bulk, '');
 }
 
 function calcFolderProgress(children, bulk, prefix) {
@@ -174,7 +454,7 @@ async function importProgress(input) {
   const form = new FormData(); form.append('file', file);
   const res = await fetch('/api/import', { method: 'POST', body: form });
   const data = await res.json(); input.value = '';
-  if (data.ok) { alert(`Importado! ${data.imported} registro(s).`); load(); } else { alert('Erro ao importar.'); }
+  if (data.ok) { toast(`Importado! ${data.imported} registro(s).`, 'success'); load(); } else { toast('Erro ao importar.', 'error'); }
 }
 
 // ==================== TAB 2: EDITAL ====================
@@ -189,7 +469,7 @@ function editalFmt(s) { return `${String(Math.floor(s/3600)).padStart(2,'0')}:${
 function editalTick() { if (editalPaused || !editalStartedAt) return; editalElapsed = Math.floor((Date.now() - editalStartedAt) / 1000); editalDisplay.textContent = editalFmt(editalElapsed); }
 
 editalBtnStart.addEventListener('click', () => {
-  if (!editalSelectedId) { alert('Selecione um tópico no accordion abaixo.'); return; }
+  if (!editalSelectedId) { toast('Selecione um tópico no accordion abaixo.', 'warning'); return; }
   if (editalTimer) { clearInterval(editalTimer); editalTimer=null; editalPaused=true; editalElapsed=Math.floor((Date.now()-editalStartedAt)/1000); editalStartedAt=null; editalBtnStart.textContent='▶ Iniciar'; editalBtnStop.style.display='inline-block'; }
   else { if (editalPaused) { editalStartedAt=Date.now()-(editalElapsed*1000); } else { editalStartedAt=Date.now(); editalElapsed=0; } editalPaused=false; editalTimer=setInterval(editalTick,250); editalBtnStart.textContent='⏸ Pausar'; editalBtnStop.style.display='inline-block'; editalTick(); }
 });
@@ -213,6 +493,7 @@ function saveAccordionState(state) { sessionStorage.setItem(EDITAL_OPEN_KEY, JSO
 let editalInfo = [];
 
 async function loadEdital() {
+  showLoading('edital-accordion');
   try {
     const [dataRes, infoRes] = await Promise.all([
       fetch('/api/edital').then(r => r.json()),
@@ -225,7 +506,10 @@ async function loadEdital() {
     try {
       editalData = await fetch('/api/edital').then(r => r.json());
       editalInfo = [];
-    } catch(e2) { editalData = []; editalInfo = []; }
+    } catch(e2) {
+      editalData = []; editalInfo = [];
+      toast('Erro ao carregar edital', 'error');
+    }
   }
   renderEditalTree();
 }
@@ -400,10 +684,15 @@ function selectEditalTopic(id, materia, topico) {
 async function toggleEditalStatus(id) { await fetch(`/api/edital/${id}/status`, { method: 'PUT' }); loadEdital(); }
 
 async function deleteEditalItem(id) {
-  if (!confirm('Excluir?')) return;
-  await fetch(`/api/edital/${id}`, { method: 'DELETE' });
-  if (editalSelectedId == id) { editalSelectedId = null; editalMateriaLabel.textContent = 'Nenhuma matéria selecionada'; }
-  loadEdital();
+  undoableDelete('Tópico', `/api/edital/${id}`, (deleted) => {
+    if (deleted) {
+      if (editalSelectedId == id) { editalSelectedId = null; editalMateriaLabel.textContent = 'Nenhuma matéria selecionada'; }
+      loadEdital();
+    } else {
+      // Undo - reload to restore view
+      loadEdital();
+    }
+  });
 }
 
 async function addEdital() {
@@ -411,7 +700,7 @@ async function addEdital() {
   const cargo = document.getElementById('edital-cargo-input').value.trim() || '';
   const m = document.getElementById('edital-materia-input').value.trim();
   const t = document.getElementById('edital-topico-input').value.trim();
-  if (!m || !t) { alert('Preencha matéria e tópico.'); return; }
+  if (!m || !t) { toast('Preencha matéria e tópico.', 'warning'); return; }
   await fetch('/api/edital', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({edital_nome:concurso, cargo:cargo, materia:m, topico:t}) });
   document.getElementById('edital-materia-input').value=''; document.getElementById('edital-topico-input').value='';
   loadEdital();
@@ -423,7 +712,7 @@ async function importEditalPdf(input) {
   const form = new FormData(); form.append('file', file);
   const res = await fetch(`/api/edital/importar-pdf?edital_nome=${encodeURIComponent(nome)}`, { method:'POST', body:form }).then(r=>r.json());
   input.value = '';
-  if (res.ok) { alert(`Importados ${res.importados} itens!`); loadEdital(); } else { alert('Erro.'); }
+  if (res.ok) { toast(`Importados ${res.importados} itens!`, 'success'); loadEdital(); } else { toast('Erro ao importar.', 'error'); }
 }
 
 loadEdital();
@@ -433,45 +722,51 @@ let cicloTimerInterval = null, cicloStartedAt = null, cicloElapsed = 0, cicloPau
 let cicloProximoId = null, cicloProximoMateria = '';
 
 async function loadCiclo() {
-  const [ciclo, proximo] = await Promise.all([
-    fetch('/api/ciclo').then(r=>r.json()),
-    fetch('/api/ciclo/proximo').then(r=>r.json())
-  ]);
+  showLoading('ciclo-list');
+  try {
+    const [ciclo, proximo] = await Promise.all([
+      fetch('/api/ciclo').then(r=>r.json()),
+      fetch('/api/ciclo/proximo').then(r=>r.json())
+    ]);
 
-  // Card de foco
-  cicloProximoId = proximo.id || null;
-  cicloProximoMateria = proximo.materia || '—';
-  document.getElementById('ciclo-focus-materia').textContent = cicloProximoMateria;
-  const pctProx = proximo.horas_alvo > 0 ? Math.round((proximo.horas_cumpridas || 0) / proximo.horas_alvo * 100) : 0;
-  document.getElementById('ciclo-focus-sub').textContent = `${(proximo.horas_cumpridas||0).toFixed(1)}h / ${(proximo.horas_alvo||0).toFixed(1)}h (${pctProx}%)`;
+    // Card de foco
+    cicloProximoId = proximo.id || null;
+    cicloProximoMateria = proximo.materia || '—';
+    document.getElementById('ciclo-focus-materia').textContent = cicloProximoMateria;
+    const pctProx = proximo.horas_alvo > 0 ? Math.round((proximo.horas_cumpridas || 0) / proximo.horas_alvo * 100) : 0;
+    document.getElementById('ciclo-focus-sub').textContent = `${(proximo.horas_cumpridas||0).toFixed(1)}h / ${(proximo.horas_alvo||0).toFixed(1)}h (${pctProx}%)`;
 
-  // Lista
-  const list = document.getElementById('ciclo-list');
-  if (ciclo.length === 0) { list.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Adicione matérias ao ciclo abaixo ou importe do edital.</p>'; return; }
+    // Lista
+    const list = document.getElementById('ciclo-list');
+    if (ciclo.length === 0) { list.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Adicione matérias ao ciclo abaixo ou importe do edital.</p>'; return; }
 
-  const totalHoras = ciclo.reduce((a, c) => a + c.horas_alvo, 0);
-  const totalCumpridas = ciclo.reduce((a, c) => a + c.horas_cumpridas, 0);
-  const pctGeral = totalHoras > 0 ? Math.round(totalCumpridas / totalHoras * 100) : 0;
+    const totalHoras = ciclo.reduce((a, c) => a + c.horas_alvo, 0);
+    const totalCumpridas = ciclo.reduce((a, c) => a + c.horas_cumpridas, 0);
+    const pctGeral = totalHoras > 0 ? Math.round(totalCumpridas / totalHoras * 100) : 0;
 
-  let html = `<div style="font-size:0.8rem;color:#9399b2;margin-bottom:8px;display:flex;justify-content:space-between;"><span>${ciclo.length} matérias no ciclo</span><span>Progresso geral: ${pctGeral}% (${totalCumpridas.toFixed(1)}h / ${totalHoras.toFixed(1)}h)</span></div>`;
+    let html = `<div style="font-size:0.8rem;color:#9399b2;margin-bottom:8px;display:flex;justify-content:space-between;"><span>${ciclo.length} matérias no ciclo</span><span>Progresso geral: ${pctGeral}% (${totalCumpridas.toFixed(1)}h / ${totalHoras.toFixed(1)}h)</span></div>`;
 
-  html += ciclo.map(c => {
-    const pct = c.horas_alvo > 0 ? Math.min(100, (c.horas_cumpridas / c.horas_alvo) * 100) : 0;
-    const isNext = c.id === cicloProximoId;
-    return `<div class="ciclo-item ${isNext ? 'is-next' : ''}">
-      ${isNext ? '<span style="color:#a6e3a1;font-size:0.8rem;">▶</span>' : '<span style="width:14px;"></span>'}
-      <span class="ciclo-materia">${c.materia}</span>
-      <div class="ciclo-bar"><div class="ciclo-bar-fill" style="width:${pct}%;${pct >= 100 ? 'background:#a6e3a1;' : ''}"></div></div>
-      <span class="ciclo-pct">${Math.round(pct)}%</span>
-      <span class="ciclo-hours">${c.horas_cumpridas.toFixed(1)}h / ${c.horas_alvo.toFixed(1)}h</span>
-      <button class="ciclo-delete" onclick="deleteCiclo(${c.id})">🗑</button>
-    </div>`;
-  }).join('');
-  list.innerHTML = html;
+    html += ciclo.map(c => {
+      const pct = c.horas_alvo > 0 ? Math.min(100, (c.horas_cumpridas / c.horas_alvo) * 100) : 0;
+      const isNext = c.id === cicloProximoId;
+      return `<div class="ciclo-item ${isNext ? 'is-next' : ''}">
+        ${isNext ? '<span style="color:#a6e3a1;font-size:0.8rem;">▶</span>' : '<span style="width:14px;"></span>'}
+        <span class="ciclo-materia">${c.materia}</span>
+        <div class="ciclo-bar"><div class="ciclo-bar-fill" style="width:${pct}%;${pct >= 100 ? 'background:#a6e3a1;' : ''}"></div></div>
+        <span class="ciclo-pct">${Math.round(pct)}%</span>
+        <span class="ciclo-hours">${c.horas_cumpridas.toFixed(1)}h / ${c.horas_alvo.toFixed(1)}h</span>
+        <button class="ciclo-delete" onclick="deleteCiclo(${c.id})">🗑</button>
+      </div>`;
+    }).join('');
+    list.innerHTML = html;
+  } catch (e) {
+    toast('Erro ao carregar ciclo', 'error');
+    showEmpty('ciclo-list', '🔄', 'Erro ao carregar ciclo.');
+  }
 }
 
 function cicloTimerToggle() {
-  if (!cicloProximoId) { alert('Adicione matérias ao ciclo primeiro.'); return; }
+  if (!cicloProximoId) { toast('Adicione matérias ao ciclo primeiro.', 'warning'); return; }
   const btn = document.getElementById('ciclo-btn-start');
   const stopBtn = document.getElementById('ciclo-btn-stop');
 
@@ -535,14 +830,14 @@ async function cicloTimerStop() {
 async function importarCicloDoEdital() {
   // Buscar matérias do edital e oferecer seleção
   const materias = [...new Set(editalData.map(e => e.materia))].sort();
-  if (materias.length === 0) { alert('Nenhuma matéria no edital.'); return; }
+  if (materias.length === 0) { toast('Nenhuma matéria no edital.', 'warning'); return; }
 
   // Verificar quais já estão no ciclo
   const cicloAtual = await fetch('/api/ciclo').then(r=>r.json());
   const jaNoCliclo = new Set(cicloAtual.map(c => c.materia));
   const novas = materias.filter(m => !jaNoCliclo.has(m));
 
-  if (novas.length === 0) { alert('Todas as matérias do edital já estão no ciclo.'); return; }
+  if (novas.length === 0) { toast('Todas as matérias do edital já estão no ciclo.', 'info'); return; }
 
   if (!confirm(`Importar ${novas.length} matérias do edital para o ciclo?\n\n${novas.slice(0,10).join('\n')}${novas.length > 10 ? '\n...' : ''}`)) return;
 
@@ -552,27 +847,37 @@ async function importarCicloDoEdital() {
       body: JSON.stringify({ materia: m, horas_alvo: 2.0 })
     });
   }
+  toast(`${novas.length} matérias importadas!`, 'success');
   loadCiclo();
 }
 
 async function addCiclo() {
   const m=document.getElementById('ciclo-materia-input').value.trim();
   const h=parseFloat(document.getElementById('ciclo-horas-input').value)||2;
-  if(!m){alert('Preencha a matéria.');return;}
+  if(!m){toast('Preencha a matéria.', 'warning');return;}
   await fetch('/api/ciclo',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({materia:m,horas_alvo:h})});
   document.getElementById('ciclo-materia-input').value=''; loadCiclo();
 }
 
-async function deleteCiclo(id) { if(confirm('Remover do ciclo?')){await fetch(`/api/ciclo/${id}`,{method:'DELETE'});loadCiclo();} }
-async function resetarCiclo() { if(confirm('Resetar todas as horas cumpridas?')){await fetch('/api/ciclo/resetar',{method:'POST'});loadCiclo();} }
+async function deleteCiclo(id) {
+  undoableDelete('Matéria do ciclo', `/api/ciclo/${id}`, (deleted) => {
+    if (deleted) loadCiclo();
+  });
+}
+
+async function resetarCiclo() { if(confirm('Resetar todas as horas cumpridas?')){await fetch('/api/ciclo/resetar',{method:'POST'});loadCiclo();toast('Horas resetadas!','success');} }
 loadCiclo();
 
 // ==================== TAB 4: FLASHCARDS ====================
 let flashcardsToday = [], currentFlashIndex = 0;
 
 async function loadFlashcardsToday() {
-  flashcardsToday = await fetch('/api/flashcards/today').then(r=>r.json());
-  currentFlashIndex = 0; showCurrentFlashcard();
+  try {
+    flashcardsToday = await fetch('/api/flashcards/today').then(r=>r.json());
+    currentFlashIndex = 0; showCurrentFlashcard();
+  } catch (e) {
+    toast('Erro ao carregar flashcards de hoje', 'error');
+  }
 }
 
 function showCurrentFlashcard() {
@@ -593,77 +898,100 @@ async function reviewFlashcard(acertou) {
 
 async function addFlashcard() {
   const p=document.getElementById('flash-pergunta').value.trim(), r=document.getElementById('flash-resposta').value.trim();
-  if(!p||!r){alert('Preencha pergunta e resposta.');return;}
+  if(!p||!r){toast('Preencha pergunta e resposta.', 'warning');return;}
   await fetch('/api/flashcards',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pergunta:p,resposta:r})});
   document.getElementById('flash-pergunta').value=''; document.getElementById('flash-resposta').value='';
+  toast('Flashcard criado!', 'success');
   loadFlashcardsToday(); loadAllFlashcards();
 }
 
 async function loadAllFlashcards() {
-  const all = await fetch('/api/flashcards').then(r=>r.json());
-  document.getElementById('flash-count').textContent = `Total: ${all.length} flashcard(s)`;
-  document.getElementById('flash-list').innerHTML = all.map(c => `
-    <div class="flash-list-item"><span style="flex:1;color:#cdd6f4;">${c.pergunta}</span><button class="flash-list-delete" onclick="deleteFlashcard(${c.id})">🗑</button></div>
-  `).join('');
+  showLoading('flash-list');
+  try {
+    const all = await fetch('/api/flashcards').then(r=>r.json());
+    document.getElementById('flash-count').textContent = `Total: ${all.length} flashcard(s)`;
+    document.getElementById('flash-list').innerHTML = all.map(c => `
+      <div class="flash-list-item"><span style="flex:1;color:#cdd6f4;">${c.pergunta}</span><button class="flash-list-delete" onclick="deleteFlashcard(${c.id})">🗑</button></div>
+    `).join('');
+  } catch (e) {
+    toast('Erro ao carregar flashcards', 'error');
+  }
 }
 
-async function deleteFlashcard(id) { if(confirm('Excluir?')){await fetch(`/api/flashcards/${id}`,{method:'DELETE'});loadAllFlashcards();loadFlashcardsToday();} }
+async function deleteFlashcard(id) {
+  undoableDelete('Flashcard', `/api/flashcards/${id}`, (deleted) => {
+    if (deleted) { loadAllFlashcards(); loadFlashcardsToday(); }
+  });
+}
+
 loadFlashcardsToday(); loadAllFlashcards();
 
 // ==================== TAB 5: METAS ====================
 async function loadMetas() {
-  const data = await fetch('/api/metas').then(r=>r.json());
-  const cfg = data.config; const prog = data.progresso;
+  try {
+    const data = await fetch('/api/metas').then(r=>r.json());
+    const cfg = data.config; const prog = data.progresso;
 
-  document.getElementById('meta-horas').value = cfg.meta_horas;
-  document.getElementById('meta-questoes').value = cfg.meta_questoes;
-  document.getElementById('meta-flashcards').value = cfg.meta_flashcards;
-  document.getElementById('meta-paginas').value = cfg.meta_paginas;
+    document.getElementById('meta-horas').value = cfg.meta_horas;
+    document.getElementById('meta-questoes').value = cfg.meta_questoes;
+    document.getElementById('meta-flashcards').value = cfg.meta_flashcards;
+    document.getElementById('meta-paginas').value = cfg.meta_paginas;
 
-  const progEl = document.getElementById('metas-progresso');
-  const items = [
-    { icon:'⏱', label:'Horas', val:prog.horas.toFixed(1), meta:cfg.meta_horas, pct:Math.min(100,(prog.horas/cfg.meta_horas)*100), color:'#89b4fa' },
-    { icon:'❓', label:'Questões', val:prog.questoes, meta:cfg.meta_questoes, pct:Math.min(100,(prog.questoes/cfg.meta_questoes)*100), color:'#a6e3a1' },
-    { icon:'🧠', label:'Flashcards', val:prog.flashcards, meta:cfg.meta_flashcards, pct:Math.min(100,(prog.flashcards/cfg.meta_flashcards)*100), color:'#cba6f7' },
-  ];
-  progEl.innerHTML = items.map(m => `
-    <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #45475a;">
-      <span style="font-size:1.2rem;">${m.icon}</span>
-      <span style="min-width:80px;font-size:0.88rem;">${m.label}</span>
-      <div style="flex:1;height:8px;background:#45475a;border-radius:4px;overflow:hidden;"><div style="height:100%;width:${m.pct}%;background:${m.color};border-radius:4px;"></div></div>
-      <span style="font-size:0.85rem;font-weight:700;color:${m.color};min-width:70px;text-align:right;">${m.val}/${m.meta}</span>
-    </div>
-  `).join('');
+    const progEl = document.getElementById('metas-progresso');
+    const items = [
+      { icon:'⏱', label:'Horas', val:prog.horas.toFixed(1), meta:cfg.meta_horas, pct:Math.min(100,(prog.horas/cfg.meta_horas)*100), color:'#89b4fa' },
+      { icon:'❓', label:'Questões', val:prog.questoes, meta:cfg.meta_questoes, pct:Math.min(100,(prog.questoes/cfg.meta_questoes)*100), color:'#a6e3a1' },
+      { icon:'🧠', label:'Flashcards', val:prog.flashcards, meta:cfg.meta_flashcards, pct:Math.min(100,(prog.flashcards/cfg.meta_flashcards)*100), color:'#cba6f7' },
+    ];
+    progEl.innerHTML = items.map(m => `
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #45475a;">
+        <span style="font-size:1.2rem;">${m.icon}</span>
+        <span style="min-width:80px;font-size:0.88rem;">${m.label}</span>
+        <div style="flex:1;height:8px;background:#45475a;border-radius:4px;overflow:hidden;"><div style="height:100%;width:${m.pct}%;background:${m.color};border-radius:4px;"></div></div>
+        <span style="font-size:0.85rem;font-weight:700;color:${m.color};min-width:70px;text-align:right;">${m.val}/${m.meta}</span>
+      </div>
+    `).join('');
 
-  // Mini dots no header
-  document.getElementById('meta-dot-h').className = 'meta-dot' + (items[0].pct >= 100 ? ' done' : items[0].pct > 0 ? ' partial' : '');
-  document.getElementById('meta-dot-q').className = 'meta-dot' + (items[1].pct >= 100 ? ' done' : items[1].pct > 0 ? ' partial' : '');
-  document.getElementById('meta-dot-f').className = 'meta-dot' + (items[2].pct >= 100 ? ' done' : items[2].pct > 0 ? ' partial' : '');
+    // Mini dots no header
+    document.getElementById('meta-dot-h').className = 'meta-dot' + (items[0].pct >= 100 ? ' done' : items[0].pct > 0 ? ' partial' : '');
+    document.getElementById('meta-dot-q').className = 'meta-dot' + (items[1].pct >= 100 ? ' done' : items[1].pct > 0 ? ' partial' : '');
+    document.getElementById('meta-dot-f').className = 'meta-dot' + (items[2].pct >= 100 ? ' done' : items[2].pct > 0 ? ' partial' : '');
+  } catch (e) {
+    toast('Erro ao carregar metas', 'error');
+  }
 }
 
 async function salvarMetas() {
-  await fetch('/api/metas',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-    meta_horas:parseFloat(document.getElementById('meta-horas').value),
-    meta_questoes:parseInt(document.getElementById('meta-questoes').value),
-    meta_flashcards:parseInt(document.getElementById('meta-flashcards').value),
-    meta_paginas:parseInt(document.getElementById('meta-paginas').value),
-  })});
-  alert('Metas salvas!'); loadMetas();
+  try {
+    await fetch('/api/metas',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      meta_horas:parseFloat(document.getElementById('meta-horas').value),
+      meta_questoes:parseInt(document.getElementById('meta-questoes').value),
+      meta_flashcards:parseInt(document.getElementById('meta-flashcards').value),
+      meta_paginas:parseInt(document.getElementById('meta-paginas').value),
+    })});
+    toast('Metas salvas!', 'success'); loadMetas();
+  } catch (e) {
+    toast('Erro ao salvar metas', 'error');
+  }
 }
 
 async function loadStreakBadge() {
-  const data = await fetch('/api/streaks').then(r=>r.json());
-  document.getElementById('streak-num').textContent = data.streak_atual;
+  try {
+    const data = await fetch('/api/streaks').then(r=>r.json());
+    document.getElementById('streak-num').textContent = data.streak_atual;
 
-  const streakEl = document.getElementById('metas-streak');
-  if (streakEl) {
-    streakEl.innerHTML = `
-      <div style="display:flex;align-items:center;gap:16px;">
-        <span style="font-size:2.5rem;">🔥</span>
-        <div><div style="font-size:1.6rem;font-weight:700;color:#fab387;">${data.streak_atual} dias</div><div style="font-size:0.85rem;color:#9399b2;">consecutivos de estudo</div></div>
-        <div style="margin-left:auto;text-align:right;"><div style="font-size:1.2rem;font-weight:700;color:#a6e3a1;">${data.melhor_streak}</div><div style="font-size:0.75rem;color:#9399b2;">recorde</div></div>
-      </div>
-    `;
+    const streakEl = document.getElementById('metas-streak');
+    if (streakEl) {
+      streakEl.innerHTML = `
+        <div style="display:flex;align-items:center;gap:16px;">
+          <span style="font-size:2.5rem;">🔥</span>
+          <div><div style="font-size:1.6rem;font-weight:700;color:#fab387;">${data.streak_atual} dias</div><div style="font-size:0.85rem;color:#9399b2;">consecutivos de estudo</div></div>
+          <div style="margin-left:auto;text-align:right;"><div style="font-size:1.2rem;font-weight:700;color:#a6e3a1;">${data.melhor_streak}</div><div style="font-size:0.75rem;color:#9399b2;">recorde</div></div>
+        </div>
+      `;
+    }
+  } catch (e) {
+    // Silently fail for streaks - non-critical
   }
 }
 
@@ -787,7 +1115,7 @@ async function linkPdfToTopic(id, materia) {
   }
   extractPdfs(tree, '');
 
-  if (pdfs.length === 0) { alert('Nenhum PDF disponível. Adicione PDFs na pasta backend/pdfs/'); return; }
+  if (pdfs.length === 0) { toast('Nenhum PDF disponível. Adicione PDFs na pasta backend/pdfs/', 'warning'); return; }
 
   openSelectModal(`📖 Vincular PDF a "${materia}"`, pdfs.map(p => ({
     icon: '📄',
@@ -818,7 +1146,7 @@ async function linkPdfToMateria(materia, editalNome, cargo) {
   }
   extractPdfs(tree, '');
 
-  if (pdfs.length === 0) { alert('Nenhum PDF disponível.'); return; }
+  if (pdfs.length === 0) { toast('Nenhum PDF disponível.', 'warning'); return; }
 
   openSelectModal(`🔗 Vincular PDF a "${materia}"`, pdfs.map(p => ({
     icon: '📄',
@@ -843,7 +1171,7 @@ async function unlinkPdf(pdfPath) {
 // Vincular PDF a uma disciplina (da tela de PDFs)
 async function linkPdfToDisc(pdfPath) {
   const materias = [...new Set(editalData.map(e => e.materia))].sort();
-  if (materias.length === 0) { alert('Nenhuma disciplina cadastrada no edital.'); return; }
+  if (materias.length === 0) { toast('Nenhuma disciplina cadastrada no edital.', 'warning'); return; }
 
   openSelectModal(`🔗 Vincular "${pdfPath.split('/').pop()}"`, materias.map(m => ({
     icon: '📚',
@@ -966,6 +1294,7 @@ async function arquivarCargo(editalNome, cargo) {
   await fetch(`/api/edital/arquivar?edital_nome=${encodeURIComponent(editalNome)}&cargo=${encodeURIComponent(cargo)}`, { method: 'PUT' });
   editalData = await fetch('/api/edital').then(r => r.json());
   renderEditalTree();
+  toast('Cargo arquivado!', 'success');
 }
 
 async function excluirCargo(editalNome, cargo) {
@@ -974,6 +1303,7 @@ async function excluirCargo(editalNome, cargo) {
   await fetch(`/api/edital/excluir-edital?edital_nome=${encodeURIComponent(editalNome)}&cargo=${encodeURIComponent(cargo)}`, { method: 'DELETE' });
   editalData = await fetch('/api/edital').then(r => r.json());
   renderEditalTree();
+  toast('Cargo excluído permanentemente', 'success');
 }
 
 async function arquivarConcurso(editalNome) {
@@ -981,6 +1311,7 @@ async function arquivarConcurso(editalNome) {
   await fetch(`/api/edital/arquivar?edital_nome=${encodeURIComponent(editalNome)}`, { method: 'PUT' });
   editalData = await fetch('/api/edital').then(r => r.json());
   renderEditalTree();
+  toast('Concurso arquivado!', 'success');
 }
 
 async function excluirConcurso(editalNome) {
@@ -989,11 +1320,12 @@ async function excluirConcurso(editalNome) {
   await fetch(`/api/edital/excluir-edital?edital_nome=${encodeURIComponent(editalNome)}`, { method: 'DELETE' });
   editalData = await fetch('/api/edital').then(r => r.json());
   renderEditalTree();
+  toast('Concurso excluído permanentemente', 'success');
 }
 
 async function showArquivados() {
   const arquivados = await fetch('/api/edital/arquivados').then(r => r.json());
-  if (arquivados.length === 0) { alert('Nenhum edital arquivado.'); return; }
+  if (arquivados.length === 0) { toast('Nenhum edital arquivado.', 'info'); return; }
 
   openSelectModal('📦 Editais Arquivados — Desarquivar', arquivados.map(a => ({
     icon: '📦',
@@ -1005,6 +1337,7 @@ async function showArquivados() {
     await fetch(`/api/edital/desarquivar?edital_nome=${encodeURIComponent(a.edital_nome)}&cargo=${encodeURIComponent(a.cargo)}`, { method: 'PUT' });
     editalData = await fetch('/api/edital').then(r => r.json());
     renderEditalTree();
+    toast('Edital desarquivado!', 'success');
   });
 }
 
@@ -1057,6 +1390,6 @@ document.addEventListener('dblclick', async (e) => {
   if (!id) return;
   if (confirm('Agendar revisão espaçada para este tópico?')) {
     const res = await fetch(`/api/edital/${id}/agendar-revisao`, {method:'POST'}).then(r=>r.json());
-    alert(`Revisão agendada para: ${res.proxima_revisao} (intervalo: ${res.intervalo} dias)`);
+    toast(`Revisão agendada para: ${res.proxima_revisao} (intervalo: ${res.intervalo} dias)`, 'success');
   }
 });
