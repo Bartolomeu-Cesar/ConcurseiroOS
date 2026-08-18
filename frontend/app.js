@@ -900,12 +900,44 @@ function showCurrentFlashcard() {
   q.textContent = card.pergunta; a.textContent = card.resposta; a.style.display='none'; rb.style.display='inline-block'; rv.style.display='none';
 }
 
-function revealAnswer() { document.getElementById('flash-answer').style.display='block'; document.getElementById('flash-reveal-btn').style.display='none'; document.getElementById('flash-review-btns').style.display='flex'; }
+function revealAnswer() {
+  document.getElementById('flash-answer').style.display='block';
+  document.getElementById('flash-reveal-btn').style.display='none';
+  const rv = document.getElementById('flash-review-btns');
+  rv.style.display='flex';
+  rv.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;width:100%;">
+      <button onclick="reviewFlashcard(0)" style="background:#f38ba8;color:#1e1e2e;border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">0•Esqueci</button>
+      <button onclick="reviewFlashcard(1)" style="background:#f38ba8;color:#1e1e2e;border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">1•Errei</button>
+      <button onclick="reviewFlashcard(2)" style="background:#fab387;color:#1e1e2e;border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">2•Quase</button>
+      <button onclick="reviewFlashcard(3)" style="background:#f9e2af;color:#1e1e2e;border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">3•Difícil</button>
+      <button onclick="reviewFlashcard(4)" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">4•Bom</button>
+      <button onclick="reviewFlashcard(5)" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">5•Fácil</button>
+    </div>
+  `;
+}
 
-async function reviewFlashcard(acertou) {
+async function reviewFlashcard(quality) {
   const card = flashcardsToday[currentFlashIndex];
-  await fetch(`/api/flashcards/${card.id}/review`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({acertou})});
-  currentFlashIndex++; showCurrentFlashcard(); loadAllFlashcards(); loadStreakBadge();
+  if (!card) return;
+  try {
+    const data = await api(`/api/flashcards/${card.id}/review-sm2`, {
+      method: 'POST',
+      body: { quality: quality }
+    });
+    const msgs = [
+      'Esqueceu — recomeçar',
+      'Quase — recomeçar',
+      'Errou — recomeçar',
+      'Difícil — +1d',
+      'Bom — +' + data.intervalo_dias + 'd',
+      'Fácil — +' + data.intervalo_dias + 'd'
+    ];
+    toast(`${msgs[quality]} (EF: ${data.easiness_factor.toFixed(2)})`, quality >= 3 ? 'success' : 'warning', 3000);
+    currentFlashIndex++; showCurrentFlashcard(); loadAllFlashcards(); loadStreakBadge();
+  } catch(e) {
+    toast('Erro ao revisar', 'error');
+  }
 }
 
 async function addFlashcard() {

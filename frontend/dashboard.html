@@ -312,6 +312,24 @@
     </div>
   </div>
 
+  <!-- Treinador Inteligente + Trilha -->
+  <div class="charts">
+    <div class="chart-box" style="grid-column: span 2;">
+      <h3>🧠 Treinador Inteligente</h3>
+      <div id="treinador-box"></div>
+    </div>
+  </div>
+  <div class="charts">
+    <div class="chart-box">
+      <h3>🚩 Trilha do Dia</h3>
+      <div id="trilha-box"></div>
+    </div>
+    <div class="chart-box">
+      <h3>📉 Curva de Esquecimento</h3>
+      <div id="curva-box"></div>
+    </div>
+  </div>
+
   <!-- Premium -->
   <div class="charts">
     <div class="chart-box">
@@ -332,6 +350,24 @@
     <div class="chart-box">
       <h3>⏱ Linha do Tempo</h3>
       <div id="linha-tempo"></div>
+    </div>
+  </div>
+
+  <!-- Evolução + Heatmap Erros + Raio-X -->
+  <div class="charts">
+    <div class="chart-box" style="grid-column: span 2;">
+      <h3>📈 Evolução Semanal</h3>
+      <canvas id="evolucao-chart" height="180"></canvas>
+    </div>
+  </div>
+  <div class="charts">
+    <div class="chart-box">
+      <h3>🔥 Mapa de Erros por Tópico</h3>
+      <div id="heatmap-erros-box"></div>
+    </div>
+    <div class="chart-box">
+      <h3>📊 Raio-X do Edital</h3>
+      <div id="raio-x-box"></div>
     </div>
   </div>
 
@@ -811,6 +847,169 @@
       } catch(e) {}
     }
 
+    async function loadTreinador() {
+      try {
+        const data = await fetch('/api/treinador').then(r => r.json());
+        const el = document.getElementById('treinador-box');
+        const scoreColor = data.score_prontidao >= 60 ? '#a6e3a1' : data.score_prontidao >= 30 ? '#fab387' : '#f38ba8';
+        let html = `
+          <div style="display:flex;align-items:center;gap:20px;margin-bottom:16px;flex-wrap:wrap;">
+            <div style="text-align:center;">
+              <div style="font-size:2.2rem;font-weight:700;color:${scoreColor};">${data.score_prontidao}</div>
+              <div style="font-size:0.75rem;color:#9399b2;">Score de Prontidão</div>
+              <div style="font-size:0.82rem;color:${scoreColor};font-weight:600;">${data.nivel}</div>
+            </div>
+            <div style="flex:1;min-width:200px;">
+              <div style="background:#45475a;border-radius:8px;height:10px;overflow:hidden;">
+                <div style="width:${data.score_prontidao}%;height:100%;background:${scoreColor};border-radius:8px;transition:width 0.6s;"></div>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:#9399b2;margin-top:4px;">
+                <span>Iniciante</span><span>Intermediário</span><span>Avançado</span><span>Pronto</span>
+              </div>
+            </div>
+            <div style="text-align:center;">
+              <div style="font-size:0.8rem;color:#9399b2;">Revisões pendentes</div>
+              <div style="font-size:1.2rem;font-weight:700;color:#89b4fa;">🧠 ${data.revisoes_pendentes.flashcards} | 📝 ${data.revisoes_pendentes.topicos}</div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:8px;">
+            ${data.recomendacoes.map(r => {
+              const icons = {revisar:'🧠',questoes:'❓',estudar:'📚',alerta:'🚨'};
+              const colors = {revisar:'#89b4fa',questoes:'#cba6f7',estudar:'#a6e3a1',alerta:'#f38ba8'};
+              return `<div style="background:#1e1e2e;border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:8px;border-left:3px solid ${colors[r.tipo]||'#45475a'};">
+                <span style="font-size:1.1rem;">${icons[r.tipo]||'💡'}</span>
+                <span style="font-size:0.82rem;">${r.msg}</span>
+              </div>`;
+            }).join('')}
+          </div>
+        `;
+        if (data.materias_foco && data.materias_foco.length > 0) {
+          html += `<div style="margin-top:12px;"><div style="font-size:0.8rem;color:#9399b2;margin-bottom:6px;font-weight:600;">🎯 Matérias Foco:</div>`;
+          html += data.materias_foco.map(m => `<span style="display:inline-block;background:${m.prioridade==='ALTA'?'#f38ba8':'#fab387'};color:#1e1e2e;padding:3px 10px;border-radius:12px;font-size:0.75rem;font-weight:600;margin:2px 4px;">${m.materia} (${m.pct_acerto}%)</span>`).join('');
+          html += `</div>`;
+        }
+        el.innerHTML = html;
+      } catch(e) { console.error('Treinador error:', e); }
+    }
+
+    async function loadTrilha() {
+      try {
+        const data = await fetch('/api/trilha-diaria').then(r => r.json());
+        const el = document.getElementById('trilha-box');
+        const icons = {revisao:'🧠',estudo:'📚',questoes:'❓',pausa:'☕'};
+        const colors = {revisao:'#89b4fa',estudo:'#a6e3a1',questoes:'#cba6f7',pausa:'#9399b2'};
+        let html = `<div style="font-size:0.78rem;color:#9399b2;margin-bottom:10px;">${data.tempo_total_min} min planejados | Foco: <strong style="color:#cba6f7;">${data.foco_principal || 'Geral'}</strong></div>`;
+        html += data.atividades.map((a, i) => `
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 0;${i < data.atividades.length-1 ? 'border-bottom:1px solid #45475a;':''}">
+            <div style="width:24px;height:24px;border-radius:50%;background:${colors[a.tipo]||'#45475a'};display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:#1e1e2e;font-weight:700;">${i+1}</div>
+            <span style="font-size:1rem;">${icons[a.tipo]||'📌'}</span>
+            <span style="flex:1;font-size:0.82rem;">${a.descricao || (a.materia + ': ' + (a.qtd ? a.qtd + ' questões' : a.topicos?.join(', ') || 'estudo'))}</span>
+            <span style="font-size:0.75rem;color:#9399b2;min-width:40px;text-align:right;">${a.tempo_min}min</span>
+          </div>
+        `).join('');
+        if (data.motivo) html += `<div style="margin-top:10px;font-size:0.75rem;color:#fab387;font-style:italic;">💡 ${data.motivo}</div>`;
+        el.innerHTML = html;
+      } catch(e) { console.error('Trilha error:', e); }
+    }
+
+    async function loadCurvaEsquecimento() {
+      try {
+        const data = await fetch('/api/curva-esquecimento').then(r => r.json());
+        const el = document.getElementById('curva-box');
+        if (!data.length) { el.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Complete revisões para gerar a curva.</p>'; return; }
+        data.sort((a, b) => a.retencao_pct - b.retencao_pct);
+        el.innerHTML = data.slice(0, 8).map(t => {
+          const color = t.retencao_pct >= 70 ? '#a6e3a1' : t.retencao_pct >= 40 ? '#fab387' : '#f38ba8';
+          const urgente = t.retencao_pct < 40;
+          return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #45475a;${urgente?'background:#1e1e2e;border-radius:6px;padding:6px 8px;margin:2px 0;':''}">
+            <div style="width:36px;height:36px;border-radius:50%;border:3px solid ${color};display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;color:${color};">${t.retencao_pct}%</div>
+            <div style="flex:1;">
+              <div style="font-size:0.8rem;font-weight:600;">${t.materia}</div>
+              <div style="font-size:0.72rem;color:#9399b2;">${t.topico?.substring(0,40) || ''}</div>
+            </div>
+            <div style="font-size:0.7rem;color:#9399b2;text-align:right;">${t.dias_desde_revisao}d atrás${urgente ? '<br><span style="color:#f38ba8;font-weight:600;">URGENTE</span>' : ''}</div>
+          </div>`;
+        }).join('');
+      } catch(e) { console.error('Curva error:', e); }
+    }
+
+    async function loadEvolucao() {
+      try {
+        const data = await fetch('/api/evolucao?semanas=8').then(r => r.json());
+        if (!data.evolucao || data.evolucao.length < 2) return;
+        const labels = data.evolucao.map(e => e.semana);
+        const geral = data.evolucao.map(e => e.geral.pct);
+        const ctx = document.getElementById('evolucao-chart');
+        if (!ctx) return;
+        new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [{
+              label: 'Acerto Geral %',
+              data: geral,
+              borderColor: '#cba6f7',
+              backgroundColor: 'rgba(203,166,247,0.1)',
+              fill: true,
+              tension: 0.3
+            }]
+          },
+          options: {
+            responsive: true,
+            plugins: { legend: { labels: { color: '#cdd6f4' } } },
+            scales: {
+              y: { min: 0, max: 100, ticks: { color: '#9399b2' }, grid: { color: '#45475a' } },
+              x: { ticks: { color: '#9399b2' }, grid: { color: '#45475a' } }
+            }
+          }
+        });
+      } catch(e) { console.error('Evolucao error:', e); }
+    }
+
+    async function loadHeatmapErros() {
+      try {
+        const data = await fetch('/api/heatmap-erros').then(r => r.json());
+        const el = document.getElementById('heatmap-erros-box');
+        if (!data.materias || !data.materias.length) { el.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Resolva questões para gerar o mapa de erros.</p>'; return; }
+        const intensityColors = ['#313244','#a6e3a1','#f9e2af','#fab387','#f38ba8'];
+        let html = '';
+        data.materias.slice(0, 5).forEach(m => {
+          html += `<div style="margin-bottom:10px;"><div style="font-size:0.82rem;font-weight:600;margin-bottom:4px;">${m.materia} <span style="color:#9399b2;font-weight:400;">(${m.pct_erro.toFixed(0)}% erro)</span></div>`;
+          html += `<div style="display:flex;flex-wrap:wrap;gap:3px;">`;
+          m.topicos.slice(0, 8).forEach(t => {
+            html += `<div title="${t.topico}: ${t.erros}/${t.total} erros (${t.pct_erro.toFixed(0)}%)" style="width:28px;height:28px;border-radius:4px;background:${intensityColors[t.intensidade]};cursor:help;" ></div>`;
+          });
+          html += `</div></div>`;
+        });
+        el.innerHTML = html;
+      } catch(e) { console.error('HeatmapErros error:', e); }
+    }
+
+    async function loadRaioX() {
+      try {
+        const data = await fetch('/api/raio-x').then(r => r.json());
+        const el = document.getElementById('raio-x-box');
+        if (!data.materias || !data.materias.length) { el.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Adicione questões para gerar o Raio-X.</p>'; return; }
+        let html = `<div style="font-size:0.78rem;color:#9399b2;margin-bottom:8px;">${data.total_questoes} questões analisadas</div>`;
+        data.materias.forEach(m => {
+          const balColor = m.balanceamento === 'equilibrado' ? '#a6e3a1' : m.balanceamento === 'subestudado' ? '#f38ba8' : '#fab387';
+          html += `<div style="margin-bottom:8px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.8rem;margin-bottom:3px;">
+              <span>${m.materia}</span>
+              <span style="color:${balColor};font-size:0.72rem;font-weight:600;">${m.balanceamento}</span>
+            </div>
+            <div style="display:flex;gap:4px;align-items:center;">
+              <div style="flex:1;height:6px;background:#45475a;border-radius:3px;overflow:hidden;">
+                <div style="width:${m.peso_pct}%;height:100%;background:#cba6f7;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:0.7rem;color:#9399b2;min-width:35px;">${m.peso_pct.toFixed(0)}%</span>
+            </div>
+          </div>`;
+        });
+        el.innerHTML = html;
+      } catch(e) { console.error('RaioX error:', e); }
+    }
+
     loadDashboard();
     loadRadar();
     loadGamification();
@@ -829,6 +1028,12 @@
     loadLinhaTempo();
     loadMissoes();
     loadShareBox();
+    loadTreinador();
+    loadTrilha();
+    loadCurvaEsquecimento();
+    loadEvolucao();
+    loadHeatmapErros();
+    loadRaioX();
   </script>
 </body>
 </html>

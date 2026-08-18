@@ -222,15 +222,28 @@
   <div id="tab-resolver" class="qtab-content active">
     <div class="panel">
       <h2>🎯 Resolver Questões</h2>
+      <div style="background:#313244;border-radius:8px;padding:10px 16px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <span style="font-size:0.85rem;">⏱ Tempo médio: <strong id="tempo-medio-val">--</strong></span>
+        <span id="tempo-vs-prova" style="font-size:0.78rem;color:#9399b2;"></span>
+      </div>
       <div class="filter-bar">
         <select id="filtro-materia" onchange="loadQuestoesResolver()">
           <option value="">Todas as matérias</option>
+        </select>
+        <select id="filtro-banca" onchange="loadQuestoesResolver()">
+          <option value="">Todas as bancas</option>
         </select>
         <select id="filtro-dificuldade" onchange="loadQuestoesResolver()">
           <option value="">Todas dificuldades</option>
           <option value="Fácil">Fácil</option>
           <option value="Médio">Médio</option>
           <option value="Difícil">Difícil</option>
+        </select>
+        <select id="filtro-status" onchange="loadQuestoesResolver()">
+          <option value="">Todas</option>
+          <option value="acertadas">Só acertadas</option>
+          <option value="erradas">Só erradas</option>
+          <option value="nao_respondidas">Não respondidas</option>
         </select>
         <button class="btn btn-primary" onclick="loadQuestoesResolver()">🔄 Nova Questão</button>
       </div>
@@ -395,9 +408,39 @@
       });
     }
 
+    async function loadBancas() {
+      try {
+        const bancas = await fetch('/api/questoes/bancas').then(r => r.json());
+        const el = document.getElementById('filtro-banca');
+        if (!el) return;
+        while (el.options.length > 1) el.remove(1);
+        bancas.forEach(b => {
+          const opt = document.createElement('option');
+          opt.value = b;
+          opt.textContent = b;
+          el.appendChild(opt);
+        });
+      } catch(e) {}
+    }
+
+    async function loadTempoMedio() {
+      try {
+        const data = await fetch('/api/questoes/stats/tempo').then(r => r.json());
+        document.getElementById('tempo-medio-val').textContent = data.tempo_medio_formatado + '/questão';
+        const el = document.getElementById('tempo-vs-prova');
+        const color = data.analise.seu_tempo_vs_prova === 'dentro_do_limite' ? '#a6e3a1' : '#f38ba8';
+        el.innerHTML = `<span style="color:${color};">${data.analise.mensagem}</span>`;
+      } catch(e) {}
+    }
+
     async function loadQuestoesResolver() {
       const materia = document.getElementById('filtro-materia').value;
-      const url = materia ? `/api/questoes?materia=${encodeURIComponent(materia)}` : '/api/questoes';
+      const banca = document.getElementById('filtro-banca').value;
+      const status = document.getElementById('filtro-status').value;
+      let url = '/api/questoes?';
+      if (materia) url += `materia=${encodeURIComponent(materia)}&`;
+      if (banca) url += `banca=${encodeURIComponent(banca)}&`;
+      if (status) url += `status=${encodeURIComponent(status)}&`;
       questoesPool = await fetch(url).then(r => r.json());
 
       const dificuldade = document.getElementById('filtro-dificuldade').value;
@@ -792,6 +835,8 @@
 
     // ==================== INIT ====================
     loadMaterias();
+    loadBancas();
+    loadTempoMedio();
     loadStats();
     loadSimulados();
     loadErros();
