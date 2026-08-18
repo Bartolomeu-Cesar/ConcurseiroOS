@@ -1,3 +1,11 @@
+// ==================== SECURITY: HTML SANITIZATION ====================
+function escapeHtml(text) {
+  if (!text) return '';
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
 // ==================== TOAST NOTIFICATION SYSTEM ====================
 const toastContainer = document.createElement('div');
 toastContainer.id = 'toast-container';
@@ -160,10 +168,10 @@ function closeActiveOverlay() {
 }
 
 function switchTab(tabId) {
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
   const btn = document.querySelector(`.tab-btn[data-tab="${tabId}"]`);
-  if (btn) btn.classList.add('active');
+  if (btn) { btn.classList.add('active'); btn.setAttribute('aria-selected', 'true'); }
   const tab = document.getElementById(tabId);
   if (tab) tab.classList.add('active');
 }
@@ -211,8 +219,8 @@ function quickSearchQuery(query) {
   if (results.length === 0) { container.innerHTML = '<div class="qs-empty">Nenhum resultado</div>'; return; }
   container.innerHTML = results.map((r, i) => `
     <div class="qs-result ${i===0?'active':''}" onclick="goToEditalItem(${r.id})">
-      <span class="qs-materia">${r.materia}</span>
-      <span class="qs-topico">${r.topico}</span>
+      <span class="qs-materia">${escapeHtml(r.materia)}</span>
+      <span class="qs-topico">${escapeHtml(r.topico)}</span>
     </div>
   `).join('');
 }
@@ -275,9 +283,10 @@ function undoableDelete(itemDesc, deleteUrl, onComplete) {
 // ==================== TAB NAVIGATION ====================
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
     btn.classList.add('active');
+    btn.setAttribute('aria-selected', 'true');
     document.getElementById(btn.dataset.tab).classList.add('active');
   });
 });
@@ -307,6 +316,9 @@ async function load() {
     }
     document.getElementById('tree').innerHTML = '';
     renderNodes(tree, document.getElementById('tree'), bulk, '');
+    if (tree.length === 0) {
+      showEmpty('tree', '📚', 'Nenhum PDF encontrado. Adicione arquivos PDF na pasta backend/pdfs/ para começar!');
+    }
   } catch (e) {
     toast('Erro ao carregar PDFs', 'error');
     showEmpty('tree', '📄', 'Erro ao carregar. Tente novamente.');
@@ -339,7 +351,7 @@ function renderNodes(nodes, container, bulk, prefix) {
       const div = document.createElement('div');
       div.className = 'folder';
       div.innerHTML = `
-        <div class="folder-header"><span class="folder-icon">📁</span><span class="folder-name">${node.name}</span><span class="folder-progress">${pct}% concluído</span>${pct === 100 ? '<span class="badge-done">✓</span>' : ''}</div>
+        <div class="folder-header"><span class="folder-icon">📁</span><span class="folder-name">${escapeHtml(node.name)}</span><span class="folder-progress">${pct}% concluído</span>${pct === 100 ? '<span class="badge-done">✓</span>' : ''}</div>
         <div class="folder-bar"><div class="folder-bar-fill" style="width:${pct}%"></div></div>
         <div class="folder-children"></div>
       `;
@@ -362,7 +374,7 @@ function renderNodes(nodes, container, bulk, prefix) {
       const label = tp ? `pág. ${cp}/${tp} (${pct}%)` : 'não lido';
       // Verificar se este PDF está vinculado a alguma disciplina
       const vinculado = editalData.find(e => e.pdf_link === path);
-      const materiaTag = vinculado ? `<span class="pdf-materia-tag">${vinculado.materia}</span>` : '';
+      const materiaTag = vinculado ? `<span class="pdf-materia-tag">${escapeHtml(vinculado.materia)}</span>` : '';
       const linkBtn = vinculado
         ? `<button class="pdf-link-disc-btn pdf-unlink" onclick="event.stopPropagation();unlinkPdf('${path.replace(/'/g,"\\'")}')" title="Desvincular disciplina">❌</button>`
         : `<button class="pdf-link-disc-btn" onclick="event.stopPropagation();linkPdfToDisc('${path.replace(/'/g,"\\'")}')" title="Vincular a disciplina">🔗</button>`;
@@ -370,7 +382,7 @@ function renderNodes(nodes, container, bulk, prefix) {
       div.innerHTML = `
         <div class="pdf-item" data-path="${path}">
           <span>📄</span>
-          <span class="pdf-name">${node.name.replace(/_/g,' ')}</span>
+          <span class="pdf-name">${escapeHtml(node.name.replace(/_/g,' '))}</span>
           ${materiaTag}
           <span class="pdf-progress">${label}</span>
           ${pct === 100 ? '<span class="badge-done">✓</span>' : ''}
@@ -522,7 +534,7 @@ function renderEditalTree() {
   const state = getAccordionState();
 
   if (editalData.length === 0) {
-    container.innerHTML = '<p style="color:#9399b2;font-size:0.9rem;text-align:center;padding:20px;">Nenhum tópico cadastrado.</p>';
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-msg">Nenhum edital cadastrado ainda. Use o formulário abaixo para adicionar matérias e tópicos, ou importe um PDF de edital.</div></div>';
     return;
   }
 
@@ -556,11 +568,11 @@ function renderEditalTree() {
       <div class="tree-node tree-node-l1 ${concOpen ? 'open' : ''}" data-key="${concKey}" onclick="toggleTree(this)">
         <span class="tree-chevron">▶</span>
         <span class="tree-icon">📋</span>
-        <span class="tree-label">${concurso}</span>
+        <span class="tree-label">${escapeHtml(concurso)}</span>
         <span class="tree-stats">${concDone}/${concItems.length} (${concPct}%)</span>
         <div class="tree-bar"><div class="tree-bar-fill" style="width:${concPct}%"></div></div>
-        <button class="tree-archive-btn" onclick="event.stopPropagation();arquivarConcurso('${concurso}')" title="Arquivar concurso inteiro">📦</button>
-        <button class="tree-archive-btn tree-excluir-btn" onclick="event.stopPropagation();excluirConcurso('${concurso}')" title="Excluir concurso inteiro">🗑</button>
+        <button class="tree-archive-btn" onclick="event.stopPropagation();arquivarConcurso('${concurso.replace(/'/g,"\\'")}')" title="Arquivar concurso inteiro">📦</button>
+        <button class="tree-archive-btn tree-excluir-btn" onclick="event.stopPropagation();excluirConcurso('${concurso.replace(/'/g,"\\'")}')" title="Excluir concurso inteiro">🗑</button>
       </div>
       <div class="tree-children ${concOpen ? 'open' : ''}">`;
 
@@ -574,36 +586,36 @@ function renderEditalTree() {
 
       // Nível 2: Cargo - buscar metadados
       const info = editalInfo.find(i => i.edital_nome === concurso && i.cargo === cargo);
-      const infoHtml = info ? `<div class="tree-info-badge" title="${info.local_prova || ''}">
-        ${info.data_prova_objetiva ? `<span>📅 ${info.data_prova_objetiva}</span>` : ''}
-        ${info.subsidio ? `<span>💰 ${info.subsidio}</span>` : ''}
-        ${info.vagas ? `<span>🎯 ${info.vagas}</span>` : ''}
+      const infoHtml = info ? `<div class="tree-info-badge" title="${escapeHtml(info.local_prova || '')}">
+        ${info.data_prova_objetiva ? `<span>📅 ${escapeHtml(info.data_prova_objetiva)}</span>` : ''}
+        ${info.subsidio ? `<span>💰 ${escapeHtml(info.subsidio)}</span>` : ''}
+        ${info.vagas ? `<span>🎯 ${escapeHtml(info.vagas)}</span>` : ''}
       </div>` : '';
 
       html += `<div class="tree-l2">
         <div class="tree-node tree-node-l2 ${cargoOpen ? 'open' : ''}" data-key="${cargoKey}" onclick="toggleTree(this)">
           <span class="tree-chevron">▶</span>
           <span class="tree-icon">👤</span>
-          <span class="tree-label">${cargo}</span>
+          <span class="tree-label">${escapeHtml(cargo)}</span>
           ${infoHtml}
           <span class="tree-stats">${cargoDone}/${cargoItems.length}</span>
           <div class="tree-bar"><div class="tree-bar-fill" style="width:${cargoPct}%"></div></div>
-          <button class="tree-archive-btn" onclick="event.stopPropagation();arquivarCargo('${concurso}','${cargo}')" title="Arquivar">📦</button>
-          <button class="tree-archive-btn tree-excluir-btn" onclick="event.stopPropagation();excluirCargo('${concurso}','${cargo}')" title="Excluir permanentemente">🗑</button>
+          <button class="tree-archive-btn" onclick="event.stopPropagation();arquivarCargo('${concurso.replace(/'/g,"\\'")}','${cargo.replace(/'/g,"\\'")}')\" title="Arquivar">📦</button>
+          <button class="tree-archive-btn tree-excluir-btn" onclick="event.stopPropagation();excluirCargo('${concurso.replace(/'/g,"\\'")}','${cargo.replace(/'/g,"\\'")}')\" title="Excluir permanentemente">🗑</button>
         </div>
         <div class="tree-children ${cargoOpen ? 'open' : ''}">`;
 
       // Se há info detalhada, mostrar card dentro do cargo
       if (info) {
         html += `<div class="tree-info-card">
-          ${info.data_prova_objetiva ? `<div><strong>📅 Objetiva:</strong> ${info.data_prova_objetiva}</div>` : ''}
-          ${info.data_prova_discursiva ? `<div><strong>📝 Discursiva:</strong> ${info.data_prova_discursiva}</div>` : ''}
-          ${info.horario ? `<div><strong>🕐 Horário:</strong> ${info.horario}</div>` : ''}
-          ${info.local_prova ? `<div><strong>📍 Local:</strong> ${info.local_prova}</div>` : ''}
-          ${info.vagas ? `<div><strong>🎯 Vagas:</strong> ${info.vagas}</div>` : ''}
-          ${info.subsidio ? `<div><strong>💰 Subsídio:</strong> ${info.subsidio}</div>` : ''}
-          ${info.inscricoes ? `<div><strong>📋 Inscrições:</strong> ${info.inscricoes}</div>` : ''}
-          ${info.link_edital ? `<div><a href="${info.link_edital}" target="_blank" style="color:#89b4fa;font-size:0.8rem;">🔗 Abrir edital no Cebraspe</a></div>` : ''}
+          ${info.data_prova_objetiva ? `<div><strong>📅 Objetiva:</strong> ${escapeHtml(info.data_prova_objetiva)}</div>` : ''}
+          ${info.data_prova_discursiva ? `<div><strong>📝 Discursiva:</strong> ${escapeHtml(info.data_prova_discursiva)}</div>` : ''}
+          ${info.horario ? `<div><strong>🕐 Horário:</strong> ${escapeHtml(info.horario)}</div>` : ''}
+          ${info.local_prova ? `<div><strong>📍 Local:</strong> ${escapeHtml(info.local_prova)}</div>` : ''}
+          ${info.vagas ? `<div><strong>🎯 Vagas:</strong> ${escapeHtml(info.vagas)}</div>` : ''}
+          ${info.subsidio ? `<div><strong>💰 Subsídio:</strong> ${escapeHtml(info.subsidio)}</div>` : ''}
+          ${info.inscricoes ? `<div><strong>📋 Inscrições:</strong> ${escapeHtml(info.inscricoes)}</div>` : ''}
+          ${info.link_edital ? `<div><a href="${escapeHtml(info.link_edital)}" target="_blank" style="color:#89b4fa;font-size:0.8rem;">🔗 Abrir edital no Cebraspe</a></div>` : ''}
         </div>`;
       }
 
@@ -620,7 +632,7 @@ function renderEditalTree() {
           <div class="tree-node tree-node-l3 ${matOpen ? 'open' : ''}" data-key="${matKey}" onclick="toggleTree(this)">
             <span class="tree-chevron">▶</span>
             <span class="tree-icon">📚</span>
-            <span class="tree-label">${matNome}</span>
+            <span class="tree-label">${escapeHtml(matNome)}</span>
             <span class="tree-stats">${matDone}/${items.length}${matHoras > 0 ? ' • '+formatHours(matHoras) : ''}</span>
             <div class="tree-bar"><div class="tree-bar-fill" style="width:${matPct}%"></div></div>
             <button class="tree-pdf-link-btn" style="font-size:0.7rem;" onclick="event.stopPropagation();linkPdfToMateria('${matNome.replace(/'/g,"\\\\'")}','${concurso}','${cargo}')" title="Vincular PDF à matéria">🔗</button>
@@ -636,7 +648,7 @@ function renderEditalTree() {
             : `<button class="tree-pdf-link-btn" onclick="event.stopPropagation();linkPdfToTopic(${item.id},'${safeMateria}')" title="Vincular PDF">🔗</button>`;
           html += `<div class="tree-leaf${sel}" data-id="${item.id}" onclick="selectEditalTopic(${item.id}, '${safeMateria}', '${safeTopico}')">
             <span class="tree-status ${getStatusClass(item.status)}" onclick="event.stopPropagation();toggleEditalStatus(${item.id})">${item.status === 'Concluído' ? '✓' : item.status === 'Em Andamento' ? '◐' : '○'}</span>
-            <span class="tree-topic">${item.topico}</span>
+            <span class="tree-topic">${escapeHtml(item.topico)}</span>
             ${item.horas_estudadas > 0 ? `<span class="tree-hours">${formatHours(item.horas_estudadas)}</span>` : ''}
             ${pdfBtn}
             <button class="tree-note" onclick="event.stopPropagation();openNoteModal(${item.id})" title="Notas">📝</button>
@@ -738,7 +750,7 @@ async function loadCiclo() {
 
     // Lista
     const list = document.getElementById('ciclo-list');
-    if (ciclo.length === 0) { list.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Adicione matérias ao ciclo abaixo ou importe do edital.</p>'; return; }
+    if (ciclo.length === 0) { list.innerHTML = '<div class="empty-state"><div class="empty-icon">🔄</div><div class="empty-msg">Nenhuma matéria no ciclo. Adicione matérias ou importe do edital para começar o estudo intercalado.</div></div>'; return; }
 
     const totalHoras = ciclo.reduce((a, c) => a + c.horas_alvo, 0);
     const totalCumpridas = ciclo.reduce((a, c) => a + c.horas_cumpridas, 0);
@@ -751,7 +763,7 @@ async function loadCiclo() {
       const isNext = c.id === cicloProximoId;
       return `<div class="ciclo-item ${isNext ? 'is-next' : ''}">
         ${isNext ? '<span style="color:#a6e3a1;font-size:0.8rem;">▶</span>' : '<span style="width:14px;"></span>'}
-        <span class="ciclo-materia">${c.materia}</span>
+        <span class="ciclo-materia">${escapeHtml(c.materia)}</span>
         <div class="ciclo-bar"><div class="ciclo-bar-fill" style="width:${pct}%;${pct >= 100 ? 'background:#a6e3a1;' : ''}"></div></div>
         <span class="ciclo-pct">${Math.round(pct)}%</span>
         <span class="ciclo-hours">${c.horas_cumpridas.toFixed(1)}h / ${c.horas_alvo.toFixed(1)}h</span>
@@ -910,9 +922,13 @@ async function loadAllFlashcards() {
   try {
     const all = await fetch('/api/flashcards').then(r=>r.json());
     document.getElementById('flash-count').textContent = `Total: ${all.length} flashcard(s)`;
-    document.getElementById('flash-list').innerHTML = all.map(c => `
-      <div class="flash-list-item"><span style="flex:1;color:#cdd6f4;">${c.pergunta}</span><button class="flash-list-delete" onclick="deleteFlashcard(${c.id})">🗑</button></div>
-    `).join('');
+    if (all.length === 0) {
+      showEmpty('flash-list', '🧠', 'Nenhum flashcard criado. Crie perguntas e respostas para revisar com repetição espaçada!');
+    } else {
+      document.getElementById('flash-list').innerHTML = all.map(c => `
+        <div class="flash-list-item"><span style="flex:1;color:#cdd6f4;">${escapeHtml(c.pergunta)}</span><button class="flash-list-delete" onclick="deleteFlashcard(${c.id})">🗑</button></div>
+      `).join('');
+    }
   } catch (e) {
     toast('Erro ao carregar flashcards', 'error');
   }
@@ -1034,7 +1050,7 @@ async function loadCountdown() {
 
     const el = document.getElementById('countdown-badge');
     if (el) {
-      el.innerHTML = `<span class="countdown-icon">⏳</span><span class="countdown-text">${selected.cargo}: <strong>${selected.days}d</strong></span><span class="countdown-fav" title="Alterar cargo favorito">⭐</span>`;
+      el.innerHTML = `<span class="countdown-icon">⏳</span><span class="countdown-text">${escapeHtml(selected.cargo)}: <strong>${selected.days}d</strong></span><span class="countdown-fav" title="Alterar cargo favorito">⭐</span>`;
       el.onclick = () => showCountdownPicker(parsed);
     }
   } catch(e) {}
@@ -1216,7 +1232,7 @@ async function loadNotesForTopic(id) {
   const list = document.getElementById('note-modal-list');
   list.innerHTML = notes.map(n => `
     <div class="nota-item">
-      <span class="nota-text">${n.conteudo}</span>
+      <span class="nota-text">${escapeHtml(n.conteudo)}</span>
       <button class="nota-del" onclick="deleteNote(${n.id})">×</button>
     </div>
   `).join('');
@@ -1264,8 +1280,8 @@ function renderSelectItems(items) {
   list.innerHTML = items.map((item, i) => `
     <div class="select-item" data-index="${i}" onclick="selectModalChoice(${i})">
       <span class="si-icon">${item.icon || ''}</span>
-      <span class="si-label">${item.label}</span>
-      <span class="si-sub">${item.sub || ''}</span>
+      <span class="si-label">${escapeHtml(item.label)}</span>
+      <span class="si-sub">${escapeHtml(item.sub || '')}</span>
     </div>
   `).join('');
   // Guardar items para referência
@@ -1393,3 +1409,97 @@ document.addEventListener('dblclick', async (e) => {
     toast(`Revisão agendada para: ${res.proxima_revisao} (intervalo: ${res.intervalo} dias)`, 'success');
   }
 });
+
+// ==================== ACCESSIBILITY: FOCUS MANAGEMENT ====================
+function trapFocus(element) {
+  const focusable = element.querySelectorAll('button, input, textarea, select, a[href], [tabindex]:not([tabindex="-1"])');
+  if (focusable.length === 0) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  first.focus();
+  element.addEventListener('keydown', (e) => {
+    if (e.key !== 'Tab') return;
+    if (e.shiftKey) {
+      if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+    } else {
+      if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  });
+}
+
+// ==================== CONFETTI EFFECT ====================
+function launchConfetti(duration = 2000) {
+  const canvas = document.createElement('canvas');
+  canvas.id = 'confetti-canvas';
+  document.body.appendChild(canvas);
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  const colors = ['#a6e3a1','#f38ba8','#89b4fa','#fab387','#cba6f7','#f9e2af'];
+  const particles = Array.from({length: 80}, () => ({
+    x: Math.random() * canvas.width,
+    y: Math.random() * canvas.height - canvas.height,
+    size: Math.random() * 8 + 4,
+    color: colors[Math.floor(Math.random() * colors.length)],
+    speed: Math.random() * 3 + 2,
+    angle: Math.random() * Math.PI * 2,
+    spin: (Math.random() - 0.5) * 0.2
+  }));
+  const start = Date.now();
+  function draw() {
+    if (Date.now() - start > duration) { canvas.remove(); return; }
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (const p of particles) {
+      p.y += p.speed;
+      p.x += Math.sin(p.angle) * 0.5;
+      p.angle += p.spin;
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x, p.y, p.size, p.size * 0.6);
+    }
+    requestAnimationFrame(draw);
+  }
+  draw();
+}
+
+// ==================== ONBOARDING / FIRST USE ====================
+function checkFirstUse() {
+  if (localStorage.getItem('concurseiro_onboarded')) return;
+  // Mostrar welcome modal
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.style.display = 'flex';
+  overlay.id = 'onboarding-overlay';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:500px;text-align:center;">
+      <div style="font-size:3rem;margin-bottom:12px;">🎓</div>
+      <h2 style="color:#cba6f7;margin-bottom:12px;">Bem-vindo ao ConcurseiroOS!</h2>
+      <p style="color:#9399b2;margin-bottom:20px;line-height:1.6;">
+        Seu sistema completo de estudos para concursos públicos.<br>
+        Aqui você pode ler PDFs, gerenciar editais, criar flashcards,<br>
+        resolver questões e acompanhar seu progresso.
+      </p>
+      <div style="text-align:left;background:#1e1e2e;border-radius:8px;padding:16px;margin-bottom:20px;font-size:0.85rem;">
+        <div style="margin-bottom:8px;"><strong>🚀 Dicas rápidas:</strong></div>
+        <div style="margin-bottom:6px;">• <kbd>Ctrl+K</kbd> — Busca rápida em tópicos</div>
+        <div style="margin-bottom:6px;">• <kbd>Alt+1-5</kbd> — Trocar entre abas</div>
+        <div style="margin-bottom:6px;">• <kbd>Shift+?</kbd> — Ver todos os atalhos</div>
+        <div>• O timer registra horas de estudo automaticamente</div>
+      </div>
+      <button class="iobtn" style="background:#cba6f7;color:#1e1e2e;padding:10px 32px;font-size:1rem;" onclick="dismissOnboarding()">Começar a Estudar! 💪</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  trapFocus(overlay);
+}
+
+function dismissOnboarding() {
+  localStorage.setItem('concurseiro_onboarded', '1');
+  const el = document.getElementById('onboarding-overlay');
+  if (el) el.remove();
+  toast('Bons estudos! Use Shift+? para ver os atalhos.', 'info', 5000);
+}
+
+// Verificar primeiro uso após carregar
+setTimeout(checkFirstUse, 500);

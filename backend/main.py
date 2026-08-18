@@ -12,6 +12,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.staticfiles import StaticFiles
 from starlette.responses import Response
 from starlette.types import Scope
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
 
 from database import init_db
 from routers import pdf, edital, flashcards, questoes, simulados, ciclo, streaks, dashboard, misc
@@ -28,11 +30,40 @@ import database
 database.DB_PATH = DB_PATH
 
 # ============================================================
+# SECURITY HEADERS MIDDLEWARE
+# ============================================================
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: blob:; "
+            "font-src 'self'; "
+            "connect-src 'self'; "
+            "worker-src 'self' blob:; "
+            "frame-src 'self' blob:"
+        )
+        return response
+
+# ============================================================
 # APP SETUP
 # ============================================================
 
 app = FastAPI()
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:8000", "http://127.0.0.1:8000", "http://0.0.0.0:8000"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ============================================================
 # INICIALIZAÇÃO DO BANCO

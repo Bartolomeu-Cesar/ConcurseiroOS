@@ -10,8 +10,10 @@
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
+  <a href="#tab-bar" class="skip-link">Pular para conteúdo</a>
+
   <!-- Overlay pausa -->
-  <div id="overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:999;align-items:center;justify-content:center;">
+  <div id="overlay" role="dialog" aria-modal="true" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:999;align-items:center;justify-content:center;">
     <div style="background:#313244;border-radius:16px;padding:40px 48px;text-align:center;max-width:360px;">
       <div style="font-size:2.5rem;margin-bottom:12px;">☕</div>
       <div style="font-size:1.2rem;font-weight:700;color:#cba6f7;margin-bottom:8px;">Hora de descansar!</div>
@@ -20,7 +22,7 @@
     </div>
   </div>
 
-  <div class="modal-overlay" id="note-modal">
+  <div class="modal-overlay" id="note-modal" role="dialog" aria-modal="true">
     <div class="modal-box">
       <h3 id="note-modal-title">📝 Notas</h3>
       <div id="note-modal-list"></div>
@@ -32,8 +34,7 @@
     </div>
   </div>
 
-  <!-- Modal de seleção genérico -->
-  <div class="modal-overlay" id="select-modal">
+  <div class="modal-overlay" id="select-modal" role="dialog" aria-modal="true">
     <div class="modal-box">
       <h3 id="select-modal-title">Selecione</h3>
       <input type="text" id="select-modal-search" placeholder="Buscar..." class="select-search">
@@ -60,7 +61,7 @@
       <div id="xp-badge" class="xp-badge"></div>
     </div>
     <div class="header-right">
-      <button class="tbtn" onclick="toggleTheme()" title="Alternar tema" style="background:#45475a;color:#cdd6f4;font-size:0.9rem;">🌓</button>
+      <button class="tbtn" onclick="toggleTheme()" title="Alternar tema" aria-label="Alternar tema claro/escuro" style="background:#45475a;color:#cdd6f4;font-size:0.9rem;">🌓</button>
       <div id="timer-box">
         <span id="timer-display">00:00:00</span>
         <select id="timer-select">
@@ -77,9 +78,9 @@
           <option value="55">55 min</option>
           <option value="60">60 min</option>
         </select>
-        <button id="btn-start" class="tbtn">▶ Iniciar</button>
-        <button id="btn-pause" class="tbtn" disabled>⏸ Pausar</button>
-        <button id="btn-stop" class="tbtn" disabled>⏹ Parar</button>
+        <button id="btn-start" class="tbtn" aria-label="Iniciar timer">▶ Iniciar</button>
+        <button id="btn-pause" class="tbtn" aria-label="Pausar timer" disabled>⏸ Pausar</button>
+        <button id="btn-stop" class="tbtn" aria-label="Parar timer" disabled>⏹ Parar</button>
       </div>
     </div>
   </div>
@@ -92,16 +93,16 @@
   </div>
 
   <!-- Tabs -->
-  <div id="tab-bar">
-    <button class="tab-btn active" data-tab="tab-pdfs">📚 PDFs</button>
-    <button class="tab-btn" data-tab="tab-edital">📊 Edital</button>
-    <button class="tab-btn" data-tab="tab-ciclo">🔄 Ciclo</button>
-    <button class="tab-btn" data-tab="tab-flashcards">🧠 Flashcards</button>
-    <button class="tab-btn" data-tab="tab-metas">🎯 Metas</button>
+  <div id="tab-bar" role="tablist">
+    <button class="tab-btn active" data-tab="tab-pdfs" role="tab" aria-selected="true">📚 PDFs</button>
+    <button class="tab-btn" data-tab="tab-edital" role="tab" aria-selected="false">📊 Edital</button>
+    <button class="tab-btn" data-tab="tab-ciclo" role="tab" aria-selected="false">🔄 Ciclo</button>
+    <button class="tab-btn" data-tab="tab-flashcards" role="tab" aria-selected="false">🧠 Flashcards</button>
+    <button class="tab-btn" data-tab="tab-metas" role="tab" aria-selected="false">🎯 Metas</button>
   </div>
 
   <!-- Tab: PDFs -->
-  <div id="tab-pdfs" class="tab-content active">
+  <div id="tab-pdfs" class="tab-content active" role="tabpanel">
     <div id="io-box">
       <button class="iobtn" onclick="exportProgress()">⬇ Exportar progresso</button>
       <button class="iobtn" onclick="document.getElementById('import-input').click()">⬆ Importar progresso</button>
@@ -111,7 +112,7 @@
   </div>
 
   <!-- Tab: Edital -->
-  <div id="tab-edital" class="tab-content">
+  <div id="tab-edital" class="tab-content" role="tabpanel">
     <div class="panel">
       <h2>⏱ Cronômetro de Horas Líquidas</h2>
       <div id="edital-timer-box">
@@ -151,7 +152,7 @@
   </div>
 
   <!-- Tab: Ciclo de Estudos -->
-  <div id="tab-ciclo" class="tab-content">
+  <div id="tab-ciclo" class="tab-content" role="tabpanel">
     <div class="panel">
       <h2>🔄 Ciclo de Estudos</h2>
       <p style="font-size:0.85rem;color:#9399b2;margin-bottom:12px;">Estudo intercalado: o sistema indica a próxima matéria (menor progresso relativo). Inicie o timer e ao parar, as horas são registradas automaticamente.</p>
@@ -193,7 +194,7 @@
   </div>
 
   <!-- Tab: Flashcards -->
-  <div id="tab-flashcards" class="tab-content">
+  <div id="tab-flashcards" class="tab-content" role="tabpanel">
     <div class="flash-panel">
       <h2>🧠 Revisão de Hoje</h2>
       <div id="flash-card-area">
@@ -220,7 +221,7 @@
   </div>
 
   <!-- Tab: Metas -->
-  <div id="tab-metas" class="tab-content">
+  <div id="tab-metas" class="tab-content" role="tabpanel">
     <div class="panel">
       <h2>🎯 Configurar Metas Diárias</h2>
       <p style="font-size:0.85rem;color:#9399b2;margin-bottom:12px;">Defina suas metas diárias. O progresso aparece no cabeçalho e no Dashboard.</p>
@@ -241,6 +242,13 @@
       <div id="metas-streak"></div>
     </div>
   </div>
+
+  <!-- Mobile Bottom Navigation -->
+  <nav class="mobile-bottom-nav" aria-label="Navegação principal">
+    <a href="/" class="active"><span class="nav-icon">📚</span>PDFs</a>
+    <a href="/dashboard.html"><span class="nav-icon">📊</span>Dash</a>
+    <a href="/questoes.html"><span class="nav-icon">❓</span>Questões</a>
+  </nav>
 
   <script src="/app.js"></script>
 </body>
