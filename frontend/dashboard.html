@@ -892,6 +892,7 @@
         const el = document.getElementById('dash-countdown');
         if (!provas.length || !el) return;
         const now = new Date();
+        const favorito = localStorage.getItem('countdown_favorito');
         const futuras = provas.map(p => {
           const parts = p.data_objetiva.match(/(\d+)[-\/](\d+)[-\/](\d+)/);
           if (!parts) return null;
@@ -902,7 +903,12 @@
           return dias > 0 ? {...p, dias} : null;
         }).filter(Boolean).sort((a,b) => a.dias - b.dias);
         if (!futuras.length) { el.textContent = ''; return; }
-        const prox = futuras[0];
+        // Usar favorito se definido, senão a mais próxima
+        let prox = null;
+        if (favorito) {
+          prox = futuras.find(p => `${p.edital}|${p.cargo}` === favorito);
+        }
+        if (!prox) prox = futuras[0];
         const cor = prox.dias <= 30 ? '#f38ba8' : prox.dias <= 60 ? '#fab387' : '#f9e2af';
         el.style.color = cor;
         el.innerHTML = `⏳ <strong>${prox.cargo}</strong>: ${prox.dias} dias`;
