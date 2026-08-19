@@ -205,6 +205,15 @@
   <div id="tab-flashcards" class="tab-content" role="tabpanel">
     <div class="flash-panel">
       <h2>🧠 Revisão de Hoje</h2>
+      <div id="flash-progress" style="margin-bottom:10px;display:none;">
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.78rem;margin-bottom:4px;">
+          <span id="flash-progress-text" style="color:#9399b2;">0/0 revisados</span>
+          <span id="flash-progress-pct" style="color:#a6e3a1;font-weight:600;">0%</span>
+        </div>
+        <div style="height:6px;background:#45475a;border-radius:3px;overflow:hidden;">
+          <div id="flash-progress-bar" style="height:100%;background:#a6e3a1;border-radius:3px;width:0%;transition:width 0.3s;"></div>
+        </div>
+      </div>
       <div id="flash-card-area">
         <div id="flash-question"></div>
         <div id="flash-answer"></div>

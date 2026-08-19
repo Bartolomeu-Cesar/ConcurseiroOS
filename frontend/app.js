@@ -1111,15 +1111,41 @@ async function loadFlashcardsToday() {
 function showCurrentFlashcard() {
     const q = document.getElementById('flash-question'), a = document.getElementById('flash-answer');
     const rb = document.getElementById('flash-reveal-btn'), rv = document.getElementById('flash-review-btns');
-    if (currentFlashIndex >= flashcardsToday.length) {
-        q.innerHTML = '<span style="color:#a6e3a1;font-size:1.3rem;font-weight:600;">🎉 Não há revisões pendentes para hoje!</span>';
+    const progressEl = document.getElementById('flash-progress');
+    const total = flashcardsToday.length;
+
+    // Atualizar barra de progresso
+    if (progressEl && total > 0) {
+        progressEl.style.display = 'block';
+        const done = currentFlashIndex;
+        const pct = Math.round((done / total) * 100);
+        document.getElementById('flash-progress-text').textContent = `${done}/${total} revisados`;
+        document.getElementById('flash-progress-pct').textContent = `${pct}%`;
+        document.getElementById('flash-progress-bar').style.width = `${pct}%`;
+        // Cor muda conforme progresso
+        const bar = document.getElementById('flash-progress-bar');
+        bar.style.background = pct >= 100 ? '#a6e3a1' : pct >= 50 ? '#f9e2af' : '#89b4fa';
+    } else if (progressEl) {
+        progressEl.style.display = 'none';
+    }
+
+    if (currentFlashIndex >= total) {
+        q.innerHTML = `<span style="color:#a6e3a1;font-size:1.3rem;font-weight:600;">🎉 Parabéns! ${total} flashcards revisados hoje!</span>`;
         a.style.display = 'none';
         rb.style.display = 'none';
         rv.style.display = 'none';
+        // Marcar 100% no progresso
+        if (progressEl && total > 0) {
+            document.getElementById('flash-progress-text').textContent = `${total}/${total} revisados ✓`;
+            document.getElementById('flash-progress-pct').textContent = '100%';
+            document.getElementById('flash-progress-bar').style.width = '100%';
+            document.getElementById('flash-progress-bar').style.background = '#a6e3a1';
+        }
         return;
     }
     const card = flashcardsToday[currentFlashIndex];
-    q.textContent = card.pergunta;
+    const badge = card.materia ? `<span style="font-size:0.7rem;background:#45475a;color:#cba6f7;padding:2px 8px;border-radius:4px;margin-bottom:4px;display:inline-block;">📚 ${card.materia}</span><br>` : '';
+    q.innerHTML = badge + escapeHtml(card.pergunta);
     a.textContent = card.resposta;
     a.style.display = 'none';
     rb.style.display = 'inline-block';
