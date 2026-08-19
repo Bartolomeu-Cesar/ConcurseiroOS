@@ -90,7 +90,11 @@
     };
 
     window.globalTimerStop = function() {
-        if (confirm('Parar o timer e voltar ao calendário?')) {
+        if (typeof confirmModal === 'function') {
+            confirmModal('Parar Timer', 'Deseja parar o timer e voltar ao calendário?', { confirmText: 'Parar', type: 'warning', icon: '⏹' }).then(ok => {
+                if (ok) { clearTimerState(); removeWidget(); window.location.href = '/dashboard.html'; }
+            });
+        } else if (confirm('Parar o timer e voltar ao calendário?')) {
             clearTimerState();
             removeWidget();
             window.location.href = '/dashboard.html';

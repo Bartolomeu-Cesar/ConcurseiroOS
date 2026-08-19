@@ -915,3 +915,7 @@ body.light-theme .mobile-bottom-nav a.active { color: #8839ef; background: rgba(
   .streak-badge, .countdown-badge { display: none; }
   .metas-mini { display: none; }
 }
+
+/* Modal confirmação animações */
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes scaleIn { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }

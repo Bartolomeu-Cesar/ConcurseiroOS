@@ -8,6 +8,33 @@ function escapeHtml(text) {
     div.textContent = text;
     return div.innerHTML;
 }
+// ==================== MODAL DE CONFIRMAÇÃO ====================
+function confirmModal(title, message, { confirmText = 'Confirmar', cancelText = 'Cancelar', type = 'warning', icon = '⚠️' } = {}) {
+    return new Promise((resolve) => {
+        const colors = { warning: '#f9e2af', danger: '#f38ba8', info: '#89b4fa', success: '#a6e3a1' };
+        const btnColors = { warning: '#f9e2af', danger: '#f38ba8', info: '#89b4fa', success: '#a6e3a1' };
+        const overlay = document.createElement('div');
+        overlay.id = 'confirm-modal-overlay';
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:99999;display:flex;align-items:center;justify-content:center;animation:fadeIn 0.15s;';
+        overlay.innerHTML = `<div style="background:#313244;border-radius:16px;padding:28px;max-width:400px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.5);border:1px solid #45475a;animation:scaleIn 0.15s;">
+            <div style="text-align:center;margin-bottom:16px;">
+                <div style="font-size:2.2rem;margin-bottom:8px;">${icon}</div>
+                <h3 style="color:${colors[type]};margin-bottom:8px;font-size:1.1rem;">${title}</h3>
+                <p style="font-size:0.85rem;color:#cdd6f4;line-height:1.5;">${message}</p>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:center;">
+                <button id="cm-cancel" style="background:#45475a;color:#cdd6f4;border:none;border-radius:8px;padding:10px 20px;font-size:0.88rem;cursor:pointer;font-weight:500;min-width:100px;">${cancelText}</button>
+                <button id="cm-confirm" style="background:${btnColors[type]};color:#1e1e2e;border:none;border-radius:8px;padding:10px 20px;font-size:0.88rem;cursor:pointer;font-weight:700;min-width:100px;">${confirmText}</button>
+            </div>
+        </div>`;
+        document.body.appendChild(overlay);
+        overlay.querySelector('#cm-confirm').onclick = () => { overlay.remove(); resolve(true); };
+        overlay.querySelector('#cm-cancel').onclick = () => { overlay.remove(); resolve(false); };
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) { overlay.remove(); resolve(false); } });
+        // Focus no cancel por segurança
+        overlay.querySelector('#cm-cancel').focus();
+    });
+}
 // ==================== TOAST NOTIFICATION SYSTEM ====================
 const toastContainer = document.createElement('div');
 toastContainer.id = 'toast-container';
@@ -1980,14 +2007,20 @@ async function arquivarCargo(editalNome, cargo) {
     toast('Cargo arquivado!', 'success');
 }
 async function excluirCargo(editalNome, cargo) {
-    if (!confirm(`⚠️ EXCLUIR PERMANENTEMENTE "${cargo}" de "${editalNome}"?\n\nEsta ação não pode ser desfeita!`))
-        return;
-    if (!confirm(`Tem certeza? Todos os tópicos, notas e vínculos serão perdidos.`))
-        return;
-    await fetch(`/api/edital/excluir-edital?edital_nome=${encodeURIComponent(editalNome)}&cargo=${encodeURIComponent(cargo)}`, { method: 'DELETE' });
-    editalData = await fetch('/api/edital').then(r => r.json());
-    renderEditalTree();
-    toast('Cargo excluído permanentemente', 'success');
+    const ok1 = await confirmModal('Excluir Cargo', `Excluir permanentemente <strong>"${cargo}"</strong> de <strong>"${editalNome}"</strong>?<br><br>Todos os tópicos, notas e vínculos serão perdidos.`, { confirmText: 'Excluir', type: 'danger', icon: '🗑️' });
+    if (!ok1) return;
+    try {
+        const res = await fetch(`/api/edital/excluir-edital?edital_nome=${encodeURIComponent(editalNome)}&cargo=${encodeURIComponent(cargo)}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.ok) {
+            toast(`Cargo "${cargo}" excluído (${data.excluidos} tópicos)`, 'success');
+        } else {
+            toast('Erro ao excluir: ' + (data.detail || 'desconhecido'), 'error');
+        }
+    } catch(e) {
+        toast('Erro de conexão ao excluir.', 'error');
+    }
+    await loadEdital();
 }
 async function arquivarConcurso(editalNome) {
     if (!confirm(`Arquivar TODO o concurso "${editalNome}" (todos os cargos)?\n\nOs dados não serão excluídos, apenas ocultados.`))
@@ -1998,14 +2031,22 @@ async function arquivarConcurso(editalNome) {
     toast('Concurso arquivado!', 'success');
 }
 async function excluirConcurso(editalNome) {
-    if (!confirm(`⚠️ EXCLUIR PERMANENTEMENTE TODO o concurso "${editalNome}"?\n\nTodos os cargos, tópicos, notas e vínculos serão perdidos!`))
-        return;
-    if (!confirm(`ÚLTIMA CONFIRMAÇÃO: excluir "${editalNome}" por completo? Isso é irreversível.`))
-        return;
-    await fetch(`/api/edital/excluir-edital?edital_nome=${encodeURIComponent(editalNome)}`, { method: 'DELETE' });
-    editalData = await fetch('/api/edital').then(r => r.json());
-    renderEditalTree();
-    toast('Concurso excluído permanentemente', 'success');
+    const ok1 = await confirmModal('Excluir Concurso', `Excluir permanentemente TODO o concurso <strong>"${editalNome}"</strong>?<br><br>Todos os cargos, tópicos, notas e vínculos serão perdidos!`, { confirmText: 'Excluir Tudo', type: 'danger', icon: '🗑️' });
+    if (!ok1) return;
+    const ok2 = await confirmModal('Última Confirmação', `Tem certeza absoluta? Isso é <strong>irreversível</strong>.`, { confirmText: 'Sim, excluir', cancelText: 'Não, voltar', type: 'danger', icon: '⚠️' });
+    if (!ok2) return;
+    try {
+        const res = await fetch(`/api/edital/excluir-edital?edital_nome=${encodeURIComponent(editalNome)}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.ok) {
+            toast(`Concurso "${editalNome}" excluído (${data.excluidos} tópicos)`, 'success');
+        } else {
+            toast('Erro ao excluir: ' + (data.detail || 'desconhecido'), 'error');
+        }
+    } catch(e) {
+        toast('Erro de conexão ao excluir. Verifique se o servidor está rodando.', 'error');
+    }
+    await loadEdital();
 }
 async function showArquivados() {
     const arquivados = await fetch('/api/edital/arquivados').then(r => r.json());
