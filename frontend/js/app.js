@@ -6,7 +6,7 @@ import { switchTab, initTabs } from './modules/tabs.js';
 import { initShortcuts, goToEditalItem } from './modules/shortcuts.js';
 import { load, exportProgress, importProgress, initPdfs } from './modules/pdfs.js';
 import { loadEdital, toggleTree, toggleAllEdital, selectEditalTopic, toggleEditalStatus, deleteEditalItem, addEdital, importEditalPdf, arquivarCargo, excluirCargo, arquivarConcurso, excluirConcurso, editarEdital, salvarEdicaoEdital, showArquivados, iniciarQuestoesPosEstudo, iniciarFlashPosEstudo, initEdital } from './modules/edital.js';
-import { loadCiclo, cicloTimerToggle, cicloTimerStop, importarCicloDoEdital, addCiclo, deleteCiclo, resetarCiclo, initCiclo } from './modules/ciclo.js';
+import { loadCiclo, cicloTimerToggle, cicloTimerStop, importarCicloDoEdital, addCiclo, deleteCiclo, resetarCiclo, limparCiclo, initCiclo } from './modules/ciclo.js';
 import { loadFlashcardsToday, revealAnswer, reviewFlashcard, addFlashcard, loadAllFlashcards, toggleFlashGroup, iniciarSessaoFlash, sessaoNext, deleteFlashcard, initFlashcards } from './modules/flashcards.js';
 import { carregarQuestoesDia, showQuestaoDia, responderQuestaoDia, advanceQuestao, initQuestoes } from './modules/questoes.js';
 import { loadMetas, salvarMetas, getConfigSessoes, salvarConfigSessoes, loadConfigSessoes, loadStreakBadge, initMetas } from './modules/metas.js';
@@ -34,7 +34,7 @@ Object.assign(window, {
   editarEdital, salvarEdicaoEdital, showArquivados,
   iniciarQuestoesPosEstudo, iniciarFlashPosEstudo,
   // Ciclo
-  loadCiclo, cicloTimerToggle, cicloTimerStop, importarCicloDoEdital, addCiclo, deleteCiclo, resetarCiclo,
+  loadCiclo, cicloTimerToggle, cicloTimerStop, importarCicloDoEdital, addCiclo, deleteCiclo, resetarCiclo, limparCiclo,
   // Flashcards
   loadFlashcardsToday, revealAnswer, reviewFlashcard, addFlashcard, loadAllFlashcards,
   toggleFlashGroup, iniciarSessaoFlash, sessaoNext, deleteFlashcard,

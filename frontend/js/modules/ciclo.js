@@ -152,6 +152,13 @@ export async function resetarCiclo() {
   }
 }
 
+export async function limparCiclo() {
+  if (!confirm('Remover TODAS as matérias do ciclo?\n\nIsso permite reimportar de outro edital.')) return;
+  const res = await fetch('/api/ciclo/limpar', { method: 'DELETE' }).then(r => r.json());
+  loadCiclo();
+  toast(`Ciclo limpo! ${res.removidos} matérias removidas.`, 'success');
+}
+
 export function initCiclo(deps) {
   _loadStreakBadge = deps.loadStreakBadge;
   loadCiclo();

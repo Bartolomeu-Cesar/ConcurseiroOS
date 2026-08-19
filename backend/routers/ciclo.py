@@ -45,6 +45,15 @@ def resetar_ciclo(conn=Depends(get_db_session)):
     return {"ok": True}
 
 
+@router.delete("/api/ciclo/limpar")
+def limpar_ciclo(conn=Depends(get_db_session)):
+    """Remove TODAS as matérias do ciclo para poder reimportar de outro edital"""
+    count = conn.execute("SELECT COUNT(*) FROM ciclo_estudos").fetchone()[0]
+    conn.execute("DELETE FROM ciclo_estudos")
+    conn.commit()
+    return {"ok": True, "removidos": count}
+
+
 @router.put("/api/ciclo/{id}")
 def update_ciclo(id: int, body: CicloUpdate, conn=Depends(get_db_session)):
     if body.horas_alvo is not None:
