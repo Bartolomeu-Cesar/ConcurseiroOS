@@ -2292,7 +2292,7 @@
 
               // Botão Pomodoro
               if (ativ.tempo_min > 0) {
-                html += `<button class="cal-pomo-btn" onclick="startPomodoro('${(materia || detail).replace(/'/g, "\\'")}', ${ativ.tempo_min})" title="Iniciar Timer">▶</button>`;
+                html += `<button class="cal-pomo-btn" onclick="startPomodoro('${(materia || detail).replace(/'/g, "\\'")}', ${ativ.tempo_min}, '${ativ.tipo}')" title="Iniciar Timer e ir para atividade">▶</button>`;
               }
 
               if (editable && ativ.id) {
@@ -2451,8 +2451,9 @@
     }
 
     // === TIMER POMODORO ===
-    let pomoInterval = null, pomoSeconds = 0, pomoTotal = 0, pomoPaused = false;
-    function startPomodoro(materia, tempoMin) {
+    let pomoInterval = null, pomoSeconds = 0, pomoTotal = 0, pomoPaused = false, pomoMateria = '';
+    function startPomodoro(materia, tempoMin, tipo) {
+      pomoMateria = materia;
       pomoSeconds = tempoMin * 60;
       pomoTotal = pomoSeconds;
       pomoPaused = false;
@@ -2483,6 +2484,20 @@
           }
         }
       }, 1000);
+
+      // Redirecionar para a atividade correspondente
+      if (tipo === 'revisao' || tipo === 'flashcard') {
+        // Ir para flashcards na página principal
+        window.open('/#tab-flashcards', '_blank');
+      } else if (tipo === 'questoes') {
+        // Ir para questões
+        window.open('/questoes.html', '_blank');
+      } else if (tipo === 'estudo') {
+        // Ir para PDFs (leitura) - página principal
+        window.open('/', '_blank');
+      }
+      // Pedir permissão de notificação para avisar quando terminar
+      if (Notification.permission === 'default') Notification.requestPermission();
     }
     function updatePomoDisplay() {
       const m = Math.floor(pomoSeconds / 60);
