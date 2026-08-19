@@ -1007,7 +1007,13 @@
     }
 
     function renderChartHoras(data) {
-      const ctx = document.getElementById('chart-horas').getContext('2d');
+      if (typeof Chart === 'undefined') { setTimeout(() => renderChartHoras(data), 200); return; }
+      if (!data || data.length === 0) {
+        document.getElementById('chart-horas').parentElement.innerHTML = '<p style="color:#9399b2;font-size:0.82rem;text-align:center;padding:20px;">Estude para gerar o gráfico de horas.</p>';
+        return;
+      }
+      const ctx = document.getElementById('chart-horas')?.getContext('2d');
+      if (!ctx) return;
       new Chart(ctx, {
         type: 'bar',
         data: {
@@ -1030,7 +1036,10 @@
     }
 
     function renderChartAcertos(data) {
-      const ctx = document.getElementById('chart-acertos').getContext('2d');
+      if (typeof Chart === 'undefined') { setTimeout(() => renderChartAcertos(data), 200); return; }
+      if (!data || data.length === 0) return;
+      const ctx = document.getElementById('chart-acertos')?.getContext('2d');
+      if (!ctx) return;
       new Chart(ctx, {
         type: 'line',
         data: {
@@ -1054,7 +1063,10 @@
     }
 
     function renderChartMaterias(data) {
-      const ctx = document.getElementById('chart-materias').getContext('2d');
+      if (typeof Chart === 'undefined') { setTimeout(() => renderChartMaterias(data), 200); return; }
+      if (!data || data.length === 0) return;
+      const ctx = document.getElementById('chart-materias')?.getContext('2d');
+      if (!ctx) return;
       const colors = [COLORS.blue, COLORS.green, COLORS.peach, COLORS.pink, COLORS.mauve, COLORS.teal, COLORS.yellow];
       new Chart(ctx, {
         type: 'doughnut',
@@ -1075,7 +1087,10 @@
     }
 
     function renderChartEdital(data) {
-      const ctx = document.getElementById('chart-edital').getContext('2d');
+      if (typeof Chart === 'undefined') { setTimeout(() => renderChartEdital(data), 200); return; }
+      if (!data) return;
+      const ctx = document.getElementById('chart-edital')?.getContext('2d');
+      if (!ctx) return;
       const pendente = data.total - data.concluido;
       new Chart(ctx, {
         type: 'doughnut',
