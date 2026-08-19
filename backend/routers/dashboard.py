@@ -61,6 +61,11 @@ def get_dashboard(conn=Depends(get_db_session)):
     # Total flashcards
     flashcards_total = conn.execute("SELECT COUNT(*) FROM flashcards").fetchone()[0]
 
+    # Total flashcards revisados (histórico)
+    flashcards_revisados_total = conn.execute(
+        "SELECT COALESCE(SUM(flashcards_revisados), 0) FROM streaks"
+    ).fetchone()[0]
+
     return {
         "horas_por_dia": [dict(r) for r in horas_dia],
         "total_horas": round(total_horas, 1),
@@ -72,7 +77,7 @@ def get_dashboard(conn=Depends(get_db_session)):
         },
         "acertos_por_dia": [dict(r) for r in acertos_dia],
         "horas_por_materia": [dict(r) for r in horas_materia],
-        "flashcards": {"pendentes": flashcards_pendentes, "total": flashcards_total}
+        "flashcards": {"pendentes": flashcards_pendentes, "total": flashcards_total, "revisados_total": flashcards_revisados_total}
     }
 
 
@@ -1107,6 +1112,42 @@ def evolucao_semanal(semanas: int = 12, conn=Depends(get_db_session)):
         geral = sem["geral"]
         geral["pct"] = round((geral["acertos"] / geral["questoes"] * 100) if geral["questoes"] > 0 else 0, 1)
         evolucao.append({"semana": sem["semana"], "inicio": sem["inicio"], "materias": materias_list, "geral": geral})
+
+    # Incluir dados de horas e flashcards por semana (da tabela streaks)
+    streaks_rows = conn.execute("""
+        SELECT data, horas_estudadas, questoes_resolvidas, flashcards_revisados
+        FROM streaks WHERE data >= ? ORDER BY data
+    """, (inicio,)).fetchall()
+
+    for sr in streaks_rows:
+        try:
+            d = date.fromisoformat(sr[0])
+        except (ValueError, TypeError):
+            continue
+        iso = d.isocalendar()
+        semana_key = f"{iso[0]}-W{iso[1]:02d}"
+        inicio_semana = (d - timedelta(days=d.weekday())).isoformat()
+
+        if semana_key not in semanas_map:
+            semanas_map[semana_key] = {"semana": semana_key, "inicio": inicio_semana, "materias": {}, "geral": {"questoes": 0, "acertos": 0}}
+
+        if "horas" not in semanas_map[semana_key]["geral"]:
+            semanas_map[semana_key]["geral"]["horas"] = 0
+            semanas_map[semana_key]["geral"]["flashcards"] = 0
+        semanas_map[semana_key]["geral"]["horas"] += (sr[1] or 0)
+        semanas_map[semana_key]["geral"]["flashcards"] += (sr[3] or 0)
+
+    # Reconstruir evolucao com dados completos
+    evolucao = []
+    for key in sorted(semanas_map.keys()):
+        sem = semanas_map[key]
+        materias_list = []
+        for mat, dados in sem.get("materias", {}).items():
+            pct = round((dados["acertos"] / dados["questoes"] * 100) if dados["questoes"] > 0 else 0, 1)
+            materias_list.append({"materia": mat, "questoes": dados["questoes"], "acertos": dados["acertos"], "pct": pct})
+        geral = sem["geral"]
+        geral["pct"] = round((geral["acertos"] / geral["questoes"] * 100) if geral["questoes"] > 0 else 0, 1)
+        evolucao.append({"semana": sem["semana"], "inicio": sem.get("inicio", ""), "materias": materias_list, "geral": geral})
 
     # Calcular tendência: comparar média das últimas 4 semanas vs anteriores
     tendencia = []

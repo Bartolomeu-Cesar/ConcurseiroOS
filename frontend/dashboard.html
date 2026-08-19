@@ -936,14 +936,14 @@
           <span class="card-sub">${dash.edital.concluido}/${dash.edital.total} tópicos</span>
         </div>
         <div class="card">
-          <span class="card-label">Flashcards Pendentes</span>
-          <span class="card-value pink">${dash.flashcards.pendentes}</span>
-          <span class="card-sub">${dash.flashcards.total} total</span>
+          <span class="card-label">Flashcards</span>
+          <span class="card-value pink">${streaks.hoje.flashcards_revisados || 0}</span>
+          <span class="card-sub">revisados hoje (${dash.flashcards.pendentes} pendentes)</span>
         </div>
         <div class="card">
           <span class="card-label">Hoje</span>
           <span class="card-value">${((h)=>{const hrs=Math.floor(h);const mins=Math.round((h-hrs)*60);if(hrs===0)return mins+'min';if(mins===0)return hrs+'h';return hrs+'h '+mins+'min';})(streaks.hoje.horas_estudadas||0)}</span>
-          <span class="card-sub">${streaks.hoje.questoes_resolvidas || 0} questões</span>
+          <span class="card-sub">${streaks.hoje.questoes_resolvidas || 0}q · ${streaks.hoje.flashcards_revisados || 0}fc</span>
         </div>
       `;
     }
