@@ -79,3 +79,41 @@ def delete_ciclo(id: int, conn=Depends(get_db_session)):
     conn.execute("DELETE FROM ciclo_estudos WHERE id = ?", (id,))
     conn.commit()
     return {"ok": True}
+
+
+# ============================================================
+# Exportação
+# ============================================================
+import csv
+import io
+import json
+
+from fastapi.responses import Response
+
+
+@router.get("/api/ciclo/exportar", summary="Exportar ciclo de estudos",
+            description="Exporta o ciclo de estudos em formato JSON ou CSV")
+def exportar_ciclo(formato: str = "json", conn=Depends(get_db_session)):
+    """Formatos: json, csv"""
+    rows = conn.execute("SELECT id, materia, horas_alvo, horas_cumpridas, ordem, ativo FROM ciclo_estudos ORDER BY ordem, id").fetchall()
+    items = [dict(r) for r in rows]
+
+    if formato == "csv":
+        output = io.StringIO()
+        if items:
+            writer = csv.DictWriter(output, fieldnames=items[0].keys())
+            writer.writeheader()
+            writer.writerows(items)
+        content = output.getvalue()
+        return Response(
+            content=content,
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=ciclo_estudos.csv"}
+        )
+
+    content = json.dumps(items, ensure_ascii=False, indent=2)
+    return Response(
+        content=content,
+        media_type="application/json",
+        headers={"Content-Disposition": "attachment; filename=ciclo_estudos.json"}
+    )

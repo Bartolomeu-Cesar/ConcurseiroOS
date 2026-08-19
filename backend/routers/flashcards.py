@@ -132,3 +132,60 @@ def speed_review(conn=Depends(get_db_session)):
         LIMIT ?
     """, (today_str(), SPEED_REVIEW_LIMIT)).fetchall()
     return [{"id": r[0], "pergunta": r[1], "resposta": r[2]} for r in rows]
+
+
+# ============================================================
+# Exportação
+# ============================================================
+import csv
+import io
+import json
+
+from fastapi.responses import Response
+
+
+@router.get("/api/flashcards/exportar", summary="Exportar flashcards",
+            description="Exporta flashcards em formato JSON, CSV ou Anki (TSV)")
+def exportar_flashcards(formato: str = "json", conn=Depends(get_db_session)):
+    """Formatos: json, csv, anki"""
+    rows = conn.execute(
+        "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions FROM flashcards ORDER BY id"
+    ).fetchall()
+    items = [dict(r) for r in rows]
+
+    if formato == "csv":
+        output = io.StringIO()
+        if items:
+            writer = csv.DictWriter(output, fieldnames=items[0].keys())
+            writer.writeheader()
+            writer.writerows(items)
+        content = output.getvalue()
+        return Response(
+            content=content,
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=flashcards.csv"}
+        )
+
+    if formato == "anki":
+        # Formato Anki: TSV (tab-separated) com pergunta<TAB>resposta
+        # O Anki importa este formato diretamente como deck
+        lines = []
+        for item in items:
+            # Escapar tabs e newlines
+            pergunta = item["pergunta"].replace("\t", " ").replace("\n", "<br>")
+            resposta = item["resposta"].replace("\t", " ").replace("\n", "<br>")
+            lines.append(f"{pergunta}\t{resposta}")
+        content = "\n".join(lines)
+        return Response(
+            content=content,
+            media_type="text/tab-separated-values",
+            headers={"Content-Disposition": "attachment; filename=flashcards_anki.txt"}
+        )
+
+    # JSON (default)
+    content = json.dumps(items, ensure_ascii=False, indent=2)
+    return Response(
+        content=content,
+        media_type="application/json",
+        headers={"Content-Disposition": "attachment; filename=flashcards.json"}
+    )

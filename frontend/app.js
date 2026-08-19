@@ -1771,3 +1771,13 @@ function dismissOnboarding() {
 }
 // Verificar primeiro uso após carregar
 setTimeout(checkFirstUse, 500);
+// ==================== EXPORT FUNCTIONS ====================
+function exportarEdital(formato) {
+    window.open(`/api/edital/exportar?formato=${formato}`, '_blank');
+}
+function exportarCiclo(formato) {
+    window.open(`/api/ciclo/exportar?formato=${formato}`, '_blank');
+}
+function exportarFlashcards(formato) {
+    window.open(`/api/flashcards/exportar?formato=${formato}`, '_blank');
+}

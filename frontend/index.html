@@ -129,6 +129,8 @@
         <button class="iobtn" onclick="toggleAllEdital(true)">▼ Expandir tudo</button>
         <button class="iobtn" onclick="toggleAllEdital(false)">▲ Colapsar tudo</button>
         <button class="iobtn" onclick="showArquivados()">📦 Arquivados</button>
+        <button class="iobtn" onclick="exportarEdital('json')">⬇ JSON</button>
+        <button class="iobtn" onclick="exportarEdital('csv')">⬇ CSV</button>
         <span id="edital-stats" style="font-size:0.8rem;color:#9399b2;margin-left:auto;"></span>
       </div>
       <div id="edital-accordion"></div>
@@ -180,6 +182,8 @@
       <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
         <button class="iobtn" onclick="resetarCiclo()">🔁 Resetar Ciclo</button>
         <button class="iobtn" onclick="importarCicloDoEdital()">📋 Importar do Edital</button>
+        <button class="iobtn" onclick="exportarCiclo('json')">⬇ JSON</button>
+        <button class="iobtn" onclick="exportarCiclo('csv')">⬇ CSV</button>
       </div>
     </div>
 
@@ -213,6 +217,11 @@
     </div>
     <div class="flash-panel">
       <h2>📦 Todos os Flashcards</h2>
+      <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
+        <button class="iobtn" onclick="exportarFlashcards('json')">⬇ JSON</button>
+        <button class="iobtn" onclick="exportarFlashcards('csv')">⬇ CSV</button>
+        <button class="iobtn" onclick="exportarFlashcards('anki')">⬇ Anki</button>
+      </div>
       <div class="flash-count" id="flash-count"></div>
       <div id="flash-list"></div>
     </div>

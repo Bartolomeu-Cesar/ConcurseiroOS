@@ -440,3 +440,57 @@ def prompt_resumo(id: int, conn=Depends(get_db_session)):
             "Conecte com outro conceito que você conhece"
         ]
     }
+
+
+# ============================================================
+# Exportação
+# ============================================================
+import csv
+import io
+import json
+
+from fastapi.responses import Response
+
+
+@router.get("/api/edital/exportar", summary="Exportar edital verticalizado",
+            description="Exporta o edital em formato JSON ou CSV")
+def exportar_edital(
+    formato: str = "json",
+    edital_nome: str = "",
+    cargo: str = "",
+    conn=Depends(get_db_session)
+):
+    """Formatos: json, csv"""
+    query = """SELECT id, edital_nome, cargo, materia, topico, status, horas_estudadas, pdf_link, pdf_pagina
+               FROM edital WHERE (arquivado IS NULL OR arquivado = 0)"""
+    params = []
+    if edital_nome:
+        query += " AND edital_nome = ?"
+        params.append(edital_nome)
+    if cargo:
+        query += " AND cargo = ?"
+        params.append(cargo)
+    query += " ORDER BY edital_nome, cargo, materia, id"
+    rows = conn.execute(query, params).fetchall()
+    items = [dict(r) for r in rows]
+
+    if formato == "csv":
+        output = io.StringIO()
+        if items:
+            writer = csv.DictWriter(output, fieldnames=items[0].keys())
+            writer.writeheader()
+            writer.writerows(items)
+        content = output.getvalue()
+        return Response(
+            content=content,
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=edital_verticalizado.csv"}
+        )
+
+    # JSON (default)
+    content = json.dumps(items, ensure_ascii=False, indent=2)
+    return Response(
+        content=content,
+        media_type="application/json",
+        headers={"Content-Disposition": "attachment; filename=edital_verticalizado.json"}
+    )
