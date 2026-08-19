@@ -148,9 +148,9 @@ def resumo_diario(conn=Depends(get_db_session)):
 
     return {
         "data": today_str(),
-        "horas": hoje[1] if hoje else 0,
-        "questoes": hoje[2] if hoje else 0,
-        "flashcards": hoje[3] if hoje else 0,
+        "horas": hoje["horas_estudadas"] if hoje else 0,
+        "questoes": hoje["questoes_resolvidas"] if hoje else 0,
+        "flashcards": hoje["flashcards_revisados"] if hoje else 0,
         "sessoes": [{"materia": r[0], "horas": round(r[1], 1)} for r in sessoes],
         "questoes_detalhes": [{"materia": r[0], "total": r[1], "acertos": r[2] or 0} for r in q_hoje],
         "sugestao_amanha": [r[0] for r in menos_estudada],
@@ -844,8 +844,8 @@ def widget_resumo(conn=Depends(get_db_session)):
 
     return {
         "streak_hoje": bool(hoje),
-        "horas_hoje": hoje[1] if hoje else 0,
-        "questoes_hoje": hoje[2] if hoje else 0,
+        "horas_hoje": hoje["horas_estudadas"] if hoje else 0,
+        "questoes_hoje": hoje["questoes_resolvidas"] if hoje else 0,
         "flashcards_pendentes": flash,
         "proxima_prova": {"cargo": prova[0], "data": prova[1]} if prova else None
     }
