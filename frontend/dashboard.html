@@ -2234,8 +2234,25 @@
 
           html += `<div class="cal-activities-list" data-date="${dia.data}" data-total="${dia.atividades.length}">`;
 
+          // Linha do tempo com hora atual (só no dia de hoje)
+          let timelineInserida = false;
+          const turnoAtualNome = isToday ? getTurnoAtual(horaAtual) : '';
+
           for (const turno of ['manha', 'tarde', 'noite']) {
             const ativsTurno = turnos[turno];
+
+            // Inserir linha do tempo ANTES do turno ativo
+            if (isToday && !timelineInserida && turno === turnoAtualNome) {
+              const agora = new Date();
+              const horaStr = `${String(agora.getHours()).padStart(2,'0')}:${String(agora.getMinutes()).padStart(2,'0')}`;
+              html += `<div class="cal-timeline" style="display:flex;align-items:center;gap:4px;margin:6px 0;position:relative;">
+                <span style="font-size:0.65rem;color:#a6e3a1;font-weight:700;background:#313244;padding:1px 4px;border-radius:3px;z-index:1;">${horaStr}</span>
+                <div style="flex:1;height:2px;background:linear-gradient(90deg, #a6e3a1, transparent);border-radius:1px;"></div>
+                <span style="font-size:0.6rem;color:#a6e3a1;">◀ agora</span>
+              </div>`;
+              timelineInserida = true;
+            }
+
             if (ativsTurno.length === 0) continue;
 
             // Header do turno
@@ -2312,6 +2329,15 @@
       // Carregar streak e alertas
       loadCalStreak();
       loadAlertasNegligenciadas();
+      // Atualizar linha do tempo a cada minuto
+      clearInterval(window._calTimelineInterval);
+      window._calTimelineInterval = setInterval(() => {
+        const tl = document.querySelector('.cal-timeline span');
+        if (tl) {
+          const agora = new Date();
+          tl.textContent = `${String(agora.getHours()).padStart(2,'0')}:${String(agora.getMinutes()).padStart(2,'0')}`;
+        }
+      }, 60000);
     }
 
     // === CHECK DE ATIVIDADE CONCLUÍDA ===
