@@ -1,5 +1,4 @@
 import mimetypes
-import os
 import time
 
 # Força o MIME type correto para arquivos .mjs e .js (necessário para PDF.js)
@@ -8,38 +7,34 @@ mimetypes.add_type("application/javascript", ".js", strict=True)
 mimetypes.add_type("text/javascript", ".mjs", strict=True)
 mimetypes.add_type("text/javascript", ".js", strict=True)
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.staticfiles import StaticFiles
-from starlette.responses import Response
-from starlette.types import Scope
+from fastapi.responses import JSONResponse
+from routers import ciclo, dashboard, edital, flashcards, misc, pdf, questoes, simulados, streaks, treinador
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
+from starlette.requests import Request as StarletteRequest
+from starlette.responses import Response
+from starlette.staticfiles import StaticFiles
+from starlette.types import Scope
 
 from database import init_db
 from logger import log
-from routers import pdf, edital, flashcards, questoes, simulados, ciclo, streaks, dashboard, misc, treinador
+from settings import settings
 
 # ============================================================
 # CONFIGURAÇÃO
 # ============================================================
 
-PDF_ROOT = os.environ.get("PDF_ROOT", "./pdfs")
-DB_PATH = "./progress.db"
-
 # Registrar tempo de início para o health check
 APP_START_TIME = time.time()
-
-# Atualizar DB_PATH no módulo database
-import database
-database.DB_PATH = DB_PATH
 
 # ============================================================
 # SECURITY HEADERS MIDDLEWARE
 # ============================================================
 
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(self, request: StarletteRequest, call_next):
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "SAMEORIGIN"
@@ -57,6 +52,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         )
         return response
 
+
 # ============================================================
 # APP SETUP
 # ============================================================
@@ -64,17 +60,31 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 app = FastAPI(
     title="ConcurseiroOS API",
     description="API do sistema de estudos para concursos públicos",
-    version="2.1.0",
+    version=settings.APP_VERSION,
     docs_url="/docs",
     redoc_url="/redoc"
 )
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8000", "http://127.0.0.1:8000", "http://0.0.0.0:8000"],
+    allow_origins=settings.CORS_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ============================================================
+# GLOBAL EXCEPTION HANDLER
+# ============================================================
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    log.error(f"Unhandled error on {request.method} {request.url.path}: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Erro interno do servidor"}
+    )
+
 
 # ============================================================
 # INICIALIZAÇÃO DO BANCO
@@ -85,17 +95,18 @@ init_db()
 
 # Auto-backup diário
 from backup import auto_backup_if_needed
-auto_backup_if_needed(DB_PATH)
+
+auto_backup_if_needed(settings.DB_PATH)
 
 # Disponibilizar APP_START_TIME para o router misc
 misc.APP_START_TIME = APP_START_TIME
-misc.DB_PATH = DB_PATH
+misc.DB_PATH = settings.DB_PATH
 
 # ============================================================
 # CONFIGURAR PDF_ROOT NOS ROUTERS
 # ============================================================
 
-pdf.set_pdf_root(PDF_ROOT)
+pdf.set_pdf_root(settings.PDF_ROOT)
 
 # ============================================================
 # INCLUIR ROUTERS

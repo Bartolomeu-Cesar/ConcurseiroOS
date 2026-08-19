@@ -1,8 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
 from database import get_db
-from logger import log
-from models import CicloCreate, CicloUpdate, CicloHoras
+from models import CicloCreate, CicloHoras, CicloUpdate
 from utils import today_str
 
 router = APIRouter(prefix="", tags=["Ciclo de Estudos"])
@@ -67,7 +66,7 @@ def add_ciclo_horas(id: int, body: CicloHoras):
     with get_db() as conn:
         row = conn.execute("SELECT materia, horas_cumpridas FROM ciclo_estudos WHERE id = ?", (id,)).fetchone()
         if not row:
-            raise HTTPException(404)
+            raise HTTPException(status_code=404, detail="Item do ciclo não encontrado")
         new_horas = row[1] + body.horas
         conn.execute("UPDATE ciclo_estudos SET horas_cumpridas = ? WHERE id = ?", (new_horas, id))
         # Registrar sessão

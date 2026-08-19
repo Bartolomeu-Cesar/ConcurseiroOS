@@ -1,5 +1,8 @@
+import math
 from datetime import date, timedelta
 from pathlib import Path
+from typing import Any
+
 from pypdf import PdfReader
 
 
@@ -61,3 +64,51 @@ def calculate_streak(conn) -> dict:
         best_streak = max(best_streak, current_best)
 
     return {"streak_atual": streak, "melhor_streak": best_streak}
+
+
+def paginate(items: list, page: int | None, limit: int = 50) -> Any:
+    """Aplica paginação a uma lista. Se page=None, retorna lista completa (retrocompatível)."""
+    if page is None:
+        return items
+    total = len(items)
+    pages = math.ceil(total / limit) if limit > 0 else 1
+    start = (page - 1) * limit
+    return {
+        "items": items[start:start + limit],
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "pages": pages,
+    }
+
+
+def update_streak(conn, field: str, value: int = 1) -> None:
+    """Incrementa um campo do streak de hoje. Fields: horas_estudadas, questoes_resolvidas, flashcards_revisados."""
+    if field == "horas_estudadas":
+        conn.execute("""
+            INSERT INTO streaks (data, horas_estudadas) VALUES (?, ?)
+            ON CONFLICT(data) DO UPDATE SET horas_estudadas = horas_estudadas + ?
+        """, (today_str(), value, value))
+    elif field == "questoes_resolvidas":
+        conn.execute("""
+            INSERT INTO streaks (data, questoes_resolvidas) VALUES (?, 1)
+            ON CONFLICT(data) DO UPDATE SET questoes_resolvidas = questoes_resolvidas + 1
+        """, (today_str(),))
+    elif field == "flashcards_revisados":
+        conn.execute("""
+            INSERT INTO streaks (data, flashcards_revisados) VALUES (?, 1)
+            ON CONFLICT(data) DO UPDATE SET flashcards_revisados = flashcards_revisados + 1
+        """, (today_str(),))
+
+
+def build_edital_filter(edital_nome: str = "", cargo: str = "") -> tuple[str, list]:
+    """Constrói cláusula WHERE para filtros de edital_nome e cargo."""
+    where = ""
+    params = []
+    if edital_nome:
+        where += " AND edital_nome = ?"
+        params.append(edital_nome)
+    if cargo:
+        where += " AND cargo = ?"
+        params.append(cargo)
+    return where, params

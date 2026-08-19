@@ -2,13 +2,12 @@ import json
 import tempfile
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from database import get_db
-from logger import log
 from models import ProgressUpdate
-from utils import get_pdf_pages, build_tree
+from utils import build_tree, get_pdf_pages
 
 router = APIRouter(prefix="", tags=["PDFs"])
 
@@ -60,7 +59,7 @@ def get_progress_bulk():
 def serve_pdf(path: str):
     full = Path(PDF_ROOT) / path
     if not full.exists() or full.suffix.lower() != ".pdf":
-        raise HTTPException(404)
+        raise HTTPException(status_code=404, detail="PDF não encontrado")
     return FileResponse(str(full), media_type="application/pdf")
 
 
@@ -81,7 +80,7 @@ async def import_progress(file: UploadFile = File(...)):
     try:
         data = json.loads(content)
     except Exception:
-        raise HTTPException(400, "Arquivo JSON inválido")
+        raise HTTPException(status_code=400, detail="Arquivo JSON inválido") from None
     with get_db() as conn:
         for item in data:
             conn.execute("""

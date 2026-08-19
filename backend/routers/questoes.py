@@ -1,13 +1,12 @@
 import random
-import math
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
+from constants import DEFAULT_EXAM_DURATION_MIN, DEFAULT_EXAM_QUESTIONS, DEFAULT_TIME_PER_QUESTION_SEC
 from database import get_db
 from logger import log
 from models import QuestaoCreate, QuestaoResposta
-from utils import today_str
+from utils import paginate, today_str, update_streak
 
 router = APIRouter(prefix="", tags=["Questões"])
 
@@ -18,11 +17,11 @@ def list_questoes(
     topico: str = "",
     dificuldade: str = "",
     banca: str = "",
-    acertou: Optional[int] = Query(None),
-    respondidas: Optional[int] = Query(None),
+    acertou: int | None = Query(None),
+    respondidas: int | None = Query(None),
     data_inicio: str = "",
     data_fim: str = "",
-    page: Optional[int] = Query(None),
+    page: int | None = Query(None),
     limit: int = 50
 ):
     with get_db() as conn:
@@ -91,23 +90,7 @@ def list_questoes(
         rows = conn.execute(query, params).fetchall()
 
     items = [dict(r) for r in rows]
-
-    # Se page não fornecido, retorna array completo (retrocompatibilidade)
-    if page is None:
-        return items
-
-    # Paginação
-    total = len(items)
-    pages = math.ceil(total / limit) if limit > 0 else 1
-    start = (page - 1) * limit
-    end = start + limit
-    return {
-        "items": items[start:end],
-        "total": total,
-        "page": page,
-        "limit": limit,
-        "pages": pages
-    }
+    return paginate(items, page, limit)
 
 
 @router.get("/api/questoes/materias")
@@ -213,19 +196,9 @@ def questoes_stats_tempo():
             ORDER BY media ASC
         """).fetchall()
 
-        # Buscar dados do edital_info para análise
-        try:
-            edital_info = conn.execute("""
-                SELECT data_prova_objetiva FROM edital_info
-                WHERE data_prova_objetiva != '' LIMIT 1
-            """).fetchone()
-        except Exception:
-            edital_info = None
-
-    # Estimativa padrão: 180 min, 120 questões
-    tempo_prova_min = 180
-    questoes_prova = 120
-    tempo_por_questao_prova = int(tempo_prova_min * 60 / questoes_prova)  # 90s
+    tempo_prova_min = DEFAULT_EXAM_DURATION_MIN
+    questoes_prova = DEFAULT_EXAM_QUESTIONS
+    tempo_por_questao_prova = DEFAULT_TIME_PER_QUESTION_SEC
 
     # Análise
     if tempo_medio > 0 and tempo_medio <= tempo_por_questao_prova:
@@ -278,7 +251,7 @@ def get_questao(id: int):
     with get_db() as conn:
         row = conn.execute("SELECT * FROM questoes WHERE id = ?", (id,)).fetchone()
     if not row:
-        raise HTTPException(404)
+        raise HTTPException(status_code=404, detail="Questão não encontrada")
     return dict(row)
 
 
@@ -303,17 +276,13 @@ def responder_questao(id: int, body: QuestaoResposta):
     with get_db() as conn:
         questao = conn.execute("SELECT resposta_correta FROM questoes WHERE id = ?", (id,)).fetchone()
         if not questao:
-            raise HTTPException(404)
+            raise HTTPException(status_code=404, detail="Questão não encontrada")
         acertou = 1 if body.resposta.upper() == questao[0].upper() else 0
         conn.execute("""
             INSERT INTO questoes_respostas (questao_id, resposta_usuario, acertou, tempo_segundos, data)
             VALUES (?, ?, ?, ?, ?)
         """, (id, body.resposta, acertou, body.tempo_segundos, today_str()))
-        # Atualizar streak
-        conn.execute("""
-            INSERT INTO streaks (data, questoes_resolvidas) VALUES (?, 1)
-            ON CONFLICT(data) DO UPDATE SET questoes_resolvidas = questoes_resolvidas + 1
-        """, (today_str(),))
+        update_streak(conn, "questoes_resolvidas")
         conn.commit()
     return {"acertou": bool(acertou), "resposta_correta": questao[0]}
 
@@ -388,7 +357,7 @@ def questoes_vinculadas(edital_id: int):
     with get_db() as conn:
         topico = conn.execute("SELECT materia, topico FROM edital WHERE id = ?", (edital_id,)).fetchone()
         if not topico:
-            raise HTTPException(404)
+            raise HTTPException(status_code=404, detail="Tópico do edital não encontrado")
         rows = conn.execute("SELECT id, enunciado, resposta_correta FROM questoes WHERE materia = ? LIMIT 10",
                             (topico[0],)).fetchall()
     return {"materia": topico[0], "topico": topico[1], "questoes": [dict(r) for r in rows]}
@@ -400,7 +369,7 @@ def gerar_questao_template(edital_id: int):
     with get_db() as conn:
         topico = conn.execute("SELECT materia, topico FROM edital WHERE id = ?", (edital_id,)).fetchone()
     if not topico:
-        raise HTTPException(404)
+        raise HTTPException(status_code=404, detail="Tópico do edital não encontrado")
     return {
         "materia": topico[0],
         "topico": topico[1],

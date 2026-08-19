@@ -2,8 +2,9 @@ import sqlite3
 from contextlib import contextmanager
 
 from logger import log
+from settings import settings
 
-DB_PATH = "./progress.db"
+DB_PATH = settings.DB_PATH
 
 
 @contextmanager
@@ -56,13 +57,8 @@ def rebuild_search_index(conn):
     log.info("Search index rebuilt")
 
 
-def init_db():
-    """Cria todas as tabelas, faz migrações e cria índices."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-
-    # ========== TABELAS ==========
-
+def _create_tables(conn):
+    """Cria todas as tabelas do sistema."""
     # Tabela de progresso de PDFs
     conn.execute("""
         CREATE TABLE IF NOT EXISTS progress (
@@ -323,45 +319,53 @@ def init_db():
         )
     """)
 
-    # ========== MIGRAÇÕES ==========
 
+def _run_migrations(conn):
+    """Executa migrações de schema (ALTER TABLE)."""
     # Adicionar colunas no edital se não existirem
     try:
         conn.execute("SELECT edital_nome FROM edital LIMIT 1")
     except Exception:
         conn.execute("ALTER TABLE edital ADD COLUMN edital_nome TEXT DEFAULT 'Geral'")
+        log.info("Migration: added column edital_nome to edital")
 
     try:
         conn.execute("SELECT cargo FROM edital LIMIT 1")
     except Exception:
         conn.execute("ALTER TABLE edital ADD COLUMN cargo TEXT DEFAULT ''")
+        log.info("Migration: added column cargo to edital")
 
     try:
         conn.execute("SELECT pdf_link FROM edital LIMIT 1")
     except Exception:
         conn.execute("ALTER TABLE edital ADD COLUMN pdf_link TEXT DEFAULT ''")
+        log.info("Migration: added column pdf_link to edital")
 
     try:
         conn.execute("SELECT pdf_pagina FROM edital LIMIT 1")
     except Exception:
         conn.execute("ALTER TABLE edital ADD COLUMN pdf_pagina INTEGER DEFAULT 0")
+        log.info("Migration: added column pdf_pagina to edital")
 
     try:
         conn.execute("SELECT arquivado FROM edital LIMIT 1")
     except Exception:
         conn.execute("ALTER TABLE edital ADD COLUMN arquivado INTEGER DEFAULT 0")
+        log.info("Migration: added column arquivado to edital")
 
     try:
         conn.execute("SELECT proxima_revisao FROM edital LIMIT 1")
     except Exception:
         conn.execute("ALTER TABLE edital ADD COLUMN proxima_revisao TEXT DEFAULT ''")
         conn.execute("ALTER TABLE edital ADD COLUMN intervalo_revisao INTEGER DEFAULT 1")
+        log.info("Migration: added columns proxima_revisao, intervalo_revisao to edital")
 
     # Lote E: coluna banca nas questões
     try:
         conn.execute("SELECT banca FROM questoes LIMIT 1")
     except Exception:
         conn.execute("ALTER TABLE questoes ADD COLUMN banca TEXT DEFAULT ''")
+        log.info("Migration: added column banca to questoes")
 
     # Lote D: SM-2 para flashcards
     try:
@@ -369,6 +373,7 @@ def init_db():
     except Exception:
         conn.execute("ALTER TABLE flashcards ADD COLUMN easiness_factor REAL DEFAULT 2.5")
         conn.execute("ALTER TABLE flashcards ADD COLUMN repetitions INTEGER DEFAULT 0")
+        log.info("Migration: added SM-2 columns to flashcards")
 
     # Lote D: SM-2 para edital (revisão de tópicos)
     try:
@@ -376,17 +381,11 @@ def init_db():
     except Exception:
         conn.execute("ALTER TABLE edital ADD COLUMN easiness_factor_edital REAL DEFAULT 2.5")
         conn.execute("ALTER TABLE edital ADD COLUMN repetitions_edital INTEGER DEFAULT 0")
+        log.info("Migration: added SM-2 columns to edital")
 
-    # ========== DADOS PADRÃO ==========
 
-    # Inserir config padrão de metas se não existir
-    conn.execute("""
-        INSERT OR IGNORE INTO metas_config (id, meta_horas, meta_questoes, meta_flashcards, meta_paginas)
-        VALUES (1, 3.0, 30, 10, 20)
-    """)
-
-    # ========== ÍNDICES ==========
-
+def _create_indexes(conn):
+    """Cria índices para performance."""
     conn.execute("CREATE INDEX IF NOT EXISTS idx_streaks_data ON streaks(data)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_sessoes_data ON sessoes_estudo(data)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_questoes_respostas_data ON questoes_respostas(data)")
@@ -397,8 +396,7 @@ def init_db():
     conn.execute("CREATE INDEX IF NOT EXISTS idx_bookmarks_pdf_path ON bookmarks_pdf(pdf_path)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_edital_materia ON edital(materia)")
 
-    # ========== FTS5 FULL-TEXT SEARCH ==========
-
+    # FTS5 Full-Text Search
     conn.execute("""
         CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
             source,
@@ -409,10 +407,24 @@ def init_db():
         )
     """)
 
+
+def _seed_defaults(conn):
+    """Insere dados padrão se não existirem."""
+    conn.execute("""
+        INSERT OR IGNORE INTO metas_config (id, meta_horas, meta_questoes, meta_flashcards, meta_paginas)
+        VALUES (1, 3.0, 30, 10, 20)
+    """)
+
+
+def init_db():
+    """Inicializa o banco de dados: tabelas, migrações, índices e dados padrão."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    _create_tables(conn)
+    _run_migrations(conn)
+    _create_indexes(conn)
+    _seed_defaults(conn)
     conn.commit()
-
-    # Rebuild search index
     rebuild_search_index(conn)
-
     conn.close()
     log.info("Database initialized")

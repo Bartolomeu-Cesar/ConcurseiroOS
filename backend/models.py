@@ -1,6 +1,5 @@
-from typing import List, Optional
-from pydantic import BaseModel
 
+from pydantic import BaseModel
 
 # ============================================================
 # PDF Progress
@@ -83,7 +82,7 @@ class QuestaoResposta(BaseModel):
 class SimuladoCreate(BaseModel):
     titulo: str
     tempo_limite_min: int = 60
-    questao_ids: List[int]
+    questao_ids: list[int]
 
 
 class SimuladoResponder(BaseModel):
@@ -112,9 +111,9 @@ class CicloCreate(BaseModel):
 
 
 class CicloUpdate(BaseModel):
-    horas_alvo: Optional[float] = None
-    ativo: Optional[int] = None
-    ordem: Optional[int] = None
+    horas_alvo: float | None = None
+    ativo: int | None = None
+    ordem: int | None = None
 
 
 class CicloHoras(BaseModel):

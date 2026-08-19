@@ -1,25 +1,24 @@
 import random
-from datetime import date, timedelta
 
 from fastapi import APIRouter
 
+from constants import (
+    LEVEL_XP,
+    XP_PER_CORRECT,
+    XP_PER_FLASHCARD,
+    XP_PER_HOUR,
+    XP_PER_QUESTION,
+    XP_PER_SIMULADO,
+    XP_PER_TOPIC,
+    XP_STREAK_WEEKLY_BONUS,
+)
 from database import get_db
-from logger import log
-from models import MetasUpdate, DesafioCreate
-from utils import today_str, calculate_streak
+from models import DesafioCreate, MetasUpdate
+from utils import calculate_streak, today_str
 
 router = APIRouter(prefix="", tags=["Gamificação"])
 
-# XP rewards:
-# - Estudar 1 hora = 100 XP
-# - Resolver questão = 10 XP (acertar = +5 bonus)
-# - Revisar flashcard = 5 XP
-# - Completar tópico do edital = 25 XP
-# - Completar simulado = 50 XP
-# - Streak de 7 dias = 200 XP bonus
-
-# Levels: cada 500 XP = 1 nível
-LEVEL_XP = 500
+# XP rewards are defined in constants.py
 
 BADGES = [
     {"id": "first_hour", "name": "Primeira Hora", "desc": "Estudou 1 hora no total", "icon": "⏱", "condition": "horas >= 1"},
@@ -105,13 +104,13 @@ def get_gamification():
 
     # Calcular XP
     xp = int(
-        horas * 100 +
-        questoes_total * 10 +
-        questoes_certas * 5 +
-        flashcards_rev * 5 +
-        topicos_concluidos * 25 +
-        simulados_feitos * 50 +
-        (streak // 7) * 200
+        horas * XP_PER_HOUR +
+        questoes_total * XP_PER_QUESTION +
+        questoes_certas * XP_PER_CORRECT +
+        flashcards_rev * XP_PER_FLASHCARD +
+        topicos_concluidos * XP_PER_TOPIC +
+        simulados_feitos * XP_PER_SIMULADO +
+        (streak // 7) * XP_STREAK_WEEKLY_BONUS
     )
 
     nivel = (xp // LEVEL_XP) + 1
@@ -124,18 +123,7 @@ def get_gamification():
     for badge in BADGES:
         earned = False
         cond = badge["condition"]
-        if cond == "horas >= 1" and horas >= 1: earned = True
-        elif cond == "horas >= 10" and horas >= 10: earned = True
-        elif cond == "horas >= 50" and horas >= 50: earned = True
-        elif cond == "questoes >= 1" and questoes_total >= 1: earned = True
-        elif cond == "questoes >= 100" and questoes_total >= 100: earned = True
-        elif cond == "questoes >= 500" and questoes_total >= 500: earned = True
-        elif cond == "streak >= 7" and streak >= 7: earned = True
-        elif cond == "streak >= 30" and streak >= 30: earned = True
-        elif cond == "simulados >= 1" and simulados_feitos >= 1: earned = True
-        elif cond == "accuracy >= 80" and accuracy >= 80 and questoes_total >= 20: earned = True
-        elif cond == "topicos >= 10" and topicos_concluidos >= 10: earned = True
-        elif cond == "topicos >= 50" and topicos_concluidos >= 50: earned = True
+        if cond == "horas >= 1" and horas >= 1 or cond == "horas >= 10" and horas >= 10 or cond == "horas >= 50" and horas >= 50 or cond == "questoes >= 1" and questoes_total >= 1 or cond == "questoes >= 100" and questoes_total >= 100 or cond == "questoes >= 500" and questoes_total >= 500 or cond == "streak >= 7" and streak >= 7 or cond == "streak >= 30" and streak >= 30 or cond == "simulados >= 1" and simulados_feitos >= 1 or cond == "accuracy >= 80" and accuracy >= 80 and questoes_total >= 20 or cond == "topicos >= 10" and topicos_concluidos >= 10 or cond == "topicos >= 50" and topicos_concluidos >= 50: earned = True
 
         if earned:
             badges_earned.append(badge)

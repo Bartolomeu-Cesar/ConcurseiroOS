@@ -1,16 +1,15 @@
 import os
 import tempfile
-import math
 from datetime import date, datetime, timedelta
-from typing import Optional
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Query
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from pypdf import PdfReader
 
+from constants import SM2_FIRST_INTERVAL, SM2_INITIAL_EF, SM2_MIN_EF, SM2_SECOND_INTERVAL
 from database import get_db
 from logger import log
-from models import EditalCreate, EditalHoras, EditalPdfLink, NotaTopicoCreate, EditalReviewSM2, ResumoCreate
-from utils import today_str
+from models import EditalCreate, EditalHoras, EditalPdfLink, EditalReviewSM2, NotaTopicoCreate, ResumoCreate
+from utils import paginate, today_str
 
 router = APIRouter(prefix="", tags=["Edital"])
 
@@ -56,13 +55,14 @@ def list_editais_arquivados():
                 FROM edital WHERE arquivado = 1
                 GROUP BY edital_nome, cargo ORDER BY edital_nome, cargo
             """).fetchall()
-        except Exception:
+        except Exception as e:
+            log.warning(f"Could not query archived editais: {e}")
             rows = []
     return [{"edital_nome": r[0], "cargo": r[1], "total": r[2]} for r in rows]
 
 
 @router.get("/api/edital", summary="Listar tópicos do edital", description="Retorna todos os tópicos do edital, com filtros opcionais e paginação")
-def list_edital(edital_nome: str = "", cargo: str = "", incluir_arquivados: bool = False, page: Optional[int] = Query(None), limit: int = 50):
+def list_edital(edital_nome: str = "", cargo: str = "", incluir_arquivados: bool = False, page: int | None = Query(None), limit: int = 50):
     with get_db() as conn:
         query = "SELECT id, edital_nome, cargo, materia, topico, status, horas_estudadas, pdf_link, pdf_pagina FROM edital WHERE 1=1"
         params = []
@@ -78,23 +78,7 @@ def list_edital(edital_nome: str = "", cargo: str = "", incluir_arquivados: bool
         rows = conn.execute(query, params).fetchall()
 
     items = [dict(r) for r in rows]
-
-    # Se page não fornecido, retorna array completo (retrocompatibilidade)
-    if page is None:
-        return items
-
-    # Paginação
-    total = len(items)
-    pages = math.ceil(total / limit) if limit > 0 else 1
-    start = (page - 1) * limit
-    end = start + limit
-    return {
-        "items": items[start:end],
-        "total": total,
-        "page": page,
-        "limit": limit,
-        "pages": pages
-    }
+    return paginate(items, page, limit)
 
 
 @router.post("/api/edital", summary="Criar tópico", description="Adiciona um novo tópico ao edital verticalizado")
@@ -115,7 +99,7 @@ def toggle_edital_status(id: int):
     with get_db() as conn:
         row = conn.execute("SELECT status FROM edital WHERE id = ?", (id,)).fetchone()
         if not row:
-            raise HTTPException(404)
+            raise HTTPException(status_code=404, detail="Tópico do edital não encontrado")
         current = row[0]
         next_status = cycle[(cycle.index(current) + 1) % len(cycle)] if current in cycle else cycle[0]
         conn.execute("UPDATE edital SET status = ? WHERE id = ?", (next_status, id))
@@ -128,7 +112,7 @@ def add_edital_horas(id: int, body: EditalHoras):
     with get_db() as conn:
         row = conn.execute("SELECT horas_estudadas, materia FROM edital WHERE id = ?", (id,)).fetchone()
         if not row:
-            raise HTTPException(404)
+            raise HTTPException(status_code=404, detail="Tópico do edital não encontrado")
         new_horas = row[0] + body.horas
         conn.execute("UPDATE edital SET horas_estudadas = ? WHERE id = ?", (new_horas, id))
         # Registrar sessão de estudo
@@ -255,9 +239,9 @@ async def importar_edital_pdf(file: UploadFile = File(...), edital_nome: str = "
         text = ""
         for page in reader.pages:
             text += page.extract_text() + "\n"
-    except Exception:
+    except Exception as e:
         os.unlink(tmp.name)
-        raise HTTPException(400, "Não foi possível ler o PDF")
+        raise HTTPException(status_code=400, detail=f"Não foi possível ler o PDF: {e}") from e
 
     os.unlink(tmp.name)
 
@@ -296,7 +280,6 @@ def get_notas_topico(id: int):
 
 @router.post("/api/edital/{id}/notas")
 def add_nota_topico(id: int, body: NotaTopicoCreate):
-    from datetime import datetime
     with get_db() as conn:
         cur = conn.execute("INSERT INTO notas_topico (edital_id, conteudo, created_at) VALUES (?, ?, ?)",
                            (id, body.conteudo, datetime.now().isoformat()))
@@ -320,25 +303,25 @@ def agendar_revisao_topico(id: int):
             "SELECT intervalo_revisao, easiness_factor_edital, repetitions_edital FROM edital WHERE id = ?", (id,)
         ).fetchone()
         if not row:
-            raise HTTPException(404)
+            raise HTTPException(status_code=404, detail="Tópico do edital não encontrado")
 
         intervalo = row[0] or 1
-        ef = row[1] if row[1] is not None else 2.5
+        ef = row[1] if row[1] is not None else SM2_INITIAL_EF
         reps = row[2] if row[2] is not None else 0
         quality = 4  # default: acertou
 
         # SM-2 Algorithm
         if reps == 0:
-            intervalo = 1
+            intervalo = SM2_FIRST_INTERVAL
         elif reps == 1:
-            intervalo = 6
+            intervalo = SM2_SECOND_INTERVAL
         else:
             intervalo = round(intervalo * ef)
         reps += 1
 
         # Atualizar EF
         ef = ef + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02))
-        ef = max(1.3, ef)
+        ef = max(SM2_MIN_EF, ef)
 
         proxima = (date.today() + timedelta(days=intervalo)).isoformat()
         conn.execute(
@@ -354,26 +337,26 @@ def agendar_revisao_topico(id: int):
 def revisar_topico_sm2(id: int, body: EditalReviewSM2):
     """Revisão de tópico do edital usando SM-2 com quality variável (0-5)"""
     if body.quality < 0 or body.quality > 5:
-        raise HTTPException(400, "quality deve ser entre 0 e 5")
+        raise HTTPException(status_code=400, detail="quality deve ser entre 0 e 5")
 
     with get_db() as conn:
         row = conn.execute(
             "SELECT intervalo_revisao, easiness_factor_edital, repetitions_edital FROM edital WHERE id = ?", (id,)
         ).fetchone()
         if not row:
-            raise HTTPException(404)
+            raise HTTPException(status_code=404, detail="Tópico do edital não encontrado")
 
         intervalo = row[0] or 1
-        ef = row[1] if row[1] is not None else 2.5
+        ef = row[1] if row[1] is not None else SM2_INITIAL_EF
         reps = row[2] if row[2] is not None else 0
         quality = body.quality
 
         # SM-2 Algorithm
         if quality >= 3:
             if reps == 0:
-                intervalo = 1
+                intervalo = SM2_FIRST_INTERVAL
             elif reps == 1:
-                intervalo = 6
+                intervalo = SM2_SECOND_INTERVAL
             else:
                 intervalo = round(intervalo * ef)
             reps += 1
@@ -383,7 +366,7 @@ def revisar_topico_sm2(id: int, body: EditalReviewSM2):
 
         # Atualizar EF
         ef = ef + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02))
-        ef = max(1.3, ef)
+        ef = max(SM2_MIN_EF, ef)
 
         proxima = (date.today() + timedelta(days=intervalo)).isoformat()
         conn.execute(
@@ -414,7 +397,8 @@ def revisoes_pendentes():
                 WHERE proxima_revisao != '' AND proxima_revisao <= ?
                 ORDER BY proxima_revisao
             """, (today_str(),)).fetchall()
-        except Exception:
+        except Exception as e:
+            log.warning(f"Could not query pending reviews: {e}")
             rows = []
     return [dict(r) for r in rows]
 
@@ -442,7 +426,7 @@ def create_resumo(id: int, body: ResumoCreate):
         # Verificar se edital_id existe
         row = conn.execute("SELECT id FROM edital WHERE id = ?", (id,)).fetchone()
         if not row:
-            raise HTTPException(404, "Tópico do edital não encontrado")
+            raise HTTPException(status_code=404, detail="Tópico do edital não encontrado")
         cur = conn.execute(
             "INSERT INTO resumos (edital_id, resumo, tipo, created_at) VALUES (?, ?, ?, ?)",
             (id, body.resumo, body.tipo, datetime.now().isoformat())
@@ -469,7 +453,7 @@ def prompt_resumo(id: int):
     with get_db() as conn:
         row = conn.execute("SELECT materia, topico FROM edital WHERE id = ?", (id,)).fetchone()
         if not row:
-            raise HTTPException(404, "Tópico do edital não encontrado")
+            raise HTTPException(status_code=404, detail="Tópico do edital não encontrado")
 
     materia = row[0]
     topico = row[1]

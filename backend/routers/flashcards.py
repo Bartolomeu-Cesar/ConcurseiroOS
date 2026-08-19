@@ -1,40 +1,23 @@
-import math
 from datetime import date, timedelta
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
+from constants import SM2_FIRST_INTERVAL, SM2_INITIAL_EF, SM2_MIN_EF, SM2_SECOND_INTERVAL, SPEED_REVIEW_LIMIT
 from database import get_db
 from logger import log
 from models import FlashcardCreate, FlashcardReview, FlashcardReviewSM2
-from utils import today_str
+from utils import paginate, today_str, update_streak
 
 router = APIRouter(prefix="", tags=["Flashcards"])
 
 
 @router.get("/api/flashcards", summary="Listar flashcards", description="Lista todos os flashcards com paginação opcional")
-def list_flashcards(page: Optional[int] = Query(None), limit: int = 50):
+def list_flashcards(page: int | None = Query(None), limit: int = 50):
     with get_db() as conn:
         rows = conn.execute("SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions FROM flashcards").fetchall()
 
     items = [dict(r) for r in rows]
-
-    # Se page não fornecido, retorna array completo (retrocompatibilidade)
-    if page is None:
-        return items
-
-    # Paginação
-    total = len(items)
-    pages = math.ceil(total / limit) if limit > 0 else 1
-    start = (page - 1) * limit
-    end = start + limit
-    return {
-        "items": items[start:end],
-        "total": total,
-        "page": page,
-        "limit": limit,
-        "pages": pages
-    }
+    return paginate(items, page, limit)
 
 
 @router.get("/api/flashcards/today")
@@ -66,16 +49,12 @@ def review_flashcard(id: int, body: FlashcardReview):
     with get_db() as conn:
         row = conn.execute("SELECT intervalo_dias FROM flashcards WHERE id = ?", (id,)).fetchone()
         if not row:
-            raise HTTPException(404)
+            raise HTTPException(status_code=404, detail="Flashcard não encontrado")
         new_intervalo = row[0] * 2 if body.acertou else 1
         proxima = (date.today() + timedelta(days=new_intervalo)).isoformat()
         conn.execute("UPDATE flashcards SET intervalo_dias = ?, proxima_revisao = ? WHERE id = ?",
                      (new_intervalo, proxima, id))
-        # Atualizar streak
-        conn.execute("""
-            INSERT INTO streaks (data, flashcards_revisados) VALUES (?, 1)
-            ON CONFLICT(data) DO UPDATE SET flashcards_revisados = flashcards_revisados + 1
-        """, (today_str(),))
+        update_streak(conn, "flashcards_revisados")
         conn.commit()
     return {"id": id, "intervalo_dias": new_intervalo, "proxima_revisao": proxima}
 
@@ -86,26 +65,26 @@ def review_flashcard_sm2(id: int, body: FlashcardReviewSM2):
     quality: 0-5 (0=esqueceu, 3=correto com dificuldade, 5=perfeito)
     """
     if body.quality < 0 or body.quality > 5:
-        raise HTTPException(400, "quality deve ser entre 0 e 5")
+        raise HTTPException(status_code=400, detail="quality deve ser entre 0 e 5")
 
     with get_db() as conn:
         row = conn.execute(
             "SELECT intervalo_dias, easiness_factor, repetitions FROM flashcards WHERE id = ?", (id,)
         ).fetchone()
         if not row:
-            raise HTTPException(404)
+            raise HTTPException(status_code=404, detail="Flashcard não encontrado")
 
         intervalo = row[0] or 1
-        ef = row[1] if row[1] is not None else 2.5
+        ef = row[1] if row[1] is not None else SM2_INITIAL_EF
         reps = row[2] if row[2] is not None else 0
         quality = body.quality
 
         # SM-2 Algorithm
         if quality >= 3:
             if reps == 0:
-                intervalo = 1
+                intervalo = SM2_FIRST_INTERVAL
             elif reps == 1:
-                intervalo = 6
+                intervalo = SM2_SECOND_INTERVAL
             else:
                 intervalo = round(intervalo * ef)
             reps += 1
@@ -115,7 +94,7 @@ def review_flashcard_sm2(id: int, body: FlashcardReviewSM2):
 
         # Atualizar EF
         ef = ef + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02))
-        ef = max(1.3, ef)
+        ef = max(SM2_MIN_EF, ef)
 
         proxima = (date.today() + timedelta(days=intervalo)).isoformat()
 
@@ -123,11 +102,7 @@ def review_flashcard_sm2(id: int, body: FlashcardReviewSM2):
             "UPDATE flashcards SET intervalo_dias = ?, proxima_revisao = ?, easiness_factor = ?, repetitions = ? WHERE id = ?",
             (intervalo, proxima, round(ef, 4), reps, id)
         )
-        # Atualizar streak
-        conn.execute("""
-            INSERT INTO streaks (data, flashcards_revisados) VALUES (?, 1)
-            ON CONFLICT(data) DO UPDATE SET flashcards_revisados = flashcards_revisados + 1
-        """, (today_str(),))
+        update_streak(conn, "flashcards_revisados")
         conn.commit()
 
     log.info(f"Flashcard SM-2 review: id={id} quality={quality} ef={ef:.4f} reps={reps} interval={intervalo}")
@@ -152,12 +127,12 @@ def delete_flashcard(id: int):
 
 @router.get("/api/speed-review")
 def speed_review():
-    """Retorna 20 flashcards para revisão relâmpago (modo rápido)"""
+    """Retorna flashcards para revisão relâmpago (modo rápido)"""
     with get_db() as conn:
         rows = conn.execute("""
             SELECT id, pergunta, resposta FROM flashcards
             WHERE proxima_revisao <= ?
             ORDER BY intervalo_dias ASC
-            LIMIT 20
-        """, (today_str(),)).fetchall()
+            LIMIT ?
+        """, (today_str(), SPEED_REVIEW_LIMIT)).fetchall()
     return [{"id": r[0], "pergunta": r[1], "resposta": r[2]} for r in rows]

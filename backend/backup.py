@@ -1,10 +1,12 @@
-import shutil
 import os
-from datetime import datetime, date
+import shutil
+from datetime import datetime
 from pathlib import Path
 
-BACKUP_DIR = Path("./backups")
-MAX_BACKUPS = 7
+from constants import BACKUP_INTERVAL_HOURS, MAX_BACKUPS
+from settings import settings
+
+BACKUP_DIR = Path(settings.BACKUP_DIR)
 
 
 def ensure_backup_dir():
@@ -54,12 +56,12 @@ def restore_backup(filename: str, db_path: str) -> bool:
 
 
 def auto_backup_if_needed(db_path: str):
-    """Cria backup se o último foi há mais de 24h."""
+    """Cria backup se o último foi há mais de BACKUP_INTERVAL_HOURS."""
     ensure_backup_dir()
     backups = sorted(BACKUP_DIR.glob("progress_backup_*.db"), key=os.path.getmtime, reverse=True)
     if not backups:
         create_backup(db_path)
         return
     last_backup_time = datetime.fromtimestamp(backups[0].stat().st_mtime)
-    if (datetime.now() - last_backup_time).total_seconds() > 86400:  # 24h
+    if (datetime.now() - last_backup_time).total_seconds() > BACKUP_INTERVAL_HOURS * 3600:
         create_backup(db_path)

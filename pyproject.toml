@@ -1,0 +1,36 @@
+[project]
+name = "concurseiro-os"
+version = "2.2.0"
+description = "Sistema de estudos para concursos públicos"
+requires-python = ">=3.10"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM"]
+ignore = [
+    "E501",   # line too long (controlado por line-length)
+    "E402",   # module import not at top (necessário para configuração de MIME types e settings)
+    "E701",   # multiple statements on one line (usado em migrações compactas)
+    "E741",   # ambiguous variable name (l, O, I) — usado como 'l' em loops
+    "B008",   # function call in default argument (FastAPI Query/Depends)
+    "N802",   # function name should be lowercase (alguns nomes em português)
+    "N806",   # variable in function should be lowercase
+    "UP007",  # Use X | Y instead of Optional (compat Python 3.9)
+    "SIM115", # open file with context handler (tempfile patterns)
+    "SIM105", # suppressible exception (try/except pass for migrations)
+    "SIM108", # if-else-block-instead-of-if-exp (readability preference)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["database", "models", "utils", "logger", "backup", "constants", "settings"]
+
+[tool.ruff.lint.per-file-ignores]
+"backend/main_old.py" = ["ALL"]
+"backend/tests/*" = ["B007"]
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+pythonpath = ["backend"]

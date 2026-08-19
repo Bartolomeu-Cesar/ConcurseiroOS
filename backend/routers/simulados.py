@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException
 
 from database import get_db
 from logger import log
-from models import SimuladoCreate, SimuladoResponder, SimuladoFinalizar, SimuladoProvaReal
+from models import SimuladoCreate, SimuladoFinalizar, SimuladoProvaReal, SimuladoResponder
 from utils import today_str
 
 router = APIRouter(prefix="", tags=["Simulados"])
@@ -23,7 +23,7 @@ def get_simulado(id: int):
     with get_db() as conn:
         sim = conn.execute("SELECT * FROM simulados WHERE id = ?", (id,)).fetchone()
         if not sim:
-            raise HTTPException(404)
+            raise HTTPException(status_code=404, detail="Simulado não encontrado")
         questoes = conn.execute("""
             SELECT sq.*, q.enunciado, q.alternativa_a, q.alternativa_b, q.alternativa_c,
                    q.alternativa_d, q.alternativa_e, q.resposta_correta, q.materia, q.explicacao
@@ -55,7 +55,7 @@ def responder_simulado(id: int, body: SimuladoResponder):
     with get_db() as conn:
         questao = conn.execute("SELECT resposta_correta FROM questoes WHERE id = ?", (body.questao_id,)).fetchone()
         if not questao:
-            raise HTTPException(404)
+            raise HTTPException(status_code=404, detail="Questão não encontrada")
         acertou = 1 if body.resposta.upper() == questao[0].upper() else 0
         conn.execute("""
             UPDATE simulado_questoes SET resposta_usuario = ?, acertou = ?
@@ -111,8 +111,7 @@ def simulado_prova_real(body: SimuladoProvaReal):
         materias = conn.execute(query, params).fetchall()
 
         if not materias:
-            from fastapi import HTTPException
-            raise HTTPException(400, "Nenhuma matéria encontrada no edital. Cadastre tópicos primeiro.")
+            raise HTTPException(status_code=400, detail="Nenhuma matéria encontrada no edital. Cadastre tópicos primeiro.")
 
         # Calcular total de tópicos (proxy para peso)
         total_topicos = sum(r[1] for r in materias)
@@ -149,8 +148,7 @@ def simulado_prova_real(body: SimuladoProvaReal):
         questoes_selecionadas = list(dict.fromkeys(questoes_selecionadas))
 
         if not questoes_selecionadas:
-            from fastapi import HTTPException
-            raise HTTPException(400, "Nenhuma questão disponível no banco para as matérias do edital.")
+            raise HTTPException(status_code=400, detail="Nenhuma questão disponível no banco para as matérias do edital.")
 
         # Criar simulado
         cur = conn.execute("""

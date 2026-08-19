@@ -12,6 +12,7 @@ Executar: pytest tests/test_lote_ef.py -v
 import os
 import sys
 import tempfile
+
 import pytest
 
 # Configurar DB temporário ANTES de importar o app
@@ -23,11 +24,12 @@ os.environ.setdefault("TEST_DB", _tmp_db.name)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import database
+
 database.DB_PATH = _tmp_db.name
 database.init_db()
 
-from main import app
 from fastapi.testclient import TestClient
+from main import app
 
 
 @pytest.fixture(scope="module")

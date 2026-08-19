@@ -1,20 +1,16 @@
 import random
 import time
-import sqlite3
 from datetime import date, datetime, timedelta
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
+from backup import create_backup, list_backups, restore_backup
 from database import get_db, rebuild_search_index
 from logger import log
-from models import (
-    NotaCreate, PlanejadorItem, CadernoCreate, CadernoAddItem,
-    BookmarkCreate, FeynmanCreate
-)
+from models import BookmarkCreate, CadernoAddItem, CadernoCreate, FeynmanCreate, NotaCreate, PlanejadorItem
+from settings import settings
 from utils import today_str
-from backup import create_backup, list_backups, restore_backup
 
 router = APIRouter(prefix="", tags=["Utilidades"])
 
@@ -51,7 +47,7 @@ def health_check():
         "status": "ok",
         "uptime_seconds": round(uptime, 1),
         "database": db_status,
-        "version": "2.1.0",
+        "version": settings.APP_VERSION,
         "tables_count": tables_count,
         "edital_count": edital_count,
         "timestamp": datetime.now().isoformat()
@@ -85,7 +81,7 @@ def restore_backup_endpoint(body: RestoreRequest):
     """Restaura um backup específico."""
     success = restore_backup(body.filename, DB_PATH)
     if not success:
-        raise HTTPException(404, "Backup não encontrado")
+        raise HTTPException(status_code=404, detail="Backup não encontrado")
     log.info(f"Backup restored: {body.filename}")
     return {"ok": True, "restored": body.filename}
 
@@ -262,7 +258,7 @@ def get_caderno(id: int):
     with get_db() as conn:
         caderno = conn.execute("SELECT * FROM cadernos WHERE id = ?", (id,)).fetchone()
         if not caderno:
-            raise HTTPException(404)
+            raise HTTPException(status_code=404, detail="Caderno não encontrado")
         itens = conn.execute("SELECT * FROM caderno_itens WHERE caderno_id = ?", (id,)).fetchall()
     return {"caderno": dict(caderno), "itens": [dict(i) for i in itens]}
 
@@ -382,7 +378,8 @@ def get_countdown():
                 WHERE data_prova_objetiva != '' AND data_prova_objetiva != 'Consultar edital'
                 ORDER BY data_prova_objetiva
             """).fetchall()
-        except Exception:
+        except Exception as e:
+            log.warning(f"Could not fetch countdown data: {e}")
             rows = []
     result = []
     for r in rows:

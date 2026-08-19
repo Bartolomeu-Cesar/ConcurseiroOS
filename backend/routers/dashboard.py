@@ -1,17 +1,15 @@
 import json
-import re
 import math
-import random
+import re
 import tempfile
 from datetime import date, datetime, timedelta
-from typing import Optional
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Query
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 
 from database import get_db
 from logger import log
-from utils import today_str, calculate_streak
+from utils import calculate_streak, paginate, today_str
 
 router = APIRouter(prefix="", tags=["Dashboard & Analytics"])
 
@@ -639,7 +637,7 @@ def plano_automatico(edital_nome: str = "", cargo: str = "", horas_dia: float = 
 
 
 @router.get("/api/linha-tempo", summary="Linha do tempo", description="Histórico de sessões de estudo com paginação opcional")
-def linha_tempo(page: Optional[int] = Query(None), limit: int = 50):
+def linha_tempo(page: int | None = Query(None), limit: int = 50):
     """Histórico de sessões de estudo (timeline)"""
     with get_db() as conn:
         rows = conn.execute("""
@@ -649,22 +647,11 @@ def linha_tempo(page: Optional[int] = Query(None), limit: int = 50):
 
     items = [dict(r) for r in rows]
 
-    # Se page não fornecido, retorna array completo (retrocompatibilidade)
+    # Se page não fornecido, retorna array completo (retrocompatibilidade) — max 50
     if page is None:
-        return items[:50]  # Mantém o limite original de 50
+        return items[:50]
 
-    # Paginação
-    total = len(items)
-    pages = math.ceil(total / limit) if limit > 0 else 1
-    start = (page - 1) * limit
-    end = start + limit
-    return {
-        "items": items[start:end],
-        "total": total,
-        "page": page,
-        "limit": limit,
-        "pages": pages
-    }
+    return paginate(items, page, limit)
 
 
 @router.get("/api/exportar-stats")
@@ -779,7 +766,7 @@ async def importar_tudo(file: UploadFile = File(...)):
     try:
         data = json.loads(content)
     except Exception:
-        raise HTTPException(400, "JSON inválido")
+        raise HTTPException(status_code=400, detail="JSON inválido") from None
 
     with get_db() as conn:
         count = 0
