@@ -808,7 +808,29 @@
         const el = document.getElementById('daily-challenge');
         if (!data.questao) { el.innerHTML = `<p style="color:#a6e3a1;font-size:0.9rem;">${data.message}</p>`; return; }
         const q = data.questao;
-        el.innerHTML = `<div style="font-size:0.88rem;line-height:1.5;margin-bottom:8px;">${q.enunciado.substring(0,200)}...</div><div style="font-size:0.78rem;color:#9399b2;">${q.materia}</div><a href="/questoes.html" style="font-size:0.82rem;">Ir resolver →</a>`;
+        el.innerHTML = `<div style="font-size:0.88rem;line-height:1.5;margin-bottom:8px;">${q.enunciado.substring(0,200)}${q.enunciado.length > 200 ? '...' : ''}</div><div style="font-size:0.78rem;color:#9399b2;margin-bottom:8px;">${q.materia}${q.topico ? ' • '+q.topico : ''}</div><div style="display:flex;flex-wrap:wrap;gap:6px;">${['A','B','C','D','E'].filter(l => q['alternativa_'+l.toLowerCase()]).map(l => `<button onclick="responderDailyChallenge(${q.id},'${l}',this)" style="background:#45475a;border:none;color:#cdd6f4;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:0.8rem;"><strong>${l})</strong> ${q['alternativa_'+l.toLowerCase()].substring(0,40)}</button>`).join('')}</div><div id="daily-feedback" style="margin-top:8px;display:none;"></div>`;
+      } catch(e) {}
+    }
+
+    async function responderDailyChallenge(qId, letra, btn) {
+      try {
+        const res = await fetch(`/api/questoes/${qId}/responder`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({resposta: letra, tempo_segundos: 0})
+        }).then(r => r.json());
+        const fb = document.getElementById('daily-feedback');
+        fb.style.display = 'block';
+        if (res.acertou) {
+          fb.innerHTML = `<span style="color:#a6e3a1;font-weight:600;">✓ Correto!</span>`;
+          btn.style.background = '#a6e3a1'; btn.style.color = '#1e1e2e';
+        } else {
+          fb.innerHTML = `<span style="color:#f38ba8;font-weight:600;">✗ Errado. Resposta: ${res.resposta_correta}</span>`;
+          btn.style.background = '#f38ba8'; btn.style.color = '#1e1e2e';
+        }
+        // Desabilitar todos os botões
+        btn.parentElement.querySelectorAll('button').forEach(b => { b.disabled = true; b.style.opacity = '0.6'; });
+        btn.style.opacity = '1';
       } catch(e) {}
     }
 
