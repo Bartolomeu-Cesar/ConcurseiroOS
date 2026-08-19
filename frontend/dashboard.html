@@ -1175,7 +1175,7 @@
         const data = await fetch('/api/resumo-diario').then(r => r.json());
         const el = document.getElementById('resumo-diario');
         const hFmt = (h) => { const hrs = Math.floor(h); const mins = Math.round((h - hrs) * 60); if (hrs === 0) return `${mins}min`; if (mins === 0) return `${hrs}h`; return `${hrs}h ${mins}min`; };
-        el.innerHTML = `<div style="font-size:0.85rem;line-height:1.8;"><div>⏱ <strong>${hFmt(data.horas || 0)}</strong> estudadas</div><div>❓ <strong>${data.questoes || 0}</strong> questões resolvidas</div><div>🧠 <strong>${data.flashcards || 0}</strong> flashcards revisados</div>${data.sugestao_amanha?.length ? `<div style="margin-top:8px;padding:8px;background:#45475a;border-radius:6px;font-size:0.78rem;">💡 Amanhã foque em: <strong>${data.sugestao_amanha.join(', ')}</strong></div>` : ''}</div>`;
+        el.innerHTML = `<div style="font-size:0.85rem;line-height:1.8;"><div>⏱ <strong>${hFmt(data.horas || 0)}</strong> estudadas</div><div>❓ <strong>${data.questoes || 0}</strong> questões resolvidas</div><div>🧠 <strong>${data.flashcards || 0}</strong> flashcards revisados</div>${data.sugestao_amanha?.length ? `<div style="margin-top:8px;padding:8px;background:#313244;border:1px solid #45475a;border-radius:6px;font-size:0.78rem;color:#cdd6f4;">💡 Amanhã foque em: <strong style="color:#f9e2af;">${data.sugestao_amanha.join(', ')}</strong></div>` : ''}</div>`;
       } catch(e) {}
     }
 
