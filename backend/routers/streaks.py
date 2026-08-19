@@ -1,4 +1,5 @@
 import random
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends
 
@@ -174,7 +175,21 @@ def conquistas_diarias(conn=Depends(get_db_session)):
 @router.get("/api/desafios")
 def list_desafios(conn=Depends(get_db_session)):
     rows = conn.execute("SELECT * FROM desafios ORDER BY finalizado ASC, created_at DESC").fetchall()
-    return [dict(r) for r in rows]
+    desafios = []
+    for r in rows:
+        d = dict(r)
+        # Calcular dias restantes
+        try:
+            criado = date.fromisoformat(d["created_at"])
+            expira = criado + timedelta(days=d["dias"])
+            d["dias_restantes"] = max(0, (expira - date.today()).days)
+            d["expirado"] = d["dias_restantes"] == 0 and not d["finalizado"]
+        except:
+            d["dias_restantes"] = d["dias"]
+            d["expirado"] = False
+        d["pct"] = min(100, round(d["progresso"] / d["meta_valor"] * 100, 1)) if d["meta_valor"] > 0 else 0
+        desafios.append(d)
+    return desafios
 
 
 @router.post("/api/desafios")
@@ -184,3 +199,158 @@ def create_desafio(body: DesafioCreate, conn=Depends(get_db_session)):
         (body.titulo, body.meta_tipo, body.meta_valor, body.materia, body.dias, today_str()))
     conn.commit()
     return {"id": cur.lastrowid, "ok": True}
+
+
+@router.delete("/api/desafios/{id}")
+def delete_desafio(id: int, conn=Depends(get_db_session)):
+    conn.execute("DELETE FROM desafios WHERE id = ?", (id,))
+    conn.commit()
+    return {"ok": True}
+
+
+@router.post("/api/desafios/atualizar-progresso")
+def atualizar_progresso_desafios(conn=Depends(get_db_session)):
+    """Atualiza o progresso de TODOS os desafios ativos baseado nos dados reais."""
+    desafios = conn.execute("SELECT * FROM desafios WHERE finalizado = 0").fetchall()
+    atualizados = 0
+
+    for d in desafios:
+        criado = d["created_at"]
+        meta_tipo = d["meta_tipo"]
+        materia = d["materia"]
+        meta_valor = d["meta_valor"]
+
+        progresso = 0
+        if meta_tipo == "questoes":
+            if materia:
+                progresso = conn.execute(
+                    "SELECT COUNT(*) FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id WHERE qr.data >= ? AND q.materia = ?",
+                    (criado, materia)
+                ).fetchone()[0]
+            else:
+                progresso = conn.execute(
+                    "SELECT COUNT(*) FROM questoes_respostas WHERE data >= ?", (criado,)
+                ).fetchone()[0]
+        elif meta_tipo == "horas":
+            if materia:
+                row = conn.execute(
+                    "SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE data >= ? AND materia = ?",
+                    (criado, materia)
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    "SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE data >= ?", (criado,)
+                ).fetchone()
+            progresso = int(row[0])
+        elif meta_tipo == "flashcards":
+            progresso = conn.execute(
+                "SELECT COALESCE(SUM(flashcards_revisados), 0) FROM streaks WHERE data >= ?", (criado,)
+            ).fetchone()[0]
+        elif meta_tipo == "topicos":
+            if materia:
+                progresso = conn.execute(
+                    "SELECT COUNT(*) FROM edital WHERE status = 'Concluído' AND materia = ?", (materia,)
+                ).fetchone()[0]
+            else:
+                progresso = conn.execute(
+                    "SELECT COUNT(*) FROM edital WHERE status = 'Concluído'"
+                ).fetchone()[0]
+
+        finalizado = 1 if progresso >= meta_valor else 0
+        conn.execute(
+            "UPDATE desafios SET progresso = ?, finalizado = ? WHERE id = ?",
+            (min(progresso, meta_valor), finalizado, d["id"])
+        )
+        atualizados += 1
+
+    conn.commit()
+    return {"ok": True, "atualizados": atualizados}
+
+
+@router.get("/api/desafios/sugestoes")
+def sugestoes_desafios(conn=Depends(get_db_session)):
+    """Sugere desafios baseados no desempenho atual."""
+    sugestoes = []
+
+    # 1. Matéria mais fraca (< 60% acerto, mínimo 5 questões)
+    fraca = conn.execute("""
+        SELECT q.materia, COUNT(*) as total, SUM(qr.acertou) as acertos
+        FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id
+        GROUP BY q.materia HAVING total >= 5
+        ORDER BY (CAST(acertos AS REAL) / total) ASC LIMIT 1
+    """).fetchone()
+    if fraca:
+        pct = round(fraca["acertos"] / fraca["total"] * 100)
+        if pct < 70:
+            sugestoes.append({
+                "titulo": f"Dominar {fraca['materia']}",
+                "descricao": f"Você está com {pct}% de acerto. Resolva 30 questões para melhorar!",
+                "meta_tipo": "questoes",
+                "meta_valor": 30,
+                "materia": fraca["materia"],
+                "dias": 7,
+                "icon": "🎯"
+            })
+
+    # 2. Streak de estudo
+    streak = conn.execute("SELECT COUNT(*) FROM streaks WHERE data >= ?",
+        ((date.today() - timedelta(days=6)).isoformat(),)).fetchone()[0]
+    if streak < 5:
+        sugestoes.append({
+            "titulo": "Estudar 7 dias seguidos",
+            "descricao": "Construa o hábito! Estude pelo menos 30min por dia.",
+            "meta_tipo": "horas",
+            "meta_valor": 4,
+            "materia": "",
+            "dias": 7,
+            "icon": "🔥"
+        })
+
+    # 3. Flashcards
+    pendentes = conn.execute(
+        "SELECT COUNT(*) FROM flashcards WHERE proxima_revisao <= ?", (today_str(),)
+    ).fetchone()[0]
+    if pendentes > 10:
+        sugestoes.append({
+            "titulo": f"Zerar {pendentes} revisões pendentes",
+            "descricao": "Flashcards atrasados comprometem a memória de longo prazo.",
+            "meta_tipo": "flashcards",
+            "meta_valor": pendentes,
+            "materia": "",
+            "dias": 3,
+            "icon": "🧠"
+        })
+
+    # 4. Concluir tópicos do edital
+    pendentes_edital = conn.execute(
+        "SELECT COUNT(*) FROM edital WHERE status != 'Concluído' AND arquivado = 0"
+    ).fetchone()[0]
+    if pendentes_edital > 0:
+        meta = min(10, pendentes_edital)
+        sugestoes.append({
+            "titulo": f"Concluir {meta} tópicos do edital",
+            "descricao": "Avance no edital para cobrir mais conteúdo antes da prova.",
+            "meta_tipo": "topicos",
+            "meta_valor": meta,
+            "materia": "",
+            "dias": 7,
+            "icon": "📋"
+        })
+
+    # 5. Volume de questões
+    questoes_semana = conn.execute(
+        "SELECT COUNT(*) FROM questoes_respostas WHERE data >= ?",
+        ((date.today() - timedelta(days=6)).isoformat(),)
+    ).fetchone()[0]
+    if questoes_semana < 50:
+        sugestoes.append({
+            "titulo": "Resolver 50 questões esta semana",
+            "descricao": f"Você fez {questoes_semana} na última semana. Aumente o volume!",
+            "meta_tipo": "questoes",
+            "meta_valor": 50,
+            "materia": "",
+            "dias": 7,
+            "icon": "❓"
+        })
+
+    return sugestoes[:4]  # Max 4 sugestões

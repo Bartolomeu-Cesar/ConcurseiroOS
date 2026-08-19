@@ -1350,15 +1350,136 @@
 
     async function loadDesafios() {
       try {
-        const data = await fetch('/api/desafios').then(r => r.json());
+        // Atualizar progresso automaticamente
+        await fetch('/api/desafios/atualizar-progresso', { method: 'POST' }).catch(() => {});
+        const [desafios, sugestoes] = await Promise.all([
+          fetch('/api/desafios').then(r => r.json()),
+          fetch('/api/desafios/sugestoes').then(r => r.json()).catch(() => [])
+        ]);
         const el = document.getElementById('desafios-box');
-        if (!data.length) { el.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Nenhum desafio ativo. Use a API para criar.</p>'; return; }
-        el.innerHTML = data.slice(0, 4).map(d => {
-          const pct = Math.min(100, (d.progresso / d.meta_valor) * 100);
-          const done = d.finalizado ? '✅' : '';
-          return `<div style="padding:6px 0;border-bottom:1px solid #45475a;font-size:0.82rem;"><div style="display:flex;align-items:center;gap:6px;"><span>${done}</span><span style="flex:1;">${d.titulo}</span><span style="color:#9399b2;">${d.progresso}/${d.meta_valor}</span></div><div style="height:4px;background:#45475a;border-radius:2px;margin-top:4px;"><div style="height:100%;width:${pct}%;background:#a6e3a1;border-radius:2px;"></div></div></div>`;
-        }).join('');
-      } catch(e) {}
+
+        let html = '';
+
+        // Desafios ativos
+        const ativos = desafios.filter(d => !d.finalizado && !d.expirado);
+        const concluidos = desafios.filter(d => d.finalizado);
+        const expirados = desafios.filter(d => d.expirado);
+
+        if (ativos.length > 0) {
+          html += ativos.map(d => {
+            const cor = d.pct >= 100 ? '#a6e3a1' : d.pct >= 50 ? '#f9e2af' : '#89b4fa';
+            return `<div style="padding:8px;margin-bottom:6px;background:#1e1e2e;border-radius:8px;border-left:3px solid ${cor};">
+              <div style="display:flex;align-items:center;gap:6px;font-size:0.82rem;">
+                <span style="flex:1;color:#cdd6f4;font-weight:500;">${d.titulo}</span>
+                <span style="font-size:0.72rem;color:#9399b2;">${d.dias_restantes}d restantes</span>
+                <button onclick="deleteDesafio(${d.id})" style="background:none;border:none;color:#f38ba855;cursor:pointer;font-size:0.8rem;" title="Remover">×</button>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
+                <div style="flex:1;height:6px;background:#45475a;border-radius:3px;overflow:hidden;">
+                  <div style="width:${d.pct}%;height:100%;background:${cor};border-radius:3px;transition:width 0.3s;"></div>
+                </div>
+                <span style="font-size:0.72rem;color:${cor};font-weight:600;min-width:60px;text-align:right;">${d.progresso}/${d.meta_valor}</span>
+              </div>
+              ${d.materia ? `<div style="font-size:0.68rem;color:#585b70;margin-top:2px;">📚 ${d.materia}</div>` : ''}
+            </div>`;
+          }).join('');
+        }
+
+        // Concluídos recentes
+        if (concluidos.length > 0) {
+          html += `<div style="margin-top:8px;font-size:0.72rem;color:#a6e3a1;font-weight:600;">✅ Concluídos</div>`;
+          html += concluidos.slice(0, 3).map(d => `<div style="padding:4px 8px;font-size:0.75rem;color:#9399b2;display:flex;align-items:center;gap:4px;"><span>✓</span><span style="flex:1;text-decoration:line-through;">${d.titulo}</span><button onclick="deleteDesafio(${d.id})" style="background:none;border:none;color:#f38ba855;cursor:pointer;">×</button></div>`).join('');
+        }
+
+        // Sugestões
+        if (sugestoes.length > 0 && ativos.length < 3) {
+          html += `<div style="margin-top:10px;padding-top:8px;border-top:1px solid #45475a;">
+            <div style="font-size:0.75rem;color:#cba6f7;font-weight:600;margin-bottom:6px;">💡 Desafios Sugeridos</div>`;
+          html += sugestoes.slice(0, 3).map(s => `<div style="display:flex;align-items:center;gap:6px;padding:6px;background:#313244;border-radius:6px;margin-bottom:4px;font-size:0.78rem;">
+            <span style="font-size:1rem;">${s.icon}</span>
+            <div style="flex:1;">
+              <div style="color:#cdd6f4;font-weight:500;">${s.titulo}</div>
+              <div style="font-size:0.68rem;color:#9399b2;">${s.descricao}</div>
+            </div>
+            <button onclick="aceitarDesafio('${s.titulo.replace(/'/g,"\\'")}','${s.meta_tipo}',${s.meta_valor},'${s.materia}',${s.dias})" style="background:#cba6f7;color:#1e1e2e;border:none;border-radius:4px;padding:4px 8px;font-size:0.7rem;font-weight:600;cursor:pointer;white-space:nowrap;">Aceitar</button>
+          </div>`).join('');
+          html += '</div>';
+        }
+
+        // Botão criar manual
+        html += `<button onclick="showCriarDesafioModal()" style="width:100%;margin-top:8px;padding:8px;background:#45475a;color:#cdd6f4;border:none;border-radius:6px;cursor:pointer;font-size:0.8rem;">+ Criar Desafio</button>`;
+
+        el.innerHTML = html;
+      } catch(e) { console.error('Desafios error:', e); }
+    }
+
+    async function aceitarDesafio(titulo, metaTipo, metaValor, materia, dias) {
+      await fetch('/api/desafios', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ titulo, meta_tipo: metaTipo, meta_valor: metaValor, materia, dias })
+      });
+      loadDesafios();
+    }
+
+    async function deleteDesafio(id) {
+      await fetch(`/api/desafios/${id}`, { method: 'DELETE' });
+      loadDesafios();
+    }
+
+    function showCriarDesafioModal() {
+      const overlay = document.createElement('div');
+      overlay.id = 'criar-desafio-modal';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;';
+      overlay.innerHTML = `<div style="background:#313244;border-radius:12px;padding:24px;max-width:400px;width:100%;">
+        <h3 style="color:#cba6f7;margin-bottom:12px;">🏆 Criar Desafio</h3>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <label style="font-size:0.8rem;color:#9399b2;">Título
+            <input id="desafio-titulo" type="text" placeholder="Ex: Dominar Direito Constitucional" style="width:100%;padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;margin-top:4px;">
+          </label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <label style="font-size:0.8rem;color:#9399b2;">Tipo
+              <select id="desafio-tipo" style="width:100%;padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;margin-top:4px;">
+                <option value="questoes">❓ Questões</option>
+                <option value="horas">⏱ Horas</option>
+                <option value="flashcards">🧠 Flashcards</option>
+                <option value="topicos">📋 Tópicos</option>
+              </select>
+            </label>
+            <label style="font-size:0.8rem;color:#9399b2;">Meta (quantidade)
+              <input id="desafio-meta" type="number" value="30" min="1" style="width:100%;padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;margin-top:4px;">
+            </label>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <label style="font-size:0.8rem;color:#9399b2;">Matéria (opcional)
+              <input id="desafio-materia" type="text" placeholder="Todas" style="width:100%;padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;margin-top:4px;">
+            </label>
+            <label style="font-size:0.8rem;color:#9399b2;">Prazo (dias)
+              <input id="desafio-dias" type="number" value="7" min="1" max="30" style="width:100%;padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;margin-top:4px;">
+            </label>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:16px;">
+          <button onclick="document.getElementById('criar-desafio-modal').remove()" style="flex:1;padding:10px;background:#45475a;color:#cdd6f4;border:none;border-radius:6px;cursor:pointer;">Cancelar</button>
+          <button onclick="criarDesafioManual()" style="flex:1;padding:10px;background:#cba6f7;color:#1e1e2e;border:none;border-radius:6px;font-weight:600;cursor:pointer;">Criar</button>
+        </div>
+      </div>`;
+      document.body.appendChild(overlay);
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    }
+
+    async function criarDesafioManual() {
+      const titulo = document.getElementById('desafio-titulo').value.trim();
+      const tipo = document.getElementById('desafio-tipo').value;
+      const meta = parseInt(document.getElementById('desafio-meta').value) || 30;
+      const materia = document.getElementById('desafio-materia').value.trim();
+      const dias = parseInt(document.getElementById('desafio-dias').value) || 7;
+      if (!titulo) return;
+      await fetch('/api/desafios', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ titulo, meta_tipo: tipo, meta_valor: meta, materia, dias })
+      });
+      document.getElementById('criar-desafio-modal').remove();
+      loadDesafios();
     }
 
     async function loadResumoDiario() {
