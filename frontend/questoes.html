@@ -207,6 +207,7 @@
     <div class="header-links">
       <a href="/">📚 PDFs</a>
       <a href="/dashboard.html">📊 Dashboard</a>
+      <button onclick="toggleTheme()" title="Alternar tema" style="background:#45475a;color:#cdd6f4;border:none;border-radius:6px;padding:6px 10px;font-size:0.9rem;cursor:pointer;">🌓</button>
     </div>
   </div>
 
@@ -416,6 +417,10 @@
 
   <script>
     if (localStorage.getItem('theme') === 'light') document.body.classList.add('light-theme');
+    function toggleTheme() {
+      const isDark = document.body.classList.toggle('light-theme');
+      localStorage.setItem('theme', isDark ? 'light' : 'dark');
+    }
 
     // Tab navigation
     document.querySelectorAll('.qtab-btn').forEach(btn => {

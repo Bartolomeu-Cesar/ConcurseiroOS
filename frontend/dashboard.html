@@ -314,6 +314,7 @@
       <a href="/">📚 PDFs</a>
       <a href="/questoes.html">❓ Questões</a>
       <button class="export-btn" onclick="exportStats()">⬇ Exportar Estatísticas</button>
+      <button onclick="toggleTheme()" title="Alternar tema" style="background:#45475a;color:#cdd6f4;border:none;border-radius:6px;padding:6px 10px;font-size:0.9rem;cursor:pointer;">🌓</button>
     </div>
   </div>
 
@@ -415,6 +416,82 @@
       <div class="chart-box">
         <h3>🔀 Intercalação Forçada (Sugestão)</h3>
         <div id="intercalacao-box"></div>
+      </div>
+      <div class="chart-box">
+        <h3>🎯 Prática Deliberada</h3>
+        <div id="pratica-delib-box"></div>
+      </div>
+    </div>
+
+    <!-- Técnica Feynman + Elaboração -->
+    <div class="charts">
+      <div class="chart-box">
+        <h3>🧑‍🏫 Técnica Feynman</h3>
+        <p style="font-size:0.75rem;color:#9399b2;margin-bottom:8px;">Explique o tópico como se ensinasse a uma criança. Se travar, volte ao material.</p>
+        <div id="feynman-box">
+          <div style="margin-bottom:8px;">
+            <select id="feynman-materia" style="width:100%;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:6px;padding:6px;font-size:0.82rem;">
+              <option value="">Escolha uma matéria...</option>
+            </select>
+          </div>
+          <div id="feynman-topico" style="font-size:0.85rem;color:#cba6f7;font-weight:600;margin-bottom:6px;"></div>
+          <textarea id="feynman-texto" placeholder="Explique o tópico com suas palavras, de forma simples..." rows="4" style="width:100%;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:8px;padding:8px;font-size:0.82rem;resize:vertical;"></textarea>
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <button onclick="sortearFeynman()" style="background:#89b4fa;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;">🎲 Sortear Tópico</button>
+            <button onclick="salvarFeynman()" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;">💾 Salvar</button>
+          </div>
+        </div>
+      </div>
+      <div class="chart-box">
+        <h3>📝 Elaboração Ativa (3 Frases)</h3>
+        <p style="font-size:0.75rem;color:#9399b2;margin-bottom:8px;">Resuma o que aprendeu em exatamente 3 frases. Força síntese e retenção.</p>
+        <div id="elaboracao-box">
+          <div id="elab-topico-atual" style="font-size:0.82rem;color:#cba6f7;font-weight:600;margin-bottom:8px;"></div>
+          <textarea id="elab-frase1" placeholder="Frase 1: O conceito principal é..." rows="1" style="width:100%;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:6px;padding:6px;font-size:0.82rem;margin-bottom:4px;"></textarea>
+          <textarea id="elab-frase2" placeholder="Frase 2: Isso é importante porque..." rows="1" style="width:100%;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:6px;padding:6px;font-size:0.82rem;margin-bottom:4px;"></textarea>
+          <textarea id="elab-frase3" placeholder="Frase 3: Um exemplo prático seria..." rows="1" style="width:100%;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:6px;padding:6px;font-size:0.82rem;margin-bottom:8px;"></textarea>
+          <div style="display:flex;gap:8px;">
+            <button onclick="sortearElaboracao()" style="background:#89b4fa;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;">🎲 Sortear</button>
+            <button onclick="salvarElaboracao()" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;">💾 Salvar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Retrieval Practice + Leitner -->
+    <div class="charts">
+      <div class="chart-box">
+        <h3>🧪 Teste de Recuperação (Retrieval Practice)</h3>
+        <p style="font-size:0.75rem;color:#9399b2;margin-bottom:8px;">Tente lembrar SEM olhar o material. A dificuldade de lembrar fortalece a memória.</p>
+        <div id="retrieval-box">
+          <div id="retrieval-pergunta" style="font-size:0.9rem;color:#cdd6f4;padding:12px;background:#1e1e2e;border-radius:8px;min-height:60px;margin-bottom:8px;">Clique em "Gerar" para um teste de recuperação aleatório.</div>
+          <textarea id="retrieval-resposta" placeholder="Escreva tudo que lembra sobre o tema..." rows="3" style="width:100%;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:8px;padding:8px;font-size:0.82rem;resize:vertical;display:none;"></textarea>
+          <div id="retrieval-gabarito" style="display:none;padding:10px;background:#313244;border-radius:8px;margin-top:8px;font-size:0.82rem;color:#a6e3a1;"></div>
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <button onclick="gerarRetrieval()" style="background:#cba6f7;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;">🧪 Gerar</button>
+            <button onclick="tentarRetrieval()" id="btn-retrieval-tentar" style="display:none;background:#f9e2af;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;">✍️ Responder</button>
+            <button onclick="revelarRetrieval()" id="btn-retrieval-revelar" style="display:none;background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;">👁 Revelar Resposta</button>
+          </div>
+        </div>
+      </div>
+      <div class="chart-box">
+        <h3>📊 Análise de Pontos Fracos</h3>
+        <p style="font-size:0.75rem;color:#9399b2;margin-bottom:8px;">Matérias e tópicos onde você mais erra — foco estratégico.</p>
+        <div id="pontos-fracos-box"></div>
+      </div>
+    </div>
+
+    <!-- Mapa Mental + Conexões -->
+    <div class="charts">
+      <div class="chart-box">
+        <h3>🗺️ Mapa de Conexões entre Matérias</h3>
+        <p style="font-size:0.75rem;color:#9399b2;margin-bottom:8px;">Identifique como os temas se conectam para criar uma rede de conhecimento.</p>
+        <div id="conexoes-box"></div>
+      </div>
+      <div class="chart-box">
+        <h3>⏱ Análise de Tempo vs Resultado</h3>
+        <p style="font-size:0.75rem;color:#9399b2;margin-bottom:8px;">Quais matérias dão mais retorno por hora investida?</p>
+        <div id="tempo-resultado-box"></div>
       </div>
     </div>
   </div>
@@ -661,6 +738,10 @@
     });
 
     if (localStorage.getItem('theme') === 'light') document.body.classList.add('light-theme');
+    function toggleTheme() {
+      const isDark = document.body.classList.toggle('light-theme');
+      localStorage.setItem('theme', isDark ? 'light' : 'dark');
+    }
 
     document.getElementById('date-label').textContent = new Date().toLocaleDateString('pt-BR', {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
@@ -1074,6 +1155,230 @@
         if (!data.topicos?.length) { el.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Estudo intercalado requer tópicos não concluídos.</p>'; return; }
         el.innerHTML = `<p style="font-size:0.78rem;color:#9399b2;margin-bottom:8px;">Estude estes tópicos misturados (interleaving):</p>` +
           data.topicos.map(t => `<div style="padding:5px 0;border-bottom:1px solid #45475a;font-size:0.82rem;"><span style="color:#89b4fa;">${t.materia}</span> — ${t.topico}</div>`).join('');
+      } catch(e) {}
+    }
+
+    // === PRÁTICA DELIBERADA ===
+    async function loadPraticaDelib() {
+      try {
+        const data = await fetch('/api/pratica-deliberada').then(r => r.json()).catch(() => null);
+        const el = document.getElementById('pratica-delib-box');
+        if (!data || !data.foco) { el.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Responda questões para gerar análise de prática deliberada.</p>'; return; }
+        el.innerHTML = `
+          <div style="padding:8px;background:#1e1e2e;border-radius:8px;margin-bottom:8px;">
+            <div style="font-size:0.82rem;color:#f9e2af;font-weight:600;">🎯 Foco: ${data.foco}</div>
+            <div style="font-size:0.75rem;color:#9399b2;margin-top:4px;">${data.motivo || 'Matéria com maior potencial de melhoria'}</div>
+          </div>
+          ${(data.exercicios || []).map(e => `<div style="padding:4px 0;font-size:0.8rem;border-bottom:1px solid #313244;">• ${e}</div>`).join('')}
+        `;
+      } catch(e) {}
+    }
+
+    // === TÉCNICA FEYNMAN ===
+    async function loadFeynmanMaterias() {
+      try {
+        const mats = await fetch('/api/questoes/materias').then(r => r.json()).catch(() => []);
+        const sel = document.getElementById('feynman-materia');
+        if (sel) {
+          sel.innerHTML = '<option value="">Escolha uma matéria...</option>' +
+            mats.map(m => `<option value="${m}">${m}</option>`).join('');
+        }
+      } catch(e) {}
+    }
+
+    async function sortearFeynman() {
+      const materia = document.getElementById('feynman-materia').value;
+      try {
+        const url = materia ? `/api/edital?edital_nome=&cargo=&limit=100` : '/api/edital?limit=100';
+        const data = await fetch(url).then(r => r.json());
+        const items = (data.items || data).filter(t => t.status !== 'Concluído');
+        const filtered = materia ? items.filter(t => t.materia === materia) : items;
+        if (filtered.length === 0) { document.getElementById('feynman-topico').textContent = 'Nenhum tópico disponível'; return; }
+        const sorteado = filtered[Math.floor(Math.random() * filtered.length)];
+        document.getElementById('feynman-topico').textContent = `📌 ${sorteado.materia}: ${sorteado.topico}`;
+        document.getElementById('feynman-topico').dataset.editalId = sorteado.id;
+        document.getElementById('feynman-texto').value = '';
+        document.getElementById('feynman-texto').focus();
+      } catch(e) { console.error(e); }
+    }
+
+    async function salvarFeynman() {
+      const texto = document.getElementById('feynman-texto').value.trim();
+      const editalId = document.getElementById('feynman-topico').dataset.editalId;
+      if (!texto || !editalId) { alert('Sorteie um tópico e escreva sua explicação.'); return; }
+      try {
+        await fetch(`/api/edital/${editalId}/feynman`, {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ edital_id: parseInt(editalId), explicacao: texto })
+        });
+        alert('✅ Explicação Feynman salva com sucesso!');
+        document.getElementById('feynman-texto').value = '';
+      } catch(e) { alert('Erro ao salvar'); }
+    }
+
+    // === ELABORAÇÃO ATIVA (3 FRASES) ===
+    async function sortearElaboracao() {
+      try {
+        const data = await fetch('/api/edital?limit=200').then(r => r.json());
+        const items = (data.items || data).filter(t => t.status !== 'Concluído');
+        if (items.length === 0) return;
+        const sorteado = items[Math.floor(Math.random() * items.length)];
+        document.getElementById('elab-topico-atual').textContent = `📌 ${sorteado.materia}: ${sorteado.topico}`;
+        document.getElementById('elab-topico-atual').dataset.editalId = sorteado.id;
+        document.getElementById('elab-frase1').value = '';
+        document.getElementById('elab-frase2').value = '';
+        document.getElementById('elab-frase3').value = '';
+        document.getElementById('elab-frase1').focus();
+      } catch(e) {}
+    }
+
+    async function salvarElaboracao() {
+      const f1 = document.getElementById('elab-frase1').value.trim();
+      const f2 = document.getElementById('elab-frase2').value.trim();
+      const f3 = document.getElementById('elab-frase3').value.trim();
+      const editalId = document.getElementById('elab-topico-atual').dataset?.editalId;
+      if (!f1 || !f2 || !f3) { alert('Preencha as 3 frases!'); return; }
+      const resumo = `1) ${f1}\n2) ${f2}\n3) ${f3}`;
+      try {
+        if (editalId) {
+          await fetch(`/api/edital/${editalId}/resumo`, {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ resumo, tipo: '3frases' })
+          });
+        }
+        alert('✅ Elaboração salva!');
+        document.getElementById('elab-frase1').value = '';
+        document.getElementById('elab-frase2').value = '';
+        document.getElementById('elab-frase3').value = '';
+      } catch(e) { alert('Erro ao salvar'); }
+    }
+
+    // === TESTE DE RECUPERAÇÃO (RETRIEVAL PRACTICE) ===
+    let retrievalCard = null;
+    async function gerarRetrieval() {
+      try {
+        const flashcards = await fetch('/api/flashcards/aleatorio?quantidade=1').then(r => r.json());
+        if (flashcards.length === 0) { document.getElementById('retrieval-pergunta').textContent = 'Sem flashcards disponíveis.'; return; }
+        retrievalCard = flashcards[0];
+        document.getElementById('retrieval-pergunta').innerHTML = `<strong>${retrievalCard.materia || 'Geral'}</strong><br><br>${retrievalCard.pergunta}`;
+        document.getElementById('retrieval-resposta').style.display = 'none';
+        document.getElementById('retrieval-resposta').value = '';
+        document.getElementById('retrieval-gabarito').style.display = 'none';
+        document.getElementById('btn-retrieval-tentar').style.display = 'inline-block';
+        document.getElementById('btn-retrieval-revelar').style.display = 'none';
+      } catch(e) {}
+    }
+
+    function tentarRetrieval() {
+      document.getElementById('retrieval-resposta').style.display = 'block';
+      document.getElementById('retrieval-resposta').focus();
+      document.getElementById('btn-retrieval-tentar').style.display = 'none';
+      document.getElementById('btn-retrieval-revelar').style.display = 'inline-block';
+    }
+
+    function revelarRetrieval() {
+      if (!retrievalCard) return;
+      document.getElementById('retrieval-gabarito').style.display = 'block';
+      document.getElementById('retrieval-gabarito').innerHTML = `<strong>Resposta correta:</strong><br>${retrievalCard.resposta}`;
+      document.getElementById('btn-retrieval-revelar').style.display = 'none';
+    }
+
+    // === PONTOS FRACOS ===
+    async function loadPontosFragcos() {
+      try {
+        const el = document.getElementById('pontos-fracos-box');
+        const data = await fetch('/api/questoes/materias').then(r => r.json());
+        // Buscar stats por matéria
+        let stats = [];
+        for (const mat of data.slice(0, 10)) {
+          const qs = await fetch(`/api/questoes?materia=${encodeURIComponent(mat)}&limit=1`).then(r => r.json()).catch(() => []);
+          // Simplificar: mostrar matérias disponíveis
+          stats.push({ materia: mat, total: Array.isArray(qs) ? qs.length : (qs.items?.length || 0) });
+        }
+        // Buscar desempenho real via tempo-por-questao
+        const tempo = await fetch('/api/questoes/tempo-medio').then(r => r.json()).catch(() => ({por_materia: []}));
+        const porMateria = tempo.por_materia || [];
+
+        if (porMateria.length === 0) {
+          el.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Responda questões para identificar pontos fracos.</p>';
+          return;
+        }
+
+        // Ordenar por pior desempenho (mais tempo = mais dificuldade)
+        porMateria.sort((a, b) => b.tempo_medio_seg - a.tempo_medio_seg);
+        el.innerHTML = porMateria.slice(0, 5).map((m, i) => `
+          <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #313244;font-size:0.8rem;">
+            <span style="color:${i < 2 ? '#f38ba8' : '#f9e2af'};font-weight:700;">#${i+1}</span>
+            <span style="flex:1;">${m.materia}</span>
+            <span style="color:#fab387;font-size:0.75rem;">${m.tempo_medio_seg}s/questão</span>
+            <span style="color:#9399b2;font-size:0.72rem;">(${m.questoes} questões)</span>
+          </div>
+        `).join('');
+      } catch(e) { console.error(e); }
+    }
+
+    // === MAPA DE CONEXÕES ===
+    async function loadConexoes() {
+      try {
+        const el = document.getElementById('conexoes-box');
+        const mats = await fetch('/api/questoes/materias').then(r => r.json()).catch(() => []);
+        if (mats.length < 2) { el.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Adicione mais matérias para ver conexões.</p>'; return; }
+
+        // Mapa de conexões entre matérias de concursos (estáticas mas úteis)
+        const conexoes = [
+          {a: 'Direito Constitucional', b: 'Direito Administrativo', desc: 'Princípios + Organização do Estado'},
+          {a: 'Direito Penal', b: 'Direito Processual Penal', desc: 'Tipificação → Persecução'},
+          {a: 'Direito Civil', b: 'Direito Processual Civil', desc: 'Direito Material → Instrumental'},
+          {a: 'Direito Constitucional', b: 'Direitos Humanos', desc: 'Direitos Fundamentais + Tratados'},
+          {a: 'Direito Tributário', b: 'Direito Financeiro', desc: 'Receitas + Orçamento Público'},
+          {a: 'Direito Administrativo', b: 'Controle Externo', desc: 'Atos + Fiscalização'},
+          {a: 'Raciocínio Lógico', b: 'Estatística', desc: 'Lógica + Análise de Dados'},
+          {a: 'Engenharia De Software', b: 'Gestão E Governança De Ti', desc: 'Desenvolvimento + Gestão'},
+          {a: 'Segurança Da Informação', b: 'Computação Em Nuvem', desc: 'Proteção + Infraestrutura'},
+        ];
+
+        const matSet = new Set(mats.map(m => m.toLowerCase()));
+        const relevantes = conexoes.filter(c =>
+          mats.some(m => m.toLowerCase().includes(c.a.toLowerCase().substring(0, 10))) ||
+          mats.some(m => m.toLowerCase().includes(c.b.toLowerCase().substring(0, 10)))
+        );
+
+        el.innerHTML = (relevantes.length > 0 ? relevantes : conexoes).slice(0, 6).map(c => `
+          <div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid #313244;font-size:0.78rem;">
+            <span style="color:#89b4fa;font-weight:600;">${c.a}</span>
+            <span style="color:#cba6f7;">↔</span>
+            <span style="color:#a6e3a1;font-weight:600;">${c.b}</span>
+            <span style="color:#9399b2;margin-left:auto;font-size:0.7rem;">${c.desc}</span>
+          </div>
+        `).join('') + '<p style="font-size:0.7rem;color:#585b70;margin-top:8px;">💡 Estude matérias conectadas na mesma semana para criar associações mentais mais fortes.</p>';
+      } catch(e) {}
+    }
+
+    // === TEMPO vs RESULTADO ===
+    async function loadTempoResultado() {
+      try {
+        const el = document.getElementById('tempo-resultado-box');
+        const tempo = await fetch('/api/questoes/tempo-medio').then(r => r.json()).catch(() => ({por_materia: []}));
+        const porMateria = tempo.por_materia || [];
+
+        if (porMateria.length === 0) {
+          el.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Responda questões com timer para análise de eficiência.</p>';
+          return;
+        }
+
+        // Eficiência = questões por tempo (mais questões em menos tempo = melhor)
+        porMateria.sort((a, b) => a.tempo_medio_seg - b.tempo_medio_seg);
+        el.innerHTML = `<p style="font-size:0.72rem;color:#9399b2;margin-bottom:6px;">⚡ Matérias por velocidade de resolução (mais rápida = mais dominada):</p>` +
+          porMateria.slice(0, 6).map((m, i) => {
+            const barW = Math.min(100, Math.max(10, 100 - m.tempo_medio_seg));
+            const cor = i < 2 ? '#a6e3a1' : i < 4 ? '#f9e2af' : '#f38ba8';
+            return `<div style="margin-bottom:4px;">
+              <div style="display:flex;justify-content:space-between;font-size:0.75rem;margin-bottom:2px;">
+                <span>${m.materia}</span><span style="color:${cor};">${m.tempo_medio_seg}s · ${m.questoes}q</span>
+              </div>
+              <div style="height:5px;background:#45475a;border-radius:3px;overflow:hidden;"><div style="width:${barW}%;height:100%;background:${cor};border-radius:3px;"></div></div>
+            </div>`;
+          }).join('');
       } catch(e) {}
     }
 
@@ -1893,6 +2198,11 @@
           loadRevisoesPendentes();
           loadDailyChallenge();
           loadIntercalacao();
+          loadPraticaDelib();
+          loadFeynmanMaterias();
+          loadPontosFragcos();
+          loadConexoes();
+          loadTempoResultado();
           break;
         case 'panel-calendario':
           loadCalendario();
