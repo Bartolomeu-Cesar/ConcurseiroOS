@@ -2318,9 +2318,46 @@
     let concluidasHoje = new Set();
     async function loadConcluidasHoje() {
       try {
+        const hoje = new Date().toISOString().split('T')[0];
+
+        // 1. Buscar atividades marcadas manualmente
         const data = await fetch('/api/calendario/concluidas').then(r => r.json());
         concluidasHoje = new Set(data.map(a => `${a.data}|${a.materia}|${a.tipo}`));
-        // Marcar checkboxes
+
+        // 2. Buscar sessões de estudo de hoje para auto-marcar atividades
+        const resumo = await fetch('/api/resumo-diario').then(r => r.json()).catch(() => null);
+        if (resumo && resumo.sessoes && resumo.sessoes.length > 0) {
+          const materiasEstudadas = new Set(resumo.sessoes.map(s => s.materia));
+
+          // Também considerar questões respondidas como estudo concluído
+          if (resumo.questoes_detalhes) {
+            resumo.questoes_detalhes.forEach(q => materiasEstudadas.add(q.materia));
+          }
+
+          // Auto-marcar atividades do tipo 'estudo' ou 'questoes' para matérias já estudadas hoje
+          document.querySelectorAll('.cal-activity').forEach(el => {
+            const atDate = el.dataset.date;
+            const atMateria = el.dataset.materia;
+            const atTipo = el.dataset.tipo;
+            const key = `${atDate}|${atMateria}|${atTipo}`;
+
+            if (atDate === hoje && atMateria && materiasEstudadas.has(atMateria) && !concluidasHoje.has(key)) {
+              // Auto-marcar como concluída
+              concluidasHoje.add(key);
+              const cb = el.querySelector('.cal-check');
+              if (cb) { cb.checked = true; }
+              el.classList.add('concluida');
+              // Registrar no backend silenciosamente
+              fetch('/api/calendario/atividade-concluida', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ data: atDate, dia_semana: parseInt(el.dataset.diasemana || 0), materia: atMateria, tipo: atTipo, tempo_min: parseInt(el.dataset.tempo || 0), total_atividades: parseInt(el.dataset.total) || 1 })
+              }).catch(() => {});
+            }
+          });
+        }
+
+        // 3. Marcar checkboxes das concluídas manualmente
         document.querySelectorAll('.cal-check').forEach(cb => {
           if (concluidasHoje.has(cb.dataset.key)) {
             cb.checked = true;
@@ -2409,6 +2446,14 @@
             // Notificação
             if (Notification.permission === 'granted') new Notification('⏰ Pomodoro finalizado!', {body: `Sessão de ${materia} concluída!`});
             else if (Notification.permission !== 'denied') Notification.requestPermission();
+            // Registrar sessão de estudo e auto-marcar check
+            const horasEstudadas = pomoTotal / 3600;
+            if (materia && horasEstudadas > 0) {
+              fetch('/api/sessoes-estudo/registrar', {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({ horas: Math.round(horasEstudadas * 100) / 100, materia: materia, tipo: 'pomodoro' })
+              }).then(() => { loadConcluidasHoje(); loadCalStreak(); }).catch(() => {});
+            }
           }
         }
       }, 1000);
