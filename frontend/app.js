@@ -333,6 +333,13 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
         document.getElementById(btn.dataset.tab).classList.add('active');
     });
 });
+// Abrir aba via hash na URL (ex: /#tab-flashcards)
+(function() {
+    const hash = window.location.hash.replace('#', '');
+    if (hash && document.getElementById(hash)) {
+        switchTab(hash);
+    }
+})();
 // ==================== TAB 1: PDFs ====================
 const API = '';
 const OPEN_KEY = 'folders_open';
