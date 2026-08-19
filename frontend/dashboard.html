@@ -298,6 +298,10 @@
     .cal-activity[draggable] { cursor: grab; transition: transform 0.15s, opacity 0.15s; }
     .cal-activity[draggable]:active { cursor: grabbing; }
     .cal-activity.dragging { opacity: 0.4; transform: scale(0.95); }
+    /* Atividade adiada */
+    .cal-activity.adiada { border-left: 2px solid #f9e2af; padding-left: 4px; background: rgba(249,226,175,0.05); }
+    /* Turno header */
+    .cal-turno-header { transition: background 0.2s; }
   </style>
 </head>
 <body>
@@ -1500,8 +1504,12 @@
     function renderCalendario(data, editable) {
       const el = document.getElementById('calendario-grid');
       const hoje = new Date().toISOString().split('T')[0];
+      const horaAtual = new Date().getHours();
       const icons = {revisao: '🧠', estudo: '📚', questoes: '❓', pausa: '☕'};
       const diasNomes = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
+      const turnoIcons = {manha: '🌅', tarde: '☀️', noite: '🌙'};
+      const turnoNomes = {manha: 'Manhã', tarde: 'Tarde', noite: 'Noite'};
+      const turnoCores = {manha: '#f9e2af', tarde: '#fab387', noite: '#89b4fa'};
 
       // Carregar atividades concluídas de hoje
       loadConcluidasHoje();
@@ -1522,51 +1530,76 @@
       for (const dia of data.dias) {
         const isToday = dia.data === hoje;
         const nome = dia.nome || diasNomes[dia.dia_semana] || '';
+        // Formatar data como "Quarta 19/08"
+        let dataFormatada = '';
+        if (dia.data) {
+          const [ano, mes, d] = dia.data.split('-');
+          dataFormatada = `${d}/${mes}`;
+        }
+
         html += `<div class="cal-day ${isToday ? 'today' : ''}" data-date="${dia.data}" data-diasemana="${dia.dia_semana}">`;
-        html += `<div class="cal-day-header">${nome} <span class="cal-date">${dia.data ? dia.data.substring(5) : ''}</span></div>`;
+        html += `<div class="cal-day-header">${nome} <span class="cal-date">${dataFormatada}</span></div>`;
 
         if (dia.atividades.length === 0) {
           html += `<div style="color:#9399b2;font-size:0.75rem;padding:8px 0;text-align:center;">Descanso</div>`;
+        } else {
+          // Distribuir atividades em turnos (Manhã: 6-12, Tarde: 12-18, Noite: 18-23)
+          const turnos = distribuirEmTurnos(dia.atividades, isToday, horaAtual);
+
+          html += `<div class="cal-activities-list" data-date="${dia.data}" data-total="${dia.atividades.length}">`;
+
+          for (const turno of ['manha', 'tarde', 'noite']) {
+            const ativsTurno = turnos[turno];
+            if (ativsTurno.length === 0) continue;
+
+            // Header do turno
+            const turnoAtivo = isToday && getTurnoAtual(horaAtual) === turno;
+            html += `<div class="cal-turno-header" style="display:flex;align-items:center;gap:4px;padding:3px 6px;margin:4px 0 2px;background:${turnoAtivo ? 'rgba(166,227,161,0.15)' : 'rgba(69,71,90,0.5)'};border-radius:4px;border-left:3px solid ${turnoCores[turno]};">
+              <span style="font-size:0.7rem;">${turnoIcons[turno]}</span>
+              <span style="font-size:0.68rem;font-weight:600;color:${turnoCores[turno]};">${turnoNomes[turno]}</span>
+              ${turnoAtivo ? '<span style="font-size:0.6rem;color:#a6e3a1;margin-left:auto;">● agora</span>' : ''}
+            </div>`;
+
+            for (let i = 0; i < ativsTurno.length; i++) {
+              const ativ = ativsTurno[i];
+              const icon = icons[ativ.tipo] || '📌';
+              const materia = ativ.materia || '';
+              let detail = '';
+              if (ativ.topicos) {
+                detail = typeof ativ.topicos === 'string' ? ativ.topicos : (ativ.topicos || []).join(', ');
+              } else if (ativ.qtd) {
+                detail = `${ativ.qtd} questões`;
+              } else if (ativ.descricao) {
+                detail = ativ.descricao;
+              }
+              const ativKey = `${dia.data}|${materia}|${ativ.tipo}`;
+              const adiada = ativ._adiada;
+
+              html += `<div class="cal-activity ${adiada ? 'adiada' : ''}" draggable="true" data-idx="${i}" data-key="${ativKey}" data-materia="${materia}" data-tipo="${ativ.tipo}" data-tempo="${ativ.tempo_min}" data-date="${dia.data}" data-diasemana="${dia.dia_semana}" data-total="${dia.atividades.length}">`;
+
+              // Checkbox de conclusão
+              html += `<input type="checkbox" class="cal-check" data-key="${ativKey}" onchange="toggleAtivConcluida(this)" title="Marcar como concluída">`;
+
+              html += `<span class="cal-activity-icon">${icon}</span>`;
+              html += `<div class="cal-activity-info">`;
+              if (materia) html += `<div class="cal-activity-materia">${materia}${adiada ? ' <span style="font-size:0.6rem;color:#f9e2af;">⏩ adiada</span>' : ''}</div>`;
+              if (detail) html += `<div class="cal-activity-detail">${detail}</div>`;
+              html += `</div>`;
+              html += `<span class="cal-activity-time">${ativ.tempo_min}min</span>`;
+
+              // Botão Pomodoro
+              if (ativ.tempo_min > 0) {
+                html += `<button class="cal-pomo-btn" onclick="startPomodoro('${(materia || detail).replace(/'/g, "\\'")}', ${ativ.tempo_min})" title="Iniciar Timer">▶</button>`;
+              }
+
+              if (editable && ativ.id) {
+                html += `<button class="cal-delete-btn" onclick="removeCalItem(${ativ.id})">❌</button>`;
+              }
+              html += `</div>`;
+            }
+          }
+          html += `</div>`; // cal-activities-list
         }
-
-        html += `<div class="cal-activities-list" data-date="${dia.data}" data-total="${dia.atividades.length}">`;
-        for (let i = 0; i < dia.atividades.length; i++) {
-          const ativ = dia.atividades[i];
-          const icon = icons[ativ.tipo] || '📌';
-          const materia = ativ.materia || '';
-          let detail = '';
-          if (ativ.topicos) {
-            detail = typeof ativ.topicos === 'string' ? ativ.topicos : (ativ.topicos || []).join(', ');
-          } else if (ativ.qtd) {
-            detail = `${ativ.qtd} questões`;
-          } else if (ativ.descricao) {
-            detail = ativ.descricao;
-          }
-          const ativKey = `${dia.data}|${materia}|${ativ.tipo}`;
-
-          html += `<div class="cal-activity" draggable="true" data-idx="${i}" data-key="${ativKey}" data-materia="${materia}" data-tipo="${ativ.tipo}" data-tempo="${ativ.tempo_min}" data-date="${dia.data}" data-diasemana="${dia.dia_semana}" data-total="${dia.atividades.length}">`;
-
-          // Checkbox de conclusão
-          html += `<input type="checkbox" class="cal-check" data-key="${ativKey}" onchange="toggleAtivConcluida(this)" title="Marcar como concluída">`;
-
-          html += `<span class="cal-activity-icon">${icon}</span>`;
-          html += `<div class="cal-activity-info">`;
-          if (materia) html += `<div class="cal-activity-materia">${materia}</div>`;
-          if (detail) html += `<div class="cal-activity-detail">${detail}</div>`;
-          html += `</div>`;
-          html += `<span class="cal-activity-time">${ativ.tempo_min}min</span>`;
-
-          // Botão Pomodoro
-          if (ativ.tempo_min > 0) {
-            html += `<button class="cal-pomo-btn" onclick="startPomodoro('${materia || detail}', ${ativ.tempo_min})" title="Iniciar Timer">▶</button>`;
-          }
-
-          if (editable && ativ.id) {
-            html += `<button class="cal-delete-btn" onclick="removeCalItem(${ativ.id})">❌</button>`;
-          }
-          html += `</div>`;
-        }
-        html += `</div>`; // cal-activities-list
 
         html += `<div class="cal-day-footer">⏱ ${dia.tempo_total_min}min</div>`;
         html += `</div>`;
@@ -1706,6 +1739,75 @@
     }
     function resetPomodoro() { pomoSeconds = pomoTotal; pomoPaused = false; updatePomoDisplay(); document.getElementById('pomo-toggle-btn').textContent = '⏸ Pausar'; }
     function closePomodoro() { clearInterval(pomoInterval); document.getElementById('pomodoro-overlay').style.display = 'none'; }
+
+    // === DISTRIBUIÇÃO POR TURNOS ===
+    function getTurnoAtual(hora) {
+      if (hora >= 6 && hora < 12) return 'manha';
+      if (hora >= 12 && hora < 18) return 'tarde';
+      return 'noite';
+    }
+
+    function distribuirEmTurnos(atividades, isToday, horaAtual) {
+      const turnos = { manha: [], tarde: [], noite: [] };
+
+      if (!atividades || atividades.length === 0) return turnos;
+
+      // Calcular tempo total disponível por turno (em minutos)
+      const tempoTotal = atividades.reduce((a, at) => a + (at.tempo_min || 0), 0);
+      const tempoPorTurno = { manha: 0, tarde: 0, noite: 0 };
+
+      // Distribuir atividades proporcionalmente nos 3 turnos
+      // Manhã: ~40%, Tarde: ~35%, Noite: ~25%
+      const proporcoes = { manha: 0.4, tarde: 0.35, noite: 0.25 };
+      let turnoAtual = 'manha';
+      let tempoAcumulado = 0;
+      const limiteManha = tempoTotal * proporcoes.manha;
+      const limiteTarde = tempoTotal * (proporcoes.manha + proporcoes.tarde);
+
+      for (const ativ of atividades) {
+        // Revisões e flashcards sempre de manhã
+        if (ativ.tipo === 'revisao' && turnoAtual === 'manha') {
+          turnos.manha.push(ativ);
+          tempoAcumulado += ativ.tempo_min || 0;
+          continue;
+        }
+
+        // Determinar turno pela proporção de tempo
+        if (tempoAcumulado >= limiteTarde) {
+          turnoAtual = 'noite';
+        } else if (tempoAcumulado >= limiteManha) {
+          turnoAtual = 'tarde';
+        }
+
+        turnos[turnoAtual].push(ativ);
+        tempoAcumulado += ativ.tempo_min || 0;
+      }
+
+      // Se é HOJE: redistribuir atividades não concluídas de turnos passados para o próximo turno
+      if (isToday) {
+        const turnoAgora = getTurnoAtual(horaAtual);
+        const ordemTurnos = ['manha', 'tarde', 'noite'];
+        const idxTurnoAtual = ordemTurnos.indexOf(turnoAgora);
+
+        // Mover atividades de turnos passados para o turno atual (se não foram concluídas)
+        for (let i = 0; i < idxTurnoAtual; i++) {
+          const turnoPassado = ordemTurnos[i];
+          const naoFeitas = turnos[turnoPassado].filter(a => {
+            const key = `${new Date().toISOString().split('T')[0]}|${a.materia || ''}|${a.tipo}`;
+            return !concluidasHoje.has(key);
+          });
+          if (naoFeitas.length > 0) {
+            // Marcar como adiadas e mover para o turno atual
+            naoFeitas.forEach(a => { a._adiada = true; });
+            turnos[turnoAgora] = [...naoFeitas, ...turnos[turnoAgora]];
+            // Remover do turno passado
+            turnos[turnoPassado] = turnos[turnoPassado].filter(a => !a._adiada || concluidasHoje.has(`${new Date().toISOString().split('T')[0]}|${a.materia || ''}|${a.tipo}`));
+          }
+        }
+      }
+
+      return turnos;
+    }
 
     // === DRAG-AND-DROP ===
     function initDragDrop() {
