@@ -772,7 +772,7 @@ function renderEditalTree() {
     const concursos = Object.keys(tree).sort();
     for (const concurso of concursos) {
         const concKey = `c_${concurso}`;
-        const concOpen = state[concKey] !== false;
+        const concOpen = state[concKey] === true;
         const concItems = editalData.filter(i => i.edital_nome === concurso);
         const concDone = concItems.filter(i => i.status === 'Concluído').length;
         const concPct = concItems.length > 0 ? Math.round(concDone / concItems.length * 100) : 0;
