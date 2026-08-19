@@ -436,6 +436,7 @@
     let questoesPool = [];
     let currentQuestao = null;
     let respondida = false;
+    let questaoStartTime = null;
 
     // Simulado state
     let simAtivo = null;
@@ -538,6 +539,7 @@
     function showQuestao(q) {
       currentQuestao = q;
       respondida = false;
+      questaoStartTime = Date.now();
       const area = document.getElementById('resolver-area');
 
       const alternativas = [
@@ -587,10 +589,11 @@
       if (!selected) { alert('Selecione uma alternativa.'); return; }
 
       const letra = selected.dataset.letter;
+      const tempoSegundos = questaoStartTime ? Math.round((Date.now() - questaoStartTime) / 1000) : 0;
       const res = await fetch(`/api/questoes/${currentQuestao.id}/responder`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ resposta: letra, tempo_segundos: 0 })
+        body: JSON.stringify({ resposta: letra, tempo_segundos: tempoSegundos })
       }).then(r => r.json());
 
       respondida = true;
