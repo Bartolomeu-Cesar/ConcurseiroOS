@@ -2485,16 +2485,24 @@
         }
       }, 1000);
 
-      // Redirecionar para a atividade correspondente
+      // Salvar estado no localStorage para o timer global (funciona entre páginas)
+      const timerState = {
+        materia: materia,
+        tipo: tipo || 'estudo',
+        totalSeconds: pomoTotal,
+        endTime: Date.now() + pomoTotal * 1000,
+        paused: false,
+        remainingWhenPaused: 0
+      };
+      localStorage.setItem('pomo_timer', JSON.stringify(timerState));
+
+      // Redirecionar para a atividade correspondente (mesma aba - timer persiste via localStorage)
       if (tipo === 'revisao' || tipo === 'flashcard') {
-        // Ir para flashcards na página principal
-        window.open('/#tab-flashcards', '_blank');
+        window.location.href = '/#tab-flashcards';
       } else if (tipo === 'questoes') {
-        // Ir para questões
-        window.open('/questoes.html', '_blank');
+        window.location.href = '/questoes.html';
       } else if (tipo === 'estudo') {
-        // Ir para PDFs (leitura) - página principal
-        window.open('/', '_blank');
+        window.location.href = '/';
       }
       // Pedir permissão de notificação para avisar quando terminar
       if (Notification.permission === 'default') Notification.requestPermission();
@@ -2714,5 +2722,6 @@
     // Carga inicial
     loadActivePanel();
   </script>
+<script src="/timer-global.js"></script>
 </body>
 </html>
