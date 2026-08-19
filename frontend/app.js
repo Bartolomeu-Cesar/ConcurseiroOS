@@ -1790,28 +1790,55 @@ async function showArquivados() {
     });
 }
 // ==================== MODO FOCO ====================
-function enterFocusMode() {
+function enterFocusMode(targetTab) {
+    // Se não especificou aba, mostrar seletor
+    if (!targetTab) {
+        const options = [
+            { tab: 'tab-edital', label: '📋 Edital', desc: 'Estudar tópicos do edital' },
+            { tab: 'tab-pdf', label: '📚 Leitor PDF', desc: 'Leitura focada de material' },
+            { tab: 'tab-flashcards', label: '🧠 Flashcards', desc: 'Revisão com repetição espaçada' },
+            { tab: 'tab-metas', label: '🎯 Metas', desc: 'Acompanhar progresso do dia' },
+        ];
+        const modal = document.createElement('div');
+        modal.id = 'focus-modal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:9999;display:flex;align-items:center;justify-content:center;';
+        modal.innerHTML = `<div style="background:#313244;border-radius:16px;padding:24px;max-width:360px;width:90%;">
+            <h3 style="color:#cba6f7;margin-bottom:12px;text-align:center;">🎯 Modo Foco</h3>
+            <p style="font-size:0.8rem;color:#9399b2;text-align:center;margin-bottom:16px;">Escolha em que deseja focar. Tela cheia, sem distrações.</p>
+            ${options.map(o => `<button onclick="document.getElementById('focus-modal').remove();enterFocusMode('${o.tab}')" style="display:block;width:100%;padding:12px;margin-bottom:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;cursor:pointer;text-align:left;font-size:0.85rem;">
+                <strong>${o.label}</strong><br><span style="font-size:0.75rem;color:#9399b2;">${o.desc}</span>
+            </button>`).join('')}
+            <button onclick="document.getElementById('focus-modal').remove()" style="display:block;width:100%;padding:8px;background:#45475a;border:none;border-radius:6px;color:#cdd6f4;cursor:pointer;margin-top:4px;font-size:0.82rem;">Cancelar</button>
+            <p style="font-size:0.7rem;color:#585b70;text-align:center;margin-top:8px;">Dica: do Calendário, use o botão ▶ para iniciar com timer.</p>
+        </div>`;
+        document.body.appendChild(modal);
+        return;
+    }
+
     const el = document.documentElement;
     if (el.requestFullscreen)
         el.requestFullscreen();
     else if (el.webkitRequestFullscreen)
         el.webkitRequestFullscreen();
     document.body.classList.add('focus-mode');
-    // Show only the edital tab
+    // Show only the target tab
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-    document.querySelector('[data-tab="tab-edital"]').classList.add('active');
-    document.getElementById('tab-edital').classList.add('active');
+    const tabBtn = document.querySelector(`[data-tab="${targetTab}"]`);
+    if (tabBtn) tabBtn.classList.add('active');
+    const tabContent = document.getElementById(targetTab);
+    if (tabContent) tabContent.classList.add('active');
     // Hide non-essential elements
     document.getElementById('header').style.display = 'none';
-    document.querySelector('.nav-links').style.display = 'none';
+    const navLinks = document.querySelector('.nav-links');
+    if (navLinks) navLinks.style.display = 'none';
     document.getElementById('tab-bar').style.display = 'none';
     // Show exit button
     if (!document.getElementById('exit-focus-btn')) {
         const btn = document.createElement('button');
         btn.id = 'exit-focus-btn';
         btn.className = 'iobtn';
-        btn.style.cssText = 'position:fixed;top:12px;right:12px;z-index:9999;background:#f38ba8;color:#1e1e2e;';
+        btn.style.cssText = 'position:fixed;top:12px;right:12px;z-index:9999;background:#f38ba8;color:#1e1e2e;font-weight:600;';
         btn.textContent = '✕ Sair do Foco';
         btn.onclick = exitFocusMode;
         document.body.appendChild(btn);
