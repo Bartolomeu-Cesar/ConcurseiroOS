@@ -270,8 +270,24 @@ def get_heatmap(conn=Depends(get_db_session)):
         SELECT data, horas_estudadas, questoes_resolvidas, flashcards_revisados
         FROM streaks WHERE data >= ? ORDER BY data
     """, (inicio,)).fetchall()
-    return [{"data": r[0], "horas": r[1] or 0, "questoes": r[2] or 0, "flashcards": r[3] or 0,
-             "intensidade": min(4, int((r[1] or 0) / 0.5))} for r in rows]
+
+    result = []
+    for r in rows:
+        horas = r[1] or 0
+        questoes = r[2] or 0
+        flashcards = r[3] or 0
+        # Intensidade combinada: horas + questões + flashcards
+        # Cada atividade contribui para a intensidade:
+        # - 0.5h = 1 nível, 1h = 2 níveis, 2h+ = 3-4 níveis
+        # - 10 questões = 1 nível, 20+ = 2 níveis
+        # - 5 flashcards = 1 nível, 15+ = 2 níveis
+        score = (horas / 0.5) + (questoes / 10) + (flashcards / 5)
+        intensidade = min(4, max(1, int(score))) if score > 0 else 0
+        result.append({
+            "data": r[0], "horas": horas, "questoes": questoes,
+            "flashcards": flashcards, "intensidade": intensidade
+        })
+    return result
 
 
 @router.get("/api/projecao-nota")
