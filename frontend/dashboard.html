@@ -2302,7 +2302,8 @@
 
               // Botão Pomodoro
               if (ativ.tempo_min > 0) {
-                html += `<button class="cal-pomo-btn" onclick="startPomodoro('${(materia || detail).replace(/'/g, "\\'")}', ${ativ.tempo_min}, '${ativ.tipo}')" title="Iniciar Timer e ir para atividade">▶</button>`;
+                const pomoLabel = materia || (ativ.tipo === 'revisao' ? 'Flashcards (Revisão)' : detail);
+                html += `<button class="cal-pomo-btn" onclick="startPomodoro('${pomoLabel.replace(/'/g, "\\'")}', ${ativ.tempo_min}, '${ativ.tipo}')" title="Iniciar Timer e ir para atividade">▶</button>`;
               }
 
               if (editable && ativ.id) {
