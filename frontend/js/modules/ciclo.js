@@ -107,29 +107,56 @@ export async function importarCicloDoEdital() {
   items.unshift({ icon: '📚', label: 'Todos os concursos', sub: `${state.editalData.length} tópicos no total`, value: '__todos__' });
 
   openSelectModal('📋 Importar de qual concurso?', items, async (choice) => {
-    let materias;
+    let dadosFiltrados;
     if (choice.value === '__todos__') {
-      materias = [...new Set(state.editalData.map(e => e.materia))].sort();
+      dadosFiltrados = state.editalData;
     } else {
-      materias = [...new Set(state.editalData.filter(e => (e.edital_nome || 'Geral') === choice.value).map(e => e.materia))].sort();
+      dadosFiltrados = state.editalData.filter(e => (e.edital_nome || 'Geral') === choice.value);
     }
 
-    if (materias.length === 0) { toast('Nenhuma matéria encontrada.', 'warning'); return; }
+    // Se tem mais de um cargo, perguntar qual
+    const cargos = [...new Set(dadosFiltrados.map(e => e.cargo || 'Geral'))].sort();
+    if (cargos.length > 1) {
+      const cargoItems = cargos.map(c => ({
+        icon: '👤',
+        label: c,
+        sub: `${dadosFiltrados.filter(e => (e.cargo || 'Geral') === c).length} tópicos`,
+        value: c
+      }));
+      cargoItems.unshift({ icon: '📚', label: 'Todos os cargos', sub: `${dadosFiltrados.length} tópicos`, value: '__todos_cargos__' });
 
-    const cicloAtual = await fetch('/api/ciclo').then(r => r.json());
-    const jaNoCliclo = new Set(cicloAtual.map(c => c.materia));
-    const novas = materias.filter(m => !jaNoCliclo.has(m));
-
-    if (novas.length === 0) { toast('Todas as matérias deste edital já estão no ciclo.', 'info'); return; }
-    const ok = await confirmModal('Importar Matérias', `Importar <strong>${novas.length}</strong> matérias para o ciclo?<br><br>${novas.slice(0, 8).map(m => `• ${m}`).join('<br>')}${novas.length > 8 ? '<br>...' : ''}`, { confirmText: 'Importar', type: 'info', icon: '📋' });
-    if (!ok) return;
-
-    for (const m of novas) {
-      await fetch('/api/ciclo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ materia: m, horas_alvo: 2.0 }) });
+      openSelectModal('👤 De qual cargo?', cargoItems, async (cargoChoice) => {
+        let filtrado;
+        if (cargoChoice.value === '__todos_cargos__') {
+          filtrado = dadosFiltrados;
+        } else {
+          filtrado = dadosFiltrados.filter(e => (e.cargo || 'Geral') === cargoChoice.value);
+        }
+        await _importarMateriasCiclo(filtrado);
+      });
+    } else {
+      await _importarMateriasCiclo(dadosFiltrados);
     }
-    toast(`${novas.length} matérias importadas!`, 'success');
-    loadCiclo();
   });
+}
+
+async function _importarMateriasCiclo(dados) {
+  const materias = [...new Set(dados.map(e => e.materia))].sort();
+  if (materias.length === 0) { toast('Nenhuma matéria encontrada.', 'warning'); return; }
+
+  const cicloAtual = await fetch('/api/ciclo').then(r => r.json());
+  const jaNoCliclo = new Set(cicloAtual.map(c => c.materia));
+  const novas = materias.filter(m => !jaNoCliclo.has(m));
+
+  if (novas.length === 0) { toast('Todas as matérias já estão no ciclo.', 'info'); return; }
+  const ok = await confirmModal('Importar Matérias', `Importar <strong>${novas.length}</strong> matérias para o ciclo?<br><br>${novas.slice(0, 8).map(m => `• ${m}`).join('<br>')}${novas.length > 8 ? '<br>...' : ''}`, { confirmText: 'Importar', type: 'info', icon: '📋' });
+  if (!ok) return;
+
+  for (const m of novas) {
+    await fetch('/api/ciclo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ materia: m, horas_alvo: 2.0 }) });
+  }
+  toast(`${novas.length} matérias importadas!`, 'success');
+  loadCiclo();
 }
 
 export async function addCiclo() {
