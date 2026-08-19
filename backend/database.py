@@ -1,4 +1,5 @@
 import sqlite3
+from collections.abc import Generator
 from contextlib import contextmanager
 
 from logger import log
@@ -9,6 +10,16 @@ DB_PATH = settings.DB_PATH
 
 @contextmanager
 def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
+def get_db_session() -> Generator[sqlite3.Connection, None, None]:
+    """FastAPI dependency que fornece uma conexão ao banco de dados."""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:

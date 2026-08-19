@@ -1,6 +1,6 @@
 import random
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from constants import (
     LEVEL_XP,
@@ -12,8 +12,8 @@ from constants import (
     XP_PER_TOPIC,
     XP_STREAK_WEEKLY_BONUS,
 )
-from database import get_db
-from models import DesafioCreate, MetasUpdate
+from database import get_db_session
+from models import DesafioCreate, MetasUpdate, StreakResponse
 from utils import calculate_streak, today_str
 
 router = APIRouter(prefix="", tags=["Gamificação"])
@@ -39,15 +39,14 @@ BADGES = [
 ]
 
 
-@router.get("/api/streaks", summary="Streak e gamificação", description="Retorna streak atual, dados de hoje, XP e conquistas")
-def get_streaks():
+@router.get("/api/streaks", response_model=StreakResponse, summary="Streak e gamificação", description="Retorna streak atual, dados de hoje, XP e conquistas")
+def get_streaks(conn=Depends(get_db_session)):
     """Retorna streak atual (dias consecutivos) e dados de hoje"""
-    with get_db() as conn:
-        # Dados de hoje
-        hoje = conn.execute("SELECT * FROM streaks WHERE data = ?", (today_str(),)).fetchone()
-        hoje_data = dict(hoje) if hoje else {"data": today_str(), "horas_estudadas": 0, "questoes_resolvidas": 0, "flashcards_revisados": 0}
+    # Dados de hoje
+    hoje = conn.execute("SELECT * FROM streaks WHERE data = ?", (today_str(),)).fetchone()
+    hoje_data = dict(hoje) if hoje else {"data": today_str(), "horas_estudadas": 0, "questoes_resolvidas": 0, "flashcards_revisados": 0}
 
-        streak_info = calculate_streak(conn)
+    streak_info = calculate_streak(conn)
 
     return {
         "streak_atual": streak_info["streak_atual"],
@@ -57,10 +56,9 @@ def get_streaks():
 
 
 @router.get("/api/metas")
-def get_metas():
-    with get_db() as conn:
-        config = conn.execute("SELECT * FROM metas_config WHERE id = 1").fetchone()
-        hoje = conn.execute("SELECT * FROM streaks WHERE data = ?", (today_str(),)).fetchone()
+def get_metas(conn=Depends(get_db_session)):
+    config = conn.execute("SELECT * FROM metas_config WHERE id = 1").fetchone()
+    hoje = conn.execute("SELECT * FROM streaks WHERE data = ?", (today_str(),)).fetchone()
 
     config_dict = dict(config) if config else {"meta_horas": 3.0, "meta_questoes": 30, "meta_flashcards": 10, "meta_paginas": 20}
     hoje_dict = dict(hoje) if hoje else {"horas_estudadas": 0, "questoes_resolvidas": 0, "flashcards_revisados": 0}
@@ -76,31 +74,29 @@ def get_metas():
 
 
 @router.put("/api/metas")
-def update_metas(body: MetasUpdate):
-    with get_db() as conn:
-        conn.execute("""
-            UPDATE metas_config SET meta_horas = ?, meta_questoes = ?, meta_flashcards = ?, meta_paginas = ?
-            WHERE id = 1
-        """, (body.meta_horas, body.meta_questoes, body.meta_flashcards, body.meta_paginas))
-        conn.commit()
+def update_metas(body: MetasUpdate, conn=Depends(get_db_session)):
+    conn.execute("""
+        UPDATE metas_config SET meta_horas = ?, meta_questoes = ?, meta_flashcards = ?, meta_paginas = ?
+        WHERE id = 1
+    """, (body.meta_horas, body.meta_questoes, body.meta_flashcards, body.meta_paginas))
+    conn.commit()
     return {"ok": True}
 
 
 @router.get("/api/gamification")
-def get_gamification():
+def get_gamification(conn=Depends(get_db_session)):
     """Retorna XP, nível, badges e progresso do usuário"""
-    with get_db() as conn:
-        # Calcular XP baseado nas atividades
-        horas = conn.execute("SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo").fetchone()[0]
-        questoes_total = conn.execute("SELECT COUNT(*) FROM questoes_respostas").fetchone()[0]
-        questoes_certas = conn.execute("SELECT COUNT(*) FROM questoes_respostas WHERE acertou = 1").fetchone()[0]
-        flashcards_rev = conn.execute("SELECT COALESCE(SUM(flashcards_revisados), 0) FROM streaks").fetchone()[0]
-        topicos_concluidos = conn.execute("SELECT COUNT(*) FROM edital WHERE status = 'Concluído'").fetchone()[0]
-        simulados_feitos = conn.execute("SELECT COUNT(*) FROM simulados WHERE status = 'finalizado'").fetchone()[0]
+    # Calcular XP baseado nas atividades
+    horas = conn.execute("SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo").fetchone()[0]
+    questoes_total = conn.execute("SELECT COUNT(*) FROM questoes_respostas").fetchone()[0]
+    questoes_certas = conn.execute("SELECT COUNT(*) FROM questoes_respostas WHERE acertou = 1").fetchone()[0]
+    flashcards_rev = conn.execute("SELECT COALESCE(SUM(flashcards_revisados), 0) FROM streaks").fetchone()[0]
+    topicos_concluidos = conn.execute("SELECT COUNT(*) FROM edital WHERE status = 'Concluído'").fetchone()[0]
+    simulados_feitos = conn.execute("SELECT COUNT(*) FROM simulados WHERE status = 'finalizado'").fetchone()[0]
 
-        # Streak atual
-        streak_info = calculate_streak(conn)
-        streak = streak_info["streak_atual"]
+    # Streak atual
+    streak_info = calculate_streak(conn)
+    streak = streak_info["streak_atual"]
 
     # Calcular XP
     xp = int(
@@ -150,17 +146,16 @@ def get_gamification():
 
 
 @router.get("/api/conquistas-diarias")
-def conquistas_diarias():
+def conquistas_diarias(conn=Depends(get_db_session)):
     """Gera missões diárias baseadas no progresso"""
-    with get_db() as conn:
-        # Buscar matérias menos estudadas
-        mat_fraca = conn.execute("""
-            SELECT materia FROM edital WHERE status != 'Concluído'
-            GROUP BY materia ORDER BY SUM(horas_estudadas) ASC LIMIT 5
-        """).fetchall()
+    # Buscar matérias menos estudadas
+    mat_fraca = conn.execute("""
+        SELECT materia FROM edital WHERE status != 'Concluído'
+        GROUP BY materia ORDER BY SUM(horas_estudadas) ASC LIMIT 5
+    """).fetchall()
 
-        # Dados de hoje
-        hoje = conn.execute("SELECT * FROM streaks WHERE data = ?", (today_str(),)).fetchone()
+    # Dados de hoje
+    hoje = conn.execute("SELECT * FROM streaks WHERE data = ?", (today_str(),)).fetchone()
 
     missoes = []
     materias_fracas = [r[0] for r in mat_fraca] if mat_fraca else ['Geral']
@@ -177,17 +172,15 @@ def conquistas_diarias():
 
 
 @router.get("/api/desafios")
-def list_desafios():
-    with get_db() as conn:
-        rows = conn.execute("SELECT * FROM desafios ORDER BY finalizado ASC, created_at DESC").fetchall()
+def list_desafios(conn=Depends(get_db_session)):
+    rows = conn.execute("SELECT * FROM desafios ORDER BY finalizado ASC, created_at DESC").fetchall()
     return [dict(r) for r in rows]
 
 
 @router.post("/api/desafios")
-def create_desafio(body: DesafioCreate):
-    with get_db() as conn:
-        cur = conn.execute(
-            "INSERT INTO desafios (titulo, meta_tipo, meta_valor, materia, dias, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-            (body.titulo, body.meta_tipo, body.meta_valor, body.materia, body.dias, today_str()))
-        conn.commit()
+def create_desafio(body: DesafioCreate, conn=Depends(get_db_session)):
+    cur = conn.execute(
+        "INSERT INTO desafios (titulo, meta_tipo, meta_valor, materia, dias, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (body.titulo, body.meta_tipo, body.meta_valor, body.materia, body.dias, today_str()))
+    conn.commit()
     return {"id": cur.lastrowid, "ok": True}

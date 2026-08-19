@@ -1,10 +1,10 @@
 import re
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
 from constants import WEIGHT_ACCURACY, WEIGHT_CONSISTENCY, WEIGHT_PROGRESS
-from database import get_db
+from database import get_db_session
 from logger import log
 from utils import calculate_streak, today_str
 
@@ -310,60 +310,59 @@ def _distribute_time(conn, top_materias: list, tempo_restante: int, ordem: int,
 # ============================================================
 
 @router.get("/api/treinador", summary="Treinador Inteligente", description="Retorna recomendações de estudo personalizadas baseadas em desempenho e progresso")
-def treinador_inteligente(edital_nome: str = "", cargo: str = ""):
+def treinador_inteligente(edital_nome: str = "", cargo: str = "", conn=Depends(get_db_session)):
     """Treinador inteligente: recomendações baseadas em desempenho, revisões pendentes e metas"""
-    with get_db() as conn:
-        # 1. Desempenho por matéria
-        desempenho = _get_performance_by_subject(conn)
+    # 1. Desempenho por matéria
+    desempenho = _get_performance_by_subject(conn)
 
-        # 2. Última sessão por matéria
-        ultima_sessao = _get_last_session_by_subject(conn)
+    # 2. Última sessão por matéria
+    ultima_sessao = _get_last_session_by_subject(conn)
 
-        # 3-4. Revisões pendentes
-        pending = _get_pending_reviews(conn)
+    # 3-4. Revisões pendentes
+    pending = _get_pending_reviews(conn)
 
-        # 5. Progresso do edital
-        query_edital = "SELECT COUNT(*) FROM edital WHERE 1=1"
-        query_done = "SELECT COUNT(*) FROM edital WHERE status = 'Concluído'"
-        params_edital = []
-        if edital_nome:
-            query_edital += " AND edital_nome = ?"
-            query_done += " AND edital_nome = ?"
-            params_edital.append(edital_nome)
-        if cargo:
-            query_edital += " AND cargo = ?"
-            query_done += " AND cargo = ?"
-            params_edital.append(cargo)
-        edital_total = conn.execute(query_edital, params_edital).fetchone()[0]
-        edital_concluido = conn.execute(query_done, params_edital).fetchone()[0]
+    # 5. Progresso do edital
+    query_edital = "SELECT COUNT(*) FROM edital WHERE 1=1"
+    query_done = "SELECT COUNT(*) FROM edital WHERE status = 'Concluído'"
+    params_edital = []
+    if edital_nome:
+        query_edital += " AND edital_nome = ?"
+        query_done += " AND edital_nome = ?"
+        params_edital.append(edital_nome)
+    if cargo:
+        query_edital += " AND cargo = ?"
+        query_done += " AND cargo = ?"
+        params_edital.append(cargo)
+    edital_total = conn.execute(query_edital, params_edital).fetchone()[0]
+    edital_concluido = conn.execute(query_done, params_edital).fetchone()[0]
 
-        # 6. Dias estudados na semana
-        inicio_semana = (date.today() - timedelta(days=date.today().weekday())).isoformat()
-        dias_semana = conn.execute("""
-            SELECT COUNT(DISTINCT data) FROM streaks
-            WHERE data >= ? AND (horas_estudadas > 0 OR questoes_resolvidas > 0)
-        """, (inicio_semana,)).fetchone()[0]
+    # 6. Dias estudados na semana
+    inicio_semana = (date.today() - timedelta(days=date.today().weekday())).isoformat()
+    dias_semana = conn.execute("""
+        SELECT COUNT(DISTINCT data) FROM streaks
+        WHERE data >= ? AND (horas_estudadas > 0 OR questoes_resolvidas > 0)
+    """, (inicio_semana,)).fetchone()[0]
 
-        # 7. Metas de hoje
-        metas = conn.execute("SELECT meta_horas, meta_questoes FROM metas_config WHERE id = 1").fetchone()
-        meta_horas = metas[0] if metas else 3.0
-        meta_questoes = metas[1] if metas else 30
+    # 7. Metas de hoje
+    metas = conn.execute("SELECT meta_horas, meta_questoes FROM metas_config WHERE id = 1").fetchone()
+    meta_horas = metas[0] if metas else 3.0
+    meta_questoes = metas[1] if metas else 30
 
-        hoje_streak = conn.execute("SELECT horas_estudadas, questoes_resolvidas FROM streaks WHERE data = ?", (today_str(),)).fetchone()
-        horas_hoje = hoje_streak[0] if hoje_streak else 0
-        questoes_hoje = hoje_streak[1] if hoje_streak else 0
+    hoje_streak = conn.execute("SELECT horas_estudadas, questoes_resolvidas FROM streaks WHERE data = ?", (today_str(),)).fetchone()
+    horas_hoje = hoje_streak[0] if hoje_streak else 0
+    questoes_hoje = hoje_streak[1] if hoje_streak else 0
 
-        # 8. Streak
-        streak_info = calculate_streak(conn)
-        streak = streak_info["streak_atual"]
+    # 8. Streak
+    streak_info = calculate_streak(conn)
+    streak = streak_info["streak_atual"]
 
-        # 9. Dias até prova
-        dias_prova = _dias_ate_prova(conn, edital_nome, cargo)
+    # 9. Dias até prova
+    dias_prova = _dias_ate_prova(conn, edital_nome, cargo)
 
-        # 10. % acerto total
-        q_total = conn.execute("SELECT COUNT(*) FROM questoes_respostas").fetchone()[0]
-        q_acertos = conn.execute("SELECT COUNT(*) FROM questoes_respostas WHERE acertou = 1").fetchone()[0]
-        pct_acerto_global = (q_acertos / q_total * 100) if q_total > 0 else 0
+    # 10. % acerto total
+    q_total = conn.execute("SELECT COUNT(*) FROM questoes_respostas").fetchone()[0]
+    q_acertos = conn.execute("SELECT COUNT(*) FROM questoes_respostas WHERE acertou = 1").fetchone()[0]
+    pct_acerto_global = (q_acertos / q_total * 100) if q_total > 0 else 0
 
     # Calcular score de prontidão
     pct_edital = (edital_concluido / edital_total * 100) if edital_total > 0 else 0
@@ -394,50 +393,49 @@ def treinador_inteligente(edital_nome: str = "", cargo: str = ""):
 
 
 @router.get("/api/trilha-diaria", summary="Trilha de Estudo Diária", description="Gera plano de estudo para o dia baseado em revisões pendentes e desempenho")
-def trilha_diaria(edital_nome: str = "", cargo: str = "", horas_disponiveis: float = Query(default=3.0)):
+def trilha_diaria(edital_nome: str = "", cargo: str = "", horas_disponiveis: float = Query(default=3.0), conn=Depends(get_db_session)):
     """Gera trilha de estudo diária personalizada baseada em SM-2 e desempenho"""
-    with get_db() as conn:
-        tempo_total_min = int(horas_disponiveis * 60)
-        tempo_restante = tempo_total_min
-        atividades = []
-        ordem = 1
+    tempo_total_min = int(horas_disponiveis * 60)
+    tempo_restante = tempo_total_min
+    atividades = []
+    ordem = 1
 
-        # 1. Revisões SRS pendentes (flashcards) — prioridade máxima
-        pending = _get_pending_reviews(conn)
+    # 1. Revisões SRS pendentes (flashcards) — prioridade máxima
+    pending = _get_pending_reviews(conn)
 
-        if pending["flashcards"] > 0 and tempo_restante > 0:
-            tempo_flash = min(max(5, pending["flashcards"] * 2), 20)  # 2min por card, max 20min
-            tempo_flash = min(tempo_flash, tempo_restante)
-            atividades.append({
-                "ordem": ordem,
-                "tipo": "revisao",
-                "descricao": f"Revisar {pending['flashcards']} flashcard{'s' if pending['flashcards'] > 1 else ''} pendente{'s' if pending['flashcards'] > 1 else ''}",
-                "tempo_min": tempo_flash
-            })
-            tempo_restante -= tempo_flash
-            ordem += 1
+    if pending["flashcards"] > 0 and tempo_restante > 0:
+        tempo_flash = min(max(5, pending["flashcards"] * 2), 20)  # 2min por card, max 20min
+        tempo_flash = min(tempo_flash, tempo_restante)
+        atividades.append({
+            "ordem": ordem,
+            "tipo": "revisao",
+            "descricao": f"Revisar {pending['flashcards']} flashcard{'s' if pending['flashcards'] > 1 else ''} pendente{'s' if pending['flashcards'] > 1 else ''}",
+            "tempo_min": tempo_flash
+        })
+        tempo_restante -= tempo_flash
+        ordem += 1
 
-        # 2. Revisões SRS pendentes (tópicos do edital)
-        if pending["topicos"] > 0 and tempo_restante > 0:
-            tempo_top = min(max(5, pending["topicos"] * 5), 30)  # 5min por tópico, max 30min
-            tempo_top = min(tempo_top, tempo_restante)
-            atividades.append({
-                "ordem": ordem,
-                "tipo": "revisao",
-                "descricao": f"Revisar {pending['topicos']} tópico{'s' if pending['topicos'] > 1 else ''} com baixa retenção",
-                "tempo_min": tempo_top
-            })
-            tempo_restante -= tempo_top
-            ordem += 1
+    # 2. Revisões SRS pendentes (tópicos do edital)
+    if pending["topicos"] > 0 and tempo_restante > 0:
+        tempo_top = min(max(5, pending["topicos"] * 5), 30)  # 5min por tópico, max 30min
+        tempo_top = min(tempo_top, tempo_restante)
+        atividades.append({
+            "ordem": ordem,
+            "tipo": "revisao",
+            "descricao": f"Revisar {pending['topicos']} tópico{'s' if pending['topicos'] > 1 else ''} com baixa retenção",
+            "tempo_min": tempo_top
+        })
+        tempo_restante -= tempo_top
+        ordem += 1
 
-        # 3. Identificar matérias prioritárias
-        desempenho = _get_performance_by_subject(conn)
-        ultima_sessao = _get_last_session_by_subject(conn)
-        top_materias = _get_priority_activities(conn, desempenho, ultima_sessao, edital_nome, cargo)
+    # 3. Identificar matérias prioritárias
+    desempenho = _get_performance_by_subject(conn)
+    ultima_sessao = _get_last_session_by_subject(conn)
+    top_materias = _get_priority_activities(conn, desempenho, ultima_sessao, edital_nome, cargo)
 
-        # 4. Distribuir tempo restante entre matérias prioritárias
-        new_atividades, ordem = _distribute_time(conn, top_materias, tempo_restante, ordem, edital_nome, cargo)
-        atividades.extend(new_atividades)
+    # 4. Distribuir tempo restante entre matérias prioritárias
+    new_atividades, ordem = _distribute_time(conn, top_materias, tempo_restante, ordem, edital_nome, cargo)
+    atividades.extend(new_atividades)
 
     # Calcular tempo total real
     tempo_total_real = sum(a["tempo_min"] for a in atividades)

@@ -147,10 +147,10 @@ class TestSM2Flashcards:
         fid = r.json()["id"]
 
         r = client.post(f"/api/flashcards/{fid}/review-sm2", json={"quality": 6})
-        assert r.status_code == 400
+        assert r.status_code == 422
 
         r = client.post(f"/api/flashcards/{fid}/review-sm2", json={"quality": -1})
-        assert r.status_code == 400
+        assert r.status_code == 422
 
     def test_review_sm2_nonexistent(self, client):
         r = client.post("/api/flashcards/99999/review-sm2", json={"quality": 4})
@@ -261,7 +261,7 @@ class TestSM2Edital:
         })
         eid = r.json()["id"]
         r = client.post(f"/api/edital/{eid}/revisar-sm2", json={"quality": 7})
-        assert r.status_code == 400
+        assert r.status_code == 422
 
 
 # ============================================================
