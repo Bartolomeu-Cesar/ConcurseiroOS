@@ -326,6 +326,7 @@
       <span style="font-size:0.82rem;color:#9399b2;" id="date-label"></span>
     </div>
     <div class="header-links">
+      <span id="dash-countdown" style="background:#313244;border-radius:20px;padding:4px 12px;font-size:0.78rem;color:#f38ba8;font-weight:600;"></span>
       <a href="/">📚 PDFs</a>
       <a href="/questoes.html">❓ Questões</a>
       <button class="export-btn" onclick="exportStats()">⬇ Exportar Estatísticas</button>
@@ -881,6 +882,32 @@
       const isDark = document.body.classList.toggle('light-theme');
       localStorage.setItem('theme', isDark ? 'light' : 'dark');
     }
+
+    // Countdown de provas no header
+    async function loadDashCountdown() {
+      try {
+        const provas = await fetch('/api/countdown').then(r => r.json());
+        const el = document.getElementById('dash-countdown');
+        if (!provas.length || !el) return;
+        const now = new Date();
+        const futuras = provas.map(p => {
+          const parts = p.data_objetiva.match(/(\d+)[-\/](\d+)[-\/](\d+)/);
+          if (!parts) return null;
+          let d;
+          if (parts[3].length === 4) d = new Date(parts[3], parts[2]-1, parts[1]);
+          else d = new Date(parts[1], parts[2]-1, parts[3]);
+          const dias = Math.ceil((d - now) / 86400000);
+          return dias > 0 ? {...p, dias} : null;
+        }).filter(Boolean).sort((a,b) => a.dias - b.dias);
+        if (!futuras.length) { el.textContent = ''; return; }
+        const prox = futuras[0];
+        const cor = prox.dias <= 30 ? '#f38ba8' : prox.dias <= 60 ? '#fab387' : '#f9e2af';
+        el.style.color = cor;
+        el.innerHTML = `⏳ <strong>${prox.cargo}</strong>: ${prox.dias} dias`;
+        el.title = futuras.map(p => `${p.cargo}: ${p.dias}d`).join('\n');
+      } catch(e) {}
+    }
+    loadDashCountdown();
 
     document.getElementById('date-label').textContent = new Date().toLocaleDateString('pt-BR', {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
@@ -2690,6 +2717,7 @@
           loadDashboard();
           loadResumoDiario();
           loadHeatmap();
+          loadDashCountdown();
           break;
         case 'panel-treinador':
           loadTreinador();
