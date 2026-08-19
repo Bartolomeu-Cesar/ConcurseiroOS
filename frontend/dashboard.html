@@ -2245,10 +2245,20 @@
             if (isToday && !timelineInserida && turno === turnoAtualNome) {
               const agora = new Date();
               const horaStr = `${String(agora.getHours()).padStart(2,'0')}:${String(agora.getMinutes()).padStart(2,'0')}`;
-              html += `<div class="cal-timeline" style="display:flex;align-items:center;gap:4px;margin:6px 0;position:relative;">
-                <span style="font-size:0.65rem;color:#a6e3a1;font-weight:700;background:#313244;padding:1px 4px;border-radius:3px;z-index:1;">${horaStr}</span>
-                <div style="flex:1;height:2px;background:linear-gradient(90deg, #a6e3a1, transparent);border-radius:1px;"></div>
-                <span style="font-size:0.6rem;color:#a6e3a1;">◀ agora</span>
+              // Calcular posição da agulha: proporção dentro do turno (0-100%)
+              const turnoInicio = turno === 'manha' ? 6 : turno === 'tarde' ? 12 : 18;
+              const turnoFim = turno === 'manha' ? 12 : turno === 'tarde' ? 18 : 23;
+              const minutosNoTurno = (horaAtual - turnoInicio) * 60 + new Date().getMinutes();
+              const totalMinTurno = (turnoFim - turnoInicio) * 60;
+              const pctPos = Math.min(95, Math.max(5, (minutosNoTurno / totalMinTurno) * 100));
+
+              html += `<div class="cal-timeline" style="position:relative;margin:8px 0;height:14px;">
+                <div style="position:absolute;top:6px;left:0;right:0;height:2px;background:#45475a;border-radius:1px;"></div>
+                <div style="position:absolute;top:6px;left:0;width:${pctPos}%;height:2px;background:#a6e3a1;border-radius:1px;"></div>
+                <div style="position:absolute;top:0;left:${pctPos}%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;">
+                  <span style="font-size:0.6rem;color:#a6e3a1;font-weight:700;background:#313244;padding:0 3px;border-radius:2px;white-space:nowrap;">${horaStr}</span>
+                  <div style="width:2px;height:6px;background:#a6e3a1;border-radius:1px;"></div>
+                </div>
               </div>`;
               timelineInserida = true;
             }
@@ -2329,13 +2339,27 @@
       // Carregar streak e alertas
       loadCalStreak();
       loadAlertasNegligenciadas();
-      // Atualizar linha do tempo a cada minuto
+      // Atualizar linha do tempo (agulha) a cada minuto
       clearInterval(window._calTimelineInterval);
       window._calTimelineInterval = setInterval(() => {
-        const tl = document.querySelector('.cal-timeline span');
+        const tl = document.querySelector('.cal-timeline');
         if (tl) {
           const agora = new Date();
-          tl.textContent = `${String(agora.getHours()).padStart(2,'0')}:${String(agora.getMinutes()).padStart(2,'0')}`;
+          const h = agora.getHours();
+          const horaStr = `${String(h).padStart(2,'0')}:${String(agora.getMinutes()).padStart(2,'0')}`;
+          const turno = h >= 6 && h < 12 ? 'manha' : h >= 12 && h < 18 ? 'tarde' : 'noite';
+          const turnoInicio = turno === 'manha' ? 6 : turno === 'tarde' ? 12 : 18;
+          const turnoFim = turno === 'manha' ? 12 : turno === 'tarde' ? 18 : 23;
+          const minutosNoTurno = (h - turnoInicio) * 60 + agora.getMinutes();
+          const totalMinTurno = (turnoFim - turnoInicio) * 60;
+          const pctPos = Math.min(95, Math.max(5, (minutosNoTurno / totalMinTurno) * 100));
+          // Atualizar posição e hora
+          const needle = tl.querySelector('div:last-child');
+          const bar = tl.querySelectorAll('div')[1];
+          if (needle) needle.style.left = pctPos + '%';
+          if (bar) bar.style.width = pctPos + '%';
+          const label = tl.querySelector('span');
+          if (label) label.textContent = horaStr;
         }
       }, 60000);
     }
