@@ -1487,12 +1487,22 @@ setInterval(loadCountdown, 60000);
 // ==================== THEME TOGGLE ====================
 function toggleTheme() {
     const body = document.body;
-    const isDark = body.classList.toggle('light-theme');
-    localStorage.setItem('theme', isDark ? 'light' : 'dark');
-    document.querySelector('meta[name=theme-color]').content = isDark ? '#eff1f5' : '#1e1e2e';
+    body.classList.add('theme-forced');
+    const isLight = body.classList.toggle('light-theme');
+    localStorage.setItem('theme', isLight ? 'light' : 'dark');
+    const metaTheme = document.querySelector('meta[name=theme-color]');
+    if (metaTheme) metaTheme.content = isLight ? '#eff1f5' : '#1e1e2e';
 }
-if (localStorage.getItem('theme') === 'light')
-    document.body.classList.add('light-theme');
+// Aplicar tema salvo ou respeitar preferência do sistema
+(function() {
+    const saved = localStorage.getItem('theme');
+    if (saved === 'light') {
+        document.body.classList.add('light-theme', 'theme-forced');
+    } else if (saved === 'dark') {
+        document.body.classList.add('theme-forced');
+    }
+    // Se não tem preferência salva, o CSS @media prefers-color-scheme cuida
+})();
 // ==================== GAMIFICATION BADGE ====================
 async function loadXpBadge() {
     try {
