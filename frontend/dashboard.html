@@ -416,6 +416,7 @@
               <option value="6">6h/dia</option>
               <option value="8">8h/dia</option>
             </select>
+            <button onclick="regenerarCalendario()" style="background:#f9e2af;color:#1e1e2e;border:none;border-radius:6px;padding:5px 12px;font-size:0.82rem;font-weight:600;cursor:pointer;" title="Regerar calendário (apaga personalizado e gera novo)">🔄 Regerar</button>
           </div>
         </div>
 
@@ -1259,6 +1260,34 @@
       document.getElementById('cal-hibrido-info').style.display = mode === 'hibrido' ? 'block' : 'none';
       document.getElementById('cal-actions').style.display = (mode === 'manual' || mode === 'hibrido') ? 'flex' : 'none';
       loadCalendario();
+    }
+
+    async function regenerarCalendario() {
+      if (!confirm('Deseja regerar o calendário? Isso vai apagar o calendário personalizado atual e gerar um novo baseado no seu desempenho.')) return;
+
+      try {
+        // Limpar calendário personalizado salvo
+        await fetch('/api/calendario-personalizado', { method: 'DELETE' });
+
+        // Forçar modo auto para regerar
+        calendarMode = 'auto';
+        document.querySelectorAll('.cal-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === 'auto'));
+        document.getElementById('cal-manual-form').style.display = 'none';
+        document.getElementById('cal-hibrido-info').style.display = 'none';
+        const actionsEl = document.getElementById('cal-actions');
+        if (actionsEl) actionsEl.style.display = 'none';
+
+        // Recarregar calendário (auto gera novo)
+        await loadCalendario();
+
+        // Feedback
+        const el = document.getElementById('calendario-resumo');
+        if (el) {
+          el.innerHTML += '<div style="color:#a6e3a1;font-size:0.8rem;margin-top:6px;">✅ Calendário regenerado com sucesso!</div>';
+        }
+      } catch(e) {
+        alert('Erro ao regerar calendário: ' + e.message);
+      }
     }
 
     async function loadCalendario() {
