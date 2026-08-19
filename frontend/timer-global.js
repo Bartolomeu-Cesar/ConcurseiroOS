@@ -61,7 +61,10 @@
                     body: JSON.stringify({ horas: Math.round(horas * 100) / 100, materia: state.materia, tipo: 'pomodoro' })
                 }).catch(() => {});
                 clearTimerState();
-                setTimeout(removeWidget, 5000);
+                setTimeout(() => {
+                    removeWidget();
+                    window.location.href = '/dashboard.html';
+                }, 3000);
                 return;
             }
 
@@ -87,9 +90,10 @@
     };
 
     window.globalTimerStop = function() {
-        if (confirm('Parar o timer?')) {
+        if (confirm('Parar o timer e voltar ao calendário?')) {
             clearTimerState();
             removeWidget();
+            window.location.href = '/dashboard.html';
         }
     };
 
