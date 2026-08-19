@@ -339,6 +339,21 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (hash && document.getElementById(hash)) {
         switchTab(hash);
     }
+    // Tratar ação pós-PDF (veio do viewer após concluir leitura)
+    const posPdfAcao = localStorage.getItem('pos_pdf_acao');
+    if (posPdfAcao) {
+        localStorage.removeItem('pos_pdf_acao');
+        switchTab('tab-flashcards');
+        setTimeout(() => {
+            if (posPdfAcao === 'questoes') {
+                carregarQuestoesDia();
+                toast('📝 Questões pós-leitura!', 'success');
+            } else if (posPdfAcao === 'flashcards') {
+                iniciarSessaoFlash('aleatorio');
+                toast('🧠 Flashcards pós-leitura!', 'success');
+            }
+        }, 500);
+    }
 })();
 // ==================== TAB 1: PDFs ====================
 const API = '';

@@ -180,6 +180,33 @@
       currentPage = p;
       updateInfo();
       scheduleSave();
+
+      // Detectar se chegou na última página (PDF concluído)
+      if (currentPage >= totalPages && totalPages > 1 && !window._pdfFinishShown) {
+        window._pdfFinishShown = true;
+        setTimeout(() => ofereceQuestoesPdf(), 1500);
+      }
+    }
+
+    function ofereceQuestoesPdf() {
+      // Extrair matéria do nome do PDF
+      const filename = path.split('/').pop().replace(/\.pdf$/i, '').replace(/[-_]/g, ' ');
+
+      const modal = document.createElement('div');
+      modal.id = 'pdf-finish-modal';
+      modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:99999;display:flex;align-items:center;justify-content:center;';
+      modal.innerHTML = `<div style="background:#313244;border-radius:16px;padding:24px;max-width:380px;width:90%;text-align:center;">
+        <div style="font-size:1.5rem;margin-bottom:8px;">📖✅</div>
+        <h3 style="color:#a6e3a1;margin-bottom:8px;">PDF Concluído!</h3>
+        <p style="font-size:0.82rem;color:#cdd6f4;margin-bottom:16px;">${filename}</p>
+        <p style="font-size:0.82rem;color:#f9e2af;margin-bottom:16px;">📝 Fixe o conteúdo com questões ou flashcards!</p>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <button onclick="window.open('/#tab-flashcards','_self');localStorage.setItem('pos_pdf_acao','questoes');" style="background:#89b4fa;color:#1e1e2e;border:none;border-radius:8px;padding:12px;font-weight:600;cursor:pointer;font-size:0.9rem;">❓ Resolver Questões</button>
+          <button onclick="window.open('/#tab-flashcards','_self');localStorage.setItem('pos_pdf_acao','flashcards');" style="background:#cba6f7;color:#1e1e2e;border:none;border-radius:8px;padding:12px;font-weight:600;cursor:pointer;font-size:0.9rem;">🧠 Revisar Flashcards</button>
+          <button onclick="document.getElementById('pdf-finish-modal').remove();" style="background:#45475a;color:#cdd6f4;border:none;border-radius:8px;padding:10px;cursor:pointer;font-size:0.85rem;">⏭ Pular (continuar depois)</button>
+        </div>
+      </div>`;
+      document.body.appendChild(modal);
     }
 
     function updateInfo() {
