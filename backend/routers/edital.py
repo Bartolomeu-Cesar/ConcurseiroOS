@@ -488,7 +488,26 @@ def exportar_edital(
         )
 
     # JSON (default)
-    content = json.dumps(items, ensure_ascii=False, indent=2)
+    # JSON (default) - incluir metadados dos cargos
+    # Buscar metadados
+    meta_query = "SELECT * FROM edital_info WHERE 1=1"
+    meta_params = []
+    if edital_nome:
+        meta_query += " AND edital_nome = ?"
+        meta_params.append(edital_nome)
+    if cargo:
+        meta_query += " AND cargo = ?"
+        meta_params.append(cargo)
+    meta_rows = conn.execute(meta_query, meta_params).fetchall()
+    metadados = [dict(r) for r in meta_rows]
+
+    export_data = {
+        "editais": items,
+        "metadados": metadados,
+        "total_topicos": len(items),
+        "total_cargos": len(metadados)
+    }
+    content = json.dumps(export_data, ensure_ascii=False, indent=2)
     return Response(
         content=content,
         media_type="application/json",
@@ -499,10 +518,11 @@ def exportar_edital(
 @router.post("/api/edital/importar", summary="Importar edital verticalizado",
              description="Importa edital de arquivo JSON ou CSV")
 def importar_edital(file: UploadFile = File(...), conn=Depends(get_db_session)):
-    """Aceita JSON (array de objetos) ou CSV com colunas: edital_nome, cargo, materia, topico, status, horas_estudadas"""
+    """Aceita JSON (array de objetos ou {editais:[], metadados:[]}) ou CSV com colunas: edital_nome, cargo, materia, topico, status, horas_estudadas"""
     content = file.file.read()
     text = content.decode("utf-8")
     items = []
+    metadados = []
 
     if file.filename.endswith(".csv"):
         reader = csv.DictReader(io.StringIO(text))
@@ -511,9 +531,18 @@ def importar_edital(file: UploadFile = File(...), conn=Depends(get_db_session)):
     else:
         # JSON
         try:
-            items = json.loads(text)
+            data = json.loads(text)
         except Exception:
             raise HTTPException(status_code=400, detail="Arquivo JSON inválido") from None
+
+        # Suportar formato novo {editais:[], metadados:[]} e formato antigo (array direto)
+        if isinstance(data, dict) and "editais" in data:
+            items = data["editais"]
+            metadados = data.get("metadados", [])
+        elif isinstance(data, list):
+            items = data
+        else:
+            raise HTTPException(status_code=400, detail="Formato inválido: esperado array ou {editais:[], metadados:[]}")
 
     if not isinstance(items, list):
         raise HTTPException(status_code=400, detail="Formato inválido: esperado array de objetos")
@@ -533,6 +562,27 @@ def importar_edital(file: UploadFile = File(...), conn=Depends(get_db_session)):
             (edital_nome, cargo, materia, topico, status, horas)
         )
         count += 1
+
+    # Importar metadados (se presentes)
+    meta_count = 0
+    for m in metadados:
+        edital_n = m.get("edital_nome", "")
+        cargo_n = m.get("cargo", "")
+        if not edital_n:
+            continue
+        # Evitar duplicatas
+        existing = conn.execute("SELECT COUNT(*) FROM edital_info WHERE edital_nome = ? AND cargo = ?", (edital_n, cargo_n)).fetchone()[0]
+        if existing == 0:
+            conn.execute("""
+                INSERT INTO edital_info (edital_nome, cargo, orgao, banca, vagas, subsidio, inscricoes,
+                    data_prova_objetiva, data_prova_discursiva, horario, local_prova, taxa_inscricao, link_edital, observacoes)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (edital_n, cargo_n, m.get("orgao",""), m.get("banca",""), m.get("vagas",""),
+                  m.get("subsidio",""), m.get("inscricoes",""), m.get("data_prova_objetiva",""),
+                  m.get("data_prova_discursiva",""), m.get("horario",""), m.get("local_prova",""),
+                  m.get("taxa_inscricao",""), m.get("link_edital",""), m.get("observacoes","")))
+            meta_count += 1
+
     conn.commit()
-    log.info(f"Edital imported: {count} items")
-    return {"ok": True, "importados": count}
+    log.info(f"Edital imported: {count} items, {meta_count} metadados")
+    return {"ok": True, "importados": count, "metadados_importados": meta_count}
