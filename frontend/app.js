@@ -889,7 +889,72 @@ function selectEditalTopic(id, materia, topico) {
     if (row)
         row.classList.add('selected');
 }
-async function toggleEditalStatus(id) { await fetch(`/api/edital/${id}/status`, { method: 'PUT' }); loadEdital(); }
+async function toggleEditalStatus(id) {
+    const res = await fetch(`/api/edital/${id}/status`, { method: 'PUT' }).then(r => r.json());
+    loadEdital();
+
+    // Se marcou como Concluído, oferecer questões de fixação
+    if (res.status === 'Concluído') {
+        // Buscar dados do tópico para saber a matéria
+        const topico = editalData.find(t => t.id === id);
+        if (topico) {
+            ofereceQuestoesPosEstudo(topico.materia, topico.topico);
+        }
+    }
+}
+
+function ofereceQuestoesPosEstudo(materia, topico) {
+    // Modal oferecendo questões ou pular
+    const modal = document.createElement('div');
+    modal.id = 'pos-estudo-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:9999;display:flex;align-items:center;justify-content:center;';
+    modal.innerHTML = `<div style="background:#313244;border-radius:16px;padding:24px;max-width:380px;width:90%;text-align:center;">
+        <div style="font-size:1.5rem;margin-bottom:8px;">🎉</div>
+        <h3 style="color:#a6e3a1;margin-bottom:8px;">Tópico Concluído!</h3>
+        <p style="font-size:0.82rem;color:#cdd6f4;margin-bottom:4px;"><strong>${materia}</strong></p>
+        <p style="font-size:0.78rem;color:#9399b2;margin-bottom:16px;">${topico}</p>
+        <p style="font-size:0.82rem;color:#f9e2af;margin-bottom:16px;">📝 Que tal fixar com algumas questões?</p>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+            <button onclick="iniciarQuestoesPosEstudo('${materia.replace(/'/g, "\\'")}');document.getElementById('pos-estudo-modal').remove();" style="background:#89b4fa;color:#1e1e2e;border:none;border-radius:8px;padding:12px;font-weight:600;cursor:pointer;font-size:0.9rem;">❓ Resolver Questões (${materia})</button>
+            <button onclick="iniciarFlashPosEstudo('${materia.replace(/'/g, "\\'")}');document.getElementById('pos-estudo-modal').remove();" style="background:#cba6f7;color:#1e1e2e;border:none;border-radius:8px;padding:12px;font-weight:600;cursor:pointer;font-size:0.9rem;">🧠 Revisar Flashcards</button>
+            <button onclick="document.getElementById('pos-estudo-modal').remove();" style="background:#45475a;color:#cdd6f4;border:none;border-radius:8px;padding:10px;cursor:pointer;font-size:0.85rem;">⏭ Pular (continuar depois)</button>
+        </div>
+    </div>`;
+    document.body.appendChild(modal);
+}
+
+async function iniciarQuestoesPosEstudo(materia) {
+    // Carregar questões da matéria e iniciar mini-sessão
+    try {
+        const all = await fetch(`/api/questoes?materia=${encodeURIComponent(materia)}&limit=50`).then(r => r.json());
+        const pool = Array.isArray(all) ? all : (all.items || []);
+        if (pool.length === 0) {
+            toast('Nenhuma questão disponível para esta matéria.', 'warning');
+            return;
+        }
+        questoesDia = pool.sort(() => Math.random() - 0.5).slice(0, 5);
+        qDiaIdx = 0;
+        qDiaAcertos = 0;
+        // Mudar para tab flashcards (onde estão as questões do dia)
+        switchTab('tab-flashcards');
+        document.getElementById('questoes-dia-area').style.display = 'none';
+        document.getElementById('questao-dia-card').style.display = 'block';
+        document.getElementById('questoes-dia-progress').style.display = 'block';
+        showQuestaoDia();
+        toast(`📝 5 questões de ${materia}`, 'success');
+    } catch(e) { toast('Erro ao carregar questões', 'error'); }
+}
+
+async function iniciarFlashPosEstudo(materia) {
+    // Iniciar sessão de flashcards da matéria
+    const cfg = getConfigSessoes();
+    flashSessao = await fetch(`/api/flashcards/aleatorio?materia=${encodeURIComponent(materia)}&quantidade=${cfg.flashcards_sessao}`).then(r => r.json());
+    if (flashSessao.length === 0) { toast('Nenhum flashcard para esta matéria.', 'warning'); return; }
+    flashSessaoIndex = 0;
+    switchTab('tab-flashcards');
+    showSessaoFlashcard();
+    toast(`🧠 Sessão: ${materia} (${flashSessao.length} cards)`, 'success');
+}
 async function deleteEditalItem(id) {
     undoableDelete('Tópico', `/api/edital/${id}`, (deleted) => {
         if (deleted) {
