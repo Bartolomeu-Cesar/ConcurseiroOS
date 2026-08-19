@@ -147,13 +147,15 @@
 
     .heatmap-grid { display: flex; gap: 2px; flex-wrap: wrap; }
     .heatmap-cell { width: 12px; height: 12px; border-radius: 2px; background: #45475a; border: 1px solid #585b70; }
-    .heatmap-cell.l1 { background: #1e4620; }
-    .heatmap-cell.l2 { background: #2d6a30; }
-    .heatmap-cell.l3 { background: #3da140; }
-    .heatmap-cell.l4 { background: #a6e3a1; }
+    .heatmap-cell.future { background: #313244; border: 1px dashed #45475a; opacity: 0.5; }
+    .heatmap-cell.l1 { background: #1e4620; opacity: 1; }
+    .heatmap-cell.l2 { background: #2d6a30; opacity: 1; }
+    .heatmap-cell.l3 { background: #3da140; opacity: 1; }
+    .heatmap-cell.l4 { background: #a6e3a1; opacity: 1; }
     .heatmap-months { display: flex; gap: 2px; font-size: 0.6rem; color: #9399b2; margin-bottom: 2px; }
     /* Heatmap - tema claro */
     body.light-theme .heatmap-cell { background: #ccd0da; border: 1px solid #bcc0cc; }
+    body.light-theme .heatmap-cell.future { background: #e6e9ef; border: 1px dashed #ccd0da; opacity: 0.5; }
     body.light-theme .heatmap-cell.l1 { background: #b8e6b3; border-color: #a0d99b; }
     body.light-theme .heatmap-cell.l2 { background: #7bc975; border-color: #5fb858; }
     body.light-theme .heatmap-cell.l3 { background: #40a02b; border-color: #339022; }
@@ -920,23 +922,27 @@
     };
 
     // Chart.js defaults
-    Chart.defaults.color = '#a6adc8';
-    Chart.defaults.borderColor = '#45475a';
+    if (typeof Chart !== 'undefined') {
+      Chart.defaults.color = '#a6adc8';
+      Chart.defaults.borderColor = '#45475a';
+    }
 
     async function loadDashboard() {
-      const [dashboard, streaks, metas] = await Promise.all([
-        fetch('/api/dashboard').then(r => r.json()),
-        fetch('/api/streaks').then(r => r.json()),
-        fetch('/api/metas').then(r => r.json())
-      ]);
+      try {
+        const [dashboard, streaks, metas] = await Promise.all([
+          fetch('/api/dashboard').then(r => r.json()),
+          fetch('/api/streaks').then(r => r.json()),
+          fetch('/api/metas').then(r => r.json())
+        ]);
 
-      renderStreak(streaks);
-      renderCards(dashboard, streaks);
-      renderMetas(metas);
-      renderChartHoras(dashboard.horas_por_dia);
-      renderChartAcertos(dashboard.acertos_por_dia);
-      renderChartMaterias(dashboard.horas_por_materia);
-      renderChartEdital(dashboard.edital);
+        renderStreak(streaks);
+        renderCards(dashboard, streaks);
+        renderMetas(metas);
+        renderChartHoras(dashboard.horas_por_dia);
+        renderChartAcertos(dashboard.acertos_por_dia);
+        renderChartMaterias(dashboard.horas_por_materia);
+        renderChartEdital(dashboard.edital);
+      } catch(e) { console.error('Erro loadDashboard:', e); }
     }
 
     function renderStreak(data) {
@@ -1739,11 +1745,15 @@
         data.forEach(d => { dateMap[d.data] = d.intensidade; });
         let html = '<div class="heatmap-grid">';
         const today = new Date();
-        for (let i = 365; i >= 0; i--) {
-          const d = new Date(today); d.setDate(d.getDate() - i);
+        const start = new Date(today.getFullYear(), today.getMonth(), 1);
+        const end = new Date(today.getFullYear(), 11, 31);
+        const totalDays = Math.ceil((end - start) / 86400000) + 1;
+        for (let i = 0; i < totalDays; i++) {
+          const d = new Date(start); d.setDate(d.getDate() + i);
           const key = d.toISOString().split('T')[0];
           const level = dateMap[key] || 0;
-          html += `<div class="heatmap-cell ${level > 0 ? 'l'+level : ''}" title="${key}: ${level > 0 ? 'estudou' : 'sem estudo'}"></div>`;
+          const isFuture = d > today;
+          html += `<div class="heatmap-cell ${level > 0 ? 'l'+level : ''} ${isFuture ? 'future' : ''}" title="${key}: ${level > 0 ? 'estudou' : isFuture ? 'futuro' : 'sem estudo'}"></div>`;
         }
         html += '</div>';
         el.innerHTML = html;

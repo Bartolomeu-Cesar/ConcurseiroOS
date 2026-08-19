@@ -3,6 +3,7 @@ import { escapeHtml, toast } from './utils.js';
 import { switchTab } from './tabs.js';
 
 let questoesDia = [], qDiaIdx = 0, qDiaAcertos = 0;
+let qDiaStartTime = null; // Timestamp de quando a questão foi exibida
 let _loadMetas = null, _loadStreakBadge = null, _getConfigSessoes = null;
 
 export async function carregarQuestoesDia() {
@@ -42,8 +43,11 @@ export function showQuestaoDia() {
     document.getElementById('qdia-progress-pct').textContent = '100%';
     document.getElementById('qdia-progress-bar').style.width = '100%';
     document.getElementById('qdia-progress-bar').style.background = '#a6e3a1';
+    qDiaStartTime = null;
     return;
   }
+  // Iniciar timer para esta questão
+  qDiaStartTime = Date.now();
   const q = questoesDia[qDiaIdx];
   const alts = [
     {letra: 'A', texto: q.alternativa_a},
@@ -67,6 +71,7 @@ export function showQuestaoDia() {
 
 export async function responderQuestaoDia(letra) {
   const q = questoesDia[qDiaIdx];
+  const tempoSegundos = qDiaStartTime ? Math.round((Date.now() - qDiaStartTime) / 1000) : 0;
   const acertou = letra.toUpperCase() === q.resposta_correta.toUpperCase();
   if (acertou) qDiaAcertos++;
   document.querySelectorAll('.qdia-alt').forEach(btn => {
@@ -75,15 +80,17 @@ export async function responderQuestaoDia(letra) {
     if (btnLetra === q.resposta_correta) { btn.style.background = '#1e3a2e'; btn.style.borderColor = '#a6e3a1'; btn.style.color = '#a6e3a1'; }
     else if (btnLetra === letra && !acertou) { btn.style.background = '#3a1e1e'; btn.style.borderColor = '#f38ba8'; btn.style.color = '#f38ba8'; }
   });
+  const tempoFmt = `${Math.floor(tempoSegundos / 60)}:${String(tempoSegundos % 60).padStart(2, '0')}`;
   const fb = document.getElementById('qdia-feedback');
   fb.style.display = 'block';
   fb.style.background = acertou ? '#1e3a2e' : '#3a1e1e';
   fb.style.color = acertou ? '#a6e3a1' : '#f38ba8';
   fb.innerHTML = `<strong>${acertou ? '✓ Correto!' : '✗ Errado! Resposta: ' + q.resposta_correta}</strong>
+    <span style="float:right;color:#9399b2;font-size:0.75rem;">⏱ ${tempoFmt}</span>
     ${q.explicacao ? '<br><span style="color:#cdd6f4;font-size:0.78rem;">' + q.explicacao + '</span>' : ''}
     <br><button onclick="advanceQuestao()" style="margin-top:8px;background:#89b4fa;color:#1e1e2e;border:none;border-radius:6px;padding:6px 14px;font-weight:600;cursor:pointer;">Próxima →</button>`;
   try {
-    await fetch(`/api/questoes/${q.id}/responder`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ resposta: letra, tempo_segundos: 0 }) });
+    await fetch(`/api/questoes/${q.id}/responder`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ resposta: letra, tempo_segundos: tempoSegundos }) });
     if (_loadMetas) _loadMetas();
     if (_loadStreakBadge) _loadStreakBadge();
   } catch(e) {}

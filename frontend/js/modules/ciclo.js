@@ -1,6 +1,7 @@
 // ==================== TAB 3: CICLO ====================
 import { state } from './state.js';
 import { escapeHtml, toast, showLoading, showEmpty, undoableDelete } from './utils.js';
+import { openSelectModal } from './modal-selecao.js';
 
 let cicloTimerInterval = null, cicloStartedAt = null, cicloElapsed = 0, cicloPaused = false;
 let cicloProximoId = null, cicloProximoMateria = '';
@@ -92,18 +93,42 @@ export async function cicloTimerStop() {
 }
 
 export async function importarCicloDoEdital() {
-  const materias = [...new Set(state.editalData.map(e => e.materia))].sort();
-  if (materias.length === 0) { toast('Nenhuma matéria no edital.', 'warning'); return; }
-  const cicloAtual = await fetch('/api/ciclo').then(r => r.json());
-  const jaNoCliclo = new Set(cicloAtual.map(c => c.materia));
-  const novas = materias.filter(m => !jaNoCliclo.has(m));
-  if (novas.length === 0) { toast('Todas as matérias do edital já estão no ciclo.', 'info'); return; }
-  if (!confirm(`Importar ${novas.length} matérias do edital para o ciclo?\n\n${novas.slice(0, 10).join('\n')}${novas.length > 10 ? '\n...' : ''}`)) return;
-  for (const m of novas) {
-    await fetch('/api/ciclo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ materia: m, horas_alvo: 2.0 }) });
-  }
-  toast(`${novas.length} matérias importadas!`, 'success');
-  loadCiclo();
+  if (state.editalData.length === 0) { toast('Nenhuma matéria no edital.', 'warning'); return; }
+
+  // Listar concursos disponíveis
+  const concursos = [...new Set(state.editalData.map(e => e.edital_nome || 'Geral'))].sort();
+
+  const items = concursos.map(c => ({
+    icon: '📋',
+    label: c,
+    sub: `${state.editalData.filter(e => (e.edital_nome || 'Geral') === c).length} tópicos`,
+    value: c
+  }));
+  items.unshift({ icon: '📚', label: 'Todos os concursos', sub: `${state.editalData.length} tópicos no total`, value: '__todos__' });
+
+  openSelectModal('📋 Importar de qual concurso?', items, async (choice) => {
+    let materias;
+    if (choice.value === '__todos__') {
+      materias = [...new Set(state.editalData.map(e => e.materia))].sort();
+    } else {
+      materias = [...new Set(state.editalData.filter(e => (e.edital_nome || 'Geral') === choice.value).map(e => e.materia))].sort();
+    }
+
+    if (materias.length === 0) { toast('Nenhuma matéria encontrada.', 'warning'); return; }
+
+    const cicloAtual = await fetch('/api/ciclo').then(r => r.json());
+    const jaNoCliclo = new Set(cicloAtual.map(c => c.materia));
+    const novas = materias.filter(m => !jaNoCliclo.has(m));
+
+    if (novas.length === 0) { toast('Todas as matérias deste edital já estão no ciclo.', 'info'); return; }
+    if (!confirm(`Importar ${novas.length} matérias para o ciclo?\n\n${novas.slice(0, 10).join('\n')}${novas.length > 10 ? '\n...' : ''}`)) return;
+
+    for (const m of novas) {
+      await fetch('/api/ciclo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ materia: m, horas_alvo: 2.0 }) });
+    }
+    toast(`${novas.length} matérias importadas!`, 'success');
+    loadCiclo();
+  });
 }
 
 export async function addCiclo() {

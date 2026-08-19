@@ -31,8 +31,9 @@ function renderSelectItems(items) {
 export function selectModalChoice(index) {
   const list = document.getElementById('select-modal-list');
   const item = list._items[index];
+  const callback = state.selectModalCallback;
   closeSelectModal();
-  if (state.selectModalCallback) state.selectModalCallback(item);
+  if (callback) callback(item);
 }
 
 export function closeSelectModal() {
