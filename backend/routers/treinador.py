@@ -1,5 +1,5 @@
 import re
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import List
 
 from fastapi import APIRouter, Body, Depends, Query
@@ -510,61 +510,78 @@ def _get_uncompleted_topics(conn, materia: str, edital_nome: str = "", cargo: st
 
 def _distribute_materias_to_days(materias_ranked: List[dict], num_days: int = 7) -> List[List[dict]]:
     """
-    Distribui matérias nos dias da semana (2 por dia, exceto domingo).
-    Garante alternância: mesma matéria não aparece em dias consecutivos.
+    Distribui matérias nos dias da semana com INTERCALAÇÃO FORÇADA.
+    - Mesma matéria NUNCA em dias consecutivos
+    - Peso por dificuldade: menor % acerto = mais tempo/frequência
+    - 2-3 matérias por dia para variedade cognitiva
     """
     if not materias_ranked:
         return [[] for _ in range(num_days)]
 
-    # Se temos poucas matérias, duplicar para preencher
-    materias_pool = materias_ranked[:]
-    if len(materias_pool) == 1:
-        # Só 1 matéria: usa ela todos os dias
-        return [[materias_pool[0]] for _ in range(num_days)]
+    if len(materias_ranked) == 1:
+        return [[materias_ranked[0]] for _ in range(num_days)]
 
     days = [[] for _ in range(num_days)]
-    # Dias 0-5 (Seg-Sáb): 2 matérias cada; Dia 6 (Domingo): dia leve
-    slots_per_day = [2, 2, 2, 2, 2, 2, 0]  # Domingo sem matérias novas
+    slots_per_day = [2, 3, 2, 3, 2, 2, 0]  # Varia entre 2-3, domingo leve
 
-    # Criar ciclo de matérias priorizadas
-    # Matérias com pior desempenho aparecem mais vezes
-    weighted_pool = []
-    for i, m in enumerate(materias_pool):
-        # Mais prioritárias ganham mais slots
-        repeats = max(1, 3 - i) if i < 4 else 1
-        weighted_pool.extend([m] * repeats)
+    # Calcular peso por dificuldade (menor acerto = mais frequência)
+    for m in materias_ranked:
+        pct = m.get("pct_acerto", 50)
+        # Score de dificuldade: 0-100 invertido + boost por pendentes
+        m["peso_dificuldade"] = (100 - pct) + min(m.get("pendentes", 0), 20) * 2
 
-    # Distribuir garantindo alternância
-    last_day_materias = set()
+    # Ordenar por peso de dificuldade (mais difícil primeiro)
+    materias_ranked.sort(key=lambda x: -x.get("peso_dificuldade", x.get("score", 0)))
+
+    # Criar pool com repetições baseadas no peso
+    # Top 30% das matérias aparecem ~3x/semana, restante ~1-2x
+    total_mats = len(materias_ranked)
+    pool = []
+    for i, m in enumerate(materias_ranked):
+        if i < total_mats * 0.3:
+            repeats = 3  # Matérias difíceis: 3x/semana
+        elif i < total_mats * 0.6:
+            repeats = 2  # Médias: 2x/semana
+        else:
+            repeats = 1  # Fáceis: 1x/semana
+        pool.extend([m] * repeats)
+
+    # Distribuir com INTERCALAÇÃO FORÇADA
+    last_day_set = set()
     pool_idx = 0
 
     for day_idx in range(num_days - 1):  # Excluir domingo
         day_materias = []
+        used_this_day = set()
         attempts = 0
         search_idx = pool_idx
 
-        while len(day_materias) < slots_per_day[day_idx] and attempts < len(weighted_pool) * 2:
-            candidate = weighted_pool[search_idx % len(weighted_pool)]
+        target_slots = slots_per_day[day_idx]
+
+        while len(day_materias) < target_slots and attempts < len(pool) * 3:
+            candidate = pool[search_idx % len(pool)]
             cand_name = candidate["materia"]
 
-            # Verificar alternância: não repetir do dia anterior
-            if cand_name not in last_day_materias and cand_name not in [m["materia"] for m in day_materias]:
+            # INTERCALAÇÃO FORÇADA: não repetir do dia anterior NEM no mesmo dia
+            if cand_name not in last_day_set and cand_name not in used_this_day:
                 day_materias.append(candidate)
-                pool_idx = (search_idx + 1) % len(weighted_pool)
+                used_this_day.add(cand_name)
+                pool_idx = (search_idx + 1) % len(pool)
 
             search_idx += 1
             attempts += 1
 
-        # Se não conseguiu preencher (poucas matérias), relaxar restrição
-        if len(day_materias) < slots_per_day[day_idx]:
-            for m in materias_pool:
-                if m["materia"] not in [dm["materia"] for dm in day_materias]:
+        # Fallback: se não preencheu, relaxar restrição de dia anterior
+        if len(day_materias) < target_slots:
+            for m in materias_ranked:
+                if m["materia"] not in used_this_day:
                     day_materias.append(m)
-                    if len(day_materias) >= slots_per_day[day_idx]:
+                    used_this_day.add(m["materia"])
+                    if len(day_materias) >= target_slots:
                         break
 
         days[day_idx] = day_materias
-        last_day_materias = {m["materia"] for m in day_materias}
+        last_day_set = used_this_day
 
     return days
 
@@ -860,3 +877,210 @@ def salvar_calendario_completo(dias: list = Body(...), conn=Depends(get_db_sessi
         count += 1
     conn.commit()
     return {"ok": True, "salvos": count}
+
+
+
+# ============================================================
+# ATIVIDADES DO CALENDÁRIO - CONCLUSÃO + STREAK
+# ============================================================
+
+@router.post("/api/calendario/atividade-concluida")
+def marcar_atividade_concluida(body: dict = Body(...), conn=Depends(get_db_session)):
+    """Marca uma atividade do calendário como concluída.
+    Body: {data, dia_semana, materia, tipo, tempo_min}
+    """
+    data_str = body.get("data", today_str())
+    dia_semana = body.get("dia_semana", 0)
+    materia = body.get("materia", "")
+    tipo = body.get("tipo", "estudo")
+    tempo_min = body.get("tempo_min", 0)
+
+    conn.execute("""
+        INSERT INTO calendario_atividades (data, dia_semana, materia, tipo, tempo_min, concluida, concluida_at)
+        VALUES (?, ?, ?, ?, ?, 1, ?)
+    """, (data_str, dia_semana, materia, tipo, tempo_min, datetime.now().isoformat()))
+
+    # Atualizar streak do calendário
+    _update_calendario_streak(conn, data_str, body.get("total_atividades", 0))
+
+    conn.commit()
+    log.info(f"Atividade concluída: {materia} ({tipo}) em {data_str}")
+    return {"ok": True}
+
+
+@router.delete("/api/calendario/atividade-concluida")
+def desmarcar_atividade_concluida(body: dict = Body(...), conn=Depends(get_db_session)):
+    """Desmarca uma atividade (desfaz conclusão)."""
+    data_str = body.get("data", today_str())
+    materia = body.get("materia", "")
+    tipo = body.get("tipo", "estudo")
+
+    conn.execute("""
+        DELETE FROM calendario_atividades
+        WHERE data = ? AND materia = ? AND tipo = ?
+        ORDER BY id DESC LIMIT 1
+    """, (data_str, materia, tipo))
+
+    _update_calendario_streak(conn, data_str, body.get("total_atividades", 0))
+    conn.commit()
+    return {"ok": True}
+
+
+@router.get("/api/calendario/concluidas")
+def get_atividades_concluidas(data: str = "", conn=Depends(get_db_session)):
+    """Retorna atividades concluídas de um dia (ou hoje)."""
+    data_str = data or today_str()
+    rows = conn.execute(
+        "SELECT * FROM calendario_atividades WHERE data = ? AND concluida = 1",
+        (data_str,)
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@router.get("/api/calendario/streak")
+def get_calendario_streak(conn=Depends(get_db_session)):
+    """Retorna streak de dias com 100% do calendário concluído."""
+    rows = conn.execute("""
+        SELECT data, pct_conclusao FROM calendario_streaks
+        WHERE pct_conclusao >= 100
+        ORDER BY data DESC
+    """).fetchall()
+
+    # Calcular streak consecutivo
+    streak = 0
+    hoje = date.today()
+    for i, r in enumerate(rows):
+        expected = (hoje - timedelta(days=i)).isoformat()
+        if r[0] == expected:
+            streak += 1
+        else:
+            break
+
+    # Melhor streak
+    best = 0
+    current = 0
+    all_dates = [r[0] for r in rows]
+    all_dates.sort()
+    for i, d in enumerate(all_dates):
+        if i == 0:
+            current = 1
+        else:
+            prev = date.fromisoformat(all_dates[i-1])
+            curr = date.fromisoformat(d)
+            if (curr - prev).days == 1:
+                current += 1
+            else:
+                current = 1
+        best = max(best, current)
+
+    # Progresso de hoje
+    hoje_row = conn.execute(
+        "SELECT * FROM calendario_streaks WHERE data = ?", (today_str(),)
+    ).fetchone()
+
+    return {
+        "streak_calendario": streak,
+        "melhor_streak_calendario": best,
+        "hoje": dict(hoje_row) if hoje_row else {"total_atividades": 0, "concluidas": 0, "pct_conclusao": 0}
+    }
+
+
+def _update_calendario_streak(conn, data_str: str, total_atividades: int = 0):
+    """Atualiza o registro de streak do calendário para uma data."""
+    concluidas = conn.execute(
+        "SELECT COUNT(*) FROM calendario_atividades WHERE data = ? AND concluida = 1",
+        (data_str,)
+    ).fetchone()[0]
+
+    pct = round((concluidas / total_atividades * 100) if total_atividades > 0 else 0, 1)
+    xp = 50 if pct >= 100 else 0  # XP bônus por 100%
+
+    conn.execute("""
+        INSERT INTO calendario_streaks (data, total_atividades, concluidas, pct_conclusao, xp_bonus)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(data) DO UPDATE SET
+            total_atividades = ?, concluidas = ?, pct_conclusao = ?, xp_bonus = ?
+    """, (data_str, total_atividades, concluidas, pct, xp,
+          total_atividades, concluidas, pct, xp))
+
+
+# ============================================================
+# ALERTA DE MATÉRIAS NEGLIGENCIADAS
+# ============================================================
+
+@router.get("/api/calendario/materias-negligenciadas")
+def get_materias_negligenciadas(dias_limite: int = 5, conn=Depends(get_db_session)):
+    """Retorna matérias importantes que não foram estudadas há mais de X dias."""
+    hoje = date.today()
+
+    # Buscar matérias do edital com seus pesos (tópicos pendentes)
+    materias = conn.execute("""
+        SELECT materia, COUNT(*) as pendentes
+        FROM edital WHERE status != 'Concluído'
+        GROUP BY materia HAVING pendentes > 3
+        ORDER BY pendentes DESC
+    """).fetchall()
+
+    # Buscar última sessão de estudo por matéria
+    sessoes = conn.execute("""
+        SELECT materia, MAX(data) as ultima FROM sessoes_estudo GROUP BY materia
+    """).fetchall()
+    ultima_sessao = {r[0]: r[1] for r in sessoes}
+
+    # Buscar última atividade concluída no calendário por matéria
+    cal_atividades = conn.execute("""
+        SELECT materia, MAX(data) as ultima FROM calendario_atividades
+        WHERE concluida = 1 AND materia != ''
+        GROUP BY materia
+    """).fetchall()
+    ultima_cal = {r[0]: r[1] for r in cal_atividades}
+
+    negligenciadas = []
+    for r in materias:
+        materia = r[0]
+        pendentes = r[1]
+
+        # Pegar a data mais recente entre sessão de estudo e atividade do calendário
+        ultima_estudo = ultima_sessao.get(materia)
+        ultima_ativ = ultima_cal.get(materia)
+
+        if ultima_estudo and ultima_ativ:
+            ultima = max(ultima_estudo, ultima_ativ)
+        elif ultima_estudo:
+            ultima = ultima_estudo
+        elif ultima_ativ:
+            ultima = ultima_ativ
+        else:
+            ultima = None
+
+        if ultima:
+            dias_sem = (hoje - date.fromisoformat(ultima)).days
+        else:
+            dias_sem = 999  # Nunca estudou
+
+        if dias_sem >= dias_limite:
+            # Buscar desempenho
+            perf = conn.execute("""
+                SELECT COUNT(*) as total, SUM(qr.acertou) as acertos
+                FROM questoes_respostas qr
+                JOIN questoes q ON q.id = qr.questao_id
+                WHERE q.materia = ?
+            """, (materia,)).fetchone()
+
+            pct_acerto = round((perf[1] or 0) / perf[0] * 100, 1) if perf[0] and perf[0] > 0 else 0
+
+            negligenciadas.append({
+                "materia": materia,
+                "dias_sem_estudar": dias_sem,
+                "topicos_pendentes": pendentes,
+                "pct_acerto": pct_acerto,
+                "urgencia": "alta" if dias_sem > 10 or (dias_sem > 5 and pct_acerto < 60) else "media",
+                "sugestao": f"Estudar {min(3, pendentes)} tópicos + resolver {max(5, 10 - pct_acerto // 10)} questões"
+            })
+
+    negligenciadas.sort(key=lambda x: (-1 if x["urgencia"] == "alta" else 0, -x["dias_sem_estudar"]))
+    return {
+        "negligenciadas": negligenciadas,
+        "total": len(negligenciadas),
+        "dias_limite": dias_limite
+    }

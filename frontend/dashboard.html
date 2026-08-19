@@ -277,6 +277,27 @@
       font-size: 0.75rem; opacity: 0.6; transition: opacity 0.2s;
     }
     .cal-delete-btn:hover { opacity: 1; }
+    /* Check de conclusão */
+    .cal-check {
+      width: 14px; height: 14px; accent-color: #a6e3a1; cursor: pointer;
+      margin-right: 2px; flex-shrink: 0;
+    }
+    .cal-activity.concluida {
+      opacity: 0.5; text-decoration: line-through; background: rgba(166,227,161,0.05);
+      border-radius: 4px; padding-left: 4px;
+    }
+    .cal-activity.concluida .cal-activity-materia { color: #a6e3a1; }
+    /* Pomodoro btn */
+    .cal-pomo-btn {
+      background: none; border: 1px solid #45475a; color: #a6e3a1; cursor: pointer;
+      font-size: 0.7rem; border-radius: 4px; padding: 1px 5px;
+      opacity: 0.7; transition: all 0.2s;
+    }
+    .cal-pomo-btn:hover { opacity: 1; background: #a6e3a1; color: #1e1e2e; }
+    /* Drag-and-drop */
+    .cal-activity[draggable] { cursor: grab; transition: transform 0.15s, opacity 0.15s; }
+    .cal-activity[draggable]:active { cursor: grabbing; }
+    .cal-activity.dragging { opacity: 0.4; transform: scale(0.95); }
   </style>
 </head>
 <body>
@@ -1360,18 +1381,35 @@
       const icons = {revisao: '🧠', estudo: '📚', questoes: '❓', pausa: '☕'};
       const diasNomes = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
 
-      let html = '<div class="cal-grid">';
+      // Carregar atividades concluídas de hoje
+      loadConcluidasHoje();
+
+      let html = '';
+      // Streak do calendário no topo
+      html += `<div id="cal-streak-bar" style="display:flex;align-items:center;gap:12px;padding:8px 12px;background:#313244;border-radius:8px;margin-bottom:12px;">
+        <span style="font-size:1.3rem;">🏆</span>
+        <span style="font-size:0.85rem;color:#f9e2af;font-weight:600;" id="cal-streak-num">...</span>
+        <div style="flex:1;height:6px;background:#45475a;border-radius:3px;overflow:hidden;" id="cal-progress-bar"><div id="cal-progress-fill" style="height:100%;background:#a6e3a1;width:0%;border-radius:3px;transition:width 0.5s;"></div></div>
+        <span style="font-size:0.75rem;color:#9399b2;" id="cal-progress-txt">0%</span>
+      </div>`;
+
+      // Alerta de matérias negligenciadas
+      html += `<div id="cal-alertas" style="display:none;margin-bottom:12px;"></div>`;
+
+      html += '<div class="cal-grid">';
       for (const dia of data.dias) {
         const isToday = dia.data === hoje;
         const nome = dia.nome || diasNomes[dia.dia_semana] || '';
-        html += `<div class="cal-day ${isToday ? 'today' : ''}">`;
+        html += `<div class="cal-day ${isToday ? 'today' : ''}" data-date="${dia.data}" data-diasemana="${dia.dia_semana}">`;
         html += `<div class="cal-day-header">${nome} <span class="cal-date">${dia.data ? dia.data.substring(5) : ''}</span></div>`;
 
         if (dia.atividades.length === 0) {
-          html += `<div style="color:#9399b2;font-size:0.75rem;padding:8px 0;text-align:center;">Nenhuma atividade</div>`;
+          html += `<div style="color:#9399b2;font-size:0.75rem;padding:8px 0;text-align:center;">Descanso</div>`;
         }
 
-        for (const ativ of dia.atividades) {
+        html += `<div class="cal-activities-list" data-date="${dia.data}" data-total="${dia.atividades.length}">`;
+        for (let i = 0; i < dia.atividades.length; i++) {
+          const ativ = dia.atividades[i];
           const icon = icons[ativ.tipo] || '📌';
           const materia = ativ.materia || '';
           let detail = '';
@@ -1382,25 +1420,200 @@
           } else if (ativ.descricao) {
             detail = ativ.descricao;
           }
+          const ativKey = `${dia.data}|${materia}|${ativ.tipo}`;
 
-          html += `<div class="cal-activity">`;
+          html += `<div class="cal-activity" draggable="true" data-idx="${i}" data-key="${ativKey}" data-materia="${materia}" data-tipo="${ativ.tipo}" data-tempo="${ativ.tempo_min}" data-date="${dia.data}" data-diasemana="${dia.dia_semana}" data-total="${dia.atividades.length}">`;
+
+          // Checkbox de conclusão
+          html += `<input type="checkbox" class="cal-check" data-key="${ativKey}" onchange="toggleAtivConcluida(this)" title="Marcar como concluída">`;
+
           html += `<span class="cal-activity-icon">${icon}</span>`;
           html += `<div class="cal-activity-info">`;
           if (materia) html += `<div class="cal-activity-materia">${materia}</div>`;
           if (detail) html += `<div class="cal-activity-detail">${detail}</div>`;
           html += `</div>`;
           html += `<span class="cal-activity-time">${ativ.tempo_min}min</span>`;
+
+          // Botão Pomodoro
+          if (ativ.tempo_min > 0) {
+            html += `<button class="cal-pomo-btn" onclick="startPomodoro('${materia || detail}', ${ativ.tempo_min})" title="Iniciar Timer">▶</button>`;
+          }
+
           if (editable && ativ.id) {
             html += `<button class="cal-delete-btn" onclick="removeCalItem(${ativ.id})">❌</button>`;
           }
           html += `</div>`;
         }
+        html += `</div>`; // cal-activities-list
 
         html += `<div class="cal-day-footer">⏱ ${dia.tempo_total_min}min</div>`;
         html += `</div>`;
       }
       html += '</div>';
+
+      // Timer Pomodoro overlay
+      html += `<div id="pomodoro-overlay" style="display:none;position:fixed;bottom:20px;right:20px;background:#313244;border:2px solid #cba6f7;border-radius:16px;padding:16px 24px;z-index:1000;box-shadow:0 8px 32px rgba(0,0,0,0.5);min-width:240px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <span style="font-size:0.8rem;color:#cba6f7;font-weight:600;" id="pomo-materia">...</span>
+          <button onclick="closePomodoro()" style="background:none;border:none;color:#f38ba8;cursor:pointer;font-size:1rem;">✕</button>
+        </div>
+        <div style="font-size:2.2rem;font-weight:700;color:#cdd6f4;text-align:center;font-family:monospace;" id="pomo-timer">25:00</div>
+        <div style="display:flex;gap:8px;justify-content:center;margin-top:10px;">
+          <button onclick="togglePomodoro()" id="pomo-toggle-btn" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:6px 16px;font-weight:600;cursor:pointer;">⏸ Pausar</button>
+          <button onclick="resetPomodoro()" style="background:#45475a;color:#cdd6f4;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;">🔄</button>
+        </div>
+      </div>`;
+
       el.innerHTML = html;
+
+      // Inicializar drag-and-drop
+      initDragDrop();
+      // Carregar streak e alertas
+      loadCalStreak();
+      loadAlertasNegligenciadas();
+    }
+
+    // === CHECK DE ATIVIDADE CONCLUÍDA ===
+    let concluidasHoje = new Set();
+    async function loadConcluidasHoje() {
+      try {
+        const data = await fetch('/api/calendario/concluidas').then(r => r.json());
+        concluidasHoje = new Set(data.map(a => `${a.data}|${a.materia}|${a.tipo}`));
+        // Marcar checkboxes
+        document.querySelectorAll('.cal-check').forEach(cb => {
+          if (concluidasHoje.has(cb.dataset.key)) {
+            cb.checked = true;
+            cb.closest('.cal-activity').classList.add('concluida');
+          }
+        });
+      } catch(e) {}
+    }
+
+    async function toggleAtivConcluida(checkbox) {
+      const el = checkbox.closest('.cal-activity');
+      const key = checkbox.dataset.key;
+      const [dataStr, materia, tipo] = key.split('|');
+      const total = parseInt(el.dataset.total) || 1;
+
+      if (checkbox.checked) {
+        el.classList.add('concluida');
+        await fetch('/api/calendario/atividade-concluida', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ data: dataStr, dia_semana: parseInt(el.dataset.diasemana), materia, tipo, tempo_min: parseInt(el.dataset.tempo), total_atividades: total })
+        });
+        concluidasHoje.add(key);
+      } else {
+        el.classList.remove('concluida');
+        await fetch('/api/calendario/atividade-concluida', {
+          method: 'DELETE',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ data: dataStr, materia, tipo, total_atividades: total })
+        });
+        concluidasHoje.delete(key);
+      }
+      loadCalStreak();
+    }
+
+    // === STREAK DO CALENDÁRIO ===
+    async function loadCalStreak() {
+      try {
+        const data = await fetch('/api/calendario/streak').then(r => r.json());
+        const streakEl = document.getElementById('cal-streak-num');
+        const fillEl = document.getElementById('cal-progress-fill');
+        const txtEl = document.getElementById('cal-progress-txt');
+        if (streakEl) streakEl.textContent = `${data.streak_calendario} dias seguindo o plano`;
+        const pct = data.hoje?.pct_conclusao || 0;
+        if (fillEl) fillEl.style.width = `${pct}%`;
+        if (txtEl) txtEl.textContent = `${Math.round(pct)}% hoje`;
+        // XP bonus
+        if (pct >= 100 && streakEl) streakEl.textContent += ' 🎉 +50 XP';
+      } catch(e) {}
+    }
+
+    // === ALERTA DE MATÉRIAS NEGLIGENCIADAS ===
+    async function loadAlertasNegligenciadas() {
+      try {
+        const data = await fetch('/api/calendario/materias-negligenciadas?dias_limite=5').then(r => r.json());
+        const el = document.getElementById('cal-alertas');
+        if (!el || data.total === 0) { if(el) el.style.display = 'none'; return; }
+        el.style.display = 'block';
+        const top3 = data.negligenciadas.slice(0, 3);
+        el.innerHTML = `<div style="background:#3a2a1e;border:1px solid #f9e2af;border-radius:8px;padding:10px 12px;font-size:0.8rem;">
+          <div style="color:#f9e2af;font-weight:600;margin-bottom:6px;">⚠️ Matérias negligenciadas</div>
+          ${top3.map(m => `<div style="color:#cdd6f4;padding:2px 0;">• <strong>${m.materia}</strong> — ${m.dias_sem_estudar} dias sem estudar${m.urgencia === 'alta' ? ' 🔴' : ' 🟡'}</div>`).join('')}
+        </div>`;
+      } catch(e) {}
+    }
+
+    // === TIMER POMODORO ===
+    let pomoInterval = null, pomoSeconds = 0, pomoTotal = 0, pomoPaused = false;
+    function startPomodoro(materia, tempoMin) {
+      pomoSeconds = tempoMin * 60;
+      pomoTotal = pomoSeconds;
+      pomoPaused = false;
+      document.getElementById('pomo-materia').textContent = materia;
+      document.getElementById('pomodoro-overlay').style.display = 'block';
+      document.getElementById('pomo-toggle-btn').textContent = '⏸ Pausar';
+      updatePomoDisplay();
+      clearInterval(pomoInterval);
+      pomoInterval = setInterval(() => {
+        if (!pomoPaused) {
+          pomoSeconds--;
+          updatePomoDisplay();
+          if (pomoSeconds <= 0) {
+            clearInterval(pomoInterval);
+            document.getElementById('pomo-timer').textContent = '🎉 FIM!';
+            document.getElementById('pomo-timer').style.color = '#a6e3a1';
+            // Notificação
+            if (Notification.permission === 'granted') new Notification('⏰ Pomodoro finalizado!', {body: `Sessão de ${materia} concluída!`});
+            else if (Notification.permission !== 'denied') Notification.requestPermission();
+          }
+        }
+      }, 1000);
+    }
+    function updatePomoDisplay() {
+      const m = Math.floor(pomoSeconds / 60);
+      const s = pomoSeconds % 60;
+      document.getElementById('pomo-timer').textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+      document.getElementById('pomo-timer').style.color = pomoSeconds < 60 ? '#f38ba8' : '#cdd6f4';
+    }
+    function togglePomodoro() {
+      pomoPaused = !pomoPaused;
+      document.getElementById('pomo-toggle-btn').textContent = pomoPaused ? '▶ Retomar' : '⏸ Pausar';
+    }
+    function resetPomodoro() { pomoSeconds = pomoTotal; pomoPaused = false; updatePomoDisplay(); document.getElementById('pomo-toggle-btn').textContent = '⏸ Pausar'; }
+    function closePomodoro() { clearInterval(pomoInterval); document.getElementById('pomodoro-overlay').style.display = 'none'; }
+
+    // === DRAG-AND-DROP ===
+    function initDragDrop() {
+      const items = document.querySelectorAll('.cal-activity[draggable]');
+      items.forEach(item => {
+        item.addEventListener('dragstart', e => {
+          e.dataTransfer.setData('text/plain', item.dataset.idx);
+          item.classList.add('dragging');
+        });
+        item.addEventListener('dragend', () => item.classList.remove('dragging'));
+      });
+      const lists = document.querySelectorAll('.cal-activities-list');
+      lists.forEach(list => {
+        list.addEventListener('dragover', e => {
+          e.preventDefault();
+          const dragging = document.querySelector('.cal-activity.dragging');
+          if (!dragging) return;
+          const siblings = [...list.querySelectorAll('.cal-activity:not(.dragging)')];
+          const next = siblings.find(s => {
+            const box = s.getBoundingClientRect();
+            return e.clientY < box.top + box.height / 2;
+          });
+          if (next) list.insertBefore(dragging, next);
+          else list.appendChild(dragging);
+        });
+        list.addEventListener('drop', e => {
+          e.preventDefault();
+          // Reordenar salvo automaticamente na próxima vez que salvar
+        });
+      });
     }
 
     async function addCalendarioItem() {

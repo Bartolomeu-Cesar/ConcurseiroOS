@@ -343,6 +343,31 @@ def _create_tables(conn):
         )
     """)
 
+    # Atividades do calendário concluídas
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS calendario_atividades (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            data TEXT NOT NULL,
+            dia_semana INTEGER NOT NULL,
+            materia TEXT DEFAULT '',
+            tipo TEXT DEFAULT 'estudo',
+            tempo_min INTEGER DEFAULT 0,
+            concluida INTEGER DEFAULT 0,
+            concluida_at TEXT DEFAULT ''
+        )
+    """)
+
+    # Streak do calendário (dias que completou 100% do planejado)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS calendario_streaks (
+            data TEXT PRIMARY KEY,
+            total_atividades INTEGER DEFAULT 0,
+            concluidas INTEGER DEFAULT 0,
+            pct_conclusao REAL DEFAULT 0.0,
+            xp_bonus INTEGER DEFAULT 0
+        )
+    """)
+
 
 def _run_migrations(conn):
     """Executa migrações de schema (ALTER TABLE)."""
