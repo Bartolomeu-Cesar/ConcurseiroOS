@@ -222,6 +222,23 @@
         </div>
       </div>
     </div>
+    <div class="flash-panel">
+      <h2>❓ Questões do Dia</h2>
+      <div id="questoes-dia-progress" style="margin-bottom:10px;display:none;">
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.78rem;margin-bottom:4px;">
+          <span id="qdia-progress-text" style="color:#9399b2;">0/0 respondidas</span>
+          <span id="qdia-progress-pct" style="color:#a6e3a1;font-weight:600;">0%</span>
+        </div>
+        <div style="height:6px;background:#45475a;border-radius:3px;overflow:hidden;">
+          <div id="qdia-progress-bar" style="height:100%;background:#89b4fa;border-radius:3px;width:0%;transition:width 0.3s;"></div>
+        </div>
+      </div>
+      <div id="questoes-dia-area">
+        <p style="font-size:0.82rem;color:#9399b2;margin-bottom:10px;">Questões aleatórias sorteadas para treinar hoje.</p>
+        <button onclick="carregarQuestoesDia()" style="background:#89b4fa;color:#1e1e2e;border:none;border-radius:8px;padding:10px 20px;font-weight:600;cursor:pointer;font-size:0.9rem;">❓ Iniciar Questões do Dia</button>
+      </div>
+      <div id="questao-dia-card" style="display:none;"></div>
+    </div>
     <div class="flash-panel flash-add-form">
       <h2>➕ Adicionar Flashcard</h2>
       <textarea id="flash-pergunta" placeholder="Pergunta..." rows="2"></textarea>
