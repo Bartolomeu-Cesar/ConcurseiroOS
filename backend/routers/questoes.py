@@ -1,6 +1,8 @@
 import random
+import re
+import tempfile
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 
 from constants import DEFAULT_EXAM_DURATION_MIN, DEFAULT_EXAM_QUESTIONS, DEFAULT_TIME_PER_QUESTION_SEC
 from database import get_db_session
@@ -370,3 +372,247 @@ def gerar_questao_template(edital_id: int, conn=Depends(get_db_session)):
             "dificuldade": "Médio"
         }
     }
+
+
+# ==================== IMPORTAÇÃO VIA PDF (OCR) ====================
+
+def _extrair_texto_pdf(file_path: str) -> str:
+    """Extrai texto do PDF: primeiro tenta pypdf (texto digital), depois OCR se necessário."""
+    from pypdf import PdfReader
+
+    reader = PdfReader(file_path)
+    texto = ""
+    for page in reader.pages:
+        page_text = page.extract_text() or ""
+        texto += page_text + "\n"
+
+    # Se o texto extraído é muito curto, provavelmente é PDF escaneado — usar OCR
+    if len(texto.strip()) < 100:
+        try:
+            from pdf2image import convert_from_path
+            import pytesseract
+
+            log.info("PDF sem texto selecionável, usando OCR...")
+            images = convert_from_path(file_path, dpi=300)
+            texto = ""
+            for img in images:
+                texto += pytesseract.image_to_string(img, lang='por') + "\n"
+        except ImportError:
+            log.warning("pytesseract/pdf2image não instalados. Instale com: pip install pytesseract pdf2image")
+            raise
+        except Exception as e:
+            log.error(f"Erro no OCR: {e}")
+            raise
+
+    return texto
+
+
+def _parse_gabarito(texto: str) -> dict:
+    """Extrai gabarito do texto. Busca padrões como '1-A', '1.A', '1) A', 'Q1: A', etc."""
+    gabarito = {}
+
+    # Padrões comuns de gabarito
+    patterns = [
+        r'(\d+)\s*[-–.):]\s*([A-Ea-e])',           # 1-A, 1.A, 1)A, 1: A
+        r'[Qq](?:uestão)?\s*(\d+)\s*[-–.):]\s*([A-Ea-e])',  # Q1: A, Questão 1: A
+        r'(\d+)\s*\|\s*([A-Ea-e])',                 # 1 | A
+    ]
+
+    for pattern in patterns:
+        matches = re.findall(pattern, texto)
+        if matches:
+            for num, letra in matches:
+                gabarito[int(num)] = letra.upper()
+            if len(gabarito) >= 3:
+                break
+
+    return gabarito
+
+
+def _parse_questoes_texto(texto: str, materia: str = "", banca: str = "") -> list:
+    """Analisa texto extraído e separa em questões individuais."""
+    questoes = []
+
+    # Separar seção de questões da seção de gabarito
+    # Identificar onde começa o gabarito
+    gab_markers = ['GABARITO', 'Gabarito', 'RESPOSTAS', 'Respostas', 'CARTÃO RESPOSTA']
+    texto_questoes = texto
+    texto_gabarito = ""
+
+    for marker in gab_markers:
+        pos = texto.rfind(marker)
+        if pos > 0:
+            texto_questoes = texto[:pos]
+            texto_gabarito = texto[pos:]
+            break
+
+    # Extrair gabarito
+    gabarito = _parse_gabarito(texto_gabarito if texto_gabarito else texto)
+
+    # Padrões para identificar início de questão
+    quest_patterns = [
+        r'(?:^|\n)\s*(?:QUESTÃO|Questão|questão)\s+(\d+)',
+        r'(?:^|\n)\s*(\d+)\s*[.)]\s+(?=[A-Z])',      # "1. " ou "1) " seguido de letra maiúscula
+        r'(?:^|\n)\s*(\d+)\s*[-–]\s+',                # "1 - "
+    ]
+
+    # Encontrar posições de início de cada questão
+    quest_positions = []
+    for pattern in quest_patterns:
+        for m in re.finditer(pattern, texto_questoes):
+            quest_positions.append((m.start(), int(m.group(1)), m.end()))
+        if quest_positions:
+            break
+
+    # Ordenar por posição
+    quest_positions.sort(key=lambda x: x[0])
+
+    # Extrair texto de cada questão
+    for i, (start, num, text_start) in enumerate(quest_positions):
+        # Fim é o início da próxima questão ou fim do texto
+        end = quest_positions[i + 1][0] if i + 1 < len(quest_positions) else len(texto_questoes)
+        bloco = texto_questoes[text_start:end].strip()
+
+        if len(bloco) < 20:
+            continue
+
+        # Separar enunciado e alternativas
+        alt_pattern = r'\n\s*\(?([A-Ea-e])\)?\s*[-–.]?\s*(.+?)(?=\n\s*\(?[A-Ea-e]\)|\Z)'
+        alternativas_matches = re.findall(alt_pattern, bloco, re.DOTALL)
+
+        if len(alternativas_matches) < 4:
+            # Tentar outro padrão
+            alt_pattern2 = r'(?:^|\n)\s*([A-Ea-e])\s*[).\-–]\s*(.+?)(?=(?:^|\n)\s*[A-Ea-e]\s*[).\-–]|\Z)'
+            alternativas_matches = re.findall(alt_pattern2, bloco, re.DOTALL)
+
+        if len(alternativas_matches) < 4:
+            continue
+
+        # Encontrar onde começa a primeira alternativa para separar enunciado
+        first_alt_pos = bloco.find(alternativas_matches[0][1].strip()[:20])
+        if first_alt_pos > 0:
+            # Voltar até a letra da alternativa
+            search_back = bloco[:first_alt_pos].rfind(alternativas_matches[0][0])
+            enunciado = bloco[:search_back].strip() if search_back > 0 else bloco[:first_alt_pos].strip()
+        else:
+            enunciado = bloco.split('\n')[0].strip()
+
+        # Limpar enunciado
+        enunciado = re.sub(r'^\d+\s*[.):\-–]\s*', '', enunciado).strip()
+
+        # Montar alternativas
+        alts = {'A': '', 'B': '', 'C': '', 'D': '', 'E': ''}
+        for letra, texto_alt in alternativas_matches[:5]:
+            alts[letra.upper()] = texto_alt.strip()
+
+        # Buscar resposta no gabarito
+        resposta = gabarito.get(num, '')
+
+        questao = {
+            "numero": num,
+            "materia": materia,
+            "topico": "",
+            "enunciado": enunciado,
+            "alternativa_a": alts['A'],
+            "alternativa_b": alts['B'],
+            "alternativa_c": alts['C'],
+            "alternativa_d": alts['D'],
+            "alternativa_e": alts['E'],
+            "resposta_correta": resposta,
+            "explicacao": "",
+            "dificuldade": "Médio",
+            "banca": banca,
+        }
+        questoes.append(questao)
+
+    return questoes
+
+
+@router.post("/api/questoes/importar-pdf",
+             summary="Importar questões de PDF",
+             description="Extrai questões de um PDF (com texto ou escaneado via OCR) e cadastra no banco")
+async def importar_questoes_pdf(
+    file: UploadFile = File(...),
+    materia: str = "",
+    banca: str = "",
+    conn=Depends(get_db_session)
+):
+    """
+    Aceita PDF com questões de múltipla escolha e gabarito.
+    - Extrai texto via pypdf (PDF digital) ou pytesseract (PDF escaneado/OCR)
+    - Identifica questões numeradas com alternativas A-E
+    - Busca gabarito no mesmo PDF (seção 'GABARITO' ou padrão '1-A, 2-B...')
+    """
+    if not file.filename.endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="Apenas arquivos PDF são aceitos.")
+
+    # Salvar arquivo temporário
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    try:
+        # Extrair texto
+        texto = _extrair_texto_pdf(tmp_path)
+
+        if len(texto.strip()) < 50:
+            raise HTTPException(status_code=400, detail="Não foi possível extrair texto do PDF. Verifique se o arquivo contém questões legíveis.")
+
+        # Parsear questões
+        questoes = _parse_questoes_texto(texto, materia=materia, banca=banca)
+
+        if not questoes:
+            # Retornar o texto extraído para debug
+            return {
+                "ok": False,
+                "importadas": 0,
+                "erro": "Não foi possível identificar questões no formato esperado.",
+                "texto_extraido_preview": texto[:2000],
+                "dica": "O PDF deve conter questões numeradas (1, 2, 3...) com alternativas (A, B, C, D, E) e preferencialmente uma seção de GABARITO."
+            }
+
+        # Inserir no banco
+        count = 0
+        sem_gabarito = 0
+        for q in questoes:
+            if not q["enunciado"] or len(q["enunciado"]) < 10:
+                continue
+            if not q["resposta_correta"]:
+                sem_gabarito += 1
+            conn.execute("""
+                INSERT INTO questoes (materia, topico, enunciado, alternativa_a, alternativa_b,
+                    alternativa_c, alternativa_d, alternativa_e, resposta_correta, explicacao, dificuldade, banca, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (q["materia"], q["topico"], q["enunciado"], q["alternativa_a"], q["alternativa_b"],
+                  q["alternativa_c"], q["alternativa_d"], q["alternativa_e"], q["resposta_correta"],
+                  q["explicacao"], q["dificuldade"], q["banca"], today_str()))
+            count += 1
+
+        conn.commit()
+        log.info(f"PDF import: {count} questões importadas de {file.filename}")
+
+        return {
+            "ok": True,
+            "importadas": count,
+            "sem_gabarito": sem_gabarito,
+            "total_detectadas": len(questoes),
+            "mensagem": f"{count} questões importadas com sucesso!" + (f" ({sem_gabarito} sem gabarito identificado)" if sem_gabarito else "")
+        }
+
+    except HTTPException:
+        raise
+    except ImportError:
+        raise HTTPException(
+            status_code=500,
+            detail="OCR não disponível. Instale: pip install pytesseract pdf2image. E instale o Tesseract: sudo apt install tesseract-ocr tesseract-ocr-por"
+        ) from None
+    except Exception as e:
+        log.error(f"Erro ao importar PDF: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao processar PDF: {str(e)}") from None
+    finally:
+        import os
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass

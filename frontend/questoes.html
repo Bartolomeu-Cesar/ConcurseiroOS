@@ -265,12 +265,23 @@
       <div class="form-row">
         <input type="text" id="sim-titulo" placeholder="Título do simulado">
         <input type="number" id="sim-tempo" placeholder="Tempo (min)" value="60" min="5" max="300" style="max-width:100px;">
-        <select id="sim-materia-filtro">
-          <option value="">Todas as matérias</option>
-        </select>
         <input type="number" id="sim-qtd" placeholder="Qtd questões" value="10" min="1" max="100" style="max-width:110px;">
         <button class="btn btn-primary" onclick="criarSimulado()">Criar Simulado</button>
       </div>
+      <div style="margin-top:10px;">
+        <label style="font-size:0.85rem;font-weight:600;color:#cba6f7;">📚 Disciplinas:</label>
+        <div style="display:flex;gap:6px;margin:6px 0;flex-wrap:wrap;">
+          <button class="btn btn-secondary" style="font-size:0.75rem;padding:4px 10px;" onclick="simToggleAll(true)">✓ Todas</button>
+          <button class="btn btn-secondary" style="font-size:0.75rem;padding:4px 10px;" onclick="simToggleAll(false)">✗ Nenhuma</button>
+        </div>
+        <div id="sim-materias-checkboxes" style="max-height:180px;overflow-y:auto;border:1px solid #45475a;border-radius:8px;padding:8px;background:#1e1e2e;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px;">
+          <span style="color:#9399b2;font-size:0.8rem;">Carregando disciplinas...</span>
+        </div>
+      </div>
+      <!-- Manter o select oculto para compatibilidade -->
+      <select id="sim-materia-filtro" style="display:none;">
+        <option value="">Todas as matérias</option>
+      </select>
     </div>
 
     <div class="panel" id="simulado-ativo-panel" style="display:none;">
@@ -302,6 +313,47 @@
 
   <!-- Tab: Cadastrar Questão -->
   <div id="tab-cadastrar" class="qtab-content">
+    <div class="panel">
+      <h2>📄 Importar Questões de PDF (OCR)</h2>
+      <p style="font-size:0.82rem;color:#9399b2;margin-bottom:12px;">
+        Envie um PDF com questões numeradas e gabarito. O sistema extrai o texto (digital ou via OCR para escaneados) e cadastra automaticamente.
+      </p>
+      <div class="form-row" style="align-items:flex-end;">
+        <div style="flex:1;">
+          <label style="font-size:0.8rem;color:#a6adc8;">Matéria</label>
+          <input type="text" id="pdf-import-materia" placeholder="Ex: Direito Constitucional">
+        </div>
+        <div style="flex:1;">
+          <label style="font-size:0.8rem;color:#a6adc8;">Banca</label>
+          <input type="text" id="pdf-import-banca" placeholder="Ex: CEBRASPE">
+        </div>
+      </div>
+      <div style="margin:12px 0;">
+        <label for="pdf-import-file" class="btn btn-primary" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
+          📎 Selecionar PDF
+        </label>
+        <input id="pdf-import-file" type="file" accept=".pdf" style="display:none" onchange="importarQuestoesPDF(this)">
+        <span id="pdf-import-filename" style="font-size:0.8rem;color:#9399b2;margin-left:8px;"></span>
+      </div>
+      <div id="pdf-import-status" style="display:none;margin-top:10px;padding:12px;border-radius:8px;font-size:0.85rem;"></div>
+      <details style="margin-top:12px;">
+        <summary style="font-size:0.8rem;color:#89b4fa;cursor:pointer;">ℹ️ Formato esperado do PDF</summary>
+        <div style="font-size:0.78rem;color:#9399b2;margin-top:8px;padding:8px;background:#1e1e2e;border-radius:6px;line-height:1.6;">
+          <strong>Questões numeradas:</strong><br>
+          1) Texto do enunciado...<br>
+          A) Alternativa A<br>
+          B) Alternativa B<br>
+          C) Alternativa C<br>
+          D) Alternativa D<br>
+          E) Alternativa E<br><br>
+          <strong>Gabarito (no mesmo PDF):</strong><br>
+          GABARITO<br>
+          1-A  2-B  3-C  4-D  5-E ...<br><br>
+          <em>Formatos aceitos: "1. ", "1) ", "Questão 1", "QUESTÃO 1"</em><br>
+          <em>Para PDFs escaneados, o Tesseract OCR será usado automaticamente.</em>
+        </div>
+      </details>
+    </div>
     <div class="panel">
       <h2>➕ Cadastrar Nova Questão</h2>
       <div class="form-row">
@@ -342,7 +394,7 @@
         </select>
       </div>
       <div class="form-row">
-        <textarea id="cad-explicacao" placeholder="Explicação (opcional)" rows="2"></textarea>
+        <textarea id="cad-explicacao" placeholder="Explicação (inclua mnemônicos, macetes e dicas para fixação)" rows="2"></textarea>
       </div>
       <button class="btn btn-success" onclick="cadastrarQuestao()">✓ Salvar Questão</button>
     </div>
@@ -406,6 +458,26 @@
         });
         el.value = val;
       });
+      // Popular checkboxes do simulado
+      const cbContainer = document.getElementById('sim-materias-checkboxes');
+      if (cbContainer && materias.length > 0) {
+        cbContainer.innerHTML = materias.map(m => `
+          <label style="display:flex;align-items:center;gap:6px;font-size:0.8rem;color:#cdd6f4;cursor:pointer;padding:2px 4px;border-radius:4px;" 
+                 onmouseover="this.style.background='#45475a'" onmouseout="this.style.background='transparent'">
+            <input type="checkbox" class="sim-mat-cb" value="${m}" checked style="accent-color:#cba6f7;">
+            ${m}
+          </label>
+        `).join('');
+      } else if (cbContainer) {
+        cbContainer.innerHTML = '<span style="color:#9399b2;font-size:0.8rem;">Nenhuma disciplina disponível. Adicione questões primeiro.</span>';
+      }
+    }
+    function simToggleAll(checked) {
+      document.querySelectorAll('.sim-mat-cb').forEach(cb => cb.checked = checked);
+    }
+    function getSimMateriasSelecionadas() {
+      const checked = [...document.querySelectorAll('.sim-mat-cb:checked')].map(cb => cb.value);
+      return checked;
     }
 
     async function loadBancas() {
@@ -545,14 +617,29 @@
     async function criarSimulado() {
       const titulo = document.getElementById('sim-titulo').value.trim() || `Simulado ${new Date().toLocaleDateString('pt-BR')}`;
       const tempo = parseInt(document.getElementById('sim-tempo').value) || 60;
-      const materia = document.getElementById('sim-materia-filtro').value;
+      const materiasSelecionadas = getSimMateriasSelecionadas();
       const qtd = parseInt(document.getElementById('sim-qtd').value) || 10;
 
-      // Buscar questões
-      const url = materia ? `/api/questoes?materia=${encodeURIComponent(materia)}` : '/api/questoes';
-      let pool = await fetch(url).then(r => r.json());
+      if (materiasSelecionadas.length === 0) {
+        alert('Selecione pelo menos uma disciplina!');
+        return;
+      }
 
-      if (pool.length === 0) { alert('Nenhuma questão disponível.'); return; }
+      // Buscar questões de todas as matérias selecionadas
+      let pool = [];
+      const todasMaterias = document.querySelectorAll('.sim-mat-cb').length;
+      if (materiasSelecionadas.length === todasMaterias) {
+        // Todas selecionadas = buscar tudo
+        pool = await fetch('/api/questoes').then(r => r.json());
+      } else {
+        // Buscar por cada matéria selecionada
+        for (const mat of materiasSelecionadas) {
+          const qs = await fetch(`/api/questoes?materia=${encodeURIComponent(mat)}`).then(r => r.json());
+          pool = pool.concat(qs);
+        }
+      }
+
+      if (pool.length === 0) { alert('Nenhuma questão disponível para as disciplinas selecionadas.'); return; }
 
       // Shufflar e pegar qtd
       pool = pool.sort(() => Math.random() - 0.5).slice(0, qtd);
@@ -739,6 +826,61 @@
         html += `</div></div>`;
       }
       list.innerHTML = html;
+    }
+
+    // ==================== IMPORTAR PDF/OCR ====================
+    async function importarQuestoesPDF(input) {
+      const file = input.files[0];
+      if (!file) return;
+
+      document.getElementById('pdf-import-filename').textContent = file.name;
+      const statusEl = document.getElementById('pdf-import-status');
+      statusEl.style.display = 'block';
+      statusEl.style.background = '#45475a';
+      statusEl.style.color = '#cdd6f4';
+      statusEl.innerHTML = '⏳ Processando PDF... (isso pode levar alguns segundos para OCR)';
+
+      const materia = document.getElementById('pdf-import-materia').value.trim();
+      const banca = document.getElementById('pdf-import-banca').value.trim();
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      let url = '/api/questoes/importar-pdf';
+      const params = [];
+      if (materia) params.push(`materia=${encodeURIComponent(materia)}`);
+      if (banca) params.push(`banca=${encodeURIComponent(banca)}`);
+      if (params.length) url += '?' + params.join('&');
+
+      try {
+        const res = await fetch(url, { method: 'POST', body: formData });
+        const data = await res.json();
+
+        if (data.ok) {
+          statusEl.style.background = '#1e3a2e';
+          statusEl.style.color = '#a6e3a1';
+          statusEl.innerHTML = `✅ ${data.mensagem}<br><small>Detectadas: ${data.total_detectadas} | Importadas: ${data.importadas}${data.sem_gabarito ? ' | Sem gabarito: ' + data.sem_gabarito : ''}</small>`;
+          // Recarregar banco
+          if (typeof loadBanco === 'function') loadBanco();
+          if (typeof loadMaterias === 'function') loadMaterias();
+        } else {
+          statusEl.style.background = '#3a1e1e';
+          statusEl.style.color = '#f38ba8';
+          let msg = `⚠️ ${data.erro || data.detail || 'Erro desconhecido'}`;
+          if (data.dica) msg += `<br><small>${data.dica}</small>`;
+          if (data.texto_extraido_preview) {
+            msg += `<br><details style="margin-top:6px;"><summary style="cursor:pointer;font-size:0.75rem;">Ver texto extraído (preview)</summary><pre style="font-size:0.7rem;max-height:200px;overflow:auto;white-space:pre-wrap;margin-top:4px;padding:6px;background:#1e1e2e;border-radius:4px;">${data.texto_extraido_preview}</pre></details>`;
+          }
+          statusEl.innerHTML = msg;
+        }
+      } catch (e) {
+        statusEl.style.background = '#3a1e1e';
+        statusEl.style.color = '#f38ba8';
+        statusEl.innerHTML = `❌ Erro: ${e.message}`;
+      }
+
+      // Limpar input
+      input.value = '';
     }
 
     // ==================== CADASTRAR ====================

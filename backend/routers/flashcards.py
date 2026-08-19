@@ -18,27 +18,58 @@ from utils import paginate, today_str, update_streak
 router = APIRouter(prefix="", tags=["Flashcards"])
 
 
-@router.get("/api/flashcards", summary="Listar flashcards", description="Lista todos os flashcards com paginação opcional")
-def list_flashcards(page: int | None = Query(None), limit: int = 50, conn=Depends(get_db_session)):
-    rows = conn.execute("SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions FROM flashcards").fetchall()
+@router.get("/api/flashcards", summary="Listar flashcards", description="Lista todos os flashcards com paginação opcional e filtro por matéria")
+def list_flashcards(materia: str = "", page: int | None = Query(None), limit: int = 50, conn=Depends(get_db_session)):
+    if materia:
+        rows = conn.execute("SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia FROM flashcards WHERE materia = ?", (materia,)).fetchall()
+    else:
+        rows = conn.execute("SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia FROM flashcards").fetchall()
     items = [dict(r) for r in rows]
     return paginate(items, page, limit)
 
 
+@router.get("/api/flashcards/materias", summary="Listar matérias dos flashcards")
+def list_flashcards_materias(conn=Depends(get_db_session)):
+    rows = conn.execute("SELECT materia, COUNT(*) as total FROM flashcards GROUP BY materia ORDER BY total DESC").fetchall()
+    return [{"materia": r[0] or "Sem matéria", "total": r[1]} for r in rows]
+
+
 @router.get("/api/flashcards/today")
-def get_flashcards_today(conn=Depends(get_db_session)):
-    rows = conn.execute(
-        "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions FROM flashcards WHERE proxima_revisao <= ?",
-        (today_str(),)
-    ).fetchall()
+def get_flashcards_today(materia: str = "", conn=Depends(get_db_session)):
+    if materia:
+        rows = conn.execute(
+            "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia FROM flashcards WHERE proxima_revisao <= ? AND materia = ?",
+            (today_str(), materia)
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia FROM flashcards WHERE proxima_revisao <= ?",
+            (today_str(),)
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@router.get("/api/flashcards/aleatorio", summary="Flashcards aleatórios para estudo")
+def get_flashcards_aleatorio(materia: str = "", quantidade: int = 10, conn=Depends(get_db_session)):
+    """Retorna flashcards aleatórios para sessão de estudo (por disciplina ou todas)"""
+    if materia:
+        rows = conn.execute(
+            "SELECT id, pergunta, resposta, materia FROM flashcards WHERE materia = ? ORDER BY RANDOM() LIMIT ?",
+            (materia, quantidade)
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT id, pergunta, resposta, materia FROM flashcards ORDER BY RANDOM() LIMIT ?",
+            (quantidade,)
+        ).fetchall()
     return [dict(r) for r in rows]
 
 
 @router.post("/api/flashcards", summary="Criar flashcard", description="Cria um novo flashcard com revisão SRS")
 def create_flashcard(body: FlashcardCreate, conn=Depends(get_db_session)):
     cur = conn.execute(
-        "INSERT INTO flashcards (pergunta, resposta, proxima_revisao) VALUES (?, ?, ?)",
-        (body.pergunta, body.resposta, today_str())
+        "INSERT INTO flashcards (pergunta, resposta, proxima_revisao, materia) VALUES (?, ?, ?, ?)",
+        (body.pergunta, body.resposta, today_str(), getattr(body, 'materia', ''))
     )
     conn.commit()
     new_id = cur.lastrowid

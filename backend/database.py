@@ -399,6 +399,13 @@ def _run_migrations(conn):
         conn.execute("ALTER TABLE flashcards ADD COLUMN repetitions INTEGER DEFAULT 0")
         log.info("Migration: added SM-2 columns to flashcards")
 
+    # Flashcards: coluna materia
+    try:
+        conn.execute("SELECT materia FROM flashcards LIMIT 1")
+    except Exception:
+        conn.execute("ALTER TABLE flashcards ADD COLUMN materia TEXT DEFAULT ''")
+        log.info("Migration: added column materia to flashcards")
+
     # Lote D: SM-2 para edital (revisão de tópicos)
     try:
         conn.execute("SELECT easiness_factor_edital FROM edital LIMIT 1")

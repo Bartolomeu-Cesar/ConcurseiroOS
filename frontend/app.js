@@ -1156,6 +1156,7 @@ async function reviewFlashcard(quality) {
         showCurrentFlashcard();
         loadAllFlashcards();
         loadStreakBadge();
+        loadMetas();
     }
     catch (e) {
         toast('Erro ao revisar', 'error');
@@ -1177,20 +1178,161 @@ async function addFlashcard() {
 async function loadAllFlashcards() {
     showLoading('flash-list');
     try {
-        const all = await fetch('/api/flashcards').then(r => r.json());
-        document.getElementById('flash-count').textContent = `Total: ${all.length} flashcard(s)`;
+        const matFilter = document.getElementById('flash-materia-filter')?.value || '';
+        const url = matFilter ? `/api/flashcards?materia=${encodeURIComponent(matFilter)}` : '/api/flashcards';
+        const all = await fetch(url).then(r => r.json());
+        document.getElementById('flash-count').textContent = `Total: ${all.length} flashcard(s)${matFilter ? ' em ' + matFilter : ''}`;
         if (all.length === 0) {
             showEmpty('flash-list', '🧠', 'Nenhum flashcard criado. Crie perguntas e respostas para revisar com repetição espaçada!');
         }
         else {
-            document.getElementById('flash-list').innerHTML = all.map(c => `
-        <div class="flash-list-item"><span style="flex:1;color:#cdd6f4;">${escapeHtml(c.pergunta)}</span><button class="flash-list-delete" onclick="deleteFlashcard(${c.id})">🗑</button></div>
-      `).join('');
+            // Agrupar por matéria
+            const grouped = {};
+            all.forEach(c => {
+                const mat = c.materia || 'Sem matéria';
+                if (!grouped[mat]) grouped[mat] = [];
+                grouped[mat].push(c);
+            });
+            let html = '';
+            if (!matFilter && Object.keys(grouped).length > 1) {
+                // Exibir agrupado com collapse
+                for (const [mat, cards] of Object.entries(grouped).sort((a,b) => b[1].length - a[1].length)) {
+                    const matId = 'flash-group-' + mat.replace(/[^a-zA-Z0-9]/g, '_');
+                    html += `<div style="margin-top:8px;">
+                      <div onclick="toggleFlashGroup('${matId}')" style="font-size:0.8rem;font-weight:600;color:#cba6f7;padding:6px 10px;background:#45475a;border-radius:6px;margin-bottom:2px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;user-select:none;">
+                        <span><span class="flash-chevron" id="chev-${matId}">▶</span> 📚 ${mat} (${cards.length})</span>
+                      </div>
+                      <div id="${matId}" style="display:none;">`;
+                    html += cards.map(c => `<div class="flash-list-item"><span style="flex:1;color:#cdd6f4;">${escapeHtml(c.pergunta)}</span><button class="flash-list-delete" onclick="deleteFlashcard(${c.id})">🗑</button></div>`).join('');
+                    html += '</div></div>';
+                }
+            } else {
+                html = all.map(c => `<div class="flash-list-item"><span style="flex:1;color:#cdd6f4;">${escapeHtml(c.pergunta)}</span><button class="flash-list-delete" onclick="deleteFlashcard(${c.id})">🗑</button></div>`).join('');
+            }
+            document.getElementById('flash-list').innerHTML = html;
         }
+        // Carregar dropdown de matérias
+        loadFlashMaterias();
     }
     catch (e) {
         toast('Erro ao carregar flashcards', 'error');
     }
+}
+function toggleFlashGroup(id) {
+    const el = document.getElementById(id);
+    const chev = document.getElementById('chev-' + id);
+    if (!el) return;
+    if (el.style.display === 'none') {
+        el.style.display = 'block';
+        if (chev) chev.textContent = '▼';
+    } else {
+        el.style.display = 'none';
+        if (chev) chev.textContent = '▶';
+    }
+}
+async function loadFlashMaterias() {
+    try {
+        const mats = await fetch('/api/flashcards/materias').then(r => r.json());
+        const sel = document.getElementById('flash-materia-filter');
+        const current = sel.value;
+        // Preservar opção selecionada
+        sel.innerHTML = '<option value="">Todas as Disciplinas</option>' +
+            mats.map(m => `<option value="${m.materia}" ${m.materia === current ? 'selected' : ''}>${m.materia} (${m.total})</option>`).join('');
+    } catch(e) {}
+}
+let flashSessao = [], flashSessaoIndex = 0, flashSessaoMode = '';
+async function iniciarSessaoFlash(mode) {
+    flashSessaoMode = mode;
+    if (mode === 'revisao') {
+        // Carregar revisões de hoje
+        loadFlashcardsToday();
+        toast('📅 Modo Revisão SRS ativado!', 'success');
+        return;
+    }
+    if (mode === 'disciplina') {
+        // Pedir para escolher disciplina
+        const mats = await fetch('/api/flashcards/materias').then(r => r.json());
+        if (mats.length === 0) { toast('Nenhum flashcard disponível', 'warning'); return; }
+        const opts = mats.map(m => m.materia).filter(m => m);
+        const escolha = await promptSelect('📚 Escolha a disciplina:', opts);
+        if (!escolha) return;
+        flashSessao = await fetch(`/api/flashcards/aleatorio?materia=${encodeURIComponent(escolha)}&quantidade=20`).then(r => r.json());
+        if (flashSessao.length === 0) { toast('Nenhum flashcard nessa disciplina', 'warning'); return; }
+        flashSessaoIndex = 0;
+        showSessaoFlashcard();
+        toast(`📚 Sessão: ${escolha} (${flashSessao.length} cards)`, 'success');
+        return;
+    }
+    if (mode === 'aleatorio') {
+        flashSessao = await fetch('/api/flashcards/aleatorio?quantidade=15').then(r => r.json());
+        if (flashSessao.length === 0) { toast('Nenhum flashcard disponível', 'warning'); return; }
+        flashSessaoIndex = 0;
+        showSessaoFlashcard();
+        toast(`🎲 Sessão Aleatória (${flashSessao.length} cards)`, 'success');
+        return;
+    }
+}
+function showSessaoFlashcard() {
+    const q = document.getElementById('flash-question'), a = document.getElementById('flash-answer');
+    const rb = document.getElementById('flash-reveal-btn'), rv = document.getElementById('flash-review-btns');
+    if (flashSessaoIndex >= flashSessao.length) {
+        q.innerHTML = '<span style="color:#a6e3a1;font-size:1.3rem;font-weight:600;">🎉 Sessão concluída! Parabéns!</span>';
+        a.style.display = 'none'; rb.style.display = 'none'; rv.style.display = 'none';
+        flashSessao = []; flashSessaoMode = '';
+        return;
+    }
+    const card = flashSessao[flashSessaoIndex];
+    const badge = card.materia ? `<span style="font-size:0.7rem;background:#45475a;color:#cba6f7;padding:2px 8px;border-radius:4px;margin-bottom:6px;display:inline-block;">📚 ${card.materia}</span><br>` : '';
+    q.innerHTML = badge + `<span>${flashSessaoIndex + 1}/${flashSessao.length}</span> — ${escapeHtml(card.pergunta)}`;
+    a.textContent = card.resposta;
+    a.style.display = 'none';
+    rb.style.display = 'inline-block';
+    rv.style.display = 'none';
+    rb.onclick = function() {
+        a.style.display = 'block'; rb.style.display = 'none';
+        rv.style.display = 'flex';
+        rv.innerHTML = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;width:100%;">
+          <button onclick="sessaoNext(0)" style="background:#f38ba8;color:#1e1e2e;border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">0•Esqueci</button>
+          <button onclick="sessaoNext(1)" style="background:#f38ba8;color:#1e1e2e;border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">1•Errei</button>
+          <button onclick="sessaoNext(2)" style="background:#fab387;color:#1e1e2e;border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">2•Quase</button>
+          <button onclick="sessaoNext(3)" style="background:#f9e2af;color:#1e1e2e;border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">3•Difícil</button>
+          <button onclick="sessaoNext(4)" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">4•Bom</button>
+          <button onclick="sessaoNext(5)" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">5•Fácil</button>
+        </div>`;
+    };
+}
+async function sessaoNext(quality) {
+    const card = flashSessao[flashSessaoIndex];
+    if (card && card.id) {
+        try { await api(`/api/flashcards/${card.id}/review-sm2`, { method: 'POST', body: { quality } }); } catch(e) {}
+    }
+    flashSessaoIndex++;
+    showSessaoFlashcard();
+    loadMetas();
+    loadStreakBadge();
+}
+function promptSelect(title, options) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('select-modal');
+        document.getElementById('select-modal-title').textContent = title;
+        const list = document.getElementById('select-modal-list');
+        const search = document.getElementById('select-modal-search');
+        search.value = '';
+        function render(filter) {
+            const filtered = filter ? options.filter(o => o.toLowerCase().includes(filter.toLowerCase())) : options;
+            list.innerHTML = filtered.map(o => `<div class="select-item" onclick="this.dispatchEvent(new CustomEvent('pick',{bubbles:true,detail:'${o.replace(/'/g, "\\'")}'}))">${o}</div>`).join('');
+        }
+        render('');
+        search.oninput = () => render(search.value);
+        list.onclick = (e) => {
+            if (e.target.classList.contains('select-item')) {
+                modal.style.display = 'none';
+                resolve(e.target.textContent);
+            }
+        };
+        modal.querySelector('.iobtn').onclick = () => { modal.style.display = 'none'; resolve(null); };
+        modal.style.display = 'flex';
+    });
 }
 async function deleteFlashcard(id) {
     undoableDelete('Flashcard', `/api/flashcards/${id}`, (deleted) => {
@@ -1208,31 +1350,40 @@ async function loadMetas() {
         const data = await fetch('/api/metas').then(r => r.json());
         const cfg = data.config;
         const prog = data.progresso;
-        document.getElementById('meta-horas').value = cfg.meta_horas;
-        document.getElementById('meta-questoes').value = cfg.meta_questoes;
-        document.getElementById('meta-flashcards').value = cfg.meta_flashcards;
-        document.getElementById('meta-paginas').value = cfg.meta_paginas;
+        const metaHoras = document.getElementById('meta-horas');
+        const metaQuestoes = document.getElementById('meta-questoes');
+        const metaFlashcards = document.getElementById('meta-flashcards');
+        const metaPaginas = document.getElementById('meta-paginas');
+        if (metaHoras) metaHoras.value = cfg.meta_horas;
+        if (metaQuestoes) metaQuestoes.value = cfg.meta_questoes;
+        if (metaFlashcards) metaFlashcards.value = cfg.meta_flashcards;
+        if (metaPaginas) metaPaginas.value = cfg.meta_paginas;
         const progEl = document.getElementById('metas-progresso');
         const items = [
-            { icon: '⏱', label: 'Horas', val: prog.horas.toFixed(1), meta: cfg.meta_horas, pct: Math.min(100, (prog.horas / cfg.meta_horas) * 100), color: '#89b4fa' },
-            { icon: '❓', label: 'Questões', val: prog.questoes, meta: cfg.meta_questoes, pct: Math.min(100, (prog.questoes / cfg.meta_questoes) * 100), color: '#a6e3a1' },
-            { icon: '🧠', label: 'Flashcards', val: prog.flashcards, meta: cfg.meta_flashcards, pct: Math.min(100, (prog.flashcards / cfg.meta_flashcards) * 100), color: '#cba6f7' },
+            { icon: '⏱', label: 'Horas', val: (prog.horas || 0).toFixed(1), meta: cfg.meta_horas, pct: Math.min(100, ((prog.horas || 0) / cfg.meta_horas) * 100), color: '#89b4fa' },
+            { icon: '❓', label: 'Questões', val: prog.questoes || 0, meta: cfg.meta_questoes, pct: Math.min(100, ((prog.questoes || 0) / cfg.meta_questoes) * 100), color: '#a6e3a1' },
+            { icon: '🧠', label: 'Flashcards', val: prog.flashcards || 0, meta: cfg.meta_flashcards, pct: Math.min(100, ((prog.flashcards || 0) / cfg.meta_flashcards) * 100), color: '#cba6f7' },
         ];
-        progEl.innerHTML = items.map(m => `
-      <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #45475a;">
-        <span style="font-size:1.2rem;">${m.icon}</span>
-        <span style="min-width:80px;font-size:0.88rem;">${m.label}</span>
-        <div style="flex:1;height:8px;background:#45475a;border-radius:4px;overflow:hidden;"><div style="height:100%;width:${m.pct}%;background:${m.color};border-radius:4px;"></div></div>
-        <span style="font-size:0.85rem;font-weight:700;color:${m.color};min-width:70px;text-align:right;">${m.val}/${m.meta}</span>
-      </div>
-    `).join('');
-        // Mini dots no header
-        document.getElementById('meta-dot-h').className = 'meta-dot' + (items[0].pct >= 100 ? ' done' : items[0].pct > 0 ? ' partial' : '');
-        document.getElementById('meta-dot-q').className = 'meta-dot' + (items[1].pct >= 100 ? ' done' : items[1].pct > 0 ? ' partial' : '');
-        document.getElementById('meta-dot-f').className = 'meta-dot' + (items[2].pct >= 100 ? ' done' : items[2].pct > 0 ? ' partial' : '');
+        if (progEl) {
+            progEl.innerHTML = items.map(m => `
+          <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #45475a;">
+            <span style="font-size:1.2rem;">${m.icon}</span>
+            <span style="min-width:80px;font-size:0.88rem;">${m.label}</span>
+            <div style="flex:1;height:8px;background:#45475a;border-radius:4px;overflow:hidden;"><div style="height:100%;width:${m.pct}%;background:${m.color};border-radius:4px;"></div></div>
+            <span style="font-size:0.85rem;font-weight:700;color:${m.color};min-width:70px;text-align:right;">${m.val}/${m.meta}</span>
+          </div>
+        `).join('');
+        }
+        // Mini dots no header (sempre visíveis)
+        const dotH = document.getElementById('meta-dot-h');
+        const dotQ = document.getElementById('meta-dot-q');
+        const dotF = document.getElementById('meta-dot-f');
+        if (dotH) dotH.className = 'meta-dot' + (items[0].pct >= 100 ? ' done' : items[0].pct > 0 ? ' partial' : '');
+        if (dotQ) dotQ.className = 'meta-dot' + (items[1].pct >= 100 ? ' done' : items[1].pct > 0 ? ' partial' : '');
+        if (dotF) dotF.className = 'meta-dot' + (items[2].pct >= 100 ? ' done' : items[2].pct > 0 ? ' partial' : '');
     }
     catch (e) {
-        toast('Erro ao carregar metas', 'error');
+        // Silently handle - non-critical UI update
     }
 }
 async function salvarMetas() {

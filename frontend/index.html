@@ -216,11 +216,26 @@
     <div class="flash-panel flash-add-form">
       <h2>➕ Adicionar Flashcard</h2>
       <textarea id="flash-pergunta" placeholder="Pergunta..." rows="2"></textarea>
-      <textarea id="flash-resposta" placeholder="Resposta..." rows="2"></textarea>
+      <textarea id="flash-resposta" placeholder="Resposta (inclua mnemônicos 🧠, macetes e dicas para fixação)" rows="2"></textarea>
       <button onclick="addFlashcard()">Adicionar</button>
     </div>
     <div class="flash-panel">
       <h2>📦 Todos os Flashcards</h2>
+      <!-- Modos de Estudo -->
+      <div style="margin-bottom:12px;padding:12px;background:#313244;border-radius:10px;">
+        <div style="font-size:0.85rem;font-weight:600;color:#cba6f7;margin-bottom:8px;">🎯 Modo de Estudo</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="iobtn" onclick="iniciarSessaoFlash('revisao')" style="background:#a6e3a1;color:#1e1e2e;">📅 Revisão SRS (Hoje)</button>
+          <button class="iobtn" onclick="iniciarSessaoFlash('disciplina')" style="background:#89b4fa;color:#1e1e2e;">📚 Por Disciplina</button>
+          <button class="iobtn" onclick="iniciarSessaoFlash('aleatorio')" style="background:#f9e2af;color:#1e1e2e;">🎲 Aleatório (Todas)</button>
+        </div>
+      </div>
+      <!-- Filtro por Disciplina -->
+      <div style="margin-bottom:10px;">
+        <select id="flash-materia-filter" onchange="loadAllFlashcards()" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.9rem;">
+          <option value="">Todas as Disciplinas</option>
+        </select>
+      </div>
       <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
         <button class="iobtn" onclick="exportarFlashcards('json')">⬇ JSON</button>
         <button class="iobtn" onclick="exportarFlashcards('csv')">⬇ CSV</button>

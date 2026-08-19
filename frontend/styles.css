@@ -277,6 +277,7 @@ body.light-theme .ciclo-focus-timer { color: #1e66f5; }
 .flash-list-item:hover { background: #45475a; border-radius: 6px; }
 .flash-list-delete { background: none; border: none; color: #f38ba8; cursor: pointer; font-size: 1rem; }
 .flash-count { font-size: 0.82rem; color: #9399b2; margin-bottom: 8px; }
+.flash-chevron { display: inline-block; margin-right: 6px; font-size: 0.7rem; transition: transform 0.2s; }
 
 /* Metas config */
 .metas-config { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }

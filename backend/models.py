@@ -40,6 +40,7 @@ class EditalPdfLink(BaseModel):
 class FlashcardCreate(BaseModel):
     pergunta: str
     resposta: str
+    materia: str = ""
 
 
 class FlashcardReview(BaseModel):

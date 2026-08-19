@@ -2,6 +2,9 @@ fastapi
 uvicorn
 pypdf
 python-multipart
+pytesseract
+pdf2image
+Pillow
 
 # Dev/Test
 pytest
