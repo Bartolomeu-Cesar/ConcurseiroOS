@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Login — ConcurseiroOS</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#1e1e2e">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: sans-serif; background: #1e1e2e; color: #cdd6f4; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+    .login-container { width: 100%; max-width: 400px; }
+    .login-card { background: #313244; border-radius: 16px; padding: 32px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); border: 1px solid #45475a; }
+    .login-header { text-align: center; margin-bottom: 24px; }
+    .login-header .logo { font-size: 2.5rem; margin-bottom: 8px; }
+    .login-header h1 { font-size: 1.4rem; color: #cba6f7; margin-bottom: 4px; }
+    .login-header p { font-size: 0.85rem; color: #9399b2; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 0.82rem; color: #9399b2; margin-bottom: 4px; }
+    .form-group input { width: 100%; padding: 12px 16px; border-radius: 8px; border: 1px solid #45475a; background: #1e1e2e; color: #cdd6f4; font-size: 0.95rem; outline: none; transition: border-color 0.2s; }
+    .form-group input:focus { border-color: #cba6f7; }
+    .form-group input::placeholder { color: #585b70; }
+    .btn { width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 0.95rem; font-weight: 600; cursor: pointer; transition: opacity 0.2s, transform 0.1s; }
+    .btn:hover { opacity: 0.9; }
+    .btn:active { transform: scale(0.98); }
+    .btn-primary { background: #cba6f7; color: #1e1e2e; }
+    .btn-secondary { background: #45475a; color: #cdd6f4; margin-top: 8px; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .toggle-link { text-align: center; margin-top: 16px; font-size: 0.85rem; color: #9399b2; }
+    .toggle-link a { color: #89b4fa; cursor: pointer; text-decoration: none; }
+    .toggle-link a:hover { text-decoration: underline; }
+    .code-input { display: flex; gap: 8px; justify-content: center; margin: 16px 0; }
+    .code-input input { width: 45px; height: 52px; text-align: center; font-size: 1.5rem; font-weight: 700; border-radius: 8px; border: 2px solid #45475a; background: #1e1e2e; color: #a6e3a1; outline: none; }
+    .code-input input:focus { border-color: #cba6f7; }
+    .message { padding: 10px; border-radius: 8px; font-size: 0.82rem; margin-bottom: 12px; text-align: center; display: none; }
+    .message.success { display: block; background: #1e3a2e; color: #a6e3a1; border: 1px solid #a6e3a1; }
+    .message.error { display: block; background: #3a1e1e; color: #f38ba8; border: 1px solid #f38ba8; }
+    .message.info { display: block; background: #1e2a3a; color: #89b4fa; border: 1px solid #89b4fa; }
+    .step { display: none; }
+    .step.active { display: block; }
+    .resend { text-align: center; margin-top: 12px; font-size: 0.8rem; color: #9399b2; }
+    .resend a { color: #89b4fa; cursor: pointer; }
+    .dev-code { text-align: center; margin-top: 8px; font-size: 0.8rem; padding: 8px; background: #1e1e2e; border-radius: 6px; color: #f9e2af; display: none; }
+    .skip-link { display: block; text-align: center; margin-top: 16px; font-size: 0.82rem; color: #585b70; }
+    .skip-link:hover { color: #9399b2; }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <div class="login-card">
+      <div class="login-header">
+        <div class="logo">📚</div>
+        <h1>ConcurseiroOS</h1>
+        <p>Entre para salvar seu progresso</p>
+      </div>
+
+      <div id="msg" class="message"></div>
+
+      <!-- STEP 1: Email -->
+      <div id="step-email" class="step active">
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input type="email" id="email" placeholder="seu@email.com" autocomplete="email" autofocus>
+        </div>
+        <div class="form-group" id="nome-group" style="display:none;">
+          <label for="nome">Nome (opcional)</label>
+          <input type="text" id="nome" placeholder="Como quer ser chamado?">
+        </div>
+        <button class="btn btn-primary" id="btn-login" onclick="handleLogin()">Entrar</button>
+        <div class="toggle-link">
+          <span id="toggle-text">Não tem conta?</span> <a id="toggle-btn" onclick="toggleMode()">Criar conta</a>
+        </div>
+      </div>
+
+      <!-- STEP 2: Código de verificação -->
+      <div id="step-code" class="step">
+        <p style="text-align:center;font-size:0.88rem;margin-bottom:4px;">Código enviado para:</p>
+        <p style="text-align:center;font-size:0.82rem;color:#cba6f7;margin-bottom:16px;" id="code-email-label"></p>
+        <div class="code-input" id="code-inputs">
+          <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]">
+          <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]">
+          <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]">
+          <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]">
+          <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]">
+          <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]">
+        </div>
+        <button class="btn btn-primary" id="btn-verify" onclick="handleVerify()">Verificar</button>
+        <button class="btn btn-secondary" onclick="goBackToEmail()">← Voltar</button>
+        <div class="resend">Não recebeu? <a onclick="handleResend()">Reenviar código</a></div>
+        <div class="dev-code" id="dev-code"></div>
+      </div>
+
+      <!-- STEP 3: Sucesso -->
+      <div id="step-success" class="step">
+        <div style="text-align:center;padding:16px;">
+          <div style="font-size:2.5rem;margin-bottom:8px;">🎉</div>
+          <h2 style="color:#a6e3a1;margin-bottom:8px;">Login realizado!</h2>
+          <p style="font-size:0.85rem;color:#9399b2;">Redirecionando...</p>
+        </div>
+      </div>
+    </div>
+    <a href="/" class="skip-link">← Continuar sem login</a>
+  </div>
+
+  <script>
+    let mode = 'login'; // 'login' ou 'register'
+    let currentEmail = '';
+
+    function toggleMode() {
+      mode = mode === 'login' ? 'register' : 'login';
+      const btn = document.getElementById('btn-login');
+      const nomeGroup = document.getElementById('nome-group');
+      const toggleText = document.getElementById('toggle-text');
+      const toggleBtn = document.getElementById('toggle-btn');
+      if (mode === 'register') {
+        btn.textContent = 'Criar Conta';
+        nomeGroup.style.display = 'block';
+        toggleText.textContent = 'Já tem conta?';
+        toggleBtn.textContent = 'Fazer login';
+      } else {
+        btn.textContent = 'Entrar';
+        nomeGroup.style.display = 'none';
+        toggleText.textContent = 'Não tem conta?';
+        toggleBtn.textContent = 'Criar conta';
+      }
+      hideMsg();
+    }
+
+    function showMsg(text, type) {
+      const el = document.getElementById('msg');
+      el.textContent = text;
+      el.className = 'message ' + type;
+    }
+
+    function hideMsg() {
+      document.getElementById('msg').className = 'message';
+    }
+
+    function showStep(step) {
+      document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+      document.getElementById('step-' + step).classList.add('active');
+    }
+
+    async function handleLogin() {
+      const email = document.getElementById('email').value.trim();
+      const nome = document.getElementById('nome').value.trim();
+      if (!email || !email.includes('@')) { showMsg('Informe um email válido.', 'error'); return; }
+
+      const btn = document.getElementById('btn-login');
+      btn.disabled = true;
+      btn.textContent = 'Enviando...';
+      hideMsg();
+
+      try {
+        const endpoint = mode === 'register' ? '/api/auth/register' : '/api/auth/login';
+        const body = mode === 'register' ? { email, nome } : { email };
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          showMsg(data.detail || 'Erro ao processar', 'error');
+          btn.disabled = false;
+          btn.textContent = mode === 'register' ? 'Criar Conta' : 'Entrar';
+          return;
+        }
+
+        currentEmail = email;
+        document.getElementById('code-email-label').textContent = email;
+
+        // Em dev sem SMTP, mostrar código na tela
+        if (data.code) {
+          const devEl = document.getElementById('dev-code');
+          devEl.style.display = 'block';
+          devEl.textContent = '🔑 Código (dev): ' + data.code;
+        }
+
+        showStep('code');
+        setupCodeInputs();
+        showMsg(data.message, 'success');
+      } catch(e) {
+        showMsg('Erro de conexão com o servidor.', 'error');
+      }
+
+      btn.disabled = false;
+      btn.textContent = mode === 'register' ? 'Criar Conta' : 'Entrar';
+    }
+
+    function setupCodeInputs() {
+      const inputs = document.querySelectorAll('#code-inputs input');
+      inputs.forEach((inp, i) => {
+        inp.value = '';
+        inp.addEventListener('input', (e) => {
+          if (e.target.value && i < inputs.length - 1) inputs[i + 1].focus();
+          // Auto-verify quando completar todos
+          const code = [...inputs].map(x => x.value).join('');
+          if (code.length === 6) setTimeout(handleVerify, 100);
+        });
+        inp.addEventListener('keydown', (e) => {
+          if (e.key === 'Backspace' && !e.target.value && i > 0) inputs[i - 1].focus();
+        });
+        inp.addEventListener('paste', (e) => {
+          e.preventDefault();
+          const paste = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g, '').slice(0, 6);
+          paste.split('').forEach((ch, j) => { if (inputs[j]) inputs[j].value = ch; });
+          if (paste.length === 6) setTimeout(handleVerify, 100);
+        });
+      });
+      inputs[0].focus();
+    }
+
+    async function handleVerify() {
+      const inputs = document.querySelectorAll('#code-inputs input');
+      const code = [...inputs].map(x => x.value).join('');
+      if (code.length !== 6) { showMsg('Preencha os 6 dígitos.', 'error'); return; }
+
+      const btn = document.getElementById('btn-verify');
+      btn.disabled = true;
+      btn.textContent = 'Verificando...';
+      hideMsg();
+
+      try {
+        const res = await fetch('/api/auth/verify-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: currentEmail, code })
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          showMsg(data.detail || 'Código inválido', 'error');
+          btn.disabled = false;
+          btn.textContent = 'Verificar';
+          return;
+        }
+
+        // Salvar token e dados do usuário
+        localStorage.setItem('auth_token', data.token);
+        localStorage.setItem('auth_user', JSON.stringify(data.user));
+
+        showStep('success');
+
+        // Redirecionar
+        setTimeout(() => { window.location.href = '/'; }, 1000);
+      } catch(e) {
+        showMsg('Erro de conexão.', 'error');
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Verificar';
+    }
+
+    async function handleResend() {
+      hideMsg();
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: currentEmail })
+        });
+        const data = await res.json();
+        if (data.code) {
+          document.getElementById('dev-code').style.display = 'block';
+          document.getElementById('dev-code').textContent = '🔑 Código (dev): ' + data.code;
+        }
+        showMsg('Novo código enviado!', 'success');
+      } catch(e) {
+        showMsg('Erro ao reenviar.', 'error');
+      }
+    }
+
+    function goBackToEmail() {
+      showStep('email');
+      hideMsg();
+      document.getElementById('dev-code').style.display = 'none';
+    }
+
+    // Se já está logado, redirecionar
+    if (localStorage.getItem('auth_token')) {
+      window.location.href = '/';
+    }
+  </script>
+</body>
+</html>

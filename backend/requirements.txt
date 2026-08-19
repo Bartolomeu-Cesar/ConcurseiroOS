@@ -5,6 +5,8 @@ python-multipart
 pytesseract
 pdf2image
 Pillow
+PyJWT
+bcrypt
 
 # Dev/Test
 pytest

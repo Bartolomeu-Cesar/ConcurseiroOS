@@ -368,6 +368,33 @@ def _create_tables(conn):
         )
     """)
 
+    # Usuários
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT UNIQUE NOT NULL,
+            nome TEXT DEFAULT '',
+            avatar TEXT DEFAULT '',
+            password_hash TEXT DEFAULT '',
+            email_verified INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            last_login TEXT DEFAULT ''
+        )
+    """)
+
+    # Códigos de autenticação por email
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS auth_codes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT NOT NULL,
+            code TEXT NOT NULL,
+            tipo TEXT DEFAULT 'login',
+            created_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            used INTEGER DEFAULT 0
+        )
+    """)
+
 
 def _run_migrations(conn):
     """Executa migrações de schema (ALTER TABLE)."""
