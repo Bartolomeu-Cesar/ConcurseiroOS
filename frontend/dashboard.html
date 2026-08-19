@@ -1372,6 +1372,7 @@
               <div style="display:flex;align-items:center;gap:6px;font-size:0.82rem;">
                 <span style="flex:1;color:#cdd6f4;font-weight:500;">${d.titulo}</span>
                 <span style="font-size:0.72rem;color:#9399b2;">${d.dias_restantes}d restantes</span>
+                <button onclick="editarDesafio(${d.id},'${d.titulo.replace(/'/g,"\\'")}','${d.meta_tipo}',${d.meta_valor},'${(d.materia||'').replace(/'/g,"\\'")}',${d.dias})" style="background:none;border:none;color:#89b4fa88;cursor:pointer;font-size:0.8rem;" title="Editar">✏️</button>
                 <button onclick="deleteDesafio(${d.id})" style="background:none;border:none;color:#f38ba855;cursor:pointer;font-size:0.8rem;" title="Remover">×</button>
               </div>
               <div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
@@ -1479,6 +1480,62 @@
         body: JSON.stringify({ titulo, meta_tipo: tipo, meta_valor: meta, materia, dias })
       });
       document.getElementById('criar-desafio-modal').remove();
+      loadDesafios();
+    }
+
+    function editarDesafio(id, titulo, metaTipo, metaValor, materia, dias) {
+      const overlay = document.createElement('div');
+      overlay.id = 'editar-desafio-modal';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;';
+      overlay.innerHTML = `<div style="background:#313244;border-radius:12px;padding:24px;max-width:400px;width:100%;">
+        <h3 style="color:#cba6f7;margin-bottom:12px;">✏️ Editar Desafio</h3>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <label style="font-size:0.8rem;color:#9399b2;">Título
+            <input id="edit-desafio-titulo" type="text" value="${titulo}" style="width:100%;padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;margin-top:4px;">
+          </label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <label style="font-size:0.8rem;color:#9399b2;">Tipo
+              <select id="edit-desafio-tipo" style="width:100%;padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;margin-top:4px;">
+                <option value="questoes" ${metaTipo==='questoes'?'selected':''}>❓ Questões</option>
+                <option value="horas" ${metaTipo==='horas'?'selected':''}>⏱ Horas</option>
+                <option value="flashcards" ${metaTipo==='flashcards'?'selected':''}>🧠 Flashcards</option>
+                <option value="topicos" ${metaTipo==='topicos'?'selected':''}>📋 Tópicos</option>
+              </select>
+            </label>
+            <label style="font-size:0.8rem;color:#9399b2;">Meta (quantidade)
+              <input id="edit-desafio-meta" type="number" value="${metaValor}" min="1" style="width:100%;padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;margin-top:4px;">
+            </label>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <label style="font-size:0.8rem;color:#9399b2;">Matéria (opcional)
+              <input id="edit-desafio-materia" type="text" value="${materia}" placeholder="Todas" style="width:100%;padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;margin-top:4px;">
+            </label>
+            <label style="font-size:0.8rem;color:#9399b2;">Prazo (dias)
+              <input id="edit-desafio-dias" type="number" value="${dias}" min="1" max="30" style="width:100%;padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;margin-top:4px;">
+            </label>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:16px;">
+          <button onclick="document.getElementById('editar-desafio-modal').remove()" style="flex:1;padding:10px;background:#45475a;color:#cdd6f4;border:none;border-radius:6px;cursor:pointer;">Cancelar</button>
+          <button onclick="salvarEdicaoDesafio(${id})" style="flex:1;padding:10px;background:#cba6f7;color:#1e1e2e;border:none;border-radius:6px;font-weight:600;cursor:pointer;">💾 Salvar</button>
+        </div>
+      </div>`;
+      document.body.appendChild(overlay);
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    }
+
+    async function salvarEdicaoDesafio(id) {
+      const titulo = document.getElementById('edit-desafio-titulo').value.trim();
+      const tipo = document.getElementById('edit-desafio-tipo').value;
+      const meta = parseInt(document.getElementById('edit-desafio-meta').value) || 30;
+      const materia = document.getElementById('edit-desafio-materia').value.trim();
+      const dias = parseInt(document.getElementById('edit-desafio-dias').value) || 7;
+      if (!titulo) return;
+      await fetch(`/api/desafios/${id}`, {
+        method: 'PUT', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ titulo, meta_tipo: tipo, meta_valor: meta, materia, dias })
+      });
+      document.getElementById('editar-desafio-modal').remove();
       loadDesafios();
     }
 

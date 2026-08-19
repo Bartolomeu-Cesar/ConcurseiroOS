@@ -1,7 +1,7 @@
 import random
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Body, Depends, HTTPException
 
 from constants import (
     LEVEL_XP,
@@ -206,6 +206,27 @@ def delete_desafio(id: int, conn=Depends(get_db_session)):
     conn.execute("DELETE FROM desafios WHERE id = ?", (id,))
     conn.commit()
     return {"ok": True}
+
+
+@router.put("/api/desafios/{id}")
+def update_desafio(id: int, body: dict = Body(...), conn=Depends(get_db_session)):
+    """Edita um desafio existente."""
+    existing = conn.execute("SELECT * FROM desafios WHERE id = ?", (id,)).fetchone()
+    if not existing:
+        raise HTTPException(status_code=404, detail="Desafio não encontrado")
+
+    titulo = body.get("titulo", existing["titulo"])
+    meta_tipo = body.get("meta_tipo", existing["meta_tipo"])
+    meta_valor = body.get("meta_valor", existing["meta_valor"])
+    materia = body.get("materia", existing["materia"])
+    dias = body.get("dias", existing["dias"])
+
+    conn.execute(
+        "UPDATE desafios SET titulo = ?, meta_tipo = ?, meta_valor = ?, materia = ?, dias = ? WHERE id = ?",
+        (titulo, meta_tipo, meta_valor, materia, dias, id)
+    )
+    conn.commit()
+    return {"ok": True, "id": id}
 
 
 @router.post("/api/desafios/atualizar-progresso")
