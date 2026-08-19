@@ -586,44 +586,35 @@ def _distribute_materias_to_days(materias_ranked: List[dict], num_days: int = 7)
     return days
 
 
-@router.get("/api/calendario-semanal", summary="Calendário Semanal", description="Gera programação semanal de estudos baseada em desempenho e edital")
+@router.get("/api/calendario-semanal", summary="Calendário Semanal", description="Gera programação semanal de estudos baseada no planejador inteligente")
 def calendario_semanal(edital_nome: str = "", cargo: str = "", horas_dia: float = Query(default=3.0), conn=Depends(get_db_session)):
-    """Gera calendário semanal de estudos com distribuição inteligente de matérias."""
+    """Gera calendário semanal de estudos. Cascata:
+    Calendário → verifica Planejador → se vazio gera → verifica Ciclo → se vazio gera dos editais.
+    """
     tempo_dia_min = int(horas_dia * 60)
 
-    # 1. Verificar se há ciclo ativo — se sim, usar como fonte principal
-    ciclo = conn.execute("SELECT * FROM ciclo_estudos WHERE ativo = 1 ORDER BY ordem, id").fetchall()
+    # 1. CASCATA: Verificar Planejador → se vazio, gerar (que por sua vez gera Ciclo se necessário)
+    planejador = conn.execute("SELECT * FROM planejador_semanal ORDER BY dia_semana, id").fetchall()
 
-    if ciclo:
-        # Usar matérias do ciclo com proporções de horas_alvo
-        materias_edital = []
-        total_alvo = sum(c["horas_alvo"] for c in ciclo) or 1
-        for c in ciclo:
-            # Buscar tópicos pendentes para essa matéria
-            pendentes = conn.execute(
-                "SELECT COUNT(*) FROM edital WHERE materia = ? AND status != 'Concluído' AND arquivado = 0",
-                (c["materia"],)
-            ).fetchone()[0]
-            materias_edital.append({
-                "materia": c["materia"],
-                "pendentes": pendentes,
-                "total": conn.execute("SELECT COUNT(*) FROM edital WHERE materia = ?", (c["materia"],)).fetchone()[0],
-                "horas_alvo": c["horas_alvo"],
-                "horas_cumpridas": c["horas_cumpridas"],
-                "peso_ciclo": c["horas_alvo"] / total_alvo,  # Proporção no ciclo
-            })
-    else:
-        # 1b. Sem ciclo: buscar matérias do edital (comportamento original)
-        materias_edital = _get_materias_edital_with_topics(conn, edital_nome, cargo)
+    planejador_gerado = False
+    ciclo_gerado = False
+    if not planejador:
+        # Gerar planejador automaticamente (que gera ciclo se necessário)
+        from routers.misc import gerar_planejador as _gerar_plan_fn
+        # Simular a chamada interna (não HTTP)
+        _gerar_planejador_interno(conn, horas_dia)
+        planejador = conn.execute("SELECT * FROM planejador_semanal ORDER BY dia_semana, id").fetchall()
+        planejador_gerado = True
 
-    if not materias_edital:
-        # Sem matérias: retornar calendário vazio com orientação
+    if not planejador:
+        # Se mesmo após geração não há nada (edital vazio)
         hoje = date.today()
         inicio_semana = hoje - timedelta(days=hoje.weekday())
         return {
             "semana_inicio": inicio_semana.isoformat(),
             "semana_fim": (inicio_semana + timedelta(days=6)).isoformat(),
             "horas_dia": horas_dia,
+            "planejador_gerado": False,
             "dias": [{
                 "dia_semana": i,
                 "nome": NOMES_DIAS[i],
@@ -635,43 +626,26 @@ def calendario_semanal(edital_nome: str = "", cargo: str = "", horas_dia: float 
             "resumo": {"total_materias": 0, "horas_semana": 0, "distribuicao": []}
         }
 
-    # 2. Obter desempenho por matéria
+    # 2. Agrupar planejador por dia
+    plan_por_dia = {i: [] for i in range(7)}
+    for p in planejador:
+        plan_por_dia[p["dia_semana"]].append({"materia": p["materia"], "horas": p["horas"]})
+
+    # 3. Obter desempenho e revisões pendentes
     desempenho = _get_performance_by_subject(conn)
-
-    # 3. Rankear matérias
-    for m in materias_edital:
-        perf = desempenho.get(m["materia"], {})
-        pct = perf.get("pct", 0)
-        m["pct_acerto"] = pct
-        if "peso_ciclo" in m:
-            # Ciclo ativo: score baseado em peso do ciclo + desempenho
-            # Matérias com mais horas_alvo e pior desempenho = prioridade
-            m["score"] = (100 - pct) + m["peso_ciclo"] * 100 + m["pendentes"]
-        else:
-            # Sem ciclo: score original (desempenho + pendentes)
-            m["score"] = (100 - pct) + m["pendentes"] * 2
-
-    materias_edital.sort(key=lambda x: -x["score"])
-
-    # 4. Distribuir matérias nos dias
-    days_materias = _distribute_materias_to_days(materias_edital)
-
-    # 5. Revisões SRS pendentes
     pending = _get_pending_reviews(conn)
 
-    # 6. Montar calendário
+    # 4. Montar calendário enriquecido a partir do planejador
     hoje = date.today()
     inicio_semana = hoje - timedelta(days=hoje.weekday())
     dias = []
-    distribuicao_map = {}  # materia -> set of day indices
+    distribuicao_map = {}
 
     for day_idx in range(7):
         data_dia = inicio_semana + timedelta(days=day_idx)
         atividades = []
         tempo_restante = tempo_dia_min
         materias_do_dia = []
-
-        # Domingo = dia leve
         is_domingo = day_idx == 6
 
         # Revisão de flashcards no início (todos os dias)
@@ -685,9 +659,12 @@ def calendario_semanal(edital_nome: str = "", cargo: str = "", horas_dia: float 
             })
             tempo_restante -= tempo_flash
 
-        if is_domingo:
-            # Domingo: só revisão + questões das matérias mais fracas
-            if tempo_restante > 0 and pending["topicos"] > 0:
+        # Usar matérias do planejador para este dia
+        day_plan = plan_por_dia.get(day_idx, [])
+
+        if is_domingo and not day_plan:
+            # Domingo sem planejamento: revisão leve
+            if pending["topicos"] > 0:
                 tempo_top = min(15, tempo_restante)
                 atividades.append({
                     "tipo": "revisao",
@@ -696,24 +673,6 @@ def calendario_semanal(edital_nome: str = "", cargo: str = "", horas_dia: float 
                     "materia": None
                 })
                 tempo_restante -= tempo_top
-
-            # Questões das matérias mais fracas
-            weakest = materias_edital[:2] if len(materias_edital) >= 2 else materias_edital
-            for mat_info in weakest:
-                if tempo_restante < 20:
-                    break
-                tempo_questoes = min(30, tempo_restante)
-                qtd = max(5, tempo_questoes // 2)
-                atividades.append({
-                    "tipo": "questoes",
-                    "materia": mat_info["materia"],
-                    "qtd": qtd,
-                    "tempo_min": tempo_questoes
-                })
-                materias_do_dia.append(mat_info["materia"])
-                tempo_restante -= tempo_questoes
-
-            # Revisão final
             if tempo_restante >= 10:
                 atividades.append({
                     "tipo": "revisao",
@@ -722,28 +681,17 @@ def calendario_semanal(edital_nome: str = "", cargo: str = "", horas_dia: float 
                     "materia": None
                 })
                 tempo_restante -= min(15, tempo_restante)
-        else:
-            # Dias normais: estudo + questões por matéria
-            day_mats = days_materias[day_idx]
-            if not day_mats:
-                day_mats = materias_edital[:2]
-
-            num_materias = len(day_mats)
-            if num_materias == 0:
-                num_materias = 1
-
+        elif day_plan:
             # Reservar tempo para revisão final
             tempo_revisao_final = 10
             tempo_para_materias = tempo_restante - tempo_revisao_final
+            num_materias = len(day_plan)
 
-            # Distribuir tempo entre matérias
-            tempo_por_materia = tempo_para_materias // num_materias if num_materias > 0 else 0
-
-            for mat_info in day_mats:
+            for slot in day_plan:
                 if tempo_para_materias <= 0:
                     break
 
-                materia_nome = mat_info["materia"]
+                materia_nome = slot["materia"]
                 materias_do_dia.append(materia_nome)
 
                 # Track distribuição
@@ -751,14 +699,31 @@ def calendario_semanal(edital_nome: str = "", cargo: str = "", horas_dia: float 
                     distribuicao_map[materia_nome] = {"dias": [], "tempo_total": 0}
                 distribuicao_map[materia_nome]["dias"].append(day_idx)
 
-                # Buscar tópicos
+                # Calcular tempo proporcional às horas alocadas no planejador
+                total_horas_dia = sum(s["horas"] for s in day_plan) or 1
+                proporcao = slot["horas"] / total_horas_dia
+                tempo_materia = int(tempo_para_materias * proporcao)
+
+                # Buscar tópicos pendentes
                 topicos = _get_uncompleted_topics(conn, materia_nome, edital_nome, cargo, limit=3)
                 if not topicos:
                     topicos = ["Revisão geral"]
 
-                # Tempo de estudo (60% do tempo da matéria)
-                tempo_estudo = int(tempo_por_materia * 0.6)
-                tempo_questoes = int(tempo_por_materia * 0.3)
+                # Distribuir: 60% estudo, 30% questões, 10% revisão rápida
+                tempo_estudo = int(tempo_materia * 0.6)
+                tempo_questoes = int(tempo_materia * 0.3)
+
+                # Matérias com pior desempenho = mais questões, menos teoria
+                perf = desempenho.get(materia_nome, {})
+                pct = perf.get("pct", 0)
+                if pct < 50 and perf.get("total", 0) > 0:
+                    # Fraca: mais questões para praticar
+                    tempo_estudo = int(tempo_materia * 0.45)
+                    tempo_questoes = int(tempo_materia * 0.45)
+                elif pct > 80:
+                    # Forte: mais teoria para avançar, menos questões
+                    tempo_estudo = int(tempo_materia * 0.7)
+                    tempo_questoes = int(tempo_materia * 0.2)
 
                 if tempo_estudo >= 15:
                     atividades.append({
@@ -799,11 +764,9 @@ def calendario_semanal(edital_nome: str = "", cargo: str = "", horas_dia: float 
             "materias": materias_do_dia
         })
 
-    # 7. Montar resumo
+    # 5. Montar resumo
     distribuicao = []
     for materia, info in distribuicao_map.items():
-        horas_semana = round(info["tempo_total"] * len(info["dias"]) / 60, 1)
-        # Recalcular baseado no tempo real alocado
         tempo_total_materia = sum(
             a["tempo_min"]
             for d in dias
@@ -815,23 +778,136 @@ def calendario_semanal(edital_nome: str = "", cargo: str = "", horas_dia: float 
             "dias": sorted(set(info["dias"])),
             "horas_semana": round(tempo_total_materia / 60, 1)
         })
-
     distribuicao.sort(key=lambda x: -x["horas_semana"])
 
     horas_semana_total = round(sum(d["tempo_total_min"] for d in dias) / 60, 1)
+    total_materias = len(set(m for d in dias for m in d["materias"]))
 
-    log.info(f"Calendário semanal gerado: {len(materias_edital)} matérias, {horas_semana_total}h/semana")
+    log.info(f"Calendário semanal gerado: {total_materias} matérias, {horas_semana_total}h/semana (planejador_gerado={planejador_gerado})")
     return {
         "semana_inicio": inicio_semana.isoformat(),
         "semana_fim": (inicio_semana + timedelta(days=6)).isoformat(),
         "horas_dia": horas_dia,
+        "planejador_gerado": planejador_gerado,
         "dias": dias,
         "resumo": {
-            "total_materias": len(set(m["materia"] for m in materias_edital)),
+            "total_materias": total_materias,
             "horas_semana": horas_semana_total,
             "distribuicao": distribuicao
         }
     }
+
+
+def _gerar_planejador_interno(conn, horas_dia: float = 3.0):
+    """Gera planejador internamente (sem HTTP). Cascata: gera ciclo se necessário."""
+    from routers.ciclo import _gerar_ciclo_automatico
+
+    # Verificar ciclo
+    ciclo = conn.execute("SELECT * FROM ciclo_estudos WHERE ativo = 1 ORDER BY ordem, id").fetchall()
+    if not ciclo:
+        _gerar_ciclo_automatico(conn, horas_dia)
+        ciclo = conn.execute("SELECT * FROM ciclo_estudos WHERE ativo = 1 ORDER BY ordem, id").fetchall()
+
+    if not ciclo:
+        return  # Sem matérias no edital
+
+    # Scoring por matéria
+    materias_scored = []
+    for c in ciclo:
+        mat = c["materia"]
+        desemp = conn.execute("""
+            SELECT COUNT(*) as total, COALESCE(SUM(qr.acertou), 0) as acertos
+            FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id
+            WHERE q.materia = ?
+        """, (mat,)).fetchone()
+        total_q = desemp[0] or 0
+        pct_acerto = (desemp[1] / total_q * 100) if total_q > 0 else 0
+
+        horas_estudadas = conn.execute(
+            "SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE materia = ?", (mat,)
+        ).fetchone()[0]
+
+        pendentes = conn.execute(
+            "SELECT COUNT(*) FROM edital WHERE materia = ? AND status != 'Concluído' AND arquivado = 0", (mat,)
+        ).fetchone()[0]
+
+        ultima = conn.execute("SELECT MAX(data) FROM sessoes_estudo WHERE materia = ?", (mat,)).fetchone()[0]
+        if ultima:
+            try:
+                dias_sem = (date.today() - date.fromisoformat(ultima)).days
+            except (ValueError, TypeError):
+                dias_sem = 30
+        else:
+            dias_sem = 999
+
+        score = (100 - pct_acerto) * 0.35 + min(pendentes * 2, 25) + c["horas_alvo"] * 5
+        if horas_estudadas < c["horas_alvo"] * 2:
+            score += 10
+        if dias_sem >= 999:
+            score += 15
+        elif dias_sem >= 7:
+            score += 8
+        if total_q == 0:
+            score += 8
+
+        materias_scored.append({"materia": mat, "score": score, "horas_alvo": c["horas_alvo"], "pct_acerto": pct_acerto})
+
+    materias_scored.sort(key=lambda x: -x["score"])
+
+    # Frequência por tier
+    total_mats = len(materias_scored)
+    for i, m in enumerate(materias_scored):
+        pos = i / max(total_mats, 1)
+        m["freq"] = 3 if pos < 0.3 else 2 if pos < 0.65 else 1
+
+    # Distribuir em 6 dias
+    SLOTS_POR_DIA = [3, 2, 3, 2, 3, 2]
+    dias = [[] for _ in range(7)]
+    pool = []
+    for m in materias_scored:
+        pool.extend([m] * m["freq"])
+
+    last_day_materias = set()
+    pool_idx = 0
+    for dia in range(6):
+        target = SLOTS_POR_DIA[dia]
+        used_today = set()
+        attempts = 0
+        search_idx = pool_idx
+        while len(dias[dia]) < target and attempts < len(pool) * 3:
+            if not pool:
+                break
+            candidate = pool[search_idx % len(pool)]
+            if candidate["materia"] not in last_day_materias and candidate["materia"] not in used_today:
+                horas_slot = round(horas_dia / target, 1)
+                if candidate["score"] > 50:
+                    horas_slot = round(horas_slot * 1.2, 1)
+                horas_slot = min(2.0, max(0.5, horas_slot))
+                dias[dia].append({"materia": candidate["materia"], "horas": horas_slot})
+                used_today.add(candidate["materia"])
+                pool_idx = (search_idx + 1) % len(pool)
+            search_idx += 1
+            attempts += 1
+        if len(dias[dia]) < target:
+            for m in materias_scored:
+                if m["materia"] not in used_today:
+                    dias[dia].append({"materia": m["materia"], "horas": round(horas_dia / target, 1)})
+                    used_today.add(m["materia"])
+                    if len(dias[dia]) >= target:
+                        break
+        last_day_materias = used_today
+
+    # Domingo revisão
+    for m in materias_scored[:2]:
+        dias[6].append({"materia": m["materia"], "horas": 0.5})
+
+    # Salvar
+    conn.execute("DELETE FROM planejador_semanal")
+    for dia_idx, slots in enumerate(dias):
+        for slot in slots:
+            conn.execute("INSERT INTO planejador_semanal (dia_semana, materia, horas) VALUES (?, ?, ?)",
+                         (dia_idx, slot["materia"], slot["horas"]))
+    conn.commit()
 
 
 # ============================================================

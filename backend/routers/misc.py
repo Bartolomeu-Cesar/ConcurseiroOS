@@ -219,6 +219,228 @@ def delete_planejador(id: int, conn=Depends(get_db_session)):
     return {"ok": True}
 
 
+@router.post("/api/planejador/gerar", summary="Gerar planejador automaticamente",
+             description="Distribui matérias do ciclo nos dias da semana com scoring inteligente")
+def gerar_planejador(horas_dia: float = Query(default=3.0), conn=Depends(get_db_session)):
+    """
+    Gera planejador semanal inteligente. Cascata:
+    1. Verifica se há ciclo ativo → se não, gera automaticamente dos editais
+    2. Distribui matérias nos dias otimizando aprendizado:
+       - Intercalação forçada (mesma matéria nunca em dias consecutivos)
+       - Matérias difíceis (pior desempenho + menos horas) = mais frequentes
+       - Espaçamento otimizado para retenção de longo prazo
+       - Variação cognitiva (2-3 matérias/dia para evitar fadiga)
+    """
+    # 1. Verificar ciclo ativo
+    ciclo = conn.execute("SELECT * FROM ciclo_estudos WHERE ativo = 1 ORDER BY ordem, id").fetchall()
+
+    ciclo_gerado = False
+    if not ciclo:
+        # Gerar ciclo automaticamente dos editais
+        from routers.ciclo import _gerar_ciclo_automatico
+        result = _gerar_ciclo_automatico(conn, horas_dia)
+        if not result["ok"]:
+            from fastapi import HTTPException as HE
+            raise HE(status_code=400, detail="Não há matérias no edital para gerar o planejador")
+        ciclo = conn.execute("SELECT * FROM ciclo_estudos WHERE ativo = 1 ORDER BY ordem, id").fetchall()
+        ciclo_gerado = True
+
+    # 2. Calcular scoring por matéria (desempenho + horas + gaps)
+    materias_scored = []
+    for c in ciclo:
+        mat = c["materia"]
+
+        # Desempenho em questões
+        desemp = conn.execute("""
+            SELECT COUNT(*) as total, COALESCE(SUM(qr.acertou), 0) as acertos
+            FROM questoes_respostas qr
+            JOIN questoes q ON q.id = qr.questao_id
+            WHERE q.materia = ?
+        """, (mat,)).fetchone()
+        total_q = desemp[0] or 0
+        pct_acerto = (desemp[1] / total_q * 100) if total_q > 0 else 0
+
+        # Horas já estudadas
+        horas_estudadas = conn.execute(
+            "SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE materia = ?", (mat,)
+        ).fetchone()[0]
+
+        # Tópicos pendentes
+        pendentes = conn.execute(
+            "SELECT COUNT(*) FROM edital WHERE materia = ? AND status != 'Concluído' AND arquivado = 0",
+            (mat,)
+        ).fetchone()[0]
+
+        # Dias sem estudar
+        ultima = conn.execute(
+            "SELECT MAX(data) FROM sessoes_estudo WHERE materia = ?", (mat,)
+        ).fetchone()[0]
+        if ultima:
+            try:
+                dias_sem = (date.today() - date.fromisoformat(ultima)).days
+            except (ValueError, TypeError):
+                dias_sem = 30
+        else:
+            dias_sem = 999
+
+        # SCORING para distribuição semanal:
+        # Maior score = precisa aparecer mais vezes na semana
+        score = 0.0
+        score += (100 - pct_acerto) * 0.35  # Pior acerto = mais frequente (0-35)
+        score += min(pendentes * 2, 25)      # Mais pendentes = mais urgente (0-25)
+        score += c["horas_alvo"] * 5          # Respeitar proporção do ciclo (0-20)
+
+        # Penalizar matérias com pouco estudo acumulado
+        if horas_estudadas < c["horas_alvo"] * 2:
+            score += 10  # Ainda precisa de muito estudo
+
+        # Matéria nunca estudada / muito tempo sem estudar
+        if dias_sem >= 999:
+            score += 15
+        elif dias_sem >= 7:
+            score += 8
+        elif dias_sem >= 3:
+            score += 4
+
+        # Nunca fez questão = risco, precisa praticar
+        if total_q == 0:
+            score += 8
+
+        materias_scored.append({
+            "materia": mat,
+            "score": round(score, 2),
+            "horas_alvo": c["horas_alvo"],
+            "pct_acerto": round(pct_acerto, 1),
+            "horas_estudadas": round(horas_estudadas, 1),
+            "pendentes": pendentes,
+            "dias_sem": dias_sem if dias_sem < 999 else None,
+        })
+
+    # 3. Ordenar por score (maior prioridade primeiro)
+    materias_scored.sort(key=lambda x: -x["score"])
+
+    # 4. Determinar frequência semanal por matéria
+    # Dividir em tiers: difíceis 3x/semana, médias 2x, fáceis 1x
+    total_mats = len(materias_scored)
+    for i, m in enumerate(materias_scored):
+        pos_relativa = i / max(total_mats, 1)
+        if pos_relativa < 0.3:
+            m["freq"] = 3  # Top 30% mais difíceis: 3x/semana
+        elif pos_relativa < 0.65:
+            m["freq"] = 2  # Meio: 2x/semana
+        else:
+            m["freq"] = 1  # Mais fáceis: 1x/semana
+
+    # 5. Distribuir nos 6 dias úteis (domingo = descanso/revisão leve)
+    DIAS_ESTUDO = 6  # Seg a Sáb
+    SLOTS_POR_DIA = [3, 2, 3, 2, 3, 2]  # Alternância para variedade
+    dias = [[] for _ in range(7)]  # 0=Seg, 6=Dom
+
+    # Criar pool de matérias repetidas pela frequência
+    pool = []
+    for m in materias_scored:
+        pool.extend([m] * m["freq"])
+
+    # Distribuir com intercalação forçada
+    last_day_materias = set()
+    pool_idx = 0
+
+    for dia in range(DIAS_ESTUDO):
+        target_slots = SLOTS_POR_DIA[dia]
+        used_today = set()
+        attempts = 0
+        search_idx = pool_idx
+
+        while len(dias[dia]) < target_slots and attempts < len(pool) * 3:
+            if not pool:
+                break
+            candidate = pool[search_idx % len(pool)]
+            cand_name = candidate["materia"]
+
+            # INTERCALAÇÃO: não repetir do dia anterior NEM no mesmo dia
+            if cand_name not in last_day_materias and cand_name not in used_today:
+                # Horas proporcionais ao score e tempo disponível
+                horas_slot = round(horas_dia / target_slots, 1)
+                # Matérias mais difíceis ganham um pouco mais de tempo
+                if candidate["score"] > 50:
+                    horas_slot = round(horas_slot * 1.2, 1)
+                horas_slot = min(horas_slot, 2.0)  # Cap 2h por slot
+                horas_slot = max(horas_slot, 0.5)  # Min 30min
+
+                dias[dia].append({
+                    "materia": cand_name,
+                    "horas": horas_slot,
+                    "score": candidate["score"],
+                    "pct_acerto": candidate["pct_acerto"],
+                })
+                used_today.add(cand_name)
+                pool_idx = (search_idx + 1) % len(pool)
+
+            search_idx += 1
+            attempts += 1
+
+        # Fallback: se não preencheu, relaxar restrição
+        if len(dias[dia]) < target_slots:
+            for m in materias_scored:
+                if m["materia"] not in used_today:
+                    horas_slot = round(horas_dia / target_slots, 1)
+                    dias[dia].append({
+                        "materia": m["materia"],
+                        "horas": horas_slot,
+                        "score": m["score"],
+                        "pct_acerto": m["pct_acerto"],
+                    })
+                    used_today.add(m["materia"])
+                    if len(dias[dia]) >= target_slots:
+                        break
+
+        last_day_materias = used_today
+
+    # Domingo: revisão leve das matérias mais fracas
+    weakest = materias_scored[:2] if len(materias_scored) >= 2 else materias_scored
+    for m in weakest:
+        dias[6].append({
+            "materia": m["materia"],
+            "horas": 0.5,
+            "score": m["score"],
+            "pct_acerto": m["pct_acerto"],
+        })
+
+    # 6. Salvar no banco (limpar e recriar)
+    conn.execute("DELETE FROM planejador_semanal")
+    count = 0
+    for dia_idx, slots in enumerate(dias):
+        for slot in slots:
+            conn.execute(
+                "INSERT INTO planejador_semanal (dia_semana, materia, horas) VALUES (?, ?, ?)",
+                (dia_idx, slot["materia"], slot["horas"])
+            )
+            count += 1
+    conn.commit()
+
+    log.info(f"Planejador gerado: {count} slots em 7 dias (ciclo_gerado={ciclo_gerado})")
+
+    # Retornar resumo
+    nomes_dias = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
+    resumo_dias = []
+    for i, slots in enumerate(dias):
+        resumo_dias.append({
+            "dia": nomes_dias[i],
+            "dia_semana": i,
+            "materias": [{"materia": s["materia"], "horas": s["horas"]} for s in slots],
+            "horas_total": round(sum(s["horas"] for s in slots), 1),
+        })
+
+    return {
+        "ok": True,
+        "ciclo_gerado": ciclo_gerado,
+        "total_slots": count,
+        "horas_dia": horas_dia,
+        "dias": resumo_dias,
+        "scoring": materias_scored[:10],  # Top 10 para referência
+    }
+
+
 # ============================================================
 # CADERNOS
 # ============================================================

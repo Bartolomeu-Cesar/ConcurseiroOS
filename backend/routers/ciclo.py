@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from datetime import date
+
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 
 from database import get_db_session
 from logger import log
@@ -6,6 +8,165 @@ from models import CicloCreate, CicloHoras, CicloUpdate
 from utils import today_str
 
 router = APIRouter(prefix="", tags=["Ciclo de Estudos"])
+
+
+# ============================================================
+# GERAÇÃO AUTOMÁTICA DO CICLO (SCORING INTELIGENTE)
+# ============================================================
+
+def _calcular_score_materia(materia: str, conn) -> dict:
+    """
+    Calcula o score de prioridade de uma matéria para o ciclo.
+    Fatores:
+    - Tópicos pendentes (mais pendentes = mais importante para aprovação)
+    - Desempenho em questões (pior acerto = precisa reforçar)
+    - Horas já estudadas vs peso no edital (pouco estudo = precisa mais)
+    - Dias sem estudar (mais dias = precisa revisão urgente)
+    - Matéria nunca estudada = prioridade máxima
+    """
+    # 1. Tópicos pendentes vs total
+    topicos = conn.execute("""
+        SELECT COUNT(*) as total,
+               SUM(CASE WHEN status != 'Concluído' THEN 1 ELSE 0 END) as pendentes
+        FROM edital WHERE materia = ? AND arquivado = 0
+    """, (materia,)).fetchone()
+    total_topicos = topicos[0] or 1
+    pendentes = topicos[1] or 0
+    pct_pendente = pendentes / total_topicos  # 0.0 a 1.0
+
+    # 2. Desempenho em questões
+    desempenho = conn.execute("""
+        SELECT COUNT(*) as total, SUM(qr.acertou) as acertos
+        FROM questoes_respostas qr
+        JOIN questoes q ON q.id = qr.questao_id
+        WHERE q.materia = ?
+    """, (materia,)).fetchone()
+    total_questoes = desempenho[0] or 0
+    acertos = desempenho[1] or 0
+    pct_acerto = (acertos / total_questoes * 100) if total_questoes > 0 else 0
+    # Penalizar falta de questões (nunca praticou = risco)
+    fator_pratica = 1.0 if total_questoes >= 10 else 1.3 if total_questoes == 0 else 1.1
+
+    # 3. Horas já estudadas
+    horas = conn.execute("""
+        SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE materia = ?
+    """, (materia,)).fetchone()[0]
+
+    # 4. Dias sem estudar
+    ultima_sessao = conn.execute("""
+        SELECT MAX(data) FROM sessoes_estudo WHERE materia = ?
+    """, (materia,)).fetchone()[0]
+    if ultima_sessao:
+        try:
+            dias_sem = (date.today() - date.fromisoformat(ultima_sessao)).days
+        except (ValueError, TypeError):
+            dias_sem = 30
+    else:
+        dias_sem = 999  # Nunca estudou
+
+    # ============ SCORING ============
+    # Score alto = mais prioridade = mais horas no ciclo
+    score = 0.0
+
+    # Peso do edital: matérias com mais tópicos pendentes são mais críticas
+    score += pct_pendente * 40  # 0-40 pontos
+
+    # Desempenho ruim = precisa reforçar
+    score += (100 - pct_acerto) * 0.3 * fator_pratica  # 0-39 pontos
+
+    # Dias sem estudar: penalização crescente
+    if dias_sem >= 999:
+        score += 20  # Nunca estudou = prioridade alta
+    elif dias_sem >= 14:
+        score += 15
+    elif dias_sem >= 7:
+        score += 10
+    elif dias_sem >= 3:
+        score += 5
+
+    # Pouco estudo acumulado para uma matéria pesada
+    horas_esperadas = total_topicos * 0.5  # ~30min por tópico como mínimo
+    if horas_esperadas > 0 and horas < horas_esperadas:
+        deficit = (horas_esperadas - horas) / horas_esperadas
+        score += deficit * 10  # 0-10 pontos
+
+    return {
+        "materia": materia,
+        "score": round(score, 2),
+        "total_topicos": total_topicos,
+        "pendentes": pendentes,
+        "pct_acerto": round(pct_acerto, 1),
+        "total_questoes": total_questoes,
+        "horas_estudadas": round(horas, 1),
+        "dias_sem_estudar": dias_sem if dias_sem < 999 else None,
+    }
+
+
+def _gerar_ciclo_automatico(conn, horas_dia: float = 3.0) -> dict:
+    """Gera ciclo automaticamente a partir dos editais com scoring inteligente.
+    Retorna info sobre o ciclo gerado."""
+    # Buscar todas as matérias ativas no edital
+    materias = conn.execute("""
+        SELECT DISTINCT materia FROM edital
+        WHERE arquivado = 0 AND materia != ''
+    """).fetchall()
+
+    if not materias:
+        return {"ok": False, "erro": "Nenhuma matéria encontrada no edital", "gerados": 0}
+
+    # Calcular score de cada matéria
+    scored = []
+    for row in materias:
+        info = _calcular_score_materia(row[0], conn)
+        scored.append(info)
+
+    # Ordenar por score (maior prioridade primeiro)
+    scored.sort(key=lambda x: -x["score"])
+
+    # Limpar ciclo existente
+    conn.execute("DELETE FROM ciclo_estudos")
+
+    # Converter scores em horas_alvo proporcionais
+    # Score mais alto = mais horas. Mínimo 0.5h, máximo proporcional ao total disponível
+    total_score = sum(m["score"] for m in scored) or 1
+    total_horas_semana = horas_dia * 6  # 6 dias úteis
+
+    for i, m in enumerate(scored):
+        # Proporção do score → horas na semana → horas por ciclo (alvo)
+        proporcao = m["score"] / total_score
+        horas_alvo = max(0.5, round(proporcao * total_horas_semana, 1))
+        # Cap em 4h para não dominar
+        horas_alvo = min(4.0, horas_alvo)
+
+        conn.execute(
+            "INSERT INTO ciclo_estudos (materia, horas_alvo, horas_cumpridas, ordem, ativo) VALUES (?, ?, 0, ?, 1)",
+            (m["materia"], horas_alvo, i + 1)
+        )
+
+    conn.commit()
+    log.info(f"Ciclo auto-gerado: {len(scored)} matérias")
+
+    return {
+        "ok": True,
+        "gerados": len(scored),
+        "horas_dia": horas_dia,
+        "materias": scored[:10],  # Top 10 para referência
+    }
+
+
+@router.post("/api/ciclo/gerar-automatico", summary="Gerar ciclo automaticamente",
+             description="Analisa editais, desempenho e dificuldades para gerar ciclo inteligente")
+def gerar_ciclo_automatico(horas_dia: float = Query(default=3.0), conn=Depends(get_db_session)):
+    """Gera ciclo de estudos baseado em:
+    - Matérias com mais tópicos pendentes (críticas para aprovação)
+    - Pior desempenho em questões (dificuldades do usuário)
+    - Menos horas estudadas / Nunca estudadas (gaps)
+    - Mais dias sem estudar (necessidade de revisão)
+    """
+    result = _gerar_ciclo_automatico(conn, horas_dia)
+    if not result["ok"]:
+        raise HTTPException(status_code=400, detail=result["erro"])
+    return result
 
 
 @router.get("/api/ciclo")
