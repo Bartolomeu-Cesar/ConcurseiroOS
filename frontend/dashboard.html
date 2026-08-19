@@ -210,6 +210,59 @@
     @media (max-width: 768px) {
       .dash-tab { padding: 10px 12px; font-size: 0.78rem; }
     }
+
+    /* Calendário Semanal */
+    .cal-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 8px;
+    }
+    @media (max-width: 768px) {
+      .cal-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 480px) {
+      .cal-grid { grid-template-columns: 1fr; }
+    }
+    .cal-day {
+      background: #1e1e2e;
+      border-radius: 10px;
+      padding: 12px;
+      min-height: 200px;
+      border: 1px solid #45475a;
+      transition: border-color 0.2s;
+    }
+    .cal-day:hover { border-color: #cba6f7; }
+    .cal-day.today { border-color: #a6e3a1; border-width: 2px; }
+    .cal-day-header {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #cba6f7;
+      margin-bottom: 8px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid #45475a;
+    }
+    .cal-day-header .cal-date { font-size: 0.72rem; color: #9399b2; font-weight: 400; }
+    .cal-activity {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      padding: 5px 0;
+      font-size: 0.75rem;
+      border-bottom: 1px solid #313244;
+    }
+    .cal-activity:last-child { border-bottom: none; }
+    .cal-activity-icon { font-size: 0.85rem; min-width: 18px; }
+    .cal-activity-info { flex: 1; }
+    .cal-activity-materia { font-weight: 600; color: #cdd6f4; }
+    .cal-activity-detail { color: #9399b2; font-size: 0.7rem; margin-top: 2px; }
+    .cal-activity-time { font-size: 0.7rem; color: #89b4fa; white-space: nowrap; }
+    .cal-day-footer { margin-top: 8px; padding-top: 6px; border-top: 1px solid #45475a; font-size: 0.72rem; color: #9399b2; }
+    body.light-theme .cal-day { background: #dce0e8; border-color: #bcc0cc; }
+    body.light-theme .cal-day:hover { border-color: #8839ef; }
+    body.light-theme .cal-day.today { border-color: #40a02b; }
+    body.light-theme .cal-day-header { color: #8839ef; border-bottom-color: #bcc0cc; }
+    body.light-theme .cal-activity { border-bottom-color: #e6e9ef; }
+    body.light-theme .cal-activity-materia { color: #4c4f69; }
   </style>
 </head>
 <body>
@@ -229,6 +282,7 @@
   <div class="dash-tabs">
     <button class="dash-tab active" data-panel="panel-overview">📊 Visão Geral</button>
     <button class="dash-tab" data-panel="panel-treinador">🧠 Treinador</button>
+    <button class="dash-tab" data-panel="panel-calendario">📅 Calendário</button>
     <button class="dash-tab" data-panel="panel-analytics">📈 Analytics</button>
     <button class="dash-tab" data-panel="panel-gamification">🏆 Gamificação</button>
     <button class="dash-tab" data-panel="panel-plans">📋 Planos</button>
@@ -322,6 +376,31 @@
       <div class="chart-box">
         <h3>🔀 Intercalação Forçada (Sugestão)</h3>
         <div id="intercalacao-box"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Calendário Semanal -->
+  <div id="panel-calendario" class="dash-panel">
+    <div class="charts" style="grid-template-columns: 1fr;">
+      <div class="chart-box" style="grid-column: span 2; padding: 20px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+          <h3 style="margin:0;">📅 Calendário Semanal de Estudos</h3>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span style="font-size:0.8rem;color:#9399b2;">Horas/dia:</span>
+            <select id="cal-horas" onchange="loadCalendario()" style="background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:6px;padding:4px 8px;font-size:0.85rem;">
+              <option value="2">2h</option>
+              <option value="3" selected>3h</option>
+              <option value="4">4h</option>
+              <option value="5">5h</option>
+              <option value="6">6h</option>
+              <option value="8">8h</option>
+            </select>
+            <button onclick="loadCalendario()" style="background:#45475a;color:#cdd6f4;border:none;border-radius:6px;padding:5px 12px;font-size:0.8rem;cursor:pointer;">🔄 Atualizar</button>
+          </div>
+        </div>
+        <div id="calendario-grid"></div>
+        <div id="calendario-resumo" style="margin-top:16px;"></div>
       </div>
     </div>
   </div>
@@ -1118,6 +1197,69 @@
       } catch(e) { console.error('RaioX error:', e); }
     }
 
+    async function loadCalendario() {
+      const el = document.getElementById('calendario-grid');
+      const resumoEl = document.getElementById('calendario-resumo');
+      const horas = document.getElementById('cal-horas')?.value || '3';
+
+      el.innerHTML = '<div style="text-align:center;color:#9399b2;padding:20px;">Gerando calendário...</div>';
+
+      try {
+        const data = await fetch(`/api/calendario-semanal?horas_dia=${horas}`).then(r => r.json());
+        const hoje = new Date().toISOString().split('T')[0];
+        const icons = {revisao: '🧠', estudo: '📚', questoes: '❓', pausa: '☕'};
+
+        let html = '<div class="cal-grid">';
+        for (const dia of data.dias) {
+          const isToday = dia.data === hoje;
+          html += `<div class="cal-day ${isToday ? 'today' : ''}">`;
+          html += `<div class="cal-day-header">${dia.nome} <span class="cal-date">${dia.data.substring(5)}</span></div>`;
+
+          for (const ativ of dia.atividades) {
+            const icon = icons[ativ.tipo] || '📌';
+            const materia = ativ.materia || '';
+            let detail = '';
+            if (ativ.topicos && ativ.topicos.length) detail = ativ.topicos.join(', ');
+            else if (ativ.qtd) detail = `${ativ.qtd} questões`;
+            else if (ativ.descricao) detail = ativ.descricao;
+
+            html += `<div class="cal-activity">`;
+            html += `<span class="cal-activity-icon">${icon}</span>`;
+            html += `<div class="cal-activity-info">`;
+            if (materia) html += `<div class="cal-activity-materia">${materia}</div>`;
+            if (detail) html += `<div class="cal-activity-detail">${detail}</div>`;
+            html += `</div>`;
+            html += `<span class="cal-activity-time">${ativ.tempo_min}min</span>`;
+            html += `</div>`;
+          }
+
+          html += `<div class="cal-day-footer">⏱ ${dia.tempo_total_min}min total</div>`;
+          html += `</div>`;
+        }
+        html += '</div>';
+        el.innerHTML = html;
+
+        // Resumo
+        if (data.resumo) {
+          let rhtml = `<div style="display:flex;flex-wrap:wrap;gap:12px;font-size:0.8rem;">`;
+          rhtml += `<span style="color:#9399b2;">📚 ${data.resumo.total_materias} matérias</span>`;
+          rhtml += `<span style="color:#9399b2;">⏰ ${data.resumo.horas_semana}h/semana</span>`;
+          if (data.resumo.distribuicao) {
+            rhtml += `</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">`;
+            data.resumo.distribuicao.forEach(d => {
+              const dias = d.dias.map(i => ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'][i]).join(', ');
+              rhtml += `<span style="background:#313244;padding:3px 8px;border-radius:12px;font-size:0.72rem;">${d.materia}: <strong style="color:#89b4fa;">${dias}</strong></span>`;
+            });
+          }
+          rhtml += `</div>`;
+          resumoEl.innerHTML = rhtml;
+        }
+      } catch(e) {
+        el.innerHTML = '<div style="color:#f38ba8;text-align:center;padding:20px;">Erro ao gerar calendário. Adicione matérias ao edital primeiro.</div>';
+        console.error('Calendario error:', e);
+      }
+    }
+
     // Carregar dados da aba ativa
     function loadActivePanel() {
       const active = document.querySelector('.dash-panel.active')?.id;
@@ -1134,6 +1276,9 @@
           loadRevisoesPendentes();
           loadDailyChallenge();
           loadIntercalacao();
+          break;
+        case 'panel-calendario':
+          loadCalendario();
           break;
         case 'panel-analytics':
           loadEvolucao();

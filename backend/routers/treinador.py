@@ -1,5 +1,6 @@
 import re
 from datetime import date, timedelta
+from typing import List
 
 from fastapi import APIRouter, Depends, Query
 
@@ -463,4 +464,326 @@ def trilha_diaria(edital_nome: str = "", cargo: str = "", horas_disponiveis: flo
         "tempo_total_min": tempo_total_real,
         "foco_principal": foco_principal,
         "motivo": motivo
+    }
+
+
+# ============================================================
+# CALENDÁRIO SEMANAL
+# ============================================================
+
+NOMES_DIAS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
+
+
+def _get_materias_edital_with_topics(conn, edital_nome: str = "", cargo: str = "") -> List[dict]:
+    """Busca matérias do edital com contagem de tópicos não concluídos e desempenho."""
+    query = """
+        SELECT materia, COUNT(*) as total_topicos,
+               SUM(CASE WHEN status != 'Concluído' THEN 1 ELSE 0 END) as pendentes
+        FROM edital WHERE 1=1
+    """
+    params = []
+    if edital_nome:
+        query += " AND edital_nome = ?"
+        params.append(edital_nome)
+    if cargo:
+        query += " AND cargo = ?"
+        params.append(cargo)
+    query += " GROUP BY materia HAVING pendentes > 0 ORDER BY pendentes DESC"
+    rows = conn.execute(query, params).fetchall()
+    return [{"materia": r[0], "total_topicos": r[1], "pendentes": r[2]} for r in rows]
+
+
+def _get_uncompleted_topics(conn, materia: str, edital_nome: str = "", cargo: str = "", limit: int = 3) -> list:
+    """Busca tópicos não concluídos de uma matéria."""
+    query = "SELECT topico FROM edital WHERE materia = ? AND status != 'Concluído'"
+    params = [materia]
+    if edital_nome:
+        query += " AND edital_nome = ?"
+        params.append(edital_nome)
+    if cargo:
+        query += " AND cargo = ?"
+        params.append(cargo)
+    query += f" LIMIT {limit}"
+    return [r[0] for r in conn.execute(query, params).fetchall()]
+
+
+def _distribute_materias_to_days(materias_ranked: List[dict], num_days: int = 7) -> List[List[dict]]:
+    """
+    Distribui matérias nos dias da semana (2 por dia, exceto domingo).
+    Garante alternância: mesma matéria não aparece em dias consecutivos.
+    """
+    if not materias_ranked:
+        return [[] for _ in range(num_days)]
+
+    # Se temos poucas matérias, duplicar para preencher
+    materias_pool = materias_ranked[:]
+    if len(materias_pool) == 1:
+        # Só 1 matéria: usa ela todos os dias
+        return [[materias_pool[0]] for _ in range(num_days)]
+
+    days = [[] for _ in range(num_days)]
+    # Dias 0-5 (Seg-Sáb): 2 matérias cada; Dia 6 (Domingo): dia leve
+    slots_per_day = [2, 2, 2, 2, 2, 2, 0]  # Domingo sem matérias novas
+
+    # Criar ciclo de matérias priorizadas
+    # Matérias com pior desempenho aparecem mais vezes
+    weighted_pool = []
+    for i, m in enumerate(materias_pool):
+        # Mais prioritárias ganham mais slots
+        repeats = max(1, 3 - i) if i < 4 else 1
+        weighted_pool.extend([m] * repeats)
+
+    # Distribuir garantindo alternância
+    last_day_materias = set()
+    pool_idx = 0
+
+    for day_idx in range(num_days - 1):  # Excluir domingo
+        day_materias = []
+        attempts = 0
+        search_idx = pool_idx
+
+        while len(day_materias) < slots_per_day[day_idx] and attempts < len(weighted_pool) * 2:
+            candidate = weighted_pool[search_idx % len(weighted_pool)]
+            cand_name = candidate["materia"]
+
+            # Verificar alternância: não repetir do dia anterior
+            if cand_name not in last_day_materias and cand_name not in [m["materia"] for m in day_materias]:
+                day_materias.append(candidate)
+                pool_idx = (search_idx + 1) % len(weighted_pool)
+
+            search_idx += 1
+            attempts += 1
+
+        # Se não conseguiu preencher (poucas matérias), relaxar restrição
+        if len(day_materias) < slots_per_day[day_idx]:
+            for m in materias_pool:
+                if m["materia"] not in [dm["materia"] for dm in day_materias]:
+                    day_materias.append(m)
+                    if len(day_materias) >= slots_per_day[day_idx]:
+                        break
+
+        days[day_idx] = day_materias
+        last_day_materias = {m["materia"] for m in day_materias}
+
+    return days
+
+
+@router.get("/api/calendario-semanal", summary="Calendário Semanal", description="Gera programação semanal de estudos baseada em desempenho e edital")
+def calendario_semanal(edital_nome: str = "", cargo: str = "", horas_dia: float = Query(default=3.0), conn=Depends(get_db_session)):
+    """Gera calendário semanal de estudos com distribuição inteligente de matérias."""
+    tempo_dia_min = int(horas_dia * 60)
+
+    # 1. Buscar matérias do edital com tópicos pendentes
+    materias_edital = _get_materias_edital_with_topics(conn, edital_nome, cargo)
+
+    if not materias_edital:
+        # Sem matérias: retornar calendário vazio com orientação
+        hoje = date.today()
+        inicio_semana = hoje - timedelta(days=hoje.weekday())
+        return {
+            "semana_inicio": inicio_semana.isoformat(),
+            "semana_fim": (inicio_semana + timedelta(days=6)).isoformat(),
+            "horas_dia": horas_dia,
+            "dias": [{
+                "dia_semana": i,
+                "nome": NOMES_DIAS[i],
+                "data": (inicio_semana + timedelta(days=i)).isoformat(),
+                "atividades": [{"tipo": "revisao", "descricao": "Adicione matérias ao edital para gerar o calendário", "tempo_min": 0, "materia": None}],
+                "tempo_total_min": 0,
+                "materias": []
+            } for i in range(7)],
+            "resumo": {"total_materias": 0, "horas_semana": 0, "distribuicao": []}
+        }
+
+    # 2. Obter desempenho por matéria
+    desempenho = _get_performance_by_subject(conn)
+
+    # 3. Rankear matérias: pior desempenho + mais tópicos pendentes = mais prioridade
+    for m in materias_edital:
+        perf = desempenho.get(m["materia"], {})
+        pct = perf.get("pct", 0)
+        # Score: menor % de acerto = prioridade maior; mais pendentes = prioridade maior
+        m["pct_acerto"] = pct
+        m["score"] = (100 - pct) + m["pendentes"] * 2
+
+    materias_edital.sort(key=lambda x: -x["score"])
+
+    # 4. Distribuir matérias nos dias
+    days_materias = _distribute_materias_to_days(materias_edital)
+
+    # 5. Revisões SRS pendentes
+    pending = _get_pending_reviews(conn)
+
+    # 6. Montar calendário
+    hoje = date.today()
+    inicio_semana = hoje - timedelta(days=hoje.weekday())
+    dias = []
+    distribuicao_map = {}  # materia -> set of day indices
+
+    for day_idx in range(7):
+        data_dia = inicio_semana + timedelta(days=day_idx)
+        atividades = []
+        tempo_restante = tempo_dia_min
+        materias_do_dia = []
+
+        # Domingo = dia leve
+        is_domingo = day_idx == 6
+
+        # Revisão de flashcards no início (todos os dias)
+        if pending["flashcards"] > 0:
+            tempo_flash = min(10, tempo_restante)
+            atividades.append({
+                "tipo": "revisao",
+                "descricao": f"Revisar {pending['flashcards']} flashcards pendentes",
+                "tempo_min": tempo_flash,
+                "materia": None
+            })
+            tempo_restante -= tempo_flash
+
+        if is_domingo:
+            # Domingo: só revisão + questões das matérias mais fracas
+            if tempo_restante > 0 and pending["topicos"] > 0:
+                tempo_top = min(15, tempo_restante)
+                atividades.append({
+                    "tipo": "revisao",
+                    "descricao": f"Revisar {pending['topicos']} tópicos com baixa retenção",
+                    "tempo_min": tempo_top,
+                    "materia": None
+                })
+                tempo_restante -= tempo_top
+
+            # Questões das matérias mais fracas
+            weakest = materias_edital[:2] if len(materias_edital) >= 2 else materias_edital
+            for mat_info in weakest:
+                if tempo_restante < 20:
+                    break
+                tempo_questoes = min(30, tempo_restante)
+                qtd = max(5, tempo_questoes // 2)
+                atividades.append({
+                    "tipo": "questoes",
+                    "materia": mat_info["materia"],
+                    "qtd": qtd,
+                    "tempo_min": tempo_questoes
+                })
+                materias_do_dia.append(mat_info["materia"])
+                tempo_restante -= tempo_questoes
+
+            # Revisão final
+            if tempo_restante >= 10:
+                atividades.append({
+                    "tipo": "revisao",
+                    "descricao": "Revisão geral da semana",
+                    "tempo_min": min(15, tempo_restante),
+                    "materia": None
+                })
+                tempo_restante -= min(15, tempo_restante)
+        else:
+            # Dias normais: estudo + questões por matéria
+            day_mats = days_materias[day_idx]
+            if not day_mats:
+                day_mats = materias_edital[:2]
+
+            num_materias = len(day_mats)
+            if num_materias == 0:
+                num_materias = 1
+
+            # Reservar tempo para revisão final
+            tempo_revisao_final = 10
+            tempo_para_materias = tempo_restante - tempo_revisao_final
+
+            # Distribuir tempo entre matérias
+            tempo_por_materia = tempo_para_materias // num_materias if num_materias > 0 else 0
+
+            for mat_info in day_mats:
+                if tempo_para_materias <= 0:
+                    break
+
+                materia_nome = mat_info["materia"]
+                materias_do_dia.append(materia_nome)
+
+                # Track distribuição
+                if materia_nome not in distribuicao_map:
+                    distribuicao_map[materia_nome] = {"dias": [], "tempo_total": 0}
+                distribuicao_map[materia_nome]["dias"].append(day_idx)
+
+                # Buscar tópicos
+                topicos = _get_uncompleted_topics(conn, materia_nome, edital_nome, cargo, limit=3)
+                if not topicos:
+                    topicos = ["Revisão geral"]
+
+                # Tempo de estudo (60% do tempo da matéria)
+                tempo_estudo = int(tempo_por_materia * 0.6)
+                tempo_questoes = int(tempo_por_materia * 0.3)
+
+                if tempo_estudo >= 15:
+                    atividades.append({
+                        "tipo": "estudo",
+                        "materia": materia_nome,
+                        "topicos": topicos,
+                        "tempo_min": tempo_estudo
+                    })
+
+                if tempo_questoes >= 10:
+                    qtd_questoes = max(5, tempo_questoes // 2)
+                    atividades.append({
+                        "tipo": "questoes",
+                        "materia": materia_nome,
+                        "qtd": qtd_questoes,
+                        "tempo_min": tempo_questoes
+                    })
+
+                distribuicao_map[materia_nome]["tempo_total"] += tempo_estudo + tempo_questoes
+                tempo_para_materias -= (tempo_estudo + tempo_questoes)
+
+            # Revisão final (Técnica Feynman)
+            if tempo_revisao_final > 0:
+                atividades.append({
+                    "tipo": "revisao",
+                    "descricao": "Resumo do dia (Técnica Feynman)",
+                    "tempo_min": tempo_revisao_final,
+                    "materia": None
+                })
+
+        tempo_total_dia = sum(a["tempo_min"] for a in atividades)
+        dias.append({
+            "dia_semana": day_idx,
+            "nome": NOMES_DIAS[day_idx],
+            "data": data_dia.isoformat(),
+            "atividades": atividades,
+            "tempo_total_min": tempo_total_dia,
+            "materias": materias_do_dia
+        })
+
+    # 7. Montar resumo
+    distribuicao = []
+    for materia, info in distribuicao_map.items():
+        horas_semana = round(info["tempo_total"] * len(info["dias"]) / 60, 1)
+        # Recalcular baseado no tempo real alocado
+        tempo_total_materia = sum(
+            a["tempo_min"]
+            for d in dias
+            for a in d["atividades"]
+            if a.get("materia") == materia
+        )
+        distribuicao.append({
+            "materia": materia,
+            "dias": sorted(set(info["dias"])),
+            "horas_semana": round(tempo_total_materia / 60, 1)
+        })
+
+    distribuicao.sort(key=lambda x: -x["horas_semana"])
+
+    horas_semana_total = round(sum(d["tempo_total_min"] for d in dias) / 60, 1)
+
+    log.info(f"Calendário semanal gerado: {len(materias_edital)} matérias, {horas_semana_total}h/semana")
+    return {
+        "semana_inicio": inicio_semana.isoformat(),
+        "semana_fim": (inicio_semana + timedelta(days=6)).isoformat(),
+        "horas_dia": horas_dia,
+        "dias": dias,
+        "resumo": {
+            "total_materias": len(set(m["materia"] for m in materias_edital)),
+            "horas_semana": horas_semana_total,
+            "distribuicao": distribuicao
+        }
     }
