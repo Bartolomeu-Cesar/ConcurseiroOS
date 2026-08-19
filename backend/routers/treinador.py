@@ -1084,3 +1084,247 @@ def get_materias_negligenciadas(dias_limite: int = 5, conn=Depends(get_db_sessio
         "total": len(negligenciadas),
         "dias_limite": dias_limite
     }
+
+
+
+# ============================================================
+# MICRO-REVISÕES (2-MIN DRILLS)
+# ============================================================
+
+@router.get("/api/micro-revisao")
+def get_micro_revisao(quantidade: int = 5, conn=Depends(get_db_session)):
+    """Gera sessão ultra-curta de micro-revisão: 3-5 perguntas rápidas aleatórias."""
+    # Misturar flashcards e tópicos do edital
+    items = []
+
+    # Flashcards aleatórios
+    flashcards = conn.execute(
+        "SELECT id, pergunta, resposta, materia FROM flashcards ORDER BY RANDOM() LIMIT ?",
+        (quantidade,)
+    ).fetchall()
+    for f in flashcards:
+        items.append({
+            "tipo": "flashcard",
+            "id": f[0],
+            "pergunta": f[1],
+            "resposta": f[2],
+            "materia": f[3] or "Geral"
+        })
+
+    # Se não tem flashcards suficientes, completar com tópicos do edital
+    if len(items) < quantidade:
+        falta = quantidade - len(items)
+        topicos = conn.execute(
+            "SELECT id, materia, topico FROM edital WHERE status != 'Concluído' ORDER BY RANDOM() LIMIT ?",
+            (falta,)
+        ).fetchall()
+        for t in topicos:
+            items.append({
+                "tipo": "topico",
+                "id": t[0],
+                "pergunta": f"O que você sabe sobre: {t[2]}?",
+                "resposta": f"Tópico de {t[1]} — revise seu material.",
+                "materia": t[1]
+            })
+
+    import random
+    random.shuffle(items)
+    return {"items": items[:quantidade], "total": len(items), "tempo_estimado_seg": quantidade * 24}
+
+
+# ============================================================
+# QUESTÕES DISSERTATIVAS
+# ============================================================
+
+@router.get("/api/questao-dissertativa")
+def get_questao_dissertativa(materia: str = "", conn=Depends(get_db_session)):
+    """Gera uma questão dissertativa baseada em tópico do edital."""
+    query = "SELECT id, materia, topico FROM edital WHERE status != 'Concluído'"
+    params = []
+    if materia:
+        query += " AND materia = ?"
+        params.append(materia)
+    query += " ORDER BY RANDOM() LIMIT 1"
+    row = conn.execute(query, params).fetchone()
+
+    if not row:
+        return {"pergunta": None, "message": "Nenhum tópico disponível."}
+
+    # Gerar pergunta dissertativa baseada no tópico
+    topico = row[2]
+    materia_nome = row[1]
+    edital_id = row[0]
+
+    perguntas_modelo = [
+        f"Explique com suas palavras o conceito de '{topico}' em {materia_nome}.",
+        f"Quais são os principais aspectos de '{topico}'? Descreva pelo menos 3 pontos.",
+        f"Como '{topico}' se relaciona com outros temas de {materia_nome}?",
+        f"Dê um exemplo prático de aplicação de '{topico}' em uma prova de concurso.",
+        f"Compare e diferencie os elementos principais de '{topico}'.",
+    ]
+
+    import random
+    pergunta = random.choice(perguntas_modelo)
+
+    return {
+        "edital_id": edital_id,
+        "materia": materia_nome,
+        "topico": topico,
+        "pergunta": pergunta,
+        "dica": "Escreva sua resposta completa. Quanto mais detalhes, melhor a fixação."
+    }
+
+
+@router.post("/api/questao-dissertativa/salvar")
+def salvar_questao_dissertativa(body: dict = Body(...), conn=Depends(get_db_session)):
+    """Salva a resposta de uma questão dissertativa."""
+    edital_id = body.get("edital_id")
+    resposta = body.get("resposta", "")
+    confianca = body.get("confianca", 3)  # 1-5
+
+    if not resposta or not edital_id:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="Preencha a resposta.")
+
+    # Salvar como resumo do tópico
+    conn.execute(
+        "INSERT INTO resumos (edital_id, resumo, tipo, created_at) VALUES (?, ?, 'dissertativa', ?)",
+        (edital_id, resposta, today_str())
+    )
+
+    # Registrar confiança
+    conn.execute("""
+        INSERT INTO calendario_atividades (data, dia_semana, materia, tipo, tempo_min, concluida, concluida_at)
+        VALUES (?, ?, ?, 'dissertativa', 5, 1, ?)
+    """, (today_str(), date.today().weekday(), body.get("materia", ""), datetime.now().isoformat()))
+
+    conn.commit()
+    return {"ok": True, "confianca": confianca}
+
+
+# ============================================================
+# AUTOAVALIAÇÃO DE CONFIANÇA
+# ============================================================
+
+@router.get("/api/autoavaliacao")
+def get_autoavaliacao(quantidade: int = 5, conn=Depends(get_db_session)):
+    """Gera sessão de autoavaliação: pergunta + o aluno indica nível de confiança antes de ver a resposta."""
+    flashcards = conn.execute(
+        "SELECT id, pergunta, resposta, materia FROM flashcards ORDER BY RANDOM() LIMIT ?",
+        (quantidade,)
+    ).fetchall()
+
+    items = [{
+        "id": f[0],
+        "pergunta": f[1],
+        "resposta": f[2],
+        "materia": f[3] or "Geral"
+    } for f in flashcards]
+
+    return {"items": items, "instrucao": "Antes de revelar a resposta, indique sua confiança: 1=Não sei, 2=Acho que sei, 3=Tenho certeza"}
+
+
+@router.post("/api/autoavaliacao/registrar")
+def registrar_autoavaliacao(body: dict = Body(...), conn=Depends(get_db_session)):
+    """Registra resultado da autoavaliação para calibrar metacognição."""
+    resultados = body.get("resultados", [])
+    # Cada resultado: {flashcard_id, confianca_pre (1-3), acertou (bool)}
+
+    calibrados = 0
+    superconfiante = 0
+    subconfiante = 0
+
+    for r in resultados:
+        conf = r.get("confianca_pre", 2)
+        acertou = r.get("acertou", False)
+        fid = r.get("flashcard_id")
+
+        if conf == 3 and not acertou:
+            superconfiante += 1  # Achava que sabia, mas errou
+        elif conf == 1 and acertou:
+            subconfiante += 1  # Achava que não sabia, mas acertou
+        elif (conf >= 2 and acertou) or (conf == 1 and not acertou):
+            calibrados += 1  # Confiança alinhada com resultado
+
+        # Revisar flashcard se errou
+        if fid and not acertou:
+            conn.execute(
+                "UPDATE flashcards SET proxima_revisao = ?, intervalo_dias = 1 WHERE id = ?",
+                (today_str(), fid)
+            )
+
+    conn.commit()
+
+    total = len(resultados)
+    calibracao_pct = round(calibrados / total * 100) if total > 0 else 0
+
+    return {
+        "ok": True,
+        "total": total,
+        "calibrados": calibrados,
+        "superconfiante": superconfiante,
+        "subconfiante": subconfiante,
+        "calibracao_pct": calibracao_pct,
+        "feedback": (
+            "🎯 Excelente calibração! Você sabe o que sabe." if calibracao_pct >= 80
+            else "⚠️ Cuidado com overconfidence — revise os temas que errou." if superconfiante > subconfiante
+            else "💪 Você sabe mais do que pensa! Confie mais no seu conhecimento." if subconfiante > superconfiante
+            else "📊 Continue praticando para melhorar sua metacognição."
+        )
+    }
+
+
+# ============================================================
+# PRÁTICA DISTRIBUÍDA - SPACING INDICATOR
+# ============================================================
+
+@router.get("/api/spacing-indicator")
+def get_spacing_indicator(conn=Depends(get_db_session)):
+    """Retorna indicador de espaçamento: quais matérias estão com distribuição ideal e quais precisam ser mais espaçadas."""
+    materias = conn.execute("""
+        SELECT materia, COUNT(*) as sessoes, MIN(data) as primeira, MAX(data) as ultima
+        FROM sessoes_estudo
+        WHERE data >= date('now', '-30 days')
+        GROUP BY materia
+        HAVING sessoes >= 2
+    """).fetchall()
+
+    resultado = []
+    hoje = date.today()
+
+    for r in materias:
+        materia = r[0]
+        sessoes = r[1]
+        primeira = r[2]
+        ultima = r[3]
+
+        if primeira and ultima and primeira != ultima:
+            dias_span = (date.fromisoformat(ultima) - date.fromisoformat(primeira)).days
+            intervalo_medio = dias_span / (sessoes - 1) if sessoes > 1 else 0
+
+            # Ideal: 2-4 dias entre sessões (spacing effect)
+            if intervalo_medio >= 2 and intervalo_medio <= 4:
+                status = "ideal"
+                cor = "#a6e3a1"
+            elif intervalo_medio < 2:
+                status = "muito_junto"
+                cor = "#f9e2af"
+            else:
+                status = "muito_espaco"
+                cor = "#f38ba8"
+
+            resultado.append({
+                "materia": materia,
+                "sessoes_30d": sessoes,
+                "intervalo_medio_dias": round(intervalo_medio, 1),
+                "status": status,
+                "cor": cor,
+                "sugestao": (
+                    "✅ Espaçamento ideal! Continue assim." if status == "ideal"
+                    else "⚠️ Sessões muito juntas — espalhe mais ao longo da semana." if status == "muito_junto"
+                    else "🔴 Intervalo muito grande — aumente a frequência."
+                )
+            })
+
+    resultado.sort(key=lambda x: 0 if x["status"] == "ideal" else (1 if x["status"] == "muito_junto" else 2))
+    return {"materias": resultado, "total": len(resultado)}

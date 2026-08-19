@@ -509,6 +509,107 @@
         <div id="tempo-resultado-box"></div>
       </div>
     </div>
+
+    <!-- Micro-Revisões + Autoavaliação de Confiança -->
+    <div class="charts">
+      <div class="chart-box">
+        <h3>⚡ Micro-Revisão (2 min drill)</h3>
+        <p style="font-size:0.75rem;color:#9399b2;margin-bottom:8px;">Sessão ultra-curta: 5 perguntas rápidas para revisar ao longo do dia.</p>
+        <div id="micro-revisao-box">
+          <button onclick="iniciarMicroRevisao()" style="background:#cba6f7;color:#1e1e2e;border:none;border-radius:8px;padding:10px 20px;font-weight:600;cursor:pointer;font-size:0.9rem;">⚡ Iniciar Micro-Revisão (2 min)</button>
+        </div>
+        <div id="micro-revisao-area" style="display:none;"></div>
+      </div>
+      <div class="chart-box">
+        <h3>📊 Autoavaliação de Confiança</h3>
+        <p style="font-size:0.75rem;color:#9399b2;margin-bottom:8px;">Avalie seu nível de certeza ANTES de ver a resposta. Calibra a metacognição.</p>
+        <div id="autoavaliacao-box">
+          <button onclick="iniciarAutoavaliacao()" style="background:#89b4fa;color:#1e1e2e;border:none;border-radius:8px;padding:10px 20px;font-weight:600;cursor:pointer;font-size:0.9rem;">🎯 Iniciar Autoavaliação</button>
+        </div>
+        <div id="autoavaliacao-area" style="display:none;"></div>
+      </div>
+    </div>
+
+    <!-- Questão Dissertativa + Cornell Notes -->
+    <div class="charts">
+      <div class="chart-box">
+        <h3>✍️ Questão Dissertativa</h3>
+        <p style="font-size:0.75rem;color:#9399b2;margin-bottom:8px;">Escrever a resposta completa fortalece mais a memória que múltipla escolha.</p>
+        <div id="dissertativa-box">
+          <div style="margin-bottom:8px;">
+            <select id="dissert-materia" style="width:100%;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:6px;padding:6px;font-size:0.82rem;">
+              <option value="">Qualquer matéria</option>
+            </select>
+          </div>
+          <button onclick="gerarDissertativa()" style="background:#f9e2af;color:#1e1e2e;border:none;border-radius:6px;padding:8px 16px;font-weight:600;cursor:pointer;font-size:0.85rem;">📝 Gerar Questão</button>
+          <div id="dissertativa-area" style="display:none;margin-top:12px;"></div>
+        </div>
+      </div>
+      <div class="chart-box">
+        <h3>📖 Cornell Notes</h3>
+        <p style="font-size:0.75rem;color:#9399b2;margin-bottom:8px;">Divida suas anotações em: Dicas (esquerda), Notas (direita) e Resumo (abaixo).</p>
+        <div id="cornell-box">
+          <div style="font-size:0.82rem;color:#cba6f7;font-weight:600;margin-bottom:6px;" id="cornell-topico">Selecione um tópico para anotar:</div>
+          <button onclick="sortearCornell()" style="background:#89b4fa;color:#1e1e2e;border:none;border-radius:6px;padding:5px 12px;font-size:0.78rem;font-weight:600;cursor:pointer;margin-bottom:8px;">🎲 Sortear Tópico</button>
+          <div style="display:grid;grid-template-columns:1fr 2fr;gap:6px;margin-bottom:6px;">
+            <textarea id="cornell-dicas" placeholder="📌 Palavras-chave / Dicas" rows="4" style="background:#1e1e2e;color:#f9e2af;border:1px solid #45475a;border-radius:6px;padding:6px;font-size:0.78rem;resize:vertical;"></textarea>
+            <textarea id="cornell-notas" placeholder="📝 Notas detalhadas durante o estudo" rows="4" style="background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:6px;padding:6px;font-size:0.78rem;resize:vertical;"></textarea>
+          </div>
+          <textarea id="cornell-resumo" placeholder="📋 Resumo com suas palavras (preencha depois de estudar, sem olhar as notas)" rows="2" style="width:100%;background:#1e1e2e;color:#a6e3a1;border:1px solid #45475a;border-radius:6px;padding:6px;font-size:0.78rem;resize:vertical;"></textarea>
+          <button onclick="salvarCornell()" style="margin-top:6px;background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:5px 12px;font-size:0.78rem;font-weight:600;cursor:pointer;">💾 Salvar Cornell Note</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Método Loci + Leitura em Voz Alta -->
+    <div class="charts">
+      <div class="chart-box">
+        <h3>🏛️ Método Loci (Palácio da Memória)</h3>
+        <p style="font-size:0.75rem;color:#9399b2;margin-bottom:8px;">Associe conceitos a locais familiares. Percorra mentalmente o caminho para lembrar.</p>
+        <div id="loci-box">
+          <div style="padding:10px;background:#1e1e2e;border-radius:8px;margin-bottom:8px;">
+            <div style="font-size:0.8rem;color:#cba6f7;font-weight:600;margin-bottom:6px;">🗺️ Crie seu Palácio:</div>
+            <div style="display:grid;grid-template-columns:auto 1fr;gap:4px;font-size:0.78rem;">
+              <span style="color:#89b4fa;">🚪 Entrada:</span><input id="loci-1" placeholder="Conceito 1..." style="background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:4px;padding:4px 6px;font-size:0.75rem;">
+              <span style="color:#89b4fa;">🛋️ Sala:</span><input id="loci-2" placeholder="Conceito 2..." style="background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:4px;padding:4px 6px;font-size:0.75rem;">
+              <span style="color:#89b4fa;">🍳 Cozinha:</span><input id="loci-3" placeholder="Conceito 3..." style="background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:4px;padding:4px 6px;font-size:0.75rem;">
+              <span style="color:#89b4fa;">🛏️ Quarto:</span><input id="loci-4" placeholder="Conceito 4..." style="background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:4px;padding:4px 6px;font-size:0.75rem;">
+              <span style="color:#89b4fa;">🚿 Banheiro:</span><input id="loci-5" placeholder="Conceito 5..." style="background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:4px;padding:4px 6px;font-size:0.75rem;">
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button onclick="testarLoci()" style="background:#f9e2af;color:#1e1e2e;border:none;border-radius:6px;padding:5px 12px;font-size:0.78rem;font-weight:600;cursor:pointer;">🧠 Testar Memória</button>
+            <button onclick="limparLoci()" style="background:#45475a;color:#cdd6f4;border:none;border-radius:6px;padding:5px 12px;font-size:0.78rem;cursor:pointer;">🗑 Limpar</button>
+          </div>
+          <div id="loci-teste" style="display:none;margin-top:8px;"></div>
+        </div>
+      </div>
+      <div class="chart-box">
+        <h3>🗣️ Leitura em Voz Alta + Timer</h3>
+        <p style="font-size:0.75rem;color:#9399b2;margin-bottom:8px;">Ler em voz alta ativa memória auditiva. Use o timer para sessões de 5 min.</p>
+        <div id="voz-alta-box">
+          <div id="voz-topico" style="font-size:0.82rem;color:#cba6f7;font-weight:600;margin-bottom:8px;">Clique em sortear para escolher um tópico.</div>
+          <button onclick="sortearVozAlta()" style="background:#89b4fa;color:#1e1e2e;border:none;border-radius:6px;padding:5px 12px;font-size:0.78rem;font-weight:600;cursor:pointer;margin-bottom:8px;">🎲 Sortear Tópico</button>
+          <div style="text-align:center;padding:12px;background:#1e1e2e;border-radius:8px;">
+            <div style="font-size:1.8rem;font-weight:700;font-family:monospace;color:#cdd6f4;" id="voz-timer">05:00</div>
+            <div style="display:flex;gap:8px;justify-content:center;margin-top:8px;">
+              <button onclick="startVozTimer()" id="voz-start-btn" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:6px 14px;font-weight:600;cursor:pointer;">▶ Iniciar 5min</button>
+              <button onclick="stopVozTimer()" style="background:#f38ba8;color:#1e1e2e;border:none;border-radius:6px;padding:6px 14px;font-weight:600;cursor:pointer;">⏹ Parar</button>
+            </div>
+          </div>
+          <p style="font-size:0.7rem;color:#585b70;margin-top:6px;">💡 Dica: explique o tópico em voz alta como se estivesse ensinando alguém.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Prática Distribuída (Spacing) -->
+    <div class="charts">
+      <div class="chart-box" style="grid-column: span 2;">
+        <h3>🔄 Prática Distribuída (Spacing Effect)</h3>
+        <p style="font-size:0.75rem;color:#9399b2;margin-bottom:8px;">Intervalo ideal entre sessões de uma mesma matéria: 2-4 dias. Veja como está seu espaçamento.</p>
+        <div id="spacing-box"></div>
+      </div>
+    </div>
   </div>
 
   <!-- Tab: Calendário Semanal -->
@@ -1420,6 +1521,188 @@
       } catch(e) {}
     }
 
+    // === MICRO-REVISÃO (2-MIN DRILL) ===
+    let microItems = [], microIdx = 0, microAcertos = 0;
+    async function iniciarMicroRevisao() {
+      try {
+        const data = await fetch('/api/micro-revisao?quantidade=5').then(r => r.json());
+        microItems = data.items; microIdx = 0; microAcertos = 0;
+        if (!microItems.length) { alert('Sem conteúdo para revisão.'); return; }
+        document.getElementById('micro-revisao-box').style.display = 'none';
+        const area = document.getElementById('micro-revisao-area');
+        area.style.display = 'block';
+        showMicroItem();
+      } catch(e) {}
+    }
+    function showMicroItem() {
+      const area = document.getElementById('micro-revisao-area');
+      if (microIdx >= microItems.length) {
+        area.innerHTML = `<div style="text-align:center;padding:12px;background:#1e1e2e;border-radius:8px;"><div style="font-size:1.2rem;margin-bottom:6px;">🎉 Micro-revisão concluída!</div><div style="color:#a6e3a1;font-size:0.9rem;">${microAcertos}/${microItems.length} acertos</div><button onclick="document.getElementById('micro-revisao-box').style.display='block';document.getElementById('micro-revisao-area').style.display='none';" style="margin-top:8px;background:#89b4fa;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-weight:600;">OK</button></div>`;
+        return;
+      }
+      const item = microItems[microIdx];
+      area.innerHTML = `<div style="padding:12px;background:#1e1e2e;border-radius:8px;"><div style="font-size:0.7rem;color:#9399b2;margin-bottom:4px;">${microIdx+1}/${microItems.length} · ${item.materia}</div><div style="font-size:0.9rem;color:#cdd6f4;margin-bottom:10px;font-weight:600;">${item.pergunta}</div><div id="micro-resp" style="display:none;padding:8px;background:#313244;border-radius:6px;color:#a6e3a1;font-size:0.82rem;margin-bottom:8px;">${item.resposta}</div><div style="display:flex;gap:6px;"><button onclick="document.getElementById('micro-resp').style.display='block';this.style.display='none';document.getElementById('micro-btns').style.display='flex';" style="background:#f9e2af;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;font-weight:600;cursor:pointer;">👁 Revelar</button><div id="micro-btns" style="display:none;gap:6px;"><button onclick="microAcertos++;microIdx++;showMicroItem();" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;font-weight:600;cursor:pointer;">✓ Sabia</button><button onclick="microIdx++;showMicroItem();" style="background:#f38ba8;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;font-weight:600;cursor:pointer;">✗ Não sabia</button></div></div></div>`;
+    }
+
+    // === AUTOAVALIAÇÃO DE CONFIANÇA ===
+    let autoItems = [], autoIdx = 0, autoResultados = [];
+    async function iniciarAutoavaliacao() {
+      try {
+        const data = await fetch('/api/autoavaliacao?quantidade=5').then(r => r.json());
+        autoItems = data.items; autoIdx = 0; autoResultados = [];
+        if (!autoItems.length) { alert('Sem flashcards para avaliação.'); return; }
+        document.getElementById('autoavaliacao-box').style.display = 'none';
+        const area = document.getElementById('autoavaliacao-area');
+        area.style.display = 'block';
+        showAutoItem();
+      } catch(e) {}
+    }
+    function showAutoItem() {
+      const area = document.getElementById('autoavaliacao-area');
+      if (autoIdx >= autoItems.length) {
+        // Enviar resultados
+        fetch('/api/autoavaliacao/registrar', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({resultados:autoResultados})}).then(r=>r.json()).then(res => {
+          area.innerHTML = `<div style="text-align:center;padding:16px;background:#1e1e2e;border-radius:8px;"><div style="font-size:1.1rem;margin-bottom:8px;">📊 Resultado</div><div style="font-size:2rem;font-weight:700;color:#cba6f7;">${res.calibracao_pct}%</div><div style="font-size:0.82rem;color:#9399b2;">calibração</div><div style="margin-top:8px;font-size:0.82rem;color:#cdd6f4;">${res.feedback}</div><div style="margin-top:6px;font-size:0.75rem;color:#9399b2;">Superconfiante: ${res.superconfiante} | Subconfiante: ${res.subconfiante} | Calibrado: ${res.calibrados}</div><button onclick="document.getElementById('autoavaliacao-box').style.display='block';document.getElementById('autoavaliacao-area').style.display='none';" style="margin-top:10px;background:#89b4fa;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-weight:600;">OK</button></div>`;
+        });
+        return;
+      }
+      const item = autoItems[autoIdx];
+      area.innerHTML = `<div style="padding:12px;background:#1e1e2e;border-radius:8px;"><div style="font-size:0.7rem;color:#9399b2;margin-bottom:4px;">${autoIdx+1}/${autoItems.length} · ${item.materia}</div><div style="font-size:0.9rem;color:#cdd6f4;margin-bottom:10px;">${item.pergunta}</div><div style="margin-bottom:8px;font-size:0.82rem;color:#f9e2af;">Antes de ver a resposta, qual sua confiança?</div><div style="display:flex;gap:6px;margin-bottom:10px;" id="auto-conf-btns"><button onclick="autoConfianca(1)" style="background:#f38ba8;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-weight:600;">😟 Não sei</button><button onclick="autoConfianca(2)" style="background:#f9e2af;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-weight:600;">🤔 Acho que sei</button><button onclick="autoConfianca(3)" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-weight:600;">😎 Tenho certeza</button></div><div id="auto-reveal" style="display:none;"></div></div>`;
+    }
+    let autoConfAtual = 0;
+    function autoConfianca(nivel) {
+      autoConfAtual = nivel;
+      document.getElementById('auto-conf-btns').style.display = 'none';
+      const item = autoItems[autoIdx];
+      document.getElementById('auto-reveal').style.display = 'block';
+      document.getElementById('auto-reveal').innerHTML = `<div style="padding:8px;background:#313244;border-radius:6px;color:#a6e3a1;font-size:0.82rem;margin-bottom:8px;"><strong>Resposta:</strong> ${item.resposta}</div><div style="display:flex;gap:6px;"><button onclick="autoRegistrar(true)" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-weight:600;">✓ Eu sabia</button><button onclick="autoRegistrar(false)" style="background:#f38ba8;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-weight:600;">✗ Errei</button></div>`;
+    }
+    function autoRegistrar(acertou) {
+      autoResultados.push({flashcard_id: autoItems[autoIdx].id, confianca_pre: autoConfAtual, acertou});
+      autoIdx++;
+      showAutoItem();
+    }
+
+    // === QUESTÃO DISSERTATIVA ===
+    async function loadDissertMaterias() {
+      try {
+        const mats = await fetch('/api/questoes/materias').then(r => r.json()).catch(() => []);
+        const sel = document.getElementById('dissert-materia');
+        if (sel) sel.innerHTML = '<option value="">Qualquer matéria</option>' + mats.map(m => `<option value="${m}">${m}</option>`).join('');
+      } catch(e) {}
+    }
+    let dissertAtual = null;
+    async function gerarDissertativa() {
+      const materia = document.getElementById('dissert-materia').value;
+      const url = materia ? `/api/questao-dissertativa?materia=${encodeURIComponent(materia)}` : '/api/questao-dissertativa';
+      const data = await fetch(url).then(r => r.json());
+      if (!data.pergunta) { alert(data.message || 'Sem tópicos disponíveis.'); return; }
+      dissertAtual = data;
+      const area = document.getElementById('dissertativa-area');
+      area.style.display = 'block';
+      area.innerHTML = `<div style="padding:10px;background:#1e1e2e;border-radius:8px;"><div style="font-size:0.75rem;color:#89b4fa;margin-bottom:4px;">${data.materia} — ${data.topico}</div><div style="font-size:0.88rem;color:#cdd6f4;margin-bottom:8px;font-weight:600;">${data.pergunta}</div><textarea id="dissert-resposta" placeholder="Escreva sua resposta completa aqui..." rows="5" style="width:100%;background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:6px;padding:8px;font-size:0.82rem;resize:vertical;"></textarea><div style="display:flex;gap:8px;margin-top:8px;align-items:center;"><span style="font-size:0.75rem;color:#9399b2;">Confiança:</span><select id="dissert-conf" style="background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:4px;padding:4px;font-size:0.78rem;"><option value="1">😟 Baixa</option><option value="2">🤔 Média</option><option value="3" selected>😎 Alta</option></select><button onclick="salvarDissertativa()" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;font-weight:600;cursor:pointer;">💾 Salvar</button></div></div>`;
+    }
+    async function salvarDissertativa() {
+      const resp = document.getElementById('dissert-resposta').value.trim();
+      if (!resp) { alert('Escreva sua resposta!'); return; }
+      await fetch('/api/questao-dissertativa/salvar', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({edital_id:dissertAtual.edital_id, resposta:resp, materia:dissertAtual.materia, confianca:parseInt(document.getElementById('dissert-conf').value)})});
+      alert('✅ Resposta salva!');
+      document.getElementById('dissertativa-area').style.display = 'none';
+    }
+
+    // === CORNELL NOTES ===
+    let cornellEditalId = null;
+    async function sortearCornell() {
+      const data = await fetch('/api/edital?limit=200').then(r => r.json());
+      const items = (data.items || data).filter(t => t.status !== 'Concluído');
+      if (!items.length) return;
+      const s = items[Math.floor(Math.random() * items.length)];
+      cornellEditalId = s.id;
+      document.getElementById('cornell-topico').textContent = `📌 ${s.materia}: ${s.topico}`;
+      document.getElementById('cornell-dicas').value = '';
+      document.getElementById('cornell-notas').value = '';
+      document.getElementById('cornell-resumo').value = '';
+    }
+    async function salvarCornell() {
+      const dicas = document.getElementById('cornell-dicas').value.trim();
+      const notas = document.getElementById('cornell-notas').value.trim();
+      const resumo = document.getElementById('cornell-resumo').value.trim();
+      if (!notas && !resumo) { alert('Preencha as notas e/ou o resumo.'); return; }
+      const texto = `[CORNELL NOTES]\nDicas: ${dicas}\nNotas: ${notas}\nResumo: ${resumo}`;
+      if (cornellEditalId) {
+        await fetch(`/api/edital/${cornellEditalId}/resumo`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({resumo:texto, tipo:'cornell'})});
+      }
+      alert('✅ Cornell Note salva!');
+    }
+
+    // === MÉTODO LOCI ===
+    function testarLoci() {
+      const valores = [];
+      for (let i = 1; i <= 5; i++) {
+        const v = document.getElementById(`loci-${i}`).value.trim();
+        if (v) valores.push(v);
+      }
+      if (valores.length === 0) { alert('Preencha pelo menos um local com um conceito.'); return; }
+      // Esconder inputs e mostrar teste
+      const locais = ['🚪 Entrada','🛋️ Sala','🍳 Cozinha','🛏️ Quarto','🚿 Banheiro'];
+      const teste = document.getElementById('loci-teste');
+      teste.style.display = 'block';
+      teste.innerHTML = `<div style="padding:8px;background:#1e1e2e;border-radius:6px;font-size:0.8rem;"><div style="color:#f9e2af;font-weight:600;margin-bottom:6px;">🧠 Feche os olhos e percorra seu palácio mentalmente. Depois confira:</div>${valores.map((v, i) => `<div style="padding:3px 0;"><span style="color:#89b4fa;">${locais[i]}:</span> <span class="loci-hidden" onclick="this.style.color='#a6e3a1'" style="color:#313244;background:#313244;border-radius:3px;padding:0 4px;cursor:pointer;">${v}</span></div>`).join('')}<p style="font-size:0.7rem;color:#585b70;margin-top:6px;">Clique em cada local para revelar o conceito.</p></div>`;
+    }
+    function limparLoci() {
+      for (let i = 1; i <= 5; i++) document.getElementById(`loci-${i}`).value = '';
+      document.getElementById('loci-teste').style.display = 'none';
+    }
+
+    // === LEITURA EM VOZ ALTA ===
+    let vozInterval = null, vozSeg = 300;
+    async function sortearVozAlta() {
+      const data = await fetch('/api/edital?limit=200').then(r => r.json());
+      const items = (data.items || data).filter(t => t.status !== 'Concluído');
+      if (!items.length) return;
+      const s = items[Math.floor(Math.random() * items.length)];
+      document.getElementById('voz-topico').textContent = `📌 ${s.materia}: ${s.topico}`;
+    }
+    function startVozTimer() {
+      vozSeg = 300;
+      clearInterval(vozInterval);
+      updateVozDisplay();
+      vozInterval = setInterval(() => {
+        vozSeg--;
+        updateVozDisplay();
+        if (vozSeg <= 0) {
+          clearInterval(vozInterval);
+          document.getElementById('voz-timer').textContent = '🎉 FIM!';
+          document.getElementById('voz-timer').style.color = '#a6e3a1';
+          if (Notification.permission === 'granted') new Notification('🗣️ Leitura em voz alta concluída!');
+        }
+      }, 1000);
+    }
+    function stopVozTimer() { clearInterval(vozInterval); }
+    function updateVozDisplay() {
+      const m = Math.floor(vozSeg / 60), s = vozSeg % 60;
+      document.getElementById('voz-timer').textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+      document.getElementById('voz-timer').style.color = vozSeg < 30 ? '#f38ba8' : '#cdd6f4';
+    }
+
+    // === PRÁTICA DISTRIBUÍDA (SPACING) ===
+    async function loadSpacing() {
+      try {
+        const data = await fetch('/api/spacing-indicator').then(r => r.json());
+        const el = document.getElementById('spacing-box');
+        if (!data.materias?.length) { el.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Estude por alguns dias para visualizar o espaçamento ideal.</p>'; return; }
+        el.innerHTML = data.materias.map(m => `
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #313244;font-size:0.8rem;">
+            <span style="width:8px;height:8px;border-radius:50%;background:${m.cor};flex-shrink:0;"></span>
+            <span style="flex:1;">${m.materia}</span>
+            <span style="color:${m.cor};font-size:0.75rem;white-space:nowrap;">⌀ ${m.intervalo_medio_dias}d entre sessões</span>
+            <span style="font-size:0.7rem;color:#9399b2;">(${m.sessoes_30d}x/mês)</span>
+          </div>
+          <div style="font-size:0.68rem;color:#585b70;padding:0 0 4px 16px;">${m.sugestao}</div>
+        `).join('');
+      } catch(e) {}
+    }
+
     async function loadHeatmap() {
       try {
         const data = await fetch('/api/heatmap').then(r => r.json());
@@ -2301,6 +2584,8 @@
           loadPontosFragcos();
           loadConexoes();
           loadTempoResultado();
+          loadDissertMaterias();
+          loadSpacing();
           break;
         case 'panel-calendario':
           loadCalendario();
