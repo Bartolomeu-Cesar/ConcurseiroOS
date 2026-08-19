@@ -131,6 +131,8 @@
         <button class="iobtn" onclick="showArquivados()">📦 Arquivados</button>
         <button class="iobtn" onclick="exportarEdital('json')">⬇ JSON</button>
         <button class="iobtn" onclick="exportarEdital('csv')">⬇ CSV</button>
+        <button class="iobtn" onclick="document.getElementById('import-edital-file').click()">⬆ Importar</button>
+        <input id="import-edital-file" type="file" accept=".json,.csv" style="display:none" onchange="importarEditalFile(this)">
         <span id="edital-stats" style="font-size:0.8rem;color:#9399b2;margin-left:auto;"></span>
       </div>
       <div id="edital-accordion"></div>
@@ -184,6 +186,8 @@
         <button class="iobtn" onclick="importarCicloDoEdital()">📋 Importar do Edital</button>
         <button class="iobtn" onclick="exportarCiclo('json')">⬇ JSON</button>
         <button class="iobtn" onclick="exportarCiclo('csv')">⬇ CSV</button>
+        <button class="iobtn" onclick="document.getElementById('import-ciclo-file').click()">⬆ Importar</button>
+        <input id="import-ciclo-file" type="file" accept=".json,.csv" style="display:none" onchange="importarCicloFile(this)">
       </div>
     </div>
 
@@ -221,6 +225,8 @@
         <button class="iobtn" onclick="exportarFlashcards('json')">⬇ JSON</button>
         <button class="iobtn" onclick="exportarFlashcards('csv')">⬇ CSV</button>
         <button class="iobtn" onclick="exportarFlashcards('anki')">⬇ Anki</button>
+        <button class="iobtn" onclick="document.getElementById('import-flash-file').click()">⬆ Importar</button>
+        <input id="import-flash-file" type="file" accept=".json,.csv,.txt,.tsv" style="display:none" onchange="importarFlashcardsFile(this)">
       </div>
       <div class="flash-count" id="flash-count"></div>
       <div id="flash-list"></div>

@@ -1781,3 +1781,71 @@ function exportarCiclo(formato) {
 function exportarFlashcards(formato) {
     window.open(`/api/flashcards/exportar?formato=${formato}`, '_blank');
 }
+// ==================== IMPORT FUNCTIONS ====================
+async function importarEditalFile(input) {
+    const file = input.files?.[0];
+    if (!file)
+        return;
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+        const res = await fetch('/api/edital/importar', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (data.ok) {
+            toast(`Importados ${data.importados} tópicos do edital!`, 'success');
+            loadEdital();
+        }
+        else {
+            toast('Erro ao importar edital', 'error');
+        }
+    }
+    catch (e) {
+        toast('Erro ao importar edital', 'error');
+    }
+    input.value = '';
+}
+async function importarCicloFile(input) {
+    const file = input.files?.[0];
+    if (!file)
+        return;
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+        const res = await fetch('/api/ciclo/importar', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (data.ok) {
+            toast(`Importadas ${data.importados} matérias no ciclo!`, 'success');
+            loadCiclo();
+        }
+        else {
+            toast('Erro ao importar ciclo', 'error');
+        }
+    }
+    catch (e) {
+        toast('Erro ao importar ciclo', 'error');
+    }
+    input.value = '';
+}
+async function importarFlashcardsFile(input) {
+    const file = input.files?.[0];
+    if (!file)
+        return;
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+        const res = await fetch('/api/flashcards/importar', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (data.ok) {
+            toast(`Importados ${data.importados} flashcards!`, 'success');
+            loadAllFlashcards();
+            loadFlashcardsToday();
+        }
+        else {
+            toast('Erro ao importar flashcards', 'error');
+        }
+    }
+    catch (e) {
+        toast('Erro ao importar flashcards', 'error');
+    }
+    input.value = '';
+}

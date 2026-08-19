@@ -494,3 +494,45 @@ def exportar_edital(
         media_type="application/json",
         headers={"Content-Disposition": "attachment; filename=edital_verticalizado.json"}
     )
+
+
+@router.post("/api/edital/importar", summary="Importar edital verticalizado",
+             description="Importa edital de arquivo JSON ou CSV")
+def importar_edital(file: UploadFile = File(...), conn=Depends(get_db_session)):
+    """Aceita JSON (array de objetos) ou CSV com colunas: edital_nome, cargo, materia, topico, status, horas_estudadas"""
+    content = file.file.read()
+    text = content.decode("utf-8")
+    items = []
+
+    if file.filename.endswith(".csv"):
+        reader = csv.DictReader(io.StringIO(text))
+        for row in reader:
+            items.append(row)
+    else:
+        # JSON
+        try:
+            items = json.loads(text)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Arquivo JSON inválido") from None
+
+    if not isinstance(items, list):
+        raise HTTPException(status_code=400, detail="Formato inválido: esperado array de objetos")
+
+    count = 0
+    for item in items:
+        edital_nome = item.get("edital_nome", "Importado")
+        cargo = item.get("cargo", "")
+        materia = item.get("materia", "")
+        topico = item.get("topico", "")
+        status = item.get("status", "Não Iniciado")
+        horas = float(item.get("horas_estudadas", 0))
+        if not materia or not topico:
+            continue
+        conn.execute(
+            "INSERT INTO edital (edital_nome, cargo, materia, topico, status, horas_estudadas) VALUES (?, ?, ?, ?, ?, ?)",
+            (edital_nome, cargo, materia, topico, status, horas)
+        )
+        count += 1
+    conn.commit()
+    log.info(f"Edital imported: {count} items")
+    return {"ok": True, "importados": count}

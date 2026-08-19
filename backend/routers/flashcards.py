@@ -1,6 +1,6 @@
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 
 from constants import SM2_FIRST_INTERVAL, SM2_INITIAL_EF, SM2_MIN_EF, SM2_SECOND_INTERVAL, SPEED_REVIEW_LIMIT
 from database import get_db_session
@@ -189,3 +189,58 @@ def exportar_flashcards(formato: str = "json", conn=Depends(get_db_session)):
         media_type="application/json",
         headers={"Content-Disposition": "attachment; filename=flashcards.json"}
     )
+
+
+@router.post("/api/flashcards/importar", summary="Importar flashcards",
+             description="Importa flashcards de JSON, CSV ou formato Anki (TSV)")
+def importar_flashcards(file: UploadFile = File(...), conn=Depends(get_db_session)):
+    """Aceita JSON, CSV (colunas: pergunta, resposta) ou Anki TSV (pergunta<TAB>resposta)"""
+    content = file.file.read()
+    text = content.decode("utf-8")
+    items = []
+
+    filename = file.filename or ""
+
+    if filename.endswith(".csv"):
+        reader = csv.DictReader(io.StringIO(text))
+        for row in reader:
+            items.append({"pergunta": row.get("pergunta", ""), "resposta": row.get("resposta", "")})
+    elif filename.endswith(".txt") or filename.endswith(".tsv"):
+        # Formato Anki: TSV (pergunta<TAB>resposta)
+        for line in text.strip().split("\n"):
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split("\t", 1)
+            if len(parts) == 2:
+                pergunta = parts[0].replace("<br>", "\n").strip()
+                resposta = parts[1].replace("<br>", "\n").strip()
+                items.append({"pergunta": pergunta, "resposta": resposta})
+            elif len(parts) == 1 and parts[0]:
+                # Caso só tenha pergunta (sem tab)
+                items.append({"pergunta": parts[0].strip(), "resposta": ""})
+    else:
+        # JSON
+        try:
+            data = json.loads(text)
+            if isinstance(data, list):
+                items = [{"pergunta": d.get("pergunta", ""), "resposta": d.get("resposta", "")} for d in data]
+            else:
+                raise HTTPException(status_code=400, detail="Formato inválido") from None
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="Arquivo JSON inválido") from None
+
+    count = 0
+    for item in items:
+        pergunta = item.get("pergunta", "").strip()
+        resposta = item.get("resposta", "").strip()
+        if not pergunta:
+            continue
+        conn.execute(
+            "INSERT INTO flashcards (pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions) VALUES (?, ?, ?, 1, 2.5, 0)",
+            (pergunta, resposta, today_str())
+        )
+        count += 1
+    conn.commit()
+    log.info(f"Flashcards imported: {count} items")
+    return {"ok": True, "importados": count}

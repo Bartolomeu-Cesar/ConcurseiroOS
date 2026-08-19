@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
 from database import get_db_session
+from logger import log
 from models import CicloCreate, CicloHoras, CicloUpdate
 from utils import today_str
 
@@ -117,3 +118,43 @@ def exportar_ciclo(formato: str = "json", conn=Depends(get_db_session)):
         media_type="application/json",
         headers={"Content-Disposition": "attachment; filename=ciclo_estudos.json"}
     )
+
+
+@router.post("/api/ciclo/importar", summary="Importar ciclo de estudos",
+             description="Importa ciclo de arquivo JSON ou CSV")
+def importar_ciclo(file: UploadFile = File(...), conn=Depends(get_db_session)):
+    """Aceita JSON (array) ou CSV com colunas: materia, horas_alvo, horas_cumpridas, ordem, ativo"""
+    content = file.file.read()
+    text = content.decode("utf-8")
+    items = []
+
+    if file.filename.endswith(".csv"):
+        reader = csv.DictReader(io.StringIO(text))
+        for row in reader:
+            items.append(row)
+    else:
+        try:
+            items = json.loads(text)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Arquivo JSON inválido") from None
+
+    if not isinstance(items, list):
+        raise HTTPException(status_code=400, detail="Formato inválido: esperado array de objetos")
+
+    count = 0
+    for item in items:
+        materia = item.get("materia", "")
+        if not materia:
+            continue
+        horas_alvo = float(item.get("horas_alvo", 1.0))
+        horas_cumpridas = float(item.get("horas_cumpridas", 0.0))
+        ordem = int(item.get("ordem", count))
+        ativo = int(item.get("ativo", 1))
+        conn.execute(
+            "INSERT INTO ciclo_estudos (materia, horas_alvo, horas_cumpridas, ordem, ativo) VALUES (?, ?, ?, ?, ?)",
+            (materia, horas_alvo, horas_cumpridas, ordem, ativo)
+        )
+        count += 1
+    conn.commit()
+    log.info(f"Ciclo imported: {count} items")
+    return {"ok": True, "importados": count}
