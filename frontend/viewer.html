@@ -447,7 +447,7 @@
         ];
         if (q.alternativa_e) alts.push({ letter: 'E', text: q.alternativa_e });
 
-        return `<div class="sp-question" data-id="${q.id}" data-correct="${q.resposta_correta}">
+        return `<div class="sp-question" data-id="${q.id}" data-correct="${q.resposta_correta}" data-start="${Date.now()}">
           <div class="sp-meta">${q.materia}${q.topico ? ' • '+q.topico : ''}</div>
           <div class="sp-enunciado">${q.enunciado}</div>
           ${alts.map(a => `<div class="sp-alt" data-letter="${a.letter}" onclick="selectSideAlt(this)"><span class="letter">${a.letter})</span> ${a.text}</div>`).join('')}
@@ -464,6 +464,8 @@
       const letter = el.dataset.letter;
       const correct = question.dataset.correct;
       const qId = question.dataset.id;
+      const startTime = parseInt(question.dataset.start || '0');
+      const tempoSegundos = startTime ? Math.round((Date.now() - startTime) / 1000) : 0;
 
       // Marcar seleção
       el.classList.add('selected');
@@ -472,7 +474,7 @@
       const res = await fetch(`/api/questoes/${qId}/responder`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ resposta: letter, tempo_segundos: 0 })
+        body: JSON.stringify({ resposta: letter, tempo_segundos: tempoSegundos })
       }).then(r => r.json());
 
       // Mostrar resultado

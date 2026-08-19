@@ -75,7 +75,43 @@ def finalizar_simulado(id: int, body: SimuladoFinalizar, conn=Depends(get_db_ses
                tempo_gasto_seg = ?, finalizado_at = ?
         WHERE id = ?
     """, (nota, acertos, body.tempo_gasto_seg, datetime.now().isoformat(), id))
+
+    # Registrar tempo do simulado como sessão de estudo
+    if body.tempo_gasto_seg > 0:
+        horas = body.tempo_gasto_seg / 3600
+        # Identificar matérias do simulado para registrar por matéria
+        materias_sim = conn.execute("""
+            SELECT DISTINCT q.materia FROM simulado_questoes sq
+            JOIN questoes q ON q.id = sq.questao_id
+            WHERE sq.simulado_id = ?
+        """, (id,)).fetchall()
+        if materias_sim:
+            horas_por_mat = horas / len(materias_sim)
+            for row in materias_sim:
+                mat = row[0] or "Simulado"
+                existing = conn.execute(
+                    "SELECT id FROM sessoes_estudo WHERE data = ? AND materia = ? AND tipo = 'simulado'",
+                    (today_str(), mat)
+                ).fetchone()
+                if existing:
+                    conn.execute(
+                        "UPDATE sessoes_estudo SET horas = horas + ? WHERE id = ?",
+                        (horas_por_mat, existing[0])
+                    )
+                else:
+                    conn.execute(
+                        "INSERT INTO sessoes_estudo (materia, horas, data, tipo) VALUES (?, ?, ?, 'simulado')",
+                        (mat, horas_por_mat, today_str())
+                    )
+        else:
+            # Fallback: registrar genérico
+            conn.execute(
+                "INSERT INTO sessoes_estudo (materia, horas, data, tipo) VALUES (?, ?, ?, 'simulado')",
+                ("Simulado", horas, today_str())
+            )
+
     conn.commit()
+    log.info(f"Simulado {id} finalizado: nota={nota}% ({acertos}/{total}) tempo={body.tempo_gasto_seg}s")
     return {"nota": nota, "acertos": acertos, "total": total}
 
 

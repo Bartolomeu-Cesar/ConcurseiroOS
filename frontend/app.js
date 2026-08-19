@@ -1553,6 +1553,7 @@ function showQuestaoDia() {
 }
 async function responderQuestaoDia(letra) {
     const q = questoesDia[qDiaIdx];
+    const tempoSegundos = window._qDiaStartTime ? Math.round((Date.now() - window._qDiaStartTime) / 1000) : 0;
     const acertou = letra.toUpperCase() === q.resposta_correta.toUpperCase();
     if (acertou) qDiaAcertos++;
 
@@ -1585,7 +1586,7 @@ async function responderQuestaoDia(letra) {
     try {
         await fetch(`/api/questoes/${q.id}/responder`, {
             method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ resposta: letra, tempo_segundos: 0 })
+            body: JSON.stringify({ resposta: letra, tempo_segundos: tempoSegundos })
         });
         loadMetas();
         loadStreakBadge();
