@@ -591,8 +591,30 @@ def calendario_semanal(edital_nome: str = "", cargo: str = "", horas_dia: float 
     """Gera calendário semanal de estudos com distribuição inteligente de matérias."""
     tempo_dia_min = int(horas_dia * 60)
 
-    # 1. Buscar matérias do edital com tópicos pendentes
-    materias_edital = _get_materias_edital_with_topics(conn, edital_nome, cargo)
+    # 1. Verificar se há ciclo ativo — se sim, usar como fonte principal
+    ciclo = conn.execute("SELECT * FROM ciclo_estudos WHERE ativo = 1 ORDER BY ordem, id").fetchall()
+
+    if ciclo:
+        # Usar matérias do ciclo com proporções de horas_alvo
+        materias_edital = []
+        total_alvo = sum(c["horas_alvo"] for c in ciclo) or 1
+        for c in ciclo:
+            # Buscar tópicos pendentes para essa matéria
+            pendentes = conn.execute(
+                "SELECT COUNT(*) FROM edital WHERE materia = ? AND status != 'Concluído' AND arquivado = 0",
+                (c["materia"],)
+            ).fetchone()[0]
+            materias_edital.append({
+                "materia": c["materia"],
+                "pendentes": pendentes,
+                "total": conn.execute("SELECT COUNT(*) FROM edital WHERE materia = ?", (c["materia"],)).fetchone()[0],
+                "horas_alvo": c["horas_alvo"],
+                "horas_cumpridas": c["horas_cumpridas"],
+                "peso_ciclo": c["horas_alvo"] / total_alvo,  # Proporção no ciclo
+            })
+    else:
+        # 1b. Sem ciclo: buscar matérias do edital (comportamento original)
+        materias_edital = _get_materias_edital_with_topics(conn, edital_nome, cargo)
 
     if not materias_edital:
         # Sem matérias: retornar calendário vazio com orientação
@@ -616,13 +638,18 @@ def calendario_semanal(edital_nome: str = "", cargo: str = "", horas_dia: float 
     # 2. Obter desempenho por matéria
     desempenho = _get_performance_by_subject(conn)
 
-    # 3. Rankear matérias: pior desempenho + mais tópicos pendentes = mais prioridade
+    # 3. Rankear matérias
     for m in materias_edital:
         perf = desempenho.get(m["materia"], {})
         pct = perf.get("pct", 0)
-        # Score: menor % de acerto = prioridade maior; mais pendentes = prioridade maior
         m["pct_acerto"] = pct
-        m["score"] = (100 - pct) + m["pendentes"] * 2
+        if "peso_ciclo" in m:
+            # Ciclo ativo: score baseado em peso do ciclo + desempenho
+            # Matérias com mais horas_alvo e pior desempenho = prioridade
+            m["score"] = (100 - pct) + m["peso_ciclo"] * 100 + m["pendentes"]
+        else:
+            # Sem ciclo: score original (desempenho + pendentes)
+            m["score"] = (100 - pct) + m["pendentes"] * 2
 
     materias_edital.sort(key=lambda x: -x["score"])
 
