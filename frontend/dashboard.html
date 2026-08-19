@@ -737,6 +737,35 @@
         <div id="projecao-nota"></div>
       </div>
     </div>
+
+    <!-- NOVOS: Analytics Avançados -->
+    <!-- Velocidade de Resolução -->
+    <div class="charts">
+      <div class="chart-box" style="grid-column: span 2;">
+        <h3>⏱ Velocidade de Resolução por Matéria</h3>
+        <div id="velocidade-box"></div>
+      </div>
+    </div>
+
+    <!-- Consistência + Metas vs Realizado -->
+    <div class="charts">
+      <div class="chart-box">
+        <h3>📅 Consistência de Estudos (4 semanas)</h3>
+        <div id="consistencia-box"></div>
+      </div>
+      <div class="chart-box">
+        <h3>📊 Meta vs Realizado</h3>
+        <canvas id="chart-metas-realizado" height="200"></canvas>
+      </div>
+    </div>
+
+    <!-- Ranking de Matérias -->
+    <div class="charts">
+      <div class="chart-box" style="grid-column: span 2;">
+        <h3>🏆 Ranking de Matérias — Fortes vs Fracas</h3>
+        <div id="ranking-materias-box"></div>
+      </div>
+    </div>
   </div>
 
   <!-- Tab 4: Gamificação -->
@@ -2740,6 +2769,145 @@
       loadCalendario();
     }
 
+    // ==================== ANALYTICS AVANÇADOS ====================
+
+    async function loadVelocidade() {
+      try {
+        const data = await fetch('/api/analytics/velocidade').then(r => r.json());
+        const el = document.getElementById('velocidade-box');
+        if (!data.por_materia || data.por_materia.length === 0) {
+          el.innerHTML = '<p style="color:#9399b2;font-size:0.82rem;">Responda questões para gerar análise de velocidade.</p>';
+          return;
+        }
+        const mediaGeral = data.media_geral_seg;
+        const fmtTime = (s) => s >= 60 ? `${Math.floor(s/60)}:${String(Math.round(s%60)).padStart(2,'0')}` : `${Math.round(s)}s`;
+        let html = `<div style="display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap;">
+          <div style="background:#1e1e2e;border-radius:8px;padding:10px 16px;text-align:center;">
+            <div style="font-size:1.4rem;font-weight:700;color:#89b4fa;">${fmtTime(mediaGeral)}</div>
+            <div style="font-size:0.72rem;color:#9399b2;">Média geral/questão</div>
+          </div>
+          <div style="background:#1e1e2e;border-radius:8px;padding:10px 16px;text-align:center;">
+            <div style="font-size:1.4rem;font-weight:700;color:#a6e3a1;">${data.por_materia.length}</div>
+            <div style="font-size:0.72rem;color:#9399b2;">Matérias analisadas</div>
+          </div>
+        </div>`;
+        html += '<div style="display:flex;flex-direction:column;gap:6px;">';
+        data.por_materia.slice(0, 10).forEach(m => {
+          const pctBar = Math.min(100, (m.media_seg / (mediaGeral * 2)) * 100);
+          const cor = m.media_seg <= mediaGeral ? '#a6e3a1' : m.media_seg <= mediaGeral * 1.5 ? '#f9e2af' : '#f38ba8';
+          html += `<div style="display:flex;align-items:center;gap:8px;font-size:0.78rem;">
+            <span style="min-width:120px;color:#cdd6f4;">${m.materia.length > 18 ? m.materia.slice(0,18)+'…' : m.materia}</span>
+            <div style="flex:1;height:6px;background:#45475a;border-radius:3px;overflow:hidden;">
+              <div style="width:${pctBar}%;height:100%;background:${cor};border-radius:3px;"></div>
+            </div>
+            <span style="min-width:45px;text-align:right;color:${cor};font-weight:600;">${fmtTime(m.media_seg)}</span>
+            <span style="min-width:40px;text-align:right;color:#9399b2;">${m.pct_acerto}%</span>
+          </div>`;
+        });
+        html += '</div>';
+        el.innerHTML = html;
+      } catch(e) { console.error('Velocidade error:', e); }
+    }
+
+    async function loadConsistencia() {
+      try {
+        const data = await fetch('/api/analytics/consistencia').then(r => r.json());
+        const el = document.getElementById('consistencia-box');
+        const pct = data.pct_consistencia;
+        const corPct = pct >= 80 ? '#a6e3a1' : pct >= 50 ? '#f9e2af' : '#f38ba8';
+        let html = `
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+            <div style="background:#1e1e2e;border-radius:8px;padding:10px;text-align:center;">
+              <div style="font-size:1.3rem;font-weight:700;color:${corPct};">${data.dias_estudados}/${data.dias_totais}</div>
+              <div style="font-size:0.7rem;color:#9399b2;">Dias estudados</div>
+            </div>
+            <div style="background:#1e1e2e;border-radius:8px;padding:10px;text-align:center;">
+              <div style="font-size:1.3rem;font-weight:700;color:#89b4fa;">${data.media_horas_dia}h</div>
+              <div style="font-size:0.7rem;color:#9399b2;">Média/dia</div>
+            </div>
+            <div style="background:#1e1e2e;border-radius:8px;padding:10px;text-align:center;">
+              <div style="font-size:1.3rem;font-weight:700;color:#cba6f7;">${data.horas_total}h</div>
+              <div style="font-size:0.7rem;color:#9399b2;">Total 4 semanas</div>
+            </div>
+            <div style="background:#1e1e2e;border-radius:8px;padding:10px;text-align:center;">
+              <div style="font-size:1.3rem;font-weight:700;color:#fab387;">🔥 ${data.streak_atual}</div>
+              <div style="font-size:0.7rem;color:#9399b2;">Streak atual</div>
+            </div>
+          </div>
+          <div style="font-size:0.75rem;color:#9399b2;margin-bottom:6px;">Distribuição semanal (horas)</div>
+          <div style="display:flex;gap:4px;align-items:flex-end;height:60px;">`;
+        const maxH = Math.max(...data.distribuicao_semana, 1);
+        data.distribuicao_semana.forEach((h, i) => {
+          const altura = Math.max(4, (h / maxH) * 55);
+          html += `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">
+            <div style="width:100%;height:${altura}px;background:#89b4fa88;border-radius:3px;"></div>
+            <span style="font-size:0.6rem;color:#9399b2;">${data.dias_semana_nomes[i]}</span>
+          </div>`;
+        });
+        html += '</div>';
+        el.innerHTML = html;
+      } catch(e) { console.error('Consistencia error:', e); }
+    }
+
+    async function loadMetasRealizado() {
+      try {
+        const data = await fetch('/api/analytics/metas-realizado').then(r => r.json());
+        if (!data.semanas || data.semanas.length === 0) return;
+        if (typeof Chart === 'undefined') { setTimeout(loadMetasRealizado, 200); return; }
+        const ctx = document.getElementById('chart-metas-realizado')?.getContext('2d');
+        if (!ctx) return;
+        new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: data.semanas.map(s => s.semana),
+            datasets: [
+              { label: 'Horas (real)', data: data.semanas.map(s => s.horas_real), backgroundColor: '#89b4fa99', borderColor: '#89b4fa', borderWidth: 1, borderRadius: 3 },
+              { label: 'Horas (meta)', data: data.semanas.map(s => s.horas_meta), backgroundColor: '#89b4fa22', borderColor: '#89b4fa55', borderWidth: 1, borderRadius: 3, borderDash: [3, 3] },
+            ]
+          },
+          options: {
+            responsive: true,
+            plugins: { legend: { labels: { color: '#a6adc8', font: { size: 10 } } } },
+            scales: {
+              y: { beginAtZero: true, ticks: { color: '#9399b2' }, grid: { color: '#45475a' } },
+              x: { ticks: { color: '#9399b2', font: { size: 9 } }, grid: { color: '#45475a' } }
+            }
+          }
+        });
+      } catch(e) { console.error('MetasRealizado error:', e); }
+    }
+
+    async function loadRankingMaterias() {
+      try {
+        const data = await fetch('/api/analytics/ranking-materias').then(r => r.json());
+        const el = document.getElementById('ranking-materias-box');
+        if (!data.ranking || data.ranking.length === 0) {
+          el.innerHTML = '<p style="color:#9399b2;font-size:0.82rem;">Responda pelo menos 3 questões por matéria para gerar o ranking.</p>';
+          return;
+        }
+        const statusColors = { forte: '#a6e3a1', medio: '#f9e2af', fraco: '#f38ba8' };
+        const statusIcons = { forte: '💪', medio: '⚡', fraco: '⚠️' };
+        let html = `<div style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
+          <span style="font-size:0.75rem;color:#a6e3a1;background:#a6e3a122;padding:3px 8px;border-radius:4px;">💪 Fortes: ${data.fortes}</span>
+          <span style="font-size:0.75rem;color:#f9e2af;background:#f9e2af22;padding:3px 8px;border-radius:4px;">⚡ Médias: ${data.medias}</span>
+          <span style="font-size:0.75rem;color:#f38ba8;background:#f38ba822;padding:3px 8px;border-radius:4px;">⚠️ Fracas: ${data.fracas}</span>
+        </div>`;
+        html += '<div style="display:flex;flex-direction:column;gap:6px;">';
+        data.ranking.forEach((m, i) => {
+          const cor = statusColors[m.status];
+          html += `<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:#1e1e2e;border-radius:6px;border-left:3px solid ${cor};font-size:0.78rem;">
+            <span style="min-width:20px;color:#585b70;font-weight:600;">#${i+1}</span>
+            <span style="flex:1;color:#cdd6f4;">${m.materia}</span>
+            <span style="font-weight:700;color:${cor};">${m.pct_acerto}%</span>
+            <span style="font-size:0.68rem;color:#9399b2;min-width:50px;text-align:right;">${m.total}q</span>
+            <span style="font-size:0.65rem;color:#585b70;min-width:100px;text-align:right;">${m.acao}</span>
+          </div>`;
+        });
+        html += '</div>';
+        el.innerHTML = html;
+      } catch(e) { console.error('Ranking error:', e); }
+    }
+
     // Carregar dados da aba ativa
     function loadActivePanel() {
       const active = document.querySelector('.dash-panel.active')?.id;
@@ -2776,6 +2944,10 @@
           loadAnaliseErros();
           loadPraticaDeliberada();
           loadProjecaoNota();
+          loadVelocidade();
+          loadConsistencia();
+          loadMetasRealizado();
+          loadRankingMaterias();
           break;
         case 'panel-gamification':
           loadGamification();

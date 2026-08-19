@@ -1189,3 +1189,154 @@ def evolucao_semanal(semanas: int = 12, conn=Depends(get_db_session)):
             tendencia.append({"materia": mat, "tendencia": tendencia_str, "delta": delta})
 
     return {"semanas": semanas, "evolucao": evolucao, "tendencia": tendencia}
+
+
+# ==================== ANALYTICS AVANÇADOS ====================
+
+@router.get("/api/analytics/velocidade")
+def analytics_velocidade(conn=Depends(get_db_session)):
+    """Tempo médio de resposta por matéria (só questões com tempo > 0)."""
+    rows = conn.execute("""
+        SELECT q.materia,
+               AVG(qr.tempo_segundos) as media_seg,
+               COUNT(*) as total,
+               SUM(qr.acertou) as acertos
+        FROM questoes_respostas qr
+        JOIN questoes q ON q.id = qr.questao_id
+        WHERE qr.tempo_segundos > 0
+        GROUP BY q.materia
+        ORDER BY media_seg DESC
+    """).fetchall()
+    geral = conn.execute(
+        "SELECT AVG(tempo_segundos) FROM questoes_respostas WHERE tempo_segundos > 0"
+    ).fetchone()[0]
+    return {
+        "media_geral_seg": round(geral, 1) if geral else 0,
+        "por_materia": [{"materia": r["materia"], "media_seg": round(r["media_seg"], 1), "total": r["total"], "pct_acerto": round(r["acertos"] / r["total"] * 100, 1) if r["total"] > 0 else 0} for r in rows]
+    }
+
+
+@router.get("/api/analytics/consistencia")
+def analytics_consistencia(conn=Depends(get_db_session)):
+    """Métricas de consistência: dias estudados, horas/dia, distribuição semanal."""
+    # Últimas 4 semanas
+    inicio = (date.today() - timedelta(days=27)).isoformat()
+    sessoes = conn.execute(
+        "SELECT data, SUM(horas) as total FROM sessoes_estudo WHERE data >= ? GROUP BY data",
+        (inicio,)
+    ).fetchall()
+
+    dias_estudados = len(sessoes)
+    dias_totais = 28
+    horas_total = sum(s["total"] for s in sessoes)
+    media_horas_dia = round(horas_total / dias_estudados, 1) if dias_estudados > 0 else 0
+
+    # Distribuição por dia da semana
+    dist_semana = [0] * 7  # seg=0 ... dom=6
+    for s in sessoes:
+        d = date.fromisoformat(s["data"])
+        dist_semana[d.weekday()] += s["total"]
+
+    # Streaks
+    streaks = conn.execute("SELECT data FROM streaks ORDER BY data DESC").fetchall()
+    streak_atual = 0
+    hoje = date.today()
+    for s in streaks:
+        d = date.fromisoformat(s["data"])
+        if d == hoje - timedelta(days=streak_atual):
+            streak_atual += 1
+        else:
+            break
+
+    return {
+        "dias_estudados": dias_estudados,
+        "dias_totais": dias_totais,
+        "pct_consistencia": round(dias_estudados / dias_totais * 100, 1),
+        "horas_total": round(horas_total, 1),
+        "media_horas_dia": media_horas_dia,
+        "streak_atual": streak_atual,
+        "distribuicao_semana": dist_semana,
+        "dias_semana_nomes": ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
+    }
+
+
+@router.get("/api/analytics/metas-realizado")
+def analytics_metas_realizado(conn=Depends(get_db_session)):
+    """Comparativo planejado vs realizado nas últimas 4 semanas."""
+    cfg = conn.execute("SELECT * FROM metas_config WHERE id = 1").fetchone()
+    meta_horas = cfg["meta_horas"] if cfg else 3
+    meta_questoes = cfg["meta_questoes"] if cfg else 30
+
+    semanas = []
+    for i in range(4):
+        fim = date.today() - timedelta(days=i * 7)
+        inicio = fim - timedelta(days=6)
+
+        horas = conn.execute(
+            "SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE data BETWEEN ? AND ?",
+            (inicio.isoformat(), fim.isoformat())
+        ).fetchone()[0]
+
+        questoes = conn.execute(
+            "SELECT COUNT(*) FROM questoes_respostas WHERE data BETWEEN ? AND ?",
+            (inicio.isoformat(), fim.isoformat())
+        ).fetchone()[0]
+
+        semanas.append({
+            "semana": f"{inicio.strftime('%d/%m')} - {fim.strftime('%d/%m')}",
+            "horas_meta": round(meta_horas * 7, 1),
+            "horas_real": round(horas, 1),
+            "questoes_meta": meta_questoes * 7,
+            "questoes_real": questoes,
+            "pct_horas": round(horas / (meta_horas * 7) * 100, 1) if meta_horas > 0 else 0,
+            "pct_questoes": round(questoes / (meta_questoes * 7) * 100, 1) if meta_questoes > 0 else 0,
+        })
+
+    semanas.reverse()
+    return {"semanas": semanas}
+
+
+@router.get("/api/analytics/ranking-materias")
+def analytics_ranking_materias(conn=Depends(get_db_session)):
+    """Ranking de matérias fortes e fracas com recomendação."""
+    rows = conn.execute("""
+        SELECT q.materia,
+               COUNT(*) as total,
+               SUM(qr.acertou) as acertos,
+               AVG(qr.tempo_segundos) as media_tempo
+        FROM questoes_respostas qr
+        JOIN questoes q ON q.id = qr.questao_id
+        GROUP BY q.materia
+        HAVING total >= 3
+        ORDER BY (CAST(acertos AS REAL) / total) ASC
+    """).fetchall()
+
+    ranking = []
+    for r in rows:
+        pct = round(r["acertos"] / r["total"] * 100, 1)
+        if pct >= 80:
+            status = "forte"
+            acao = "Manter revisão espaçada"
+        elif pct >= 60:
+            status = "medio"
+            acao = "Aumentar questões e revisar erros"
+        else:
+            status = "fraco"
+            acao = "Priorizar estudo teórico + questões comentadas"
+
+        ranking.append({
+            "materia": r["materia"],
+            "total": r["total"],
+            "pct_acerto": pct,
+            "media_tempo_seg": round(r["media_tempo"], 1) if r["media_tempo"] else 0,
+            "status": status,
+            "acao": acao,
+        })
+
+    return {
+        "ranking": ranking,
+        "total_materias": len(ranking),
+        "fortes": len([r for r in ranking if r["status"] == "forte"]),
+        "medias": len([r for r in ranking if r["status"] == "medio"]),
+        "fracas": len([r for r in ranking if r["status"] == "fraco"]),
+    }
