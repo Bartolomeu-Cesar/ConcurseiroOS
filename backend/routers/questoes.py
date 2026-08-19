@@ -267,7 +267,7 @@ def create_questao(body: QuestaoCreate, conn=Depends(get_db_session)):
 
 @router.post("/api/questoes/{id}/responder", response_model=QuestaoRespostaResponse, summary="Responder questão", description="Registra a resposta do usuário e retorna se acertou ou errou")
 def responder_questao(id: int, body: QuestaoResposta, conn=Depends(get_db_session)):
-    questao = conn.execute("SELECT resposta_correta FROM questoes WHERE id = ?", (id,)).fetchone()
+    questao = conn.execute("SELECT resposta_correta, materia FROM questoes WHERE id = ?", (id,)).fetchone()
     if not questao:
         raise HTTPException(status_code=404, detail="Questão não encontrada")
     acertou = 1 if body.resposta.upper() == questao[0].upper() else 0
@@ -276,6 +276,27 @@ def responder_questao(id: int, body: QuestaoResposta, conn=Depends(get_db_sessio
         VALUES (?, ?, ?, ?, ?)
     """, (id, body.resposta, acertou, body.tempo_segundos, today_str()))
     update_streak(conn, "questoes_resolvidas")
+
+    # Registrar tempo como sessão de estudo (se > 10 segundos)
+    if body.tempo_segundos > 10:
+        horas = body.tempo_segundos / 3600
+        materia = questao["materia"] or "Questões"
+        # Acumular na sessão do dia (evitar muitas linhas)
+        existing = conn.execute(
+            "SELECT id, horas FROM sessoes_estudo WHERE data = ? AND materia = ? AND tipo = 'questoes'",
+            (today_str(), materia)
+        ).fetchone()
+        if existing:
+            conn.execute(
+                "UPDATE sessoes_estudo SET horas = horas + ? WHERE id = ?",
+                (horas, existing["id"])
+            )
+        else:
+            conn.execute(
+                "INSERT INTO sessoes_estudo (materia, horas, data, tipo) VALUES (?, ?, ?, 'questoes')",
+                (materia, horas, today_str())
+            )
+
     conn.commit()
     return {"acertou": bool(acertou), "resposta_correta": questao[0]}
 
