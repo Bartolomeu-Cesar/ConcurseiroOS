@@ -264,6 +264,9 @@
     .cal-activity-info { flex: 1; }
     .cal-activity-materia { font-weight: 600; color: #cdd6f4; }
     .cal-activity-detail { color: #9399b2; font-size: 0.7rem; margin-top: 2px; }
+    .cal-detail-truncated { cursor: pointer; }
+    .cal-detail-truncated:hover { color: #89b4fa; }
+    .cal-detail-truncated .cal-detail-short::after { content: ' ▸'; color: #89b4fa; font-size: 0.6rem; }
     .cal-activity-time { font-size: 0.7rem; color: #89b4fa; white-space: nowrap; }
     .cal-day-footer { margin-top: 8px; padding-top: 6px; border-top: 1px solid #45475a; font-size: 0.72rem; color: #9399b2; }
     body.light-theme .cal-day { background: #dce0e8; border-color: #bcc0cc; }
@@ -2499,12 +2502,6 @@
 
           html += `<div class="cal-activities-list" data-date="${dia.data}" data-total="${dia.atividades.length}">`;
 
-          // Colapsar se muitas atividades (> 4)
-          const MAX_VISIBLE = 4;
-          const totalAtivs = dia.atividades.length;
-          const shouldCollapse = totalAtivs > MAX_VISIBLE && !isToday;
-          let atividadeCount = 0;
-
           // Linha do tempo com hora atual (só no dia de hoje)
           let timelineInserida = false;
           const turnoAtualNome = isToday ? getTurnoAtual(horaAtual) : '';
@@ -2546,12 +2543,6 @@
 
             for (let i = 0; i < ativsTurno.length; i++) {
               const ativ = ativsTurno[i];
-              atividadeCount++;
-
-              // Se deve colapsar e já passou do limite, abrir container oculto
-              if (shouldCollapse && atividadeCount === MAX_VISIBLE + 1) {
-                html += `<div class="cal-collapsed" id="cal-more-${dia.data}" style="display:none;">`;
-              }
 
               const icon = icons[ativ.tipo] || '📌';
               const materia = ativ.materia || '';
@@ -2574,7 +2565,19 @@
               html += `<span class="cal-activity-icon">${icon}</span>`;
               html += `<div class="cal-activity-info">`;
               if (materia) html += `<div class="cal-activity-materia">${materia}${adiada ? ' <span style="font-size:0.6rem;color:#f9e2af;">⏩ adiada</span>' : ''}</div>`;
-              if (detail) html += `<div class="cal-activity-detail">${detail}</div>`;
+              if (detail) {
+                const isLong = detail.length > 60;
+                if (isLong) {
+                  const truncated = detail.slice(0, 55) + '...';
+                  const uid = 'det-' + Math.random().toString(36).slice(2, 8);
+                  html += `<div class="cal-activity-detail cal-detail-truncated" id="${uid}" onclick="toggleDetailExpand(this)" title="Clique para expandir">
+                    <span class="cal-detail-short">${truncated}</span>
+                    <span class="cal-detail-full" style="display:none;">${detail}</span>
+                  </div>`;
+                } else {
+                  html += `<div class="cal-activity-detail">${detail}</div>`;
+                }
+              }
               html += `</div>`;
               html += `<span class="cal-activity-time">${ativ.tempo_min}min</span>`;
 
@@ -2590,19 +2593,7 @@
               html += `</div>`;
             }
           }
-          // Fechar div collapsed se foi aberto
-          if (shouldCollapse && atividadeCount > MAX_VISIBLE) {
-            html += `</div>`; // fecha cal-collapsed
-          }
           html += `</div>`; // cal-activities-list end
-
-          // Botão ver mais
-          if (shouldCollapse && atividadeCount > MAX_VISIBLE) {
-            const extras = atividadeCount - MAX_VISIBLE;
-            html += `<div class="cal-expand-btn" onclick="toggleCalCollapse('${dia.data}')" style="text-align:center;padding:4px;cursor:pointer;font-size:0.72rem;color:#89b4fa;border-top:1px dashed #45475a;margin-top:4px;" id="cal-expand-${dia.data}">
-              ··· ver mais (${extras})
-            </div>`;
-          }
         }
 
         html += `<div class="cal-day-footer">⏱ ${dia.tempo_total_min}min</div>`;
@@ -2721,6 +2712,20 @@
         const extras = container.querySelectorAll('.cal-activity').length;
         btn.textContent = `··· ver mais (${extras})`;
         btn.style.color = '#89b4fa';
+      }
+    }
+
+    function toggleDetailExpand(el) {
+      const short = el.querySelector('.cal-detail-short');
+      const full = el.querySelector('.cal-detail-full');
+      if (full.style.display === 'none') {
+        short.style.display = 'none';
+        full.style.display = 'inline';
+        el.classList.remove('cal-detail-truncated');
+      } else {
+        short.style.display = 'inline';
+        full.style.display = 'none';
+        el.classList.add('cal-detail-truncated');
       }
     }
 
