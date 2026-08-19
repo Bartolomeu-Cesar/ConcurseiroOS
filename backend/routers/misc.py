@@ -401,3 +401,32 @@ def topico_aleatorio(edital_nome: str = "", cargo: str = "", conn=Depends(get_db
         return {"message": "Todos os tópicos foram concluídos! 🎉"}
     chosen = random.choice(rows)
     return dict(chosen)
+
+
+# ============================================================
+# REGISTRAR SESSÃO DE ESTUDO (Timer genérico)
+# ============================================================
+
+class SessaoEstudoRegistrar(BaseModel):
+    horas: float
+    materia: str = "Leitura PDF"
+    tipo: str = "timer"
+
+
+@router.post("/api/sessoes-estudo/registrar", summary="Registrar sessão de estudo",
+             description="Registra tempo estudado pelo timer genérico")
+def registrar_sessao_estudo(body: SessaoEstudoRegistrar, conn=Depends(get_db_session)):
+    """Registra uma sessão de estudo (usada pelo timer principal e viewer)."""
+    if body.horas <= 0:
+        return {"ok": False, "message": "Tempo inválido"}
+    conn.execute(
+        "INSERT INTO sessoes_estudo (materia, horas, data, tipo) VALUES (?, ?, ?, ?)",
+        (body.materia, body.horas, today_str(), body.tipo)
+    )
+    conn.execute("""
+        INSERT INTO streaks (data, horas_estudadas) VALUES (?, ?)
+        ON CONFLICT(data) DO UPDATE SET horas_estudadas = horas_estudadas + ?
+    """, (today_str(), body.horas, body.horas))
+    conn.commit()
+    log.info(f"Session registered: {body.horas:.2f}h ({body.materia})")
+    return {"ok": True, "horas": body.horas}

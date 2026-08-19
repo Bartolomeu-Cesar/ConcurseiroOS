@@ -528,6 +528,18 @@ function pauseTimer() {
 function stopTimer(showOverlay = false) {
     clearInterval(timerInterval);
     timerInterval = null;
+    // Salvar tempo estudado se > 1 minuto
+    if (startedAt) {
+        const finalElapsed = Math.floor((Date.now() - startedAt) / 1000);
+        if (finalElapsed >= 60) {
+            const hours = finalElapsed / 3600;
+            fetch('/api/sessoes-estudo/registrar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ horas: hours, materia: 'Leitura PDF', tipo: 'timer' })
+            }).catch(() => {});
+        }
+    }
     elapsed = 0;
     paused = false;
     startedAt = null;
