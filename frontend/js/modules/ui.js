@@ -1,6 +1,6 @@
 // ==================== UI ====================
 // PWA, countdown, theme, gamification, notifications, focus mode, accessibility, confetti, onboarding
-import { escapeHtml, toast } from './utils.js';
+import { escapeHtml, toast, confirmModal } from './utils.js';
 import { openSelectModal } from './modal-selecao.js';
 
 // ==================== PWA ====================
@@ -156,7 +156,8 @@ export function initRevisaoEspacada() {
     if (!leaf) return;
     const id = leaf.dataset.id;
     if (!id) return;
-    if (confirm('Agendar revisão espaçada para este tópico?')) {
+    const ok = await confirmModal('Revisão Espaçada', 'Agendar revisão espaçada para este tópico?', { confirmText: 'Agendar', type: 'info', icon: '🔄' });
+    if (ok) {
       const res = await fetch(`/api/edital/${id}/agendar-revisao`, { method: 'POST' }).then(r => r.json());
       toast(`Revisão agendada para: ${res.proxima_revisao} (intervalo: ${res.intervalo} dias)`, 'success');
     }

@@ -1,6 +1,6 @@
 // ==================== VINCULAR PDF + NOTAS POR TÓPICO ====================
 import { state } from './state.js';
-import { toast, escapeHtml } from './utils.js';
+import { toast, escapeHtml, confirmModal } from './utils.js';
 import { openSelectModal } from './modal-selecao.js';
 
 let _loadFn = null;
@@ -60,7 +60,8 @@ export async function linkPdfToMateria(materia, editalNome, cargo) {
 
 export async function unlinkPdf(pdfPath) {
   const vinculado = state.editalData.find(e => e.pdf_link === pdfPath);
-  if (!confirm(`Desvincular "${pdfPath.split('/').pop()}" de "${vinculado?.materia || 'disciplina'}"?`)) return;
+  const ok = await confirmModal('Desvincular PDF', `Desvincular <strong>"${pdfPath.split('/').pop()}"</strong> de <strong>"${vinculado?.materia || 'disciplina'}"</strong>?`, { confirmText: 'Desvincular', type: 'warning', icon: '❌' });
+  if (!ok) return;
   await fetch(`/api/edital/desvincular-pdf?pdf_link=${encodeURIComponent(pdfPath)}`, { method: 'PUT' });
   state.editalData = await fetch('/api/edital').then(r => r.json());
   if (_loadFn) await _loadFn();

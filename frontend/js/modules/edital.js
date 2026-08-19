@@ -285,7 +285,8 @@ export async function importEditalPdf(input) {
 
 // ==================== ARQUIVAR / EXCLUIR EDITAIS ====================
 export async function arquivarCargo(editalNome, cargo) {
-  if (!confirm(`Arquivar "${cargo}" de "${editalNome}"?\n\nOs tópicos não serão excluídos, apenas ocultados.`)) return;
+  const ok = await confirmModal('Arquivar Cargo', `Arquivar <strong>"${cargo}"</strong> de <strong>"${editalNome}"</strong>?<br><br>Os tópicos não serão excluídos, apenas ocultados.`, { confirmText: 'Arquivar', type: 'info', icon: '📦' });
+  if (!ok) return;
   await fetch(`/api/edital/arquivar?edital_nome=${encodeURIComponent(editalNome)}&cargo=${encodeURIComponent(cargo)}`, { method: 'PUT' });
   state.editalData = await fetch('/api/edital').then(r => r.json());
   renderEditalTree();
@@ -305,7 +306,8 @@ export async function excluirCargo(editalNome, cargo) {
 }
 
 export async function arquivarConcurso(editalNome) {
-  if (!confirm(`Arquivar TODO o concurso "${editalNome}" (todos os cargos)?\n\nOs dados não serão excluídos, apenas ocultados.`)) return;
+  const ok = await confirmModal('Arquivar Concurso', `Arquivar TODO o concurso <strong>"${editalNome}"</strong> (todos os cargos)?<br><br>Os dados não serão excluídos, apenas ocultados.`, { confirmText: 'Arquivar', type: 'info', icon: '📦' });
+  if (!ok) return;
   await fetch(`/api/edital/arquivar?edital_nome=${encodeURIComponent(editalNome)}`, { method: 'PUT' });
   state.editalData = await fetch('/api/edital').then(r => r.json());
   renderEditalTree();

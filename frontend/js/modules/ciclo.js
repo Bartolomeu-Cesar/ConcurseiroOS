@@ -1,6 +1,6 @@
 // ==================== TAB 3: CICLO ====================
 import { state } from './state.js';
-import { escapeHtml, toast, showLoading, showEmpty, undoableDelete } from './utils.js';
+import { escapeHtml, toast, showLoading, showEmpty, undoableDelete, confirmModal } from './utils.js';
 import { openSelectModal } from './modal-selecao.js';
 
 let cicloTimerInterval = null, cicloStartedAt = null, cicloElapsed = 0, cicloPaused = false;
@@ -121,7 +121,8 @@ export async function importarCicloDoEdital() {
     const novas = materias.filter(m => !jaNoCliclo.has(m));
 
     if (novas.length === 0) { toast('Todas as matérias deste edital já estão no ciclo.', 'info'); return; }
-    if (!confirm(`Importar ${novas.length} matérias para o ciclo?\n\n${novas.slice(0, 10).join('\n')}${novas.length > 10 ? '\n...' : ''}`)) return;
+    const ok = await confirmModal('Importar Matérias', `Importar <strong>${novas.length}</strong> matérias para o ciclo?<br><br>${novas.slice(0, 8).map(m => `• ${m}`).join('<br>')}${novas.length > 8 ? '<br>...' : ''}`, { confirmText: 'Importar', type: 'info', icon: '📋' });
+    if (!ok) return;
 
     for (const m of novas) {
       await fetch('/api/ciclo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ materia: m, horas_alvo: 2.0 }) });
@@ -145,7 +146,8 @@ export async function deleteCiclo(id) {
 }
 
 export async function resetarCiclo() {
-  if (confirm('Resetar todas as horas cumpridas?')) {
+  const ok = await confirmModal('Resetar Horas', 'Zerar todas as horas cumpridas no ciclo?<br><br>As matérias serão mantidas.', { confirmText: 'Resetar', type: 'warning', icon: '🔁' });
+  if (ok) {
     await fetch('/api/ciclo/resetar', { method: 'POST' });
     loadCiclo();
     toast('Horas resetadas!', 'success');
@@ -153,7 +155,8 @@ export async function resetarCiclo() {
 }
 
 export async function limparCiclo() {
-  if (!confirm('Remover TODAS as matérias do ciclo?\n\nIsso permite reimportar de outro edital.')) return;
+  const ok = await confirmModal('Limpar Ciclo', 'Remover <strong>TODAS</strong> as matérias do ciclo?<br><br>Isso permite reimportar de outro edital.', { confirmText: 'Limpar Tudo', type: 'danger', icon: '🗑️' });
+  if (!ok) return;
   const res = await fetch('/api/ciclo/limpar', { method: 'DELETE' }).then(r => r.json());
   loadCiclo();
   toast(`Ciclo limpo! ${res.removidos} matérias removidas.`, 'success');
