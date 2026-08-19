@@ -377,6 +377,8 @@ def _create_tables(conn):
             avatar TEXT DEFAULT '',
             password_hash TEXT DEFAULT '',
             email_verified INTEGER DEFAULT 0,
+            plano TEXT DEFAULT 'free',
+            plano_expira TEXT DEFAULT '',
             created_at TEXT NOT NULL,
             last_login TEXT DEFAULT ''
         )
@@ -465,6 +467,17 @@ def _run_migrations(conn):
         conn.execute("ALTER TABLE edital ADD COLUMN easiness_factor_edital REAL DEFAULT 2.5")
         conn.execute("ALTER TABLE edital ADD COLUMN repetitions_edital INTEGER DEFAULT 0")
         log.info("Migration: added SM-2 columns to edital")
+
+    # Auth: colunas de plano
+    try:
+        conn.execute("SELECT plano FROM users LIMIT 1")
+    except Exception:
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN plano TEXT DEFAULT 'free'")
+            conn.execute("ALTER TABLE users ADD COLUMN plano_expira TEXT DEFAULT ''")
+            log.info("Migration: added plano columns to users")
+        except Exception:
+            pass
 
 
 def _create_indexes(conn):

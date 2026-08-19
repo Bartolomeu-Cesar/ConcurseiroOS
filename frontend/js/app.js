@@ -14,7 +14,7 @@ import { openSelectModal, selectModalChoice, closeSelectModal, initModalSelecao 
 import { linkPdfToTopic, linkPdfToMateria, unlinkPdf, linkPdfToDisc, openNoteModal, closeNoteModal, saveNote, deleteNote, initVincularPdf } from './modules/vincular-pdf.js';
 import { toggleTheme, enterFocusMode, exitFocusMode, launchConfetti, dismissOnboarding, trapFocus, initUI } from './modules/ui.js';
 import { exportarEdital, exportarCiclo, exportarFlashcards, importarEditalFile, importarCicloFile, importarFlashcardsFile } from './modules/export-import.js';
-import { handleAuthNav, logout, isLoggedIn, getToken, getUser, initAuth } from './modules/auth.js';
+import { handleAuthNav, logout, isLoggedIn, getToken, getUser, getUserPlan, showUpgradeModal, doUpgrade, checkPlanLimit, initAuth } from './modules/auth.js';
 
 // ==================== REGISTRAR FUNÇÕES GLOBAIS ====================
 // (necessário para onclick inline no HTML)
@@ -51,7 +51,7 @@ Object.assign(window, {
   // Export/Import
   exportarEdital, exportarCiclo, exportarFlashcards, importarEditalFile, importarCicloFile, importarFlashcardsFile,
   // Auth
-  handleAuthNav, logout, isLoggedIn, getToken, getUser,
+  handleAuthNav, logout, isLoggedIn, getToken, getUser, getUserPlan, showUpgradeModal, doUpgrade, checkPlanLimit,
 });
 
 // Referências internas para módulo export-import

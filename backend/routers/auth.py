@@ -244,7 +244,7 @@ def verify_code(body: dict = Body(...), conn=Depends(get_db_session)):
     conn.commit()
 
     # Buscar usuário
-    user = conn.execute("SELECT id, email, nome, avatar FROM users WHERE email = ?", (email,)).fetchone()
+    user = conn.execute("SELECT id, email, nome, avatar, plano, plano_expira FROM users WHERE email = ?", (email,)).fetchone()
 
     # Gerar token
     token = _create_token(user["id"], user["email"])
@@ -257,6 +257,7 @@ def verify_code(body: dict = Body(...), conn=Depends(get_db_session)):
             "email": user["email"],
             "nome": user["nome"],
             "avatar": user["avatar"],
+            "plano": user["plano"],
         }
     }
 
@@ -265,14 +266,15 @@ def verify_code(body: dict = Body(...), conn=Depends(get_db_session)):
 def get_me(user=Depends(get_current_user), conn=Depends(get_db_session)):
     """Retorna dados do perfil do usuário autenticado."""
     if not user:
-        # Auth desabilitado — retornar perfil genérico
-        return {"id": 0, "email": "", "nome": "Estudante", "avatar": "", "auth_enabled": False}
+        return {"id": 0, "email": "", "nome": "Estudante", "avatar": "", "plano": "free", "auth_enabled": False}
 
     return {
         "id": user["id"],
         "email": user["email"],
         "nome": user["nome"],
         "avatar": user["avatar"],
+        "plano": user.get("plano", "free"),
+        "plano_expira": user.get("plano_expira", ""),
         "email_verified": bool(user["email_verified"]),
         "created_at": user["created_at"],
         "last_login": user["last_login"],
@@ -304,4 +306,89 @@ def auth_status():
     return {
         "auth_enabled": settings.AUTH_ENABLED,
         "smtp_configured": bool(settings.SMTP_USER and settings.SMTP_PASSWORD),
+    }
+
+
+# ==================== PLANOS ====================
+
+from plans import PLANS, get_plan, get_plan_info, get_limits, check_limit
+
+
+@router.get("/plans")
+def list_plans():
+    """Lista todos os planos disponíveis."""
+    return [
+        {"id": key, "nome": p["nome"], "descricao": p["descricao"], "limites": p["limites"]}
+        for key, p in PLANS.items()
+        if key != "guest"
+    ]
+
+
+@router.get("/my-plan")
+def my_plan(user=Depends(get_optional_user)):
+    """Retorna o plano e limites do usuário atual."""
+    return get_plan_info(user)
+
+
+@router.post("/upgrade")
+def upgrade_plan(body: dict = Body(...), user=Depends(get_current_user), conn=Depends(get_db_session)):
+    """Faz upgrade do plano do usuário (em produção integraria com pagamento)."""
+    if not user:
+        raise HTTPException(status_code=401, detail="Não autenticado")
+
+    plano = body.get("plano", "premium")
+    if plano not in ("premium", "ilimitado"):
+        raise HTTPException(status_code=400, detail="Plano inválido")
+
+    # Em produção: verificar pagamento aqui
+    # Por enquanto: ativa diretamente (para testes)
+    now = datetime.now(timezone.utc).isoformat()
+    if plano == "premium":
+        # Premium expira em 30 dias (renovável)
+        expires = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+    else:
+        # Ilimitado: sem expiração
+        expires = ""
+
+    conn.execute(
+        "UPDATE users SET plano = ?, plano_expira = ? WHERE id = ?",
+        (plano, expires, user["id"])
+    )
+    conn.commit()
+
+    log.info(f"User {user['email']} upgraded to {plano}")
+    return {"ok": True, "plano": plano, "expira": expires}
+
+
+@router.get("/check-limit/{recurso}")
+def check_resource_limit(recurso: str, user=Depends(get_optional_user), conn=Depends(get_db_session)):
+    """Verifica se o usuário pode usar mais de um recurso específico."""
+    # Contar uso atual
+    counts = {}
+    if user:
+        uid_filter = ""  # Por enquanto sem filtro por user (single-user app)
+    
+    if recurso == "editais":
+        count = conn.execute("SELECT COUNT(DISTINCT edital_nome) FROM edital WHERE arquivado = 0").fetchone()[0]
+    elif recurso == "flashcards":
+        count = conn.execute("SELECT COUNT(*) FROM flashcards").fetchone()[0]
+    elif recurso == "pdfs":
+        count = conn.execute("SELECT COUNT(*) FROM progress").fetchone()[0]
+    elif recurso == "simulados":
+        count = conn.execute("SELECT COUNT(*) FROM simulados").fetchone()[0]
+    elif recurso == "ciclo_materias":
+        count = conn.execute("SELECT COUNT(*) FROM ciclo_estudos WHERE ativo = 1").fetchone()[0]
+    else:
+        count = 0
+
+    pode = check_limit(user, recurso, count)
+    limites = get_limits(user)
+    limite_max = limites.get(recurso, -1)
+
+    return {
+        "recurso": recurso,
+        "pode": pode,
+        "atual": count,
+        "limite": limite_max,
+        "plano": get_plan(user),
     }
