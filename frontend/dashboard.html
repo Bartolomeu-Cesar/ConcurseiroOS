@@ -605,10 +605,41 @@
         <h3>⏱ Linha do Tempo</h3>
         <div id="linha-tempo"></div>
       </div>
-      <div class="chart-box">
+      <div class="chart-box" style="grid-column: span 2;">
         <h3>📅 Planejador Semanal</h3>
-        <div id="planejador-sem"></div>
-        <p style="font-size:0.78rem;color:#9399b2;margin-top:8px;">Configure na aba Edital ou via API /api/planejador</p>
+        <p style="font-size:0.78rem;color:#9399b2;margin-bottom:12px;">Defina quais matérias estudar em cada dia e quantas horas dedicar. Isso alimenta o calendário e sugestões.</p>
+
+        <!-- Formulário de adição -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px;padding:12px;background:#1e1e2e;border-radius:8px;border:1px solid #45475a;">
+          <div>
+            <label style="font-size:0.72rem;color:#9399b2;display:block;margin-bottom:2px;">Dia</label>
+            <select id="plan-dia" style="background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:6px;padding:6px 10px;font-size:0.82rem;">
+              <option value="0">Segunda</option>
+              <option value="1">Terça</option>
+              <option value="2">Quarta</option>
+              <option value="3">Quinta</option>
+              <option value="4">Sexta</option>
+              <option value="5">Sábado</option>
+              <option value="6">Domingo</option>
+            </select>
+          </div>
+          <div style="flex:1;min-width:150px;">
+            <label style="font-size:0.72rem;color:#9399b2;display:block;margin-bottom:2px;">Matéria</label>
+            <input type="text" id="plan-materia" placeholder="Ex: Direito Constitucional" list="plan-materias-list" style="width:100%;background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:6px;padding:6px 10px;font-size:0.82rem;">
+            <datalist id="plan-materias-list"></datalist>
+          </div>
+          <div>
+            <label style="font-size:0.72rem;color:#9399b2;display:block;margin-bottom:2px;">Horas</label>
+            <input type="number" id="plan-horas" value="1.5" min="0.5" max="8" step="0.5" style="width:70px;background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:6px;padding:6px 10px;font-size:0.82rem;">
+          </div>
+          <button onclick="addPlanejadorItem()" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:7px 14px;font-weight:600;font-size:0.82rem;cursor:pointer;">+ Adicionar</button>
+        </div>
+
+        <!-- Grid semanal -->
+        <div id="planejador-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;"></div>
+
+        <!-- Resumo -->
+        <div id="planejador-resumo" style="margin-top:12px;padding:10px;background:#1e1e2e;border-radius:8px;font-size:0.8rem;color:#9399b2;"></div>
       </div>
     </div>
   </div>
@@ -1090,6 +1121,97 @@
         if (!data.length) { el.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Sem sess\u00f5es registradas.</p>'; return; }
         el.innerHTML = data.slice(0,8).map(s => `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #45475a;font-size:0.8rem;"><span style="color:#9399b2;min-width:70px;">${s.data}</span><span style="flex:1;">${s.materia}</span><span style="color:#89b4fa;">${s.horas?.toFixed?.(1) || s.horas}h</span></div>`).join('');
       } catch(e) {}
+    }
+
+    // === PLANEJADOR SEMANAL ===
+    const DIAS_NOMES = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
+    const DIAS_CORES = ['#89b4fa','#a6e3a1','#f9e2af','#fab387','#cba6f7','#f38ba8','#94e2d5'];
+
+    async function loadPlanejadorSemanal() {
+      try {
+        const items = await fetch('/api/planejador').then(r => r.json());
+        const grid = document.getElementById('planejador-grid');
+        const resumo = document.getElementById('planejador-resumo');
+
+        // Popular datalist de matérias
+        const mats = await fetch('/api/questoes/materias').then(r => r.json()).catch(() => []);
+        const dl = document.getElementById('plan-materias-list');
+        if (dl) dl.innerHTML = mats.map(m => `<option value="${m}">`).join('');
+
+        // Agrupar por dia
+        const porDia = {};
+        for (let i = 0; i < 7; i++) porDia[i] = [];
+        items.forEach(it => {
+          if (!porDia[it.dia_semana]) porDia[it.dia_semana] = [];
+          porDia[it.dia_semana].push(it);
+        });
+
+        // Renderizar grid
+        let html = '';
+        let totalHoras = 0;
+        let materiasSet = new Set();
+
+        for (let dia = 0; dia < 7; dia++) {
+          const diaItems = porDia[dia];
+          const horasDia = diaItems.reduce((a, i) => a + i.horas, 0);
+          totalHoras += horasDia;
+
+          html += `<div style="background:#313244;border-radius:8px;padding:8px;min-height:120px;border-top:3px solid ${DIAS_CORES[dia]};">`;
+          html += `<div style="font-size:0.75rem;font-weight:700;color:${DIAS_CORES[dia]};margin-bottom:6px;text-align:center;">${DIAS_NOMES[dia]}</div>`;
+
+          if (diaItems.length === 0) {
+            html += `<div style="color:#585b70;font-size:0.7rem;text-align:center;padding:10px 0;">Livre</div>`;
+          } else {
+            for (const it of diaItems) {
+              materiasSet.add(it.materia);
+              html += `<div style="display:flex;align-items:center;gap:4px;padding:3px 0;border-bottom:1px solid #45475a;font-size:0.72rem;">
+                <span style="flex:1;color:#cdd6f4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${it.materia}">${it.materia}</span>
+                <span style="color:#89b4fa;font-size:0.68rem;white-space:nowrap;">${it.horas}h</span>
+                <button onclick="removePlanejadorItem(${it.id})" style="background:none;border:none;color:#f38ba8;cursor:pointer;font-size:0.7rem;padding:0 2px;" title="Remover">&#10005;</button>
+              </div>`;
+            }
+          }
+
+          html += `<div style="margin-top:4px;padding-top:4px;border-top:1px solid #45475a;font-size:0.68rem;color:#9399b2;text-align:center;">${horasDia.toFixed(1)}h</div>`;
+          html += `</div>`;
+        }
+
+        grid.innerHTML = html;
+
+        // Resumo
+        resumo.innerHTML = `
+          <div style="display:flex;gap:16px;flex-wrap:wrap;">
+            <span>&#128218; <strong>${materiasSet.size}</strong> matérias</span>
+            <span>&#9200; <strong>${totalHoras.toFixed(1)}h</strong>/semana</span>
+            <span>&#128197; <strong>${items.length}</strong> blocos de estudo</span>
+            <span>&#8960; <strong>${items.length > 0 ? (totalHoras / Math.min(7, Object.values(porDia).filter(d => d.length > 0).length || 1)).toFixed(1) : 0}h</strong>/dia (média)</span>
+          </div>
+        `;
+      } catch(e) {
+        console.error('Planejador error:', e);
+      }
+    }
+
+    async function addPlanejadorItem() {
+      const dia = parseInt(document.getElementById('plan-dia').value);
+      const materia = document.getElementById('plan-materia').value.trim();
+      const horas = parseFloat(document.getElementById('plan-horas').value) || 1.0;
+
+      if (!materia) { alert('Preencha a matéria!'); return; }
+
+      await fetch('/api/planejador', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ dia_semana: dia, materia, horas })
+      });
+
+      document.getElementById('plan-materia').value = '';
+      loadPlanejadorSemanal();
+    }
+
+    async function removePlanejadorItem(id) {
+      await fetch(`/api/planejador/${id}`, { method: 'DELETE' });
+      loadPlanejadorSemanal();
     }
 
     async function loadMissoes() {
@@ -1695,6 +1817,7 @@
           loadComparador();
           loadLinhaTempo();
           loadRelatorioSemanal();
+          loadPlanejadorSemanal();
           break;
       }
     }
