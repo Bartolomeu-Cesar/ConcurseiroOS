@@ -150,6 +150,19 @@ class NotaTopicoCreate(BaseModel):
 
 
 # ============================================================
+# Calendário Personalizado
+# ============================================================
+
+class CalendarioItem(BaseModel):
+    dia_semana: int  # 0=Seg, 6=Dom
+    materia: str
+    topicos: str = ""
+    tempo_min: int = 60
+    tipo: str = "estudo"  # estudo, questoes, revisao
+    ordem: int = 0
+
+
+# ============================================================
 # Planejador
 # ============================================================
 

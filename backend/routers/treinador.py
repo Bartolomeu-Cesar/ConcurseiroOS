@@ -2,11 +2,12 @@ import re
 from datetime import date, timedelta
 from typing import List
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Body, Depends, Query
 
 from constants import WEIGHT_ACCURACY, WEIGHT_CONSISTENCY, WEIGHT_PROGRESS
 from database import get_db_session
 from logger import log
+from models import CalendarioItem
 from utils import calculate_streak, today_str
 
 router = APIRouter(prefix="", tags=["Treinador Inteligente"])
@@ -787,3 +788,75 @@ def calendario_semanal(edital_nome: str = "", cargo: str = "", horas_dia: float 
             "distribuicao": distribuicao
         }
     }
+
+
+# ============================================================
+# CALENDÁRIO PERSONALIZADO
+# ============================================================
+
+
+@router.get("/api/calendario-personalizado")
+def get_calendario_personalizado(conn=Depends(get_db_session)):
+    """Retorna o calendário personalizado salvo pelo usuário."""
+    rows = conn.execute(
+        "SELECT id, dia_semana, materia, topicos, tempo_min, tipo, ordem FROM calendario_personalizado ORDER BY dia_semana, ordem"
+    ).fetchall()
+    items = [dict(r) for r in rows]
+    # Agrupar por dia
+    dias_nomes = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
+    dias = []
+    for d in range(7):
+        atividades = [i for i in items if i["dia_semana"] == d]
+        tempo_total = sum(a["tempo_min"] for a in atividades)
+        materias = list(set(a["materia"] for a in atividades if a["materia"]))
+        dias.append({
+            "dia_semana": d,
+            "nome": dias_nomes[d],
+            "atividades": atividades,
+            "tempo_total_min": tempo_total,
+            "materias": materias
+        })
+    return {"dias": dias}
+
+
+@router.post("/api/calendario-personalizado")
+def add_calendario_item(body: CalendarioItem, conn=Depends(get_db_session)):
+    """Adiciona uma atividade ao calendário personalizado."""
+    cur = conn.execute(
+        "INSERT INTO calendario_personalizado (dia_semana, materia, topicos, tempo_min, tipo, ordem) VALUES (?, ?, ?, ?, ?, ?)",
+        (body.dia_semana, body.materia, body.topicos, body.tempo_min, body.tipo, body.ordem)
+    )
+    conn.commit()
+    return {"ok": True, "id": cur.lastrowid}
+
+
+@router.delete("/api/calendario-personalizado/{id}")
+def delete_calendario_item(id: int, conn=Depends(get_db_session)):
+    """Remove uma atividade do calendário personalizado."""
+    conn.execute("DELETE FROM calendario_personalizado WHERE id = ?", (id,))
+    conn.commit()
+    return {"ok": True}
+
+
+@router.delete("/api/calendario-personalizado")
+def clear_calendario_personalizado(conn=Depends(get_db_session)):
+    """Limpa todo o calendário personalizado."""
+    conn.execute("DELETE FROM calendario_personalizado")
+    conn.commit()
+    return {"ok": True}
+
+
+@router.post("/api/calendario-personalizado/salvar-completo")
+def salvar_calendario_completo(dias: list = Body(...), conn=Depends(get_db_session)):
+    """Salva o calendário completo (limpa e recria). Body: array de {dia_semana, materia, topicos, tempo_min, tipo, ordem}"""
+    conn.execute("DELETE FROM calendario_personalizado")
+    count = 0
+    for item in dias:
+        conn.execute(
+            "INSERT INTO calendario_personalizado (dia_semana, materia, topicos, tempo_min, tipo, ordem) VALUES (?, ?, ?, ?, ?, ?)",
+            (item.get("dia_semana", 0), item.get("materia", ""), item.get("topicos", ""),
+             item.get("tempo_min", 60), item.get("tipo", "estudo"), item.get("ordem", count))
+        )
+        count += 1
+    conn.commit()
+    return {"ok": True, "salvos": count}

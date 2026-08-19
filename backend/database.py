@@ -330,6 +330,19 @@ def _create_tables(conn):
         )
     """)
 
+    # Calendário personalizado
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS calendario_personalizado (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            dia_semana INTEGER NOT NULL,
+            materia TEXT NOT NULL,
+            topicos TEXT DEFAULT '',
+            tempo_min INTEGER DEFAULT 60,
+            tipo TEXT DEFAULT 'estudo',
+            ordem INTEGER DEFAULT 0
+        )
+    """)
+
 
 def _run_migrations(conn):
     """Executa migrações de schema (ALTER TABLE)."""

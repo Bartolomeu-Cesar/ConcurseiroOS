@@ -263,6 +263,20 @@
     body.light-theme .cal-day-header { color: #8839ef; border-bottom-color: #bcc0cc; }
     body.light-theme .cal-activity { border-bottom-color: #e6e9ef; }
     body.light-theme .cal-activity-materia { color: #4c4f69; }
+    /* Calendar mode buttons */
+    .cal-mode-btn {
+      padding: 6px 12px; border: none; background: transparent;
+      color: #9399b2; font-size: 0.78rem; font-weight: 600; cursor: pointer;
+      transition: all 0.2s;
+    }
+    .cal-mode-btn:hover { color: #cdd6f4; background: #45475a; }
+    .cal-mode-btn.active { color: #1e1e2e; background: #cba6f7; }
+    body.light-theme .cal-mode-btn.active { background: #8839ef; color: #fff; }
+    .cal-delete-btn {
+      background: none; border: none; color: #f38ba8; cursor: pointer;
+      font-size: 0.75rem; opacity: 0.6; transition: opacity 0.2s;
+    }
+    .cal-delete-btn:hover { opacity: 1; }
   </style>
 </head>
 <body>
@@ -384,23 +398,60 @@
   <div id="panel-calendario" class="dash-panel">
     <div class="charts" style="grid-template-columns: 1fr;">
       <div class="chart-box" style="grid-column: span 2; padding: 20px;">
+        <!-- Header com modo + controles -->
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
           <h3 style="margin:0;">📅 Calendário Semanal de Estudos</h3>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <span style="font-size:0.8rem;color:#9399b2;">Horas/dia:</span>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <!-- Seletor de modo -->
+            <div style="display:flex;gap:0;background:#1e1e2e;border-radius:8px;overflow:hidden;border:1px solid #45475a;">
+              <button class="cal-mode-btn active" data-mode="auto" onclick="setCalMode('auto')">🤖 Auto</button>
+              <button class="cal-mode-btn" data-mode="manual" onclick="setCalMode('manual')">✏️ Manual</button>
+              <button class="cal-mode-btn" data-mode="hibrido" onclick="setCalMode('hibrido')">🔀 Híbrido</button>
+            </div>
             <select id="cal-horas" onchange="loadCalendario()" style="background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:6px;padding:4px 8px;font-size:0.85rem;">
-              <option value="2">2h</option>
-              <option value="3" selected>3h</option>
-              <option value="4">4h</option>
-              <option value="5">5h</option>
-              <option value="6">6h</option>
-              <option value="8">8h</option>
+              <option value="2">2h/dia</option>
+              <option value="3" selected>3h/dia</option>
+              <option value="4">4h/dia</option>
+              <option value="5">5h/dia</option>
+              <option value="6">6h/dia</option>
+              <option value="8">8h/dia</option>
             </select>
-            <button onclick="loadCalendario()" style="background:#45475a;color:#cdd6f4;border:none;border-radius:6px;padding:5px 12px;font-size:0.8rem;cursor:pointer;">🔄 Atualizar</button>
           </div>
         </div>
+
+        <!-- Formulário de adição manual (hidden por default) -->
+        <div id="cal-manual-form" style="display:none;background:#1e1e2e;border-radius:8px;padding:12px;margin-bottom:16px;border:1px solid #45475a;">
+          <div style="font-size:0.82rem;font-weight:600;color:#cba6f7;margin-bottom:8px;">➕ Adicionar atividade</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <select id="cal-add-dia" style="background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:6px;padding:6px 10px;font-size:0.82rem;">
+              <option value="0">Segunda</option><option value="1">Terça</option><option value="2">Quarta</option>
+              <option value="3">Quinta</option><option value="4">Sexta</option><option value="5">Sábado</option><option value="6">Domingo</option>
+            </select>
+            <select id="cal-add-tipo" style="background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:6px;padding:6px 10px;font-size:0.82rem;">
+              <option value="estudo">📚 Estudo</option><option value="questoes">❓ Questões</option><option value="revisao">🧠 Revisão</option>
+            </select>
+            <input id="cal-add-materia" type="text" placeholder="Matéria" style="background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:6px;padding:6px 10px;font-size:0.82rem;min-width:140px;">
+            <input id="cal-add-topicos" type="text" placeholder="Tópicos (opcional)" style="background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:6px;padding:6px 10px;font-size:0.82rem;min-width:140px;">
+            <input id="cal-add-tempo" type="number" value="60" min="10" step="10" style="background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:6px;padding:6px 10px;font-size:0.82rem;width:70px;">
+            <span style="font-size:0.75rem;color:#9399b2;">min</span>
+            <button onclick="addCalendarioItem()" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:6px 14px;font-size:0.82rem;font-weight:600;cursor:pointer;">+ Adicionar</button>
+          </div>
+        </div>
+
+        <!-- Info do modo híbrido -->
+        <div id="cal-hibrido-info" style="display:none;background:#313244;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:0.8rem;color:#fab387;">
+          💡 Modo Híbrido: O sistema gerou uma sugestão. Clique no ❌ para remover atividades ou use o formulário acima para adicionar. As alterações são salvas automaticamente.
+        </div>
+
+        <!-- Grid do calendário -->
         <div id="calendario-grid"></div>
         <div id="calendario-resumo" style="margin-top:16px;"></div>
+
+        <!-- Botões de ação -->
+        <div id="cal-actions" style="display:none;margin-top:12px;gap:8px;flex-wrap:wrap;">
+          <button onclick="salvarCalendario()" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:6px 14px;font-size:0.82rem;font-weight:600;cursor:pointer;">💾 Salvar Calendário</button>
+          <button onclick="limparCalendario()" style="background:#f38ba8;color:#1e1e2e;border:none;border-radius:6px;padding:6px 14px;font-size:0.82rem;font-weight:600;cursor:pointer;">🗑 Limpar</button>
+        </div>
       </div>
     </div>
   </div>
@@ -1198,67 +1249,166 @@
       } catch(e) { console.error('RaioX error:', e); }
     }
 
+    let calendarMode = 'auto';
+    let calendarData = null; // dados atuais do calendário exibido
+
+    function setCalMode(mode) {
+      calendarMode = mode;
+      document.querySelectorAll('.cal-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+      document.getElementById('cal-manual-form').style.display = (mode === 'manual' || mode === 'hibrido') ? 'block' : 'none';
+      document.getElementById('cal-hibrido-info').style.display = mode === 'hibrido' ? 'block' : 'none';
+      document.getElementById('cal-actions').style.display = (mode === 'manual' || mode === 'hibrido') ? 'flex' : 'none';
+      loadCalendario();
+    }
+
     async function loadCalendario() {
       const el = document.getElementById('calendario-grid');
       const resumoEl = document.getElementById('calendario-resumo');
       const horas = document.getElementById('cal-horas')?.value || '3';
-
       el.innerHTML = '<div style="text-align:center;color:#9399b2;padding:20px;">Gerando calendário...</div>';
 
       try {
-        const data = await fetch(`/api/calendario-semanal?horas_dia=${horas}`).then(r => r.json());
-        const hoje = new Date().toISOString().split('T')[0];
-        const icons = {revisao: '🧠', estudo: '📚', questoes: '❓', pausa: '☕'};
-
-        let html = '<div class="cal-grid">';
-        for (const dia of data.dias) {
-          const isToday = dia.data === hoje;
-          html += `<div class="cal-day ${isToday ? 'today' : ''}">`;
-          html += `<div class="cal-day-header">${dia.nome} <span class="cal-date">${dia.data.substring(5)}</span></div>`;
-
-          for (const ativ of dia.atividades) {
-            const icon = icons[ativ.tipo] || '📌';
-            const materia = ativ.materia || '';
-            let detail = '';
-            if (ativ.topicos && ativ.topicos.length) detail = ativ.topicos.join(', ');
-            else if (ativ.qtd) detail = `${ativ.qtd} questões`;
-            else if (ativ.descricao) detail = ativ.descricao;
-
-            html += `<div class="cal-activity">`;
-            html += `<span class="cal-activity-icon">${icon}</span>`;
-            html += `<div class="cal-activity-info">`;
-            if (materia) html += `<div class="cal-activity-materia">${materia}</div>`;
-            if (detail) html += `<div class="cal-activity-detail">${detail}</div>`;
-            html += `</div>`;
-            html += `<span class="cal-activity-time">${ativ.tempo_min}min</span>`;
-            html += `</div>`;
+        let data;
+        if (calendarMode === 'auto') {
+          data = await fetch(`/api/calendario-semanal?horas_dia=${horas}`).then(r => r.json());
+        } else if (calendarMode === 'manual') {
+          data = await fetch('/api/calendario-personalizado').then(r => r.json());
+        } else {
+          // Hibrido: carregar personalizado, se vazio usa auto como base
+          const custom = await fetch('/api/calendario-personalizado').then(r => r.json());
+          const hasData = custom.dias.some(d => d.atividades.length > 0);
+          if (hasData) {
+            data = custom;
+          } else {
+            // Gerar auto e salvar como base editável
+            data = await fetch(`/api/calendario-semanal?horas_dia=${horas}`).then(r => r.json());
+            // Salvar no personalizado para permitir edição
+            const items = [];
+            data.dias.forEach(dia => {
+              dia.atividades.forEach((a, idx) => {
+                items.push({
+                  dia_semana: dia.dia_semana,
+                  materia: a.materia || a.descricao || 'Revisão',
+                  topicos: (a.topicos || []).join(', '),
+                  tempo_min: a.tempo_min,
+                  tipo: a.tipo,
+                  ordem: idx
+                });
+              });
+            });
+            await fetch('/api/calendario-personalizado/salvar-completo', {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify(items)
+            });
+            data = await fetch('/api/calendario-personalizado').then(r => r.json());
           }
-
-          html += `<div class="cal-day-footer">⏱ ${dia.tempo_total_min}min total</div>`;
-          html += `</div>`;
         }
-        html += '</div>';
-        el.innerHTML = html;
+
+        calendarData = data;
+        renderCalendario(data, calendarMode !== 'auto');
 
         // Resumo
         if (data.resumo) {
           let rhtml = `<div style="display:flex;flex-wrap:wrap;gap:12px;font-size:0.8rem;">`;
-          rhtml += `<span style="color:#9399b2;">📚 ${data.resumo.total_materias} matérias</span>`;
-          rhtml += `<span style="color:#9399b2;">⏰ ${data.resumo.horas_semana}h/semana</span>`;
-          if (data.resumo.distribuicao) {
-            rhtml += `</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">`;
-            data.resumo.distribuicao.forEach(d => {
-              const dias = d.dias.map(i => ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'][i]).join(', ');
-              rhtml += `<span style="background:#313244;padding:3px 8px;border-radius:12px;font-size:0.72rem;">${d.materia}: <strong style="color:#89b4fa;">${dias}</strong></span>`;
-            });
-          }
+          rhtml += `<span style="color:#9399b2;">📚 ${data.resumo.total_materias || '?'} matérias</span>`;
+          rhtml += `<span style="color:#9399b2;">⏰ ${data.resumo.horas_semana || '?'}h/semana</span>`;
           rhtml += `</div>`;
           resumoEl.innerHTML = rhtml;
+        } else {
+          const totalMin = data.dias.reduce((a, d) => a + d.tempo_total_min, 0);
+          resumoEl.innerHTML = `<div style="font-size:0.8rem;color:#9399b2;">⏰ ${Math.round(totalMin/60*10)/10}h/semana planejadas</div>`;
         }
       } catch(e) {
-        el.innerHTML = '<div style="color:#f38ba8;text-align:center;padding:20px;">Erro ao gerar calendário. Adicione matérias ao edital primeiro.</div>';
+        el.innerHTML = '<div style="color:#f38ba8;text-align:center;padding:20px;">Erro ao gerar calendário.</div>';
         console.error('Calendario error:', e);
       }
+    }
+
+    function renderCalendario(data, editable) {
+      const el = document.getElementById('calendario-grid');
+      const hoje = new Date().toISOString().split('T')[0];
+      const icons = {revisao: '🧠', estudo: '📚', questoes: '❓', pausa: '☕'};
+      const diasNomes = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
+
+      let html = '<div class="cal-grid">';
+      for (const dia of data.dias) {
+        const isToday = dia.data === hoje;
+        const nome = dia.nome || diasNomes[dia.dia_semana] || '';
+        html += `<div class="cal-day ${isToday ? 'today' : ''}">`;
+        html += `<div class="cal-day-header">${nome} <span class="cal-date">${dia.data ? dia.data.substring(5) : ''}</span></div>`;
+
+        if (dia.atividades.length === 0) {
+          html += `<div style="color:#9399b2;font-size:0.75rem;padding:8px 0;text-align:center;">Nenhuma atividade</div>`;
+        }
+
+        for (const ativ of dia.atividades) {
+          const icon = icons[ativ.tipo] || '📌';
+          const materia = ativ.materia || '';
+          let detail = '';
+          if (ativ.topicos) {
+            detail = typeof ativ.topicos === 'string' ? ativ.topicos : (ativ.topicos || []).join(', ');
+          } else if (ativ.qtd) {
+            detail = `${ativ.qtd} questões`;
+          } else if (ativ.descricao) {
+            detail = ativ.descricao;
+          }
+
+          html += `<div class="cal-activity">`;
+          html += `<span class="cal-activity-icon">${icon}</span>`;
+          html += `<div class="cal-activity-info">`;
+          if (materia) html += `<div class="cal-activity-materia">${materia}</div>`;
+          if (detail) html += `<div class="cal-activity-detail">${detail}</div>`;
+          html += `</div>`;
+          html += `<span class="cal-activity-time">${ativ.tempo_min}min</span>`;
+          if (editable && ativ.id) {
+            html += `<button class="cal-delete-btn" onclick="removeCalItem(${ativ.id})">❌</button>`;
+          }
+          html += `</div>`;
+        }
+
+        html += `<div class="cal-day-footer">⏱ ${dia.tempo_total_min}min</div>`;
+        html += `</div>`;
+      }
+      html += '</div>';
+      el.innerHTML = html;
+    }
+
+    async function addCalendarioItem() {
+      const dia = parseInt(document.getElementById('cal-add-dia').value);
+      const tipo = document.getElementById('cal-add-tipo').value;
+      const materia = document.getElementById('cal-add-materia').value.trim();
+      const topicos = document.getElementById('cal-add-topicos').value.trim();
+      const tempo = parseInt(document.getElementById('cal-add-tempo').value) || 60;
+
+      if (!materia) { toast('Preencha a matéria', 'warning'); return; }
+
+      await fetch('/api/calendario-personalizado', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ dia_semana: dia, materia, topicos, tempo_min: tempo, tipo, ordem: 0 })
+      });
+      toast('Atividade adicionada!', 'success', 2000);
+      document.getElementById('cal-add-materia').value = '';
+      document.getElementById('cal-add-topicos').value = '';
+      loadCalendario();
+    }
+
+    async function removeCalItem(id) {
+      await fetch(`/api/calendario-personalizado/${id}`, { method: 'DELETE' });
+      toast('Atividade removida', 'info', 2000);
+      loadCalendario();
+    }
+
+    async function salvarCalendario() {
+      toast('Calendário salvo!', 'success', 2000);
+    }
+
+    async function limparCalendario() {
+      if (!confirm('Limpar todo o calendário personalizado?')) return;
+      await fetch('/api/calendario-personalizado', { method: 'DELETE' });
+      toast('Calendário limpo!', 'info', 2000);
+      loadCalendario();
     }
 
     // Carregar dados da aba ativa
