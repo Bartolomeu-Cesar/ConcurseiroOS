@@ -1289,7 +1289,7 @@ async function iniciarSessaoFlash(mode) {
         const opts = mats.map(m => m.materia).filter(m => m);
         const escolha = await promptSelect('📚 Escolha a disciplina:', opts);
         if (!escolha) return;
-        flashSessao = await fetch(`/api/flashcards/aleatorio?materia=${encodeURIComponent(escolha)}&quantidade=20`).then(r => r.json());
+        flashSessao = await fetch(`/api/flashcards/aleatorio?materia=${encodeURIComponent(escolha)}&quantidade=${getConfigSessoes().flashcards_sessao}`).then(r => r.json());
         if (flashSessao.length === 0) { toast('Nenhum flashcard nessa disciplina', 'warning'); return; }
         flashSessaoIndex = 0;
         showSessaoFlashcard();
@@ -1297,7 +1297,7 @@ async function iniciarSessaoFlash(mode) {
         return;
     }
     if (mode === 'aleatorio') {
-        flashSessao = await fetch('/api/flashcards/aleatorio?quantidade=15').then(r => r.json());
+        flashSessao = await fetch(`/api/flashcards/aleatorio?quantidade=${getConfigSessoes().flashcards_sessao}`).then(r => r.json());
         if (flashSessao.length === 0) { toast('Nenhum flashcard disponível', 'warning'); return; }
         flashSessaoIndex = 0;
         showSessaoFlashcard();
@@ -1381,12 +1381,14 @@ loadAllFlashcards();
 let questoesDia = [], qDiaIdx = 0, qDiaAcertos = 0;
 async function carregarQuestoesDia() {
     try {
-        // Buscar 10 questões aleatórias de matérias diversas
+        const cfg = getConfigSessoes();
+        const qtd = cfg.questoes_dia;
+        // Buscar questões aleatórias de matérias diversas
         const all = await fetch('/api/questoes?limit=200').then(r => r.json());
         const pool = Array.isArray(all) ? all : (all.items || []);
         if (pool.length === 0) { alert('Nenhuma questão no banco. Adicione questões primeiro.'); return; }
-        // Shuffle e pegar 10
-        questoesDia = pool.sort(() => Math.random() - 0.5).slice(0, 10);
+        // Shuffle e pegar qtd configurada
+        questoesDia = pool.sort(() => Math.random() - 0.5).slice(0, qtd);
         qDiaIdx = 0;
         qDiaAcertos = 0;
         document.getElementById('questoes-dia-area').style.display = 'none';
@@ -1538,6 +1540,31 @@ async function salvarMetas() {
         toast('Erro ao salvar metas', 'error');
     }
 }
+// Configurações de sessão (localStorage)
+function getConfigSessoes() {
+    const raw = localStorage.getItem('config_sessoes');
+    if (raw) try { return JSON.parse(raw); } catch(e) {}
+    return { questoes_dia: 10, flashcards_sessao: 15, pomodoro_min: 25 };
+}
+function salvarConfigSessoes() {
+    const cfg = {
+        questoes_dia: parseInt(document.getElementById('cfg-questoes-dia').value) || 10,
+        flashcards_sessao: parseInt(document.getElementById('cfg-flashcards-sessao').value) || 15,
+        pomodoro_min: parseInt(document.getElementById('cfg-pomodoro-min').value) || 25,
+    };
+    localStorage.setItem('config_sessoes', JSON.stringify(cfg));
+    toast('Configurações de sessão salvas!', 'success');
+}
+function loadConfigSessoes() {
+    const cfg = getConfigSessoes();
+    const el1 = document.getElementById('cfg-questoes-dia');
+    const el2 = document.getElementById('cfg-flashcards-sessao');
+    const el3 = document.getElementById('cfg-pomodoro-min');
+    if (el1) el1.value = cfg.questoes_dia;
+    if (el2) el2.value = cfg.flashcards_sessao;
+    if (el3) el3.value = cfg.pomodoro_min;
+}
+loadConfigSessoes();
 async function loadStreakBadge() {
     try {
         const data = await fetch('/api/streaks').then(r => r.json());

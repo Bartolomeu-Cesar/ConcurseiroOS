@@ -288,6 +288,16 @@
       </div>
     </div>
     <div class="panel">
+      <h2>⚙️ Configurar Sessões de Estudo</h2>
+      <p style="font-size:0.85rem;color:#9399b2;margin-bottom:12px;">Defina quantas questões e flashcards por sessão diária.</p>
+      <div class="metas-config">
+        <label>❓ Questões/Dia: <input type="number" id="cfg-questoes-dia" min="5" step="5" value="10" title="Quantas questões sortear por rodada"></label>
+        <label>🧠 Flashcards/Sessão: <input type="number" id="cfg-flashcards-sessao" min="5" step="5" value="15" title="Máximo de flashcards por sessão aleatória"></label>
+        <label>⏱ Pomodoro (min): <input type="number" id="cfg-pomodoro-min" min="5" step="5" value="25" title="Duração padrão do timer Pomodoro"></label>
+        <button class="iobtn" onclick="salvarConfigSessoes()">💾 Salvar</button>
+      </div>
+    </div>
+    <div class="panel">
       <h2>📊 Progresso de Hoje</h2>
       <div id="metas-progresso"></div>
     </div>
