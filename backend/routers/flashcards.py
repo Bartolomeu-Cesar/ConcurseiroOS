@@ -11,6 +11,7 @@ from models import (
     FlashcardReviewResponse,
     FlashcardReviewSM2,
     FlashcardReviewSM2Response,
+    FlashcardUpdate,
     OkResponse,
 )
 from utils import paginate, today_str, update_streak
@@ -143,6 +144,42 @@ def review_flashcard_sm2(id: int, body: FlashcardReviewSM2, conn=Depends(get_db_
         "repetitions": reps,
         "quality": quality
     }
+
+
+@router.put("/api/flashcards/{id}", summary="Editar flashcard", description="Atualiza pergunta, resposta e/ou matéria de um flashcard")
+def update_flashcard(id: int, body: FlashcardUpdate, conn=Depends(get_db_session)):
+    row = conn.execute("SELECT id FROM flashcards WHERE id = ?", (id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Flashcard não encontrado")
+    updates = []
+    params = []
+    if body.pergunta is not None:
+        updates.append("pergunta = ?")
+        params.append(body.pergunta)
+    if body.resposta is not None:
+        updates.append("resposta = ?")
+        params.append(body.resposta)
+    if body.materia is not None:
+        updates.append("materia = ?")
+        params.append(body.materia)
+    if not updates:
+        raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
+    params.append(id)
+    conn.execute(f"UPDATE flashcards SET {', '.join(updates)} WHERE id = ?", params)
+    conn.commit()
+    updated = conn.execute(
+        "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia FROM flashcards WHERE id = ?",
+        (id,)
+    ).fetchone()
+    log.info(f"Flashcard updated: id={id}")
+    return dict(updated)
+
+
+@router.get("/api/edital/materias-disponiveis", summary="Listar disciplinas do edital",
+            description="Retorna todas as disciplinas distintas cadastradas no edital para vincular a flashcards")
+def list_materias_disponiveis(conn=Depends(get_db_session)):
+    rows = conn.execute("SELECT DISTINCT materia FROM edital ORDER BY materia").fetchall()
+    return [r[0] for r in rows if r[0]]
 
 
 @router.delete("/api/flashcards/{id}", response_model=OkResponse)

@@ -45,6 +45,32 @@
     </div>
   </div>
 
+  <!-- Modal Editar Flashcard -->
+  <div class="modal-overlay" id="flash-edit-modal" role="dialog" aria-modal="true">
+    <div class="modal-box" style="max-width:480px;">
+      <h3>✏️ Editar Flashcard</h3>
+      <input type="hidden" id="flash-edit-id">
+      <div style="margin-bottom:10px;">
+        <label style="font-size:0.8rem;color:#9399b2;display:block;margin-bottom:4px;">Pergunta</label>
+        <textarea id="flash-edit-pergunta" rows="3" style="width:100%;padding:10px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.9rem;resize:vertical;"></textarea>
+      </div>
+      <div style="margin-bottom:10px;">
+        <label style="font-size:0.8rem;color:#9399b2;display:block;margin-bottom:4px;">Resposta</label>
+        <textarea id="flash-edit-resposta" rows="3" style="width:100%;padding:10px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.9rem;resize:vertical;"></textarea>
+      </div>
+      <div style="margin-bottom:14px;">
+        <label style="font-size:0.8rem;color:#9399b2;display:block;margin-bottom:4px;">📚 Disciplina (Edital)</label>
+        <select id="flash-edit-materia" style="width:100%;padding:10px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.9rem;">
+          <option value="">Sem disciplina</option>
+        </select>
+      </div>
+      <div class="modal-btns">
+        <button class="iobtn" onclick="closeFlashEditModal()">Cancelar</button>
+        <button class="iobtn" style="background:#a6e3a1;color:#1e1e2e;font-weight:600;" onclick="saveFlashEdit()">💾 Salvar</button>
+      </div>
+    </div>
+  </div>
+
   <div id="header">
     <div class="header-left">
       <h1>📚 Leitor PDF</h1>
@@ -245,6 +271,9 @@
       <h2>➕ Adicionar Flashcard</h2>
       <textarea id="flash-pergunta" placeholder="Pergunta..." rows="2"></textarea>
       <textarea id="flash-resposta" placeholder="Resposta (inclua mnemônicos 🧠, macetes e dicas para fixação)" rows="2"></textarea>
+      <select id="flash-add-materia" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.9rem;margin-bottom:8px;">
+        <option value="">📚 Disciplina (opcional)</option>
+      </select>
       <button onclick="addFlashcard()">Adicionar</button>
     </div>
     <div class="flash-panel">

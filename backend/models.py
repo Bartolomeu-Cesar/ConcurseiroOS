@@ -43,6 +43,12 @@ class FlashcardCreate(BaseModel):
     materia: str = ""
 
 
+class FlashcardUpdate(BaseModel):
+    pergunta: str | None = None
+    resposta: str | None = None
+    materia: str | None = None
+
+
 class FlashcardReview(BaseModel):
     acertou: bool
 

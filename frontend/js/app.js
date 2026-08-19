@@ -7,7 +7,7 @@ import { initShortcuts, goToEditalItem } from './modules/shortcuts.js';
 import { load, exportProgress, importProgress, initPdfs } from './modules/pdfs.js';
 import { loadEdital, toggleTree, toggleAllEdital, selectEditalTopic, toggleEditalStatus, deleteEditalItem, addEdital, importEditalPdf, arquivarCargo, excluirCargo, arquivarConcurso, excluirConcurso, editarEdital, salvarEdicaoEdital, showArquivados, iniciarQuestoesPosEstudo, iniciarFlashPosEstudo, initEdital } from './modules/edital.js';
 import { loadCiclo, cicloTimerToggle, cicloTimerStop, importarCicloDoEdital, addCiclo, deleteCiclo, resetarCiclo, limparCiclo, initCiclo } from './modules/ciclo.js';
-import { loadFlashcardsToday, revealAnswer, reviewFlashcard, addFlashcard, loadAllFlashcards, toggleFlashGroup, iniciarSessaoFlash, sessaoNext, deleteFlashcard, initFlashcards } from './modules/flashcards.js';
+import { loadFlashcardsToday, revealAnswer, reviewFlashcard, addFlashcard, loadAllFlashcards, toggleFlashGroup, iniciarSessaoFlash, sessaoNext, deleteFlashcard, openFlashEditModal, closeFlashEditModal, saveFlashEdit, initFlashcards } from './modules/flashcards.js';
 import { carregarQuestoesDia, showQuestaoDia, responderQuestaoDia, advanceQuestao, initQuestoes } from './modules/questoes.js';
 import { loadMetas, salvarMetas, getConfigSessoes, salvarConfigSessoes, loadConfigSessoes, loadStreakBadge, initMetas } from './modules/metas.js';
 import { openSelectModal, selectModalChoice, closeSelectModal, initModalSelecao } from './modules/modal-selecao.js';
@@ -38,6 +38,7 @@ Object.assign(window, {
   // Flashcards
   loadFlashcardsToday, revealAnswer, reviewFlashcard, addFlashcard, loadAllFlashcards,
   toggleFlashGroup, iniciarSessaoFlash, sessaoNext, deleteFlashcard,
+  openFlashEditModal, closeFlashEditModal, saveFlashEdit,
   // Questões
   carregarQuestoesDia, showQuestaoDia, responderQuestaoDia, advanceQuestao,
   // Metas

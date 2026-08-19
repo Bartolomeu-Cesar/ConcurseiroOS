@@ -302,6 +302,7 @@ body.light-theme .ciclo-focus-timer { color: #1e66f5; }
 .flash-list-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #45475a; font-size: 0.85rem; }
 .flash-list-item:hover { background: #45475a; border-radius: 6px; }
 .flash-list-delete { background: none; border: none; color: #f38ba8; cursor: pointer; font-size: 1rem; }
+.flash-list-edit { background: none; border: none; color: #89b4fa; cursor: pointer; font-size: 1rem; margin-right: 4px; }
 .flash-count { font-size: 0.82rem; color: #9399b2; margin-bottom: 8px; }
 .flash-chevron { display: inline-block; margin-right: 6px; font-size: 0.7rem; transition: transform 0.2s; }
 

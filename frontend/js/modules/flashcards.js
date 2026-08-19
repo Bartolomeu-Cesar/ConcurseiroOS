@@ -84,7 +84,8 @@ export async function reviewFlashcard(quality) {
 export async function addFlashcard() {
   const p = document.getElementById('flash-pergunta').value.trim(), r = document.getElementById('flash-resposta').value.trim();
   if (!p || !r) { toast('Preencha pergunta e resposta.', 'warning'); return; }
-  await fetch('/api/flashcards', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pergunta: p, resposta: r }) });
+  const materia = document.getElementById('flash-add-materia')?.value || '';
+  await fetch('/api/flashcards', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pergunta: p, resposta: r, materia }) });
   document.getElementById('flash-pergunta').value = '';
   document.getElementById('flash-resposta').value = '';
   toast('Flashcard criado!', 'success');
@@ -113,11 +114,11 @@ export async function loadAllFlashcards() {
               <span><span class="flash-chevron" id="chev-${matId}">▶</span> 📚 ${mat} (${cards.length})</span>
             </div>
             <div id="${matId}" style="display:none;">`;
-          html += cards.map(c => `<div class="flash-list-item"><span style="flex:1;color:#cdd6f4;">${escapeHtml(c.pergunta)}</span><button class="flash-list-delete" onclick="deleteFlashcard(${c.id})">🗑</button></div>`).join('');
+          html += cards.map(c => `<div class="flash-list-item"><span style="flex:1;color:#cdd6f4;">${escapeHtml(c.pergunta)}</span><button class="flash-list-edit" onclick="openFlashEditModal(${c.id})" title="Editar">✏️</button><button class="flash-list-delete" onclick="deleteFlashcard(${c.id})">🗑</button></div>`).join('');
           html += '</div></div>';
         }
       } else {
-        html = all.map(c => `<div class="flash-list-item"><span style="flex:1;color:#cdd6f4;">${escapeHtml(c.pergunta)}</span><button class="flash-list-delete" onclick="deleteFlashcard(${c.id})">🗑</button></div>`).join('');
+        html = all.map(c => `<div class="flash-list-item"><span style="flex:1;color:#cdd6f4;">${escapeHtml(c.pergunta)}</span><button class="flash-list-edit" onclick="openFlashEditModal(${c.id})" title="Editar">✏️</button><button class="flash-list-delete" onclick="deleteFlashcard(${c.id})">🗑</button></div>`).join('');
       }
       document.getElementById('flash-list').innerHTML = html;
     }
@@ -245,6 +246,50 @@ export function startSessionFromEvent(sessaoData, materia) {
   toast(`🧠 Sessão: ${materia} (${flashSessao.length} cards)`, 'success');
 }
 
+export async function openFlashEditModal(id) {
+  const modal = document.getElementById('flash-edit-modal');
+  const sel = document.getElementById('flash-edit-materia');
+  // Carregar disciplinas do edital
+  try {
+    const materias = await fetch('/api/edital/materias-disponiveis').then(r => r.json());
+    sel.innerHTML = '<option value="">Sem disciplina</option>' +
+      materias.map(m => `<option value="${m}">${m}</option>`).join('');
+  } catch(e) { /* manter opção padrão */ }
+  // Carregar dados do flashcard
+  try {
+    const all = await fetch('/api/flashcards').then(r => r.json());
+    const card = all.find(c => c.id === id);
+    if (!card) { toast('Flashcard não encontrado', 'error'); return; }
+    document.getElementById('flash-edit-id').value = id;
+    document.getElementById('flash-edit-pergunta').value = card.pergunta;
+    document.getElementById('flash-edit-resposta').value = card.resposta;
+    sel.value = card.materia || '';
+  } catch(e) { toast('Erro ao carregar flashcard', 'error'); return; }
+  modal.style.display = 'flex';
+}
+
+export function closeFlashEditModal() {
+  document.getElementById('flash-edit-modal').style.display = 'none';
+}
+
+export async function saveFlashEdit() {
+  const id = document.getElementById('flash-edit-id').value;
+  const pergunta = document.getElementById('flash-edit-pergunta').value.trim();
+  const resposta = document.getElementById('flash-edit-resposta').value.trim();
+  const materia = document.getElementById('flash-edit-materia').value;
+  if (!pergunta || !resposta) { toast('Pergunta e resposta são obrigatórios', 'warning'); return; }
+  try {
+    await api(`/api/flashcards/${id}`, {
+      method: 'PUT',
+      body: { pergunta, resposta, materia }
+    });
+    toast('Flashcard atualizado!', 'success');
+    closeFlashEditModal();
+    loadAllFlashcards();
+    loadFlashcardsToday();
+  } catch(e) { toast('Erro ao salvar edição', 'error'); }
+}
+
 export function initFlashcards(deps) {
   _loadMetas = deps.loadMetas;
   _loadStreakBadge = deps.loadStreakBadge;
@@ -255,6 +300,20 @@ export function initFlashcards(deps) {
     startSessionFromEvent(e.detail.flashSessao, e.detail.materia);
   });
 
+  // Carregar disciplinas para o select de criação
+  loadAddMaterias();
+
   loadFlashcardsToday();
   loadAllFlashcards();
+}
+
+async function loadAddMaterias() {
+  try {
+    const materias = await fetch('/api/edital/materias-disponiveis').then(r => r.json());
+    const sel = document.getElementById('flash-add-materia');
+    if (sel) {
+      sel.innerHTML = '<option value="">📚 Disciplina (opcional)</option>' +
+        materias.map(m => `<option value="${m}">${m}</option>`).join('');
+    }
+  } catch(e) { /* silencioso */ }
 }
