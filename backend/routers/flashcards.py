@@ -262,16 +262,21 @@ def importar_flashcards(file: UploadFile = File(...), conn=Depends(get_db_sessio
             raise HTTPException(status_code=400, detail="Arquivo JSON inválido") from None
 
     count = 0
-    for item in items:
+    max_por_dia = 20  # Limitar revisões por dia para não sobrecarregar
+    for i, item in enumerate(items):
         pergunta = item.get("pergunta", "").strip()
         resposta = item.get("resposta", "").strip()
         if not pergunta:
             continue
+        # Distribuir datas: primeiros 20 para hoje, próximos 20 para amanhã, etc.
+        dia_offset = count // max_por_dia
+        revisao_date = (date.today() + timedelta(days=dia_offset)).isoformat()
         conn.execute(
             "INSERT INTO flashcards (pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions) VALUES (?, ?, ?, 1, 2.5, 0)",
-            (pergunta, resposta, today_str())
+            (pergunta, resposta, revisao_date)
         )
         count += 1
     conn.commit()
-    log.info(f"Flashcards imported: {count} items")
-    return {"ok": True, "importados": count}
+    dias_distribuidos = (count // max_por_dia) + 1
+    log.info(f"Flashcards imported: {count} items distributed over {dias_distribuidos} days")
+    return {"ok": True, "importados": count, "distribuidos_em_dias": dias_distribuidos}
