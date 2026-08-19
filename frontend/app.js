@@ -810,6 +810,7 @@ function renderEditalTree() {
         <span class="tree-label">${escapeHtml(concurso)}</span>
         <span class="tree-stats">${concDone}/${concItems.length} (${concPct}%)</span>
         <div class="tree-bar"><div class="tree-bar-fill" style="width:${concPct}%"></div></div>
+        <button class="tree-archive-btn" onclick="event.stopPropagation();editarEdital('${concurso.replace(/'/g, "\\'")}')" title="Editar metadados">✏️</button>
         <button class="tree-archive-btn" onclick="event.stopPropagation();arquivarConcurso('${concurso.replace(/'/g, "\\'")}')" title="Arquivar concurso inteiro">📦</button>
         <button class="tree-archive-btn tree-excluir-btn" onclick="event.stopPropagation();excluirConcurso('${concurso.replace(/'/g, "\\'")}')" title="Excluir concurso inteiro">🗑</button>
       </div>
@@ -2030,6 +2031,95 @@ async function arquivarConcurso(editalNome) {
     renderEditalTree();
     toast('Concurso arquivado!', 'success');
 }
+// ==================== EDITAR METADADOS DO EDITAL ====================
+async function editarEdital(editalNome) {
+    const infos = await fetch(`/api/edital/info?edital_nome=${encodeURIComponent(editalNome)}`).then(r => r.json()).catch(() => []);
+
+    const overlay = document.createElement('div');
+    overlay.id = 'editar-edital-modal';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:99999;display:flex;align-items:center;justify-content:center;overflow-y:auto;padding:20px;';
+
+    let cardsHtml = '';
+    if (infos.length === 0) {
+        cardsHtml = `<p style="color:#9399b2;font-size:0.85rem;">Nenhum metadado cadastrado para este edital. Preencha abaixo para criar.</p>`;
+        infos.push({ id: null, edital_nome: editalNome, cargo: '', orgao: '', banca: '', vagas: '', subsidio: '', inscricoes: '', data_prova_objetiva: '', data_prova_discursiva: '', horario: '', local_prova: '', taxa_inscricao: '', link_edital: '', observacoes: '' });
+    }
+
+    cardsHtml += infos.map((info, idx) => `
+        <div style="background:#1e1e2e;border:1px solid #45475a;border-radius:8px;padding:12px;margin-bottom:12px;" data-info-id="${info.id || ''}">
+            <div style="font-size:0.82rem;color:#cba6f7;font-weight:600;margin-bottom:8px;">${info.cargo || 'Novo Cargo'}</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:0.78rem;">
+                <label style="color:#9399b2;">Nome do Edital<input type="text" class="ei-field" data-idx="${idx}" data-field="edital_nome" value="${escapeHtml(info.edital_nome)}" style="width:100%;background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:4px;padding:4px 6px;margin-top:2px;font-size:0.78rem;"></label>
+                <label style="color:#9399b2;">Cargo<input type="text" class="ei-field" data-idx="${idx}" data-field="cargo" value="${escapeHtml(info.cargo)}" style="width:100%;background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:4px;padding:4px 6px;margin-top:2px;font-size:0.78rem;"></label>
+                <label style="color:#9399b2;">Órgão<input type="text" class="ei-field" data-idx="${idx}" data-field="orgao" value="${escapeHtml(info.orgao)}" style="width:100%;background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:4px;padding:4px 6px;margin-top:2px;font-size:0.78rem;"></label>
+                <label style="color:#9399b2;">Banca<input type="text" class="ei-field" data-idx="${idx}" data-field="banca" value="${escapeHtml(info.banca)}" style="width:100%;background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:4px;padding:4px 6px;margin-top:2px;font-size:0.78rem;"></label>
+                <label style="color:#9399b2;">Vagas<input type="text" class="ei-field" data-idx="${idx}" data-field="vagas" value="${escapeHtml(info.vagas)}" style="width:100%;background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:4px;padding:4px 6px;margin-top:2px;font-size:0.78rem;"></label>
+                <label style="color:#9399b2;">Subsídio<input type="text" class="ei-field" data-idx="${idx}" data-field="subsidio" value="${escapeHtml(info.subsidio)}" style="width:100%;background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:4px;padding:4px 6px;margin-top:2px;font-size:0.78rem;"></label>
+                <label style="color:#9399b2;">Inscrições<input type="text" class="ei-field" data-idx="${idx}" data-field="inscricoes" value="${escapeHtml(info.inscricoes)}" style="width:100%;background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:4px;padding:4px 6px;margin-top:2px;font-size:0.78rem;"></label>
+                <label style="color:#9399b2;">Data Prova Objetiva<input type="date" class="ei-field" data-idx="${idx}" data-field="data_prova_objetiva" value="${info.data_prova_objetiva || ''}" style="width:100%;background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:4px;padding:4px 6px;margin-top:2px;font-size:0.78rem;"></label>
+                <label style="color:#9399b2;">Data Prova Discursiva<input type="date" class="ei-field" data-idx="${idx}" data-field="data_prova_discursiva" value="${info.data_prova_discursiva || ''}" style="width:100%;background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:4px;padding:4px 6px;margin-top:2px;font-size:0.78rem;"></label>
+                <label style="color:#9399b2;">Horário<input type="text" class="ei-field" data-idx="${idx}" data-field="horario" value="${escapeHtml(info.horario)}" style="width:100%;background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:4px;padding:4px 6px;margin-top:2px;font-size:0.78rem;"></label>
+                <label style="color:#9399b2;">Local<input type="text" class="ei-field" data-idx="${idx}" data-field="local_prova" value="${escapeHtml(info.local_prova)}" style="width:100%;background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:4px;padding:4px 6px;margin-top:2px;font-size:0.78rem;"></label>
+                <label style="color:#9399b2;">Taxa Inscrição<input type="text" class="ei-field" data-idx="${idx}" data-field="taxa_inscricao" value="${escapeHtml(info.taxa_inscricao)}" style="width:100%;background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:4px;padding:4px 6px;margin-top:2px;font-size:0.78rem;"></label>
+                <label style="color:#9399b2;grid-column:span 2;">Link Edital<input type="url" class="ei-field" data-idx="${idx}" data-field="link_edital" value="${escapeHtml(info.link_edital)}" style="width:100%;background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:4px;padding:4px 6px;margin-top:2px;font-size:0.78rem;"></label>
+                <label style="color:#9399b2;grid-column:span 2;">Observações<textarea class="ei-field" data-idx="${idx}" data-field="observacoes" rows="2" style="width:100%;background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:4px;padding:4px 6px;margin-top:2px;font-size:0.78rem;resize:vertical;">${escapeHtml(info.observacoes)}</textarea></label>
+            </div>
+        </div>
+    `).join('');
+
+    overlay.innerHTML = `<div style="background:#313244;border-radius:16px;padding:24px;max-width:700px;width:100%;max-height:90vh;overflow-y:auto;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <h3 style="color:#cba6f7;margin:0;">✏️ Editar: ${escapeHtml(editalNome)}</h3>
+            <button onclick="document.getElementById('editar-edital-modal').remove()" style="background:none;border:none;color:#f38ba8;font-size:1.2rem;cursor:pointer;">✕</button>
+        </div>
+        ${cardsHtml}
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
+            <button onclick="document.getElementById('editar-edital-modal').remove()" style="background:#45475a;color:#cdd6f4;border:none;border-radius:8px;padding:10px 20px;cursor:pointer;">Cancelar</button>
+            <button onclick="salvarEdicaoEdital('${editalNome.replace(/'/g, "\\'")}', ${JSON.stringify(infos.map(i => i.id))})" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:8px;padding:10px 20px;font-weight:600;cursor:pointer;">💾 Salvar</button>
+        </div>
+    </div>`;
+
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+}
+
+async function salvarEdicaoEdital(editalNomeOriginal, ids) {
+    const campos = ["edital_nome","cargo","orgao","banca","vagas","subsidio","inscricoes",
+                    "data_prova_objetiva","data_prova_discursiva","horario","local_prova",
+                    "taxa_inscricao","link_edital","observacoes"];
+
+    const groups = {};
+    document.querySelectorAll('.ei-field').forEach(el => {
+        const idx = el.dataset.idx;
+        const field = el.dataset.field;
+        if (!groups[idx]) groups[idx] = {};
+        groups[idx][field] = el.value;
+    });
+
+    let saved = 0;
+    for (const [idx, data] of Object.entries(groups)) {
+        const id = ids[parseInt(idx)];
+        if (id) {
+            await fetch(`/api/edital/info/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
+        } else {
+            await fetch('/api/edital/info', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
+        }
+        saved++;
+    }
+
+    // Se o nome do edital mudou, renomear
+    const novoNome = groups['0']?.edital_nome;
+    if (novoNome && novoNome !== editalNomeOriginal) {
+        await fetch('/api/edital/renomear', { method: 'PUT', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ antigo: editalNomeOriginal, novo: novoNome })
+        });
+    }
+
+    document.getElementById('editar-edital-modal').remove();
+    toast(`Metadados salvos (${saved} cargos)`, 'success');
+    await loadEdital();
+}
+
 async function excluirConcurso(editalNome) {
     const ok1 = await confirmModal('Excluir Concurso', `Excluir permanentemente TODO o concurso <strong>"${editalNome}"</strong>?<br><br>Todos os cargos, tópicos, notas e vínculos serão perdidos!`, { confirmText: 'Excluir Tudo', type: 'danger', icon: '🗑️' });
     if (!ok1) return;

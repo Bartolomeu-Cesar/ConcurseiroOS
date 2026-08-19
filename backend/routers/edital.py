@@ -43,6 +43,70 @@ def get_edital_info(edital_nome: str = "", conn=Depends(get_db_session)):
     return [dict(r) for r in rows]
 
 
+@router.put("/api/edital/info/{id}")
+def update_edital_info(id: int, body: dict = Body(...), conn=Depends(get_db_session)):
+    """Atualiza metadados de um edital/cargo"""
+    campos = ["edital_nome", "cargo", "orgao", "banca", "vagas", "subsidio", "inscricoes",
+              "data_prova_objetiva", "data_prova_discursiva", "horario", "local_prova",
+              "taxa_inscricao", "link_edital", "observacoes"]
+    sets = []
+    params = []
+    for campo in campos:
+        if campo in body:
+            sets.append(f"{campo} = ?")
+            params.append(body[campo])
+    if not sets:
+        raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
+    params.append(id)
+    conn.execute(f"UPDATE edital_info SET {', '.join(sets)} WHERE id = ?", params)
+    conn.commit()
+    return {"ok": True, "id": id}
+
+
+@router.post("/api/edital/info")
+def create_edital_info(body: dict = Body(...), conn=Depends(get_db_session)):
+    """Cria metadados para um edital/cargo"""
+    cur = conn.execute("""
+        INSERT INTO edital_info (edital_nome, cargo, orgao, banca, vagas, subsidio, inscricoes,
+            data_prova_objetiva, data_prova_discursiva, horario, local_prova, taxa_inscricao, link_edital, observacoes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (body.get("edital_nome",""), body.get("cargo",""), body.get("orgao",""), body.get("banca",""),
+          body.get("vagas",""), body.get("subsidio",""), body.get("inscricoes",""),
+          body.get("data_prova_objetiva",""), body.get("data_prova_discursiva",""),
+          body.get("horario",""), body.get("local_prova",""), body.get("taxa_inscricao",""),
+          body.get("link_edital",""), body.get("observacoes","")))
+    conn.commit()
+    return {"ok": True, "id": cur.lastrowid}
+
+
+@router.put("/api/edital/renomear")
+def renomear_edital(body: dict = Body(...), conn=Depends(get_db_session)):
+    """Renomeia um edital (atualiza edital_nome em edital e edital_info)"""
+    antigo = body.get("antigo", "")
+    novo = body.get("novo", "")
+    cargo_antigo = body.get("cargo_antigo", "")
+    cargo_novo = body.get("cargo_novo", "")
+
+    if not antigo or not novo:
+        raise HTTPException(status_code=400, detail="Informe nome antigo e novo")
+
+    # Renomear em edital
+    if cargo_antigo and cargo_novo:
+        conn.execute("UPDATE edital SET edital_nome = ?, cargo = ? WHERE edital_nome = ? AND cargo = ?",
+                     (novo, cargo_novo, antigo, cargo_antigo))
+        conn.execute("UPDATE edital_info SET edital_nome = ?, cargo = ? WHERE edital_nome = ? AND cargo = ?",
+                     (novo, cargo_novo, antigo, cargo_antigo))
+    elif cargo_antigo:
+        conn.execute("UPDATE edital SET cargo = ? WHERE edital_nome = ? AND cargo = ?",
+                     (cargo_novo or cargo_antigo, antigo, cargo_antigo))
+    else:
+        conn.execute("UPDATE edital SET edital_nome = ? WHERE edital_nome = ?", (novo, antigo))
+        conn.execute("UPDATE edital_info SET edital_nome = ? WHERE edital_nome = ?", (novo, antigo))
+
+    conn.commit()
+    return {"ok": True}
+
+
 @router.get("/api/edital/arquivados")
 def list_editais_arquivados(conn=Depends(get_db_session)):
     """Lista editais/cargos que foram arquivados"""
