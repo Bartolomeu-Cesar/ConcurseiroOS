@@ -107,6 +107,11 @@
     let mode = 'login'; // 'login' ou 'register'
     let currentEmail = '';
 
+    // Se já está logado, redirecionar para home
+    if (localStorage.getItem('auth_token')) {
+      window.location.href = '/';
+    }
+
     function toggleMode() {
       mode = mode === 'login' ? 'register' : 'login';
       const btn = document.getElementById('btn-login');

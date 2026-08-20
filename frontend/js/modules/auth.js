@@ -222,6 +222,19 @@ export function updateAuthUI() {
   }
 }
 
-export function initAuth() {
+export async function initAuth() {
   updateAuthUI();
+
+  // Verificar se auth está habilitado no backend
+  try {
+    const res = await fetch('/api/auth/status');
+    const status = await res.json();
+    if (status.auth_enabled && !isLoggedIn()) {
+      // Auth ativo + não logado → redirecionar para login
+      window.location.href = '/login.html';
+      return;
+    }
+  } catch(e) {
+    // Se falhar (offline), permitir acesso
+  }
 }
