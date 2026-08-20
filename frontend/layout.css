@@ -615,3 +615,16 @@ body {
 .tab-content .metas-config {
   width: 100%;
 }
+
+/* Ciclo cards grid — responsive */
+#ciclo-cards-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 768px) {
+  #ciclo-cards-grid {
+    grid-template-columns: 1fr;
+  }
+}

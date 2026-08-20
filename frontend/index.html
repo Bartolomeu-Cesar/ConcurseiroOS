@@ -115,44 +115,41 @@
 
   <!-- Tab: Ciclo de Estudos -->
   <div id="tab-ciclo" class="tab-content" role="tabpanel">
-    <!-- Card: Resumo de Ontem -->
-    <div class="panel" id="ciclo-ontem-panel" style="display:none;border-left:4px solid #fab387;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-        <h2 style="margin:0;">📅 Ontem — <span id="ciclo-ontem-dia"></span></h2>
-        <span id="ciclo-ontem-score" style="font-size:1.2rem;font-weight:700;"></span>
-      </div>
-      <p id="ciclo-ontem-msg" style="font-size:0.88rem;color:#a6adc8;margin-bottom:12px;"></p>
-      <div id="ciclo-ontem-stats" style="display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap;">
-        <div style="background:#1e1e2e;border-radius:8px;padding:8px 14px;font-size:0.82rem;">
-          ⏱ <strong id="ciclo-ontem-horas">0</strong>/<span id="ciclo-ontem-plan">0</span>h
-        </div>
-        <div style="background:#1e1e2e;border-radius:8px;padding:8px 14px;font-size:0.82rem;">
-          ❓ <strong id="ciclo-ontem-quest">0</strong> questões
-        </div>
-        <div style="background:#1e1e2e;border-radius:8px;padding:8px 14px;font-size:0.82rem;">
-          🧠 <strong id="ciclo-ontem-flash">0</strong> flashcards
-        </div>
-      </div>
-      <div id="ciclo-ontem-materias"></div>
-    </div>
-
     <div class="panel">
       <h2>🔄 Ciclo de Estudos</h2>
       <p style="font-size:0.85rem;color:#9399b2;margin-bottom:12px;">Estudo intercalado: o sistema indica a próxima matéria (menor progresso relativo). Inicie o timer e ao parar, as horas são registradas automaticamente.</p>
 
-      <!-- Próxima matéria + Timer integrado -->
-      <div class="ciclo-focus-card" id="ciclo-focus">
-        <div class="ciclo-focus-left">
-          <div class="ciclo-focus-label">PRÓXIMA MATÉRIA</div>
-          <div class="ciclo-focus-materia" id="ciclo-focus-materia">—</div>
-          <div class="ciclo-focus-sub" id="ciclo-focus-sub">Carregando...</div>
-        </div>
-        <div class="ciclo-focus-right">
-          <div class="ciclo-focus-timer" id="ciclo-timer-display">00:00:00</div>
-          <div style="display:flex;gap:6px;">
-            <button class="edital-timer-btn" id="ciclo-btn-start" onclick="cicloTimerToggle()" style="background:#a6e3a1;color:#1e1e2e;">▶ Estudar</button>
-            <button class="edital-timer-btn" id="ciclo-btn-stop" onclick="cicloTimerStop()" style="background:#f38ba8;color:#1e1e2e;display:none;">⏹ Parar</button>
+      <!-- Grid: Próxima Matéria + Resumo de Ontem -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;" id="ciclo-cards-grid">
+        <!-- Próxima matéria + Timer integrado -->
+        <div class="ciclo-focus-card" id="ciclo-focus">
+          <div class="ciclo-focus-left">
+            <div class="ciclo-focus-label">PRÓXIMA MATÉRIA</div>
+            <div class="ciclo-focus-materia" id="ciclo-focus-materia">—</div>
+            <div class="ciclo-focus-sub" id="ciclo-focus-sub">Carregando...</div>
           </div>
+          <div class="ciclo-focus-right">
+            <div class="ciclo-focus-timer" id="ciclo-timer-display">00:00:00</div>
+            <div style="display:flex;gap:6px;">
+              <button class="edital-timer-btn" id="ciclo-btn-start" onclick="cicloTimerToggle()" style="background:#a6e3a1;color:#1e1e2e;">▶ Estudar</button>
+              <button class="edital-timer-btn" id="ciclo-btn-stop" onclick="cicloTimerStop()" style="background:#f38ba8;color:#1e1e2e;display:none;">⏹ Parar</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card: Resumo de Ontem -->
+        <div class="ciclo-focus-card" id="ciclo-ontem-panel" style="display:none;border-left:4px solid #fab387;flex-direction:column;align-items:stretch;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <div class="ciclo-focus-label">📅 ONTEM — <span id="ciclo-ontem-dia"></span></div>
+            <span id="ciclo-ontem-score" style="font-size:1.1rem;font-weight:700;"></span>
+          </div>
+          <p id="ciclo-ontem-msg" style="font-size:0.82rem;color:#a6adc8;margin-bottom:8px;"></p>
+          <div style="display:flex;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
+            <span style="font-size:0.78rem;background:#1e1e2e;border-radius:6px;padding:4px 10px;">⏱ <strong id="ciclo-ontem-horas">0</strong>/<span id="ciclo-ontem-plan">0</span>h</span>
+            <span style="font-size:0.78rem;background:#1e1e2e;border-radius:6px;padding:4px 10px;">❓ <strong id="ciclo-ontem-quest">0</strong></span>
+            <span style="font-size:0.78rem;background:#1e1e2e;border-radius:6px;padding:4px 10px;">🧠 <strong id="ciclo-ontem-flash">0</strong></span>
+          </div>
+          <div id="ciclo-ontem-materias" style="font-size:0.82rem;max-height:120px;overflow-y:auto;"></div>
         </div>
       </div>
 
@@ -513,7 +510,7 @@
           if (!panel) return;
           if (!data.teve_plano && !data.estudou) { panel.style.display = 'none'; return; }
 
-          panel.style.display = 'block';
+          panel.style.display = 'flex';
           document.getElementById('ciclo-ontem-dia').textContent = data.dia_semana;
           document.getElementById('ciclo-ontem-msg').textContent = data.mensagem;
           document.getElementById('ciclo-ontem-horas').textContent = data.total_estudado;
