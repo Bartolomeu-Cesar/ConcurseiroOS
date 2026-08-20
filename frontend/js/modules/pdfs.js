@@ -97,7 +97,7 @@ function renderNodes(nodes, container, bulk, prefix) {
         : `<button class="pdf-link-disc-btn" onclick="event.stopPropagation();linkPdfToDisc('${path.replace(/'/g, "\\'")}')" title="Vincular a disciplina">🔗</button>`;
       const div = document.createElement('div');
       div.innerHTML = `
-        <div class="pdf-item" data-path="${path}" style="background:linear-gradient(to right, rgba(137,220,235,0.12) ${pct}%, transparent ${pct}%);">
+        <div class="pdf-item" data-path="${path}" style="background:linear-gradient(to right, rgba(137,220,235,0.25) ${pct}%, transparent ${pct}%);">
           <span>📄</span>
           <span class="pdf-name">${escapeHtml(node.name.replace(/_/g, ' '))}</span>
           ${materiaTag}
