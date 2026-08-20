@@ -370,53 +370,160 @@ def _simplify_cargo_name(full_name: str) -> str:
 
 
 def _extract_metadados(pdf_path: str) -> dict:
-    """Extrai metadados do concurso: órgão, banca, remuneração, jornada, vagas."""
+    """Extrai metadados completos do concurso: órgão, banca, remuneração, jornada, vagas, inscrições, datas, taxa."""
     reader = PdfReader(pdf_path)
-    text = ""
-    for i in range(min(10, len(reader.pages))):
+    # Read first 25 pages for general metadata
+    text_inicio = ""
+    for i in range(min(25, len(reader.pages))):
         page_text = reader.pages[i].extract_text() or ""
-        text += unicodedata.normalize("NFC", page_text) + "\n"
+        text_inicio += unicodedata.normalize("NFC", page_text) + "\n"
 
-    metadados = {"orgao": "", "banca": "", "remuneracao": "", "jornada": "", "vagas": {}, "escolaridade": ""}
+    # Read last 15 pages for cronograma/anexo
+    text_final = ""
+    for i in range(max(0, len(reader.pages) - 15), len(reader.pages)):
+        page_text = reader.pages[i].extract_text() or ""
+        text_final += unicodedata.normalize("NFC", page_text) + "\n"
 
-    # Órgão
+    metadados = {
+        "orgao": "",
+        "banca": "",
+        "remuneracao": "",
+        "jornada": "",
+        "vagas": {},
+        "escolaridade": "",
+        "inscricoes": "",
+        "data_prova_objetiva": "",
+        "data_prova_discursiva": "",
+        "local_prova": "",
+        "taxa_inscricao": "",
+        "link_edital": "",
+    }
+
+    # === ÓRGÃO ===
     orgao_match = re.search(
-        r"(TRIBUNAL\s+DE\s+CONTAS[^(\n]*|POL[ÍI]CIA\s+CIVIL[^(\n]*|"
-        r"MINIST[ÉE]RIO\s+P[ÚU]BLICO[^(\n]*|DEFENSORIA\s+P[ÚU]BLICA[^(\n]*|"
-        r"PROCURADORIA[^(\n]*|SECRETARIA[^(\n]*|PREFEITURA[^(\n]*)",
-        text, re.IGNORECASE
+        r"(TRIBUNAL\s+DE\s+CONTAS[^(\n]{0,60}|POL[ÍI]CIA\s+CIVIL[^(\n]{0,60}|"
+        r"MINIST[ÉE]RIO\s+P[ÚU]BLICO[^(\n]{0,60}|DEFENSORIA\s+P[ÚU]BLICA[^(\n]{0,60}|"
+        r"PROCURADORIA[^(\n]{0,40}|PREFEITURA[^(\n]{0,60})",
+        text_inicio, re.IGNORECASE
     )
     if orgao_match:
-        metadados["orgao"] = orgao_match.group(1).strip()[:100]
+        orgao = orgao_match.group(1).strip()
+        # Limpar e formatar
+        orgao = re.sub(r"\s+", " ", orgao).strip()
+        metadados["orgao"] = _smart_title_case(orgao) if orgao == orgao.upper() else orgao
 
-    # Banca
+    # === BANCA ===
     banca_match = re.search(
-        r"(Cebraspe|CEBRASPE|CESPE|FCC|FGV|VUNESP|IBFC|AOCP|IADES|IDECAN|FUNDEP|CONSULPLAN)",
-        text, re.IGNORECASE
+        r"(Cebraspe|CEBRASPE|CESPE|FCC|FGV|VUNESP|IBFC|AOCP|IADES|IDECAN|FUNDEP|CONSULPLAN|INSTITUTO\s+AOCP)",
+        text_inicio, re.IGNORECASE
     )
     if banca_match:
-        metadados["banca"] = banca_match.group(1).strip()
+        metadados["banca"] = banca_match.group(1).strip().upper()
 
-    # Remuneração
-    remuneracao_match = re.search(r"REMUNERA[ÇC][ÃA]O\s*:?\s*R?\$?\s*([\d.,]+)", text, re.IGNORECASE)
+    # === REMUNERAÇÃO ===
+    remuneracao_match = re.search(r"REMUNERA[ÇC][ÃA]O\s*:?\s*R?\$?\s*([\d.,]+)", text_inicio, re.IGNORECASE)
     if remuneracao_match:
-        metadados["remuneracao"] = f"R$ {remuneracao_match.group(1)}"
+        metadados["remuneracao"] = f"R$ {remuneracao_match.group(1).rstrip('.')}"
 
-    # Jornada
-    jornada_match = re.search(r"JORNADA\s+DE\s+TRABALHO\s*:?\s*(\d+\s*horas?\s*semanais?)", text, re.IGNORECASE)
+    # === JORNADA ===
+    jornada_match = re.search(r"JORNADA\s+DE\s+TRABALHO\s*:?\s*(\d+\s*horas?\s*semanais?)", text_inicio, re.IGNORECASE)
     if jornada_match:
         metadados["jornada"] = jornada_match.group(1).strip()
 
-    # Vagas por cargo
-    for match in re.finditer(r"Cargo\s+(\d+)\s*:.+?(\d+)\s*$", text, re.MULTILINE):
+    # === VAGAS POR CARGO (tabela) ===
+    # Pattern: "Cargo N: ... Total X" ou linhas com números de vagas
+    for match in re.finditer(
+        r"Cargo\s+(\d+)\s*:.*?(?:Total|total)\s*(\d+)",
+        text_inicio, re.DOTALL
+    ):
         metadados["vagas"][match.group(1)] = match.group(2)
 
-    # Escolaridade
-    if "NÍVEL SUPERIOR" in text.upper() and "NÍVEL MÉDIO" in text.upper():
+    # Fallback: pattern "Cargo N: ... <numeros>" em linhas da tabela
+    if not metadados["vagas"]:
+        for match in re.finditer(r"Cargo\s+(\d+).*?(\d+)\s*$", text_inicio, re.MULTILINE):
+            metadados["vagas"][match.group(1)] = match.group(2)
+
+    # === INSCRIÇÕES (período) ===
+    # Buscar no cronograma primeiro
+    inscr_match = re.search(
+        r"(?:per[íi]odo\s+de\s+(?:solicita[çc][ãa]o\s+de\s+)?inscri[çc][õo]es?).*?(\d{1,2}/\d{1,2})\s*(?:a|até)\s*(\d{1,2}/\d{1,2}/\d{4})",
+        text_inicio + text_final, re.IGNORECASE | re.DOTALL
+    )
+    if inscr_match:
+        inicio_inscr = inscr_match.group(1)
+        fim_inscr = inscr_match.group(2)
+        # Extrair ano do fim
+        ano = fim_inscr.split("/")[-1]
+        if "/" not in inicio_inscr or len(inicio_inscr.split("/")) < 3:
+            inicio_inscr = inicio_inscr + "/" + ano
+        metadados["inscricoes"] = f"{inicio_inscr} a {fim_inscr}"
+
+    # === DATA DA PROVA ===
+    # Buscar "Aplicação das provas" no cronograma
+    prova_match = re.search(
+        r"(?:Aplica[çc][ãa]o\s+das\s+provas?\s+objetivas?).*?(\d{1,2}/\d{1,2}/\d{4})",
+        text_final, re.IGNORECASE | re.DOTALL
+    )
+    if prova_match:
+        data_prova = prova_match.group(1)
+        metadados["data_prova_objetiva"] = data_prova
+        metadados["data_prova_discursiva"] = data_prova  # Geralmente mesmo dia
+
+    # Buscar segunda data de prova (se tiver Auditor/Técnico em outra data)
+    prova_matches = re.findall(
+        r"Aplica[çc][ãa]o\s+das\s+provas?.*?(\d{1,2}/\d{1,2}/\d{4})",
+        text_final, re.IGNORECASE | re.DOTALL
+    )
+    if len(prova_matches) > 1:
+        # Guardar todas as datas encontradas (será distribuída por cargo no endpoint)
+        metadados["datas_provas"] = list(set(prova_matches))
+
+    # === TAXA DE INSCRIÇÃO ===
+    taxa_match = re.search(r"(?:taxa.*?inscri|inscri.*?taxa).*?R\$\s*([\d.,]+)", text_inicio, re.IGNORECASE | re.DOTALL)
+    if not taxa_match:
+        # Buscar padrão "para os cargos de ...: R$ X"
+        taxa_match = re.search(r"R\$\s*([\d.,]+)\s*[;.]", text_inicio)
+    if taxa_match:
+        metadados["taxa_inscricao"] = f"R$ {taxa_match.group(1)}"
+
+    # Múltiplas taxas por nível
+    taxas_multi = re.findall(
+        r"(?:para\s+o[s]?\s+cargo[s]?\s+de\s+)(.+?):\s*R\$\s*([\d.,]+)",
+        text_inicio, re.IGNORECASE
+    )
+    if taxas_multi:
+        partes = [f"{cargo.strip()}: R$ {valor}" for cargo, valor in taxas_multi]
+        metadados["taxa_inscricao"] = " | ".join(partes)
+
+    # === LOCAL DA PROVA ===
+    local_match = re.search(
+        r"(?:provas?\s+ser[ãa]o?\s+(?:realizad|aplicad)).*?(?:em|na\s+cidade\s+de)\s+([A-Za-zÀ-ÿ\s]+?)(?:\.|,|\s*e\s+em)",
+        text_inicio, re.IGNORECASE
+    )
+    if local_match:
+        metadados["local_prova"] = local_match.group(1).strip()
+    else:
+        # Fallback: buscar capital do estado
+        estado_match = re.search(r"ESTADO\s+D[OE]\s+([A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇÑ]+)", text_inicio)
+        if estado_match:
+            metadados["local_prova"] = f"Capital do Estado ({estado_match.group(1).title()})"
+
+    # === LINK DO EDITAL ===
+    link_match = re.search(r"(https?://www\.cebraspe\.org\.br/concursos/[^\s\"]{3,})", text_inicio)
+    if not link_match:
+        link_match = re.search(r"(https?://[^\s\"]{20,80}concurso[^\s\"]*)", text_inicio, re.IGNORECASE)
+    if link_match:
+        link = link_match.group(1).rstrip(".,;")
+        # Fix PDF line breaks in URL (e.g., "tce_ma_2 6" → "tce_ma_26")
+        link = re.sub(r"\s+", "", link)
+        metadados["link_edital"] = link
+
+    # === ESCOLARIDADE ===
+    if "NÍVEL SUPERIOR" in text_inicio.upper() and "NÍVEL MÉDIO" in text_inicio.upper():
         metadados["escolaridade"] = "Nível Superior e Médio"
-    elif "NÍVEL SUPERIOR" in text.upper():
+    elif "NÍVEL SUPERIOR" in text_inicio.upper():
         metadados["escolaridade"] = "Nível Superior"
-    elif "NÍVEL MÉDIO" in text.upper():
+    elif "NÍVEL MÉDIO" in text_inicio.upper():
         metadados["escolaridade"] = "Nível Médio"
 
     return metadados

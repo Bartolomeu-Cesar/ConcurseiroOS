@@ -429,15 +429,33 @@ async def importar_edital_pdf_v2(
                 (nome, cargo_nome, user_id)
             ).fetchone()
             if not existing:
+                # Determinar data da prova para este cargo
+                data_prova = metadados.get("data_prova_objetiva", "")
+                datas_provas = metadados.get("datas_provas", [])
+                if len(datas_provas) > 1 and ("Auditor" in cargo_nome or "Técnico" in cargo_nome):
+                    # Segunda data geralmente é para Auditor/Técnico
+                    datas_provas.sort()
+                    data_prova = datas_provas[-1] if len(datas_provas) > 1 else data_prova
+
                 conn.execute("""
-                    INSERT INTO edital_info (edital_nome, cargo, orgao, banca, vagas, subsidio, user_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO edital_info (edital_nome, cargo, orgao, banca, vagas, subsidio,
+                        inscricoes, data_prova_objetiva, data_prova_discursiva, horario,
+                        local_prova, taxa_inscricao, link_edital, observacoes, user_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     nome, cargo_nome,
                     metadados.get("orgao", ""),
                     metadados.get("banca", ""),
-                    metadados.get("vagas", {}).get(cargo.get("cargo_numero", ""), ""),
+                    metadados.get("vagas", {}).get(cargo.get("cargo_numero", ""), "+ CR"),
                     metadados.get("remuneracao", ""),
+                    metadados.get("inscricoes", ""),
+                    data_prova,
+                    metadados.get("data_prova_discursiva", data_prova),
+                    "",
+                    metadados.get("local_prova", ""),
+                    metadados.get("taxa_inscricao", ""),
+                    metadados.get("link_edital", ""),
+                    f"{metadados.get('escolaridade', '')}. Jornada: {metadados.get('jornada', '')}." if metadados.get("jornada") else metadados.get("escolaridade", ""),
                     user_id
                 ))
 
