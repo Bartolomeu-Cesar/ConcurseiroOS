@@ -200,12 +200,13 @@
     body.light-theme .btn-secondary { background: #dce0e8; color: #4c4f69; border: 1px solid #bcc0cc; }
     body.light-theme .filter-bar select, body.light-theme .filter-bar input { background: #dce0e8; border-color: #bcc0cc; color: #4c4f69; }
   </style>
+  <link rel="stylesheet" href="/layout.css">
 </head>
 <body>
+  <div class="main-content">
   <div class="header">
     <h1>❓ Banco de Questões & Simulados</h1>
     <div class="header-links">
-      <a href="/" style="background:#cba6f7;color:#1e1e2e;border-radius:6px;padding:5px 12px;font-weight:600;font-size:0.82rem;">🏠 Início</a>
       <a href="/dashboard.html">📊 Dashboard</a>
       <button onclick="toggleTheme()" title="Alternar tema" style="background:#45475a;color:#cdd6f4;border:none;border-radius:6px;padding:6px 10px;font-size:0.9rem;cursor:pointer;">🌓</button>
     </div>
@@ -1211,5 +1212,6 @@
     loadQuestoesResolver();
   </script>
 <script src="/timer-global.js"></script>
+  <script src="/sidebar.js"></script>
 </body>
 </html>

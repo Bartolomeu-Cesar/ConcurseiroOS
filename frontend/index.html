@@ -13,56 +13,10 @@
 <body>
   <a href="#page-content" class="skip-link">Pular para conteúdo</a>
 
-  <!-- Sidebar Overlay (mobile) -->
-  <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
-
-  <!-- Sidebar -->
-  <aside class="sidebar" id="sidebar">
-    <div class="sidebar-brand">
-      <span class="brand-icon">📚</span>
-      <span class="brand-text">ConcurseiroOS</span>
-    </div>
-
-    <div class="sidebar-section">
-      <div class="sidebar-section-title">Estudos</div>
-      <ul class="sidebar-nav">
-        <li><button class="active" onclick="navigateTo('tab-pdfs', this)" data-nav="tab-pdfs"><span class="nav-icon">📖</span>PDFs</button></li>
-        <li><button onclick="navigateTo('tab-edital', this)" data-nav="tab-edital"><span class="nav-icon">📋</span>Edital</button></li>
-        <li><button onclick="navigateTo('tab-ciclo', this)" data-nav="tab-ciclo"><span class="nav-icon">🔄</span>Ciclo</button></li>
-      </ul>
-    </div>
-
-    <div class="sidebar-section">
-      <div class="sidebar-section-title">Prática</div>
-      <ul class="sidebar-nav">
-        <li><a href="/questoes.html"><span class="nav-icon">❓</span>Questões</a></li>
-        <li><button onclick="navigateTo('tab-flashcards', this)" data-nav="tab-flashcards"><span class="nav-icon">🧠</span>Flashcards<span class="nav-badge" id="sidebar-flash-badge" style="display:none;"></span></button></li>
-        <li><button onclick="navigateTo('tab-sumulas', this)" data-nav="tab-sumulas"><span class="nav-icon">⚖️</span>Súmulas</button></li>
-      </ul>
-    </div>
-
-    <div class="sidebar-section">
-      <div class="sidebar-section-title">Progresso</div>
-      <ul class="sidebar-nav">
-        <li><a href="/dashboard.html"><span class="nav-icon">📊</span>Dashboard</a></li>
-        <li><button onclick="navigateTo('tab-metas', this)" data-nav="tab-metas"><span class="nav-icon">🎯</span>Metas</button></li>
-      </ul>
-    </div>
-
-    <div class="sidebar-footer">
-      <div class="sidebar-gamify">
-        <div class="streak-box">
-          <span class="fire">🔥</span>
-          <span class="num" id="streak-num">0</span>
-        </div>
-        <div class="xp-box" id="xp-badge">⭐ Nv.1</div>
-      </div>
-    </div>
-  </aside>
+  <!-- Sidebar injected by sidebar.js -->
 
   <!-- App Shell -->
-  <div class="app-shell">
-    <div class="main-content">
+  <div class="main-content">
       <!-- Top Bar -->
       <header class="top-bar">
         <button class="sidebar-toggle" onclick="toggleSidebar()" aria-label="Abrir menu">☰</button>
@@ -393,8 +347,6 @@
       </main>
     </div>
   </div>
-
-  <!-- Modals (outside app shell for z-index) -->
   <div id="overlay" role="dialog" aria-modal="true" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:999;align-items:center;justify-content:center;">
     <div style="background:#313244;border-radius:16px;padding:40px 48px;text-align:center;max-width:360px;">
       <div style="font-size:2.5rem;margin-bottom:12px;">☕</div>
@@ -532,6 +484,7 @@
     }
   </script>
 
+  <script src="/sidebar.js"></script>
   <script type="module" src="/js/app.js"></script>
   <script src="/timer-global.js"></script>
 </body>

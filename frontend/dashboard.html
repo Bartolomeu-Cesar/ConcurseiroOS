@@ -323,18 +323,18 @@
     /* Turno header */
     .cal-turno-header { transition: background 0.2s; }
   </style>
+  <link rel="stylesheet" href="/layout.css">
 </head>
 <body>
+  <div class="main-content">
   <div class="header">
     <div>
       <h1>📊 Dashboard de Desempenho</h1>
       <span style="font-size:0.82rem;color:#9399b2;" id="date-label"></span>
     </div>
     <div class="header-links">
-      <a href="/" style="background:#cba6f7;color:#1e1e2e;border-radius:6px;padding:5px 12px;font-weight:600;font-size:0.82rem;">🏠 Início</a>
       <span id="dash-countdown" style="background:#313244;border-radius:20px;padding:4px 12px;font-size:0.78rem;color:#f38ba8;font-weight:600;"></span>
-      <a href="/questoes.html">❓ Questões</a>
-      <button class="export-btn" onclick="exportStats()">⬇ Exportar Estatísticas</button>
+      <button class="export-btn" onclick="exportStats()">⬇ Exportar</button>
       <button onclick="toggleTheme()" title="Alternar tema" style="background:#45475a;color:#cdd6f4;border:none;border-radius:6px;padding:6px 10px;font-size:0.9rem;cursor:pointer;">🌓</button>
     </div>
   </div>
@@ -3226,5 +3226,6 @@
     loadActivePanel();
   </script>
 <script src="/timer-global.js"></script>
+  <script src="/sidebar.js"></script>
 </body>
 </html>
