@@ -8,6 +8,7 @@ import { load, exportProgress, importProgress, initPdfs } from './modules/pdfs.j
 import { loadEdital, toggleTree, toggleAllEdital, selectEditalTopic, toggleEditalStatus, deleteEditalItem, addEdital, importEditalPdf, arquivarCargo, excluirCargo, arquivarConcurso, excluirConcurso, editarEdital, salvarEdicaoEdital, showArquivados, iniciarQuestoesPosEstudo, iniciarFlashPosEstudo, initEdital } from './modules/edital.js';
 import { loadCiclo, cicloTimerToggle, cicloTimerStop, importarCicloDoEdital, addCiclo, deleteCiclo, resetarCiclo, limparCiclo, initCiclo } from './modules/ciclo.js';
 import { loadFlashcardsToday, revealAnswer, reviewFlashcard, addFlashcard, loadAllFlashcards, toggleFlashGroup, iniciarSessaoFlash, sessaoNext, deleteFlashcard, openFlashEditModal, closeFlashEditModal, saveFlashEdit, initFlashcards } from './modules/flashcards.js';
+import { loadSumulasToday, revealSumula, reviewSumula, addSumula, loadAllSumulas, iniciarSessaoSumulas, deleteSumula, editSumula, initSumulas } from './modules/sumulas.js';
 import { carregarQuestoesDia, showQuestaoDia, responderQuestaoDia, advanceQuestao, initQuestoes } from './modules/questoes.js';
 import { loadMetas, salvarMetas, getConfigSessoes, salvarConfigSessoes, loadConfigSessoes, loadStreakBadge, initMetas } from './modules/metas.js';
 import { openSelectModal, selectModalChoice, closeSelectModal, initModalSelecao } from './modules/modal-selecao.js';
@@ -39,6 +40,9 @@ Object.assign(window, {
   loadFlashcardsToday, revealAnswer, reviewFlashcard, addFlashcard, loadAllFlashcards,
   toggleFlashGroup, iniciarSessaoFlash, sessaoNext, deleteFlashcard,
   openFlashEditModal, closeFlashEditModal, saveFlashEdit,
+  // Súmulas
+  loadSumulasToday, revealSumula, reviewSumula, addSumula, loadAllSumulas,
+  iniciarSessaoSumulas, deleteSumula, editSumula,
   // Questões
   carregarQuestoesDia, showQuestaoDia, responderQuestaoDia, advanceQuestao,
   // Metas
@@ -72,6 +76,7 @@ initPdfs({ linkPdfToDisc, unlinkPdf });
 initEdital({ loadMetas, loadStreakBadge, getConfigSessoes, linkPdfToTopic, linkPdfToMateria, openNoteModal });
 initCiclo({ loadStreakBadge });
 initFlashcards({ loadMetas, loadStreakBadge, getConfigSessoes });
+initSumulas();
 initQuestoes({ loadMetas, loadStreakBadge, getConfigSessoes });
 initTabs({ carregarQuestoesDia, iniciarSessaoFlash });
 initShortcuts();

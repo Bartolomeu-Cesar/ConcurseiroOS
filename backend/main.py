@@ -10,7 +10,7 @@ mimetypes.add_type("text/javascript", ".js", strict=True)
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from routers import auth, ciclo, dashboard, edital, flashcards, misc, pdf, questoes, simulados, streaks, treinador
+from routers import auth, ciclo, dashboard, edital, flashcards, misc, pdf, questoes, simulados, streaks, sumulas, treinador
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
 from starlette.responses import Response
@@ -120,6 +120,7 @@ app.include_router(questoes.router)
 app.include_router(simulados.router)
 app.include_router(ciclo.router)
 app.include_router(streaks.router)
+app.include_router(sumulas.router)
 app.include_router(dashboard.router)
 app.include_router(treinador.router)
 app.include_router(misc.router)

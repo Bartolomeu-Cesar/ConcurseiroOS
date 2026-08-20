@@ -125,6 +125,7 @@
     <button class="tab-btn" data-tab="tab-edital" role="tab" aria-selected="false">📊 Edital</button>
     <button class="tab-btn" data-tab="tab-ciclo" role="tab" aria-selected="false">🔄 Ciclo</button>
     <button class="tab-btn" data-tab="tab-flashcards" role="tab" aria-selected="false">🧠 Flashcards</button>
+    <button class="tab-btn" data-tab="tab-sumulas" role="tab" aria-selected="false">⚖️ Súmulas</button>
     <button class="tab-btn" data-tab="tab-metas" role="tab" aria-selected="false">🎯 Metas</button>
   </div>
 
@@ -302,6 +303,70 @@
       </div>
       <div class="flash-count" id="flash-count"></div>
       <div id="flash-list"></div>
+    </div>
+  </div>
+
+  <!-- Tab: Súmulas -->
+  <div id="tab-sumulas" class="tab-content" role="tabpanel">
+    <div class="flash-panel">
+      <h2>⚖️ Súmulas do Dia</h2>
+      <div id="sumula-progress" style="margin-bottom:10px;display:none;">
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.78rem;margin-bottom:4px;">
+          <span id="sumula-progress-text" style="color:#9399b2;">0/0 revisadas</span>
+          <span id="sumula-progress-pct" style="color:#a6e3a1;font-weight:600;">0%</span>
+        </div>
+        <div style="height:6px;background:#45475a;border-radius:3px;overflow:hidden;">
+          <div id="sumula-progress-bar" style="height:100%;background:#cba6f7;border-radius:3px;width:0%;transition:width 0.3s;"></div>
+        </div>
+      </div>
+      <div id="sumula-card-area">
+        <div id="sumula-front" style="font-size:0.95rem;color:#cdd6f4;padding:12px;background:#1e1e2e;border-radius:8px;min-height:60px;"></div>
+        <div id="sumula-back" style="display:none;font-size:0.88rem;color:#a6e3a1;padding:12px;background:#1e3a2e;border-radius:8px;margin-top:8px;"></div>
+        <button id="sumula-reveal-btn" style="display:none;margin-top:10px;background:#cba6f7;color:#1e1e2e;border:none;border-radius:8px;padding:10px 20px;font-weight:600;cursor:pointer;" onclick="revealSumula()">Revelar Enunciado</button>
+        <div id="sumula-review-btns" style="display:none;margin-top:10px;"></div>
+      </div>
+    </div>
+    <div class="flash-panel">
+      <h2>🎯 Modos de Estudo</h2>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
+        <button class="iobtn" onclick="iniciarSessaoSumulas('revisao')" style="background:#cba6f7;color:#1e1e2e;">📅 Revisão SRS (Hoje)</button>
+        <button class="iobtn" onclick="iniciarSessaoSumulas('tribunal')" style="background:#89b4fa;color:#1e1e2e;">🏛️ Por Tribunal</button>
+        <button class="iobtn" onclick="iniciarSessaoSumulas('tema')" style="background:#f9e2af;color:#1e1e2e;">📚 Por Tema</button>
+        <button class="iobtn" onclick="iniciarSessaoSumulas('aleatorio')" style="background:#a6e3a1;color:#1e1e2e;">🎲 Aleatório</button>
+      </div>
+      <div id="sumula-stats" style="font-size:0.8rem;color:#9399b2;"></div>
+    </div>
+    <div class="flash-panel flash-add-form">
+      <h2>➕ Adicionar Súmula</h2>
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
+        <select id="sumula-add-tribunal" style="padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.9rem;">
+          <option value="STF">STF</option>
+          <option value="STJ">STJ</option>
+          <option value="TST">TST</option>
+          <option value="TSE">TSE</option>
+          <option value="STF-V">STF Vinculante</option>
+        </select>
+        <input id="sumula-add-numero" type="number" placeholder="Nº" style="width:80px;padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;">
+      </div>
+      <textarea id="sumula-add-enunciado" placeholder="Enunciado da súmula..." rows="3" style="width:100%;padding:10px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.9rem;resize:vertical;margin-bottom:8px;"></textarea>
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
+        <input id="sumula-add-tema" placeholder="Tema (ex: Direito Penal)" style="flex:1;padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;">
+        <input id="sumula-add-obs" placeholder="Observação/Dica" style="flex:1;padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;">
+      </div>
+      <button onclick="addSumula()">Adicionar</button>
+    </div>
+    <div class="flash-panel">
+      <h2>📦 Todas as Súmulas</h2>
+      <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
+        <select id="sumula-filter-tribunal" onchange="loadAllSumulas()" style="padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.85rem;">
+          <option value="">Todos os Tribunais</option>
+        </select>
+        <select id="sumula-filter-tema" onchange="loadAllSumulas()" style="padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.85rem;">
+          <option value="">Todos os Temas</option>
+        </select>
+      </div>
+      <div class="flash-count" id="sumula-count"></div>
+      <div id="sumula-list"></div>
     </div>
   </div>
 

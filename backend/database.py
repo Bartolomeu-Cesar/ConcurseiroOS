@@ -397,6 +397,23 @@ def _create_tables(conn):
         )
     """)
 
+    # Súmulas (revisão SRS como flashcards)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS sumulas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tribunal TEXT NOT NULL,
+            numero INTEGER NOT NULL,
+            enunciado TEXT NOT NULL,
+            tema TEXT DEFAULT '',
+            observacao TEXT DEFAULT '',
+            vinculante INTEGER DEFAULT 0,
+            proxima_revisao TEXT NOT NULL,
+            intervalo_dias INTEGER DEFAULT 1,
+            easiness_factor REAL DEFAULT 2.5,
+            repetitions INTEGER DEFAULT 0
+        )
+    """)
+
 
 def _run_migrations(conn):
     """Executa migrações de schema (ALTER TABLE)."""
