@@ -1034,7 +1034,7 @@ async function importEditalPdf(input) {
     const nome = document.getElementById('edital-pdf-nome').value.trim() || 'Importado';
     const form = new FormData();
     form.append('file', file);
-    const res = await fetch(`/api/edital/importar-pdf?edital_nome=${encodeURIComponent(nome)}`, { method: 'POST', body: form }).then(r => r.json());
+    const res = await fetch(`/api/edital/importar-pdf-v2?confirmar=true&edital_nome=${encodeURIComponent(nome)}`, { method: 'POST', body: form }).then(r => r.json());
     input.value = '';
     if (res.ok) {
         toast(`Importados ${res.importados} itens!`, 'success');
