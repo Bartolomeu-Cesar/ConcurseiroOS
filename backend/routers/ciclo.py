@@ -332,6 +332,185 @@ def importar_ciclo(file: UploadFile = File(...), conn=Depends(get_db_session), u
 
 
 # ============================================================
+# CICLO COM VISÕES (Diário, Semanal, Mensal, Completo)
+# ============================================================
+
+@router.get("/api/ciclo/visao", summary="Ciclo com visões temporais",
+            description="Retorna ciclos diário, semanal, mensal e completo com priorização inteligente")
+def ciclo_visao(horas_dia: float = Query(default=3.0), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Gera 4 visões do ciclo: diário, semanal, mensal, completo."""
+    from datetime import timedelta
+    import re
+
+    ciclo = conn.execute("SELECT * FROM ciclo_estudos WHERE ativo = 1 AND user_id = ? ORDER BY ordem", (user_id,)).fetchall()
+    if not ciclo:
+        result = _gerar_ciclo_automatico(conn, user_id, horas_dia)
+        if not result["ok"]:
+            return {"diario": [], "semanal": [], "mensal": [], "completo": [], "sem_dados": True}
+        ciclo = conn.execute("SELECT * FROM ciclo_estudos WHERE ativo = 1 AND user_id = ? ORDER BY ordem", (user_id,)).fetchall()
+
+    materias_scored = []
+    for c in ciclo:
+        info = _calcular_score_materia(c["materia"], conn, user_id)
+        info["horas_alvo"] = c["horas_alvo"]
+        info["horas_cumpridas"] = c["horas_cumpridas"]
+        info["id"] = c["id"]
+        materias_scored.append(info)
+    materias_scored.sort(key=lambda x: -x["score"])
+
+    hoje = date.today()
+    dia_semana = hoje.weekday()
+
+    # ===== DIÁRIO: Top 2-3 matérias mais urgentes =====
+    tempo_dia_min = int(horas_dia * 60)
+    diario = []
+    total_score_top = sum(m["score"] for m in materias_scored[:3]) or 1
+    for m in materias_scored[:3]:
+        proporcao = m["score"] / total_score_top
+        tempo_min = max(20, int(tempo_dia_min * proporcao))
+        if m["pct_acerto"] < 50 and m["total_questoes"] >= 5:
+            acao, tipo = "Resolver questões (foco em erros)", "questoes"
+        elif m["total_questoes"] == 0:
+            acao, tipo = "Estudar teoria + primeiras questões", "teoria"
+        elif m.get("dias_sem_estudar") and m["dias_sem_estudar"] >= 7:
+            acao, tipo = "Revisão geral + flashcards", "revisao"
+        else:
+            acao, tipo = "Avançar nos tópicos pendentes", "estudo"
+        diario.append({
+            "materia": m["materia"], "tempo_min": tempo_min, "horas": round(tempo_min / 60, 1),
+            "prioridade": "alta" if m["score"] > 50 else "media",
+            "acao": acao, "tipo": tipo, "motivo": _motivo_prioridade(m),
+            "pct_acerto": m["pct_acerto"], "pendentes": m["pendentes"],
+        })
+
+    # ===== SEMANAL: Distribuição com intercalação =====
+    nomes_dias = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
+    total_mats = len(materias_scored)
+    for i, m in enumerate(materias_scored):
+        pos = i / max(total_mats, 1)
+        m["freq"] = 3 if pos < 0.3 else 2 if pos < 0.65 else 1
+
+    dias_semana_list = [[] for _ in range(7)]
+    pool = []
+    for m in materias_scored:
+        pool.extend([m] * m["freq"])
+    last_day = set()
+    pool_idx = 0
+    slots_dia = [3, 2, 3, 2, 3, 2, 1]
+    for dia in range(7):
+        used = set()
+        attempts, search, target = 0, pool_idx, slots_dia[dia]
+        while len(dias_semana_list[dia]) < target and attempts < len(pool) * 3 and pool:
+            cand = pool[search % len(pool)]
+            if cand["materia"] not in last_day and cand["materia"] not in used:
+                horas_slot = round(horas_dia / target, 1) if target > 0 else 0.5
+                dias_semana_list[dia].append({
+                    "materia": cand["materia"], "horas": min(2.0, max(0.5, horas_slot)),
+                    "pct_acerto": cand["pct_acerto"],
+                    "prioridade": "alta" if cand["score"] > 50 else "media" if cand["score"] > 25 else "baixa",
+                })
+                used.add(cand["materia"])
+                pool_idx = (search + 1) % len(pool)
+            search += 1
+            attempts += 1
+        last_day = used
+
+    semanal = []
+    for i, slots in enumerate(dias_semana_list):
+        semanal.append({
+            "dia": nomes_dias[i], "dia_semana": i, "is_hoje": i == dia_semana,
+            "materias": slots, "horas_total": round(sum(s["horas"] for s in slots), 1),
+        })
+
+    # ===== MENSAL: 4 semanas com evolução teoria → questões =====
+    mensal = []
+    for semana_num in range(1, 5):
+        fator_questoes = 0.3 + (semana_num - 1) * 0.15
+        materias_semana = []
+        for m in materias_scored:
+            horas_t = round(m["horas_alvo"] * (1 - fator_questoes), 1)
+            horas_q = round(m["horas_alvo"] * fator_questoes, 1)
+            materias_semana.append({
+                "materia": m["materia"], "horas_teoria": horas_t, "horas_questoes": horas_q,
+                "questoes_meta": max(5, int(horas_q * 10)), "pct_acerto": m["pct_acerto"],
+            })
+        mensal.append({
+            "semana": semana_num, "foco": "Teoria + base" if semana_num <= 2 else "Questões + simulados",
+            "fator_questoes": round(fator_questoes * 100),
+            "materias": materias_semana,
+            "horas_total": round(sum(m["horas_teoria"] + m["horas_questoes"] for m in materias_semana), 1),
+        })
+
+    # ===== COMPLETO: Visão geral com status por matéria =====
+    dias_prova = None
+    try:
+        prova = conn.execute("""
+            SELECT data_prova_objetiva FROM edital_info
+            WHERE data_prova_objetiva != '' AND data_prova_objetiva != 'Consultar edital' AND user_id = ?
+            ORDER BY data_prova_objetiva LIMIT 1
+        """, (user_id,)).fetchone()
+        if prova and prova[0]:
+            parts = re.match(r'(\d+)[/\-](\d+)[/\-](\d+)', prova[0])
+            if parts:
+                if len(parts.group(3)) == 4:
+                    d = date(int(parts.group(3)), int(parts.group(2)), int(parts.group(1)))
+                else:
+                    d = date(int(parts.group(1)), int(parts.group(2)), int(parts.group(3)))
+                dias_prova = max(0, (d - hoje).days)
+    except Exception:
+        pass
+
+    completo = []
+    for m in materias_scored:
+        pct_concluido = round((m["horas_cumpridas"] / m["horas_alvo"] * 100) if m["horas_alvo"] > 0 else 0, 1)
+        if pct_concluido >= 100 and m["pct_acerto"] >= 70:
+            status, cor = "dominada", "#a6e3a1"
+        elif pct_concluido >= 50 or m["pct_acerto"] >= 60:
+            status, cor = "em_progresso", "#89b4fa"
+        elif m["total_questoes"] == 0:
+            status, cor = "nao_iniciada", "#f38ba8"
+        else:
+            status, cor = "critica", "#fab387"
+        completo.append({
+            "materia": m["materia"], "status": status, "cor": cor,
+            "pct_ciclo": min(100, pct_concluido), "pct_acerto": m["pct_acerto"],
+            "horas_cumpridas": m["horas_cumpridas"], "horas_alvo": m["horas_alvo"],
+            "pendentes": m["pendentes"], "total_topicos": m["total_topicos"],
+            "total_questoes": m["total_questoes"], "score": m["score"],
+        })
+
+    total_horas_cumpridas = sum(m["horas_cumpridas"] for m in materias_scored)
+    total_horas_alvo = sum(m["horas_alvo"] for m in materias_scored)
+    pct_geral = round(total_horas_cumpridas / total_horas_alvo * 100) if total_horas_alvo > 0 else 0
+
+    return {
+        "diario": diario, "semanal": semanal, "mensal": mensal, "completo": completo,
+        "stats": {
+            "total_materias": len(materias_scored), "horas_dia": horas_dia,
+            "pct_geral": pct_geral, "horas_cumpridas": round(total_horas_cumpridas, 1),
+            "horas_alvo": round(total_horas_alvo, 1), "dias_prova": dias_prova,
+            "dominadas": len([m for m in completo if m["status"] == "dominada"]),
+            "criticas": len([m for m in completo if m["status"] in ("critica", "nao_iniciada")]),
+        },
+        "sem_dados": False,
+    }
+
+
+def _motivo_prioridade(m: dict) -> str:
+    """Gera texto explicativo de por que a matéria é prioritária."""
+    motivos = []
+    if m["pct_acerto"] < 50 and m["total_questoes"] >= 5:
+        motivos.append(f"Acerto baixo ({m['pct_acerto']}%)")
+    if m["total_questoes"] == 0:
+        motivos.append("Nunca praticou questões")
+    if m.get("dias_sem_estudar") and m["dias_sem_estudar"] >= 7:
+        motivos.append(f"{m['dias_sem_estudar']} dias sem estudar")
+    if m["pendentes"] > 10:
+        motivos.append(f"{m['pendentes']} tópicos pendentes")
+    return " · ".join(motivos) if motivos else "Manter progresso"
+
+
+# ============================================================
 # RESUMO DO DIA ANTERIOR
 # ============================================================
 

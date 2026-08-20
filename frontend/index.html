@@ -156,6 +156,17 @@
       <!-- Lista do ciclo -->
       <div id="ciclo-list"></div>
 
+      <!-- Visões do Ciclo: Diário / Semanal / Mensal / Completo -->
+      <div style="margin-top:16px;">
+        <div style="display:flex;gap:4px;margin-bottom:12px;background:#1e1e2e;border-radius:8px;padding:4px;flex-wrap:wrap;">
+          <button class="iobtn ciclo-view-btn active" onclick="switchCicloView('diario', this)" style="flex:1;text-align:center;">📅 Diário</button>
+          <button class="iobtn ciclo-view-btn" onclick="switchCicloView('semanal', this)" style="flex:1;text-align:center;">📆 Semanal</button>
+          <button class="iobtn ciclo-view-btn" onclick="switchCicloView('mensal', this)" style="flex:1;text-align:center;">🗓️ Mensal</button>
+          <button class="iobtn ciclo-view-btn" onclick="switchCicloView('completo', this)" style="flex:1;text-align:center;">🎯 Completo</button>
+        </div>
+        <div id="ciclo-view-content" style="min-height:100px;"></div>
+      </div>
+
       <!-- Ações -->
       <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
         <button class="iobtn" onclick="resetarCiclo()">🔁 Resetar Horas</button>
@@ -501,6 +512,101 @@
         });
     }
 
+    // ===== CICLO VISÕES (Diário/Semanal/Mensal/Completo) =====
+    let cicloVisaoData = null;
+    let cicloViewAtual = 'diario';
+
+    function loadCicloVisao() {
+      fetch('/api/ciclo/visao')
+        .then(r => r.json())
+        .then(data => { cicloVisaoData = data; renderCicloView(cicloViewAtual); })
+        .catch(() => {});
+    }
+
+    function switchCicloView(view, btn) {
+      cicloViewAtual = view;
+      document.querySelectorAll('.ciclo-view-btn').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+      if (cicloVisaoData) renderCicloView(view); else loadCicloVisao();
+    }
+
+    function renderCicloView(view) {
+      const el = document.getElementById('ciclo-view-content');
+      if (!el || !cicloVisaoData) return;
+      if (cicloVisaoData.sem_dados) { el.innerHTML = '<p style="color:#9399b2;">Adicione matérias ao edital para gerar o ciclo.</p>'; return; }
+      if (view === 'diario') renderDiario(el, cicloVisaoData.diario);
+      else if (view === 'semanal') renderSemanal(el, cicloVisaoData.semanal);
+      else if (view === 'mensal') renderMensal(el, cicloVisaoData.mensal);
+      else renderCompleto(el, cicloVisaoData.completo, cicloVisaoData.stats);
+    }
+
+    function renderDiario(el, items) {
+      if (!items.length) { el.innerHTML = '<p style="color:#9399b2;">Nenhuma matéria no ciclo.</p>'; return; }
+      el.innerHTML = items.map(m => `
+        <div style="background:#1e1e2e;border-radius:10px;padding:14px;margin-bottom:8px;border-left:4px solid ${m.prioridade==='alta'?'#f38ba8':'#fab387'};">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <strong style="font-size:0.95rem;">${m.materia}</strong>
+            <span style="font-size:0.82rem;background:#313244;border-radius:12px;padding:3px 10px;">${m.horas}h</span>
+          </div>
+          <div style="font-size:0.82rem;color:#a6e3a1;margin-bottom:4px;">→ ${m.acao}</div>
+          <div style="font-size:0.75rem;color:#9399b2;">${m.motivo}</div>
+          <div style="display:flex;gap:12px;margin-top:6px;font-size:0.75rem;color:#a6adc8;">
+            <span>📊 ${m.pct_acerto}% acerto</span><span>📋 ${m.pendentes} pendentes</span>
+          </div>
+        </div>`).join('');
+    }
+
+    function renderSemanal(el, dias) {
+      el.innerHTML = dias.map(d => `
+        <div style="margin-bottom:10px;${d.is_hoje?'background:#1e1e2e;border:1px solid #cba6f7;border-radius:10px;padding:10px;':''}">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <strong style="font-size:0.88rem;${d.is_hoje?'color:#cba6f7;':'color:#cdd6f4;'}">${d.dia}${d.is_hoje?' (HOJE)':''}</strong>
+            <span style="font-size:0.78rem;color:#9399b2;">${d.horas_total}h</span>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            ${d.materias.map(m => `<span style="font-size:0.78rem;background:${m.prioridade==='alta'?'#45475a':'#313244'};border-radius:6px;padding:4px 10px;border-left:3px solid ${m.prioridade==='alta'?'#f38ba8':m.prioridade==='media'?'#fab387':'#a6e3a1'};">${m.materia} <span style="color:#9399b2;">(${m.horas}h)</span></span>`).join('')}
+          </div>
+        </div>`).join('');
+    }
+
+    function renderMensal(el, semanas) {
+      el.innerHTML = semanas.map(s => `
+        <div style="background:#1e1e2e;border-radius:10px;padding:14px;margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <strong>Semana ${s.semana}</strong>
+            <span style="font-size:0.78rem;color:#9399b2;">${s.foco} · ${s.horas_total}h</span>
+          </div>
+          <div style="height:4px;background:#313244;border-radius:2px;margin-bottom:8px;overflow:hidden;">
+            <div style="height:100%;width:${s.fator_questoes}%;background:#89b4fa;border-radius:2px;"></div>
+          </div>
+          <div style="font-size:0.72rem;color:#9399b2;margin-bottom:6px;">Teoria ${100-s.fator_questoes}% | Questões ${s.fator_questoes}%</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            ${s.materias.slice(0,5).map(m => `<span style="font-size:0.75rem;background:#313244;border-radius:6px;padding:3px 8px;">${m.materia} <span style="color:#a6adc8;">${m.horas_teoria}h+${m.questoes_meta}q</span></span>`).join('')}
+            ${s.materias.length>5?`<span style="font-size:0.75rem;color:#9399b2;">+${s.materias.length-5}</span>`:''}
+          </div>
+        </div>`).join('');
+    }
+
+    function renderCompleto(el, items, stats) {
+      let h = `<div style="display:flex;gap:16px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
+        <div style="font-size:0.85rem;"><strong style="font-size:1.3rem;color:#cba6f7;">${stats.pct_geral}%</strong> completo</div>
+        <div style="font-size:0.78rem;color:#9399b2;">${stats.horas_cumpridas}/${stats.horas_alvo}h</div>
+        ${stats.dias_prova!==null?`<div style="font-size:0.78rem;color:#f38ba8;font-weight:600;">📅 ${stats.dias_prova} dias</div>`:''}
+        <div style="font-size:0.78rem;color:#a6e3a1;">✅ ${stats.dominadas} dominadas</div>
+        <div style="font-size:0.78rem;color:#f38ba8;">⚠️ ${stats.criticas} críticas</div></div>`;
+      h += items.map(m => `
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #313244;">
+          <div style="width:8px;height:8px;border-radius:50%;background:${m.cor};flex-shrink:0;"></div>
+          <span style="flex:1;font-size:0.85rem;font-weight:500;">${m.materia}</span>
+          <span style="font-size:0.72rem;color:#9399b2;min-width:55px;">${m.pct_acerto}%</span>
+          <div style="width:80px;height:6px;background:#313244;border-radius:3px;overflow:hidden;">
+            <div style="height:100%;width:${m.pct_ciclo}%;background:${m.cor};border-radius:3px;"></div>
+          </div>
+          <span style="font-size:0.72rem;color:#a6adc8;min-width:35px;text-align:right;">${m.pct_ciclo}%</span>
+        </div>`).join('');
+      el.innerHTML = h;
+    }
+
     // Load ciclo "ontem" card
     function loadCicloOntem() {
       fetch('/api/ciclo/ontem')
@@ -548,8 +654,8 @@
 
     // Load ontem when ciclo tab is shown
     const _origNav = navigateTo;
-    navigateTo = function(tabId, btn) { _origNav(tabId, btn); if (tabId === 'tab-ciclo') loadCicloOntem(); };
-    if (localStorage.getItem('concurseiro_active_tab') === 'tab-ciclo') setTimeout(loadCicloOntem, 500);
+    navigateTo = function(tabId, btn) { _origNav(tabId, btn); if (tabId === 'tab-ciclo') { loadCicloOntem(); loadCicloVisao(); } };
+    if (localStorage.getItem('concurseiro_active_tab') === 'tab-ciclo') setTimeout(() => { loadCicloOntem(); loadCicloVisao(); }, 500);
   </script>
 
   <script src="/sidebar.js"></script>

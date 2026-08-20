@@ -628,3 +628,9 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* Ciclo view tabs */
+.ciclo-view-btn.active {
+  background: #cba6f7 !important;
+  color: #1e1e2e !important;
+}
