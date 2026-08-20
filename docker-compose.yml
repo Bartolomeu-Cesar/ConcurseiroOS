@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  concurseiro:
+    build: .
+    container_name: concurseiro-os
+    ports:
+      - "8000:8000"
+    volumes:
+      - concurseiro-data:/data
+      - ./pdfs:/data/pdfs
+    environment:
+      - DB_PATH=/data/progress.db
+      - BACKUP_DIR=/data/backups
+      - PDF_ROOT=/data/pdfs
+      - AUTH_ENABLED=false
+      - DEFAULT_PLAN=premium
+      # Para habilitar auth por email:
+      # - AUTH_ENABLED=true
+      # - SMTP_HOST=smtp.gmail.com
+      # - SMTP_PORT=587
+      # - SMTP_USER=seu@gmail.com
+      # - SMTP_PASSWORD=app-password
+      # - SMTP_FROM=seu@gmail.com
+      # - JWT_SECRET=uma-chave-segura-aleatoria
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  concurseiro-data:

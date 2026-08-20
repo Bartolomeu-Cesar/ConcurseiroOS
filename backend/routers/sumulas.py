@@ -194,7 +194,12 @@ def review_sumula_sm2(id: int, body: SumulaReviewSM2, conn=Depends(get_db_sessio
         "UPDATE sumulas SET intervalo_dias = ?, proxima_revisao = ?, easiness_factor = ?, repetitions = ? WHERE id = ?",
         (intervalo, proxima, round(ef, 4), reps, id)
     )
-    update_streak(conn, "flashcards_revisados")  # Conta como revisão SRS
+    # Atualizar streak: conta como revisão SRS E como súmula revisada
+    update_streak(conn, "flashcards_revisados")
+    conn.execute("""
+        INSERT INTO streaks (data, sumulas_revisadas) VALUES (?, 1)
+        ON CONFLICT(data) DO UPDATE SET sumulas_revisadas = COALESCE(sumulas_revisadas, 0) + 1
+    """, (today_str(),))
     conn.commit()
 
     log.info(f"Súmula SM-2: id={id} quality={quality} ef={ef:.4f} reps={reps} interval={intervalo}")

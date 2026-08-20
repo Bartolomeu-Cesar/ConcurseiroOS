@@ -61,20 +61,24 @@ def get_metas(conn=Depends(get_db_session)):
     config = conn.execute("SELECT * FROM metas_config WHERE id = 1").fetchone()
     hoje = conn.execute("SELECT * FROM streaks WHERE data = ?", (today_str(),)).fetchone()
 
-    config_dict = dict(config) if config else {"meta_horas": 3.0, "meta_questoes": 30, "meta_flashcards": 10, "meta_paginas": 20}
-    hoje_dict = dict(hoje) if hoje else {"horas_estudadas": 0, "questoes_resolvidas": 0, "flashcards_revisados": 0}
+    config_dict = dict(config) if config else {"meta_horas": 3.0, "meta_questoes": 30, "meta_flashcards": 10, "meta_paginas": 20, "meta_sumulas": 0}
+    hoje_dict = dict(hoje) if hoje else {"horas_estudadas": 0, "questoes_resolvidas": 0, "flashcards_revisados": 0, "sumulas_revisadas": 0}
 
     # Usar sessoes_estudo como fonte de verdade para horas (evita dessincronização)
     horas_hoje = conn.execute(
         "SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE data = ?", (today_str(),)
     ).fetchone()[0]
 
+    # Contar súmulas revisadas hoje
+    sumulas_hoje = hoje_dict.get("sumulas_revisadas", 0)
+
     return {
         "config": config_dict,
         "progresso": {
             "horas": round(horas_hoje, 3),
             "questoes": hoje_dict.get("questoes_resolvidas", 0),
-            "flashcards": hoje_dict.get("flashcards_revisados", 0)
+            "flashcards": hoje_dict.get("flashcards_revisados", 0),
+            "sumulas": sumulas_hoje
         }
     }
 
@@ -82,9 +86,9 @@ def get_metas(conn=Depends(get_db_session)):
 @router.put("/api/metas")
 def update_metas(body: MetasUpdate, conn=Depends(get_db_session)):
     conn.execute("""
-        UPDATE metas_config SET meta_horas = ?, meta_questoes = ?, meta_flashcards = ?, meta_paginas = ?
+        UPDATE metas_config SET meta_horas = ?, meta_questoes = ?, meta_flashcards = ?, meta_paginas = ?, meta_sumulas = ?
         WHERE id = 1
-    """, (body.meta_horas, body.meta_questoes, body.meta_flashcards, body.meta_paginas))
+    """, (body.meta_horas, body.meta_questoes, body.meta_flashcards, body.meta_paginas, body.meta_sumulas))
     conn.commit()
     return {"ok": True}
 

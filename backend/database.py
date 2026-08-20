@@ -1,31 +1,54 @@
 import sqlite3
 from collections.abc import Generator
 from contextlib import contextmanager
+from queue import Queue
 
 from logger import log
 from settings import settings
 
 DB_PATH = settings.DB_PATH
 
+# ============================================================
+# CONNECTION POOL (Thread-safe SQLite)
+# ============================================================
+
+_pool: Queue | None = None
+_POOL_SIZE = 5
+
+
+def _init_pool():
+    """Inicializa pool de conexões SQLite."""
+    global _pool
+    if _pool is None:
+        _pool = Queue(maxsize=_POOL_SIZE)
+        for _ in range(_POOL_SIZE):
+            conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            conn.execute("PRAGMA cache_size=-8000")  # 8MB cache
+            conn.execute("PRAGMA busy_timeout=5000")  # 5s timeout
+            _pool.put(conn)
+
 
 @contextmanager
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    _init_pool()
+    conn = _pool.get()
     try:
         yield conn
     finally:
-        conn.close()
+        _pool.put(conn)
 
 
 def get_db_session() -> Generator[sqlite3.Connection, None, None]:
     """FastAPI dependency que fornece uma conexão ao banco de dados."""
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
+    _init_pool()
+    conn = _pool.get()
     try:
         yield conn
     finally:
-        conn.close()
+        _pool.put(conn)
 
 
 def rebuild_search_index(conn):
@@ -496,6 +519,26 @@ def _run_migrations(conn):
         except Exception:
             pass
 
+    # Meta de súmulas diárias (concursos jurídicos)
+    try:
+        conn.execute("SELECT meta_sumulas FROM metas_config LIMIT 1")
+    except Exception:
+        try:
+            conn.execute("ALTER TABLE metas_config ADD COLUMN meta_sumulas INTEGER DEFAULT 0")
+            log.info("Migration: added column meta_sumulas to metas_config")
+        except Exception:
+            pass
+
+    # Contador de súmulas revisadas no streak diário
+    try:
+        conn.execute("SELECT sumulas_revisadas FROM streaks LIMIT 1")
+    except Exception:
+        try:
+            conn.execute("ALTER TABLE streaks ADD COLUMN sumulas_revisadas INTEGER DEFAULT 0")
+            log.info("Migration: added column sumulas_revisadas to streaks")
+        except Exception:
+            pass
+
 
 def _create_indexes(conn):
     """Cria índices para performance."""
@@ -508,6 +551,17 @@ def _create_indexes(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_notas_pdf_path ON notas_pdf(pdf_path)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_bookmarks_pdf_path ON bookmarks_pdf(pdf_path)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_edital_materia ON edital(materia)")
+
+    # Índices compostos para queries frequentes do dashboard
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_sessoes_data_materia ON sessoes_estudo(data, materia)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_questoes_respostas_data_acertou ON questoes_respostas(data, acertou)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_edital_status ON edital(status)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_edital_nome_cargo_status ON edital(edital_nome, cargo, status)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_flashcards_proxima_revisao ON flashcards(proxima_revisao)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_sumulas_proxima_revisao ON sumulas(proxima_revisao)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_sumulas_tribunal ON sumulas(tribunal)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_ciclo_ativo ON ciclo_estudos(ativo)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_questoes_respostas_questao_acertou ON questoes_respostas(questao_id, acertou)")
 
     # FTS5 Full-Text Search
     conn.execute("""
@@ -554,6 +608,9 @@ def init_db():
     """Inicializa o banco de dados: tabelas, migrações, índices e dados padrão."""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    # Enable WAL mode for better concurrent read performance
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
     _create_tables(conn)
     _run_migrations(conn)
     _create_indexes(conn)
@@ -561,4 +618,4 @@ def init_db():
     conn.commit()
     rebuild_search_index(conn)
     conn.close()
-    log.info("Database initialized")
+    log.info("Database initialized (WAL mode)")

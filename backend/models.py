@@ -139,6 +139,7 @@ class MetasUpdate(BaseModel):
     meta_questoes: int = 30
     meta_flashcards: int = 10
     meta_paginas: int = 20
+    meta_sumulas: int = 0  # 0 = desativado, 5 = padrão para jurídicos
 
 
 # ============================================================

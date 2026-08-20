@@ -10,7 +10,11 @@ mimetypes.add_type("text/javascript", ".js", strict=True)
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from routers import auth, ciclo, dashboard, edital, flashcards, misc, pdf, questoes, simulados, streaks, sumulas, treinador
+from routers import (
+    analytics, auth, bookmarks, cadernos, calendario, ciclo, dashboard,
+    desafios, edital, feynman, flashcards, misc, notas, pdf, planejador,
+    questoes, simulados, streaks, sumulas, treinador
+)
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
 from starlette.responses import Response
@@ -25,7 +29,6 @@ from settings import settings
 # CONFIGURAÇÃO
 # ============================================================
 
-# Registrar tempo de início para o health check
 APP_START_TIME = time.time()
 
 # ============================================================
@@ -122,7 +125,15 @@ app.include_router(ciclo.router)
 app.include_router(streaks.router)
 app.include_router(sumulas.router)
 app.include_router(dashboard.router)
+app.include_router(analytics.router)
 app.include_router(treinador.router)
+app.include_router(calendario.router)
+app.include_router(planejador.router)
+app.include_router(bookmarks.router)
+app.include_router(notas.router)
+app.include_router(cadernos.router)
+app.include_router(feynman.router)
+app.include_router(desafios.router)
 app.include_router(misc.router)
 
 
