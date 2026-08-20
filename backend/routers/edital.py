@@ -184,6 +184,28 @@ def add_edital_horas(id: int, body: EditalHoras, conn=Depends(get_db_session)):
     return {"id": id, "horas_estudadas": new_horas}
 
 
+@router.delete("/api/edital/excluir-edital")
+def excluir_edital_inteiro(edital_nome: str, cargo: str = "", conn=Depends(get_db_session)):
+    """Exclui permanentemente todos os tópicos de um edital/cargo"""
+    query = "DELETE FROM edital WHERE edital_nome = ?"
+    params = [edital_nome]
+    if cargo:
+        query += " AND cargo = ?"
+        params.append(cargo)
+    result = conn.execute(query, params)
+    # Também remover info
+    query2 = "DELETE FROM edital_info WHERE edital_nome = ?"
+    params2 = [edital_nome]
+    if cargo:
+        query2 += " AND cargo = ?"
+        params2.append(cargo)
+    conn.execute(query2, params2)
+    conn.commit()
+    count = result.rowcount
+    log.info(f"Edital excluído: {edital_nome} ({count} tópicos)")
+    return {"ok": True, "excluidos": count}
+
+
 @router.delete("/api/edital/{id}", response_model=OkResponse)
 def delete_edital(id: int, conn=Depends(get_db_session)):
     conn.execute("DELETE FROM edital WHERE id = ?", (id,))
@@ -254,26 +276,6 @@ def desarquivar_edital(edital_nome: str, cargo: str = "", conn=Depends(get_db_se
     count = result.rowcount
     return {"ok": True, "desarquivados": count}
 
-
-@router.delete("/api/edital/excluir-edital")
-def excluir_edital_inteiro(edital_nome: str, cargo: str = "", conn=Depends(get_db_session)):
-    """Exclui permanentemente todos os tópicos de um edital/cargo"""
-    query = "DELETE FROM edital WHERE edital_nome = ?"
-    params = [edital_nome]
-    if cargo:
-        query += " AND cargo = ?"
-        params.append(cargo)
-    result = conn.execute(query, params)
-    # Também remover info
-    query2 = "DELETE FROM edital_info WHERE edital_nome = ?"
-    params2 = [edital_nome]
-    if cargo:
-        query2 += " AND cargo = ?"
-        params2.append(cargo)
-    conn.execute(query2, params2)
-    conn.commit()
-    count = result.rowcount
-    return {"ok": True, "excluidos": count}
 
 
 @router.post("/api/edital/importar-pdf")
