@@ -62,7 +62,7 @@ function showProfileMenu() {
       </span>
     </div>
     <div style="border-top:1px solid #45475a;padding-top:8px;display:flex;flex-direction:column;gap:6px;">
-      ${plan === 'free' || plan === 'guest' ? `<button onclick="showUpgradeModal()" style="background:#f9e2af;color:#1e1e2e;border:none;border-radius:6px;padding:8px;cursor:pointer;font-size:0.82rem;font-weight:600;">👑 Fazer Upgrade</button>` : ''}
+      ${plan === 'free' || plan === 'guest' ? `<button onclick="showUpgradeModal()" style="background:#f9e2af;color:#1e1e2e;border:none;border-radius:6px;padding:8px;cursor:pointer;font-size:0.82rem;font-weight:600;">👑 Fazer Upgrade</button>` : `<button onclick="showUpgradeModal()" style="background:#45475a;color:#cdd6f4;border:none;border-radius:6px;padding:8px;cursor:pointer;font-size:0.82rem;">⚙️ Gerenciar Plano</button>`}
       <button onclick="showEditProfileModal()" style="background:#45475a;color:#cdd6f4;border:none;border-radius:6px;padding:8px;cursor:pointer;font-size:0.82rem;">✏️ Editar Perfil</button>
       <button onclick="logout();document.getElementById('profile-menu')?.remove()" style="background:#f38ba8;color:#1e1e2e;border:none;border-radius:6px;padding:8px;cursor:pointer;font-size:0.82rem;font-weight:600;">🚪 Sair</button>
     </div>
@@ -112,7 +112,7 @@ export function showUpgradeModal() {
             <li>✗ Relatórios avançados</li>
             <li>✗ Conteúdo ilimitado</li>
           </ul>
-          ${currentPlan === 'free' ? '<div style="margin-top:10px;padding:6px;border:1px solid #cba6f7;border-radius:6px;font-size:0.75rem;color:#cba6f7;font-weight:600;">✓ Plano Atual</div>' : ''}
+          ${currentPlan === 'free' ? '<div style="margin-top:10px;padding:6px;border:1px solid #cba6f7;border-radius:6px;font-size:0.75rem;color:#cba6f7;font-weight:600;">✓ Plano Atual</div>' : `<button onclick="doUpgrade('free')" style="width:100%;margin-top:10px;padding:10px;border:none;border-radius:6px;background:#45475a;color:#cdd6f4;font-size:0.82rem;cursor:pointer;">Mudar para Gratuito</button>`}
         </div>
         <!-- Premium -->
         <div style="background:#1e1e2e;border:2px solid #f9e2af;border-radius:12px;padding:16px;text-align:center;position:relative;">

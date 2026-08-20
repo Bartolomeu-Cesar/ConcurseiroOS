@@ -344,7 +344,7 @@ def upgrade_plan(body: dict = Body(...), user=Depends(get_current_user), conn=De
         raise HTTPException(status_code=401, detail="Não autenticado")
 
     plano = body.get("plano", "premium")
-    if plano not in ("premium", "ilimitado"):
+    if plano not in ("free", "premium", "ilimitado"):
         raise HTTPException(status_code=400, detail="Plano inválido")
 
     # Em produção: verificar pagamento aqui
@@ -353,8 +353,11 @@ def upgrade_plan(body: dict = Body(...), user=Depends(get_current_user), conn=De
     if plano == "premium":
         # Premium expira em 30 dias (renovável)
         expires = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
-    else:
+    elif plano == "ilimitado":
         # Ilimitado: sem expiração
+        expires = ""
+    else:
+        # Free: sem expiração
         expires = ""
 
     conn.execute(
