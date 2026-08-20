@@ -48,6 +48,21 @@ export function showQuestaoDia() {
   }
   // Iniciar timer para esta questão
   qDiaStartTime = Date.now();
+
+  // Timer visual — limpar anterior e iniciar novo
+  if (window._qDiaTimerInterval) clearInterval(window._qDiaTimerInterval);
+  window._qDiaTimerInterval = setInterval(() => {
+    const el = document.getElementById('qdia-timer');
+    if (!el || !qDiaStartTime) { clearInterval(window._qDiaTimerInterval); return; }
+    const seg = Math.round((Date.now() - qDiaStartTime) / 1000);
+    const min = Math.floor(seg / 60);
+    const s = String(seg % 60).padStart(2, '0');
+    el.textContent = `⏱ ${min}:${s}`;
+    if (seg > 120) el.style.color = '#f38ba8';
+    else if (seg > 60) el.style.color = '#f9e2af';
+    else el.style.color = '#89b4fa';
+  }, 1000);
+
   const q = questoesDia[qDiaIdx];
   const alts = [
     {letra: 'A', texto: q.alternativa_a},
@@ -59,6 +74,7 @@ export function showQuestaoDia() {
   card.innerHTML = `<div style="padding:12px;background:#1e1e2e;border-radius:8px;">
     <div style="display:flex;justify-content:space-between;font-size:0.72rem;color:#9399b2;margin-bottom:6px;">
       <span>${qDiaIdx + 1}/${total}</span>
+      <span id="qdia-timer" style="font-family:monospace;font-size:0.82rem;color:#89b4fa;font-weight:600;">⏱ 0:00</span>
       <span style="color:#cba6f7;">${q.materia || ''}</span>
     </div>
     <div style="font-size:0.88rem;color:#cdd6f4;margin-bottom:12px;line-height:1.5;">${escapeHtml(q.enunciado)}</div>
@@ -72,6 +88,8 @@ export function showQuestaoDia() {
 export async function responderQuestaoDia(letra) {
   const q = questoesDia[qDiaIdx];
   const tempoSegundos = qDiaStartTime ? Math.round((Date.now() - qDiaStartTime) / 1000) : 0;
+  // Parar o timer visual
+  if (window._qDiaTimerInterval) clearInterval(window._qDiaTimerInterval);
   const acertou = letra.toUpperCase() === q.resposta_correta.toUpperCase();
   if (acertou) qDiaAcertos++;
   document.querySelectorAll('.qdia-alt').forEach(btn => {

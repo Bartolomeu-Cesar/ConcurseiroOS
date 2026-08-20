@@ -448,12 +448,32 @@
         if (q.alternativa_e) alts.push({ letter: 'E', text: q.alternativa_e });
 
         return `<div class="sp-question" data-id="${q.id}" data-correct="${q.resposta_correta}" data-start="${Date.now()}">
-          <div class="sp-meta">${q.materia}${q.topico ? ' • '+q.topico : ''}</div>
+          <div class="sp-meta">
+            ${q.materia}${q.topico ? ' • '+q.topico : ''}
+            <span class="sp-timer" id="sp-timer-${q.id}" style="float:right;font-family:monospace;font-size:0.78rem;color:#89b4fa;">⏱ 0:00</span>
+          </div>
           <div class="sp-enunciado">${q.enunciado}</div>
           ${alts.map(a => `<div class="sp-alt" data-letter="${a.letter}" onclick="selectSideAlt(this)"><span class="letter">${a.letter})</span> ${a.text}</div>`).join('')}
           <div class="sp-feedback" id="fb-${q.id}"></div>
         </div>`;
       }).join('') + `<div style="text-align:center;padding:12px;"><button onclick="loadSidePanelQuestions()" style="background:#45475a;border:none;color:#cdd6f4;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:0.82rem;">🔄 Novas questões</button></div>`;
+
+      // Iniciar timers visuais para cada questão
+      if (window._spTimerInterval) clearInterval(window._spTimerInterval);
+      window._spTimerInterval = setInterval(() => {
+        document.querySelectorAll('.sp-question:not([data-answered])').forEach(qEl => {
+          const start = parseInt(qEl.dataset.start || '0');
+          if (!start) return;
+          const timerEl = qEl.querySelector('.sp-timer');
+          if (!timerEl) return;
+          const seg = Math.round((Date.now() - start) / 1000);
+          const min = Math.floor(seg / 60);
+          const s = String(seg % 60).padStart(2, '0');
+          timerEl.textContent = `⏱ ${min}:${s}`;
+          if (seg > 120) timerEl.style.color = '#f38ba8';
+          else if (seg > 60) timerEl.style.color = '#f9e2af';
+        });
+      }, 1000);
     }
 
     async function selectSideAlt(el) {

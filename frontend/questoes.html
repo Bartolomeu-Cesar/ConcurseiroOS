@@ -540,6 +540,22 @@
       currentQuestao = q;
       respondida = false;
       questaoStartTime = Date.now();
+
+      // Timer visual — limpar anterior e iniciar novo
+      if (window._questaoTimerInterval) clearInterval(window._questaoTimerInterval);
+      window._questaoTimerInterval = setInterval(() => {
+        const el = document.getElementById('questao-timer');
+        if (!el || respondida) { clearInterval(window._questaoTimerInterval); return; }
+        const seg = Math.round((Date.now() - questaoStartTime) / 1000);
+        const min = Math.floor(seg / 60);
+        const s = String(seg % 60).padStart(2, '0');
+        el.textContent = `⏱ ${min}:${s}`;
+        // Indicar se está demorando
+        if (seg > 120) el.style.color = '#f38ba8';
+        else if (seg > 60) el.style.color = '#f9e2af';
+        else el.style.color = '#89b4fa';
+      }, 1000);
+
       const area = document.getElementById('resolver-area');
 
       const alternativas = [
@@ -556,6 +572,7 @@
             <span>${q.materia}</span>
             ${q.topico ? `<span>${q.topico}</span>` : ''}
             <span>${q.dificuldade}</span>
+            <span id="questao-timer" style="margin-left:auto;font-family:monospace;font-size:0.85rem;color:#89b4fa;font-weight:600;">⏱ 0:00</span>
           </div>
           <div class="questao-enunciado">${q.enunciado}</div>
           <div class="questao-alternativas">
