@@ -81,6 +81,13 @@ def _send_email(to_email: str, subject: str, html_body: str):
 
 def _send_code_email(email: str, code: str):
     """Envia email com código de verificação."""
+    # Se SMTP não configurado, exibir código no terminal
+    if not settings.SMTP_USER or not settings.SMTP_PASSWORD:
+        print(f"\n{'='*50}")
+        print(f"  🔑 CÓDIGO DE LOGIN: {code}")
+        print(f"  📧 Email: {email}")
+        print(f"{'='*50}\n")
+
     html = f"""
     <div style="font-family:sans-serif;max-width:400px;margin:0 auto;padding:24px;background:#1e1e2e;color:#cdd6f4;border-radius:12px;">
         <h2 style="color:#cba6f7;text-align:center;">📚 ConcurseiroOS</h2>
