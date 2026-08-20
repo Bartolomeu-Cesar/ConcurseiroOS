@@ -296,6 +296,8 @@ def responder_questao(id: int, body: QuestaoResposta, conn=Depends(get_db_sessio
                 "INSERT INTO sessoes_estudo (materia, horas, data, tipo) VALUES (?, ?, ?, 'questoes')",
                 (materia, horas, today_str())
             )
+        # Atualizar streak de horas do dia (meta diária)
+        update_streak(conn, "horas_estudadas", horas)
 
     conn.commit()
     return {"acertou": bool(acertou), "resposta_correta": questao[0]}

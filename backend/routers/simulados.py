@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from database import get_db_session
 from logger import log
 from models import SimuladoCreate, SimuladoFinalizar, SimuladoProvaReal, SimuladoResponder
-from utils import today_str
+from utils import today_str, update_streak
 
 router = APIRouter(prefix="", tags=["Simulados"])
 
@@ -109,6 +109,8 @@ def finalizar_simulado(id: int, body: SimuladoFinalizar, conn=Depends(get_db_ses
                 "INSERT INTO sessoes_estudo (materia, horas, data, tipo) VALUES (?, ?, ?, 'simulado')",
                 ("Simulado", horas, today_str())
             )
+        # Atualizar streak de horas do dia (meta diária)
+        update_streak(conn, "horas_estudadas", horas)
 
     conn.commit()
     log.info(f"Simulado {id} finalizado: nota={nota}% ({acertos}/{total}) tempo={body.tempo_gasto_seg}s")
