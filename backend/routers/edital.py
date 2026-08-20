@@ -282,7 +282,7 @@ def desarquivar_edital(edital_nome: str, cargo: str = "", conn=Depends(get_db_se
 
 @router.post("/api/edital/importar-pdf")
 async def importar_edital_pdf(file: UploadFile = File(...), edital_nome: str = "Importado", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
-    """Extrai texto do PDF e tenta identificar matérias/tópicos"""
+    """Extrai texto do PDF e tenta identificar matérias/tópicos (versão legacy)"""
     content = await file.read()
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
     tmp.write(content)
@@ -322,6 +322,119 @@ async def importar_edital_pdf(file: UploadFile = File(...), edital_nome: str = "
     conn.commit()
 
     return {"ok": True, "importados": count, "itens": itens[:20]}
+
+
+@router.post("/api/edital/importar-pdf-v2")
+async def importar_edital_pdf_v2(
+    file: UploadFile = File(...),
+    edital_nome: str = "",
+    cargo_filter: str = "",
+    confirmar: bool = False,
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """
+    Parser inteligente de editais de concursos (v2).
+
+    Extrai verticalização completa do PDF: cargos, matérias e tópicos numerados.
+
+    Parâmetros:
+    - file: PDF do edital
+    - edital_nome: Nome do edital (opcional, auto-detectado do PDF)
+    - cargo_filter: Filtrar por cargo específico (número ou nome parcial)
+    - confirmar: Se False (default), retorna preview sem importar.
+                 Se True, importa os tópicos no banco.
+
+    Retorna:
+    - Preview mode: {edital_nome, total_cargos, total_topicos, cargos: [...]}
+    - Import mode: {ok, edital_nome, importados, cargos_importados}
+    """
+    from edital_parser import parse_edital_pdf
+
+    content = await file.read()
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+    tmp.write(content)
+    tmp.close()
+
+    try:
+        result = parse_edital_pdf(tmp.name)
+    except Exception as e:
+        os.unlink(tmp.name)
+        raise HTTPException(status_code=400, detail=f"Erro ao processar PDF: {e}") from e
+
+    os.unlink(tmp.name)
+
+    # Use provided name or auto-detected
+    nome = edital_nome.strip() if edital_nome.strip() else result["edital_nome"]
+
+    # Filter cargos if requested
+    cargos_to_import = result["cargos"]
+    if cargo_filter:
+        cargo_filter_lower = cargo_filter.lower()
+        cargos_to_import = [
+            c for c in cargos_to_import
+            if cargo_filter_lower in c["cargo_numero"].lower()
+            or cargo_filter_lower in c["cargo_nome"].lower()
+        ]
+
+    if not confirmar:
+        # Preview mode: return structured data without importing
+        preview = {
+            "edital_nome": nome,
+            "total_cargos": len(cargos_to_import),
+            "total_materias": result["total_materias"],
+            "total_topicos": sum(
+                len(t) for c in cargos_to_import for m in c["materias"] for t in [m["topicos"]]
+            ),
+            "conhecimentos_gerais": [
+                {
+                    "disciplina": s["disciplina"],
+                    "total_topicos": len(s["topicos"]),
+                    "exceto_cargos": s["exceto_cargos"]
+                }
+                for s in result["conhecimentos_gerais"]
+            ],
+            "cargos": [
+                {
+                    "cargo": f"CARGO {c['cargo_numero']}: {c['cargo_nome']}",
+                    "materias": [
+                        {
+                            "materia": m["materia"],
+                            "topicos": m["topicos"]
+                        }
+                        for m in c["materias"]
+                    ]
+                }
+                for c in cargos_to_import
+            ]
+        }
+        return preview
+
+    # Import mode: save to database
+    count = 0
+    cargos_importados = []
+    for cargo in cargos_to_import:
+        cargo_display = f"CARGO {cargo['cargo_numero']}: {cargo['cargo_nome']}"
+        cargo_count = 0
+        for materia in cargo["materias"]:
+            for topico in materia["topicos"]:
+                conn.execute(
+                    "INSERT INTO edital (edital_nome, cargo, materia, topico, user_id) VALUES (?, ?, ?, ?, ?)",
+                    (nome, cargo_display, materia["materia"], topico, user_id)
+                )
+                count += 1
+                cargo_count += 1
+        cargos_importados.append({"cargo": cargo_display, "topicos_importados": cargo_count})
+
+    conn.commit()
+    log.info(f"Edital PDF v2 imported: {nome} - {count} tópicos, {len(cargos_importados)} cargos")
+
+    return {
+        "ok": True,
+        "edital_nome": nome,
+        "importados": count,
+        "cargos_importados": cargos_importados
+    }
 
 
 @router.get("/api/edital/{id}/notas")

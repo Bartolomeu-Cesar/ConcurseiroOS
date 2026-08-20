@@ -43,6 +43,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Frame-Options"] = "SAMEORIGIN"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["Permissions-Policy"] = (
+            "camera=(), microphone=(), geolocation=(), payment=()"
+        )
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; "
@@ -57,15 +61,18 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 
 # ============================================================
-# APP SETUP
+# APP SETUP — Conditional docs based on ENV
 # ============================================================
+
+_is_production = settings.ENV == "production"
 
 app = FastAPI(
     title="ConcurseiroOS API",
     description="API do sistema de estudos para concursos públicos",
     version=settings.APP_VERSION,
-    docs_url="/docs",
-    redoc_url="/redoc"
+    docs_url=None if _is_production else "/docs",
+    redoc_url=None if _is_production else "/redoc",
+    openapi_url=None if _is_production else "/openapi.json",
 )
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(

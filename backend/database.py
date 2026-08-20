@@ -404,6 +404,16 @@ def _create_tables(conn):
         )
     """)
 
+    # Rate limiting para tentativas de verificação
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS auth_attempts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT NOT NULL,
+            ip TEXT DEFAULT '',
+            created_at TEXT NOT NULL
+        )
+    """)
+
     # Súmulas (revisão SRS como flashcards)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS sumulas (

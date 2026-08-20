@@ -46,7 +46,15 @@ def list_backups() -> list:
 
 def restore_backup(filename: str, db_path: str) -> bool:
     """Restaura um backup específico."""
-    backup_path = BACKUP_DIR / filename
+    # Path traversal protection
+    if ".." in filename or "/" in filename or "\\" in filename:
+        return False
+
+    backup_path = (BACKUP_DIR / filename).resolve()
+    # Validate resolved path is within BACKUP_DIR
+    if not backup_path.is_relative_to(BACKUP_DIR.resolve()):
+        return False
+
     if not backup_path.exists():
         return False
     # Backup do atual antes de restaurar

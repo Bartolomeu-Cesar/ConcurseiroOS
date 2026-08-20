@@ -1,5 +1,6 @@
 """Router de autenticação — registro, login via código email, perfil."""
-import random
+import os
+import secrets
 import smtplib
 import string
 from datetime import datetime, timedelta, timezone
@@ -8,7 +9,7 @@ from email.mime.text import MIMEText
 
 import bcrypt
 import jwt
-from fastapi import APIRouter, Body, Depends, HTTPException, Header
+from fastapi import APIRouter, Body, Depends, HTTPException, Header, Request
 
 from database import get_db_session
 from logger import log
@@ -16,12 +17,14 @@ from settings import settings
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
+_DEBUG = os.environ.get("DEBUG", "false").lower() == "true"
+
 
 # ==================== HELPERS ====================
 
 def _generate_code(length=6):
-    """Gera código numérico de verificação."""
-    return ''.join(random.choices(string.digits, k=length))
+    """Gera código numérico de verificação usando secrets (CSPRNG)."""
+    return ''.join(secrets.choice(string.digits) for _ in range(length))
 
 
 def _hash_password(password: str) -> str:
@@ -81,12 +84,13 @@ def _send_email(to_email: str, subject: str, html_body: str):
 
 def _send_code_email(email: str, code: str):
     """Envia email com código de verificação."""
-    # Se SMTP não configurado, exibir código no terminal
+    # Se SMTP não configurado, exibir código no terminal SOMENTE em modo DEBUG
     if not settings.SMTP_USER or not settings.SMTP_PASSWORD:
-        print(f"\n{'='*50}")
-        print(f"  🔑 CÓDIGO DE LOGIN: {code}")
-        print(f"  📧 Email: {email}")
-        print(f"{'='*50}\n")
+        if _DEBUG:
+            print(f"\n{'='*50}")
+            print(f"  🔑 CÓDIGO DE LOGIN: {code}")
+            print(f"  📧 Email: {email}")
+            print(f"{'='*50}\n")
 
     html = f"""
     <div style="font-family:sans-serif;max-width:400px;margin:0 auto;padding:24px;background:#1e1e2e;color:#cdd6f4;border-radius:12px;">
@@ -102,6 +106,26 @@ def _send_code_email(email: str, code: str):
     </div>
     """
     return _send_email(email, f"ConcurseiroOS — Código: {code}", html)
+
+
+def _check_rate_limit(email: str, conn) -> bool:
+    """Verifica se email excedeu 5 tentativas nos últimos 15 minutos. Retorna True se bloqueado."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(minutes=15)).isoformat()
+    count = conn.execute(
+        "SELECT COUNT(*) FROM auth_attempts WHERE email = ? AND created_at > ?",
+        (email, cutoff)
+    ).fetchone()[0]
+    return count >= 5
+
+
+def _record_failed_attempt(email: str, ip: str, conn):
+    """Registra tentativa falhada de verificação."""
+    now = datetime.now(timezone.utc).isoformat()
+    conn.execute(
+        "INSERT INTO auth_attempts (email, ip, created_at) VALUES (?, ?, ?)",
+        (email, ip, now)
+    )
+    conn.commit()
 
 
 # ==================== DEPENDENCY: GET CURRENT USER ====================
@@ -176,10 +200,9 @@ def register(body: dict = Body(...), conn=Depends(get_db_session)):
 
     return {
         "ok": True,
-        "message": "Conta criada! Verifique seu email." if sent else "Conta criada! Código: " + code,
+        "message": "Conta criada! Verifique seu email." if sent else "Conta criada! Verifique seu email.",
         "email_sent": sent,
-        # Em dev (sem SMTP), retorna o código diretamente
-        "code": code if not sent else None,
+        "code": code if _DEBUG else None,
     }
 
 
@@ -213,20 +236,24 @@ def login(body: dict = Body(...), conn=Depends(get_db_session)):
 
     return {
         "ok": True,
-        "message": "Código enviado para seu email!" if sent else "Código: " + code,
+        "message": "Código enviado para seu email!" if sent else "Código enviado!",
         "email_sent": sent,
-        "code": code if not sent else None,
+        "code": code if _DEBUG else None,
     }
 
 
 @router.post("/verify-code")
-def verify_code(body: dict = Body(...), conn=Depends(get_db_session)):
+def verify_code(body: dict = Body(...), request: Request = None, conn=Depends(get_db_session)):
     """Verifica o código e retorna JWT token."""
     email = body.get("email", "").strip().lower()
     code = body.get("code", "").strip()
 
     if not email or not code:
         raise HTTPException(status_code=400, detail="Email e código são obrigatórios")
+
+    # Rate limiting: max 5 tentativas por email nos últimos 15 minutos
+    if _check_rate_limit(email, conn):
+        raise HTTPException(status_code=429, detail="Muitas tentativas. Aguarde 15 minutos.")
 
     # Buscar código válido
     now = datetime.now(timezone.utc).isoformat()
@@ -238,6 +265,9 @@ def verify_code(body: dict = Body(...), conn=Depends(get_db_session)):
     ).fetchone()
 
     if not auth:
+        # Registrar tentativa falhada
+        client_ip = request.client.host if request and request.client else "unknown"
+        _record_failed_attempt(email, client_ip, conn)
         raise HTTPException(status_code=401, detail="Código inválido ou expirado")
 
     # Marcar como usado

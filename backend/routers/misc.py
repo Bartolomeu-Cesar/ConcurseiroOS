@@ -56,7 +56,7 @@ def health_check(conn=Depends(get_db_session)):
 
 
 # ============================================================
-# BACKUP ENDPOINTS
+# BACKUP ENDPOINTS (admin only: user_id=1)
 # ============================================================
 
 class RestoreRequest(BaseModel):
@@ -64,19 +64,26 @@ class RestoreRequest(BaseModel):
 
 
 @router.get("/api/backups", summary="Listar backups")
-def get_backups():
+def get_backups(user_id: int = Depends(get_user_id)):
+    if user_id != 1:
+        raise HTTPException(status_code=403, detail="Acesso restrito ao administrador")
     return list_backups()
 
 
 @router.post("/api/backups", summary="Criar backup")
-def create_backup_endpoint():
+def create_backup_endpoint(user_id: int = Depends(get_user_id)):
+    if user_id != 1:
+        raise HTTPException(status_code=403, detail="Acesso restrito ao administrador")
+    # TODO: file size check (10MB max) placeholder
     path = create_backup(DB_PATH)
     log.info(f"Manual backup created: {path}")
     return {"ok": True, "path": path}
 
 
 @router.post("/api/backups/restore", summary="Restaurar backup")
-def restore_backup_endpoint(body: RestoreRequest):
+def restore_backup_endpoint(body: RestoreRequest, user_id: int = Depends(get_user_id)):
+    if user_id != 1:
+        raise HTTPException(status_code=403, detail="Acesso restrito ao administrador")
     success = restore_backup(body.filename, DB_PATH)
     if not success:
         raise HTTPException(status_code=404, detail="Backup não encontrado")
