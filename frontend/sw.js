@@ -1,4 +1,4 @@
-const CACHE_NAME = 'concurseiro-v4';
+const CACHE_NAME = 'concurseiro-v5';
 const PRECACHE_URLS = [
   '/',
   '/index.html',
@@ -7,6 +7,7 @@ const PRECACHE_URLS = [
   '/viewer.html',
   '/login.html',
   '/styles.css',
+  '/layout.css',
   '/js/app.js',
   '/js/modules/auth.js',
   '/js/modules/flashcards.js',

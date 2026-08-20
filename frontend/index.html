@@ -8,126 +8,99 @@
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/layout.css">
 </head>
 <body>
-  <a href="#tab-bar" class="skip-link">Pular para conteúdo</a>
+  <a href="#page-content" class="skip-link">Pular para conteúdo</a>
 
-  <!-- Overlay pausa -->
-  <div id="overlay" role="dialog" aria-modal="true" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:999;align-items:center;justify-content:center;">
-    <div style="background:#313244;border-radius:16px;padding:40px 48px;text-align:center;max-width:360px;">
-      <div style="font-size:2.5rem;margin-bottom:12px;">☕</div>
-      <div style="font-size:1.2rem;font-weight:700;color:#cba6f7;margin-bottom:8px;">Hora de descansar!</div>
-      <div style="font-size:0.9rem;color:#cdd6f4;margin-bottom:24px;">Faça uma pausa e volte descansado para continuar seus estudos.</div>
-      <button onclick="document.getElementById('overlay').style.display='none'" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:8px;padding:8px 24px;font-size:0.95rem;font-weight:700;cursor:pointer;">OK, entendido!</button>
+  <!-- Sidebar Overlay (mobile) -->
+  <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <span class="brand-icon">📚</span>
+      <span class="brand-text">ConcurseiroOS</span>
     </div>
-  </div>
 
-  <div class="modal-overlay" id="note-modal" role="dialog" aria-modal="true">
-    <div class="modal-box">
-      <h3 id="note-modal-title">📝 Notas</h3>
-      <div id="note-modal-list"></div>
-      <textarea id="note-modal-input" placeholder="Escreva sua nota/resumo..."></textarea>
-      <div class="modal-btns">
-        <button class="iobtn" onclick="closeNoteModal()">Fechar</button>
-        <button class="iobtn" style="background:#cba6f7;color:#1e1e2e;" onclick="saveNote()">Salvar</button>
-      </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Estudos</div>
+      <ul class="sidebar-nav">
+        <li><button class="active" onclick="navigateTo('tab-pdfs', this)" data-nav="tab-pdfs"><span class="nav-icon">📖</span>PDFs</button></li>
+        <li><button onclick="navigateTo('tab-edital', this)" data-nav="tab-edital"><span class="nav-icon">📋</span>Edital</button></li>
+        <li><button onclick="navigateTo('tab-ciclo', this)" data-nav="tab-ciclo"><span class="nav-icon">🔄</span>Ciclo</button></li>
+      </ul>
     </div>
-  </div>
 
-  <div class="modal-overlay" id="select-modal" role="dialog" aria-modal="true">
-    <div class="modal-box">
-      <h3 id="select-modal-title">Selecione</h3>
-      <input type="text" id="select-modal-search" placeholder="Buscar..." class="select-search">
-      <div id="select-modal-list" class="select-list"></div>
-      <div class="modal-btns">
-        <button class="iobtn" onclick="closeSelectModal()">Cancelar</button>
-      </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Prática</div>
+      <ul class="sidebar-nav">
+        <li><a href="/questoes.html"><span class="nav-icon">❓</span>Questões</a></li>
+        <li><button onclick="navigateTo('tab-flashcards', this)" data-nav="tab-flashcards"><span class="nav-icon">🧠</span>Flashcards<span class="nav-badge" id="sidebar-flash-badge" style="display:none;"></span></button></li>
+        <li><button onclick="navigateTo('tab-sumulas', this)" data-nav="tab-sumulas"><span class="nav-icon">⚖️</span>Súmulas</button></li>
+      </ul>
     </div>
-  </div>
 
-  <!-- Modal Editar Flashcard -->
-  <div class="modal-overlay" id="flash-edit-modal" role="dialog" aria-modal="true">
-    <div class="modal-box" style="max-width:480px;">
-      <h3>✏️ Editar Flashcard</h3>
-      <input type="hidden" id="flash-edit-id">
-      <div style="margin-bottom:10px;">
-        <label style="font-size:0.8rem;color:#9399b2;display:block;margin-bottom:4px;">Pergunta</label>
-        <textarea id="flash-edit-pergunta" rows="3" style="width:100%;padding:10px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.9rem;resize:vertical;"></textarea>
-      </div>
-      <div style="margin-bottom:10px;">
-        <label style="font-size:0.8rem;color:#9399b2;display:block;margin-bottom:4px;">Resposta</label>
-        <textarea id="flash-edit-resposta" rows="3" style="width:100%;padding:10px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.9rem;resize:vertical;"></textarea>
-      </div>
-      <div style="margin-bottom:14px;">
-        <label style="font-size:0.8rem;color:#9399b2;display:block;margin-bottom:4px;">📚 Disciplina (Edital)</label>
-        <select id="flash-edit-materia" style="width:100%;padding:10px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.9rem;">
-          <option value="">Sem disciplina</option>
-        </select>
-      </div>
-      <div class="modal-btns">
-        <button class="iobtn" onclick="closeFlashEditModal()">Cancelar</button>
-        <button class="iobtn" style="background:#a6e3a1;color:#1e1e2e;font-weight:600;" onclick="saveFlashEdit()">💾 Salvar</button>
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Progresso</div>
+      <ul class="sidebar-nav">
+        <li><a href="/dashboard.html"><span class="nav-icon">📊</span>Dashboard</a></li>
+        <li><button onclick="navigateTo('tab-metas', this)" data-nav="tab-metas"><span class="nav-icon">🎯</span>Metas</button></li>
+      </ul>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="sidebar-gamify">
+        <div class="streak-box">
+          <span class="fire">🔥</span>
+          <span class="num" id="streak-num">0</span>
+        </div>
+        <div class="xp-box" id="xp-badge">⭐ Nv.1</div>
       </div>
     </div>
-  </div>
+  </aside>
 
-  <div id="header">
-    <div class="header-left">
-      <h1>📚 Leitor PDF</h1>
-      <div class="streak-badge">
-        <span class="fire">🔥</span>
-        <span class="num" id="streak-num">0</span>
-      </div>
-      <div class="metas-mini" title="Metas do dia: Horas | Questões | Flashcards">
-        <div class="meta-dot" id="meta-dot-h"></div>
-        <div class="meta-dot" id="meta-dot-q"></div>
-        <div class="meta-dot" id="meta-dot-f"></div>
-      </div>
-      <div id="countdown-badge" class="countdown-badge"></div>
-      <div id="xp-badge" class="xp-badge"></div>
-    </div>
-    <div class="header-right">
-      <button class="tbtn" onclick="toggleTheme()" title="Alternar tema" aria-label="Alternar tema claro/escuro" style="background:#45475a;color:#cdd6f4;font-size:0.9rem;">🌓</button>
-      <div id="timer-box">
-        <span id="timer-display">00:00:00</span>
-        <select id="timer-select">
-          <option value="5">5 min</option>
-          <option value="10">10 min</option>
-          <option value="15" selected>15 min</option>
-          <option value="20">20 min</option>
-          <option value="25">25 min</option>
-          <option value="30">30 min</option>
-          <option value="35">35 min</option>
-          <option value="40">40 min</option>
-          <option value="45">45 min</option>
-          <option value="50">50 min</option>
-          <option value="55">55 min</option>
-          <option value="60">60 min</option>
-        </select>
-        <button id="btn-start" class="tbtn" aria-label="Iniciar timer">▶ Iniciar</button>
-        <button id="btn-pause" class="tbtn" aria-label="Pausar timer" disabled>⏸ Pausar</button>
-        <button id="btn-stop" class="tbtn" aria-label="Parar timer" disabled>⏹ Parar</button>
-      </div>
-    </div>
-  </div>
+  <!-- App Shell -->
+  <div class="app-shell">
+    <div class="main-content">
+      <!-- Top Bar -->
+      <header class="top-bar">
+        <button class="sidebar-toggle" onclick="toggleSidebar()" aria-label="Abrir menu">☰</button>
 
-  <!-- Navigation links -->
-  <div class="nav-links">
-    <a href="/dashboard.html">📊 Dashboard</a>
-    <a href="/questoes.html">❓ Questões & Simulados</a>
-    <a href="#" onclick="enterFocusMode();return false;">🎯 Modo Foco</a>
-    <a href="#" id="auth-nav-link" onclick="handleAuthNav();return false;" style="margin-left:auto;">👤 Login</a>
-  </div>
+        <div class="timer-section" id="timer-box">
+          <span class="timer-display" id="timer-display">00:00:00</span>
+          <select id="timer-select">
+            <option value="5">5 min</option>
+            <option value="10">10 min</option>
+            <option value="15" selected>15 min</option>
+            <option value="20">20 min</option>
+            <option value="25">25 min</option>
+            <option value="30">30 min</option>
+            <option value="45">45 min</option>
+            <option value="60">60 min</option>
+          </select>
+          <button id="btn-start" class="tbtn" aria-label="Iniciar timer">▶</button>
+          <button id="btn-pause" class="tbtn" aria-label="Pausar timer" disabled>⏸</button>
+          <button id="btn-stop" class="tbtn" aria-label="Parar timer" disabled>⏹</button>
+        </div>
 
-  <!-- Tabs -->
-  <div id="tab-bar" role="tablist">
-    <button class="tab-btn active" data-tab="tab-pdfs" role="tab" aria-selected="true">📚 PDFs</button>
-    <button class="tab-btn" data-tab="tab-edital" role="tab" aria-selected="false">📊 Edital</button>
-    <button class="tab-btn" data-tab="tab-ciclo" role="tab" aria-selected="false">🔄 Ciclo</button>
-    <button class="tab-btn" data-tab="tab-flashcards" role="tab" aria-selected="false">🧠 Flashcards</button>
-    <button class="tab-btn" data-tab="tab-sumulas" role="tab" aria-selected="false">⚖️ Súmulas</button>
-    <button class="tab-btn" data-tab="tab-metas" role="tab" aria-selected="false">🎯 Metas</button>
-  </div>
+        <div class="search-box">
+          <input type="text" id="global-search" placeholder="Buscar tópicos, questões, flashcards..." onkeydown="if(event.key==='Enter')globalSearch(this.value)">
+        </div>
+
+        <div class="user-section">
+          <div class="metas-mini" title="Metas do dia: Horas | Questões | Flashcards">
+            <div class="meta-dot" id="meta-dot-h"></div>
+            <div class="meta-dot" id="meta-dot-q"></div>
+            <div class="meta-dot" id="meta-dot-f"></div>
+          </div>
+          <button class="theme-btn" onclick="toggleTheme()" title="Alternar tema" aria-label="Alternar tema claro/escuro">🌓</button>
+          <div class="user-avatar" id="auth-nav-link" onclick="handleAuthNav()" title="Perfil">👤</div>
+        </div>
+      </header>
+
+      <!-- Page Content -->
+      <main class="page-content" id="page-content">
 
   <!-- Tab: PDFs -->
   <div id="tab-pdfs" class="tab-content active" role="tabpanel">
@@ -404,11 +377,136 @@
   </div>
 
   <!-- Mobile Bottom Navigation -->
-  <nav class="mobile-bottom-nav" aria-label="Navegação principal">
-    <a href="/" class="active"><span class="nav-icon">📚</span>PDFs</a>
-    <a href="/dashboard.html"><span class="nav-icon">📊</span>Dash</a>
-    <a href="/questoes.html"><span class="nav-icon">❓</span>Questões</a>
+  <nav class="bottom-nav" aria-label="Navegação principal">
+    <div class="bottom-nav-items">
+      <button class="active" onclick="navigateTo('tab-pdfs', this)" data-nav="tab-pdfs"><span class="nav-icon">📖</span>PDFs</button>
+      <a href="/questoes.html"><span class="nav-icon">❓</span>Questões</a>
+      <button onclick="navigateTo('tab-flashcards', this)" data-nav="tab-flashcards"><span class="nav-icon">🧠</span>Flash</button>
+      <a href="/dashboard.html"><span class="nav-icon">📊</span>Dash</a>
+      <button onclick="toggleSidebar()" aria-label="Mais opções"><span class="nav-icon">☰</span>Mais</button>
+    </div>
   </nav>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- Modals (outside app shell for z-index) -->
+  <div id="overlay" role="dialog" aria-modal="true" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:999;align-items:center;justify-content:center;">
+    <div style="background:#313244;border-radius:16px;padding:40px 48px;text-align:center;max-width:360px;">
+      <div style="font-size:2.5rem;margin-bottom:12px;">☕</div>
+      <div style="font-size:1.2rem;font-weight:700;color:#cba6f7;margin-bottom:8px;">Hora de descansar!</div>
+      <div style="font-size:0.9rem;color:#cdd6f4;margin-bottom:24px;">Faça uma pausa e volte descansado para continuar seus estudos.</div>
+      <button onclick="document.getElementById('overlay').style.display='none'" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:8px;padding:8px 24px;font-size:0.95rem;font-weight:700;cursor:pointer;">OK, entendido!</button>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="note-modal" role="dialog" aria-modal="true">
+    <div class="modal-box">
+      <h3 id="note-modal-title">📝 Notas</h3>
+      <div id="note-modal-list"></div>
+      <textarea id="note-modal-input" placeholder="Escreva sua nota/resumo..."></textarea>
+      <div class="modal-btns">
+        <button class="iobtn" onclick="closeNoteModal()">Fechar</button>
+        <button class="iobtn" style="background:#cba6f7;color:#1e1e2e;" onclick="saveNote()">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="select-modal" role="dialog" aria-modal="true">
+    <div class="modal-box">
+      <h3 id="select-modal-title">Selecione</h3>
+      <input type="text" id="select-modal-search" placeholder="Buscar..." class="select-search">
+      <div id="select-modal-list" class="select-list"></div>
+      <div class="modal-btns">
+        <button class="iobtn" onclick="closeSelectModal()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="flash-edit-modal" role="dialog" aria-modal="true">
+    <div class="modal-box" style="max-width:480px;">
+      <h3>✏️ Editar Flashcard</h3>
+      <input type="hidden" id="flash-edit-id">
+      <div style="margin-bottom:10px;">
+        <label style="font-size:0.8rem;color:#9399b2;display:block;margin-bottom:4px;">Pergunta</label>
+        <textarea id="flash-edit-pergunta" rows="3" style="width:100%;padding:10px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.9rem;resize:vertical;"></textarea>
+      </div>
+      <div style="margin-bottom:10px;">
+        <label style="font-size:0.8rem;color:#9399b2;display:block;margin-bottom:4px;">Resposta</label>
+        <textarea id="flash-edit-resposta" rows="3" style="width:100%;padding:10px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.9rem;resize:vertical;"></textarea>
+      </div>
+      <div style="margin-bottom:14px;">
+        <label style="font-size:0.8rem;color:#9399b2;display:block;margin-bottom:4px;">📚 Disciplina (Edital)</label>
+        <select id="flash-edit-materia" style="width:100%;padding:10px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.9rem;">
+          <option value="">Sem disciplina</option>
+        </select>
+      </div>
+      <div class="modal-btns">
+        <button class="iobtn" onclick="closeFlashEditModal()">Cancelar</button>
+        <button class="iobtn" style="background:#a6e3a1;color:#1e1e2e;font-weight:600;" onclick="saveFlashEdit()">💾 Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Sidebar navigation
+    function navigateTo(tabId, btn) {
+      // Hide all tabs
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+      // Show target
+      const target = document.getElementById(tabId);
+      if (target) target.classList.add('active');
+      // Update sidebar active state
+      document.querySelectorAll('.sidebar-nav button, .sidebar-nav a').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+      // Update bottom nav active state
+      document.querySelectorAll('.bottom-nav-items button, .bottom-nav-items a').forEach(b => b.classList.remove('active'));
+      const bottomBtn = document.querySelector(`.bottom-nav-items [data-nav="${tabId}"]`);
+      if (bottomBtn) bottomBtn.classList.add('active');
+      // Close sidebar on mobile
+      closeSidebar();
+      // Save state
+      localStorage.setItem('concurseiro_active_tab', tabId);
+    }
+
+    function toggleSidebar() {
+      document.getElementById('sidebar').classList.toggle('open');
+      document.getElementById('sidebar-overlay').classList.toggle('open');
+    }
+
+    function closeSidebar() {
+      document.getElementById('sidebar').classList.remove('open');
+      document.getElementById('sidebar-overlay').classList.remove('open');
+    }
+
+    // Restore last active tab
+    document.addEventListener('DOMContentLoaded', () => {
+      const saved = localStorage.getItem('concurseiro_active_tab');
+      if (saved) {
+        const btn = document.querySelector(`[data-nav="${saved}"]`);
+        if (btn) navigateTo(saved, btn);
+      }
+    });
+
+    // Global search
+    function globalSearch(query) {
+      if (!query.trim()) return;
+      fetch(`/api/search?q=${encodeURIComponent(query)}`)
+        .then(r => r.json())
+        .then(results => {
+          if (results.length === 0) {
+            alert('Nenhum resultado encontrado.');
+            return;
+          }
+          // Show results in a simple alert for now (can be improved to a modal)
+          const text = results.slice(0, 10).map(r =>
+            `[${r.source}] ${r.title || ''}: ${r.snippet || ''}`
+          ).join('\n\n');
+          alert(`🔍 ${results.length} resultado(s):\n\n${text}`);
+        });
+    }
+  </script>
 
   <script type="module" src="/js/app.js"></script>
   <script src="/timer-global.js"></script>
