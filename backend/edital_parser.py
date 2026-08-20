@@ -30,6 +30,12 @@ RE_CARGO = re.compile(
     re.IGNORECASE
 )
 
+# Matches FCC-style cargo codes: "A01 – Analista Judiciário – CONTADOR"
+RE_CARGO_FCC = re.compile(
+    r"^([A-Z]\d{2})\s*[–\-]\s*(.+)",
+    re.IGNORECASE
+)
+
 # Matches the EXCETO clause in subject names
 RE_EXCETO = re.compile(
     r"\(EXCETO\s+PARA\s+O\s+(.+?)\)",
@@ -120,6 +126,37 @@ def extract_edital_name(pdf_path: str) -> str:
     elif sigla:
         return sigla.replace('/', '-')
 
+    # Try to detect from full org name (TRIBUNAL DE JUSTIÇA DO ESTADO DO CEARÁ → TJ-CE)
+    estado_siglas = {
+        "CEARÁ": "CE", "MARANHÃO": "MA", "SÃO PAULO": "SP", "RIO DE JANEIRO": "RJ",
+        "MINAS GERAIS": "MG", "BAHIA": "BA", "PARÁ": "PA", "PARANÁ": "PR",
+        "GOIÁS": "GO", "AMAZONAS": "AM", "MATO GROSSO": "MT", "PIAUÍ": "PI",
+        "PERNAMBUCO": "PE", "SANTA CATARINA": "SC", "PARAÍBA": "PB",
+        "RIO GRANDE DO NORTE": "RN", "RIO GRANDE DO SUL": "RS", "ALAGOAS": "AL",
+        "SERGIPE": "SE", "ESPÍRITO SANTO": "ES", "TOCANTINS": "TO",
+        "RONDÔNIA": "RO", "ACRE": "AC", "AMAPÁ": "AP", "RORAIMA": "RR",
+        "MATO GROSSO DO SUL": "MS",
+    }
+    orgao_map = [
+        (r"TRIBUNAL\s+DE\s+JUSTI[ÇC]A", "TJ"),
+        (r"TRIBUNAL\s+DE\s+CONTAS", "TCE"),
+        (r"POL[ÍI]CIA\s+CIVIL", "PC"),
+        (r"MINIST[ÉE]RIO\s+P[ÚU]BLICO", "MP"),
+        (r"DEFENSORIA\s+P[ÚU]BLICA", "DPE"),
+        (r"TRIBUNAL\s+REGIONAL\s+(?:DO\s+)?TRABALHO", "TRT"),
+        (r"TRIBUNAL\s+REGIONAL\s+ELEITORAL", "TRE"),
+        (r"TRIBUNAL\s+REGIONAL\s+FEDERAL", "TRF"),
+    ]
+    for pattern, sigla_orgao in orgao_map:
+        if re.search(pattern, first_page, re.IGNORECASE):
+            # Find state
+            for estado, uf in estado_siglas.items():
+                if estado in first_page.upper():
+                    nome = f"{sigla_orgao}-{uf} {year}" if year else f"{sigla_orgao}-{uf}"
+                    return nome
+            # No state found, just use org
+            return f"{sigla_orgao} {year}" if year else sigla_orgao
+
     # Fallback: try to get organization name from first lines
     lines = first_page.split('\n')
     for line in lines[:5]:
@@ -141,8 +178,11 @@ def find_content_start(text: str) -> int:
     patterns = [
         r"(?:14|15|16)\s+DOS\s+OBJETOS\s+DE\s+AVALIA[ÇC][AÃ]O",
         r"OBJETOS?\s+DE\s+AVALIA[ÇC][ÃA]O\s*\(",
+        r"ANEXO\s+III\s*\n\s*\n?\s*CONTE[ÚU]DO\s+PROGRAM[ÁA]TICO",
+        r"ANEXO\s+III\s*\n\s*\n?\s*CONHECIMENTOS",
         r"(?:14|15|16)\.\d+\s+CONHECIMENTOS",
-        r"CONHECIMENTOS\s+GERAIS",
+        r"CONHECIMENTOS\s+GERAIS\s*[–\-]\s*PARA\s+TODOS",
+        r"CONHECIMENTOS\s+GERAIS\s*\n\s*L[ÍI]NGUA\s+PORTUGUESA",
     ]
     for pattern in patterns:
         match = re.search(pattern, text, re.IGNORECASE)
@@ -206,6 +246,18 @@ def split_topics(topic_text: str) -> list[str]:
         if item:
             topics.append(item)
 
+    # Fallback: if no numbered topics found, split by sentence (FCC style)
+    # FCC editais use "Tópico. Outro tópico. Mais um." without numbers
+    if not topics and len(topic_text) > 20:
+        sentences = re.split(r'\.\s+(?=[A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇÑ])', topic_text)
+        for s in sentences:
+            s = s.strip().rstrip('.')
+            # Filter out very short items and items that look like metadata
+            if len(s) > 5 and not re.match(r'^(Lei|Decreto|Art|§|Resolução)\s', s):
+                topics.append(s)
+            elif len(s) > 5:
+                topics.append(s)
+
     return topics
 
 
@@ -221,12 +273,12 @@ def _extract_subjects_from_block(text_block: str) -> list[dict]:
     # Normalize Unicode
     continuous_text = unicodedata.normalize("NFC", continuous_text)
 
-    # Find all subject headers: ALL CAPS text followed by colon, then "1 " or "I "
+    # Find all subject headers: ALL CAPS text followed by colon
     header_positions = []
     for match in re.finditer(
         r"([" + _UPPER + r"][" + _SUBJ_CHARS + r"]{3,}?)"
         r"\s*:\s*"
-        r"(?=(?:I{1,3}\s+[" + _UPPER + r"]|1\s))",
+        r"(?=(?:I{1,3}\s+[" + _UPPER + r"]|1\s|\d+\.\s|[A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇÑ]))",
         continuous_text
     ):
         name = match.group(1).strip()
@@ -323,12 +375,9 @@ def _extract_subjects_from_block(text_block: str) -> list[dict]:
 def _parse_cargo_name(cargo_line: str) -> tuple[str, str]:
     """
     Parse a cargo line to extract cargo number and a CLEAN short name.
-    
-    Exemplos:
-    - 'CARGO 1: ANALISTA ... – ESPECIALIDADE: ADMINISTRAÇÃO' → ('1', 'Analista - Administração')
-    - 'CARGO 12: AUDITOR ... – ESPECIALIDADE: CONTROLE EXTERNO' → ('12', 'Auditor - Controle Externo')
-    - 'CARGO 16: TÉCNICO ... – ESPECIALIDADE: TÉCNICO-ADMINISTRATIVA' → ('16', 'Técnico - Técnico-Administrativa')
+    Handles both CEBRASPE and FCC formats.
     """
+    # Try CEBRASPE format: "CARGO N: ..."
     match = RE_CARGO.match(cargo_line.strip())
     if match:
         num = match.group(1)
@@ -336,11 +385,29 @@ def _parse_cargo_name(cargo_line: str) -> tuple[str, str]:
         name = re.sub(r"\s*[\n\r]+\s*", " ", name).strip()
         name = re.sub(r"\s+", " ", name)
         name = re.sub(r"\s*-\s*$", "", name)
-
-        # Extract short name: cargo type + especialidade
         short_name = _simplify_cargo_name(name)
         return num, short_name
-    return "", _smart_title_case(cargo_line.strip())
+
+    # Try FCC format: "A01 – Analista Judiciário – CONTADOR"
+    match_fcc = RE_CARGO_FCC.match(cargo_line.strip())
+    if match_fcc:
+        code = match_fcc.group(1)
+        name = match_fcc.group(2).strip()
+        name = re.sub(r"\s*[\n\r]+\s*", " ", name).strip()
+        name = re.sub(r"\s+", " ", name)
+        # FCC format: "Analista Judiciário – ESPECIALIDADE" → extract last part
+        parts = re.split(r"\s*[–\-]\s*", name)
+        if len(parts) >= 2:
+            # Last part is usually the specialization
+            especialidade = parts[-1].strip()
+            tipo = parts[0].strip()
+            # If especialidade is like "Área TI – SISTEMAS", merge
+            if len(parts) >= 3:
+                especialidade = " - ".join(p.strip() for p in parts[1:])
+            return code, _smart_title_case(f"{tipo} - {especialidade}")
+        return code, _smart_title_case(name)
+
+    return "", _smart_title_case(cargo_line.strip()[:60])
 
 
 def _simplify_cargo_name(full_name: str) -> str:
@@ -629,7 +696,7 @@ def parse_edital_pdf(pdf_path: str) -> dict:
         ):
             cargo_positions.append((match.start(), match.group(1)))
 
-        # Fallback: more lenient pattern
+        # Fallback: more lenient CARGO pattern
         if not cargo_positions:
             for match in re.finditer(
                 r"(CARGO\s+\d+\s*[:\s].+?)(?=CARGO\s+\d+|$)",
@@ -637,6 +704,15 @@ def parse_edital_pdf(pdf_path: str) -> dict:
                 re.DOTALL
             ):
                 cargo_positions.append((match.start(), match.group(1).split('\n')[0]))
+
+        # Fallback 2: FCC-style cargo codes (A01 – Analista Judiciário – CONTADOR)
+        if not cargo_positions:
+            for match in re.finditer(
+                r"^([A-Z]\d{2}\s*[–\-]\s*.+?)$",
+                especificos_text,
+                re.MULTILINE
+            ):
+                cargo_positions.append((match.start(), match.group(1)))
 
         # Extract content for each cargo
         for i, (pos, cargo_line) in enumerate(cargo_positions):
