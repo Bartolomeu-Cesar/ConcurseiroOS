@@ -242,6 +242,18 @@ def list_questoes_bancas(conn=Depends(get_db_session)):
     return [r[0] for r in rows]
 
 
+@router.get("/api/questoes/datas-importacao", summary="Listar datas de importação")
+def list_datas_importacao(conn=Depends(get_db_session)):
+    """Retorna datas de importação com contagem de questões."""
+    rows = conn.execute("""
+        SELECT created_at, COUNT(*) as total,
+               GROUP_CONCAT(DISTINCT materia) as materias,
+               GROUP_CONCAT(DISTINCT banca) as bancas
+        FROM questoes GROUP BY created_at ORDER BY created_at DESC
+    """).fetchall()
+    return [{"data": r[0], "total": r[1], "materias": r[2] or "", "bancas": r[3] or ""} for r in rows]
+
+
 @router.get("/api/questoes/{id}", response_model=QuestaoResponse)
 def get_questao(id: int, conn=Depends(get_db_session)):
     row = conn.execute("SELECT * FROM questoes WHERE id = ?", (id,)).fetchone()
@@ -301,6 +313,55 @@ def responder_questao(id: int, body: QuestaoResposta, conn=Depends(get_db_sessio
 
     conn.commit()
     return {"acertou": bool(acertou), "resposta_correta": questao[0]}
+
+
+@router.put("/api/questoes/vincular-lote", summary="Vincular disciplina em lote",
+            description="Atualiza matéria/tópico/banca de todas as questões que correspondem ao filtro")
+def vincular_questoes_lote(body: dict = Body(...), conn=Depends(get_db_session)):
+    """
+    Body: {
+        filtro: {created_at?, materia_atual?, banca?},
+        atualizar: {materia?, topico?, banca?, dificuldade?}
+    }
+    """
+    filtro = body.get("filtro", {})
+    atualizar = body.get("atualizar", {})
+
+    if not atualizar:
+        raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
+
+    # Construir WHERE
+    where = "WHERE 1=1"
+    params = []
+    if filtro.get("created_at"):
+        where += " AND created_at = ?"
+        params.append(filtro["created_at"])
+    if filtro.get("materia_atual"):
+        where += " AND materia = ?"
+        params.append(filtro["materia_atual"])
+    elif filtro.get("materia_atual") == "":
+        where += " AND (materia IS NULL OR materia = '')"
+    if filtro.get("banca"):
+        where += " AND banca = ?"
+        params.append(filtro["banca"])
+
+    # Construir SET
+    campos_permitidos = ["materia", "topico", "banca", "dificuldade"]
+    sets = []
+    for campo in campos_permitidos:
+        if campo in atualizar:
+            sets.append(f"{campo} = ?")
+            params.append(atualizar[campo])
+
+    if not sets:
+        raise HTTPException(status_code=400, detail="Nenhum campo válido para atualizar")
+
+    query = f"UPDATE questoes SET {', '.join(sets)} {where}"
+    result = conn.execute(query, params)
+    conn.commit()
+    count = result.rowcount
+    log.info(f"Questões atualizadas em lote: {count} (filtro={filtro}, atualizar={atualizar})")
+    return {"ok": True, "atualizadas": count}
 
 
 @router.put("/api/questoes/{id}", summary="Editar questão")

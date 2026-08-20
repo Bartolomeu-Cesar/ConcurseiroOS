@@ -404,6 +404,39 @@
   <!-- Tab: Banco completo -->
   <div id="tab-banco" class="qtab-content">
     <div class="panel">
+      <h2>🔗 Vincular Disciplina em Lote</h2>
+      <p style="font-size:0.82rem;color:#9399b2;margin-bottom:10px;">Selecione um filtro (data de importação) e atribua disciplina/tópico a todas as questões de uma vez.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+        <div style="flex:1;min-width:150px;">
+          <label style="font-size:0.75rem;color:#9399b2;">📅 Data de Importação</label>
+          <select id="lote-data" onchange="previewLote()" style="width:100%;padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;margin-top:4px;">
+            <option value="">Selecione...</option>
+          </select>
+        </div>
+        <div style="flex:1;min-width:150px;">
+          <label style="font-size:0.75rem;color:#9399b2;">🏛️ Filtrar por banca (opcional)</label>
+          <select id="lote-banca" onchange="previewLote()" style="width:100%;padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;margin-top:4px;">
+            <option value="">Todas</option>
+          </select>
+        </div>
+      </div>
+      <div id="lote-preview" style="font-size:0.82rem;color:#9399b2;margin-bottom:10px;"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+        <div style="flex:1;min-width:150px;">
+          <label style="font-size:0.75rem;color:#9399b2;">📚 Nova Disciplina</label>
+          <select id="lote-materia" style="width:100%;padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;margin-top:4px;">
+            <option value="">Manter atual</option>
+          </select>
+        </div>
+        <div style="flex:1;min-width:150px;">
+          <label style="font-size:0.75rem;color:#9399b2;">📝 Novo Tópico (opcional)</label>
+          <input id="lote-topico" placeholder="Ex: Controle de Constitucionalidade" style="width:100%;padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;margin-top:4px;">
+        </div>
+      </div>
+      <button onclick="aplicarLote()" class="btn btn-success" style="width:100%;">🔗 Vincular em Lote</button>
+    </div>
+
+    <div class="panel">
       <h2>📦 Todas as Questões</h2>
       <div class="filter-bar">
         <select id="banco-filtro-materia" onchange="loadBanco()">
@@ -1092,6 +1125,80 @@
       } catch(e) { alert('Erro de conexão'); }
     }
 
+    // ==================== VINCULAÇÃO EM LOTE ====================
+    async function loadLoteOptions() {
+      try {
+        const datas = await fetch('/api/questoes/datas-importacao').then(r => r.json());
+        const sel = document.getElementById('lote-data');
+        sel.innerHTML = '<option value="">Selecione...</option>' +
+          datas.map(d => `<option value="${d.data}">${d.data} (${d.total} questões${d.bancas ? ' · ' + d.bancas.split(',').slice(0,3).join(', ') : ''})</option>`).join('');
+
+        // Carregar disciplinas do edital
+        const materias = await fetch('/api/edital/materias-disponiveis').then(r => r.json());
+        const selMat = document.getElementById('lote-materia');
+        selMat.innerHTML = '<option value="">Manter atual</option>' +
+          materias.map(m => `<option value="${m}">${m}</option>`).join('');
+      } catch(e) {}
+    }
+
+    async function previewLote() {
+      const data = document.getElementById('lote-data').value;
+      const el = document.getElementById('lote-preview');
+      const selBanca = document.getElementById('lote-banca');
+      if (!data) { el.innerHTML = ''; selBanca.innerHTML = '<option value="">Todas</option>'; return; }
+
+      const questoes = await fetch(`/api/questoes?limit=9999`).then(r => r.json());
+      const filtered = questoes.filter(q => q.created_at === data);
+
+      // Popular bancas
+      const bancas = [...new Set(filtered.map(q => q.banca).filter(b => b))];
+      selBanca.innerHTML = '<option value="">Todas (' + filtered.length + ')</option>' +
+        bancas.map(b => {
+          const count = filtered.filter(q => q.banca === b).length;
+          return `<option value="${b}">${b} (${count})</option>`;
+        }).join('');
+
+      const banca = selBanca.value;
+      const final = banca ? filtered.filter(q => q.banca === banca) : filtered;
+      const semMateria = final.filter(q => !q.materia).length;
+      el.innerHTML = `📋 <strong>${final.length}</strong> questões selecionadas` +
+        (semMateria > 0 ? ` (${semMateria} sem disciplina)` : ' (todas já vinculadas)');
+    }
+
+    async function aplicarLote() {
+      const data = document.getElementById('lote-data').value;
+      const banca = document.getElementById('lote-banca').value;
+      const materia = document.getElementById('lote-materia').value;
+      const topico = document.getElementById('lote-topico').value.trim();
+
+      if (!data) { alert('Selecione uma data de importação.'); return; }
+      if (!materia && !topico) { alert('Informe pelo menos a disciplina ou tópico.'); return; }
+
+      const filtro = { created_at: data };
+      if (banca) filtro.banca = banca;
+
+      const atualizar = {};
+      if (materia) atualizar.materia = materia;
+      if (topico) atualizar.topico = topico;
+
+      try {
+        const res = await fetch('/api/questoes/vincular-lote', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filtro, atualizar })
+        });
+        const result = await res.json();
+        if (result.ok) {
+          alert(`✅ ${result.atualizadas} questões atualizadas!`);
+          loadBanco();
+          loadMaterias();
+          previewLote();
+        } else {
+          alert('Erro: ' + (result.detail || 'desconhecido'));
+        }
+      } catch(e) { alert('Erro de conexão'); }
+    }
+
     // ==================== INIT ====================
     loadMaterias();
     loadBancas();
@@ -1100,6 +1207,7 @@
     loadSimulados();
     loadErros();
     loadBanco();
+    loadLoteOptions();
     loadQuestoesResolver();
   </script>
 <script src="/timer-global.js"></script>
