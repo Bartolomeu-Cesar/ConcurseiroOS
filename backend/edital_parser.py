@@ -468,9 +468,9 @@ def _extract_metadados(pdf_path: str) -> dict:
 
     # === ÓRGÃO ===
     orgao_match = re.search(
-        r"(TRIBUNAL\s+DE\s+CONTAS[^(\n]{0,60}|POL[ÍI]CIA\s+CIVIL[^(\n]{0,60}|"
-        r"MINIST[ÉE]RIO\s+P[ÚU]BLICO[^(\n]{0,60}|DEFENSORIA\s+P[ÚU]BLICA[^(\n]{0,60}|"
-        r"PROCURADORIA[^(\n]{0,40}|PREFEITURA[^(\n]{0,60})",
+        r"(TRIBUNAL\s+DE\s+JUSTI[ÇC]A[^(\n]{0,60}|TRIBUNAL\s+DE\s+CONTAS[^(\n]{0,60}|"
+        r"POL[ÍI]CIA\s+CIVIL[^(\n]{0,60}|MINIST[ÉE]RIO\s+P[ÚU]BLICO[^(\n]{0,60}|"
+        r"DEFENSORIA\s+P[ÚU]BLICA[^(\n]{0,60}|PROCURADORIA[^(\n]{0,40}|PREFEITURA[^(\n]{0,60})",
         text_inicio, re.IGNORECASE
     )
     if orgao_match:
@@ -488,9 +488,12 @@ def _extract_metadados(pdf_path: str) -> dict:
         metadados["banca"] = banca_match.group(1).strip().upper()
 
     # === REMUNERAÇÃO ===
-    remuneracao_match = re.search(r"REMUNERA[ÇC][ÃA]O\s*:?\s*R?\$?\s*([\d.,]+)", text_inicio, re.IGNORECASE)
+    remuneracao_match = re.search(
+        r"[Rr]emunera[çc][ãa]o\s*(?:inicial)?\s*:?\s*R\$\s*([\d]+[.\d]*,\d{2})",
+        text_inicio, re.IGNORECASE
+    )
     if remuneracao_match:
-        metadados["remuneracao"] = f"R$ {remuneracao_match.group(1).rstrip('.')}"
+        metadados["remuneracao"] = f"R$ {remuneracao_match.group(1)}"
 
     # === JORNADA ===
     jornada_match = re.search(r"JORNADA\s+DE\s+TRABALHO\s*:?\s*(\d+\s*horas?\s*semanais?)", text_inicio, re.IGNORECASE)
@@ -511,17 +514,17 @@ def _extract_metadados(pdf_path: str) -> dict:
             metadados["vagas"][match.group(1)] = match.group(2)
 
     # === INSCRIÇÕES (período) ===
-    # Buscar no cronograma primeiro
+    # Try cronograma format first: "Período de inscrições ... DD/MM/AAAA a DD/MM/AAAA"
     inscr_match = re.search(
-        r"(?:per[íi]odo\s+de\s+(?:solicita[çc][ãa]o\s+de\s+)?inscri[çc][õo]es?).*?(\d{1,2}/\d{1,2})\s*(?:a|até)\s*(\d{1,2}/\d{1,2}/\d{4})",
+        r"(?:per[íi]odo\s+de\s+(?:solicita[çc][ãa]o\s+de\s+)?inscri[çc][õo]es?).*?(\d{1,2}/\d{1,2}(?:/\d{4})?)\s*(?:a|até)\s*\n?\s*(\d{1,2}/\d{1,2}/\d{4})",
         text_inicio + text_final, re.IGNORECASE | re.DOTALL
     )
     if inscr_match:
         inicio_inscr = inscr_match.group(1)
         fim_inscr = inscr_match.group(2)
-        # Extrair ano do fim
-        ano = fim_inscr.split("/")[-1]
-        if "/" not in inicio_inscr or len(inicio_inscr.split("/")) < 3:
+        # Add year to inicio if missing
+        if len(inicio_inscr.split("/")) < 3:
+            ano = fim_inscr.split("/")[-1]
             inicio_inscr = inicio_inscr + "/" + ano
         metadados["inscricoes"] = f"{inicio_inscr} a {fim_inscr}"
 
@@ -546,21 +549,24 @@ def _extract_metadados(pdf_path: str) -> dict:
         metadados["datas_provas"] = list(set(prova_matches))
 
     # === TAXA DE INSCRIÇÃO ===
-    taxa_match = re.search(r"(?:taxa.*?inscri|inscri.*?taxa).*?R\$\s*([\d.,]+)", text_inicio, re.IGNORECASE | re.DOTALL)
-    if not taxa_match:
-        # Buscar padrão "para os cargos de ...: R$ X"
-        taxa_match = re.search(r"R\$\s*([\d.,]+)\s*[;.]", text_inicio)
-    if taxa_match:
-        metadados["taxa_inscricao"] = f"R$ {taxa_match.group(1)}"
-
-    # Múltiplas taxas por nível
-    taxas_multi = re.findall(
-        r"(?:para\s+o[s]?\s+cargo[s]?\s+de\s+)(.+?):\s*R\$\s*([\d.,]+)",
-        text_inicio, re.IGNORECASE
-    )
-    if taxas_multi:
-        partes = [f"{cargo.strip()}: R$ {valor}" for cargo, valor in taxas_multi]
-        metadados["taxa_inscricao"] = " | ".join(partes)
+    # Try "Valor da inscrição: R$ X" (FCC style)
+    taxa_valor_match = re.search(r"[Vv]alor\s+da\s+inscri[çc][ãa]o\s*:?\s*R\$\s*([\d]+[.\d]*,\d{2})", text_inicio)
+    if taxa_valor_match:
+        metadados["taxa_inscricao"] = f"R$ {taxa_valor_match.group(1)}"
+    else:
+        # Múltiplas taxas por nível (CEBRASPE: "para os cargos de ...: R$ X")
+        taxas_multi = re.findall(
+            r"(?:para\s+o[s]?\s+cargo[s]?\s+de\s+)(.+?):\s*R\$\s*([\d]+[.\d]*,\d{2})",
+            text_inicio, re.IGNORECASE
+        )
+        if taxas_multi:
+            partes = [f"{cargo.strip()}: R$ {valor}" for cargo, valor in taxas_multi]
+            metadados["taxa_inscricao"] = " | ".join(partes)
+        else:
+            # Generic: "taxa ... R$ X"
+            taxa_generic = re.search(r"taxa.*?inscri.*?R\$\s*([\d]+[.\d]*,\d{2})", text_inicio, re.IGNORECASE | re.DOTALL)
+            if taxa_generic:
+                metadados["taxa_inscricao"] = f"R$ {taxa_generic.group(1)}"
 
     # === LOCAL DA PROVA ===
     local_match = re.search(
@@ -579,10 +585,15 @@ def _extract_metadados(pdf_path: str) -> dict:
     link_match = re.search(r"(https?://www\.cebraspe\.org\.br/concursos/[^\s\"]{3,})", text_inicio)
     if not link_match:
         link_match = re.search(r"(https?://[^\s\"]{20,80}concurso[^\s\"]*)", text_inicio, re.IGNORECASE)
+    if not link_match:
+        # Try www. without protocol
+        link_match = re.search(r"(www\.[^\s,\)]{10,60})", text_inicio)
     if link_match:
-        link = link_match.group(1).rstrip(".,;")
-        # Fix PDF line breaks in URL (e.g., "tce_ma_2 6" → "tce_ma_26")
+        link = link_match.group(1).rstrip(".,;)")
+        # Fix PDF line breaks in URL
         link = re.sub(r"\s+", "", link)
+        if not link.startswith("http"):
+            link = "https://" + link
         metadados["link_edital"] = link
 
     # === ESCOLARIDADE ===
