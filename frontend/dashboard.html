@@ -2277,9 +2277,14 @@
     async function loadEvolucao() {
       try {
         const data = await fetch('/api/evolucao?semanas=8').then(r => r.json());
-        if (!data.evolucao || data.evolucao.length < 2) return;
+        if (!data.evolucao || data.evolucao.length === 0) {
+          document.getElementById('evolucao-chart').parentElement.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;text-align:center;padding:20px;">Resolva questões para gerar o gráfico de evolução semanal.</p>';
+          return;
+        }
         const labels = data.evolucao.map(e => e.semana);
         const geral = data.evolucao.map(e => e.geral.pct);
+        const questoes = data.evolucao.map(e => e.geral.questoes);
+        const horas = data.evolucao.map(e => e.geral.horas);
         const ctx = document.getElementById('evolucao-chart');
         if (!ctx) return;
         new Chart(ctx, {
@@ -2287,19 +2292,37 @@
           data: {
             labels,
             datasets: [{
-              label: 'Acerto Geral %',
+              label: 'Acerto %',
               data: geral,
               borderColor: '#cba6f7',
               backgroundColor: 'rgba(203,166,247,0.1)',
               fill: true,
-              tension: 0.3
+              tension: 0.3,
+              yAxisID: 'y'
+            },{
+              label: 'Questões',
+              data: questoes,
+              borderColor: '#89b4fa',
+              backgroundColor: 'rgba(137,180,250,0.1)',
+              fill: false,
+              tension: 0.3,
+              yAxisID: 'y1'
+            },{
+              label: 'Horas',
+              data: horas,
+              borderColor: '#a6e3a1',
+              backgroundColor: 'rgba(166,227,161,0.1)',
+              fill: false,
+              tension: 0.3,
+              yAxisID: 'y1'
             }]
           },
           options: {
             responsive: true,
             plugins: { legend: { labels: { color: '#cdd6f4' } } },
             scales: {
-              y: { min: 0, max: 100, ticks: { color: '#9399b2' }, grid: { color: '#45475a' } },
+              y: { min: 0, max: 100, position: 'left', title: { display: true, text: '% Acerto', color: '#9399b2' }, ticks: { color: '#9399b2' }, grid: { color: '#45475a' } },
+              y1: { min: 0, position: 'right', title: { display: true, text: 'Qtd', color: '#9399b2' }, ticks: { color: '#9399b2' }, grid: { display: false } },
               x: { ticks: { color: '#9399b2' }, grid: { color: '#45475a' } }
             }
           }
