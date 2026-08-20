@@ -490,7 +490,9 @@ def _parse_qconcursos(texto: str, materia_override: str = "") -> list:
     # Dividir o texto em blocos de questões usando o header como separador
     splits = re.split(r'(?=Ano:\s*\d{4}\s*Banca:)', texto_limpo)
     
-    quest_num = 0
+    # Determinar numeração base do gabarito (ex: se começa em 21, offset = 21)
+    gab_start = min(gabarito.keys()) if gabarito else 1
+    quest_num = gab_start - 1  # será incrementado para gab_start na primeira questão
     for bloco in splits:
         bloco = bloco.strip()
         if not bloco or len(bloco) < 30:
