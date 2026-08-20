@@ -48,7 +48,7 @@ def gerar_planejador(horas_dia: float = Query(default=3.0), conn=Depends(get_db_
     ciclo_gerado = False
     if not ciclo:
         from routers.ciclo import _gerar_ciclo_automatico
-        result = _gerar_ciclo_automatico(conn, horas_dia, user_id)
+        result = _gerar_ciclo_automatico(conn, user_id, horas_dia)
         if not result["ok"]:
             raise HTTPException(status_code=400, detail="Não há matérias no edital para gerar o planejador")
         ciclo = conn.execute("SELECT * FROM ciclo_estudos WHERE ativo = 1 AND user_id = ? ORDER BY ordem, id", (user_id,)).fetchall()

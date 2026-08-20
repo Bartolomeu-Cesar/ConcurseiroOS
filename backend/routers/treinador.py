@@ -354,7 +354,7 @@ def _gerar_planejador_interno(conn, user_id: int, horas_dia: float = 3.0):
 
     ciclo = conn.execute("SELECT * FROM ciclo_estudos WHERE ativo = 1 AND user_id = ? ORDER BY ordem, id", (user_id,)).fetchall()
     if not ciclo:
-        _gerar_ciclo_automatico(conn, horas_dia, user_id)
+        _gerar_ciclo_automatico(conn, user_id, horas_dia)
         ciclo = conn.execute("SELECT * FROM ciclo_estudos WHERE ativo = 1 AND user_id = ? ORDER BY ordem, id", (user_id,)).fetchall()
     if not ciclo:
         return
