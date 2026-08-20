@@ -452,9 +452,110 @@ def _parse_gabarito(texto: str) -> dict:
     return gabarito
 
 
+def _parse_qconcursos(texto: str, materia_override: str = "") -> list:
+    """
+    Parser para formato QConcursos:
+    Ano: 2026Banca: FUNDATECÓrgão: Polícia Penal - RS
+    [enunciado]
+    A [texto alternativa A]
+    B [texto alternativa B]
+    ...
+    """
+    questoes = []
+
+    # Separar questões pelo padrão "Ano: XXXX"
+    # O header pode ter formato: "Ano: 2026Banca: XXXÓrgão: YYY" (colado) ou separado
+    header_pattern = r'Ano:\s*(\d{4})\s*Banca:\s*(.+?)(?:Órgão|Orgão|Prova):\s*(.+?)(?=\n|$)'
+    
+    # Dividir o texto em blocos de questões usando o header como separador
+    splits = re.split(r'(?=Ano:\s*\d{4}\s*Banca:)', texto)
+    
+    for bloco in splits:
+        bloco = bloco.strip()
+        if not bloco or len(bloco) < 30:
+            continue
+        
+        # Extrair metadados do header
+        header_match = re.match(header_pattern, bloco, re.IGNORECASE)
+        if not header_match:
+            continue
+        
+        ano = header_match.group(1)
+        banca_q = header_match.group(2).strip().rstrip('Óó')
+        orgao = header_match.group(3).strip()
+        
+        # Limpar banca (pode ter "Órgão" colado)
+        banca_q = re.sub(r'[ÓO]rg[ãa]o.*$', '', banca_q, flags=re.IGNORECASE).strip()
+        
+        # Texto após o header = enunciado + alternativas
+        corpo = bloco[header_match.end():].strip()
+        
+        if len(corpo) < 20:
+            continue
+        
+        # Encontrar alternativas
+        # Padrões: "A " no início de linha, ou "\nA " 
+        # Formato QConcursos: letra seguida de espaço no início de linha
+        alt_pattern = r'(?:^|\n)\s*([A-E])\s+(.+?)(?=(?:^|\n)\s*[A-E]\s+|\Z)'
+        alt_matches = re.findall(alt_pattern, corpo, re.DOTALL)
+        
+        if len(alt_matches) < 4:
+            # Tentar variação: letra seguida de espaço (mais agressivo)
+            alt_pattern2 = r'(?:^|\n)([A-E])\s{1,3}(.+?)(?=(?:^|\n)[A-E]\s{1,3}|\Z)'
+            alt_matches = re.findall(alt_pattern2, corpo, re.DOTALL)
+        
+        if len(alt_matches) < 4:
+            continue
+        
+        # Encontrar onde começa a primeira alternativa para separar o enunciado
+        first_alt_text = alt_matches[0][1].strip()[:30]
+        # Buscar a posição da primeira alternativa no corpo
+        first_alt_re = re.search(r'(?:^|\n)\s*A\s+', corpo, re.MULTILINE)
+        if first_alt_re:
+            enunciado = corpo[:first_alt_re.start()].strip()
+        else:
+            enunciado = corpo.split('\n')[0].strip()
+        
+        # Limpar enunciado (remover quebras de linha internas)
+        enunciado = re.sub(r'\s*\n\s*', ' ', enunciado).strip()
+        
+        if len(enunciado) < 15:
+            continue
+        
+        # Montar alternativas
+        alts = {'A': '', 'B': '', 'C': '', 'D': '', 'E': ''}
+        for letra, texto_alt in alt_matches[:5]:
+            # Limpar texto da alternativa (remover quebras internas)
+            clean_text = re.sub(r'\s*\n\s*', ' ', texto_alt).strip()
+            alts[letra.upper()] = clean_text
+        
+        questao = {
+            "numero": len(questoes) + 1,
+            "materia": materia_override or "",
+            "topico": "",
+            "enunciado": enunciado,
+            "alternativa_a": alts['A'],
+            "alternativa_b": alts['B'],
+            "alternativa_c": alts['C'],
+            "alternativa_d": alts['D'],
+            "alternativa_e": alts['E'],
+            "resposta_correta": "",  # QConcursos não inclui gabarito no texto
+            "explicacao": "",
+            "dificuldade": "Médio",
+            "banca": banca_q,
+        }
+        questoes.append(questao)
+    
+    return questoes
+
+
 def _parse_questoes_texto(texto: str, materia: str = "", banca: str = "") -> list:
     """Analisa texto extraído e separa em questões individuais."""
     questoes = []
+
+    # Detectar formato QConcursos (Ano: XXXX Banca: XXX Órgão: XXX)
+    if re.search(r'Ano:\s*\d{4}\s*Banca:', texto):
+        return _parse_qconcursos(texto, materia_override=materia)
 
     # Separar seção de questões da seção de gabarito
     # Identificar onde começa o gabarito
