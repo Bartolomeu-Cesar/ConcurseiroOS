@@ -101,11 +101,15 @@ function renderNodes(nodes, container, bulk, prefix) {
           <span>📄</span>
           <span class="pdf-name">${escapeHtml(node.name.replace(/_/g, ' '))}</span>
           ${materiaTag}
-          <span class="pdf-progress">${label}</span>
           ${pct === 100 ? '<span class="badge-done">✓</span>' : ''}
           ${linkBtn}
         </div>
-        <div class="pdf-bar"><div class="pdf-bar-fill" style="width:${pct}%"></div></div>
+        <div class="pdf-progress-bar-container">
+          <div class="pdf-progress-bar">
+            <div class="pdf-progress-bar-fill" style="width:${pct}%"></div>
+          </div>
+          <span class="pdf-progress-label">${tp ? `${cp}/${tp}` : '—'}</span>
+        </div>
       `;
       div.querySelector('.pdf-item').addEventListener('click', () => { window.open(`viewer.html?path=${encodeURIComponent(path)}`, '_blank'); });
       container.appendChild(div);
