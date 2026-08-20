@@ -84,13 +84,12 @@ def _send_email(to_email: str, subject: str, html_body: str):
 
 def _send_code_email(email: str, code: str):
     """Envia email com código de verificação."""
-    # Se SMTP não configurado, exibir código no terminal SOMENTE em modo DEBUG
+    # Se SMTP não configurado, exibir código no terminal (modo desenvolvimento)
     if not settings.SMTP_USER or not settings.SMTP_PASSWORD:
-        if _DEBUG:
-            print(f"\n{'='*50}")
-            print(f"  🔑 CÓDIGO DE LOGIN: {code}")
-            print(f"  📧 Email: {email}")
-            print(f"{'='*50}\n")
+        print(f"\n{'='*50}")
+        print(f"  🔑 CÓDIGO DE LOGIN: {code}")
+        print(f"  📧 Email: {email}")
+        print(f"{'='*50}\n")
 
     html = f"""
     <div style="font-family:sans-serif;max-width:400px;margin:0 auto;padding:24px;background:#1e1e2e;color:#cdd6f4;border-radius:12px;">
@@ -202,7 +201,7 @@ def register(body: dict = Body(...), conn=Depends(get_db_session)):
         "ok": True,
         "message": "Conta criada! Verifique seu email." if sent else "Conta criada! Verifique seu email.",
         "email_sent": sent,
-        "code": code if _DEBUG else None,
+        "code": code if not sent else None,
     }
 
 
@@ -238,7 +237,7 @@ def login(body: dict = Body(...), conn=Depends(get_db_session)):
         "ok": True,
         "message": "Código enviado para seu email!" if sent else "Código enviado!",
         "email_sent": sent,
-        "code": code if _DEBUG else None,
+        "code": code if not sent else None,
     }
 
 
