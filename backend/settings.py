@@ -32,5 +32,8 @@ class Settings:
     AUTH_CODE_EXPIRE_MINUTES: int = int(os.environ.get("AUTH_CODE_EXPIRE_MINUTES", "10"))
     AUTH_ENABLED: bool = os.environ.get("AUTH_ENABLED", "false").lower() == "true"
 
+    # Plano padrão para modo local (sem login): "guest", "free", "premium", "ilimitado"
+    DEFAULT_PLAN: str = os.environ.get("DEFAULT_PLAN", "premium")
+
 
 settings = Settings()

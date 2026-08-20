@@ -134,9 +134,11 @@ PLANS = {
 
 
 def get_plan(user):
-    """Retorna o plano do usuário (ou 'guest' se não autenticado)."""
+    """Retorna o plano do usuário (ou DEFAULT_PLAN das settings se não autenticado)."""
+    from settings import settings
+
     if not user:
-        return "guest"
+        return settings.DEFAULT_PLAN if settings.DEFAULT_PLAN in PLANS else "guest"
     plano = user.get("plano", "free") if isinstance(user, dict) else (user["plano"] if user else "free")
     # Verificar expiração do plano premium
     if plano == "premium" and user.get("plano_expira"):
