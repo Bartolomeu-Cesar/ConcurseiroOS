@@ -64,10 +64,15 @@ def get_metas(conn=Depends(get_db_session)):
     config_dict = dict(config) if config else {"meta_horas": 3.0, "meta_questoes": 30, "meta_flashcards": 10, "meta_paginas": 20}
     hoje_dict = dict(hoje) if hoje else {"horas_estudadas": 0, "questoes_resolvidas": 0, "flashcards_revisados": 0}
 
+    # Usar sessoes_estudo como fonte de verdade para horas (evita dessincronização)
+    horas_hoje = conn.execute(
+        "SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE data = ?", (today_str(),)
+    ).fetchone()[0]
+
     return {
         "config": config_dict,
         "progresso": {
-            "horas": hoje_dict.get("horas_estudadas", 0),
+            "horas": round(horas_hoje, 3),
             "questoes": hoje_dict.get("questoes_resolvidas", 0),
             "flashcards": hoje_dict.get("flashcards_revisados", 0)
         }
