@@ -53,6 +53,30 @@ _UPPER = r"A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇÑ"
 _SUBJ_CHARS = _UPPER + r"\s,/\-–—()0-9º°ª"
 
 
+# Preposições e artigos que ficam em minúscula no Title Case português
+_LOWERCASE_WORDS = {
+    "de", "da", "do", "das", "dos", "e", "em", "na", "no", "nas", "nos",
+    "a", "o", "as", "os", "ao", "aos", "à", "às", "com", "por", "para",
+    "pelo", "pela", "pelos", "pelas", "sem", "sob", "sobre", "entre",
+}
+
+
+def _smart_title_case(text: str) -> str:
+    """Converte ALL CAPS para Title Case respeitando preposições portuguesas."""
+    if not text:
+        return text
+    words = text.lower().split()
+    result = []
+    for i, word in enumerate(words):
+        if i == 0:
+            result.append(word.capitalize())
+        elif word in _LOWERCASE_WORDS:
+            result.append(word)
+        else:
+            result.append(word.capitalize())
+    return " ".join(result)
+
+
 def extract_text_from_pdf(pdf_path: str, start_page: int = 0) -> str:
     """Extract all text from a PDF file starting at a given page."""
     reader = PdfReader(pdf_path)
@@ -280,6 +304,9 @@ def _extract_subjects_from_block(text_block: str) -> list[dict]:
         # Normalize whitespace in name
         name_clean = re.sub(r"\s+", " ", name_clean).strip()
 
+        # Convert to proper Title Case (lowercase prepositions/articles)
+        name_clean = _smart_title_case(name_clean)
+
         # Split content into topics
         topics = split_topics(content)
 
@@ -295,7 +322,12 @@ def _extract_subjects_from_block(text_block: str) -> list[dict]:
 
 def _parse_cargo_name(cargo_line: str) -> tuple[str, str]:
     """
-    Parse a cargo line to extract cargo number and full name.
+    Parse a cargo line to extract cargo number and a CLEAN short name.
+    
+    Exemplos:
+    - 'CARGO 1: ANALISTA ... – ESPECIALIDADE: ADMINISTRAÇÃO' → ('1', 'Analista - Administração')
+    - 'CARGO 12: AUDITOR ... – ESPECIALIDADE: CONTROLE EXTERNO' → ('12', 'Auditor - Controle Externo')
+    - 'CARGO 16: TÉCNICO ... – ESPECIALIDADE: TÉCNICO-ADMINISTRATIVA' → ('16', 'Técnico - Técnico-Administrativa')
     """
     match = RE_CARGO.match(cargo_line.strip())
     if match:
@@ -304,8 +336,37 @@ def _parse_cargo_name(cargo_line: str) -> tuple[str, str]:
         name = re.sub(r"\s*[\n\r]+\s*", " ", name).strip()
         name = re.sub(r"\s+", " ", name)
         name = re.sub(r"\s*-\s*$", "", name)
-        return num, name
-    return "", cargo_line.strip()
+
+        # Extract short name: cargo type + especialidade
+        short_name = _simplify_cargo_name(name)
+        return num, short_name
+    return "", _smart_title_case(cargo_line.strip())
+
+
+def _simplify_cargo_name(full_name: str) -> str:
+    """Simplifica nome do cargo para formato curto."""
+    # Fix common PDF extraction issues (broken words)
+    full_name = re.sub(r"ANA\s+LISTA", "ANALISTA", full_name, flags=re.IGNORECASE)
+    full_name = re.sub(r"AN\s+ALISTA", "ANALISTA", full_name, flags=re.IGNORECASE)
+
+    # Try to extract ESPECIALIDADE
+    esp_match = re.search(r"ESPECIALIDADE\s*:\s*(.+?)(?:\s*$|\s*–)", full_name, re.IGNORECASE)
+    if esp_match:
+        especialidade = esp_match.group(1).strip().rstrip("–").rstrip("-").strip()
+    else:
+        especialidade = ""
+
+    # Extract cargo type
+    tipo_match = re.match(r"(ANALISTA|AUDITOR|T[ÉE]CNICO|PROCURADOR|DEFENSOR|DELEGADO|INVESTIGADOR|AGENTE|ESCRIV[ÃA]O|PERITO)", full_name, re.IGNORECASE)
+    tipo = tipo_match.group(1) if tipo_match else ""
+
+    if tipo and especialidade:
+        return f"{_smart_title_case(tipo)} - {_smart_title_case(especialidade)}"
+    elif tipo:
+        return _smart_title_case(tipo)
+    else:
+        clean = _smart_title_case(full_name)
+        return clean[:60] if len(clean) > 60 else clean
 
 
 def _extract_metadados(pdf_path: str) -> dict:
