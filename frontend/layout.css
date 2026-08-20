@@ -158,6 +158,7 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  width: calc(100% - 240px);
 }
 
 /* Top bar */
@@ -281,7 +282,7 @@
 .page-content {
   flex: 1;
   padding: 24px;
-  max-width: 1200px;
+  width: 100%;
 }
 
 /* Section title within content */
@@ -390,6 +391,7 @@
 
   .main-content {
     margin-left: 0;
+    width: 100%;
     padding-bottom: 72px; /* space for bottom nav */
   }
 
@@ -504,4 +506,20 @@ body {
 }
 .tab-content.active {
   display: block;
+  width: 100%;
+}
+
+/* Make panels stretch full width */
+.page-content .panel,
+.page-content .flash-panel,
+.page-content .flash-add-form,
+.tab-content .panel,
+.tab-content .flash-panel {
+  width: 100%;
+}
+
+/* Grid de cards responsivo — ocupa toda a largura */
+.tab-content .edital-form,
+.tab-content .metas-config {
+  width: 100%;
 }
