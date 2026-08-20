@@ -63,7 +63,7 @@ function showProfileMenu() {
     </div>
     <div style="border-top:1px solid #45475a;padding-top:8px;display:flex;flex-direction:column;gap:6px;">
       ${plan === 'free' || plan === 'guest' ? `<button onclick="showUpgradeModal()" style="background:#f9e2af;color:#1e1e2e;border:none;border-radius:6px;padding:8px;cursor:pointer;font-size:0.82rem;font-weight:600;">👑 Fazer Upgrade</button>` : ''}
-      <button onclick="window.location.href='/login.html'" style="background:#45475a;color:#cdd6f4;border:none;border-radius:6px;padding:8px;cursor:pointer;font-size:0.82rem;">✏️ Editar Perfil</button>
+      <button onclick="showEditProfileModal()" style="background:#45475a;color:#cdd6f4;border:none;border-radius:6px;padding:8px;cursor:pointer;font-size:0.82rem;">✏️ Editar Perfil</button>
       <button onclick="logout();document.getElementById('profile-menu')?.remove()" style="background:#f38ba8;color:#1e1e2e;border:none;border-radius:6px;padding:8px;cursor:pointer;font-size:0.82rem;font-weight:600;">🚪 Sair</button>
     </div>
   `;
@@ -219,6 +219,68 @@ export function updateAuthUI() {
     link.innerHTML = `${planInfo.icon} ${user?.nome || user?.email?.split('@')[0] || 'Perfil'}`;
   } else {
     link.textContent = '👤 Login';
+  }
+}
+
+export function showEditProfileModal() {
+  document.getElementById('profile-menu')?.remove();
+  const user = getUser();
+  const avatars = ['👤','👨‍💻','👩‍💻','🧑‍🎓','👨‍🎓','👩‍🎓','🦸','🧠','📚','⚖️','🔬','💼'];
+
+  const overlay = document.createElement('div');
+  overlay.id = 'edit-profile-modal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  overlay.innerHTML = `
+    <div style="background:#313244;border-radius:16px;padding:28px;max-width:400px;width:100%;">
+      <h3 style="color:#cba6f7;margin:0 0 16px;text-align:center;">✏️ Editar Perfil</h3>
+      <div style="margin-bottom:14px;">
+        <label style="font-size:0.8rem;color:#9399b2;display:block;margin-bottom:4px;">Nome</label>
+        <input id="edit-profile-nome" type="text" value="${user?.nome || ''}" style="width:100%;padding:10px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.9rem;">
+      </div>
+      <div style="margin-bottom:14px;">
+        <label style="font-size:0.8rem;color:#9399b2;display:block;margin-bottom:4px;">Avatar</label>
+        <div id="edit-profile-avatars" style="display:flex;flex-wrap:wrap;gap:6px;">
+          ${avatars.map(a => `<span onclick="document.getElementById('edit-profile-avatar-val').value='${a}';document.querySelectorAll('#edit-profile-avatars span').forEach(s=>s.style.border='2px solid transparent');this.style.border='2px solid #cba6f7'" style="font-size:1.5rem;cursor:pointer;padding:4px;border-radius:8px;border:2px solid ${a === (user?.avatar || '👤') ? '#cba6f7' : 'transparent'};">${a}</span>`).join('')}
+        </div>
+        <input type="hidden" id="edit-profile-avatar-val" value="${user?.avatar || '👤'}">
+      </div>
+      <div style="display:flex;gap:8px;margin-top:16px;">
+        <button onclick="document.getElementById('edit-profile-modal').remove()" style="flex:1;padding:10px;background:#45475a;color:#cdd6f4;border:none;border-radius:8px;cursor:pointer;">Cancelar</button>
+        <button onclick="saveProfile()" style="flex:1;padding:10px;background:#a6e3a1;color:#1e1e2e;border:none;border-radius:8px;font-weight:600;cursor:pointer;">💾 Salvar</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+}
+
+export async function saveProfile() {
+  const nome = document.getElementById('edit-profile-nome').value.trim();
+  const avatar = document.getElementById('edit-profile-avatar-val').value;
+  const token = getToken();
+  if (!token) return;
+
+  try {
+    const res = await fetch('/api/auth/profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ nome, avatar })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      // Atualizar localStorage
+      const user = getUser();
+      user.nome = data.nome;
+      user.avatar = data.avatar;
+      localStorage.setItem('auth_user', JSON.stringify(user));
+      document.getElementById('edit-profile-modal')?.remove();
+      updateAuthUI();
+      if (window.toast) window.toast('Perfil atualizado!', 'success');
+    } else {
+      if (window.toast) window.toast(data.detail || 'Erro ao salvar', 'error');
+    }
+  } catch(e) {
+    if (window.toast) window.toast('Erro de conexão', 'error');
   }
 }
 
