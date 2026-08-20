@@ -2,7 +2,7 @@ import random
 import re
 import tempfile
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile
 
 from constants import DEFAULT_EXAM_DURATION_MIN, DEFAULT_EXAM_QUESTIONS, DEFAULT_TIME_PER_QUESTION_SEC
 from database import get_db_session
@@ -301,6 +301,35 @@ def responder_questao(id: int, body: QuestaoResposta, conn=Depends(get_db_sessio
 
     conn.commit()
     return {"acertou": bool(acertou), "resposta_correta": questao[0]}
+
+
+@router.put("/api/questoes/{id}", summary="Editar questão")
+def update_questao(id: int, body: dict = Body(...), conn=Depends(get_db_session)):
+    """Atualiza campos de uma questão (materia, topico, enunciado, alternativas, resposta, explicacao, dificuldade, banca)."""
+    row = conn.execute("SELECT id FROM questoes WHERE id = ?", (id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Questão não encontrada")
+    
+    campos_permitidos = ["materia", "topico", "enunciado", "alternativa_a", "alternativa_b",
+                         "alternativa_c", "alternativa_d", "alternativa_e", "resposta_correta",
+                         "explicacao", "dificuldade", "banca"]
+    updates = []
+    params = []
+    for campo in campos_permitidos:
+        if campo in body:
+            updates.append(f"{campo} = ?")
+            params.append(body[campo])
+    
+    if not updates:
+        raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
+    
+    params.append(id)
+    conn.execute(f"UPDATE questoes SET {', '.join(updates)} WHERE id = ?", params)
+    conn.commit()
+    
+    updated = conn.execute("SELECT * FROM questoes WHERE id = ?", (id,)).fetchone()
+    log.info(f"Questão atualizada: id={id}")
+    return dict(updated)
 
 
 @router.delete("/api/questoes/{id}")
