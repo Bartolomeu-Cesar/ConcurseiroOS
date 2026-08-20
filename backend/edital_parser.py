@@ -501,17 +501,33 @@ def _extract_metadados(pdf_path: str) -> dict:
         metadados["jornada"] = jornada_match.group(1).strip()
 
     # === VAGAS POR CARGO (tabela) ===
-    # Pattern: "Cargo N: ... Total X" ou linhas com números de vagas
+    # Strategy 1: CEBRASPE - "Cargo N: ...\n– Especialidade: ... AC PcD PP Total"
+    # The total is the LAST number on the line
     for match in re.finditer(
-        r"Cargo\s+(\d+)\s*:.*?(?:Total|total)\s*(\d+)",
-        text_inicio, re.DOTALL
+        r"Cargo\s+(\d+)\s*:.*?\n.*?(\d+)\s*$",
+        text_inicio, re.MULTILINE
     ):
-        metadados["vagas"][match.group(1)] = match.group(2)
+        num, last_num = match.group(1), match.group(2)
+        if int(last_num) <= 500:
+            metadados["vagas"][num] = f"{last_num} + CR"
 
-    # Fallback: pattern "Cargo N: ... <numeros>" em linhas da tabela
+    # Strategy 2: FCC style - "A01\nCargo Name\n... \n2 - - - -"
     if not metadados["vagas"]:
-        for match in re.finditer(r"Cargo\s+(\d+).*?(\d+)\s*$", text_inicio, re.MULTILINE):
-            metadados["vagas"][match.group(1)] = match.group(2)
+        for match in re.finditer(
+            r"([A-Z]\d{2})\s*\n.*?\n.*?(\d+)\s+[\-\d]",
+            text_inicio, re.DOTALL
+        ):
+            code, total = match.group(1), match.group(2)
+            if int(total) <= 500:
+                metadados["vagas"][code] = f"{total} + CR"
+
+    # Strategy 3: General total vagas
+    if not metadados["vagas"]:
+        total_match = re.search(r"total\s+de\s+(\d+)\s+vagas", text_inicio, re.IGNORECASE)
+        if total_match:
+            metadados["vagas"]["total"] = total_match.group(1) + " + CR"
+        elif re.search(r"cadastro\s+(?:de\s+)?reserva", text_inicio, re.IGNORECASE):
+            metadados["vagas"]["total"] = "CR (Cadastro de Reserva)"
 
     # === INSCRIÇÕES (período) ===
     # Try cronograma format first: "Período de inscrições ... DD/MM/AAAA a DD/MM/AAAA"
