@@ -121,26 +121,55 @@ export async function loadAllSumulas() {
     if (tribunal) url += `tribunal=${encodeURIComponent(tribunal)}&`;
     if (tema) url += `tema=${encodeURIComponent(tema)}&`;
     const all = await fetch(url).then(r => r.json());
-    document.getElementById('sumula-count').textContent = `Total: ${all.length} súmula(s)`;
+    document.getElementById('sumula-count').textContent = `Total: ${all.length} súmula(s)${tribunal ? ' em ' + tribunal : ''}`;
     if (all.length === 0) {
       showEmpty('sumula-list', '⚖️', 'Nenhuma súmula cadastrada. Adicione súmulas do STF/STJ para revisar com repetição espaçada!');
     } else {
-      const html = all.map(s => {
-        const vinc = s.vinculante ? '🔴' : '';
-        const tema = s.tema ? `<span style="font-size:0.7rem;color:#89b4fa;margin-left:6px;">${s.tema}</span>` : '';
-        return `<div class="flash-list-item">
-          <span style="flex:1;color:#cdd6f4;font-size:0.82rem;">
-            <strong style="color:#cba6f7;">${s.tribunal} ${s.numero}</strong>${vinc}${tema}
-            — ${escapeHtml(s.enunciado.substring(0, 80))}${s.enunciado.length > 80 ? '...' : ''}
-          </span>
-          <button class="flash-list-edit" onclick="editSumula(${s.id})" title="Editar">✏️</button>
-          <button class="flash-list-delete" onclick="deleteSumula(${s.id})">🗑</button>
-        </div>`;
-      }).join('');
+      // Agrupar por tribunal
+      const grouped = {};
+      all.forEach(s => { const t = s.tribunal || 'Outros'; if (!grouped[t]) grouped[t] = []; grouped[t].push(s); });
+      let html = '';
+      if (!tribunal && Object.keys(grouped).length > 1) {
+        for (const [trib, items] of Object.entries(grouped).sort((a,b) => b[1].length - a[1].length)) {
+          const grpId = 'sumula-group-' + trib.replace(/[^a-zA-Z0-9]/g, '_');
+          const vincCount = items.filter(s => s.vinculante).length;
+          const vincLabel = vincCount > 0 ? ` · ${vincCount} vinculante${vincCount > 1 ? 's' : ''}` : '';
+          html += `<div style="margin-top:8px;">
+            <div onclick="toggleSumulaGroup('${grpId}')" style="font-size:0.8rem;font-weight:600;color:#cba6f7;padding:6px 10px;background:#45475a;border-radius:6px;margin-bottom:2px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;user-select:none;">
+              <span><span class="flash-chevron" id="chev-${grpId}">▶</span> 🏛️ ${trib} (${items.length}${vincLabel})</span>
+            </div>
+            <div id="${grpId}" style="display:none;">`;
+          html += items.map(s => renderSumulaItem(s)).join('');
+          html += '</div></div>';
+        }
+      } else {
+        html = all.map(s => renderSumulaItem(s)).join('');
+      }
       document.getElementById('sumula-list').innerHTML = html;
     }
     loadSumulaFilters();
   } catch (e) { toast('Erro ao carregar súmulas', 'error'); }
+}
+
+function renderSumulaItem(s) {
+  const vinc = s.vinculante ? ' 🔴' : '';
+  const temaLabel = s.tema ? `<span style="font-size:0.7rem;color:#89b4fa;margin-left:6px;">${s.tema}</span>` : '';
+  return `<div class="flash-list-item">
+    <span style="flex:1;color:#cdd6f4;font-size:0.82rem;">
+      <strong style="color:#cba6f7;">${s.tribunal} ${s.numero}</strong>${vinc}${temaLabel}
+      — ${escapeHtml(s.enunciado.substring(0, 80))}${s.enunciado.length > 80 ? '...' : ''}
+    </span>
+    <button class="flash-list-edit" onclick="editSumula(${s.id})" title="Editar">✏️</button>
+    <button class="flash-list-delete" onclick="deleteSumula(${s.id})">🗑</button>
+  </div>`;
+}
+
+export function toggleSumulaGroup(id) {
+  const el = document.getElementById(id);
+  const chev = document.getElementById('chev-' + id);
+  if (!el) return;
+  if (el.style.display === 'none') { el.style.display = 'block'; if (chev) chev.textContent = '▼'; }
+  else { el.style.display = 'none'; if (chev) chev.textContent = '▶'; }
 }
 
 async function loadSumulaFilters() {
