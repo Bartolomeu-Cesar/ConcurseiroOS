@@ -25,10 +25,9 @@ export async function load() {
       fetch(`${API}/api/tree`).then(r => r.json()),
       fetch(`${API}/api/progress-bulk`).then(r => r.json())
     ]);
-    if (!state.editalData || state.editalData.length === 0) {
-      try { state.editalData = await fetch('/api/edital').then(r => r.json()); }
-      catch (e) { }
-    }
+    // Always reload edital data for vinculo display
+    try { state.editalData = await fetch('/api/edital').then(r => r.json()); }
+    catch (e) { state.editalData = []; }
     document.getElementById('tree').innerHTML = '';
     renderNodes(tree, document.getElementById('tree'), bulk, '');
     if (tree.length === 0) {
@@ -302,8 +301,8 @@ export function initPdfs(deps) {
       restoreTimer();
     }
   });
-  window.addEventListener('focus', () => load());
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') load(); });
+  window.addEventListener('focus', () => { state.editalData = null; load(); });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { state.editalData = null; load(); } });
 
   load();
 }
