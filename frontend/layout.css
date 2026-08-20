@@ -636,17 +636,30 @@ body {
 }
 
 /* PDF progress bar inside card */
+.pdf-item {
+  flex-direction: column !important;
+  gap: 4px !important;
+}
+
+.pdf-item-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
 .pdf-progress-bar-container {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 12px 6px 34px;
+  width: 100%;
+  padding-left: 22px;
 }
 
 .pdf-progress-bar {
   flex: 1;
-  height: 6px;
-  background: #313244;
+  height: 5px;
+  background: #45475a;
   border-radius: 3px;
   overflow: hidden;
 }
