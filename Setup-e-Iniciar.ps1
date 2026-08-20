@@ -198,4 +198,13 @@ Start-Job -ScriptBlock {
 
 # Iniciar servidor com --reload
 Set-Location $BackendDir
+
+# === MODO TESTE (Auth habilitado) ===
+# Para testar login: Email teste@concurseiroos.com (código aparece no terminal)
+$env:AUTH_ENABLED = "true"
+$env:JWT_SECRET = "test-secret-concurseiroos-2026"
 & $pythonCmd -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+# === MODO PADRÃO (sem login, tudo liberado) ===
+# Descomente a linha abaixo e comente as 3 linhas acima para voltar ao normal
+# & $pythonCmd -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
