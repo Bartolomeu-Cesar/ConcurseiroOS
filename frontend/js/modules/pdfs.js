@@ -87,7 +87,7 @@ function renderNodes(nodes, container, bulk, prefix) {
       const prog = bulk[path];
       const tp = prog ? prog.total_pages : null;
       const cp = prog ? prog.current_page : 1;
-      const pct = tp ? Math.round(((cp - 1) / tp) * 100) : 0;
+      const pct = tp ? (cp >= tp ? 100 : Math.round((cp / tp) * 100)) : 0;
       const label = tp ? `pág. ${cp}/${tp} (${pct}%)` : 'não lido';
       const vinculado = state.editalData.find(e => e.pdf_link === path);
       const materiaTag = vinculado ? `<span class="pdf-materia-tag">${escapeHtml(vinculado.materia)}</span>` : '';
