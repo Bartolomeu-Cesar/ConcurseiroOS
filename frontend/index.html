@@ -95,7 +95,10 @@
             <div class="meta-dot" id="meta-dot-f"></div>
           </div>
           <button class="theme-btn" onclick="toggleTheme()" title="Alternar tema" aria-label="Alternar tema claro/escuro">🌓</button>
-          <div class="user-avatar" id="auth-nav-link" onclick="handleAuthNav()" title="Perfil">👤</div>
+          <div class="user-avatar" id="user-avatar-btn" onclick="handleAuthNav()" title="Perfil">
+            <span id="user-avatar-initials">👤</span>
+          </div>
+          <span class="user-name" id="user-name-display"></span>
         </div>
       </header>
 
@@ -487,7 +490,28 @@
         const btn = document.querySelector(`[data-nav="${saved}"]`);
         if (btn) navigateTo(saved, btn);
       }
+      // Load user info for avatar
+      loadUserAvatar();
     });
+
+    function loadUserAvatar() {
+      fetch('/api/auth/me')
+        .then(r => r.json())
+        .then(user => {
+          const nameEl = document.getElementById('user-name-display');
+          const avatarEl = document.getElementById('user-avatar-initials');
+          const nome = user.nome || user.email || 'Estudante';
+          // Show first name
+          const firstName = nome.split(' ')[0];
+          if (nameEl) nameEl.textContent = firstName;
+          // Show initials in avatar circle
+          if (avatarEl) {
+            const initials = nome.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+            avatarEl.textContent = initials || '👤';
+          }
+        })
+        .catch(() => {});
+    }
 
     // Global search
     function globalSearch(query) {
