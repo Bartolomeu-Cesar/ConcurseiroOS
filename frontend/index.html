@@ -115,6 +115,27 @@
 
   <!-- Tab: Ciclo de Estudos -->
   <div id="tab-ciclo" class="tab-content" role="tabpanel">
+    <!-- Card: Resumo de Ontem -->
+    <div class="panel" id="ciclo-ontem-panel" style="display:none;border-left:4px solid #fab387;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h2 style="margin:0;">📅 Ontem — <span id="ciclo-ontem-dia"></span></h2>
+        <span id="ciclo-ontem-score" style="font-size:1.2rem;font-weight:700;"></span>
+      </div>
+      <p id="ciclo-ontem-msg" style="font-size:0.88rem;color:#a6adc8;margin-bottom:12px;"></p>
+      <div id="ciclo-ontem-stats" style="display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap;">
+        <div style="background:#1e1e2e;border-radius:8px;padding:8px 14px;font-size:0.82rem;">
+          ⏱ <strong id="ciclo-ontem-horas">0</strong>/<span id="ciclo-ontem-plan">0</span>h
+        </div>
+        <div style="background:#1e1e2e;border-radius:8px;padding:8px 14px;font-size:0.82rem;">
+          ❓ <strong id="ciclo-ontem-quest">0</strong> questões
+        </div>
+        <div style="background:#1e1e2e;border-radius:8px;padding:8px 14px;font-size:0.82rem;">
+          🧠 <strong id="ciclo-ontem-flash">0</strong> flashcards
+        </div>
+      </div>
+      <div id="ciclo-ontem-materias"></div>
+    </div>
+
     <div class="panel">
       <h2>🔄 Ciclo de Estudos</h2>
       <p style="font-size:0.85rem;color:#9399b2;margin-bottom:12px;">Estudo intercalado: o sistema indica a próxima matéria (menor progresso relativo). Inicie o timer e ao parar, as horas são registradas automaticamente.</p>
@@ -482,6 +503,56 @@
           alert(`🔍 ${results.length} resultado(s):\n\n${text}`);
         });
     }
+
+    // Load ciclo "ontem" card
+    function loadCicloOntem() {
+      fetch('/api/ciclo/ontem')
+        .then(r => r.json())
+        .then(data => {
+          const panel = document.getElementById('ciclo-ontem-panel');
+          if (!panel) return;
+          if (!data.teve_plano && !data.estudou) { panel.style.display = 'none'; return; }
+
+          panel.style.display = 'block';
+          document.getElementById('ciclo-ontem-dia').textContent = data.dia_semana;
+          document.getElementById('ciclo-ontem-msg').textContent = data.mensagem;
+          document.getElementById('ciclo-ontem-horas').textContent = data.total_estudado;
+          document.getElementById('ciclo-ontem-plan').textContent = data.total_planejado;
+          document.getElementById('ciclo-ontem-quest').textContent = data.questoes;
+          document.getElementById('ciclo-ontem-flash').textContent = data.flashcards;
+
+          const scoreEl = document.getElementById('ciclo-ontem-score');
+          scoreEl.textContent = data.score_dia + '%';
+          scoreEl.style.color = data.score_dia >= 80 ? '#a6e3a1' : data.score_dia >= 50 ? '#fab387' : '#f38ba8';
+          panel.style.borderLeftColor = data.score_dia >= 80 ? '#a6e3a1' : data.score_dia >= 50 ? '#fab387' : '#f38ba8';
+
+          const materiasEl = document.getElementById('ciclo-ontem-materias');
+          if (data.comparativo.length > 0) {
+            materiasEl.innerHTML = data.comparativo.map(m => `
+              <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #313244;">
+                <span>${m.status}</span>
+                <span style="flex:1;font-size:0.85rem;font-weight:500;">${m.materia}</span>
+                <span style="font-size:0.78rem;color:#9399b2;">${m.horas_estudadas}/${m.horas_planejadas}h</span>
+                <div style="width:60px;height:5px;background:#45475a;border-radius:3px;overflow:hidden;">
+                  <div style="height:100%;width:${m.pct_cumprido}%;background:${m.pct_cumprido >= 80 ? '#a6e3a1' : m.pct_cumprido >= 40 ? '#fab387' : '#f38ba8'};border-radius:3px;"></div>
+                </div>
+              </div>
+            `).join('');
+          } else {
+            materiasEl.innerHTML = '';
+          }
+          if (data.extras.length > 0) {
+            materiasEl.innerHTML += '<div style="margin-top:8px;font-size:0.78rem;color:#89b4fa;">📌 Extra: ' +
+              data.extras.map(e => `${e.materia} (${e.horas_estudadas}h)`).join(', ') + '</div>';
+          }
+        })
+        .catch(() => {});
+    }
+
+    // Load ontem when ciclo tab is shown
+    const _origNav = navigateTo;
+    navigateTo = function(tabId, btn) { _origNav(tabId, btn); if (tabId === 'tab-ciclo') loadCicloOntem(); };
+    if (localStorage.getItem('concurseiro_active_tab') === 'tab-ciclo') setTimeout(loadCicloOntem, 500);
   </script>
 
   <script src="/sidebar.js"></script>

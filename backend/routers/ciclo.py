@@ -329,3 +329,107 @@ def importar_ciclo(file: UploadFile = File(...), conn=Depends(get_db_session), u
     conn.commit()
     log.info(f"Ciclo imported: {count} items")
     return {"ok": True, "importados": count}
+
+
+# ============================================================
+# RESUMO DO DIA ANTERIOR
+# ============================================================
+
+@router.get("/api/ciclo/ontem", summary="Resumo do dia anterior",
+            description="Retorna o que deveria ter sido estudado ontem (planejador) vs o que foi realmente estudado")
+def ciclo_ontem(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Compara o planejado vs realizado do dia anterior para feedback."""
+    from datetime import timedelta
+
+    ontem = (date.today() - timedelta(days=1))
+    ontem_str = ontem.isoformat()
+    dia_semana_ontem = ontem.weekday()  # 0=Seg, 6=Dom
+
+    # O que estava planejado para ontem (do planejador_semanal)
+    planejado = conn.execute("""
+        SELECT materia, horas FROM planejador_semanal
+        WHERE dia_semana = ? AND user_id = ?
+        ORDER BY id
+    """, (dia_semana_ontem, user_id)).fetchall()
+
+    materias_planejadas = [{"materia": r[0], "horas_planejadas": r[1]} for r in planejado]
+    total_planejado = sum(r[1] for r in planejado)
+
+    # O que foi realmente estudado ontem
+    estudado = conn.execute("""
+        SELECT materia, SUM(horas) as horas
+        FROM sessoes_estudo
+        WHERE data = ? AND user_id = ?
+        GROUP BY materia
+    """, (ontem_str, user_id)).fetchall()
+
+    estudado_map = {r[0]: round(r[1], 2) for r in estudado}
+    total_estudado = sum(estudado_map.values())
+
+    # Questões resolvidas ontem
+    questoes_ontem = conn.execute(
+        "SELECT COUNT(*) FROM questoes_respostas WHERE data = ? AND user_id = ?",
+        (ontem_str, user_id)
+    ).fetchone()[0]
+
+    # Flashcards revisados ontem
+    streak_ontem = conn.execute(
+        "SELECT flashcards_revisados FROM streaks WHERE data = ? AND user_id = ?",
+        (ontem_str, user_id)
+    ).fetchone()
+    flashcards_ontem = streak_ontem[0] if streak_ontem else 0
+
+    # Montar comparativo por matéria
+    comparativo = []
+    for mp in materias_planejadas:
+        mat = mp["materia"]
+        horas_real = estudado_map.pop(mat, 0)
+        pct = round(horas_real / mp["horas_planejadas"] * 100) if mp["horas_planejadas"] > 0 else 0
+        status = "✅" if pct >= 80 else "⚠️" if pct >= 40 else "❌"
+        comparativo.append({
+            "materia": mat,
+            "horas_planejadas": mp["horas_planejadas"],
+            "horas_estudadas": round(horas_real, 2),
+            "pct_cumprido": min(pct, 100),
+            "status": status
+        })
+
+    # Matérias estudadas fora do plano
+    extras = []
+    for mat, horas in estudado_map.items():
+        extras.append({"materia": mat, "horas_estudadas": round(horas, 2)})
+
+    # Score geral do dia
+    if total_planejado > 0:
+        score_dia = min(100, round(total_estudado / total_planejado * 100))
+    else:
+        score_dia = 100 if total_estudado > 0 else 0
+
+    # Mensagem motivacional
+    if score_dia >= 90:
+        mensagem = "🏆 Excelente! Dia quase perfeito."
+    elif score_dia >= 70:
+        mensagem = "👏 Bom trabalho! Continue assim."
+    elif score_dia >= 40:
+        mensagem = "⚠️ Dia parcial. Tente compensar hoje."
+    elif total_estudado > 0:
+        mensagem = "📖 Estudou pouco ontem. Hoje é dia de recuperar!"
+    else:
+        mensagem = "❌ Não estudou ontem. Não desanime — comece agora!"
+
+    nomes_dias = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
+
+    return {
+        "data": ontem_str,
+        "dia_semana": nomes_dias[dia_semana_ontem],
+        "score_dia": score_dia,
+        "mensagem": mensagem,
+        "total_planejado": round(total_planejado, 1),
+        "total_estudado": round(total_estudado, 1),
+        "questoes": questoes_ontem,
+        "flashcards": flashcards_ontem,
+        "comparativo": comparativo,
+        "extras": extras,
+        "teve_plano": len(materias_planejadas) > 0,
+        "estudou": total_estudado > 0
+    }
