@@ -308,6 +308,59 @@ def _parse_cargo_name(cargo_line: str) -> tuple[str, str]:
     return "", cargo_line.strip()
 
 
+def _extract_metadados(pdf_path: str) -> dict:
+    """Extrai metadados do concurso: órgão, banca, remuneração, jornada, vagas."""
+    reader = PdfReader(pdf_path)
+    text = ""
+    for i in range(min(10, len(reader.pages))):
+        page_text = reader.pages[i].extract_text() or ""
+        text += unicodedata.normalize("NFC", page_text) + "\n"
+
+    metadados = {"orgao": "", "banca": "", "remuneracao": "", "jornada": "", "vagas": {}, "escolaridade": ""}
+
+    # Órgão
+    orgao_match = re.search(
+        r"(TRIBUNAL\s+DE\s+CONTAS[^(\n]*|POL[ÍI]CIA\s+CIVIL[^(\n]*|"
+        r"MINIST[ÉE]RIO\s+P[ÚU]BLICO[^(\n]*|DEFENSORIA\s+P[ÚU]BLICA[^(\n]*|"
+        r"PROCURADORIA[^(\n]*|SECRETARIA[^(\n]*|PREFEITURA[^(\n]*)",
+        text, re.IGNORECASE
+    )
+    if orgao_match:
+        metadados["orgao"] = orgao_match.group(1).strip()[:100]
+
+    # Banca
+    banca_match = re.search(
+        r"(Cebraspe|CEBRASPE|CESPE|FCC|FGV|VUNESP|IBFC|AOCP|IADES|IDECAN|FUNDEP|CONSULPLAN)",
+        text, re.IGNORECASE
+    )
+    if banca_match:
+        metadados["banca"] = banca_match.group(1).strip()
+
+    # Remuneração
+    remuneracao_match = re.search(r"REMUNERA[ÇC][ÃA]O\s*:?\s*R?\$?\s*([\d.,]+)", text, re.IGNORECASE)
+    if remuneracao_match:
+        metadados["remuneracao"] = f"R$ {remuneracao_match.group(1)}"
+
+    # Jornada
+    jornada_match = re.search(r"JORNADA\s+DE\s+TRABALHO\s*:?\s*(\d+\s*horas?\s*semanais?)", text, re.IGNORECASE)
+    if jornada_match:
+        metadados["jornada"] = jornada_match.group(1).strip()
+
+    # Vagas por cargo
+    for match in re.finditer(r"Cargo\s+(\d+)\s*:.+?(\d+)\s*$", text, re.MULTILINE):
+        metadados["vagas"][match.group(1)] = match.group(2)
+
+    # Escolaridade
+    if "NÍVEL SUPERIOR" in text.upper() and "NÍVEL MÉDIO" in text.upper():
+        metadados["escolaridade"] = "Nível Superior e Médio"
+    elif "NÍVEL SUPERIOR" in text.upper():
+        metadados["escolaridade"] = "Nível Superior"
+    elif "NÍVEL MÉDIO" in text.upper():
+        metadados["escolaridade"] = "Nível Médio"
+
+    return metadados
+
+
 def parse_edital_pdf(pdf_path: str) -> dict:
     """
     Main parser function. Reads a PDF edital and extracts structured
@@ -485,6 +538,7 @@ def parse_edital_pdf(pdf_path: str) -> dict:
         "total_cargos": len(cargos),
         "total_materias": len(total_materias_set),
         "total_topicos": total_topicos,
+        "metadados": _extract_metadados(pdf_path),
         "conhecimentos_gerais": [
             {"disciplina": s["disciplina"], "topicos": s["topicos"], "exceto_cargos": s["exceto_cargos"]}
             for s in conhecimentos_gerais

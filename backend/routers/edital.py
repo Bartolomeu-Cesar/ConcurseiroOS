@@ -378,7 +378,7 @@ async def importar_edital_pdf_v2(
         ]
 
     if not confirmar:
-        # Preview mode: return structured data without importing
+        # Preview mode: return cargos + disciplinas + metadados
         preview = {
             "edital_nome": nome,
             "total_cargos": len(cargos_to_import),
@@ -386,35 +386,28 @@ async def importar_edital_pdf_v2(
             "total_topicos": sum(
                 len(t) for c in cargos_to_import for m in c["materias"] for t in [m["topicos"]]
             ),
+            "metadados": result.get("metadados", {}),
             "conhecimentos_gerais": [
-                {
-                    "disciplina": s["disciplina"],
-                    "total_topicos": len(s["topicos"]),
-                    "exceto_cargos": s["exceto_cargos"]
-                }
-                for s in result["conhecimentos_gerais"]
+                {"disciplina": s["disciplina"], "total_topicos": len(s["topicos"])}
+                for s in result.get("conhecimentos_gerais", [])
             ],
             "cargos": [
                 {
-                    "cargo": f"CARGO {c['cargo_numero']}: {c['cargo_nome']}",
-                    "materias": [
-                        {
-                            "materia": m["materia"],
-                            "topicos": m["topicos"]
-                        }
-                        for m in c["materias"]
-                    ]
+                    "cargo_numero": c["cargo_numero"],
+                    "cargo": c["cargo_nome"],
+                    "materias": [m["materia"] for m in c["materias"]],
+                    "total_topicos": sum(len(m["topicos"]) for m in c["materias"])
                 }
                 for c in cargos_to_import
             ]
         }
         return preview
 
-    # Import mode: save to database
+    # Import mode: salvar cada tópico individual (mesmo padrão do PC-MA/TCE-MA existentes)
     count = 0
     cargos_importados = []
     for cargo in cargos_to_import:
-        cargo_display = f"CARGO {cargo['cargo_numero']}: {cargo['cargo_nome']}"
+        cargo_display = cargo["cargo_nome"]
         cargo_count = 0
         for materia in cargo["materias"]:
             for topico in materia["topicos"]:
@@ -425,6 +418,28 @@ async def importar_edital_pdf_v2(
                 count += 1
                 cargo_count += 1
         cargos_importados.append({"cargo": cargo_display, "topicos_importados": cargo_count})
+
+    # Salvar metadados do concurso em edital_info (por cargo)
+    metadados = result.get("metadados", {})
+    if metadados:
+        for cargo in cargos_to_import:
+            cargo_nome = cargo["cargo_nome"]
+            existing = conn.execute(
+                "SELECT id FROM edital_info WHERE edital_nome = ? AND cargo = ? AND user_id = ?",
+                (nome, cargo_nome, user_id)
+            ).fetchone()
+            if not existing:
+                conn.execute("""
+                    INSERT INTO edital_info (edital_nome, cargo, orgao, banca, vagas, subsidio, user_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    nome, cargo_nome,
+                    metadados.get("orgao", ""),
+                    metadados.get("banca", ""),
+                    metadados.get("vagas", {}).get(cargo.get("cargo_numero", ""), ""),
+                    metadados.get("remuneracao", ""),
+                    user_id
+                ))
 
     conn.commit()
     log.info(f"Edital PDF v2 imported: {nome} - {count} tópicos, {len(cargos_importados)} cargos")
