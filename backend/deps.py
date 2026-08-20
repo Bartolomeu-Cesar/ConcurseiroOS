@@ -10,9 +10,34 @@ DEFAULT_USER_ID = 1
 async def get_user_id(authorization: str = Header(None)) -> int:
     """Extrai user_id do token JWT.
 
-    - Se AUTH_ENABLED=false → retorna DEFAULT_USER_ID (modo single-user)
-    - Se AUTH_ENABLED=true e token válido → retorna user_id do token
-    - Se AUTH_ENABLED=true e sem token → HTTPException 401
+    Comportamento:
+    - AUTH_ENABLED=false → sempre retorna DEFAULT_USER_ID (modo single-user)
+    - AUTH_ENABLED=true + token válido → retorna user_id do token
+    - AUTH_ENABLED=true + sem token → retorna DEFAULT_USER_ID (permite acesso guest)
+    - AUTH_ENABLED=true + token inválido/expirado → retorna DEFAULT_USER_ID
+
+    Nota: A proteção real de endpoints sensíveis deve usar get_authenticated_user_id()
+    """
+    if not settings.AUTH_ENABLED:
+        return DEFAULT_USER_ID
+
+    # Se não tem token, retorna default (guest mode)
+    if not authorization or not authorization.startswith("Bearer "):
+        return DEFAULT_USER_ID
+
+    token = authorization.replace("Bearer ", "")
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        return int(payload["sub"])
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError, KeyError, ValueError):
+        # Token inválido = guest
+        return DEFAULT_USER_ID
+
+
+async def get_authenticated_user_id(authorization: str = Header(None)) -> int:
+    """Versão estrita: EXIGE autenticação quando AUTH_ENABLED=true.
+
+    Usar em endpoints sensíveis (backup, upgrade, etc.)
     """
     if not settings.AUTH_ENABLED:
         return DEFAULT_USER_ID
@@ -24,5 +49,7 @@ async def get_user_id(authorization: str = Header(None)) -> int:
     try:
         payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
         return int(payload["sub"])
-    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError, KeyError, ValueError):
-        raise HTTPException(status_code=401, detail="Token inválido ou expirado")
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expirado")
+    except (jwt.InvalidTokenError, KeyError, ValueError):
+        raise HTTPException(status_code=401, detail="Token inválido")

@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from backup import create_backup, list_backups, restore_backup
 from database import get_db_session, rebuild_search_index
-from deps import get_user_id
+from deps import get_user_id, get_authenticated_user_id
 from logger import log
 from models import HealthResponse, OkResponse
 from settings import settings
