@@ -28,6 +28,17 @@ def get_dashboard(conn=Depends(get_db_session)):
     # Total de horas
     total_horas = conn.execute("SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo").fetchone()[0]
 
+    # Horas por tipo de atividade (estudo direto, questões, simulados, ciclo)
+    horas_por_tipo = conn.execute("""
+        SELECT tipo, COALESCE(SUM(horas), 0) as total
+        FROM sessoes_estudo GROUP BY tipo
+    """).fetchall()
+    horas_tipo_map = {r[0]: round(r[1], 1) for r in horas_por_tipo}
+    horas_estudo = round(
+        horas_tipo_map.get("edital", 0) + horas_tipo_map.get("ciclo", 0) + horas_tipo_map.get("timer", 0), 1
+    )
+    horas_questoes = round(horas_tipo_map.get("questoes", 0) + horas_tipo_map.get("simulado", 0), 1)
+
     # Progresso do edital
     edital_total = conn.execute("SELECT COUNT(*) FROM edital").fetchone()[0]
     edital_concluido = conn.execute("SELECT COUNT(*) FROM edital WHERE status = 'Concluído'").fetchone()[0]
@@ -69,6 +80,8 @@ def get_dashboard(conn=Depends(get_db_session)):
     return {
         "horas_por_dia": [dict(r) for r in horas_dia],
         "total_horas": round(total_horas, 1),
+        "horas_estudo": horas_estudo,
+        "horas_questoes": horas_questoes,
         "edital": {"total": edital_total, "concluido": edital_concluido},
         "questoes": {
             "total": questoes_total,

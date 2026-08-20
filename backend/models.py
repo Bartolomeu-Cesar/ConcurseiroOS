@@ -325,6 +325,8 @@ class StreakResponse(BaseModel):
 class DashboardResponse(BaseModel):
     horas_por_dia: list
     total_horas: float
+    horas_estudo: float = 0
+    horas_questoes: float = 0
     edital: dict
     questoes: dict
     acertos_por_dia: list
