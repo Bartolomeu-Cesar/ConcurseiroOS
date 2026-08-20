@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 
 from database import get_db_session
+from deps import get_user_id
 from logger import log
 from utils import calculate_streak, paginate, today_str
 
@@ -16,31 +17,31 @@ router = APIRouter(prefix="", tags=["Analytics"])
 
 
 @router.get("/api/relatorio-semanal", summary="Relatório semanal")
-def relatorio_semanal(conn=Depends(get_db_session)):
+def relatorio_semanal(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     inicio_semana = (date.today() - timedelta(days=date.today().weekday())).isoformat()
 
     horas = conn.execute(
-        "SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE data >= ?", (inicio_semana,)
+        "SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE data >= ? AND user_id = ?", (inicio_semana, user_id)
     ).fetchone()[0]
 
     questoes = conn.execute(
-        "SELECT COUNT(*) as total, SUM(acertou) as acertos FROM questoes_respostas WHERE data >= ?",
-        (inicio_semana,)
+        "SELECT COUNT(*) as total, SUM(acertou) as acertos FROM questoes_respostas WHERE data >= ? AND user_id = ?",
+        (inicio_semana, user_id)
     ).fetchone()
 
     materia_fraca = conn.execute("""
         SELECT q.materia, COUNT(*) as total, SUM(qr.acertou) as acertos,
                ROUND(CAST(SUM(qr.acertou) AS FLOAT) / COUNT(*) * 100, 1) as pct
         FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id
-        WHERE qr.data >= ?
+        WHERE qr.data >= ? AND qr.user_id = ?
         GROUP BY q.materia HAVING total >= 3
         ORDER BY pct ASC LIMIT 3
-    """, (inicio_semana,)).fetchall()
+    """, (inicio_semana, user_id)).fetchall()
 
     dias = conn.execute("""
         SELECT COUNT(DISTINCT data) FROM streaks
-        WHERE data >= ? AND (horas_estudadas > 0 OR questoes_resolvidas > 0)
-    """, (inicio_semana,)).fetchone()[0]
+        WHERE data >= ? AND (horas_estudadas > 0 OR questoes_resolvidas > 0) AND user_id = ?
+    """, (inicio_semana, user_id)).fetchone()[0]
 
     return {
         "periodo": f"{inicio_semana} a {today_str()}",
@@ -55,18 +56,18 @@ def relatorio_semanal(conn=Depends(get_db_session)):
 
 
 @router.get("/api/resumo-diario")
-def resumo_diario(conn=Depends(get_db_session)):
-    hoje = conn.execute("SELECT * FROM streaks WHERE data = ?", (today_str(),)).fetchone()
-    sessoes = conn.execute("SELECT materia, SUM(horas) FROM sessoes_estudo WHERE data = ? GROUP BY materia", (today_str(),)).fetchall()
+def resumo_diario(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    hoje = conn.execute("SELECT * FROM streaks WHERE data = ? AND user_id = ?", (today_str(), user_id)).fetchone()
+    sessoes = conn.execute("SELECT materia, SUM(horas) FROM sessoes_estudo WHERE data = ? AND user_id = ? GROUP BY materia", (today_str(), user_id)).fetchall()
     q_hoje = conn.execute("""
         SELECT q.materia, COUNT(*) as total, SUM(qr.acertou) as acertos
         FROM questoes_respostas qr JOIN questoes q ON q.id=qr.questao_id
-        WHERE qr.data = ? GROUP BY q.materia
-    """, (today_str(),)).fetchall()
+        WHERE qr.data = ? AND qr.user_id = ? GROUP BY q.materia
+    """, (today_str(), user_id)).fetchall()
     menos_estudada = conn.execute("""
         SELECT materia, SUM(horas_estudadas) as h FROM edital
-        WHERE status != 'Concluído' GROUP BY materia ORDER BY h ASC LIMIT 3
-    """).fetchall()
+        WHERE status != 'Concluído' AND user_id = ? GROUP BY materia ORDER BY h ASC LIMIT 3
+    """, (user_id,)).fetchall()
 
     return {
         "data": today_str(),
@@ -81,21 +82,23 @@ def resumo_diario(conn=Depends(get_db_session)):
 
 
 @router.get("/api/pratica-deliberada")
-def pratica_deliberada(conn=Depends(get_db_session)):
+def pratica_deliberada(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     materias = conn.execute("""
         SELECT q.materia, COUNT(*) as total_questoes, SUM(qr.acertou) as acertos,
                ROUND(CAST(SUM(qr.acertou) AS FLOAT) / COUNT(*) * 100, 1) as percentual
         FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id
+        WHERE qr.user_id = ?
         GROUP BY q.materia ORDER BY percentual ASC
-    """).fetchall()
+    """, (user_id,)).fetchall()
 
     nao_estudadas = conn.execute("""
         SELECT DISTINCT materia FROM questoes
-        WHERE materia NOT IN (
+        WHERE user_id = ? AND materia NOT IN (
             SELECT DISTINCT q.materia FROM questoes_respostas qr
             JOIN questoes q ON q.id = qr.questao_id
+            WHERE qr.user_id = ?
         )
-    """).fetchall()
+    """, (user_id, user_id)).fetchall()
 
     sugestoes = []
     for m in materias:
@@ -113,14 +116,14 @@ def pratica_deliberada(conn=Depends(get_db_session)):
 
 
 @router.get("/api/radar")
-def get_radar(edital_nome: str = "", cargo: str = "", conn=Depends(get_db_session)):
+def get_radar(edital_nome: str = "", cargo: str = "", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     query = """
         SELECT materia, COUNT(*) as total,
                SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) as concluidos,
                SUM(horas_estudadas) as horas
-        FROM edital WHERE 1=1
+        FROM edital WHERE user_id = ?
     """
-    params = []
+    params = [user_id]
     if edital_nome:
         query += " AND edital_nome = ?"
         params.append(edital_nome)
@@ -133,8 +136,9 @@ def get_radar(edital_nome: str = "", cargo: str = "", conn=Depends(get_db_sessio
     questoes_por_mat = conn.execute("""
         SELECT q.materia, COUNT(*) as total, SUM(qr.acertou) as acertos
         FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id
+        WHERE qr.user_id = ?
         GROUP BY q.materia
-    """).fetchall()
+    """, (user_id,)).fetchall()
     q_map = {r[0]: {"total": r[1], "acertos": r[2]} for r in questoes_por_mat}
 
     radar_data = []
@@ -154,12 +158,12 @@ def get_radar(edital_nome: str = "", cargo: str = "", conn=Depends(get_db_sessio
 
 
 @router.get("/api/heatmap")
-def get_heatmap(conn=Depends(get_db_session)):
+def get_heatmap(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     inicio = (date.today() - timedelta(days=365)).isoformat()
     rows = conn.execute("""
         SELECT data, horas_estudadas, questoes_resolvidas, flashcards_revisados
-        FROM streaks WHERE data >= ? ORDER BY data
-    """, (inicio,)).fetchall()
+        FROM streaks WHERE data >= ? AND user_id = ? ORDER BY data
+    """, (inicio, user_id)).fetchall()
 
     result = []
     for r in rows:
@@ -172,9 +176,9 @@ def get_heatmap(conn=Depends(get_db_session)):
 
 
 @router.get("/api/projecao-nota")
-def projecao_nota(edital_nome: str = "", cargo: str = "", conn=Depends(get_db_session)):
-    query = "SELECT DISTINCT materia FROM edital WHERE 1=1"
-    params = []
+def projecao_nota(edital_nome: str = "", cargo: str = "", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    query = "SELECT DISTINCT materia FROM edital WHERE user_id = ?"
+    params = [user_id]
     if edital_nome:
         query += " AND edital_nome = ?"
         params.append(edital_nome)
@@ -189,8 +193,8 @@ def projecao_nota(edital_nome: str = "", cargo: str = "", conn=Depends(get_db_se
     for mat in materias:
         q = conn.execute("""
             SELECT COUNT(*) as total, SUM(acertou) as acertos
-            FROM questoes_respostas qr JOIN questoes q ON q.id=qr.questao_id WHERE q.materia = ?
-        """, (mat,)).fetchone()
+            FROM questoes_respostas qr JOIN questoes q ON q.id=qr.questao_id WHERE q.materia = ? AND qr.user_id = ?
+        """, (mat, user_id)).fetchone()
         total_q, acertos = q[0] or 0, q[1] or 0
         pct = (acertos / total_q * 100) if total_q > 0 else 50
         total_pontos += pct
@@ -207,10 +211,10 @@ def projecao_nota(edital_nome: str = "", cargo: str = "", conn=Depends(get_db_se
 
 
 @router.get("/api/previsao-aprovacao")
-def previsao_aprovacao(edital_nome: str = "", cargo: str = "", conn=Depends(get_db_session)):
-    query_base = "SELECT COUNT(*) FROM edital WHERE 1=1"
-    query_done = "SELECT COUNT(*) FROM edital WHERE status = 'Concluído'"
-    params = []
+def previsao_aprovacao(edital_nome: str = "", cargo: str = "", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    query_base = "SELECT COUNT(*) FROM edital WHERE user_id = ?"
+    query_done = "SELECT COUNT(*) FROM edital WHERE status = 'Concluído' AND user_id = ?"
+    params = [user_id]
     if edital_nome:
         query_base += " AND edital_nome = ?"
         query_done += " AND edital_nome = ?"
@@ -222,9 +226,9 @@ def previsao_aprovacao(edital_nome: str = "", cargo: str = "", conn=Depends(get_
 
     total_topicos = conn.execute(query_base, params).fetchone()[0]
     topicos_concluidos = conn.execute(query_done, params).fetchone()[0]
-    q_total = conn.execute("SELECT COUNT(*) FROM questoes_respostas").fetchone()[0]
-    q_acertos = conn.execute("SELECT COUNT(*) FROM questoes_respostas WHERE acertou = 1").fetchone()[0]
-    horas_total = conn.execute("SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo").fetchone()[0]
+    q_total = conn.execute("SELECT COUNT(*) FROM questoes_respostas WHERE user_id = ?", (user_id,)).fetchone()[0]
+    q_acertos = conn.execute("SELECT COUNT(*) FROM questoes_respostas WHERE acertou = 1 AND user_id = ?", (user_id,)).fetchone()[0]
+    horas_total = conn.execute("SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE user_id = ?", (user_id,)).fetchone()[0]
 
     pct_edital = (topicos_concluidos / total_topicos * 100) if total_topicos > 0 else 0
     pct_questoes = (q_acertos / q_total * 100) if q_total > 0 else 0
@@ -253,10 +257,10 @@ def previsao_aprovacao(edital_nome: str = "", cargo: str = "", conn=Depends(get_
 
 
 @router.get("/api/previsao-data-aprovacao")
-def previsao_data_aprovacao(edital_nome: str = "", cargo: str = "", conn=Depends(get_db_session)):
+def previsao_data_aprovacao(edital_nome: str = "", cargo: str = "", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     try:
-        query = "SELECT COUNT(*) FROM edital WHERE status != 'Concluído'"
-        params = []
+        query = "SELECT COUNT(*) FROM edital WHERE status != 'Concluído' AND user_id = ?"
+        params = [user_id]
         if edital_nome:
             query += " AND edital_nome = ?"
             params.append(edital_nome)
@@ -267,7 +271,7 @@ def previsao_data_aprovacao(edital_nome: str = "", cargo: str = "", conn=Depends
 
         quatro_semanas = (date.today() - timedelta(days=28)).isoformat()
         total_horas_4sem = float(conn.execute(
-            "SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE data >= ?", (quatro_semanas,)
+            "SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE data >= ? AND user_id = ?", (quatro_semanas, user_id)
         ).fetchone()[0] or 0)
     except Exception:
         return {"semanas_restantes": None, "data_prevista": None,
@@ -291,19 +295,19 @@ def previsao_data_aprovacao(edital_nome: str = "", cargo: str = "", conn=Depends
 
 
 @router.get("/api/analise-erros")
-def analise_padroes_erro(conn=Depends(get_db_session)):
+def analise_padroes_erro(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     erros_por_materia = conn.execute("""
         SELECT q.materia, COUNT(*) as erros,
-               (SELECT COUNT(*) FROM questoes_respostas qr2 JOIN questoes q2 ON q2.id=qr2.questao_id WHERE q2.materia=q.materia) as total
+               (SELECT COUNT(*) FROM questoes_respostas qr2 JOIN questoes q2 ON q2.id=qr2.questao_id WHERE q2.materia=q.materia AND qr2.user_id=?) as total
         FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id
-        WHERE qr.acertou = 0 GROUP BY q.materia ORDER BY erros DESC
-    """).fetchall()
+        WHERE qr.acertou = 0 AND qr.user_id = ? GROUP BY q.materia ORDER BY erros DESC
+    """, (user_id, user_id)).fetchall()
 
     erros_por_topico = conn.execute("""
         SELECT q.materia, q.enunciado, COUNT(*) as vezes_errado
         FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id
-        WHERE qr.acertou = 0 GROUP BY qr.questao_id ORDER BY vezes_errado DESC LIMIT 10
-    """).fetchall()
+        WHERE qr.acertou = 0 AND qr.user_id = ? GROUP BY qr.questao_id ORDER BY vezes_errado DESC LIMIT 10
+    """, (user_id,)).fetchall()
 
     sugestoes = []
     for r in erros_por_materia:
@@ -320,11 +324,11 @@ def analise_padroes_erro(conn=Depends(get_db_session)):
 
 
 @router.get("/api/comparativo")
-def comparativo_cargos(edital1: str = "", cargo1: str = "", edital2: str = "", cargo2: str = "", conn=Depends(get_db_session)):
+def comparativo_cargos(edital1: str = "", cargo1: str = "", edital2: str = "", cargo2: str = "", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     mat1 = set(r[0] for r in conn.execute(
-        "SELECT DISTINCT materia FROM edital WHERE edital_nome = ? AND cargo = ?", (edital1, cargo1)).fetchall())
+        "SELECT DISTINCT materia FROM edital WHERE edital_nome = ? AND cargo = ? AND user_id = ?", (edital1, cargo1, user_id)).fetchall())
     mat2 = set(r[0] for r in conn.execute(
-        "SELECT DISTINCT materia FROM edital WHERE edital_nome = ? AND cargo = ?", (edital2, cargo2)).fetchall())
+        "SELECT DISTINCT materia FROM edital WHERE edital_nome = ? AND cargo = ? AND user_id = ?", (edital2, cargo2, user_id)).fetchall())
     comuns = sorted(mat1 & mat2)
     apenas1 = sorted(mat1 - mat2)
     apenas2 = sorted(mat2 - mat1)
@@ -334,22 +338,22 @@ def comparativo_cargos(edital1: str = "", cargo1: str = "", edital2: str = "", c
 
 
 @router.get("/api/comparador-progresso")
-def comparador_progresso(conn=Depends(get_db_session)):
+def comparador_progresso(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     rows = conn.execute("""
         SELECT edital_nome, cargo, COUNT(*) as total,
                SUM(CASE WHEN status='Concluído' THEN 1 ELSE 0 END) as done,
                SUM(horas_estudadas) as horas
-        FROM edital GROUP BY edital_nome, cargo ORDER BY edital_nome, cargo
-    """).fetchall()
+        FROM edital WHERE user_id = ? GROUP BY edital_nome, cargo ORDER BY edital_nome, cargo
+    """, (user_id,)).fetchall()
     return [{"edital": r[0], "cargo": r[1], "total": r[2], "concluidos": r[3] or 0,
              "pct": round((r[3] or 0) / r[2] * 100, 1) if r[2] > 0 else 0,
              "horas": round(r[4] or 0, 1)} for r in rows]
 
 
 @router.get("/api/planejador-aprovacao")
-def planejador_aprovacao(edital_nome: str = "", cargo: str = "", conn=Depends(get_db_session)):
-    query = "SELECT materia, COUNT(*) as total, SUM(CASE WHEN status='Concluído' THEN 1 ELSE 0 END) as done, SUM(horas_estudadas) as horas FROM edital WHERE 1=1"
-    params = []
+def planejador_aprovacao(edital_nome: str = "", cargo: str = "", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    query = "SELECT materia, COUNT(*) as total, SUM(CASE WHEN status='Concluído' THEN 1 ELSE 0 END) as done, SUM(horas_estudadas) as horas FROM edital WHERE user_id = ?"
+    params = [user_id]
     if edital_nome:
         query += " AND edital_nome = ?"
         params.append(edital_nome)
@@ -361,8 +365,8 @@ def planejador_aprovacao(edital_nome: str = "", cargo: str = "", conn=Depends(ge
 
     q_stats = conn.execute("""
         SELECT q.materia, COUNT(*) as total, SUM(qr.acertou) as acertos
-        FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id GROUP BY q.materia
-    """).fetchall()
+        FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id WHERE qr.user_id = ? GROUP BY q.materia
+    """, (user_id,)).fetchall()
     q_map = {r[0]: {"total": r[1], "acertos": r[2] or 0} for r in q_stats}
 
     META_EDITAL, META_QUESTOES = 70, 70
@@ -382,17 +386,17 @@ def planejador_aprovacao(edital_nome: str = "", cargo: str = "", conn=Depends(ge
 
 
 @router.get("/api/plano-automatico")
-def plano_automatico(edital_nome: str = "", cargo: str = "", horas_dia: float = 3.0, conn=Depends(get_db_session)):
+def plano_automatico(edital_nome: str = "", cargo: str = "", horas_dia: float = 3.0, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     try:
         prova = conn.execute("""
             SELECT data_prova_objetiva FROM edital_info
-            WHERE edital_nome = ? AND cargo = ? AND data_prova_objetiva != '' AND data_prova_objetiva != 'Consultar edital'
-        """, (edital_nome, cargo)).fetchone()
+            WHERE edital_nome = ? AND cargo = ? AND data_prova_objetiva != '' AND data_prova_objetiva != 'Consultar edital' AND user_id = ?
+        """, (edital_nome, cargo, user_id)).fetchone()
     except Exception:
         prova = None
 
-    query = "SELECT materia, COUNT(*) as total, SUM(CASE WHEN status='Concluído' THEN 1 ELSE 0 END) as done FROM edital WHERE 1=1"
-    params = []
+    query = "SELECT materia, COUNT(*) as total, SUM(CASE WHEN status='Concluído' THEN 1 ELSE 0 END) as done FROM edital WHERE user_id = ?"
+    params = [user_id]
     if edital_nome:
         query += " AND edital_nome = ?"
         params.append(edital_nome)
@@ -431,8 +435,8 @@ def plano_automatico(edital_nome: str = "", cargo: str = "", horas_dia: float = 
 
 
 @router.get("/api/linha-tempo", summary="Linha do tempo")
-def linha_tempo(page: int | None = Query(None), limit: int = 50, conn=Depends(get_db_session)):
-    rows = conn.execute("SELECT data, materia, horas, tipo FROM sessoes_estudo ORDER BY data DESC, id DESC").fetchall()
+def linha_tempo(page: int | None = Query(None), limit: int = 50, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    rows = conn.execute("SELECT data, materia, horas, tipo FROM sessoes_estudo WHERE user_id = ? ORDER BY data DESC, id DESC", (user_id,)).fetchall()
     items = [dict(r) for r in rows]
     if page is None:
         return items[:50]
@@ -440,17 +444,17 @@ def linha_tempo(page: int | None = Query(None), limit: int = 50, conn=Depends(ge
 
 
 @router.get("/api/exportar-stats")
-def exportar_estatisticas(conn=Depends(get_db_session)):
+def exportar_estatisticas(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     data = {
         "exportado_em": datetime.now().isoformat(),
-        "edital": [dict(r) for r in conn.execute("SELECT * FROM edital").fetchall()],
+        "edital": [dict(r) for r in conn.execute("SELECT * FROM edital WHERE user_id = ?", (user_id,)).fetchall()],
         "questoes_stats": {
-            "total": conn.execute("SELECT COUNT(*) FROM questoes_respostas").fetchone()[0],
-            "acertos": conn.execute("SELECT COUNT(*) FROM questoes_respostas WHERE acertou = 1").fetchone()[0],
+            "total": conn.execute("SELECT COUNT(*) FROM questoes_respostas WHERE user_id = ?", (user_id,)).fetchone()[0],
+            "acertos": conn.execute("SELECT COUNT(*) FROM questoes_respostas WHERE acertou = 1 AND user_id = ?", (user_id,)).fetchone()[0],
         },
-        "sessoes": [dict(r) for r in conn.execute("SELECT * FROM sessoes_estudo ORDER BY data DESC LIMIT 100").fetchall()],
-        "streaks": [dict(r) for r in conn.execute("SELECT * FROM streaks ORDER BY data DESC LIMIT 30").fetchall()],
-        "simulados": [dict(r) for r in conn.execute("SELECT * FROM simulados").fetchall()],
+        "sessoes": [dict(r) for r in conn.execute("SELECT * FROM sessoes_estudo WHERE user_id = ? ORDER BY data DESC LIMIT 100", (user_id,)).fetchall()],
+        "streaks": [dict(r) for r in conn.execute("SELECT * FROM streaks WHERE user_id = ? ORDER BY data DESC LIMIT 30", (user_id,)).fetchall()],
+        "simulados": [dict(r) for r in conn.execute("SELECT * FROM simulados WHERE user_id = ?", (user_id,)).fetchall()],
     }
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".json", mode="w", encoding="utf-8")
     json.dump(data, tmp, ensure_ascii=False, indent=2)
@@ -459,15 +463,15 @@ def exportar_estatisticas(conn=Depends(get_db_session)):
 
 
 @router.get("/api/exportar-resumo")
-def exportar_resumo(conn=Depends(get_db_session)):
+def exportar_resumo(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     editais = conn.execute("""
         SELECT edital_nome, cargo, COUNT(*) as total,
                SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) as done,
                SUM(horas_estudadas) as horas
-        FROM edital GROUP BY edital_nome, cargo ORDER BY edital_nome, cargo
-    """).fetchall()
-    q_stats = conn.execute("SELECT COUNT(*), SUM(acertou) FROM questoes_respostas").fetchone()
-    streaks = conn.execute("SELECT data, horas_estudadas, questoes_resolvidas FROM streaks ORDER BY data DESC LIMIT 30").fetchall()
+        FROM edital WHERE user_id = ? GROUP BY edital_nome, cargo ORDER BY edital_nome, cargo
+    """, (user_id,)).fetchall()
+    q_stats = conn.execute("SELECT COUNT(*), SUM(acertou) FROM questoes_respostas WHERE user_id = ?", (user_id,)).fetchone()
+    streaks = conn.execute("SELECT data, horas_estudadas, questoes_resolvidas FROM streaks WHERE user_id = ? ORDER BY data DESC LIMIT 30", (user_id,)).fetchall()
 
     html = f"""<!DOCTYPE html>
 <html><head><meta charset='UTF-8'><title>Resumo de Estudos - ConcurseiroOS</title>
@@ -507,18 +511,18 @@ def exportar_resumo(conn=Depends(get_db_session)):
 
 
 @router.get("/api/exportar-tudo")
-def exportar_tudo(conn=Depends(get_db_session)):
+def exportar_tudo(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     data = {
         "exportado_em": datetime.now().isoformat(), "versao": "2.0",
-        "edital": [dict(r) for r in conn.execute("SELECT * FROM edital").fetchall()],
-        "questoes": [dict(r) for r in conn.execute("SELECT * FROM questoes").fetchall()],
-        "flashcards": [dict(r) for r in conn.execute("SELECT * FROM flashcards").fetchall()],
-        "questoes_respostas": [dict(r) for r in conn.execute("SELECT * FROM questoes_respostas").fetchall()],
-        "sessoes_estudo": [dict(r) for r in conn.execute("SELECT * FROM sessoes_estudo").fetchall()],
-        "streaks": [dict(r) for r in conn.execute("SELECT * FROM streaks").fetchall()],
-        "simulados": [dict(r) for r in conn.execute("SELECT * FROM simulados").fetchall()],
-        "ciclo_estudos": [dict(r) for r in conn.execute("SELECT * FROM ciclo_estudos").fetchall()],
-        "metas_config": [dict(r) for r in conn.execute("SELECT * FROM metas_config").fetchall()],
+        "edital": [dict(r) for r in conn.execute("SELECT * FROM edital WHERE user_id = ?", (user_id,)).fetchall()],
+        "questoes": [dict(r) for r in conn.execute("SELECT * FROM questoes WHERE user_id = ?", (user_id,)).fetchall()],
+        "flashcards": [dict(r) for r in conn.execute("SELECT * FROM flashcards WHERE user_id = ?", (user_id,)).fetchall()],
+        "questoes_respostas": [dict(r) for r in conn.execute("SELECT * FROM questoes_respostas WHERE user_id = ?", (user_id,)).fetchall()],
+        "sessoes_estudo": [dict(r) for r in conn.execute("SELECT * FROM sessoes_estudo WHERE user_id = ?", (user_id,)).fetchall()],
+        "streaks": [dict(r) for r in conn.execute("SELECT * FROM streaks WHERE user_id = ?", (user_id,)).fetchall()],
+        "simulados": [dict(r) for r in conn.execute("SELECT * FROM simulados WHERE user_id = ?", (user_id,)).fetchall()],
+        "ciclo_estudos": [dict(r) for r in conn.execute("SELECT * FROM ciclo_estudos WHERE user_id = ?", (user_id,)).fetchall()],
+        "metas_config": [dict(r) for r in conn.execute("SELECT * FROM metas_config WHERE user_id = ?", (user_id,)).fetchall()],
     }
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".json", mode="w", encoding="utf-8")
     json.dump(data, tmp, ensure_ascii=False, indent=2)
@@ -527,7 +531,7 @@ def exportar_tudo(conn=Depends(get_db_session)):
 
 
 @router.post("/api/importar-tudo")
-async def importar_tudo(file: UploadFile = File(...), conn=Depends(get_db_session)):
+async def importar_tudo(file: UploadFile = File(...), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     content = await file.read()
     try:
         data = json.loads(content)
@@ -536,29 +540,29 @@ async def importar_tudo(file: UploadFile = File(...), conn=Depends(get_db_sessio
 
     count = 0
     for item in data.get("flashcards", []):
-        conn.execute("INSERT OR IGNORE INTO flashcards (pergunta, resposta, proxima_revisao, intervalo_dias) VALUES (?, ?, ?, ?)",
-                     (item["pergunta"], item["resposta"], item.get("proxima_revisao", today_str()), item.get("intervalo_dias", 1)))
+        conn.execute("INSERT OR IGNORE INTO flashcards (pergunta, resposta, proxima_revisao, intervalo_dias, user_id) VALUES (?, ?, ?, ?, ?)",
+                     (item["pergunta"], item["resposta"], item.get("proxima_revisao", today_str()), item.get("intervalo_dias", 1), user_id))
         count += 1
     for item in data.get("questoes", []):
-        conn.execute("""INSERT OR IGNORE INTO questoes (materia, topico, enunciado, alternativa_a, alternativa_b, alternativa_c, alternativa_d, alternativa_e, resposta_correta, explicacao, dificuldade, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        conn.execute("""INSERT OR IGNORE INTO questoes (materia, topico, enunciado, alternativa_a, alternativa_b, alternativa_c, alternativa_d, alternativa_e, resposta_correta, explicacao, dificuldade, created_at, user_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (item.get("materia", ""), item.get("topico", ""), item.get("enunciado", ""),
              item.get("alternativa_a", ""), item.get("alternativa_b", ""), item.get("alternativa_c", ""),
              item.get("alternativa_d", ""), item.get("alternativa_e", ""), item.get("resposta_correta", ""),
-             item.get("explicacao", ""), item.get("dificuldade", "Médio"), item.get("created_at", today_str())))
+             item.get("explicacao", ""), item.get("dificuldade", "Médio"), item.get("created_at", today_str()), user_id))
         count += 1
     conn.commit()
     return {"ok": True, "importados": count}
 
 
 @router.get("/api/compartilhar")
-def gerar_compartilhamento(conn=Depends(get_db_session)):
-    horas = conn.execute("SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo").fetchone()[0]
-    questoes = conn.execute("SELECT COUNT(*) FROM questoes_respostas").fetchone()[0]
-    acertos = conn.execute("SELECT COUNT(*) FROM questoes_respostas WHERE acertou = 1").fetchone()[0]
-    topicos = conn.execute("SELECT COUNT(*) FROM edital WHERE status = 'Concluído'").fetchone()[0]
-    total_topicos = conn.execute("SELECT COUNT(*) FROM edital").fetchone()[0]
-    streak_info = calculate_streak(conn)
+def gerar_compartilhamento(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    horas = conn.execute("SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE user_id = ?", (user_id,)).fetchone()[0]
+    questoes = conn.execute("SELECT COUNT(*) FROM questoes_respostas WHERE user_id = ?", (user_id,)).fetchone()[0]
+    acertos = conn.execute("SELECT COUNT(*) FROM questoes_respostas WHERE acertou = 1 AND user_id = ?", (user_id,)).fetchone()[0]
+    topicos = conn.execute("SELECT COUNT(*) FROM edital WHERE status = 'Concluído' AND user_id = ?", (user_id,)).fetchone()[0]
+    total_topicos = conn.execute("SELECT COUNT(*) FROM edital WHERE user_id = ?", (user_id,)).fetchone()[0]
+    streak_info = calculate_streak(conn, user_id)
     streak = streak_info["streak_atual"]
     pct = round(topicos / total_topicos * 100, 1) if total_topicos > 0 else 0
     accuracy = round(acertos / questoes * 100, 1) if questoes > 0 else 0
@@ -571,12 +575,12 @@ def gerar_compartilhamento(conn=Depends(get_db_session)):
 
 
 @router.get("/api/status-rapido")
-def status_rapido(conn=Depends(get_db_session)):
-    hoje = conn.execute("SELECT * FROM streaks WHERE data = ?", (today_str(),)).fetchone()
-    flash = conn.execute("SELECT COUNT(*) FROM flashcards WHERE proxima_revisao <= ?", (today_str(),)).fetchone()[0]
-    topicos_done = conn.execute("SELECT COUNT(*) FROM edital WHERE status = 'Concluído'").fetchone()[0]
-    topicos_total = conn.execute("SELECT COUNT(*) FROM edital").fetchone()[0]
-    streak_info = calculate_streak(conn)
+def status_rapido(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    hoje = conn.execute("SELECT * FROM streaks WHERE data = ? AND user_id = ?", (today_str(), user_id)).fetchone()
+    flash = conn.execute("SELECT COUNT(*) FROM flashcards WHERE proxima_revisao <= ? AND user_id = ?", (today_str(), user_id)).fetchone()[0]
+    topicos_done = conn.execute("SELECT COUNT(*) FROM edital WHERE status = 'Concluído' AND user_id = ?", (user_id,)).fetchone()[0]
+    topicos_total = conn.execute("SELECT COUNT(*) FROM edital WHERE user_id = ?", (user_id,)).fetchone()[0]
+    streak_info = calculate_streak(conn, user_id)
     return {
         "streak": streak_info["streak_atual"],
         "horas_hoje": hoje["horas_estudadas"] if hoje else 0,
@@ -588,15 +592,15 @@ def status_rapido(conn=Depends(get_db_session)):
 
 
 @router.get("/api/widget")
-def widget_resumo(conn=Depends(get_db_session)):
-    hoje = conn.execute("SELECT * FROM streaks WHERE data = ?", (today_str(),)).fetchone()
-    flash = conn.execute("SELECT COUNT(*) FROM flashcards WHERE proxima_revisao <= ?", (today_str(),)).fetchone()[0]
+def widget_resumo(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    hoje = conn.execute("SELECT * FROM streaks WHERE data = ? AND user_id = ?", (today_str(), user_id)).fetchone()
+    flash = conn.execute("SELECT COUNT(*) FROM flashcards WHERE proxima_revisao <= ? AND user_id = ?", (today_str(), user_id)).fetchone()[0]
     try:
         prova = conn.execute("""
             SELECT cargo, data_prova_objetiva FROM edital_info
-            WHERE data_prova_objetiva != '' AND data_prova_objetiva != 'Consultar edital'
+            WHERE data_prova_objetiva != '' AND data_prova_objetiva != 'Consultar edital' AND user_id = ?
             ORDER BY data_prova_objetiva LIMIT 1
-        """).fetchone()
+        """, (user_id,)).fetchone()
     except Exception:
         prova = None
     return {
@@ -608,13 +612,13 @@ def widget_resumo(conn=Depends(get_db_session)):
 
 
 @router.get("/api/curva-esquecimento")
-def curva_esquecimento(edital_nome: str = "", cargo: str = "", materia: str = "", conn=Depends(get_db_session)):
+def curva_esquecimento(edital_nome: str = "", cargo: str = "", materia: str = "", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     query = """
         SELECT id, edital_nome, cargo, materia, topico, proxima_revisao,
                intervalo_revisao, easiness_factor_edital
-        FROM edital WHERE proxima_revisao != '' AND proxima_revisao IS NOT NULL
+        FROM edital WHERE proxima_revisao != '' AND proxima_revisao IS NOT NULL AND user_id = ?
     """
-    params = []
+    params = [user_id]
     if edital_nome:
         query += " AND edital_nome = ?"
         params.append(edital_nome)
@@ -654,15 +658,15 @@ def curva_esquecimento(edital_nome: str = "", cargo: str = "", materia: str = ""
 
 
 @router.get("/api/raio-x")
-def raio_x_edital(edital_nome: str = "", cargo: str = "", conn=Depends(get_db_session)):
-    total_questoes = conn.execute("SELECT COUNT(*) FROM questoes").fetchone()[0]
-    questoes_por_mat = conn.execute("SELECT materia, COUNT(*) as qtd FROM questoes GROUP BY materia ORDER BY qtd DESC").fetchall()
-    horas_por_mat = conn.execute("SELECT materia, SUM(horas) as total FROM sessoes_estudo GROUP BY materia").fetchall()
+def raio_x_edital(edital_nome: str = "", cargo: str = "", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    total_questoes = conn.execute("SELECT COUNT(*) FROM questoes WHERE user_id = ?", (user_id,)).fetchone()[0]
+    questoes_por_mat = conn.execute("SELECT materia, COUNT(*) as qtd FROM questoes WHERE user_id = ? GROUP BY materia ORDER BY qtd DESC", (user_id,)).fetchall()
+    horas_por_mat = conn.execute("SELECT materia, SUM(horas) as total FROM sessoes_estudo WHERE user_id = ? GROUP BY materia", (user_id,)).fetchall()
     horas_map = {r[0]: r[1] for r in horas_por_mat}
     acertos_por_mat = conn.execute("""
         SELECT q.materia, COUNT(*) as total, SUM(qr.acertou) as acertos
-        FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id GROUP BY q.materia
-    """).fetchall()
+        FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id WHERE qr.user_id = ? GROUP BY q.materia
+    """, (user_id,)).fetchall()
     acerto_map = {r[0]: round((r[2] or 0) / r[1] * 100, 1) if r[1] > 0 else 0 for r in acertos_por_mat}
     total_horas = sum(horas_map.values()) if horas_map else 0
 
@@ -687,13 +691,14 @@ def raio_x_edital(edital_nome: str = "", cargo: str = "", conn=Depends(get_db_se
 
 
 @router.get("/api/heatmap-erros")
-def heatmap_erros(conn=Depends(get_db_session)):
+def heatmap_erros(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     rows = conn.execute("""
         SELECT q.materia, q.topico, COUNT(*) as total,
                SUM(CASE WHEN qr.acertou=0 THEN 1 ELSE 0 END) as erros
         FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id
+        WHERE qr.user_id = ?
         GROUP BY q.materia, q.topico ORDER BY q.materia, erros DESC
-    """).fetchall()
+    """, (user_id,)).fetchall()
 
     materias_map = {}
     for r in rows:
@@ -717,13 +722,13 @@ def heatmap_erros(conn=Depends(get_db_session)):
 
 
 @router.get("/api/evolucao")
-def evolucao_semanal(semanas: int = 12, conn=Depends(get_db_session)):
+def evolucao_semanal(semanas: int = 12, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     inicio = (date.today() - timedelta(weeks=semanas)).isoformat()
     rows = conn.execute("""
         SELECT qr.data, q.materia, qr.acertou
         FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id
-        WHERE qr.data >= ? ORDER BY qr.data
-    """, (inicio,)).fetchall()
+        WHERE qr.data >= ? AND qr.user_id = ? ORDER BY qr.data
+    """, (inicio, user_id)).fetchall()
 
     semanas_map = {}
     for r in rows:
@@ -746,8 +751,8 @@ def evolucao_semanal(semanas: int = 12, conn=Depends(get_db_session)):
 
     streaks_rows = conn.execute("""
         SELECT data, horas_estudadas, questoes_resolvidas, flashcards_revisados
-        FROM streaks WHERE data >= ? ORDER BY data
-    """, (inicio,)).fetchall()
+        FROM streaks WHERE data >= ? AND user_id = ? ORDER BY data
+    """, (inicio, user_id)).fetchall()
     for sr in streaks_rows:
         try:
             d = date.fromisoformat(sr[0])
@@ -796,13 +801,13 @@ def evolucao_semanal(semanas: int = 12, conn=Depends(get_db_session)):
 
 
 @router.get("/api/analytics/velocidade")
-def analytics_velocidade(conn=Depends(get_db_session)):
+def analytics_velocidade(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     rows = conn.execute("""
         SELECT q.materia, AVG(qr.tempo_segundos) as media_seg, COUNT(*) as total, SUM(qr.acertou) as acertos
         FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id
-        WHERE qr.tempo_segundos > 0 GROUP BY q.materia ORDER BY media_seg DESC
-    """).fetchall()
-    geral = conn.execute("SELECT AVG(tempo_segundos) FROM questoes_respostas WHERE tempo_segundos > 0").fetchone()[0]
+        WHERE qr.tempo_segundos > 0 AND qr.user_id = ? GROUP BY q.materia ORDER BY media_seg DESC
+    """, (user_id,)).fetchall()
+    geral = conn.execute("SELECT AVG(tempo_segundos) FROM questoes_respostas WHERE tempo_segundos > 0 AND user_id = ?", (user_id,)).fetchone()[0]
     return {
         "media_geral_seg": round(geral, 1) if geral else 0,
         "por_materia": [{"materia": r["materia"], "media_seg": round(r["media_seg"], 1), "total": r["total"],
@@ -811,10 +816,10 @@ def analytics_velocidade(conn=Depends(get_db_session)):
 
 
 @router.get("/api/analytics/consistencia")
-def analytics_consistencia(conn=Depends(get_db_session)):
+def analytics_consistencia(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     inicio = (date.today() - timedelta(days=27)).isoformat()
     sessoes = conn.execute(
-        "SELECT data, SUM(horas) as total FROM sessoes_estudo WHERE data >= ? GROUP BY data", (inicio,)
+        "SELECT data, SUM(horas) as total FROM sessoes_estudo WHERE data >= ? AND user_id = ? GROUP BY data", (inicio, user_id)
     ).fetchall()
     dias_estudados = len(sessoes)
     horas_total = sum(s["total"] for s in sessoes)
@@ -825,7 +830,7 @@ def analytics_consistencia(conn=Depends(get_db_session)):
         d = date.fromisoformat(s["data"])
         dist_semana[d.weekday()] += s["total"]
 
-    streaks = conn.execute("SELECT data FROM streaks ORDER BY data DESC").fetchall()
+    streaks = conn.execute("SELECT data FROM streaks WHERE user_id = ? ORDER BY data DESC", (user_id,)).fetchall()
     streak_atual = 0
     hoje = date.today()
     for s in streaks:
@@ -845,8 +850,8 @@ def analytics_consistencia(conn=Depends(get_db_session)):
 
 
 @router.get("/api/analytics/metas-realizado")
-def analytics_metas_realizado(conn=Depends(get_db_session)):
-    cfg = conn.execute("SELECT * FROM metas_config WHERE id = 1").fetchone()
+def analytics_metas_realizado(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    cfg = conn.execute("SELECT * FROM metas_config WHERE user_id = ?", (user_id,)).fetchone()
     meta_horas = cfg["meta_horas"] if cfg else 3
     meta_questoes = cfg["meta_questoes"] if cfg else 30
     semanas = []
@@ -854,11 +859,11 @@ def analytics_metas_realizado(conn=Depends(get_db_session)):
         fim = date.today() - timedelta(days=i * 7)
         inicio = fim - timedelta(days=6)
         horas = conn.execute(
-            "SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE data BETWEEN ? AND ?",
-            (inicio.isoformat(), fim.isoformat())).fetchone()[0]
+            "SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE data BETWEEN ? AND ? AND user_id = ?",
+            (inicio.isoformat(), fim.isoformat(), user_id)).fetchone()[0]
         questoes = conn.execute(
-            "SELECT COUNT(*) FROM questoes_respostas WHERE data BETWEEN ? AND ?",
-            (inicio.isoformat(), fim.isoformat())).fetchone()[0]
+            "SELECT COUNT(*) FROM questoes_respostas WHERE data BETWEEN ? AND ? AND user_id = ?",
+            (inicio.isoformat(), fim.isoformat(), user_id)).fetchone()[0]
         semanas.append({
             "semana": f"{inicio.strftime('%d/%m')} - {fim.strftime('%d/%m')}",
             "horas_meta": round(meta_horas * 7, 1), "horas_real": round(horas, 1),
@@ -871,13 +876,14 @@ def analytics_metas_realizado(conn=Depends(get_db_session)):
 
 
 @router.get("/api/analytics/ranking-materias")
-def analytics_ranking_materias(conn=Depends(get_db_session)):
+def analytics_ranking_materias(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     rows = conn.execute("""
         SELECT q.materia, COUNT(*) as total, SUM(qr.acertou) as acertos, AVG(qr.tempo_segundos) as media_tempo
         FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id
+        WHERE qr.user_id = ?
         GROUP BY q.materia HAVING total >= 3
         ORDER BY (CAST(acertos AS REAL) / total) ASC
-    """).fetchall()
+    """, (user_id,)).fetchall()
     ranking = []
     for r in rows:
         pct = round(r["acertos"] / r["total"] * 100, 1)

@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 from constants import SM2_FIRST_INTERVAL, SM2_INITIAL_EF, SM2_MIN_EF, SM2_SECOND_INTERVAL
 from database import get_db_session
+from deps import get_user_id
 from logger import log
 from utils import today_str, update_streak
 
@@ -42,9 +43,9 @@ class SumulaReviewSM2(BaseModel):
 # ============================================================
 
 @router.get("/api/sumulas", summary="Listar súmulas")
-def list_sumulas(tribunal: str = "", tema: str = "", page: int | None = Query(None), limit: int = 50, conn=Depends(get_db_session)):
-    query = "SELECT * FROM sumulas WHERE 1=1"
-    params = []
+def list_sumulas(tribunal: str = "", tema: str = "", page: int | None = Query(None), limit: int = 50, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    query = "SELECT * FROM sumulas WHERE user_id = ?"
+    params = [user_id]
     if tribunal:
         query += " AND tribunal = ?"
         params.append(tribunal)
@@ -61,9 +62,9 @@ def list_sumulas(tribunal: str = "", tema: str = "", page: int | None = Query(No
 
 
 @router.get("/api/sumulas/today", summary="Súmulas do dia (revisão SRS)")
-def get_sumulas_today(tribunal: str = "", tema: str = "", conn=Depends(get_db_session)):
-    query = "SELECT * FROM sumulas WHERE proxima_revisao <= ?"
-    params = [today_str()]
+def get_sumulas_today(tribunal: str = "", tema: str = "", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    query = "SELECT * FROM sumulas WHERE proxima_revisao <= ? AND user_id = ?"
+    params = [today_str(), user_id]
     if tribunal:
         query += " AND tribunal = ?"
         params.append(tribunal)
@@ -76,12 +77,12 @@ def get_sumulas_today(tribunal: str = "", tema: str = "", conn=Depends(get_db_se
 
 
 @router.get("/api/sumulas/stats", summary="Estatísticas de súmulas")
-def get_sumulas_stats(conn=Depends(get_db_session)):
-    total = conn.execute("SELECT COUNT(*) FROM sumulas").fetchone()[0]
-    pendentes = conn.execute("SELECT COUNT(*) FROM sumulas WHERE proxima_revisao <= ?", (today_str(),)).fetchone()[0]
-    por_tribunal = conn.execute("SELECT tribunal, COUNT(*) as total FROM sumulas GROUP BY tribunal ORDER BY total DESC").fetchall()
-    por_tema = conn.execute("SELECT tema, COUNT(*) as total FROM sumulas WHERE tema != '' GROUP BY tema ORDER BY total DESC").fetchall()
-    dominadas = conn.execute("SELECT COUNT(*) FROM sumulas WHERE repetitions >= 5 AND easiness_factor > 2.5").fetchone()[0]
+def get_sumulas_stats(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    total = conn.execute("SELECT COUNT(*) FROM sumulas WHERE user_id = ?", (user_id,)).fetchone()[0]
+    pendentes = conn.execute("SELECT COUNT(*) FROM sumulas WHERE proxima_revisao <= ? AND user_id = ?", (today_str(), user_id)).fetchone()[0]
+    por_tribunal = conn.execute("SELECT tribunal, COUNT(*) as total FROM sumulas WHERE user_id = ? GROUP BY tribunal ORDER BY total DESC", (user_id,)).fetchall()
+    por_tema = conn.execute("SELECT tema, COUNT(*) as total FROM sumulas WHERE tema != '' AND user_id = ? GROUP BY tema ORDER BY total DESC", (user_id,)).fetchall()
+    dominadas = conn.execute("SELECT COUNT(*) FROM sumulas WHERE repetitions >= 5 AND easiness_factor > 2.5 AND user_id = ?", (user_id,)).fetchone()[0]
     return {
         "total": total,
         "pendentes_hoje": pendentes,
@@ -92,22 +93,22 @@ def get_sumulas_stats(conn=Depends(get_db_session)):
 
 
 @router.get("/api/sumulas/tribunais", summary="Listar tribunais disponíveis")
-def list_tribunais(conn=Depends(get_db_session)):
-    rows = conn.execute("SELECT tribunal, COUNT(*) as total FROM sumulas GROUP BY tribunal ORDER BY total DESC").fetchall()
+def list_tribunais(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    rows = conn.execute("SELECT tribunal, COUNT(*) as total FROM sumulas WHERE user_id = ? GROUP BY tribunal ORDER BY total DESC", (user_id,)).fetchall()
     return [{"tribunal": r[0], "total": r[1]} for r in rows]
 
 
 @router.get("/api/sumulas/temas", summary="Listar temas disponíveis")
-def list_temas(conn=Depends(get_db_session)):
-    rows = conn.execute("SELECT tema, COUNT(*) as total FROM sumulas WHERE tema != '' GROUP BY tema ORDER BY total DESC").fetchall()
+def list_temas(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    rows = conn.execute("SELECT tema, COUNT(*) as total FROM sumulas WHERE tema != '' AND user_id = ? GROUP BY tema ORDER BY total DESC", (user_id,)).fetchall()
     return [{"tema": r[0], "total": r[1]} for r in rows]
 
 
 @router.post("/api/sumulas", summary="Criar súmula")
-def create_sumula(body: SumulaCreate, conn=Depends(get_db_session)):
+def create_sumula(body: SumulaCreate, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     cur = conn.execute(
-        "INSERT INTO sumulas (tribunal, numero, enunciado, tema, observacao, vinculante, proxima_revisao) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (body.tribunal, body.numero, body.enunciado, body.tema, body.observacao, int(body.vinculante), today_str())
+        "INSERT INTO sumulas (tribunal, numero, enunciado, tema, observacao, vinculante, proxima_revisao, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (body.tribunal, body.numero, body.enunciado, body.tema, body.observacao, int(body.vinculante), today_str(), user_id)
     )
     conn.commit()
     log.info(f"Súmula criada: {body.tribunal} {body.numero}")
@@ -115,8 +116,8 @@ def create_sumula(body: SumulaCreate, conn=Depends(get_db_session)):
 
 
 @router.put("/api/sumulas/{id}", summary="Editar súmula")
-def update_sumula(id: int, body: SumulaUpdate, conn=Depends(get_db_session)):
-    row = conn.execute("SELECT id FROM sumulas WHERE id = ?", (id,)).fetchone()
+def update_sumula(id: int, body: SumulaUpdate, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    row = conn.execute("SELECT id FROM sumulas WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Súmula não encontrada")
     updates = []
@@ -142,26 +143,27 @@ def update_sumula(id: int, body: SumulaUpdate, conn=Depends(get_db_session)):
     if not updates:
         raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
     params.append(id)
-    conn.execute(f"UPDATE sumulas SET {', '.join(updates)} WHERE id = ?", params)
+    params.append(user_id)
+    conn.execute(f"UPDATE sumulas SET {', '.join(updates)} WHERE id = ? AND user_id = ?", params)
     conn.commit()
     return {"ok": True}
 
 
 @router.delete("/api/sumulas/{id}", summary="Excluir súmula")
-def delete_sumula(id: int, conn=Depends(get_db_session)):
-    conn.execute("DELETE FROM sumulas WHERE id = ?", (id,))
+def delete_sumula(id: int, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    conn.execute("DELETE FROM sumulas WHERE id = ? AND user_id = ?", (id, user_id))
     conn.commit()
     log.info(f"Súmula deletada: id={id}")
     return {"ok": True}
 
 
 @router.post("/api/sumulas/{id}/review-sm2", summary="Revisar súmula (SM-2)")
-def review_sumula_sm2(id: int, body: SumulaReviewSM2, conn=Depends(get_db_session)):
+def review_sumula_sm2(id: int, body: SumulaReviewSM2, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Revisão de súmula usando algoritmo SM-2.
     quality: 0-5 (0=esqueceu completamente, 5=lembrou perfeitamente)
     """
     row = conn.execute(
-        "SELECT intervalo_dias, easiness_factor, repetitions FROM sumulas WHERE id = ?", (id,)
+        "SELECT intervalo_dias, easiness_factor, repetitions FROM sumulas WHERE id = ? AND user_id = ?", (id, user_id)
     ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Súmula não encontrada")
@@ -191,15 +193,15 @@ def review_sumula_sm2(id: int, body: SumulaReviewSM2, conn=Depends(get_db_sessio
     proxima = (date.today() + timedelta(days=intervalo)).isoformat()
 
     conn.execute(
-        "UPDATE sumulas SET intervalo_dias = ?, proxima_revisao = ?, easiness_factor = ?, repetitions = ? WHERE id = ?",
-        (intervalo, proxima, round(ef, 4), reps, id)
+        "UPDATE sumulas SET intervalo_dias = ?, proxima_revisao = ?, easiness_factor = ?, repetitions = ? WHERE id = ? AND user_id = ?",
+        (intervalo, proxima, round(ef, 4), reps, id, user_id)
     )
     # Atualizar streak: conta como revisão SRS E como súmula revisada
-    update_streak(conn, "flashcards_revisados")
+    update_streak(conn, "flashcards_revisados", user_id=user_id)
     conn.execute("""
-        INSERT INTO streaks (data, sumulas_revisadas) VALUES (?, 1)
+        INSERT INTO streaks (data, sumulas_revisadas, user_id) VALUES (?, 1, ?)
         ON CONFLICT(data) DO UPDATE SET sumulas_revisadas = COALESCE(sumulas_revisadas, 0) + 1
-    """, (today_str(),))
+    """, (today_str(), user_id))
     conn.commit()
 
     log.info(f"Súmula SM-2: id={id} quality={quality} ef={ef:.4f} reps={reps} interval={intervalo}")
@@ -214,7 +216,7 @@ def review_sumula_sm2(id: int, body: SumulaReviewSM2, conn=Depends(get_db_sessio
 
 
 @router.post("/api/sumulas/importar", summary="Importar súmulas em lote")
-def importar_sumulas(body: list = Body(...), conn=Depends(get_db_session)):
+def importar_sumulas(body: list = Body(...), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Importa lista de súmulas. Body: [{tribunal, numero, enunciado, tema?, observacao?, vinculante?}]"""
     count = 0
     duplicadas = 0
@@ -226,7 +228,7 @@ def importar_sumulas(body: list = Body(...), conn=Depends(get_db_session)):
             continue
         # Verificar duplicata
         existing = conn.execute(
-            "SELECT id FROM sumulas WHERE tribunal = ? AND numero = ?", (tribunal, numero)
+            "SELECT id FROM sumulas WHERE tribunal = ? AND numero = ? AND user_id = ?", (tribunal, numero, user_id)
         ).fetchone()
         if existing:
             duplicadas += 1
@@ -235,8 +237,8 @@ def importar_sumulas(body: list = Body(...), conn=Depends(get_db_session)):
         observacao = item.get("observacao", "")
         vinculante = int(item.get("vinculante", False))
         conn.execute(
-            "INSERT INTO sumulas (tribunal, numero, enunciado, tema, observacao, vinculante, proxima_revisao) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (tribunal, numero, enunciado, tema, observacao, vinculante, today_str())
+            "INSERT INTO sumulas (tribunal, numero, enunciado, tema, observacao, vinculante, proxima_revisao, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (tribunal, numero, enunciado, tema, observacao, vinculante, today_str(), user_id)
         )
         count += 1
     conn.commit()
@@ -245,9 +247,9 @@ def importar_sumulas(body: list = Body(...), conn=Depends(get_db_session)):
 
 
 @router.get("/api/sumulas/aleatorio", summary="Súmulas aleatórias para estudo")
-def get_sumulas_aleatorio(tribunal: str = "", tema: str = "", quantidade: int = 10, conn=Depends(get_db_session)):
-    query = "SELECT * FROM sumulas WHERE 1=1"
-    params = []
+def get_sumulas_aleatorio(tribunal: str = "", tema: str = "", quantidade: int = 10, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    query = "SELECT * FROM sumulas WHERE user_id = ?"
+    params = [user_id]
     if tribunal:
         query += " AND tribunal = ?"
         params.append(tribunal)

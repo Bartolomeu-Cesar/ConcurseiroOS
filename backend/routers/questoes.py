@@ -6,6 +6,7 @@ from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Upload
 
 from constants import DEFAULT_EXAM_DURATION_MIN, DEFAULT_EXAM_QUESTIONS, DEFAULT_TIME_PER_QUESTION_SEC
 from database import get_db_session
+from deps import get_user_id
 from logger import log
 from models import QuestaoCreate, QuestaoResponse, QuestaoResposta, QuestaoRespostaResponse
 from utils import paginate, today_str, update_streak
@@ -26,6 +27,7 @@ def list_questoes(
     page: int | None = Query(None),
     limit: int = 50,
     conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
 ):
     params = []
 
@@ -35,7 +37,8 @@ def list_questoes(
 
     if needs_not_in:
         # Questões NÃO respondidas
-        query = "SELECT q.* FROM questoes q WHERE q.id NOT IN (SELECT questao_id FROM questoes_respostas)"
+        query = "SELECT q.* FROM questoes q WHERE q.user_id = ? AND q.id NOT IN (SELECT questao_id FROM questoes_respostas WHERE user_id = ?)"
+        params = [user_id, user_id]
         if materia:
             query += " AND q.materia = ?"
             params.append(materia)
@@ -50,7 +53,8 @@ def list_questoes(
             params.append(banca)
     elif needs_join or respondidas == 1:
         # Questões com filtro por respostas (acertou/errou, datas)
-        query = "SELECT DISTINCT q.* FROM questoes q JOIN questoes_respostas qr ON qr.questao_id = q.id WHERE 1=1"
+        query = "SELECT DISTINCT q.* FROM questoes q JOIN questoes_respostas qr ON qr.questao_id = q.id WHERE q.user_id = ? AND qr.user_id = ?"
+        params = [user_id, user_id]
         if materia:
             query += " AND q.materia = ?"
             params.append(materia)
@@ -74,7 +78,8 @@ def list_questoes(
             params.append(data_fim)
     else:
         # Query simples sem filtros de resposta
-        query = "SELECT * FROM questoes WHERE 1=1"
+        query = "SELECT * FROM questoes WHERE user_id = ?"
+        params = [user_id]
         if materia:
             query += " AND materia = ?"
             params.append(materia)
@@ -96,38 +101,39 @@ def list_questoes(
 
 
 @router.get("/api/questoes/materias")
-def list_questoes_materias(conn=Depends(get_db_session)):
-    rows = conn.execute("SELECT DISTINCT materia FROM questoes ORDER BY materia").fetchall()
+def list_questoes_materias(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    rows = conn.execute("SELECT DISTINCT materia FROM questoes WHERE user_id = ? ORDER BY materia", (user_id,)).fetchall()
     return [r[0] for r in rows]
 
 
 # Caderno de Erros (DEVE ficar antes de /api/questoes/{id})
 @router.get("/api/questoes/erros/caderno")
-def caderno_erros(conn=Depends(get_db_session)):
+def caderno_erros(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     rows = conn.execute("""
         SELECT q.id, q.materia, q.topico, q.enunciado, q.resposta_correta, qr.resposta_usuario, qr.data
         FROM questoes_respostas qr
         JOIN questoes q ON q.id = qr.questao_id
-        WHERE qr.acertou = 0
+        WHERE qr.acertou = 0 AND qr.user_id = ?
         ORDER BY qr.data DESC
-    """).fetchall()
+    """, (user_id,)).fetchall()
     return [dict(r) for r in rows]
 
 
 # Estatísticas de questões (DEVE ficar antes de /api/questoes/{id})
 @router.get("/api/questoes/stats/geral")
-def questoes_stats(conn=Depends(get_db_session)):
-    total = conn.execute("SELECT COUNT(*) FROM questoes_respostas").fetchone()[0]
-    acertos = conn.execute("SELECT COUNT(*) FROM questoes_respostas WHERE acertou = 1").fetchone()[0]
+def questoes_stats(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    total = conn.execute("SELECT COUNT(*) FROM questoes_respostas WHERE user_id = ?", (user_id,)).fetchone()[0]
+    acertos = conn.execute("SELECT COUNT(*) FROM questoes_respostas WHERE acertou = 1 AND user_id = ?", (user_id,)).fetchone()[0]
     por_materia = conn.execute("""
         SELECT q.materia,
                COUNT(*) as total,
                SUM(qr.acertou) as acertos
         FROM questoes_respostas qr
         JOIN questoes q ON q.id = qr.questao_id
+        WHERE qr.user_id = ?
         GROUP BY q.materia
         ORDER BY q.materia
-    """).fetchall()
+    """, (user_id,)).fetchall()
     return {
         "total_resolvidas": total,
         "total_acertos": acertos,
@@ -137,7 +143,7 @@ def questoes_stats(conn=Depends(get_db_session)):
 
 
 @router.get("/api/questoes/stats/por-banca")
-def questoes_stats_por_banca(conn=Depends(get_db_session)):
+def questoes_stats_por_banca(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Retorna estatísticas de acerto agrupadas por banca examinadora"""
     log.info("GET /api/questoes/stats/por-banca")
     rows = conn.execute("""
@@ -146,10 +152,10 @@ def questoes_stats_por_banca(conn=Depends(get_db_session)):
                SUM(qr.acertou) as acertos
         FROM questoes_respostas qr
         JOIN questoes q ON q.id = qr.questao_id
-        WHERE q.banca != '' AND q.banca IS NOT NULL
+        WHERE q.banca != '' AND q.banca IS NOT NULL AND qr.user_id = ?
         GROUP BY q.banca
         ORDER BY total DESC
-    """).fetchall()
+    """, (user_id,)).fetchall()
     return [
         {
             "banca": r[0],
@@ -162,15 +168,15 @@ def questoes_stats_por_banca(conn=Depends(get_db_session)):
 
 
 @router.get("/api/questoes/stats/tempo")
-def questoes_stats_tempo(conn=Depends(get_db_session)):
+def questoes_stats_tempo(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Retorna tempo médio por questão com análise por matéria e dificuldade"""
     log.info("GET /api/questoes/stats/tempo")
     # Tempo médio geral (excluindo tempo_segundos = 0)
     geral = conn.execute("""
         SELECT AVG(tempo_segundos) as media, COUNT(*) as total
         FROM questoes_respostas
-        WHERE tempo_segundos > 0
-    """).fetchone()
+        WHERE tempo_segundos > 0 AND user_id = ?
+    """, (user_id,)).fetchone()
     tempo_medio = int(geral[0]) if geral[0] else 0
 
     # Por matéria
@@ -178,20 +184,20 @@ def questoes_stats_tempo(conn=Depends(get_db_session)):
         SELECT q.materia, AVG(qr.tempo_segundos) as media, COUNT(*) as questoes
         FROM questoes_respostas qr
         JOIN questoes q ON q.id = qr.questao_id
-        WHERE qr.tempo_segundos > 0
+        WHERE qr.tempo_segundos > 0 AND qr.user_id = ?
         GROUP BY q.materia
         ORDER BY media DESC
-    """).fetchall()
+    """, (user_id,)).fetchall()
 
     # Por dificuldade
     por_dificuldade = conn.execute("""
         SELECT q.dificuldade, AVG(qr.tempo_segundos) as media
         FROM questoes_respostas qr
         JOIN questoes q ON q.id = qr.questao_id
-        WHERE qr.tempo_segundos > 0
+        WHERE qr.tempo_segundos > 0 AND qr.user_id = ?
         GROUP BY q.dificuldade
         ORDER BY media ASC
-    """).fetchall()
+    """, (user_id,)).fetchall()
 
     tempo_prova_min = DEFAULT_EXAM_DURATION_MIN
     questoes_prova = DEFAULT_EXAM_QUESTIONS
@@ -235,42 +241,42 @@ def questoes_stats_tempo(conn=Depends(get_db_session)):
 
 
 @router.get("/api/questoes/bancas")
-def list_questoes_bancas(conn=Depends(get_db_session)):
+def list_questoes_bancas(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Lista bancas disponíveis no banco de questões"""
     log.info("GET /api/questoes/bancas")
-    rows = conn.execute("SELECT DISTINCT banca FROM questoes WHERE banca != '' AND banca IS NOT NULL ORDER BY banca").fetchall()
+    rows = conn.execute("SELECT DISTINCT banca FROM questoes WHERE banca != '' AND banca IS NOT NULL AND user_id = ? ORDER BY banca", (user_id,)).fetchall()
     return [r[0] for r in rows]
 
 
 @router.get("/api/questoes/datas-importacao", summary="Listar datas de importação")
-def list_datas_importacao(conn=Depends(get_db_session)):
+def list_datas_importacao(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Retorna datas de importação com contagem de questões."""
     rows = conn.execute("""
         SELECT created_at, COUNT(*) as total,
                GROUP_CONCAT(DISTINCT materia) as materias,
                GROUP_CONCAT(DISTINCT banca) as bancas
-        FROM questoes GROUP BY created_at ORDER BY created_at DESC
-    """).fetchall()
+        FROM questoes WHERE user_id = ? GROUP BY created_at ORDER BY created_at DESC
+    """, (user_id,)).fetchall()
     return [{"data": r[0], "total": r[1], "materias": r[2] or "", "bancas": r[3] or ""} for r in rows]
 
 
 @router.get("/api/questoes/{id}", response_model=QuestaoResponse)
-def get_questao(id: int, conn=Depends(get_db_session)):
-    row = conn.execute("SELECT * FROM questoes WHERE id = ?", (id,)).fetchone()
+def get_questao(id: int, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    row = conn.execute("SELECT * FROM questoes WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Questão não encontrada")
     return dict(row)
 
 
 @router.post("/api/questoes", summary="Criar questão", description="Adiciona uma nova questão ao banco de questões")
-def create_questao(body: QuestaoCreate, conn=Depends(get_db_session)):
+def create_questao(body: QuestaoCreate, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     cur = conn.execute("""
         INSERT INTO questoes (materia, topico, enunciado, alternativa_a, alternativa_b,
-            alternativa_c, alternativa_d, alternativa_e, resposta_correta, explicacao, dificuldade, banca, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            alternativa_c, alternativa_d, alternativa_e, resposta_correta, explicacao, dificuldade, banca, created_at, user_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (body.materia, body.topico, body.enunciado, body.alternativa_a, body.alternativa_b,
           body.alternativa_c, body.alternativa_d, body.alternativa_e, body.resposta_correta,
-          body.explicacao, body.dificuldade, body.banca, today_str()))
+          body.explicacao, body.dificuldade, body.banca, today_str(), user_id))
     conn.commit()
     new_id = cur.lastrowid
     log.info(f"Questão created: id={new_id} materia={body.materia}")
@@ -278,16 +284,16 @@ def create_questao(body: QuestaoCreate, conn=Depends(get_db_session)):
 
 
 @router.post("/api/questoes/{id}/responder", response_model=QuestaoRespostaResponse, summary="Responder questão", description="Registra a resposta do usuário e retorna se acertou ou errou")
-def responder_questao(id: int, body: QuestaoResposta, conn=Depends(get_db_session)):
-    questao = conn.execute("SELECT resposta_correta, materia FROM questoes WHERE id = ?", (id,)).fetchone()
+def responder_questao(id: int, body: QuestaoResposta, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    questao = conn.execute("SELECT resposta_correta, materia FROM questoes WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
     if not questao:
         raise HTTPException(status_code=404, detail="Questão não encontrada")
     acertou = 1 if body.resposta.upper() == questao[0].upper() else 0
     conn.execute("""
-        INSERT INTO questoes_respostas (questao_id, resposta_usuario, acertou, tempo_segundos, data)
-        VALUES (?, ?, ?, ?, ?)
-    """, (id, body.resposta, acertou, body.tempo_segundos, today_str()))
-    update_streak(conn, "questoes_resolvidas")
+        INSERT INTO questoes_respostas (questao_id, resposta_usuario, acertou, tempo_segundos, data, user_id)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (id, body.resposta, acertou, body.tempo_segundos, today_str(), user_id))
+    update_streak(conn, "questoes_resolvidas", user_id=user_id)
 
     # Registrar tempo como sessão de estudo (se > 10 segundos)
     if body.tempo_segundos > 10:
@@ -295,21 +301,21 @@ def responder_questao(id: int, body: QuestaoResposta, conn=Depends(get_db_sessio
         materia = questao["materia"] or "Questões"
         # Acumular na sessão do dia (evitar muitas linhas)
         existing = conn.execute(
-            "SELECT id, horas FROM sessoes_estudo WHERE data = ? AND materia = ? AND tipo = 'questoes'",
-            (today_str(), materia)
+            "SELECT id, horas FROM sessoes_estudo WHERE data = ? AND materia = ? AND tipo = 'questoes' AND user_id = ?",
+            (today_str(), materia, user_id)
         ).fetchone()
         if existing:
             conn.execute(
-                "UPDATE sessoes_estudo SET horas = horas + ? WHERE id = ?",
-                (horas, existing["id"])
+                "UPDATE sessoes_estudo SET horas = horas + ? WHERE id = ? AND user_id = ?",
+                (horas, existing["id"], user_id)
             )
         else:
             conn.execute(
-                "INSERT INTO sessoes_estudo (materia, horas, data, tipo) VALUES (?, ?, ?, 'questoes')",
-                (materia, horas, today_str())
+                "INSERT INTO sessoes_estudo (materia, horas, data, tipo, user_id) VALUES (?, ?, ?, 'questoes', ?)",
+                (materia, horas, today_str(), user_id)
             )
         # Atualizar streak de horas do dia (meta diária)
-        update_streak(conn, "horas_estudadas", horas)
+        update_streak(conn, "horas_estudadas", horas, user_id=user_id)
 
     conn.commit()
     return {"acertou": bool(acertou), "resposta_correta": questao[0]}
@@ -317,7 +323,7 @@ def responder_questao(id: int, body: QuestaoResposta, conn=Depends(get_db_sessio
 
 @router.put("/api/questoes/vincular-lote", summary="Vincular disciplina em lote",
             description="Atualiza matéria/tópico/banca de todas as questões que correspondem ao filtro")
-def vincular_questoes_lote(body: dict = Body(...), conn=Depends(get_db_session)):
+def vincular_questoes_lote(body: dict = Body(...), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """
     Body: {
         filtro: {created_at?, materia_atual?, banca?},
@@ -331,8 +337,8 @@ def vincular_questoes_lote(body: dict = Body(...), conn=Depends(get_db_session))
         raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
 
     # Construir WHERE
-    where = "WHERE 1=1"
-    params = []
+    where = "WHERE user_id = ?"
+    params = [user_id]
     if filtro.get("created_at"):
         where += " AND created_at = ?"
         params.append(filtro["created_at"])
@@ -365,9 +371,9 @@ def vincular_questoes_lote(body: dict = Body(...), conn=Depends(get_db_session))
 
 
 @router.put("/api/questoes/{id}", summary="Editar questão")
-def update_questao(id: int, body: dict = Body(...), conn=Depends(get_db_session)):
+def update_questao(id: int, body: dict = Body(...), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Atualiza campos de uma questão (materia, topico, enunciado, alternativas, resposta, explicacao, dificuldade, banca)."""
-    row = conn.execute("SELECT id FROM questoes WHERE id = ?", (id,)).fetchone()
+    row = conn.execute("SELECT id FROM questoes WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Questão não encontrada")
     
@@ -385,37 +391,38 @@ def update_questao(id: int, body: dict = Body(...), conn=Depends(get_db_session)
         raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
     
     params.append(id)
-    conn.execute(f"UPDATE questoes SET {', '.join(updates)} WHERE id = ?", params)
+    params.append(user_id)
+    conn.execute(f"UPDATE questoes SET {', '.join(updates)} WHERE id = ? AND user_id = ?", params)
     conn.commit()
     
-    updated = conn.execute("SELECT * FROM questoes WHERE id = ?", (id,)).fetchone()
+    updated = conn.execute("SELECT * FROM questoes WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
     log.info(f"Questão atualizada: id={id}")
     return dict(updated)
 
 
 @router.delete("/api/questoes/{id}")
-def delete_questao(id: int, conn=Depends(get_db_session)):
-    conn.execute("DELETE FROM questoes_respostas WHERE questao_id = ?", (id,))
-    conn.execute("DELETE FROM questoes WHERE id = ?", (id,))
+def delete_questao(id: int, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    conn.execute("DELETE FROM questoes_respostas WHERE questao_id = ? AND user_id = ?", (id, user_id))
+    conn.execute("DELETE FROM questoes WHERE id = ? AND user_id = ?", (id, user_id))
     conn.commit()
     log.info(f"Questão deleted: id={id}")
     return {"ok": True}
 
 
 @router.get("/api/daily-challenge")
-def daily_challenge(conn=Depends(get_db_session)):
+def daily_challenge(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Retorna a questão do dia (uma aleatória não respondida hoje)"""
     # Buscar questões não respondidas hoje
     respondidas_hoje = conn.execute(
-        "SELECT questao_id FROM questoes_respostas WHERE data = ?", (today_str(),)
+        "SELECT questao_id FROM questoes_respostas WHERE data = ? AND user_id = ?", (today_str(), user_id)
     ).fetchall()
     ids_hoje = [r[0] for r in respondidas_hoje]
 
     if ids_hoje:
         placeholders = ','.join('?' * len(ids_hoje))
-        rows = conn.execute(f"SELECT * FROM questoes WHERE id NOT IN ({placeholders})", ids_hoje).fetchall()
+        rows = conn.execute(f"SELECT * FROM questoes WHERE user_id = ? AND id NOT IN ({placeholders})", [user_id] + ids_hoje).fetchall()
     else:
-        rows = conn.execute("SELECT * FROM questoes").fetchall()
+        rows = conn.execute("SELECT * FROM questoes WHERE user_id = ?", (user_id,)).fetchall()
 
     if not rows:
         return {"message": "Parabéns! Você já respondeu todas as questões disponíveis hoje.", "questao": None}
@@ -425,9 +432,9 @@ def daily_challenge(conn=Depends(get_db_session)):
 
 
 @router.get("/api/active-recall/{materia}")
-def active_recall_session(materia: str, conn=Depends(get_db_session)):
+def active_recall_session(materia: str, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Gera uma sessão de active recall: questões aleatórias de uma matéria"""
-    rows = conn.execute("SELECT * FROM questoes WHERE materia = ?", (materia,)).fetchall()
+    rows = conn.execute("SELECT * FROM questoes WHERE materia = ? AND user_id = ?", (materia, user_id)).fetchall()
     if not rows:
         return {"questoes": [], "message": "Nenhuma questão disponível para esta matéria."}
     sample = random.sample([dict(r) for r in rows], min(5, len(rows)))
@@ -435,9 +442,9 @@ def active_recall_session(materia: str, conn=Depends(get_db_session)):
 
 
 @router.get("/api/intercalacao")
-def intercalacao_forcada(conn=Depends(get_db_session)):
+def intercalacao_forcada(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Sorteia tópicos de matérias DIFERENTES para estudo intercalado"""
-    materias = conn.execute("SELECT DISTINCT materia FROM edital WHERE status != 'Concluído'").fetchall()
+    materias = conn.execute("SELECT DISTINCT materia FROM edital WHERE status != 'Concluído' AND user_id = ?", (user_id,)).fetchall()
     if len(materias) < 2:
         return {"topicos": [], "message": "Precisa de pelo menos 2 matérias não concluídas."}
 
@@ -445,8 +452,8 @@ def intercalacao_forcada(conn=Depends(get_db_session)):
     topicos = []
     for mat in selected_mats:
         rows = conn.execute(
-            "SELECT id, materia, topico FROM edital WHERE materia = ? AND status != 'Concluído' ORDER BY RANDOM() LIMIT 2",
-            (mat,)
+            "SELECT id, materia, topico FROM edital WHERE materia = ? AND status != 'Concluído' AND user_id = ? ORDER BY RANDOM() LIMIT 2",
+            (mat, user_id)
         ).fetchall()
         topicos.extend([dict(r) for r in rows])
     random.shuffle(topicos)
@@ -454,20 +461,20 @@ def intercalacao_forcada(conn=Depends(get_db_session)):
 
 
 @router.get("/api/questoes-vinculadas/{edital_id}")
-def questoes_vinculadas(edital_id: int, conn=Depends(get_db_session)):
+def questoes_vinculadas(edital_id: int, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Busca questões que correspondem ao tópico de um item do edital"""
-    topico = conn.execute("SELECT materia, topico FROM edital WHERE id = ?", (edital_id,)).fetchone()
+    topico = conn.execute("SELECT materia, topico FROM edital WHERE id = ? AND user_id = ?", (edital_id, user_id)).fetchone()
     if not topico:
         raise HTTPException(status_code=404, detail="Tópico do edital não encontrado")
-    rows = conn.execute("SELECT id, enunciado, resposta_correta FROM questoes WHERE materia = ? LIMIT 10",
-                        (topico[0],)).fetchall()
+    rows = conn.execute("SELECT id, enunciado, resposta_correta FROM questoes WHERE materia = ? AND user_id = ? LIMIT 10",
+                        (topico[0], user_id)).fetchall()
     return {"materia": topico[0], "topico": topico[1], "questoes": [dict(r) for r in rows]}
 
 
 @router.get("/api/gerar-questao/{edital_id}")
-def gerar_questao_template(edital_id: int, conn=Depends(get_db_session)):
+def gerar_questao_template(edital_id: int, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Gera um template de questão baseado no tópico do edital"""
-    topico = conn.execute("SELECT materia, topico FROM edital WHERE id = ?", (edital_id,)).fetchone()
+    topico = conn.execute("SELECT materia, topico FROM edital WHERE id = ? AND user_id = ?", (edital_id, user_id)).fetchone()
     if not topico:
         raise HTTPException(status_code=404, detail="Tópico do edital não encontrado")
     return {
@@ -773,7 +780,8 @@ async def importar_questoes_pdf(
     file: UploadFile = File(...),
     materia: str = "",
     banca: str = "",
-    conn=Depends(get_db_session)
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
 ):
     """
     Aceita PDF com questões de múltipla escolha e gabarito.
@@ -820,11 +828,11 @@ async def importar_questoes_pdf(
                 sem_gabarito += 1
             conn.execute("""
                 INSERT INTO questoes (materia, topico, enunciado, alternativa_a, alternativa_b,
-                    alternativa_c, alternativa_d, alternativa_e, resposta_correta, explicacao, dificuldade, banca, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    alternativa_c, alternativa_d, alternativa_e, resposta_correta, explicacao, dificuldade, banca, created_at, user_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (q["materia"], q["topico"], q["enunciado"], q["alternativa_a"], q["alternativa_b"],
                   q["alternativa_c"], q["alternativa_d"], q["alternativa_e"], q["resposta_correta"],
-                  q["explicacao"], q["dificuldade"], q["banca"], today_str()))
+                  q["explicacao"], q["dificuldade"], q["banca"], today_str(), user_id))
             count += 1
 
         conn.commit()

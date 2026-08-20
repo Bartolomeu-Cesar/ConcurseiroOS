@@ -373,21 +373,21 @@ def upgrade_plan(body: dict = Body(...), user=Depends(get_current_user), conn=De
 @router.get("/check-limit/{recurso}")
 def check_resource_limit(recurso: str, user=Depends(get_optional_user), conn=Depends(get_db_session)):
     """Verifica se o usuário pode usar mais de um recurso específico."""
-    # Contar uso atual
-    counts = {}
-    if user:
-        uid_filter = ""  # Por enquanto sem filtro por user (single-user app)
-    
+    from deps import get_user_id, DEFAULT_USER_ID
+
+    # Determinar user_id para filtro
+    uid = user["id"] if user else DEFAULT_USER_ID
+
     if recurso == "editais":
-        count = conn.execute("SELECT COUNT(DISTINCT edital_nome) FROM edital WHERE arquivado = 0").fetchone()[0]
+        count = conn.execute("SELECT COUNT(DISTINCT edital_nome) FROM edital WHERE arquivado = 0 AND user_id = ?", (uid,)).fetchone()[0]
     elif recurso == "flashcards":
-        count = conn.execute("SELECT COUNT(*) FROM flashcards").fetchone()[0]
+        count = conn.execute("SELECT COUNT(*) FROM flashcards WHERE user_id = ?", (uid,)).fetchone()[0]
     elif recurso == "pdfs":
-        count = conn.execute("SELECT COUNT(*) FROM progress").fetchone()[0]
+        count = conn.execute("SELECT COUNT(*) FROM progress WHERE user_id = ?", (uid,)).fetchone()[0]
     elif recurso == "simulados":
-        count = conn.execute("SELECT COUNT(*) FROM simulados").fetchone()[0]
+        count = conn.execute("SELECT COUNT(*) FROM simulados WHERE user_id = ?", (uid,)).fetchone()[0]
     elif recurso == "ciclo_materias":
-        count = conn.execute("SELECT COUNT(*) FROM ciclo_estudos WHERE ativo = 1").fetchone()[0]
+        count = conn.execute("SELECT COUNT(*) FROM ciclo_estudos WHERE ativo = 1 AND user_id = ?", (uid,)).fetchone()[0]
     else:
         count = 0
 

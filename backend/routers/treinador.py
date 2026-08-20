@@ -7,6 +7,7 @@ from fastapi import APIRouter, Body, Depends, Query
 
 from constants import WEIGHT_ACCURACY, WEIGHT_CONSISTENCY, WEIGHT_PROGRESS
 from database import get_db_session
+from deps import get_user_id
 from logger import log
 from utils import calculate_streak, today_str
 
@@ -17,25 +18,26 @@ router = APIRouter(prefix="", tags=["Treinador Inteligente"])
 # FUNÇÕES AUXILIARES
 # ============================================================
 
-def _get_performance_by_subject(conn) -> dict:
+def _get_performance_by_subject(conn, user_id: int) -> dict:
     rows = conn.execute("""
         SELECT q.materia, COUNT(*) as total, SUM(qr.acertou) as acertos
         FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id
+        WHERE qr.user_id = ?
         GROUP BY q.materia
-    """).fetchall()
+    """, (user_id,)).fetchall()
     return {r[0]: {"total": r[1], "acertos": r[2] or 0, "pct": round((r[2] or 0) / r[1] * 100, 1) if r[1] > 0 else 0} for r in rows}
 
 
-def _get_last_session_by_subject(conn) -> dict:
-    rows = conn.execute("SELECT materia, MAX(data) as ultima FROM sessoes_estudo GROUP BY materia").fetchall()
+def _get_last_session_by_subject(conn, user_id: int) -> dict:
+    rows = conn.execute("SELECT materia, MAX(data) as ultima FROM sessoes_estudo WHERE user_id = ? GROUP BY materia", (user_id,)).fetchall()
     return {r[0]: r[1] for r in rows}
 
 
-def _get_pending_reviews(conn) -> dict:
-    flashcards = conn.execute("SELECT COUNT(*) FROM flashcards WHERE proxima_revisao <= ?", (today_str(),)).fetchone()[0]
+def _get_pending_reviews(conn, user_id: int) -> dict:
+    flashcards = conn.execute("SELECT COUNT(*) FROM flashcards WHERE proxima_revisao <= ? AND user_id = ?", (today_str(), user_id)).fetchone()[0]
     topicos = conn.execute("""
-        SELECT COUNT(*) FROM edital WHERE proxima_revisao != '' AND proxima_revisao <= ?
-    """, (today_str(),)).fetchone()[0]
+        SELECT COUNT(*) FROM edital WHERE proxima_revisao != '' AND proxima_revisao <= ? AND user_id = ?
+    """, (today_str(), user_id)).fetchone()[0]
     return {"flashcards": flashcards, "topicos": topicos}
 
 
@@ -114,11 +116,11 @@ def _generate_recommendations(materias_foco: list, pending: dict, streak: int,
     return recomendacoes
 
 
-def _dias_ate_prova(conn, edital_nome: str = "", cargo: str = ""):
+def _dias_ate_prova(conn, user_id: int, edital_nome: str = "", cargo: str = ""):
     try:
         query = """SELECT data_prova_objetiva FROM edital_info
-            WHERE data_prova_objetiva != '' AND data_prova_objetiva != 'Consultar edital'"""
-        params = []
+            WHERE data_prova_objetiva != '' AND data_prova_objetiva != 'Consultar edital' AND user_id = ?"""
+        params = [user_id]
         if edital_nome:
             query += " AND edital_nome = ?"
             params.append(edital_nome)
@@ -141,7 +143,7 @@ def _dias_ate_prova(conn, edital_nome: str = "", cargo: str = ""):
 
 
 def _get_priority_activities(conn, desempenho: dict, ultima_sessao: dict,
-                             edital_nome: str = "", cargo: str = "") -> list:
+                             user_id: int, edital_nome: str = "", cargo: str = "") -> list:
     materias_priority = []
     hoje_date = date.today()
 
@@ -151,8 +153,8 @@ def _get_priority_activities(conn, desempenho: dict, ultima_sessao: dict,
             priority_score = (100 - stats["pct"]) + dias_sem * 2
             materias_priority.append({"materia": mat, "pct": stats["pct"], "dias_sem": dias_sem, "score": priority_score})
 
-    materias_edital_query = "SELECT DISTINCT materia FROM edital WHERE status != 'Concluído'"
-    params_edital = []
+    materias_edital_query = "SELECT DISTINCT materia FROM edital WHERE status != 'Concluído' AND user_id = ?"
+    params_edital = [user_id]
     if edital_nome:
         materias_edital_query += " AND edital_nome = ?"
         params_edital.append(edital_nome)
@@ -171,7 +173,7 @@ def _get_priority_activities(conn, desempenho: dict, ultima_sessao: dict,
 
 
 def _distribute_time(conn, top_materias: list, tempo_restante: int, ordem: int,
-                     edital_nome: str = "", cargo: str = "") -> tuple:
+                     user_id: int, edital_nome: str = "", cargo: str = "") -> tuple:
     atividades = []
     if not top_materias or tempo_restante <= 0:
         return atividades, ordem
@@ -188,15 +190,15 @@ def _distribute_time(conn, top_materias: list, tempo_restante: int, ordem: int,
         tempo_estudo = int(tempo_materia * 0.6)
         tempo_questoes = tempo_materia - tempo_estudo
 
-        topicos_query = "SELECT topico FROM edital WHERE materia = ? AND status != 'Concluído'"
-        topicos_params = [mat_info["materia"]]
+        topicos_query = "SELECT topico FROM edital WHERE materia = ? AND status != 'Concluído' AND user_id = ?"
+        topicos_params = [mat_info["materia"], user_id]
         if edital_nome:
             topicos_query += " AND edital_nome = ?"
             topicos_params.append(edital_nome)
         if cargo:
             topicos_query += " AND cargo = ?"
             topicos_params.append(cargo)
-        topicos_query += " LIMIT 3"
+        topicos_query += f" LIMIT 3"
         topicos = [r[0] for r in conn.execute(topicos_query, topicos_params).fetchall()]
 
         if tempo_estudo >= 10:
@@ -218,14 +220,14 @@ def _distribute_time(conn, top_materias: list, tempo_restante: int, ordem: int,
 # ============================================================
 
 @router.get("/api/treinador", summary="Treinador Inteligente")
-def treinador_inteligente(edital_nome: str = "", cargo: str = "", conn=Depends(get_db_session)):
-    desempenho = _get_performance_by_subject(conn)
-    ultima_sessao = _get_last_session_by_subject(conn)
-    pending = _get_pending_reviews(conn)
+def treinador_inteligente(edital_nome: str = "", cargo: str = "", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    desempenho = _get_performance_by_subject(conn, user_id)
+    ultima_sessao = _get_last_session_by_subject(conn, user_id)
+    pending = _get_pending_reviews(conn, user_id)
 
-    query_edital = "SELECT COUNT(*) FROM edital WHERE 1=1"
-    query_done = "SELECT COUNT(*) FROM edital WHERE status = 'Concluído'"
-    params_edital = []
+    query_edital = "SELECT COUNT(*) FROM edital WHERE user_id = ?"
+    query_done = "SELECT COUNT(*) FROM edital WHERE status = 'Concluído' AND user_id = ?"
+    params_edital = [user_id]
     if edital_nome:
         query_edital += " AND edital_nome = ?"
         query_done += " AND edital_nome = ?"
@@ -240,22 +242,22 @@ def treinador_inteligente(edital_nome: str = "", cargo: str = "", conn=Depends(g
     inicio_semana = (date.today() - timedelta(days=date.today().weekday())).isoformat()
     dias_semana = conn.execute("""
         SELECT COUNT(DISTINCT data) FROM streaks
-        WHERE data >= ? AND (horas_estudadas > 0 OR questoes_resolvidas > 0)
-    """, (inicio_semana,)).fetchone()[0]
+        WHERE data >= ? AND (horas_estudadas > 0 OR questoes_resolvidas > 0) AND user_id = ?
+    """, (inicio_semana, user_id)).fetchone()[0]
 
-    metas = conn.execute("SELECT meta_horas, meta_questoes FROM metas_config WHERE id = 1").fetchone()
+    metas = conn.execute("SELECT meta_horas, meta_questoes FROM metas_config WHERE user_id = ?", (user_id,)).fetchone()
     meta_horas = metas[0] if metas else 3.0
     meta_questoes = metas[1] if metas else 30
-    hoje_streak = conn.execute("SELECT horas_estudadas, questoes_resolvidas FROM streaks WHERE data = ?", (today_str(),)).fetchone()
+    hoje_streak = conn.execute("SELECT horas_estudadas, questoes_resolvidas FROM streaks WHERE data = ? AND user_id = ?", (today_str(), user_id)).fetchone()
     horas_hoje = hoje_streak[0] if hoje_streak else 0
     questoes_hoje = hoje_streak[1] if hoje_streak else 0
 
-    streak_info = calculate_streak(conn)
+    streak_info = calculate_streak(conn, user_id)
     streak = streak_info["streak_atual"]
-    dias_prova = _dias_ate_prova(conn, edital_nome, cargo)
+    dias_prova = _dias_ate_prova(conn, user_id, edital_nome, cargo)
 
-    q_total = conn.execute("SELECT COUNT(*) FROM questoes_respostas").fetchone()[0]
-    q_acertos = conn.execute("SELECT COUNT(*) FROM questoes_respostas WHERE acertou = 1").fetchone()[0]
+    q_total = conn.execute("SELECT COUNT(*) FROM questoes_respostas WHERE user_id = ?", (user_id,)).fetchone()[0]
+    q_acertos = conn.execute("SELECT COUNT(*) FROM questoes_respostas WHERE acertou = 1 AND user_id = ?", (user_id,)).fetchone()[0]
     pct_acerto_global = (q_acertos / q_total * 100) if q_total > 0 else 0
 
     pct_edital = (edital_concluido / edital_total * 100) if edital_total > 0 else 0
@@ -274,13 +276,13 @@ def treinador_inteligente(edital_nome: str = "", cargo: str = "", conn=Depends(g
 
 
 @router.get("/api/trilha-diaria", summary="Trilha de Estudo Diária")
-def trilha_diaria(edital_nome: str = "", cargo: str = "", horas_disponiveis: float = Query(default=3.0), conn=Depends(get_db_session)):
+def trilha_diaria(edital_nome: str = "", cargo: str = "", horas_disponiveis: float = Query(default=3.0), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     tempo_total_min = int(horas_disponiveis * 60)
     tempo_restante = tempo_total_min
     atividades = []
     ordem = 1
 
-    pending = _get_pending_reviews(conn)
+    pending = _get_pending_reviews(conn, user_id)
 
     if pending["flashcards"] > 0 and tempo_restante > 0:
         tempo_flash = min(max(5, pending["flashcards"] * 2), 20)
@@ -300,10 +302,10 @@ def trilha_diaria(edital_nome: str = "", cargo: str = "", horas_disponiveis: flo
         tempo_restante -= tempo_top
         ordem += 1
 
-    desempenho = _get_performance_by_subject(conn)
-    ultima_sessao = _get_last_session_by_subject(conn)
-    top_materias = _get_priority_activities(conn, desempenho, ultima_sessao, edital_nome, cargo)
-    new_atividades, ordem = _distribute_time(conn, top_materias, tempo_restante, ordem, edital_nome, cargo)
+    desempenho = _get_performance_by_subject(conn, user_id)
+    ultima_sessao = _get_last_session_by_subject(conn, user_id)
+    top_materias = _get_priority_activities(conn, desempenho, ultima_sessao, user_id, edital_nome, cargo)
+    new_atividades, ordem = _distribute_time(conn, top_materias, tempo_restante, ordem, user_id, edital_nome, cargo)
     atividades.extend(new_atividades)
 
     tempo_total_real = sum(a["tempo_min"] for a in atividades)
@@ -316,7 +318,7 @@ def trilha_diaria(edital_nome: str = "", cargo: str = "", horas_disponiveis: flo
             motivos.append(f"Menor % de acerto ({m['pct']}%)")
         if m["dias_sem"] > 0:
             motivos.append(f"{m['dias_sem']} dias sem estudar")
-        dias_prova_val = _dias_ate_prova(conn, edital_nome, cargo) if edital_nome else None
+        dias_prova_val = _dias_ate_prova(conn, user_id, edital_nome, cargo) if edital_nome else None
         if dias_prova_val is not None:
             motivos.append(f"prova em {dias_prova_val} dias")
         motivo = " + ".join(motivos) if motivos else "Matéria prioritária"
@@ -333,9 +335,9 @@ def trilha_diaria(edital_nome: str = "", cargo: str = "", horas_disponiveis: flo
 NOMES_DIAS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
 
 
-def _get_uncompleted_topics(conn, materia: str, edital_nome: str = "", cargo: str = "", limit: int = 3) -> list:
-    query = "SELECT topico FROM edital WHERE materia = ? AND status != 'Concluído'"
-    params = [materia]
+def _get_uncompleted_topics(conn, materia: str, user_id: int, edital_nome: str = "", cargo: str = "", limit: int = 3) -> list:
+    query = "SELECT topico FROM edital WHERE materia = ? AND status != 'Concluído' AND user_id = ?"
+    params = [materia, user_id]
     if edital_nome:
         query += " AND edital_nome = ?"
         params.append(edital_nome)
@@ -346,14 +348,14 @@ def _get_uncompleted_topics(conn, materia: str, edital_nome: str = "", cargo: st
     return [r[0] for r in conn.execute(query, params).fetchall()]
 
 
-def _gerar_planejador_interno(conn, horas_dia: float = 3.0):
+def _gerar_planejador_interno(conn, user_id: int, horas_dia: float = 3.0):
     """Gera planejador internamente (sem HTTP). Cascata: gera ciclo se necessário."""
     from routers.ciclo import _gerar_ciclo_automatico
 
-    ciclo = conn.execute("SELECT * FROM ciclo_estudos WHERE ativo = 1 ORDER BY ordem, id").fetchall()
+    ciclo = conn.execute("SELECT * FROM ciclo_estudos WHERE ativo = 1 AND user_id = ? ORDER BY ordem, id", (user_id,)).fetchall()
     if not ciclo:
-        _gerar_ciclo_automatico(conn, horas_dia)
-        ciclo = conn.execute("SELECT * FROM ciclo_estudos WHERE ativo = 1 ORDER BY ordem, id").fetchall()
+        _gerar_ciclo_automatico(conn, horas_dia, user_id)
+        ciclo = conn.execute("SELECT * FROM ciclo_estudos WHERE ativo = 1 AND user_id = ? ORDER BY ordem, id", (user_id,)).fetchall()
     if not ciclo:
         return
 
@@ -362,13 +364,13 @@ def _gerar_planejador_interno(conn, horas_dia: float = 3.0):
         mat = c["materia"]
         desemp = conn.execute("""
             SELECT COUNT(*) as total, COALESCE(SUM(qr.acertou), 0) as acertos
-            FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id WHERE q.materia = ?
-        """, (mat,)).fetchone()
+            FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id WHERE q.materia = ? AND qr.user_id = ?
+        """, (mat, user_id)).fetchone()
         total_q = desemp[0] or 0
         pct_acerto = (desemp[1] / total_q * 100) if total_q > 0 else 0
-        horas_estudadas = conn.execute("SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE materia = ?", (mat,)).fetchone()[0]
-        pendentes = conn.execute("SELECT COUNT(*) FROM edital WHERE materia = ? AND status != 'Concluído' AND arquivado = 0", (mat,)).fetchone()[0]
-        ultima = conn.execute("SELECT MAX(data) FROM sessoes_estudo WHERE materia = ?", (mat,)).fetchone()[0]
+        horas_estudadas = conn.execute("SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE materia = ? AND user_id = ?", (mat, user_id)).fetchone()[0]
+        pendentes = conn.execute("SELECT COUNT(*) FROM edital WHERE materia = ? AND status != 'Concluído' AND arquivado = 0 AND user_id = ?", (mat, user_id)).fetchone()[0]
+        ultima = conn.execute("SELECT MAX(data) FROM sessoes_estudo WHERE materia = ? AND user_id = ?", (mat, user_id)).fetchone()[0]
         try:
             dias_sem = (date.today() - date.fromisoformat(ultima)).days if ultima else 999
         except (ValueError, TypeError):
@@ -430,24 +432,24 @@ def _gerar_planejador_interno(conn, horas_dia: float = 3.0):
     for m in materias_scored[:2]:
         dias[6].append({"materia": m["materia"], "horas": 0.5})
 
-    conn.execute("DELETE FROM planejador_semanal")
+    conn.execute("DELETE FROM planejador_semanal WHERE user_id = ?", (user_id,))
     for dia_idx, slots in enumerate(dias):
         for slot in slots:
-            conn.execute("INSERT INTO planejador_semanal (dia_semana, materia, horas) VALUES (?, ?, ?)",
-                         (dia_idx, slot["materia"], slot["horas"]))
+            conn.execute("INSERT INTO planejador_semanal (dia_semana, materia, horas, user_id) VALUES (?, ?, ?, ?)",
+                         (dia_idx, slot["materia"], slot["horas"], user_id))
     conn.commit()
 
 
 @router.get("/api/calendario-semanal", summary="Calendário Semanal")
-def calendario_semanal(edital_nome: str = "", cargo: str = "", horas_dia: float = Query(default=3.0), conn=Depends(get_db_session)):
+def calendario_semanal(edital_nome: str = "", cargo: str = "", horas_dia: float = Query(default=3.0), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Gera calendário semanal de estudos."""
     tempo_dia_min = int(horas_dia * 60)
 
-    planejador = conn.execute("SELECT * FROM planejador_semanal ORDER BY dia_semana, id").fetchall()
+    planejador = conn.execute("SELECT * FROM planejador_semanal WHERE user_id = ? ORDER BY dia_semana, id", (user_id,)).fetchall()
     planejador_gerado = False
     if not planejador:
-        _gerar_planejador_interno(conn, horas_dia)
-        planejador = conn.execute("SELECT * FROM planejador_semanal ORDER BY dia_semana, id").fetchall()
+        _gerar_planejador_interno(conn, user_id, horas_dia)
+        planejador = conn.execute("SELECT * FROM planejador_semanal WHERE user_id = ? ORDER BY dia_semana, id", (user_id,)).fetchall()
         planejador_gerado = True
 
     hoje = date.today()
@@ -469,8 +471,8 @@ def calendario_semanal(edital_nome: str = "", cargo: str = "", horas_dia: float 
     for p in planejador:
         plan_por_dia[p["dia_semana"]].append({"materia": p["materia"], "horas": p["horas"]})
 
-    desempenho = _get_performance_by_subject(conn)
-    pending = _get_pending_reviews(conn)
+    desempenho = _get_performance_by_subject(conn, user_id)
+    pending = _get_pending_reviews(conn, user_id)
 
     dias = []
     distribuicao_map = {}
@@ -513,7 +515,7 @@ def calendario_semanal(edital_nome: str = "", cargo: str = "", horas_dia: float 
                 proporcao = slot["horas"] / total_horas_dia
                 tempo_materia = int(tempo_para_materias * proporcao)
 
-                topicos = _get_uncompleted_topics(conn, materia_nome, edital_nome, cargo, limit=3)
+                topicos = _get_uncompleted_topics(conn, materia_nome, user_id, edital_nome, cargo, limit=3)
                 if not topicos:
                     topicos = ["Revisão geral"]
 

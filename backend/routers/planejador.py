@@ -4,6 +4,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from database import get_db_session
+from deps import get_user_id
 from logger import log
 from models import OkResponse, PlanejadorItem
 
@@ -11,23 +12,23 @@ router = APIRouter(prefix="", tags=["Planejador"])
 
 
 @router.get("/api/planejador")
-def get_planejador(conn=Depends(get_db_session)):
-    rows = conn.execute("SELECT id, dia_semana, materia, horas FROM planejador_semanal ORDER BY dia_semana, id").fetchall()
+def get_planejador(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    rows = conn.execute("SELECT id, dia_semana, materia, horas FROM planejador_semanal WHERE user_id = ? ORDER BY dia_semana, id", (user_id,)).fetchall()
     return [dict(r) for r in rows]
 
 
 @router.post("/api/planejador")
-def add_planejador(body: PlanejadorItem, conn=Depends(get_db_session)):
-    cur = conn.execute("INSERT INTO planejador_semanal (dia_semana, materia, horas) VALUES (?, ?, ?)",
-                       (body.dia_semana, body.materia, body.horas))
+def add_planejador(body: PlanejadorItem, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    cur = conn.execute("INSERT INTO planejador_semanal (dia_semana, materia, horas, user_id) VALUES (?, ?, ?, ?)",
+                       (body.dia_semana, body.materia, body.horas, user_id))
     conn.commit()
     log.info(f"Planejador item added: {body.materia} dia {body.dia_semana}")
     return {"id": cur.lastrowid, "ok": True}
 
 
 @router.delete("/api/planejador/{id}", response_model=OkResponse)
-def delete_planejador(id: int, conn=Depends(get_db_session)):
-    conn.execute("DELETE FROM planejador_semanal WHERE id = ?", (id,))
+def delete_planejador(id: int, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    conn.execute("DELETE FROM planejador_semanal WHERE id = ? AND user_id = ?", (id, user_id))
     conn.commit()
     log.info(f"Planejador item deleted: {id}")
     return {"ok": True}
@@ -35,22 +36,22 @@ def delete_planejador(id: int, conn=Depends(get_db_session)):
 
 @router.post("/api/planejador/gerar", summary="Gerar planejador automaticamente",
              description="Distribui matérias do ciclo nos dias da semana com scoring inteligente")
-def gerar_planejador(horas_dia: float = Query(default=3.0), conn=Depends(get_db_session)):
+def gerar_planejador(horas_dia: float = Query(default=3.0), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """
     Gera planejador semanal inteligente. Cascata:
     1. Verifica se há ciclo ativo → se não, gera automaticamente dos editais
     2. Distribui matérias nos dias otimizando aprendizado
     """
     # 1. Verificar ciclo ativo
-    ciclo = conn.execute("SELECT * FROM ciclo_estudos WHERE ativo = 1 ORDER BY ordem, id").fetchall()
+    ciclo = conn.execute("SELECT * FROM ciclo_estudos WHERE ativo = 1 AND user_id = ? ORDER BY ordem, id", (user_id,)).fetchall()
 
     ciclo_gerado = False
     if not ciclo:
         from routers.ciclo import _gerar_ciclo_automatico
-        result = _gerar_ciclo_automatico(conn, horas_dia)
+        result = _gerar_ciclo_automatico(conn, horas_dia, user_id)
         if not result["ok"]:
             raise HTTPException(status_code=400, detail="Não há matérias no edital para gerar o planejador")
-        ciclo = conn.execute("SELECT * FROM ciclo_estudos WHERE ativo = 1 ORDER BY ordem, id").fetchall()
+        ciclo = conn.execute("SELECT * FROM ciclo_estudos WHERE ativo = 1 AND user_id = ? ORDER BY ordem, id", (user_id,)).fetchall()
         ciclo_gerado = True
 
     # 2. Calcular scoring por matéria
@@ -62,22 +63,22 @@ def gerar_planejador(horas_dia: float = Query(default=3.0), conn=Depends(get_db_
             SELECT COUNT(*) as total, COALESCE(SUM(qr.acertou), 0) as acertos
             FROM questoes_respostas qr
             JOIN questoes q ON q.id = qr.questao_id
-            WHERE q.materia = ?
-        """, (mat,)).fetchone()
+            WHERE q.materia = ? AND qr.user_id = ?
+        """, (mat, user_id)).fetchone()
         total_q = desemp[0] or 0
         pct_acerto = (desemp[1] / total_q * 100) if total_q > 0 else 0
 
         horas_estudadas = conn.execute(
-            "SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE materia = ?", (mat,)
+            "SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE materia = ? AND user_id = ?", (mat, user_id)
         ).fetchone()[0]
 
         pendentes = conn.execute(
-            "SELECT COUNT(*) FROM edital WHERE materia = ? AND status != 'Concluído' AND arquivado = 0",
-            (mat,)
+            "SELECT COUNT(*) FROM edital WHERE materia = ? AND status != 'Concluído' AND arquivado = 0 AND user_id = ?",
+            (mat, user_id)
         ).fetchone()[0]
 
         ultima = conn.execute(
-            "SELECT MAX(data) FROM sessoes_estudo WHERE materia = ?", (mat,)
+            "SELECT MAX(data) FROM sessoes_estudo WHERE materia = ? AND user_id = ?", (mat, user_id)
         ).fetchone()[0]
         if ultima:
             try:
@@ -196,13 +197,13 @@ def gerar_planejador(horas_dia: float = Query(default=3.0), conn=Depends(get_db_
         })
 
     # 6. Salvar no banco
-    conn.execute("DELETE FROM planejador_semanal")
+    conn.execute("DELETE FROM planejador_semanal WHERE user_id = ?", (user_id,))
     count = 0
     for dia_idx, slots in enumerate(dias):
         for slot in slots:
             conn.execute(
-                "INSERT INTO planejador_semanal (dia_semana, materia, horas) VALUES (?, ?, ?)",
-                (dia_idx, slot["materia"], slot["horas"])
+                "INSERT INTO planejador_semanal (dia_semana, materia, horas, user_id) VALUES (?, ?, ?, ?)",
+                (dia_idx, slot["materia"], slot["horas"], user_id)
             )
             count += 1
     conn.commit()

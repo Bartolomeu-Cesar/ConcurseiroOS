@@ -1,54 +1,38 @@
 import sqlite3
 from collections.abc import Generator
 from contextlib import contextmanager
-from queue import Queue
 
 from logger import log
 from settings import settings
 
 DB_PATH = settings.DB_PATH
 
-# ============================================================
-# CONNECTION POOL (Thread-safe SQLite)
-# ============================================================
-
-_pool: Queue | None = None
-_POOL_SIZE = 5
-
-
-def _init_pool():
-    """Inicializa pool de conexões SQLite."""
-    global _pool
-    if _pool is None:
-        _pool = Queue(maxsize=_POOL_SIZE)
-        for _ in range(_POOL_SIZE):
-            conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-            conn.row_factory = sqlite3.Row
-            conn.execute("PRAGMA journal_mode=WAL")
-            conn.execute("PRAGMA synchronous=NORMAL")
-            conn.execute("PRAGMA cache_size=-8000")  # 8MB cache
-            conn.execute("PRAGMA busy_timeout=5000")  # 5s timeout
-            _pool.put(conn)
-
 
 @contextmanager
 def get_db():
-    _init_pool()
-    conn = _pool.get()
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=10)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA busy_timeout=5000")
     try:
         yield conn
     finally:
-        _pool.put(conn)
+        conn.close()
 
 
 def get_db_session() -> Generator[sqlite3.Connection, None, None]:
     """FastAPI dependency que fornece uma conexão ao banco de dados."""
-    _init_pool()
-    conn = _pool.get()
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=10)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA busy_timeout=5000")
+    conn.execute("PRAGMA cache_size=-4000")  # 4MB cache
     try:
         yield conn
     finally:
-        _pool.put(conn)
+        conn.close()
 
 
 def rebuild_search_index(conn):
@@ -538,6 +522,52 @@ def _run_migrations(conn):
             log.info("Migration: added column sumulas_revisadas to streaks")
         except Exception:
             pass
+
+    # ========== MULTI-USER ISOLATION: user_id em todas as tabelas ==========
+    _migrate_user_id(conn)
+
+
+def _migrate_user_id(conn):
+    """Adiciona coluna user_id em todas as tabelas que precisam de isolamento por usuário."""
+    tables_needing_user_id = [
+        "edital", "flashcards", "questoes", "questoes_respostas",
+        "simulados", "simulado_questoes", "ciclo_estudos", "sessoes_estudo",
+        "streaks", "metas_config", "notas_pdf", "notas_topico",
+        "bookmarks_pdf", "cadernos", "caderno_itens", "feynman",
+        "desafios", "planejador_semanal", "calendario_personalizado",
+        "calendario_atividades", "calendario_streaks", "resumos",
+        "sumulas", "progress", "edital_info",
+    ]
+
+    for table in tables_needing_user_id:
+        try:
+            conn.execute(f"SELECT user_id FROM {table} LIMIT 1")
+        except Exception:
+            try:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN user_id INTEGER DEFAULT 1")
+                log.info(f"Migration: added column user_id to {table}")
+            except Exception:
+                pass
+
+    # Criar índice composto para user_id nas tabelas mais consultadas
+    index_tables = [
+        "edital", "flashcards", "questoes", "questoes_respostas",
+        "sessoes_estudo", "streaks", "simulados", "ciclo_estudos",
+        "sumulas", "metas_config", "progress",
+    ]
+    for table in index_tables:
+        try:
+            conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{table}_user_id ON {table}(user_id)")
+        except Exception:
+            pass
+
+    # Garantir que metas_config tem registro para user_id=1
+    existing = conn.execute("SELECT id FROM metas_config WHERE user_id = 1 LIMIT 1").fetchone()
+    if not existing:
+        # Atualizar registros existentes sem user_id
+        conn.execute("UPDATE metas_config SET user_id = 1 WHERE user_id IS NULL OR user_id = 0")
+
+    conn.commit()
 
 
 def _create_indexes(conn):

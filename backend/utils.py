@@ -31,10 +31,11 @@ def build_tree(root: str) -> list:
     return result
 
 
-def calculate_streak(conn) -> dict:
+def calculate_streak(conn, user_id: int = 1) -> dict:
     """Calcula streak atual e melhor streak histórico."""
     rows = conn.execute(
-        "SELECT data FROM streaks WHERE horas_estudadas > 0 OR questoes_resolvidas > 0 OR flashcards_revisados > 0 ORDER BY data DESC"
+        "SELECT data FROM streaks WHERE (horas_estudadas > 0 OR questoes_resolvidas > 0 OR flashcards_revisados > 0) AND user_id = ? ORDER BY data DESC",
+        (user_id,)
     ).fetchall()
 
     streak = 0
@@ -82,23 +83,23 @@ def paginate(items: list, page: int | None, limit: int = 50) -> Any:
     }
 
 
-def update_streak(conn, field: str, value: int = 1) -> None:
+def update_streak(conn, field: str, value: int = 1, user_id: int = 1) -> None:
     """Incrementa um campo do streak de hoje. Fields: horas_estudadas, questoes_resolvidas, flashcards_revisados."""
     if field == "horas_estudadas":
         conn.execute("""
-            INSERT INTO streaks (data, horas_estudadas) VALUES (?, ?)
+            INSERT INTO streaks (data, horas_estudadas, user_id) VALUES (?, ?, ?)
             ON CONFLICT(data) DO UPDATE SET horas_estudadas = horas_estudadas + ?
-        """, (today_str(), value, value))
+        """, (today_str(), value, user_id, value))
     elif field == "questoes_resolvidas":
         conn.execute("""
-            INSERT INTO streaks (data, questoes_resolvidas) VALUES (?, 1)
+            INSERT INTO streaks (data, questoes_resolvidas, user_id) VALUES (?, 1, ?)
             ON CONFLICT(data) DO UPDATE SET questoes_resolvidas = questoes_resolvidas + 1
-        """, (today_str(),))
+        """, (today_str(), user_id))
     elif field == "flashcards_revisados":
         conn.execute("""
-            INSERT INTO streaks (data, flashcards_revisados) VALUES (?, 1)
+            INSERT INTO streaks (data, flashcards_revisados, user_id) VALUES (?, 1, ?)
             ON CONFLICT(data) DO UPDATE SET flashcards_revisados = flashcards_revisados + 1
-        """, (today_str(),))
+        """, (today_str(), user_id))
 
 
 def build_edital_filter(edital_nome: str = "", cargo: str = "") -> tuple[str, list]:

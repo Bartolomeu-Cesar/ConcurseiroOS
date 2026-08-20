@@ -6,6 +6,7 @@ from typing import List
 from fastapi import APIRouter, Body, Depends, Query
 
 from database import get_db_session
+from deps import get_user_id
 from logger import log
 from models import CalendarioItem
 from utils import today_str
@@ -20,10 +21,11 @@ NOMES_DIAS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domi
 # ============================================================
 
 @router.get("/api/calendario-personalizado")
-def get_calendario_personalizado(conn=Depends(get_db_session)):
+def get_calendario_personalizado(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Retorna o calendário personalizado salvo pelo usuário."""
     rows = conn.execute(
-        "SELECT id, dia_semana, materia, topicos, tempo_min, tipo, ordem FROM calendario_personalizado ORDER BY dia_semana, ordem"
+        "SELECT id, dia_semana, materia, topicos, tempo_min, tipo, ordem FROM calendario_personalizado WHERE user_id = ? ORDER BY dia_semana, ordem",
+        (user_id,)
     ).fetchall()
     items = [dict(r) for r in rows]
     dias = []
@@ -39,39 +41,39 @@ def get_calendario_personalizado(conn=Depends(get_db_session)):
 
 
 @router.post("/api/calendario-personalizado")
-def add_calendario_item(body: CalendarioItem, conn=Depends(get_db_session)):
+def add_calendario_item(body: CalendarioItem, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     cur = conn.execute(
-        "INSERT INTO calendario_personalizado (dia_semana, materia, topicos, tempo_min, tipo, ordem) VALUES (?, ?, ?, ?, ?, ?)",
-        (body.dia_semana, body.materia, body.topicos, body.tempo_min, body.tipo, body.ordem)
+        "INSERT INTO calendario_personalizado (dia_semana, materia, topicos, tempo_min, tipo, ordem, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (body.dia_semana, body.materia, body.topicos, body.tempo_min, body.tipo, body.ordem, user_id)
     )
     conn.commit()
     return {"ok": True, "id": cur.lastrowid}
 
 
 @router.delete("/api/calendario-personalizado/{id}")
-def delete_calendario_item(id: int, conn=Depends(get_db_session)):
-    conn.execute("DELETE FROM calendario_personalizado WHERE id = ?", (id,))
+def delete_calendario_item(id: int, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    conn.execute("DELETE FROM calendario_personalizado WHERE id = ? AND user_id = ?", (id, user_id))
     conn.commit()
     return {"ok": True}
 
 
 @router.delete("/api/calendario-personalizado")
-def clear_calendario_personalizado(conn=Depends(get_db_session)):
-    conn.execute("DELETE FROM calendario_personalizado")
+def clear_calendario_personalizado(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    conn.execute("DELETE FROM calendario_personalizado WHERE user_id = ?", (user_id,))
     conn.commit()
     return {"ok": True}
 
 
 @router.post("/api/calendario-personalizado/salvar-completo")
-def salvar_calendario_completo(dias: list = Body(...), conn=Depends(get_db_session)):
+def salvar_calendario_completo(dias: list = Body(...), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Salva o calendário completo (limpa e recria)."""
-    conn.execute("DELETE FROM calendario_personalizado")
+    conn.execute("DELETE FROM calendario_personalizado WHERE user_id = ?", (user_id,))
     count = 0
     for item in dias:
         conn.execute(
-            "INSERT INTO calendario_personalizado (dia_semana, materia, topicos, tempo_min, tipo, ordem) VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO calendario_personalizado (dia_semana, materia, topicos, tempo_min, tipo, ordem, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
             (item.get("dia_semana", 0), item.get("materia", ""), item.get("topicos", ""),
-             item.get("tempo_min", 60), item.get("tipo", "estudo"), item.get("ordem", count))
+             item.get("tempo_min", 60), item.get("tipo", "estudo"), item.get("ordem", count), user_id)
         )
         count += 1
     conn.commit()
@@ -83,7 +85,7 @@ def salvar_calendario_completo(dias: list = Body(...), conn=Depends(get_db_sessi
 # ============================================================
 
 @router.post("/api/calendario/atividade-concluida")
-def marcar_atividade_concluida(body: dict = Body(...), conn=Depends(get_db_session)):
+def marcar_atividade_concluida(body: dict = Body(...), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Marca uma atividade do calendário como concluída."""
     data_str = body.get("data", today_str())
     dia_semana = body.get("dia_semana", 0)
@@ -92,18 +94,18 @@ def marcar_atividade_concluida(body: dict = Body(...), conn=Depends(get_db_sessi
     tempo_min = body.get("tempo_min", 0)
 
     conn.execute("""
-        INSERT INTO calendario_atividades (data, dia_semana, materia, tipo, tempo_min, concluida, concluida_at)
-        VALUES (?, ?, ?, ?, ?, 1, ?)
-    """, (data_str, dia_semana, materia, tipo, tempo_min, datetime.now().isoformat()))
+        INSERT INTO calendario_atividades (data, dia_semana, materia, tipo, tempo_min, concluida, concluida_at, user_id)
+        VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+    """, (data_str, dia_semana, materia, tipo, tempo_min, datetime.now().isoformat(), user_id))
 
-    _update_calendario_streak(conn, data_str, body.get("total_atividades", 0))
+    _update_calendario_streak(conn, data_str, body.get("total_atividades", 0), user_id)
     conn.commit()
     log.info(f"Atividade concluída: {materia} ({tipo}) em {data_str}")
     return {"ok": True}
 
 
 @router.delete("/api/calendario/atividade-concluida")
-def desmarcar_atividade_concluida(body: dict = Body(...), conn=Depends(get_db_session)):
+def desmarcar_atividade_concluida(body: dict = Body(...), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Desmarca uma atividade (desfaz conclusão)."""
     data_str = body.get("data", today_str())
     materia = body.get("materia", "")
@@ -111,32 +113,32 @@ def desmarcar_atividade_concluida(body: dict = Body(...), conn=Depends(get_db_se
 
     conn.execute("""
         DELETE FROM calendario_atividades
-        WHERE data = ? AND materia = ? AND tipo = ?
+        WHERE data = ? AND materia = ? AND tipo = ? AND user_id = ?
         ORDER BY id DESC LIMIT 1
-    """, (data_str, materia, tipo))
+    """, (data_str, materia, tipo, user_id))
 
-    _update_calendario_streak(conn, data_str, body.get("total_atividades", 0))
+    _update_calendario_streak(conn, data_str, body.get("total_atividades", 0), user_id)
     conn.commit()
     return {"ok": True}
 
 
 @router.get("/api/calendario/concluidas")
-def get_atividades_concluidas(data: str = "", conn=Depends(get_db_session)):
+def get_atividades_concluidas(data: str = "", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Retorna atividades concluídas de um dia (ou hoje)."""
     data_str = data or today_str()
     rows = conn.execute(
-        "SELECT * FROM calendario_atividades WHERE data = ? AND concluida = 1", (data_str,)
+        "SELECT * FROM calendario_atividades WHERE data = ? AND concluida = 1 AND user_id = ?", (data_str, user_id)
     ).fetchall()
     return [dict(r) for r in rows]
 
 
 @router.get("/api/calendario/streak")
-def get_calendario_streak(conn=Depends(get_db_session)):
+def get_calendario_streak(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Retorna streak de dias com 100% do calendário concluído."""
     rows = conn.execute("""
         SELECT data, pct_conclusao FROM calendario_streaks
-        WHERE pct_conclusao >= 100 ORDER BY data DESC
-    """).fetchall()
+        WHERE pct_conclusao >= 100 AND user_id = ? ORDER BY data DESC
+    """, (user_id,)).fetchall()
 
     streak = 0
     hoje = date.today()
@@ -162,7 +164,7 @@ def get_calendario_streak(conn=Depends(get_db_session)):
                 current = 1
         best = max(best, current)
 
-    hoje_row = conn.execute("SELECT * FROM calendario_streaks WHERE data = ?", (today_str(),)).fetchone()
+    hoje_row = conn.execute("SELECT * FROM calendario_streaks WHERE data = ? AND user_id = ?", (today_str(), user_id)).fetchone()
     return {
         "streak_calendario": streak,
         "melhor_streak_calendario": best,
@@ -170,20 +172,20 @@ def get_calendario_streak(conn=Depends(get_db_session)):
     }
 
 
-def _update_calendario_streak(conn, data_str: str, total_atividades: int = 0):
+def _update_calendario_streak(conn, data_str: str, total_atividades: int = 0, user_id: int = 0):
     """Atualiza o registro de streak do calendário para uma data."""
     concluidas = conn.execute(
-        "SELECT COUNT(*) FROM calendario_atividades WHERE data = ? AND concluida = 1", (data_str,)
+        "SELECT COUNT(*) FROM calendario_atividades WHERE data = ? AND concluida = 1 AND user_id = ?", (data_str, user_id)
     ).fetchone()[0]
     pct = round((concluidas / total_atividades * 100) if total_atividades > 0 else 0, 1)
     xp = 50 if pct >= 100 else 0
 
     conn.execute("""
-        INSERT INTO calendario_streaks (data, total_atividades, concluidas, pct_conclusao, xp_bonus)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO calendario_streaks (data, total_atividades, concluidas, pct_conclusao, xp_bonus, user_id)
+        VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT(data) DO UPDATE SET
             total_atividades = ?, concluidas = ?, pct_conclusao = ?, xp_bonus = ?
-    """, (data_str, total_atividades, concluidas, pct, xp,
+    """, (data_str, total_atividades, concluidas, pct, xp, user_id,
           total_atividades, concluidas, pct, xp))
 
 
@@ -192,21 +194,21 @@ def _update_calendario_streak(conn, data_str: str, total_atividades: int = 0):
 # ============================================================
 
 @router.get("/api/calendario/materias-negligenciadas")
-def get_materias_negligenciadas(dias_limite: int = 5, conn=Depends(get_db_session)):
+def get_materias_negligenciadas(dias_limite: int = 5, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Retorna matérias importantes que não foram estudadas há mais de X dias."""
     hoje = date.today()
     materias = conn.execute("""
         SELECT materia, COUNT(*) as pendentes FROM edital
-        WHERE status != 'Concluído' GROUP BY materia HAVING pendentes > 3 ORDER BY pendentes DESC
-    """).fetchall()
+        WHERE status != 'Concluído' AND user_id = ? GROUP BY materia HAVING pendentes > 3 ORDER BY pendentes DESC
+    """, (user_id,)).fetchall()
 
-    sessoes = conn.execute("SELECT materia, MAX(data) as ultima FROM sessoes_estudo GROUP BY materia").fetchall()
+    sessoes = conn.execute("SELECT materia, MAX(data) as ultima FROM sessoes_estudo WHERE user_id = ? GROUP BY materia", (user_id,)).fetchall()
     ultima_sessao = {r[0]: r[1] for r in sessoes}
 
     cal_atividades = conn.execute("""
         SELECT materia, MAX(data) as ultima FROM calendario_atividades
-        WHERE concluida = 1 AND materia != '' GROUP BY materia
-    """).fetchall()
+        WHERE concluida = 1 AND materia != '' AND user_id = ? GROUP BY materia
+    """, (user_id,)).fetchall()
     ultima_cal = {r[0]: r[1] for r in cal_atividades}
 
     negligenciadas = []
@@ -230,8 +232,8 @@ def get_materias_negligenciadas(dias_limite: int = 5, conn=Depends(get_db_sessio
             perf = conn.execute("""
                 SELECT COUNT(*) as total, SUM(qr.acertou) as acertos
                 FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id
-                WHERE q.materia = ?
-            """, (materia,)).fetchone()
+                WHERE q.materia = ? AND qr.user_id = ?
+            """, (materia, user_id)).fetchone()
             pct_acerto = round((perf[1] or 0) / perf[0] * 100, 1) if perf[0] and perf[0] > 0 else 0
 
             negligenciadas.append({
@@ -250,11 +252,11 @@ def get_materias_negligenciadas(dias_limite: int = 5, conn=Depends(get_db_sessio
 # ============================================================
 
 @router.get("/api/micro-revisao")
-def get_micro_revisao(quantidade: int = 5, conn=Depends(get_db_session)):
+def get_micro_revisao(quantidade: int = 5, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Gera sessão ultra-curta de micro-revisão."""
     items = []
     flashcards = conn.execute(
-        "SELECT id, pergunta, resposta, materia FROM flashcards ORDER BY RANDOM() LIMIT ?", (quantidade,)
+        "SELECT id, pergunta, resposta, materia FROM flashcards WHERE user_id = ? ORDER BY RANDOM() LIMIT ?", (user_id, quantidade)
     ).fetchall()
     for f in flashcards:
         items.append({"tipo": "flashcard", "id": f[0], "pergunta": f[1], "resposta": f[2], "materia": f[3] or "Geral"})
@@ -262,7 +264,7 @@ def get_micro_revisao(quantidade: int = 5, conn=Depends(get_db_session)):
     if len(items) < quantidade:
         falta = quantidade - len(items)
         topicos = conn.execute(
-            "SELECT id, materia, topico FROM edital WHERE status != 'Concluído' ORDER BY RANDOM() LIMIT ?", (falta,)
+            "SELECT id, materia, topico FROM edital WHERE status != 'Concluído' AND user_id = ? ORDER BY RANDOM() LIMIT ?", (user_id, falta)
         ).fetchall()
         for t in topicos:
             items.append({"tipo": "topico", "id": t[0], "pergunta": f"O que você sabe sobre: {t[2]}?",
@@ -277,9 +279,9 @@ def get_micro_revisao(quantidade: int = 5, conn=Depends(get_db_session)):
 # ============================================================
 
 @router.get("/api/questao-dissertativa")
-def get_questao_dissertativa(materia: str = "", conn=Depends(get_db_session)):
-    query = "SELECT id, materia, topico FROM edital WHERE status != 'Concluído'"
-    params = []
+def get_questao_dissertativa(materia: str = "", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    query = "SELECT id, materia, topico FROM edital WHERE status != 'Concluído' AND user_id = ?"
+    params = [user_id]
     if materia:
         query += " AND materia = ?"
         params.append(materia)
@@ -303,7 +305,7 @@ def get_questao_dissertativa(materia: str = "", conn=Depends(get_db_session)):
 
 
 @router.post("/api/questao-dissertativa/salvar")
-def salvar_questao_dissertativa(body: dict = Body(...), conn=Depends(get_db_session)):
+def salvar_questao_dissertativa(body: dict = Body(...), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     edital_id = body.get("edital_id")
     resposta = body.get("resposta", "")
     confianca = body.get("confianca", 3)
@@ -312,12 +314,12 @@ def salvar_questao_dissertativa(body: dict = Body(...), conn=Depends(get_db_sess
         from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="Preencha a resposta.")
 
-    conn.execute("INSERT INTO resumos (edital_id, resumo, tipo, created_at) VALUES (?, ?, 'dissertativa', ?)",
-                 (edital_id, resposta, today_str()))
+    conn.execute("INSERT INTO resumos (edital_id, resumo, tipo, created_at, user_id) VALUES (?, ?, 'dissertativa', ?, ?)",
+                 (edital_id, resposta, today_str(), user_id))
     conn.execute("""
-        INSERT INTO calendario_atividades (data, dia_semana, materia, tipo, tempo_min, concluida, concluida_at)
-        VALUES (?, ?, ?, 'dissertativa', 5, 1, ?)
-    """, (today_str(), date.today().weekday(), body.get("materia", ""), datetime.now().isoformat()))
+        INSERT INTO calendario_atividades (data, dia_semana, materia, tipo, tempo_min, concluida, concluida_at, user_id)
+        VALUES (?, ?, ?, 'dissertativa', 5, 1, ?, ?)
+    """, (today_str(), date.today().weekday(), body.get("materia", ""), datetime.now().isoformat(), user_id))
     conn.commit()
     return {"ok": True, "confianca": confianca}
 
@@ -327,16 +329,16 @@ def salvar_questao_dissertativa(body: dict = Body(...), conn=Depends(get_db_sess
 # ============================================================
 
 @router.get("/api/autoavaliacao")
-def get_autoavaliacao(quantidade: int = 5, conn=Depends(get_db_session)):
+def get_autoavaliacao(quantidade: int = 5, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     flashcards = conn.execute(
-        "SELECT id, pergunta, resposta, materia FROM flashcards ORDER BY RANDOM() LIMIT ?", (quantidade,)
+        "SELECT id, pergunta, resposta, materia FROM flashcards WHERE user_id = ? ORDER BY RANDOM() LIMIT ?", (user_id, quantidade)
     ).fetchall()
     items = [{"id": f[0], "pergunta": f[1], "resposta": f[2], "materia": f[3] or "Geral"} for f in flashcards]
     return {"items": items, "instrucao": "Antes de revelar a resposta, indique sua confiança: 1=Não sei, 2=Acho que sei, 3=Tenho certeza"}
 
 
 @router.post("/api/autoavaliacao/registrar")
-def registrar_autoavaliacao(body: dict = Body(...), conn=Depends(get_db_session)):
+def registrar_autoavaliacao(body: dict = Body(...), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     resultados = body.get("resultados", [])
     calibrados, superconfiante, subconfiante = 0, 0, 0
 
@@ -351,7 +353,7 @@ def registrar_autoavaliacao(body: dict = Body(...), conn=Depends(get_db_session)
         elif (conf >= 2 and acertou) or (conf == 1 and not acertou):
             calibrados += 1
         if fid and not acertou:
-            conn.execute("UPDATE flashcards SET proxima_revisao = ?, intervalo_dias = 1 WHERE id = ?", (today_str(), fid))
+            conn.execute("UPDATE flashcards SET proxima_revisao = ?, intervalo_dias = 1 WHERE id = ? AND user_id = ?", (today_str(), fid, user_id))
 
     conn.commit()
     total = len(resultados)
@@ -375,12 +377,12 @@ def registrar_autoavaliacao(body: dict = Body(...), conn=Depends(get_db_session)
 # ============================================================
 
 @router.get("/api/spacing-indicator")
-def get_spacing_indicator(conn=Depends(get_db_session)):
+def get_spacing_indicator(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     materias = conn.execute("""
         SELECT materia, COUNT(*) as sessoes, MIN(data) as primeira, MAX(data) as ultima
-        FROM sessoes_estudo WHERE data >= date('now', '-30 days')
+        FROM sessoes_estudo WHERE data >= date('now', '-30 days') AND user_id = ?
         GROUP BY materia HAVING sessoes >= 2
-    """).fetchall()
+    """, (user_id,)).fetchall()
 
     resultado = []
     for r in materias:

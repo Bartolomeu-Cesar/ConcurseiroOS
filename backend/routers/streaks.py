@@ -14,6 +14,7 @@ from constants import (
     XP_STREAK_WEEKLY_BONUS,
 )
 from database import get_db_session
+from deps import get_user_id
 from models import DesafioCreate, MetasUpdate, StreakResponse
 from utils import calculate_streak, today_str
 
@@ -41,13 +42,13 @@ BADGES = [
 
 
 @router.get("/api/streaks", response_model=StreakResponse, summary="Streak e gamificação", description="Retorna streak atual, dados de hoje, XP e conquistas")
-def get_streaks(conn=Depends(get_db_session)):
+def get_streaks(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Retorna streak atual (dias consecutivos) e dados de hoje"""
     # Dados de hoje
-    hoje = conn.execute("SELECT * FROM streaks WHERE data = ?", (today_str(),)).fetchone()
+    hoje = conn.execute("SELECT * FROM streaks WHERE data = ? AND user_id = ?", (today_str(), user_id)).fetchone()
     hoje_data = dict(hoje) if hoje else {"data": today_str(), "horas_estudadas": 0, "questoes_resolvidas": 0, "flashcards_revisados": 0}
 
-    streak_info = calculate_streak(conn)
+    streak_info = calculate_streak(conn, user_id)
 
     return {
         "streak_atual": streak_info["streak_atual"],
@@ -57,16 +58,16 @@ def get_streaks(conn=Depends(get_db_session)):
 
 
 @router.get("/api/metas")
-def get_metas(conn=Depends(get_db_session)):
-    config = conn.execute("SELECT * FROM metas_config WHERE id = 1").fetchone()
-    hoje = conn.execute("SELECT * FROM streaks WHERE data = ?", (today_str(),)).fetchone()
+def get_metas(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    config = conn.execute("SELECT * FROM metas_config WHERE user_id = ?", (user_id,)).fetchone()
+    hoje = conn.execute("SELECT * FROM streaks WHERE data = ? AND user_id = ?", (today_str(), user_id)).fetchone()
 
     config_dict = dict(config) if config else {"meta_horas": 3.0, "meta_questoes": 30, "meta_flashcards": 10, "meta_paginas": 20, "meta_sumulas": 0}
     hoje_dict = dict(hoje) if hoje else {"horas_estudadas": 0, "questoes_resolvidas": 0, "flashcards_revisados": 0, "sumulas_revisadas": 0}
 
     # Usar sessoes_estudo como fonte de verdade para horas (evita dessincronização)
     horas_hoje = conn.execute(
-        "SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE data = ?", (today_str(),)
+        "SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE data = ? AND user_id = ?", (today_str(), user_id)
     ).fetchone()[0]
 
     # Contar súmulas revisadas hoje
@@ -84,28 +85,36 @@ def get_metas(conn=Depends(get_db_session)):
 
 
 @router.put("/api/metas")
-def update_metas(body: MetasUpdate, conn=Depends(get_db_session)):
-    conn.execute("""
-        UPDATE metas_config SET meta_horas = ?, meta_questoes = ?, meta_flashcards = ?, meta_paginas = ?, meta_sumulas = ?
-        WHERE id = 1
-    """, (body.meta_horas, body.meta_questoes, body.meta_flashcards, body.meta_paginas, body.meta_sumulas))
+def update_metas(body: MetasUpdate, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    # Ensure row exists for this user
+    existing = conn.execute("SELECT id FROM metas_config WHERE user_id = ?", (user_id,)).fetchone()
+    if existing:
+        conn.execute("""
+            UPDATE metas_config SET meta_horas = ?, meta_questoes = ?, meta_flashcards = ?, meta_paginas = ?, meta_sumulas = ?
+            WHERE user_id = ?
+        """, (body.meta_horas, body.meta_questoes, body.meta_flashcards, body.meta_paginas, body.meta_sumulas, user_id))
+    else:
+        conn.execute("""
+            INSERT INTO metas_config (meta_horas, meta_questoes, meta_flashcards, meta_paginas, meta_sumulas, user_id)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (body.meta_horas, body.meta_questoes, body.meta_flashcards, body.meta_paginas, body.meta_sumulas, user_id))
     conn.commit()
     return {"ok": True}
 
 
 @router.get("/api/gamification")
-def get_gamification(conn=Depends(get_db_session)):
+def get_gamification(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Retorna XP, nível, badges e progresso do usuário"""
     # Calcular XP baseado nas atividades
-    horas = conn.execute("SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo").fetchone()[0]
-    questoes_total = conn.execute("SELECT COUNT(*) FROM questoes_respostas").fetchone()[0]
-    questoes_certas = conn.execute("SELECT COUNT(*) FROM questoes_respostas WHERE acertou = 1").fetchone()[0]
-    flashcards_rev = conn.execute("SELECT COALESCE(SUM(flashcards_revisados), 0) FROM streaks").fetchone()[0]
-    topicos_concluidos = conn.execute("SELECT COUNT(*) FROM edital WHERE status = 'Concluído'").fetchone()[0]
-    simulados_feitos = conn.execute("SELECT COUNT(*) FROM simulados WHERE status = 'finalizado'").fetchone()[0]
+    horas = conn.execute("SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE user_id = ?", (user_id,)).fetchone()[0]
+    questoes_total = conn.execute("SELECT COUNT(*) FROM questoes_respostas WHERE user_id = ?", (user_id,)).fetchone()[0]
+    questoes_certas = conn.execute("SELECT COUNT(*) FROM questoes_respostas WHERE acertou = 1 AND user_id = ?", (user_id,)).fetchone()[0]
+    flashcards_rev = conn.execute("SELECT COALESCE(SUM(flashcards_revisados), 0) FROM streaks WHERE user_id = ?", (user_id,)).fetchone()[0]
+    topicos_concluidos = conn.execute("SELECT COUNT(*) FROM edital WHERE status = 'Concluído' AND user_id = ?", (user_id,)).fetchone()[0]
+    simulados_feitos = conn.execute("SELECT COUNT(*) FROM simulados WHERE status = 'finalizado' AND user_id = ?", (user_id,)).fetchone()[0]
 
     # Streak atual
-    streak_info = calculate_streak(conn)
+    streak_info = calculate_streak(conn, user_id)
     streak = streak_info["streak_atual"]
 
     # Calcular XP
@@ -156,16 +165,16 @@ def get_gamification(conn=Depends(get_db_session)):
 
 
 @router.get("/api/conquistas-diarias")
-def conquistas_diarias(conn=Depends(get_db_session)):
+def conquistas_diarias(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Gera missões diárias baseadas no progresso"""
     # Buscar matérias menos estudadas
     mat_fraca = conn.execute("""
-        SELECT materia FROM edital WHERE status != 'Concluído'
+        SELECT materia FROM edital WHERE status != 'Concluído' AND user_id = ?
         GROUP BY materia ORDER BY SUM(horas_estudadas) ASC LIMIT 5
-    """).fetchall()
+    """, (user_id,)).fetchall()
 
     # Dados de hoje
-    hoje = conn.execute("SELECT * FROM streaks WHERE data = ?", (today_str(),)).fetchone()
+    hoje = conn.execute("SELECT * FROM streaks WHERE data = ? AND user_id = ?", (today_str(), user_id)).fetchone()
 
     missoes = []
     materias_fracas = [r[0] for r in mat_fraca] if mat_fraca else ['Geral']
@@ -182,8 +191,8 @@ def conquistas_diarias(conn=Depends(get_db_session)):
 
 
 @router.get("/api/desafios")
-def list_desafios(conn=Depends(get_db_session)):
-    rows = conn.execute("SELECT * FROM desafios ORDER BY finalizado ASC, created_at DESC").fetchall()
+def list_desafios(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    rows = conn.execute("SELECT * FROM desafios WHERE user_id = ? ORDER BY finalizado ASC, created_at DESC", (user_id,)).fetchall()
     desafios = []
     for r in rows:
         d = dict(r)
@@ -202,25 +211,25 @@ def list_desafios(conn=Depends(get_db_session)):
 
 
 @router.post("/api/desafios")
-def create_desafio(body: DesafioCreate, conn=Depends(get_db_session)):
+def create_desafio(body: DesafioCreate, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     cur = conn.execute(
-        "INSERT INTO desafios (titulo, meta_tipo, meta_valor, materia, dias, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-        (body.titulo, body.meta_tipo, body.meta_valor, body.materia, body.dias, today_str()))
+        "INSERT INTO desafios (titulo, meta_tipo, meta_valor, materia, dias, created_at, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (body.titulo, body.meta_tipo, body.meta_valor, body.materia, body.dias, today_str(), user_id))
     conn.commit()
     return {"id": cur.lastrowid, "ok": True}
 
 
 @router.delete("/api/desafios/{id}")
-def delete_desafio(id: int, conn=Depends(get_db_session)):
-    conn.execute("DELETE FROM desafios WHERE id = ?", (id,))
+def delete_desafio(id: int, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    conn.execute("DELETE FROM desafios WHERE id = ? AND user_id = ?", (id, user_id))
     conn.commit()
     return {"ok": True}
 
 
 @router.put("/api/desafios/{id}")
-def update_desafio(id: int, body: dict = Body(...), conn=Depends(get_db_session)):
+def update_desafio(id: int, body: dict = Body(...), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Edita um desafio existente."""
-    existing = conn.execute("SELECT * FROM desafios WHERE id = ?", (id,)).fetchone()
+    existing = conn.execute("SELECT * FROM desafios WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
     if not existing:
         raise HTTPException(status_code=404, detail="Desafio não encontrado")
 
@@ -231,17 +240,17 @@ def update_desafio(id: int, body: dict = Body(...), conn=Depends(get_db_session)
     dias = body.get("dias", existing["dias"])
 
     conn.execute(
-        "UPDATE desafios SET titulo = ?, meta_tipo = ?, meta_valor = ?, materia = ?, dias = ? WHERE id = ?",
-        (titulo, meta_tipo, meta_valor, materia, dias, id)
+        "UPDATE desafios SET titulo = ?, meta_tipo = ?, meta_valor = ?, materia = ?, dias = ? WHERE id = ? AND user_id = ?",
+        (titulo, meta_tipo, meta_valor, materia, dias, id, user_id)
     )
     conn.commit()
     return {"ok": True, "id": id}
 
 
 @router.post("/api/desafios/atualizar-progresso")
-def atualizar_progresso_desafios(conn=Depends(get_db_session)):
+def atualizar_progresso_desafios(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Atualiza o progresso de TODOS os desafios ativos baseado nos dados reais."""
-    desafios = conn.execute("SELECT * FROM desafios WHERE finalizado = 0").fetchall()
+    desafios = conn.execute("SELECT * FROM desafios WHERE finalizado = 0 AND user_id = ?", (user_id,)).fetchall()
     atualizados = 0
 
     for d in desafios:
@@ -254,42 +263,42 @@ def atualizar_progresso_desafios(conn=Depends(get_db_session)):
         if meta_tipo == "questoes":
             if materia:
                 progresso = conn.execute(
-                    "SELECT COUNT(*) FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id WHERE qr.data >= ? AND q.materia = ?",
-                    (criado, materia)
+                    "SELECT COUNT(*) FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id WHERE qr.data >= ? AND q.materia = ? AND qr.user_id = ?",
+                    (criado, materia, user_id)
                 ).fetchone()[0]
             else:
                 progresso = conn.execute(
-                    "SELECT COUNT(*) FROM questoes_respostas WHERE data >= ?", (criado,)
+                    "SELECT COUNT(*) FROM questoes_respostas WHERE data >= ? AND user_id = ?", (criado, user_id)
                 ).fetchone()[0]
         elif meta_tipo == "horas":
             if materia:
                 row = conn.execute(
-                    "SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE data >= ? AND materia = ?",
-                    (criado, materia)
+                    "SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE data >= ? AND materia = ? AND user_id = ?",
+                    (criado, materia, user_id)
                 ).fetchone()
             else:
                 row = conn.execute(
-                    "SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE data >= ?", (criado,)
+                    "SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE data >= ? AND user_id = ?", (criado, user_id)
                 ).fetchone()
             progresso = int(row[0])
         elif meta_tipo == "flashcards":
             progresso = conn.execute(
-                "SELECT COALESCE(SUM(flashcards_revisados), 0) FROM streaks WHERE data >= ?", (criado,)
+                "SELECT COALESCE(SUM(flashcards_revisados), 0) FROM streaks WHERE data >= ? AND user_id = ?", (criado, user_id)
             ).fetchone()[0]
         elif meta_tipo == "topicos":
             if materia:
                 progresso = conn.execute(
-                    "SELECT COUNT(*) FROM edital WHERE status = 'Concluído' AND materia = ?", (materia,)
+                    "SELECT COUNT(*) FROM edital WHERE status = 'Concluído' AND materia = ? AND user_id = ?", (materia, user_id)
                 ).fetchone()[0]
             else:
                 progresso = conn.execute(
-                    "SELECT COUNT(*) FROM edital WHERE status = 'Concluído'"
+                    "SELECT COUNT(*) FROM edital WHERE status = 'Concluído' AND user_id = ?", (user_id,)
                 ).fetchone()[0]
 
         finalizado = 1 if progresso >= meta_valor else 0
         conn.execute(
-            "UPDATE desafios SET progresso = ?, finalizado = ? WHERE id = ?",
-            (min(progresso, meta_valor), finalizado, d["id"])
+            "UPDATE desafios SET progresso = ?, finalizado = ? WHERE id = ? AND user_id = ?",
+            (min(progresso, meta_valor), finalizado, d["id"], user_id)
         )
         atualizados += 1
 
@@ -298,7 +307,7 @@ def atualizar_progresso_desafios(conn=Depends(get_db_session)):
 
 
 @router.get("/api/desafios/sugestoes")
-def sugestoes_desafios(conn=Depends(get_db_session)):
+def sugestoes_desafios(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Sugere desafios baseados no desempenho atual."""
     sugestoes = []
 
@@ -306,9 +315,10 @@ def sugestoes_desafios(conn=Depends(get_db_session)):
     fraca = conn.execute("""
         SELECT q.materia, COUNT(*) as total, SUM(qr.acertou) as acertos
         FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id
+        WHERE qr.user_id = ?
         GROUP BY q.materia HAVING total >= 5
         ORDER BY (CAST(acertos AS REAL) / total) ASC LIMIT 1
-    """).fetchone()
+    """, (user_id,)).fetchone()
     if fraca:
         pct = round(fraca["acertos"] / fraca["total"] * 100)
         if pct < 70:
@@ -323,8 +333,8 @@ def sugestoes_desafios(conn=Depends(get_db_session)):
             })
 
     # 2. Streak de estudo
-    streak = conn.execute("SELECT COUNT(*) FROM streaks WHERE data >= ?",
-        ((date.today() - timedelta(days=6)).isoformat(),)).fetchone()[0]
+    streak = conn.execute("SELECT COUNT(*) FROM streaks WHERE data >= ? AND user_id = ?",
+        ((date.today() - timedelta(days=6)).isoformat(), user_id)).fetchone()[0]
     if streak < 5:
         sugestoes.append({
             "titulo": "Estudar 7 dias seguidos",
@@ -338,7 +348,7 @@ def sugestoes_desafios(conn=Depends(get_db_session)):
 
     # 3. Flashcards
     pendentes = conn.execute(
-        "SELECT COUNT(*) FROM flashcards WHERE proxima_revisao <= ?", (today_str(),)
+        "SELECT COUNT(*) FROM flashcards WHERE proxima_revisao <= ? AND user_id = ?", (today_str(), user_id)
     ).fetchone()[0]
     if pendentes > 10:
         sugestoes.append({
@@ -353,7 +363,7 @@ def sugestoes_desafios(conn=Depends(get_db_session)):
 
     # 4. Concluir tópicos do edital
     pendentes_edital = conn.execute(
-        "SELECT COUNT(*) FROM edital WHERE status != 'Concluído' AND arquivado = 0"
+        "SELECT COUNT(*) FROM edital WHERE status != 'Concluído' AND arquivado = 0 AND user_id = ?", (user_id,)
     ).fetchone()[0]
     if pendentes_edital > 0:
         meta = min(10, pendentes_edital)
@@ -369,8 +379,8 @@ def sugestoes_desafios(conn=Depends(get_db_session)):
 
     # 5. Volume de questões
     questoes_semana = conn.execute(
-        "SELECT COUNT(*) FROM questoes_respostas WHERE data >= ?",
-        ((date.today() - timedelta(days=6)).isoformat(),)
+        "SELECT COUNT(*) FROM questoes_respostas WHERE data >= ? AND user_id = ?",
+        ((date.today() - timedelta(days=6)).isoformat(), user_id)
     ).fetchone()[0]
     if questoes_semana < 50:
         sugestoes.append({

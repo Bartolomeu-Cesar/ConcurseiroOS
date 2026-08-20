@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 
 from constants import SM2_FIRST_INTERVAL, SM2_INITIAL_EF, SM2_MIN_EF, SM2_SECOND_INTERVAL, SPEED_REVIEW_LIMIT
 from database import get_db_session
+from deps import get_user_id
 from logger import log
 from models import (
     FlashcardCreate,
@@ -20,57 +21,57 @@ router = APIRouter(prefix="", tags=["Flashcards"])
 
 
 @router.get("/api/flashcards", summary="Listar flashcards", description="Lista todos os flashcards com paginação opcional e filtro por matéria")
-def list_flashcards(materia: str = "", page: int | None = Query(None), limit: int = 50, conn=Depends(get_db_session)):
+def list_flashcards(materia: str = "", page: int | None = Query(None), limit: int = 50, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     if materia:
-        rows = conn.execute("SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia FROM flashcards WHERE materia = ?", (materia,)).fetchall()
+        rows = conn.execute("SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia FROM flashcards WHERE materia = ? AND user_id = ?", (materia, user_id)).fetchall()
     else:
-        rows = conn.execute("SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia FROM flashcards").fetchall()
+        rows = conn.execute("SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia FROM flashcards WHERE user_id = ?", (user_id,)).fetchall()
     items = [dict(r) for r in rows]
     return paginate(items, page, limit)
 
 
 @router.get("/api/flashcards/materias", summary="Listar matérias dos flashcards")
-def list_flashcards_materias(conn=Depends(get_db_session)):
-    rows = conn.execute("SELECT materia, COUNT(*) as total FROM flashcards GROUP BY materia ORDER BY total DESC").fetchall()
+def list_flashcards_materias(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    rows = conn.execute("SELECT materia, COUNT(*) as total FROM flashcards WHERE user_id = ? GROUP BY materia ORDER BY total DESC", (user_id,)).fetchall()
     return [{"materia": r[0] or "Sem matéria", "total": r[1]} for r in rows]
 
 
 @router.get("/api/flashcards/today")
-def get_flashcards_today(materia: str = "", conn=Depends(get_db_session)):
+def get_flashcards_today(materia: str = "", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     if materia:
         rows = conn.execute(
-            "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia FROM flashcards WHERE proxima_revisao <= ? AND materia = ?",
-            (today_str(), materia)
+            "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia FROM flashcards WHERE proxima_revisao <= ? AND materia = ? AND user_id = ?",
+            (today_str(), materia, user_id)
         ).fetchall()
     else:
         rows = conn.execute(
-            "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia FROM flashcards WHERE proxima_revisao <= ?",
-            (today_str(),)
+            "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia FROM flashcards WHERE proxima_revisao <= ? AND user_id = ?",
+            (today_str(), user_id)
         ).fetchall()
     return [dict(r) for r in rows]
 
 
 @router.get("/api/flashcards/aleatorio", summary="Flashcards aleatórios para estudo")
-def get_flashcards_aleatorio(materia: str = "", quantidade: int = 10, conn=Depends(get_db_session)):
+def get_flashcards_aleatorio(materia: str = "", quantidade: int = 10, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Retorna flashcards aleatórios para sessão de estudo (por disciplina ou todas)"""
     if materia:
         rows = conn.execute(
-            "SELECT id, pergunta, resposta, materia FROM flashcards WHERE materia = ? ORDER BY RANDOM() LIMIT ?",
-            (materia, quantidade)
+            "SELECT id, pergunta, resposta, materia FROM flashcards WHERE materia = ? AND user_id = ? ORDER BY RANDOM() LIMIT ?",
+            (materia, user_id, quantidade)
         ).fetchall()
     else:
         rows = conn.execute(
-            "SELECT id, pergunta, resposta, materia FROM flashcards ORDER BY RANDOM() LIMIT ?",
-            (quantidade,)
+            "SELECT id, pergunta, resposta, materia FROM flashcards WHERE user_id = ? ORDER BY RANDOM() LIMIT ?",
+            (user_id, quantidade)
         ).fetchall()
     return [dict(r) for r in rows]
 
 
 @router.post("/api/flashcards", summary="Criar flashcard", description="Cria um novo flashcard com revisão SRS")
-def create_flashcard(body: FlashcardCreate, conn=Depends(get_db_session)):
+def create_flashcard(body: FlashcardCreate, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     cur = conn.execute(
-        "INSERT INTO flashcards (pergunta, resposta, proxima_revisao, materia) VALUES (?, ?, ?, ?)",
-        (body.pergunta, body.resposta, today_str(), getattr(body, 'materia', ''))
+        "INSERT INTO flashcards (pergunta, resposta, proxima_revisao, materia, user_id) VALUES (?, ?, ?, ?, ?)",
+        (body.pergunta, body.resposta, today_str(), getattr(body, 'materia', ''), user_id)
     )
     conn.commit()
     new_id = cur.lastrowid
@@ -80,26 +81,26 @@ def create_flashcard(body: FlashcardCreate, conn=Depends(get_db_session)):
 
 
 @router.post("/api/flashcards/{id}/review", response_model=FlashcardReviewResponse)
-def review_flashcard(id: int, body: FlashcardReview, conn=Depends(get_db_session)):
-    row = conn.execute("SELECT intervalo_dias FROM flashcards WHERE id = ?", (id,)).fetchone()
+def review_flashcard(id: int, body: FlashcardReview, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    row = conn.execute("SELECT intervalo_dias FROM flashcards WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Flashcard não encontrado")
     new_intervalo = row[0] * 2 if body.acertou else 1
     proxima = (date.today() + timedelta(days=new_intervalo)).isoformat()
-    conn.execute("UPDATE flashcards SET intervalo_dias = ?, proxima_revisao = ? WHERE id = ?",
-                 (new_intervalo, proxima, id))
-    update_streak(conn, "flashcards_revisados")
+    conn.execute("UPDATE flashcards SET intervalo_dias = ?, proxima_revisao = ? WHERE id = ? AND user_id = ?",
+                 (new_intervalo, proxima, id, user_id))
+    update_streak(conn, "flashcards_revisados", user_id=user_id)
     conn.commit()
     return {"id": id, "intervalo_dias": new_intervalo, "proxima_revisao": proxima}
 
 
 @router.post("/api/flashcards/{id}/review-sm2", response_model=FlashcardReviewSM2Response)
-def review_flashcard_sm2(id: int, body: FlashcardReviewSM2, conn=Depends(get_db_session)):
+def review_flashcard_sm2(id: int, body: FlashcardReviewSM2, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Revisão de flashcard usando algoritmo SM-2 (SuperMemo 2).
     quality: 0-5 (0=esqueceu, 3=correto com dificuldade, 5=perfeito)
     """
     row = conn.execute(
-        "SELECT intervalo_dias, easiness_factor, repetitions FROM flashcards WHERE id = ?", (id,)
+        "SELECT intervalo_dias, easiness_factor, repetitions FROM flashcards WHERE id = ? AND user_id = ?", (id, user_id)
     ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Flashcard não encontrado")
@@ -129,10 +130,10 @@ def review_flashcard_sm2(id: int, body: FlashcardReviewSM2, conn=Depends(get_db_
     proxima = (date.today() + timedelta(days=intervalo)).isoformat()
 
     conn.execute(
-        "UPDATE flashcards SET intervalo_dias = ?, proxima_revisao = ?, easiness_factor = ?, repetitions = ? WHERE id = ?",
-        (intervalo, proxima, round(ef, 4), reps, id)
+        "UPDATE flashcards SET intervalo_dias = ?, proxima_revisao = ?, easiness_factor = ?, repetitions = ? WHERE id = ? AND user_id = ?",
+        (intervalo, proxima, round(ef, 4), reps, id, user_id)
     )
-    update_streak(conn, "flashcards_revisados")
+    update_streak(conn, "flashcards_revisados", user_id=user_id)
     conn.commit()
 
     log.info(f"Flashcard SM-2 review: id={id} quality={quality} ef={ef:.4f} reps={reps} interval={intervalo}")
@@ -147,8 +148,8 @@ def review_flashcard_sm2(id: int, body: FlashcardReviewSM2, conn=Depends(get_db_
 
 
 @router.put("/api/flashcards/{id}", summary="Editar flashcard", description="Atualiza pergunta, resposta e/ou matéria de um flashcard")
-def update_flashcard(id: int, body: FlashcardUpdate, conn=Depends(get_db_session)):
-    row = conn.execute("SELECT id FROM flashcards WHERE id = ?", (id,)).fetchone()
+def update_flashcard(id: int, body: FlashcardUpdate, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    row = conn.execute("SELECT id FROM flashcards WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Flashcard não encontrado")
     updates = []
@@ -165,11 +166,12 @@ def update_flashcard(id: int, body: FlashcardUpdate, conn=Depends(get_db_session
     if not updates:
         raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
     params.append(id)
-    conn.execute(f"UPDATE flashcards SET {', '.join(updates)} WHERE id = ?", params)
+    params.append(user_id)
+    conn.execute(f"UPDATE flashcards SET {', '.join(updates)} WHERE id = ? AND user_id = ?", params)
     conn.commit()
     updated = conn.execute(
-        "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia FROM flashcards WHERE id = ?",
-        (id,)
+        "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia FROM flashcards WHERE id = ? AND user_id = ?",
+        (id, user_id)
     ).fetchone()
     log.info(f"Flashcard updated: id={id}")
     return dict(updated)
@@ -177,28 +179,28 @@ def update_flashcard(id: int, body: FlashcardUpdate, conn=Depends(get_db_session
 
 @router.get("/api/edital/materias-disponiveis", summary="Listar disciplinas do edital",
             description="Retorna todas as disciplinas distintas cadastradas no edital para vincular a flashcards")
-def list_materias_disponiveis(conn=Depends(get_db_session)):
-    rows = conn.execute("SELECT DISTINCT materia FROM edital ORDER BY materia").fetchall()
+def list_materias_disponiveis(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    rows = conn.execute("SELECT DISTINCT materia FROM edital WHERE user_id = ? ORDER BY materia", (user_id,)).fetchall()
     return [r[0] for r in rows if r[0]]
 
 
 @router.delete("/api/flashcards/{id}", response_model=OkResponse)
-def delete_flashcard(id: int, conn=Depends(get_db_session)):
-    conn.execute("DELETE FROM flashcards WHERE id = ?", (id,))
+def delete_flashcard(id: int, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    conn.execute("DELETE FROM flashcards WHERE id = ? AND user_id = ?", (id, user_id))
     conn.commit()
     log.info(f"Flashcard deleted: id={id}")
     return {"ok": True}
 
 
 @router.get("/api/speed-review")
-def speed_review(conn=Depends(get_db_session)):
+def speed_review(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Retorna flashcards para revisão relâmpago (modo rápido)"""
     rows = conn.execute("""
         SELECT id, pergunta, resposta FROM flashcards
-        WHERE proxima_revisao <= ?
+        WHERE proxima_revisao <= ? AND user_id = ?
         ORDER BY intervalo_dias ASC
         LIMIT ?
-    """, (today_str(), SPEED_REVIEW_LIMIT)).fetchall()
+    """, (today_str(), user_id, SPEED_REVIEW_LIMIT)).fetchall()
     return [{"id": r[0], "pergunta": r[1], "resposta": r[2]} for r in rows]
 
 
@@ -214,10 +216,11 @@ from fastapi.responses import Response
 
 @router.get("/api/flashcards/exportar", summary="Exportar flashcards",
             description="Exporta flashcards em formato JSON, CSV ou Anki (TSV)")
-def exportar_flashcards(formato: str = "json", conn=Depends(get_db_session)):
+def exportar_flashcards(formato: str = "json", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Formatos: json, csv, anki"""
     rows = conn.execute(
-        "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions FROM flashcards ORDER BY id"
+        "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions FROM flashcards WHERE user_id = ? ORDER BY id",
+        (user_id,)
     ).fetchall()
     items = [dict(r) for r in rows]
 
@@ -261,7 +264,7 @@ def exportar_flashcards(formato: str = "json", conn=Depends(get_db_session)):
 
 @router.post("/api/flashcards/importar", summary="Importar flashcards",
              description="Importa flashcards de JSON, CSV ou formato Anki (TSV)")
-def importar_flashcards(file: UploadFile = File(...), conn=Depends(get_db_session)):
+def importar_flashcards(file: UploadFile = File(...), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Aceita JSON, CSV (colunas: pergunta, resposta) ou Anki TSV (pergunta<TAB>resposta)"""
     content = file.file.read()
     text = content.decode("utf-8")
@@ -309,8 +312,8 @@ def importar_flashcards(file: UploadFile = File(...), conn=Depends(get_db_sessio
         dia_offset = count // max_por_dia
         revisao_date = (date.today() + timedelta(days=dia_offset)).isoformat()
         conn.execute(
-            "INSERT INTO flashcards (pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions) VALUES (?, ?, ?, 1, 2.5, 0)",
-            (pergunta, resposta, revisao_date)
+            "INSERT INTO flashcards (pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, user_id) VALUES (?, ?, ?, 1, 2.5, 0, ?)",
+            (pergunta, resposta, revisao_date, user_id)
         )
         count += 1
     conn.commit()

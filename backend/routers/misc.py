@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from backup import create_backup, list_backups, restore_backup
 from database import get_db_session, rebuild_search_index
+from deps import get_user_id
 from logger import log
 from models import HealthResponse, OkResponse
 from settings import settings
@@ -123,13 +124,13 @@ def reindex_search(conn=Depends(get_db_session)):
 # ============================================================
 
 @router.get("/api/notificacoes")
-def get_notificacoes(conn=Depends(get_db_session)):
+def get_notificacoes(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Retorna lembretes/notificações pendentes"""
     notifs = []
 
     # Flashcards pendentes
     flash_pendentes = conn.execute(
-        "SELECT COUNT(*) FROM flashcards WHERE proxima_revisao <= ?", (today_str(),)
+        "SELECT COUNT(*) FROM flashcards WHERE proxima_revisao <= ? AND user_id = ?", (today_str(), user_id)
     ).fetchone()[0]
     if flash_pendentes > 0:
         notifs.append({
@@ -141,7 +142,7 @@ def get_notificacoes(conn=Depends(get_db_session)):
     # Súmulas pendentes
     try:
         sumulas_pendentes = conn.execute(
-            "SELECT COUNT(*) FROM sumulas WHERE proxima_revisao <= ?", (today_str(),)
+            "SELECT COUNT(*) FROM sumulas WHERE proxima_revisao <= ? AND user_id = ?", (today_str(), user_id)
         ).fetchone()[0]
         if sumulas_pendentes > 0:
             notifs.append({
@@ -153,8 +154,8 @@ def get_notificacoes(conn=Depends(get_db_session)):
         pass
 
     # Metas não cumpridas
-    config = conn.execute("SELECT meta_horas, meta_questoes, meta_flashcards FROM metas_config WHERE id = 1").fetchone()
-    hoje = conn.execute("SELECT * FROM streaks WHERE data = ?", (today_str(),)).fetchone()
+    config = conn.execute("SELECT meta_horas, meta_questoes, meta_flashcards FROM metas_config WHERE user_id = ?", (user_id,)).fetchone()
+    hoje = conn.execute("SELECT * FROM streaks WHERE data = ? AND user_id = ?", (today_str(), user_id)).fetchone()
     if config and hoje:
         horas_hoje = float(hoje["horas_estudadas"] or 0)
         questoes_hoje = int(hoje["questoes_resolvidas"] or 0)
@@ -169,7 +170,7 @@ def get_notificacoes(conn=Depends(get_db_session)):
 
     # Streak em risco
     ontem = (date.today() - timedelta(days=1)).isoformat()
-    streak_ontem = conn.execute("SELECT * FROM streaks WHERE data = ?", (ontem,)).fetchone()
+    streak_ontem = conn.execute("SELECT * FROM streaks WHERE data = ? AND user_id = ?", (ontem, user_id)).fetchone()
     if not hoje and streak_ontem:
         notifs.append({"tipo": "streak", "icon": "🔥", "msg": "Seu streak está em risco! Estude hoje para não perder.", "prioridade": "alta"})
 
@@ -181,14 +182,14 @@ def get_notificacoes(conn=Depends(get_db_session)):
 # ============================================================
 
 @router.get("/api/countdown")
-def get_countdown(conn=Depends(get_db_session)):
+def get_countdown(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     try:
         rows = conn.execute("""
             SELECT edital_nome, cargo, data_prova_objetiva, data_prova_discursiva, local_prova
             FROM edital_info
-            WHERE data_prova_objetiva != '' AND data_prova_objetiva != 'Consultar edital'
+            WHERE data_prova_objetiva != '' AND data_prova_objetiva != 'Consultar edital' AND user_id = ?
             ORDER BY data_prova_objetiva
-        """).fetchall()
+        """, (user_id,)).fetchall()
     except Exception:
         rows = []
     return [{"edital": r[0], "cargo": r[1], "data_objetiva": r[2],
@@ -209,9 +210,9 @@ def get_modo_foco():
 # ============================================================
 
 @router.get("/api/estudo/aleatorio")
-def topico_aleatorio(edital_nome: str = "", cargo: str = "", conn=Depends(get_db_session)):
-    query = "SELECT id, edital_nome, cargo, materia, topico FROM edital WHERE status != 'Concluído'"
-    params = []
+def topico_aleatorio(edital_nome: str = "", cargo: str = "", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    query = "SELECT id, edital_nome, cargo, materia, topico FROM edital WHERE status != 'Concluído' AND user_id = ?"
+    params = [user_id]
     if edital_nome:
         query += " AND edital_nome = ?"
         params.append(edital_nome)
@@ -236,17 +237,17 @@ class SessaoEstudoRegistrar(BaseModel):
 
 
 @router.post("/api/sessoes-estudo/registrar", summary="Registrar sessão de estudo")
-def registrar_sessao_estudo(body: SessaoEstudoRegistrar, conn=Depends(get_db_session)):
+def registrar_sessao_estudo(body: SessaoEstudoRegistrar, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     if body.horas <= 0:
         return {"ok": False, "message": "Tempo inválido"}
     conn.execute(
-        "INSERT INTO sessoes_estudo (materia, horas, data, tipo) VALUES (?, ?, ?, ?)",
-        (body.materia, body.horas, today_str(), body.tipo)
+        "INSERT INTO sessoes_estudo (materia, horas, data, tipo, user_id) VALUES (?, ?, ?, ?, ?)",
+        (body.materia, body.horas, today_str(), body.tipo, user_id)
     )
     conn.execute("""
-        INSERT INTO streaks (data, horas_estudadas) VALUES (?, ?)
+        INSERT INTO streaks (data, horas_estudadas, user_id) VALUES (?, ?, ?)
         ON CONFLICT(data) DO UPDATE SET horas_estudadas = horas_estudadas + ?
-    """, (today_str(), body.horas, body.horas))
+    """, (today_str(), body.horas, user_id, body.horas))
     conn.commit()
     log.info(f"Session registered: {body.horas:.2f}h ({body.materia})")
     return {"ok": True, "horas": body.horas}
@@ -257,20 +258,20 @@ def registrar_sessao_estudo(body: SessaoEstudoRegistrar, conn=Depends(get_db_ses
 # ============================================================
 
 @router.get("/api/daily-challenge")
-def daily_challenge(conn=Depends(get_db_session)):
+def daily_challenge(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Retorna uma questão aleatória como desafio do dia"""
-    row = conn.execute("SELECT * FROM questoes ORDER BY RANDOM() LIMIT 1").fetchone()
+    row = conn.execute("SELECT * FROM questoes WHERE user_id = ? ORDER BY RANDOM() LIMIT 1", (user_id,)).fetchone()
     if not row:
         return {"message": "Nenhuma questão disponível para o desafio do dia"}
     return dict(row)
 
 
 @router.get("/api/conquistas-diarias")
-def conquistas_diarias(conn=Depends(get_db_session)):
+def conquistas_diarias(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Retorna missões diárias auto-geradas"""
     missoes = []
-    config = conn.execute("SELECT * FROM metas_config WHERE id = 1").fetchone()
-    hoje = conn.execute("SELECT * FROM streaks WHERE data = ?", (today_str(),)).fetchone()
+    config = conn.execute("SELECT * FROM metas_config WHERE user_id = ?", (user_id,)).fetchone()
+    hoje = conn.execute("SELECT * FROM streaks WHERE data = ? AND user_id = ?", (today_str(), user_id)).fetchone()
 
     horas_hoje = hoje["horas_estudadas"] if hoje else 0
     questoes_hoje = hoje["questoes_resolvidas"] if hoje else 0
@@ -300,7 +301,7 @@ def conquistas_diarias(conn=Depends(get_db_session)):
 
     # Missão bônus: speed review
     flash_pendentes = conn.execute(
-        "SELECT COUNT(*) FROM flashcards WHERE proxima_revisao <= ?", (today_str(),)
+        "SELECT COUNT(*) FROM flashcards WHERE proxima_revisao <= ? AND user_id = ?", (today_str(), user_id)
     ).fetchone()[0]
     if flash_pendentes >= 10:
         missoes.append({
@@ -315,20 +316,20 @@ def conquistas_diarias(conn=Depends(get_db_session)):
 
 
 @router.get("/api/intercalacao")
-def intercalacao(conn=Depends(get_db_session)):
+def intercalacao(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Retorna sugestão de intercalação: matérias diferentes para alternar"""
     materias = conn.execute("""
-        SELECT DISTINCT materia FROM edital WHERE status != 'Concluído' ORDER BY RANDOM() LIMIT 3
-    """).fetchall()
+        SELECT DISTINCT materia FROM edital WHERE status != 'Concluído' AND user_id = ? ORDER BY RANDOM() LIMIT 3
+    """, (user_id,)).fetchall()
     return [{"materia": r[0], "acao": "Estudar por 25 minutos (Pomodoro)"} for r in materias]
 
 
 @router.get("/api/speed-review")
-def speed_review(conn=Depends(get_db_session)):
+def speed_review(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Retorna 20 flashcards aleatórios para speed review"""
     from constants import SPEED_REVIEW_LIMIT
     rows = conn.execute(
-        "SELECT id, pergunta, resposta FROM flashcards ORDER BY RANDOM() LIMIT ?",
-        (SPEED_REVIEW_LIMIT,)
+        "SELECT id, pergunta, resposta FROM flashcards WHERE user_id = ? ORDER BY RANDOM() LIMIT ?",
+        (user_id, SPEED_REVIEW_LIMIT)
     ).fetchall()
     return [dict(r) for r in rows]
