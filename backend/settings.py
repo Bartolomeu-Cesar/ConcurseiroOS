@@ -102,6 +102,10 @@ class Settings:
     AI_PROVIDER: str = os.environ.get("AI_PROVIDER", "auto")  # auto | openai | claude | gemini | grok | deepseek | mistral | groq | together | cohere | perplexity | kimi | glm | bedrock | ollama
     AI_DAILY_TOKEN_LIMIT: int = int(os.environ.get("AI_DAILY_TOKEN_LIMIT", "50000"))
 
+    # Rate Limiting (requests per minute)
+    RATE_LIMIT_GENERAL: int = int(os.environ.get("RATE_LIMIT_GENERAL", "100"))
+    RATE_LIMIT_AUTH: int = int(os.environ.get("RATE_LIMIT_AUTH", "10"))
+
     # Push Notifications (VAPID)
     VAPID_PRIVATE_KEY: str = os.environ.get("VAPID_PRIVATE_KEY", "")
     VAPID_PUBLIC_KEY: str = os.environ.get("VAPID_PUBLIC_KEY", "")

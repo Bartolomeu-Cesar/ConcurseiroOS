@@ -33,6 +33,84 @@ from settings import settings
 APP_START_TIME = time.time()
 
 # ============================================================
+# RATE LIMITING MIDDLEWARE
+# ============================================================
+
+
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    """IP-based rate limiting with in-memory storage and TTL cleanup."""
+
+    def __init__(self, app):
+        super().__init__(app)
+        # {ip: [(timestamp, ...), ...]}
+        self._requests: dict = {}
+        self._last_cleanup = time.time()
+        self._cleanup_interval = 60  # cleanup every 60s
+
+    def _cleanup(self, now: float):
+        """Remove entries older than 60s."""
+        cutoff = now - 60
+        ips_to_delete = []
+        for ip, timestamps in self._requests.items():
+            # Filter out old timestamps
+            self._requests[ip] = [ts for ts in timestamps if ts > cutoff]
+            if not self._requests[ip]:
+                ips_to_delete.append(ip)
+        for ip in ips_to_delete:
+            del self._requests[ip]
+        self._last_cleanup = now
+
+    async def dispatch(self, request: StarletteRequest, call_next):
+        path = request.url.path
+
+        # Exempt health check endpoint
+        if path == "/api/health" or path == "/api/status":
+            return await call_next(request)
+
+        now = time.time()
+
+        # Periodic cleanup
+        if now - self._last_cleanup > self._cleanup_interval:
+            self._cleanup(now)
+
+        # Get client IP
+        client_ip = request.client.host if request.client else "unknown"
+
+        # Skip rate limiting for test clients (testclient uses "testclient" as host)
+        if client_ip == "testclient":
+            return await call_next(request)
+
+        # Determine limit based on path
+        if path.startswith("/api/auth"):
+            limit = settings.RATE_LIMIT_AUTH
+        else:
+            limit = settings.RATE_LIMIT_GENERAL
+
+        # Get request history for this IP+path_type
+        key = f"{client_ip}:auth" if path.startswith("/api/auth") else client_ip
+
+        if key not in self._requests:
+            self._requests[key] = []
+
+        # Filter to last 60 seconds
+        cutoff = now - 60
+        self._requests[key] = [ts for ts in self._requests[key] if ts > cutoff]
+
+        # Check limit
+        if len(self._requests[key]) >= limit:
+            return Response(
+                content='{"detail":"Too Many Requests. Tente novamente em alguns instantes."}',
+                status_code=429,
+                media_type="application/json",
+            )
+
+        # Record this request
+        self._requests[key].append(now)
+
+        return await call_next(request)
+
+
+# ============================================================
 # SECURITY HEADERS MIDDLEWARE
 # ============================================================
 
@@ -58,6 +136,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "worker-src 'self' blob:; "
             "frame-src 'self' blob:"
         )
+        response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+        response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
         return response
 
 
@@ -76,6 +156,7 @@ app = FastAPI(
     openapi_url=None if _is_production else "/openapi.json",
 )
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RateLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,

@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Header, Request
 
 from database import get_db_session
 from logger import log
+from sanitize import sanitize_input
 from schemas import LoginRequest, RegisterRequest, VerifyCodeRequest, ProfileUpdateRequest, UpgradePlanRequest
 from settings import settings
 
@@ -169,7 +170,7 @@ async def get_optional_user(authorization: str = Header(None), conn=Depends(get_
 def register(body: RegisterRequest, conn=Depends(get_db_session)):
     """Registra um novo usuário e envia código de verificação."""
     email = body.email.strip().lower()
-    nome = body.nome.strip()
+    nome = sanitize_input(body.nome.strip(), max_length=100)
 
     # Verificar se já existe
     existing = conn.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
@@ -335,7 +336,7 @@ def update_profile(body: ProfileUpdateRequest, user=Depends(get_current_user), c
     if not user:
         raise HTTPException(status_code=401, detail="Não autenticado")
 
-    nome = body.nome if body.nome is not None else user["nome"]
+    nome = sanitize_input(body.nome, max_length=100) if body.nome is not None else user["nome"]
     avatar = body.avatar if body.avatar is not None else user["avatar"]
 
     conn.execute(
