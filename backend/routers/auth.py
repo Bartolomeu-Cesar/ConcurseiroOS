@@ -294,6 +294,7 @@ def verify_code(body: dict = Body(...), request: Request = None, conn=Depends(ge
             "nome": user["nome"],
             "avatar": user["avatar"],
             "plano": user["plano"],
+            "role": user["role"] if "role" in user.keys() else "user",
         }
     }
 

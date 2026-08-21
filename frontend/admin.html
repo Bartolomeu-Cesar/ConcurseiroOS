@@ -81,9 +81,9 @@
             <th>ID</th>
             <th>Nome</th>
             <th>Email</th>
+            <th>Role</th>
             <th>Plano</th>
             <th>Criado</th>
-            <th>Último Login</th>
             <th>Ações</th>
           </tr>
         </thead>
@@ -113,6 +113,11 @@
         <option value="free" selected>Estudante (Free)</option>
         <option value="premium">Premium</option>
         <option value="ilimitado">Vitalício</option>
+      </select>
+      <label>Perfil de acesso</label>
+      <select id="field-role">
+        <option value="user">👤 Usuário comum</option>
+        <option value="admin">👑 Administrador</option>
       </select>
       <label>Senha (deixe vazio para manter)</label>
       <input type="password" id="field-password" placeholder="Nova senha">
@@ -166,9 +171,9 @@
             <td style="color:#9399b2;">#${u.id}</td>
             <td><strong>${esc(u.nome || '—')}</strong>${u.username ? '<br><span style="font-size:0.7rem;color:#9399b2;">@' + esc(u.username) + '</span>' : ''}</td>
             <td style="font-size:0.78rem;">${esc(u.email)}</td>
+            <td><span class="badge ${u.role === 'admin' ? 'badge-premium' : 'badge-free'}">${u.role === 'admin' ? '👑 Admin' : '👤 Usuário'}</span></td>
             <td><span class="badge badge-${u.plano}">${u.plano_nome}</span></td>
             <td style="font-size:0.75rem;color:#9399b2;">${formatDate(u.created_at)}</td>
-            <td style="font-size:0.75rem;color:#9399b2;">${formatDate(u.last_login)}</td>
             <td>
               <button class="btn small secondary" onclick="editUser(${u.id})">✏️</button>
               ${u.id !== 1 ? '<button class="btn small danger" onclick="deleteUser(' + u.id + ',\'' + esc(u.nome) + '\')">🗑</button>' : ''}
@@ -197,6 +202,7 @@
       document.getElementById('field-email').value = '';
       document.getElementById('field-username').value = '';
       document.getElementById('field-plano').value = 'free';
+      document.getElementById('field-role').value = 'user';
       document.getElementById('field-password').value = '';
       document.getElementById('modal-user').classList.add('open');
     };
@@ -212,6 +218,7 @@
         document.getElementById('field-email').value = u.email || '';
         document.getElementById('field-username').value = u.username || '';
         document.getElementById('field-plano').value = u.plano || 'free';
+        document.getElementById('field-role').value = u.role || 'user';
         document.getElementById('field-password').value = '';
         document.getElementById('modal-user').classList.add('open');
       } catch(e) { alert('Erro ao carregar usuário.'); }
@@ -225,6 +232,7 @@
         email: document.getElementById('field-email').value.trim(),
         username: document.getElementById('field-username').value.trim(),
         plano: document.getElementById('field-plano').value,
+        role: document.getElementById('field-role').value,
       };
       const pw = document.getElementById('field-password').value;
       if (pw) body.password = pw;

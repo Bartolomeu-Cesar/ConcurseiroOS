@@ -74,7 +74,7 @@
       </div>
 
       <div class="sidebar-footer">
-        ${(() => { try { const u = JSON.parse(localStorage.getItem('auth_user') || '{}'); return u.id === 1 ? '<a href="/admin.html" class="' + activeClass('/admin') + '" style="display:block;padding:6px 12px;font-size:0.75rem;color:#585b70;text-decoration:none;margin-bottom:4px;">⚙️ <span class=\\"nav-label\\">Admin</span></a>' : ''; } catch(e) { return ''; } })()}
+        ${(() => { try { const u = JSON.parse(localStorage.getItem('auth_user') || '{}'); return u.role === 'admin' ? '<a href="/admin.html" class="' + activeClass('/admin') + '" style="display:block;padding:6px 12px;font-size:0.75rem;color:#585b70;text-decoration:none;margin-bottom:4px;">⚙️ <span class=\\"nav-label\\">Admin</span></a>' : ''; } catch(e) { return ''; } })()}
         <a href="#" onclick="localStorage.removeItem('auth_token');localStorage.removeItem('auth_user');window.location.href='/login.html';return false;" style="display:block;padding:6px 12px;font-size:0.75rem;color:#f38ba8;text-decoration:none;margin-bottom:4px;">🚪 <span class="nav-label">Sair</span></a>
         <div class="sidebar-gamify">
           <div class="streak-box"><span class="fire">🔥</span><span class="num" id="sidebar-streak">0</span></div>

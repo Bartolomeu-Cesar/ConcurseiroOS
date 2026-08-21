@@ -897,6 +897,17 @@ def _run_migrations(conn):
         except Exception:
             pass
 
+    # ========== ROLE: admin/user na tabela users ==========
+    try:
+        conn.execute("SELECT role FROM users LIMIT 1")
+    except Exception:
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'")
+            conn.execute("UPDATE users SET role = 'admin' WHERE id = 1")
+            log.info("Migration: added column role to users (id=1 → admin)")
+        except Exception:
+            pass
+
 
 def _migrate_user_id(conn):
     """Adiciona coluna user_id em todas as tabelas que precisam de isolamento por usuário."""

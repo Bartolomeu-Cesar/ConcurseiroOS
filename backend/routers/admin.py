@@ -17,9 +17,12 @@ router = APIRouter(prefix="/api/admin", tags=["Administração"])
 
 
 def _require_admin(user_id: int):
-    """Verifica se o usuário é administrador (user_id=1)."""
-    if user_id != 1:
-        raise HTTPException(status_code=403, detail="Acesso restrito ao administrador.")
+    """Verifica se o usuário é administrador (role='admin')."""
+    from database import get_db
+    with get_db() as conn:
+        user = conn.execute("SELECT role FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not user or user["role"] != "admin":
+            raise HTTPException(status_code=403, detail="Acesso restrito ao administrador.")
 
 
 # ============================================================
@@ -45,14 +48,14 @@ def list_users(
             (f"%{search}%", f"%{search}%", f"%{search}%")
         ).fetchone()[0]
         rows = conn.execute("""
-            SELECT id, email, nome, username, avatar, plano, plano_expira, created_at, last_login, email_verified
+            SELECT id, email, nome, username, avatar, plano, plano_expira, created_at, last_login, email_verified, role
             FROM users WHERE nome LIKE ? OR email LIKE ? OR username LIKE ?
             ORDER BY id LIMIT ? OFFSET ?
         """, (f"%{search}%", f"%{search}%", f"%{search}%", limit, offset)).fetchall()
     else:
         total = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
         rows = conn.execute("""
-            SELECT id, email, nome, username, avatar, plano, plano_expira, created_at, last_login, email_verified
+            SELECT id, email, nome, username, avatar, plano, plano_expira, created_at, last_login, email_verified, role
             FROM users ORDER BY id LIMIT ? OFFSET ?
         """, (limit, offset)).fetchall()
 
@@ -67,6 +70,7 @@ def list_users(
             "plano": r["plano"],
             "plano_nome": PLANS.get(r["plano"], {}).get("nome", r["plano"]),
             "plano_expira": r["plano_expira"],
+            "role": r["role"] or "user",
             "created_at": r["created_at"],
             "last_login": r["last_login"],
             "email_verified": bool(r["email_verified"]),
@@ -234,6 +238,11 @@ def update_user(
     if "avatar" in body:
         updates.append("avatar = ?")
         params.append(body["avatar"])
+    if "role" in body:
+        if body["role"] not in ("admin", "user"):
+            raise HTTPException(status_code=400, detail="Role deve ser 'admin' ou 'user'.")
+        updates.append("role = ?")
+        params.append(body["role"])
     if "password" in body and body["password"]:
         import hashlib
         updates.append("password_hash = ?")
