@@ -197,6 +197,26 @@ def criar_batalha(
     conn.commit()
 
     log.info(f"[batalha] Sala criada: {codigo} por user={user_id} ({total_rodadas} rodadas, materias={materias})")
+
+    # Verificar quantas questões estão disponíveis para aviso prévio
+    if materias:
+        placeholders = ",".join("?" * len(materias))
+        qtd_disponivel = conn.execute(
+            f"SELECT COUNT(*) FROM questoes WHERE materia IN ({placeholders}) AND user_id = ? AND resposta_correta != '' AND resposta_correta IS NOT NULL",
+            (*materias, user_id)
+        ).fetchone()[0]
+    else:
+        qtd_disponivel = conn.execute(
+            "SELECT COUNT(*) FROM questoes WHERE user_id = ? AND resposta_correta != '' AND resposta_correta IS NOT NULL",
+            (user_id,)
+        ).fetchone()[0]
+
+    aviso = ""
+    if qtd_disponivel == 0:
+        aviso = "⚠️ Nenhuma questão disponível para as matérias selecionadas. Adicione questões antes de iniciar."
+    elif qtd_disponivel < total_rodadas:
+        aviso = f"⚠️ Apenas {qtd_disponivel} questões disponíveis (configurado para {total_rodadas} rodadas). Questões poderão repetir."
+
     return {
         "id": battle_id,
         "codigo": codigo,
@@ -206,6 +226,8 @@ def criar_batalha(
         "tempo_por_questao": tempo_por_questao,
         "max_jogadores": max_jogadores,
         "status": "aguardando",
+        "questoes_disponiveis": qtd_disponivel,
+        "aviso": aviso,
     }
 
 
@@ -846,3 +868,70 @@ def revanche(
     conn.commit()
 
     return {"codigo": novo_codigo, "id": new_id, "message": "Revanche criada! Compartilhe o novo código."}
+
+
+@router.post("/reconfigurar/{codigo}", summary="Reconfigurar batalha")
+def reconfigurar_batalha(
+    codigo: str,
+    body: dict = Body({}),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """
+    Reseta a batalha para 'aguardando' e permite alterar configurações.
+    Apenas o criador pode reconfigurar. Remove rodadas já geradas.
+    Body opcional: {materias, total_rodadas, tempo_por_questao, max_jogadores}
+    """
+    _ensure_battle_tables(conn)
+    battle = conn.execute("SELECT * FROM battles WHERE codigo = ?", (codigo.upper(),)).fetchone()
+    if not battle:
+        raise HTTPException(status_code=404, detail="Sala não encontrada.")
+
+    if battle["criador_id"] != user_id:
+        raise HTTPException(status_code=403, detail="Apenas o criador pode reconfigurar.")
+
+    if battle["status"] == "finalizada":
+        raise HTTPException(status_code=400, detail="Batalha finalizada não pode ser reconfigurada. Crie uma revanche.")
+
+    # Atualizar configurações se fornecidas
+    materias = body.get("materias", json.loads(battle["materias"]))
+    total_rodadas = body.get("total_rodadas", battle["total_rodadas"])
+    tempo_por_questao = body.get("tempo_por_questao", battle["tempo_por_questao"])
+    max_jogadores = body.get("max_jogadores", battle["max_jogadores"])
+
+    # Limpar rodadas geradas (reset)
+    conn.execute("DELETE FROM battle_rounds WHERE battle_id = ?", (battle["id"],))
+    conn.execute("DELETE FROM battle_responses WHERE battle_id = ?", (battle["id"],))
+
+    # Resetar status para aguardando
+    conn.execute("""
+        UPDATE battles SET status = 'aguardando', rodada_atual = 0,
+            materias = ?, total_rodadas = ?, tempo_por_questao = ?, max_jogadores = ?
+        WHERE id = ?
+    """, (json.dumps(materias), total_rodadas, tempo_por_questao, max_jogadores, battle["id"]))
+    conn.commit()
+
+    # Contar questões disponíveis
+    if materias:
+        placeholders = ",".join("?" * len(materias))
+        qtd = conn.execute(
+            f"SELECT COUNT(*) FROM questoes WHERE materia IN ({placeholders}) AND user_id = ? AND resposta_correta != '' AND resposta_correta IS NOT NULL",
+            (*materias, user_id)
+        ).fetchone()[0]
+    else:
+        qtd = conn.execute(
+            "SELECT COUNT(*) FROM questoes WHERE user_id = ? AND resposta_correta != '' AND resposta_correta IS NOT NULL",
+            (user_id,)
+        ).fetchone()[0]
+
+    log.info(f"[batalha] Sala {codigo} reconfigurada por user={user_id}")
+    return {
+        "ok": True,
+        "codigo": codigo,
+        "materias": materias,
+        "total_rodadas": total_rodadas,
+        "tempo_por_questao": tempo_por_questao,
+        "max_jogadores": max_jogadores,
+        "questoes_disponiveis": qtd,
+        "message": f"Batalha reconfigurada. {qtd} questões disponíveis.",
+    }

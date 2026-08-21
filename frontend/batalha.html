@@ -152,7 +152,7 @@
           </div>
           <div class="players-list" id="lobby-players"></div>
           <div style="margin-top:16px;">
-            ${isCreator ? '<button class="btn-battle" onclick="iniciarBatalha()">🚀 Iniciar Batalha</button>' : '<div style="color:#f9e2af;font-size:0.85rem;">Aguardando o moderador iniciar...</div>'}
+            ${isCreator ? '<button class="btn-battle" onclick="iniciarBatalha()">🚀 Iniciar Batalha</button><button class="btn-battle secondary" style="margin-top:8px;" onclick="reconfigurarBatalha()">🔄 Reconfigurar</button>' : '<div style="color:#f9e2af;font-size:0.85rem;">Aguardando o moderador iniciar...</div>'}
           </div>
           <button class="btn-battle secondary" style="margin-top:8px;" onclick="refreshLobby()">🔄 Atualizar</button>
         </div>
@@ -263,13 +263,23 @@
         });
         const data = await res.json();
         if (res.ok) {
-          // Go to lobby
-          const sala = await fetch(`/api/batalha/sala/${data.codigo}`).then(r => r.json());
-          showLobby(sala);
+          // Mostrar aviso se poucas/nenhuma questão
+          if (data.aviso) {
+            showBatalhaToast(data.aviso, data.questoes_disponiveis === 0 ? 'error' : 'warning');
+          }
+          if (data.questoes_disponiveis === 0) {
+            // Abrir modal de sem questões direto
+            state.battle = data;
+            showNoQuestionsModal(`Sem questões disponíveis para as matérias: ${materias.length ? materias.join(', ') : 'todas'}`);
+          } else {
+            // Go to lobby normalmente
+            const sala = await fetch(`/api/batalha/sala/${data.codigo}`).then(r => r.json());
+            showLobby(sala);
+          }
         } else {
-          alert(data.detail || 'Erro ao criar sala.');
+          showBatalhaToast(data.detail || 'Erro ao criar sala.', 'error');
         }
-      } catch(e) { alert('Erro de conexão.'); }
+      } catch(e) { showBatalhaToast('Erro de conexão.', 'error'); }
     };
 
     window.entrarBatalha = async function() {
@@ -342,6 +352,9 @@
             </button>
             <button onclick="openCsvImportModal()" style="width:100%;padding:12px;background:#89b4fa;color:#1e1e2e;border:none;border-radius:10px;font-weight:600;font-size:0.9rem;cursor:pointer;">
               📥 Importar CSV (QConcursos / Gran)
+            </button>
+            <button onclick="reconfigurarBatalha()" style="width:100%;padding:12px;background:#f9e2af;color:#1e1e2e;border:none;border-radius:10px;font-weight:600;font-size:0.9rem;cursor:pointer;">
+              🔄 Reconfigurar Batalha
             </button>
             <a href="/questoes.html" style="display:block;width:100%;padding:12px;background:#45475a;color:#cdd6f4;border:none;border-radius:10px;font-size:0.85rem;cursor:pointer;text-align:center;text-decoration:none;">
               📚 Ir para Banco de Questões
@@ -537,6 +550,26 @@
       } catch(e) {
         statusEl.innerHTML = '<span style="color:#f38ba8;">❌ Erro de conexão</span>';
       }
+    };
+
+    // ===== RECONFIGURAR BATALHA =====
+    window.reconfigurarBatalha = async function() {
+      document.getElementById('no-questions-modal')?.remove();
+      if (!state.battle || !state.battle.codigo) { showMenu(); return; }
+
+      // Volta ao menu para o criador reconfigurar
+      showMenu();
+      showBatalhaToast('🔄 Sala resetada. Reconfigure as matérias e clique em Criar novamente.', 'info');
+
+      // Deletar a sala antiga (reconfigurar = criar nova)
+      try {
+        await fetch(`/api/batalha/reconfigurar/${state.battle.codigo}`, { method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({})
+        });
+      } catch(e) {}
+      state.battle = null;
+      setTimeout(setupAutocomplete, 50);
     };
 
     window.selectAnswer = function(letter) {
