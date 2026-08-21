@@ -121,13 +121,61 @@ PROVIDERS = {
         "url": "https://api.openai.com/v1/chat/completions",
         "default_model": "gpt-4o-mini",
         "env_key": "OPENAI_API_KEY",
-        "format": "openai",  # OpenAI-compatible chat/completions API
+        "format": "openai",
+    },
+    "claude": {
+        "url": "https://api.anthropic.com/v1/messages",
+        "default_model": "claude-3-5-sonnet-20241022",
+        "env_key": "ANTHROPIC_API_KEY",
+        "format": "anthropic",  # Anthropic Messages API
     },
     "gemini": {
         "url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
         "default_model": "gemini-2.0-flash",
         "env_key": "GEMINI_API_KEY",
         "format": "openai",  # Gemini supports OpenAI-compatible format
+    },
+    "grok": {
+        "url": "https://api.x.ai/v1/chat/completions",
+        "default_model": "grok-2",
+        "env_key": "XAI_API_KEY",
+        "format": "openai",  # xAI Grok is OpenAI-compatible
+    },
+    "deepseek": {
+        "url": "https://api.deepseek.com/chat/completions",
+        "default_model": "deepseek-chat",
+        "env_key": "DEEPSEEK_API_KEY",
+        "format": "openai",  # DeepSeek is OpenAI-compatible
+    },
+    "mistral": {
+        "url": "https://api.mistral.ai/v1/chat/completions",
+        "default_model": "mistral-small-latest",
+        "env_key": "MISTRAL_API_KEY",
+        "format": "openai",  # Mistral is OpenAI-compatible
+    },
+    "groq": {
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "default_model": "llama-3.1-70b-versatile",
+        "env_key": "GROQ_API_KEY",
+        "format": "openai",  # Groq is OpenAI-compatible (fast inference)
+    },
+    "together": {
+        "url": "https://api.together.xyz/v1/chat/completions",
+        "default_model": "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
+        "env_key": "TOGETHER_API_KEY",
+        "format": "openai",  # Together AI is OpenAI-compatible
+    },
+    "cohere": {
+        "url": "https://api.cohere.com/v2/chat",
+        "default_model": "command-r-plus",
+        "env_key": "COHERE_API_KEY",
+        "format": "cohere",  # Cohere has its own format
+    },
+    "perplexity": {
+        "url": "https://api.perplexity.ai/chat/completions",
+        "default_model": "llama-3.1-sonar-large-128k-online",
+        "env_key": "PERPLEXITY_API_KEY",
+        "format": "openai",  # Perplexity is OpenAI-compatible
     },
     "kimi": {
         "url": "https://api.moonshot.cn/v1/chat/completions",
@@ -174,7 +222,7 @@ def _get_ai_config() -> dict:
         }
 
     # Auto-detect: try providers in priority order
-    priority = ["openai", "gemini", "kimi", "glm", "bedrock", "ollama"]
+    priority = ["openai", "claude", "gemini", "grok", "deepseek", "mistral", "groq", "together", "cohere", "perplexity", "kimi", "glm", "bedrock", "ollama"]
     for name in priority:
         prov = PROVIDERS[name]
         if prov["env_key"]:
@@ -219,15 +267,13 @@ def call_llm_sync(messages: list[dict], max_tokens: int = 1000) -> tuple[str, in
             detail="AI não disponível. Configure uma das chaves: OPENAI_API_KEY, GEMINI_API_KEY, KIMI_API_KEY, GLM_API_KEY, AWS_BEDROCK_REGION, ou inicie o Ollama.",
         )
 
-    # --- OpenAI-compatible format (OpenAI, Gemini, Kimi, GLM) ---
+    # --- OpenAI-compatible format (OpenAI, Gemini, Grok, DeepSeek, Mistral, Groq, Together, Perplexity, Kimi, GLM) ---
     if fmt == "openai":
         try:
-            headers = {"Content-Type": "application/json"}
-            if provider == "gemini":
-                # Gemini uses key as query param or Bearer token
-                headers["Authorization"] = f"Bearer {api_key}"
-            else:
-                headers["Authorization"] = f"Bearer {api_key}"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}",
+            }
 
             with httpx.Client(timeout=45) as client:
                 response = client.post(
@@ -257,6 +303,86 @@ def call_llm_sync(messages: list[dict], max_tokens: int = 1000) -> tuple[str, in
                 status_code=503,
                 detail=f"Não foi possível conectar ao {provider}.",
             )
+
+    # --- Anthropic Claude (Messages API) ---
+    elif fmt == "anthropic":
+        try:
+            # Extract system message
+            system_msg = ""
+            user_msgs = []
+            for msg in messages:
+                if msg["role"] == "system":
+                    system_msg = msg["content"]
+                else:
+                    user_msgs.append({"role": msg["role"], "content": msg["content"]})
+
+            headers = {
+                "Content-Type": "application/json",
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+            }
+            body = {
+                "model": model,
+                "max_tokens": max_tokens,
+                "messages": user_msgs,
+                "temperature": 0.7,
+            }
+            if system_msg:
+                body["system"] = system_msg
+
+            with httpx.Client(timeout=45) as client:
+                response = client.post(url, headers=headers, json=body)
+                response.raise_for_status()
+                data = response.json()
+                text = data["content"][0]["text"]
+                tokens = data.get("usage", {}).get("input_tokens", 0) + data.get("usage", {}).get("output_tokens", 0)
+                return text, tokens
+        except httpx.HTTPStatusError as e:
+            log.error(f"[AI:claude] HTTP error: {e.response.status_code} - {e.response.text[:200]}")
+            raise HTTPException(status_code=502, detail=f"Erro na API Claude: {e.response.status_code}")
+        except httpx.RequestError as e:
+            log.error(f"[AI:claude] Request error: {e}")
+            raise HTTPException(status_code=503, detail="Não foi possível conectar à API Anthropic.")
+
+    # --- Cohere (Chat API v2) ---
+    elif fmt == "cohere":
+        try:
+            # Convert messages format
+            system_msg = ""
+            chat_history = []
+            user_message = ""
+            for msg in messages:
+                if msg["role"] == "system":
+                    system_msg = msg["content"]
+                elif msg["role"] == "user":
+                    user_message = msg["content"]
+                elif msg["role"] == "assistant":
+                    chat_history.append({"role": "assistant", "content": msg["content"]})
+
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}",
+            }
+            body = {
+                "model": model,
+                "messages": [{"role": "system", "content": system_msg}] + [{"role": "user", "content": user_message}] if system_msg else [{"role": "user", "content": user_message}],
+                "max_tokens": max_tokens,
+                "temperature": 0.7,
+            }
+
+            with httpx.Client(timeout=45) as client:
+                response = client.post(url, headers=headers, json=body)
+                response.raise_for_status()
+                data = response.json()
+                text = data.get("message", {}).get("content", [{}])[0].get("text", "")
+                tokens = data.get("usage", {}).get("billed_units", {}).get("input_tokens", 0) + data.get("usage", {}).get("billed_units", {}).get("output_tokens", 0)
+                return text, tokens or len(text) // 3
+        except httpx.HTTPStatusError as e:
+            log.error(f"[AI:cohere] HTTP error: {e.response.status_code} - {e.response.text[:200]}")
+            raise HTTPException(status_code=502, detail=f"Erro na API Cohere: {e.response.status_code}")
+        except httpx.RequestError as e:
+            log.error(f"[AI:cohere] Request error: {e}")
+            raise HTTPException(status_code=503, detail="Não foi possível conectar à API Cohere.")
 
     # --- Amazon Bedrock ---
     elif fmt == "bedrock":
@@ -813,7 +939,15 @@ def get_ai_status(
 
     provider_labels = {
         "openai": "OpenAI (GPT)",
+        "claude": "Anthropic Claude",
         "gemini": "Google Gemini",
+        "grok": "xAI Grok",
+        "deepseek": "DeepSeek",
+        "mistral": "Mistral AI",
+        "groq": "Groq (fast inference)",
+        "together": "Together AI",
+        "cohere": "Cohere Command",
+        "perplexity": "Perplexity AI",
         "kimi": "Kimi (Moonshot AI)",
         "glm": "GLM (ZhipuAI / ChatGLM)",
         "bedrock": "Amazon Bedrock",
