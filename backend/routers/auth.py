@@ -9,10 +9,11 @@ from email.mime.text import MIMEText
 
 import bcrypt
 import jwt
-from fastapi import APIRouter, Body, Depends, HTTPException, Header, Request
+from fastapi import APIRouter, Depends, HTTPException, Header, Request
 
 from database import get_db_session
 from logger import log
+from schemas import LoginRequest, RegisterRequest, VerifyCodeRequest, ProfileUpdateRequest, UpgradePlanRequest
 from settings import settings
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -165,13 +166,10 @@ async def get_optional_user(authorization: str = Header(None), conn=Depends(get_
 # ==================== ENDPOINTS ====================
 
 @router.post("/register")
-def register(body: dict = Body(...), conn=Depends(get_db_session)):
+def register(body: RegisterRequest, conn=Depends(get_db_session)):
     """Registra um novo usuário e envia código de verificação."""
-    email = body.get("email", "").strip().lower()
-    nome = body.get("nome", "").strip()
-
-    if not email or "@" not in email:
-        raise HTTPException(status_code=400, detail="Email inválido")
+    email = body.email.strip().lower()
+    nome = body.nome.strip()
 
     # Verificar se já existe
     existing = conn.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
@@ -206,12 +204,9 @@ def register(body: dict = Body(...), conn=Depends(get_db_session)):
 
 
 @router.post("/login")
-def login(body: dict = Body(...), conn=Depends(get_db_session)):
+def login(body: LoginRequest, conn=Depends(get_db_session)):
     """Envia código de verificação para login."""
-    email = body.get("email", "").strip().lower()
-
-    if not email or "@" not in email:
-        raise HTTPException(status_code=400, detail="Email inválido")
+    email = body.email.strip().lower()
 
     # Verificar se existe
     user = conn.execute("SELECT id, nome FROM users WHERE email = ?", (email,)).fetchone()
@@ -242,10 +237,10 @@ def login(body: dict = Body(...), conn=Depends(get_db_session)):
 
 
 @router.post("/verify-code")
-def verify_code(body: dict = Body(...), request: Request = None, conn=Depends(get_db_session)):
+def verify_code(body: VerifyCodeRequest, request: Request = None, conn=Depends(get_db_session)):
     """Verifica o código e retorna JWT token."""
-    email = body.get("email", "").strip().lower()
-    code = body.get("code", "").strip()
+    email = body.email.strip().lower()
+    code = body.code.strip()
 
     if not email or not code:
         raise HTTPException(status_code=400, detail="Email e código são obrigatórios")
@@ -335,13 +330,13 @@ def get_me(user=Depends(get_optional_user), conn=Depends(get_db_session)):
 
 
 @router.put("/profile")
-def update_profile(body: dict = Body(...), user=Depends(get_current_user), conn=Depends(get_db_session)):
+def update_profile(body: ProfileUpdateRequest, user=Depends(get_current_user), conn=Depends(get_db_session)):
     """Atualiza dados do perfil."""
     if not user:
         raise HTTPException(status_code=401, detail="Não autenticado")
 
-    nome = body.get("nome", user["nome"])
-    avatar = body.get("avatar", user["avatar"])
+    nome = body.nome if body.nome is not None else user["nome"]
+    avatar = body.avatar if body.avatar is not None else user["avatar"]
 
     conn.execute(
         "UPDATE users SET nome = ?, avatar = ? WHERE id = ?",
@@ -383,14 +378,12 @@ def my_plan(user=Depends(get_optional_user)):
 
 
 @router.post("/upgrade")
-def upgrade_plan(body: dict = Body(...), user=Depends(get_current_user), conn=Depends(get_db_session)):
+def upgrade_plan(body: UpgradePlanRequest, user=Depends(get_current_user), conn=Depends(get_db_session)):
     """Faz upgrade do plano do usuário (em produção integraria com pagamento)."""
     if not user:
         raise HTTPException(status_code=401, detail="Não autenticado")
 
-    plano = body.get("plano", "premium")
-    if plano not in ("free", "premium", "ilimitado"):
-        raise HTTPException(status_code=400, detail="Plano inválido")
+    plano = body.plano
 
     # Em produção: verificar pagamento aqui
     # Por enquanto: ativa diretamente (para testes)

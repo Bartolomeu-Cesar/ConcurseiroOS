@@ -5,13 +5,14 @@ import random
 import re
 import tempfile
 
-from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 
 from constants import DEFAULT_EXAM_DURATION_MIN, DEFAULT_EXAM_QUESTIONS, DEFAULT_TIME_PER_QUESTION_SEC
 from database import get_db_session
 from deps import get_user_id
 from logger import log
 from models import QuestaoCreate, QuestaoResponse, QuestaoResposta, QuestaoRespostaResponse
+from schemas import QuestionLinkBatch, QuestionUpdate
 from utils import paginate, today_str, update_streak
 
 router = APIRouter(prefix="", tags=["Questões"])
@@ -343,15 +344,15 @@ def responder_questao(id: int, body: QuestaoResposta, conn=Depends(get_db_sessio
 
 @router.put("/api/questoes/vincular-lote", summary="Vincular disciplina em lote",
             description="Atualiza matéria/tópico/banca de todas as questões que correspondem ao filtro")
-def vincular_questoes_lote(body: dict = Body(...), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+def vincular_questoes_lote(body: QuestionLinkBatch, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """
     Body: {
         filtro: {created_at?, materia_atual?, banca?},
         atualizar: {materia?, topico?, banca?, dificuldade?}
     }
     """
-    filtro = body.get("filtro", {})
-    atualizar = body.get("atualizar", {})
+    filtro = body.filtro
+    atualizar = body.atualizar.model_dump(exclude_unset=True)
 
     if not atualizar:
         raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
@@ -359,17 +360,17 @@ def vincular_questoes_lote(body: dict = Body(...), conn=Depends(get_db_session),
     # Construir WHERE
     where = "WHERE user_id = ?"
     params = [user_id]
-    if filtro.get("created_at"):
+    if filtro.created_at:
         where += " AND created_at = ?"
-        params.append(filtro["created_at"])
-    if filtro.get("materia_atual"):
+        params.append(filtro.created_at)
+    if filtro.materia_atual:
         where += " AND materia = ?"
-        params.append(filtro["materia_atual"])
-    elif filtro.get("materia_atual") == "":
+        params.append(filtro.materia_atual)
+    elif filtro.materia_atual == "":
         where += " AND (materia IS NULL OR materia = '')"
-    if filtro.get("banca"):
+    if filtro.banca:
         where += " AND banca = ?"
-        params.append(filtro["banca"])
+        params.append(filtro.banca)
 
     # Construir SET
     campos_permitidos = ["materia", "topico", "banca", "dificuldade"]
@@ -391,24 +392,22 @@ def vincular_questoes_lote(body: dict = Body(...), conn=Depends(get_db_session),
 
 
 @router.put("/api/questoes/{id}", summary="Editar questão")
-def update_questao(id: int, body: dict = Body(...), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+def update_questao(id: int, body: QuestionUpdate, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Atualiza campos de uma questão (materia, topico, enunciado, alternativas, resposta, explicacao, dificuldade, banca)."""
     row = conn.execute("SELECT id FROM questoes WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Questão não encontrada")
     
-    campos_permitidos = ["materia", "topico", "enunciado", "alternativa_a", "alternativa_b",
-                         "alternativa_c", "alternativa_d", "alternativa_e", "resposta_correta",
-                         "explicacao", "dificuldade", "banca"]
+    data = body.model_dump(exclude_unset=True)
+    
+    if not data:
+        raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
+    
     updates = []
     params = []
-    for campo in campos_permitidos:
-        if campo in body:
-            updates.append(f"{campo} = ?")
-            params.append(body[campo])
-    
-    if not updates:
-        raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
+    for campo, valor in data.items():
+        updates.append(f"{campo} = ?")
+        params.append(valor)
     
     params.append(id)
     params.append(user_id)

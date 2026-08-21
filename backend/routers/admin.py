@@ -2,15 +2,15 @@
 Router de Administração de Usuários.
 Apenas user_id=1 (admin) pode acessar estes endpoints.
 """
-import json
 from datetime import datetime
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from database import get_db_session
 from deps import get_user_id
 from logger import log
 from plans import PLANS
+from schemas import AdminCreateUser, AdminUpdateUser, AdminBulkAction, AdminChangePlan
 from utils import today_str
 
 router = APIRouter(prefix="/api/admin", tags=["Administração"])
@@ -147,18 +147,18 @@ def get_user_detail(
 
 @router.post("/users", summary="Criar novo usuário")
 def create_user(
-    body: dict = Body(...),
+    body: AdminCreateUser,
     conn=Depends(get_db_session),
     user_id: int = Depends(get_user_id)
 ):
     """Cria um novo usuário manualmente."""
     _require_admin(user_id)
 
-    email = body.get("email", "").strip().lower()
-    nome = body.get("nome", "").strip()
-    username = body.get("username", "").strip()
-    plano = body.get("plano", "free")
-    password = body.get("password", "")
+    email = body.email.strip().lower()
+    nome = body.nome.strip()
+    username = body.username.strip()
+    plano = body.plano
+    password = body.password
 
     if not email:
         raise HTTPException(status_code=400, detail="Email é obrigatório.")
@@ -199,7 +199,7 @@ def create_user(
 @router.put("/users/{uid}", summary="Editar usuário")
 def update_user(
     uid: int,
-    body: dict = Body(...),
+    body: AdminUpdateUser,
     conn=Depends(get_db_session),
     user_id: int = Depends(get_user_id)
 ):
@@ -212,41 +212,42 @@ def update_user(
 
     updates = []
     params = []
+    sent_fields = body.model_fields_set
 
-    if "nome" in body:
+    if "nome" in sent_fields:
         updates.append("nome = ?")
-        params.append(body["nome"].strip())
-    if "email" in body:
-        new_email = body["email"].strip().lower()
+        params.append(body.nome.strip())
+    if "email" in sent_fields:
+        new_email = body.email.strip().lower()
         # Check uniqueness
         dup = conn.execute("SELECT id FROM users WHERE email = ? AND id != ?", (new_email, uid)).fetchone()
         if dup:
             raise HTTPException(status_code=409, detail="Email já usado por outro usuário.")
         updates.append("email = ?")
         params.append(new_email)
-    if "username" in body:
+    if "username" in sent_fields:
         updates.append("username = ?")
-        params.append(body["username"].strip())
-    if "plano" in body:
-        if body["plano"] not in PLANS:
+        params.append(body.username.strip())
+    if "plano" in sent_fields:
+        if body.plano not in PLANS:
             raise HTTPException(status_code=400, detail=f"Plano inválido. Opções: {list(PLANS.keys())}")
         updates.append("plano = ?")
-        params.append(body["plano"])
-    if "plano_expira" in body:
+        params.append(body.plano)
+    if "plano_expira" in sent_fields:
         updates.append("plano_expira = ?")
-        params.append(body["plano_expira"])
-    if "avatar" in body:
+        params.append(body.plano_expira)
+    if "avatar" in sent_fields:
         updates.append("avatar = ?")
-        params.append(body["avatar"])
-    if "role" in body:
-        if body["role"] not in ("admin", "user"):
+        params.append(body.avatar)
+    if "role" in sent_fields:
+        if body.role not in ("admin", "user"):
             raise HTTPException(status_code=400, detail="Role deve ser 'admin' ou 'user'.")
         updates.append("role = ?")
-        params.append(body["role"])
-    if "password" in body and body["password"]:
+        params.append(body.role)
+    if "password" in sent_fields and body.password:
         import hashlib
         updates.append("password_hash = ?")
-        params.append(hashlib.sha256(body["password"].encode()).hexdigest())
+        params.append(hashlib.sha256(body.password.encode()).hexdigest())
 
     if not updates:
         raise HTTPException(status_code=400, detail="Nenhum campo para atualizar.")
@@ -255,8 +256,8 @@ def update_user(
     conn.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = ?", params)
     conn.commit()
 
-    log.info(f"[admin] User updated: id={uid} fields={list(body.keys())}")
-    return {"ok": True, "updated_fields": list(body.keys())}
+    log.info(f"[admin] User updated: id={uid} fields={list(sent_fields)}")
+    return {"ok": True, "updated_fields": list(sent_fields)}
 
 
 # ============================================================
@@ -324,24 +325,21 @@ def delete_user(
 @router.post("/users/{uid}/plano", summary="Alterar plano do usuário")
 def change_plan(
     uid: int,
-    body: dict = Body(...),
+    body: AdminChangePlan,
     conn=Depends(get_db_session),
     user_id: int = Depends(get_user_id)
 ):
     """Altera o plano de um usuário (upgrade/downgrade)."""
     _require_admin(user_id)
 
-    plano = body.get("plano", "")
-    if plano not in PLANS:
+    if body.plano not in PLANS:
         raise HTTPException(status_code=400, detail=f"Plano inválido. Opções: {list(PLANS.keys())}")
 
-    plano_expira = body.get("plano_expira", "")
-
-    conn.execute("UPDATE users SET plano = ?, plano_expira = ? WHERE id = ?", (plano, plano_expira, uid))
+    conn.execute("UPDATE users SET plano = ?, plano_expira = ? WHERE id = ?", (body.plano, body.plano_expira, uid))
     conn.commit()
 
-    log.info(f"[admin] Plan changed: user={uid} → {plano} (expires={plano_expira})")
-    return {"ok": True, "plano": plano, "plano_nome": PLANS[plano]["nome"], "plano_expira": plano_expira}
+    log.info(f"[admin] Plan changed: user={uid} → {body.plano} (expires={body.plano_expira})")
+    return {"ok": True, "plano": body.plano, "plano_nome": PLANS[body.plano]["nome"], "plano_expira": body.plano_expira}
 
 
 # ============================================================

@@ -116,9 +116,46 @@ class QuestionAnswer(BaseModel):
 
 
 class QuestionBatchUpdate(BaseModel):
-    """PUT /api/questoes/vincular-lote body."""
+    """PUT /api/questoes/vincular-lote body (legacy untyped version)."""
     filtro: dict = Field(default_factory=dict)
     atualizar: dict = Field(default_factory=dict)
+
+
+class QuestionLinkBatchFiltro(BaseModel):
+    """Filter criteria for batch-linking questions."""
+    created_at: str | None = None
+    materia_atual: str | None = None
+    banca: str | None = None
+
+
+class QuestionLinkBatchAtualizar(BaseModel):
+    """Fields to update in batch-link operation."""
+    materia: str | None = None
+    topico: str | None = None
+    banca: str | None = None
+    dificuldade: str | None = None
+
+
+class QuestionLinkBatch(BaseModel):
+    """PUT /api/questoes/vincular-lote body — typed version."""
+    filtro: QuestionLinkBatchFiltro = Field(default_factory=QuestionLinkBatchFiltro)
+    atualizar: QuestionLinkBatchAtualizar = Field(default_factory=QuestionLinkBatchAtualizar)
+
+
+class QuestionUpdate(BaseModel):
+    """PUT /api/questoes/{id} body — all fields optional."""
+    materia: str | None = None
+    topico: str | None = None
+    enunciado: str | None = None
+    alternativa_a: str | None = None
+    alternativa_b: str | None = None
+    alternativa_c: str | None = None
+    alternativa_d: str | None = None
+    alternativa_e: str | None = None
+    resposta_correta: str | None = None
+    explicacao: str | None = None
+    dificuldade: str | None = None
+    banca: str | None = None
 
 
 # ============================================================
@@ -203,3 +240,44 @@ class TreinadorRecommendation(BaseModel):
     acao: str | None = None
     qtd: int | None = None
     destaque: bool = False
+
+
+# ============================================================
+# Admin — Requests
+# ============================================================
+
+class AdminCreateUser(BaseModel):
+    """POST /api/admin/users body — admin creates a new user."""
+    email: EmailStr
+    nome: str = ""
+    username: str = ""
+    plano: str = "free"
+    plano_expira: str = ""
+    avatar: str = ""
+    role: str = "user"
+    password: str = ""
+
+
+class AdminUpdateUser(BaseModel):
+    """PUT /api/admin/users/{id} body — all fields optional."""
+    email: Optional[EmailStr] = None
+    nome: Optional[str] = None
+    username: Optional[str] = None
+    plano: Optional[str] = None
+    plano_expira: Optional[str] = None
+    avatar: Optional[str] = None
+    role: Optional[str] = None
+    password: Optional[str] = None
+
+
+class AdminBulkAction(BaseModel):
+    """POST /api/admin/users/bulk body — bulk actions on users."""
+    user_ids: list[int]
+    action: str
+    value: str = ""
+
+
+class AdminChangePlan(BaseModel):
+    """POST /api/admin/users/{id}/plano body — change user plan."""
+    plano: str
+    plano_expira: str = ""
