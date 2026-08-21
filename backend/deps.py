@@ -13,10 +13,10 @@ async def get_user_id(authorization: str = Header(None)) -> int:
     Comportamento:
     - AUTH_ENABLED=false → sempre retorna DEFAULT_USER_ID (modo single-user)
     - AUTH_ENABLED=true + token válido → retorna user_id do token
-    - AUTH_ENABLED=true + sem token → retorna DEFAULT_USER_ID (permite acesso guest)
-    - AUTH_ENABLED=true + token inválido/expirado → retorna DEFAULT_USER_ID
+    - AUTH_ENABLED=true + sem token/inválido → retorna DEFAULT_USER_ID (guest mode)
 
-    Nota: A proteção real de endpoints sensíveis deve usar get_authenticated_user_id()
+    Nota: Em modo AUTH_ENABLED=true, sem token = user_id=1 para manter compatibilidade
+    com o fluxo de guest. A proteção real é no frontend que redireciona para login.
     """
     if not settings.AUTH_ENABLED:
         return DEFAULT_USER_ID
