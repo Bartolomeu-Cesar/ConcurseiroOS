@@ -65,8 +65,9 @@
       <div class="sidebar-section">
         <div class="sidebar-section-title">Progresso</div>
         <ul class="sidebar-nav">
+          <li><a href="/mastery.html" class="${activeClass('/mastery')}"><span class="nav-icon">📈</span><span class="nav-label">Domínio</span></a></li>
           <li><a href="/dashboard.html#analytics" onclick="return goPanel('panel-analytics')"><span class="nav-icon">📊</span><span class="nav-label">Analytics</span></a></li>
-          <li><a href="/dashboard.html#raio-x" onclick="return goPanel('panel-analytics')"><span class="nav-icon">🎯</span><span class="nav-label">Raio-X Bancas</span></a></li>
+          <li><a href="/raio-x.html" class="${activeClass('/raio-x')}"><span class="nav-icon">🎯</span><span class="nav-label">Raio-X Bancas</span></a></li>
           <li><a href="/social.html" class="${activeClass('/social')}"><span class="nav-icon">🏆</span><span class="nav-label">Liga & Social</span></a></li>
         </ul>
       </div>

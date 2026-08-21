@@ -1,3 +1,6 @@
+import codecs
+import csv
+import io
 import random
 import re
 import tempfile
@@ -508,6 +511,235 @@ def gerar_questao_template(edital_id: int, conn=Depends(get_db_session), user_id
             "explicacao": "",
             "dificuldade": "Médio"
         }
+    }
+
+
+# ==================== IMPORTAÇÃO VIA CSV ====================
+
+def _detect_csv_format(headers: list[str]) -> str:
+    """Detecta o formato do CSV baseado nos cabeçalhos das colunas."""
+    headers_lower = [h.lower().strip() for h in headers]
+
+    # QConcursos: "Disciplina", "Assunto", "Banca", "Ano", "Enunciado", "A", "B", "C", "D", "E", "Gabarito"
+    qconcursos_markers = {"disciplina", "enunciado", "gabarito"}
+    if qconcursos_markers.issubset(set(headers_lower)):
+        return "qconcursos"
+
+    # Gran Cursos: "Matéria", "Tópico", "Questão", "Alternativa A", ..., "Resposta", "Banca", "Ano"
+    gran_markers = {"questão", "alternativa a", "resposta"}
+    if gran_markers.issubset(set(headers_lower)):
+        return "gran"
+    # Fallback: try without accents
+    gran_markers_no_accent = {"questao", "alternativa a", "resposta"}
+    if gran_markers_no_accent.issubset(set(headers_lower)):
+        return "gran"
+
+    return "unknown"
+
+
+def _normalize_header(h: str) -> str:
+    """Normaliza header para comparação case-insensitive e sem espaços extras."""
+    return h.strip().lower()
+
+
+def _parse_csv_qconcursos(row: dict) -> dict:
+    """Mapeia uma linha CSV no formato QConcursos para o schema da tabela questoes."""
+    # Normalizar chaves do row
+    norm = {_normalize_header(k): v for k, v in row.items()}
+
+    enunciado = norm.get("enunciado", "").strip()
+    if not enunciado:
+        return None
+
+    return {
+        "materia": norm.get("disciplina", "").strip(),
+        "topico": norm.get("assunto", "").strip(),
+        "enunciado": enunciado,
+        "alternativa_a": norm.get("a", "").strip(),
+        "alternativa_b": norm.get("b", "").strip(),
+        "alternativa_c": norm.get("c", "").strip(),
+        "alternativa_d": norm.get("d", "").strip(),
+        "alternativa_e": norm.get("e", "").strip(),
+        "resposta_correta": norm.get("gabarito", "").strip().upper(),
+        "explicacao": norm.get("explicacao", norm.get("explicação", "")).strip(),
+        "dificuldade": norm.get("dificuldade", "Médio").strip() or "Médio",
+        "banca": norm.get("banca", "").strip(),
+        "ano": norm.get("ano", "").strip(),
+    }
+
+
+def _parse_csv_gran(row: dict) -> dict:
+    """Mapeia uma linha CSV no formato Gran Cursos para o schema da tabela questoes."""
+    norm = {_normalize_header(k): v for k, v in row.items()}
+
+    enunciado = norm.get("questão", norm.get("questao", "")).strip()
+    if not enunciado:
+        return None
+
+    return {
+        "materia": norm.get("matéria", norm.get("materia", "")).strip(),
+        "topico": norm.get("tópico", norm.get("topico", "")).strip(),
+        "enunciado": enunciado,
+        "alternativa_a": norm.get("alternativa a", "").strip(),
+        "alternativa_b": norm.get("alternativa b", "").strip(),
+        "alternativa_c": norm.get("alternativa c", "").strip(),
+        "alternativa_d": norm.get("alternativa d", "").strip(),
+        "alternativa_e": norm.get("alternativa e", "").strip(),
+        "resposta_correta": norm.get("resposta", "").strip().upper(),
+        "explicacao": norm.get("explicacao", norm.get("explicação", "")).strip(),
+        "dificuldade": norm.get("dificuldade", "Médio").strip() or "Médio",
+        "banca": norm.get("banca", "").strip(),
+        "ano": norm.get("ano", "").strip(),
+    }
+
+
+def _decode_csv_content(raw_bytes: bytes) -> str:
+    """Decodifica conteúdo CSV tratando UTF-8 BOM e fallback para latin1."""
+    # Tentar UTF-8 com BOM
+    try:
+        if raw_bytes.startswith(codecs.BOM_UTF8):
+            return raw_bytes.decode("utf-8-sig")
+        return raw_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        pass
+
+    # Fallback: latin1 (ISO-8859-1)
+    try:
+        return raw_bytes.decode("latin-1")
+    except UnicodeDecodeError:
+        # Último recurso: ignorar erros
+        return raw_bytes.decode("utf-8", errors="replace")
+
+
+@router.post("/api/questoes/importar-csv", summary="Importar questões via CSV",
+             description="Importa questões de CSVs exportados do QConcursos ou Gran Cursos")
+async def importar_csv(
+    file: UploadFile = File(...),
+    formato: str = Query("auto", description="Formato: auto, qconcursos, gran"),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """
+    Aceita um arquivo CSV com questões de múltipla escolha.
+    
+    Formatos suportados:
+    - **QConcursos**: Disciplina, Assunto, Banca, Ano, Enunciado, A, B, C, D, E, Gabarito
+    - **Gran Cursos**: Matéria, Tópico, Questão, Alternativa A-E, Resposta, Banca, Ano
+    
+    Detecção automática pelo cabeçalho. Limite: 5000 linhas por importação.
+    """
+    if not file.filename or not file.filename.lower().endswith('.csv'):
+        raise HTTPException(status_code=400, detail="Apenas arquivos CSV são aceitos.")
+
+    # Ler conteúdo
+    raw_bytes = await file.read()
+    if not raw_bytes:
+        raise HTTPException(status_code=400, detail="Arquivo vazio.")
+
+    # Decodificar
+    text_content = _decode_csv_content(raw_bytes)
+
+    # Detectar delimitador (vírgula ou ponto-e-vírgula)
+    first_line = text_content.split('\n', 1)[0]
+    delimiter = ';' if first_line.count(';') > first_line.count(',') else ','
+
+    # Parsear CSV
+    reader = csv.DictReader(io.StringIO(text_content), delimiter=delimiter)
+
+    if not reader.fieldnames:
+        raise HTTPException(status_code=400, detail="CSV sem cabeçalho válido.")
+
+    # Detectar formato
+    detected_format = formato
+    if formato == "auto":
+        detected_format = _detect_csv_format(reader.fieldnames)
+        if detected_format == "unknown":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Formato não reconhecido. Cabeçalhos encontrados: {', '.join(reader.fieldnames)}. "
+                       f"Use formato=qconcursos ou formato=gran explicitamente."
+            )
+
+    # Selecionar parser
+    if detected_format == "qconcursos":
+        parse_row = _parse_csv_qconcursos
+    elif detected_format == "gran":
+        parse_row = _parse_csv_gran
+    else:
+        raise HTTPException(status_code=400, detail=f"Formato inválido: {formato}. Use: auto, qconcursos, gran.")
+
+    # Processar linhas
+    imported = 0
+    duplicates = 0
+    errors = []
+    row_num = 0
+    MAX_ROWS = 5000
+
+    for row in reader:
+        row_num += 1
+        if row_num > MAX_ROWS:
+            errors.append(f"Limite de {MAX_ROWS} linhas atingido. Linhas restantes ignoradas.")
+            break
+
+        try:
+            questao = parse_row(row)
+            if questao is None:
+                errors.append(f"Linha {row_num + 1}: enunciado vazio, ignorada.")
+                continue
+
+            # Validar campos mínimos
+            if len(questao["enunciado"]) < 10:
+                errors.append(f"Linha {row_num + 1}: enunciado muito curto ({len(questao['enunciado'])} chars).")
+                continue
+
+            # Verificar duplicata (mesmo enunciado + banca + ano)
+            existing = conn.execute(
+                "SELECT id FROM questoes WHERE user_id = ? AND enunciado = ? AND banca = ? AND created_at LIKE ?",
+                (user_id, questao["enunciado"], questao["banca"],
+                 f"%{questao.get('ano', '')}%" if questao.get("ano") else "%")
+            ).fetchone()
+
+            if existing:
+                duplicates += 1
+                continue
+
+            # Inserir
+            conn.execute("""
+                INSERT INTO questoes (materia, topico, enunciado, alternativa_a, alternativa_b,
+                    alternativa_c, alternativa_d, alternativa_e, resposta_correta, explicacao,
+                    dificuldade, banca, ano, created_at, user_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                questao["materia"],
+                questao["topico"],
+                questao["enunciado"],
+                questao["alternativa_a"],
+                questao["alternativa_b"],
+                questao["alternativa_c"],
+                questao["alternativa_d"],
+                questao["alternativa_e"],
+                questao["resposta_correta"],
+                questao.get("explicacao", ""),
+                questao["dificuldade"],
+                questao["banca"],
+                questao.get("ano", ""),
+                today_str(),
+                user_id,
+            ))
+            imported += 1
+
+        except Exception as e:
+            errors.append(f"Linha {row_num + 1}: {str(e)}")
+
+    conn.commit()
+    log.info(f"CSV import: {imported} questões importadas de {file.filename} (formato={detected_format}, duplicatas={duplicates})")
+
+    return {
+        "imported": imported,
+        "duplicates": duplicates,
+        "errors": errors[:50],  # Limitar erros retornados
+        "format_detected": detected_format,
+        "total_rows": row_num,
     }
 
 

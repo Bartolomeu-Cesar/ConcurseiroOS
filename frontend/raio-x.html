@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Raio-X Bancas — ConcurseiroOS</title>
+  <link rel="stylesheet" href="/layout.css">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <style>
+    .raio-x-page {
+      padding: 24px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .raio-x-page h1 {
+      color: #cba6f7;
+      font-size: 1.8rem;
+      margin-bottom: 8px;
+    }
+
+    .raio-x-page .subtitle {
+      color: #a6adc8;
+      margin-bottom: 24px;
+    }
+
+    /* Filters */
+    .filters-bar {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 24px;
+      align-items: center;
+    }
+
+    .filters-bar select {
+      background: #313244;
+      color: #cdd6f4;
+      border: 1px solid #45475a;
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 14px;
+      min-width: 180px;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+
+    .filters-bar select:focus {
+      outline: none;
+      border-color: #cba6f7;
+    }
+
+    .filters-bar label {
+      color: #a6adc8;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .filter-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    /* Grid layout */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+
+    .chart-card {
+      background: #313244;
+      border-radius: 12px;
+      padding: 20px;
+      border: 1px solid #45475a;
+    }
+
+    .chart-card h3 {
+      color: #cdd6f4;
+      font-size: 1rem;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .chart-card canvas {
+      max-height: 320px;
+      width: 100% !important;
+    }
+
+    .chart-card.full-width {
+      grid-column: 1 / -1;
+    }
+
+    /* Balance tags */
+    .balance-section {
+      margin-bottom: 24px;
+    }
+
+    .balance-section h3 {
+      color: #cdd6f4;
+      font-size: 1rem;
+      margin-bottom: 12px;
+    }
+
+    .balance-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .balance-tag {
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .balance-tag.subestudado {
+      background: rgba(243, 139, 168, 0.15);
+      color: #f38ba8;
+      border: 1px solid rgba(243, 139, 168, 0.3);
+    }
+
+    .balance-tag.equilibrado {
+      background: rgba(166, 227, 161, 0.15);
+      color: #a6e3a1;
+      border: 1px solid rgba(166, 227, 161, 0.3);
+    }
+
+    .balance-tag.superestudado {
+      background: rgba(249, 226, 175, 0.15);
+      color: #f9e2af;
+      border: 1px solid rgba(249, 226, 175, 0.3);
+    }
+
+    /* Priorities table */
+    .priorities-section {
+      background: #313244;
+      border-radius: 12px;
+      padding: 20px;
+      border: 1px solid #45475a;
+      overflow-x: auto;
+    }
+
+    .priorities-section h3 {
+      color: #cdd6f4;
+      font-size: 1rem;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .priorities-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    .priorities-table th {
+      text-align: left;
+      color: #a6adc8;
+      font-weight: 600;
+      padding: 10px 12px;
+      border-bottom: 1px solid #45475a;
+      white-space: nowrap;
+    }
+
+    .priorities-table td {
+      color: #cdd6f4;
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(69, 71, 90, 0.5);
+    }
+
+    .priorities-table tr:hover td {
+      background: rgba(203, 166, 247, 0.05);
+    }
+
+    .rec-badge {
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .rec-badge.urgente {
+      background: rgba(243, 139, 168, 0.2);
+      color: #f38ba8;
+    }
+
+    .rec-badge.importante {
+      background: rgba(249, 226, 175, 0.2);
+      color: #f9e2af;
+    }
+
+    .rec-badge.normal {
+      background: rgba(166, 227, 161, 0.2);
+      color: #a6e3a1;
+    }
+
+    /* Loading */
+    .loading-spinner {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+      color: #a6adc8;
+      gap: 10px;
+    }
+
+    .loading-spinner::before {
+      content: '';
+      width: 20px;
+      height: 20px;
+      border: 2px solid #45475a;
+      border-top-color: #cba6f7;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: #6c7086;
+    }
+
+    .empty-state .icon {
+      font-size: 2.5rem;
+      margin-bottom: 12px;
+    }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .charts-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .raio-x-page {
+        padding: 16px;
+      }
+
+      .raio-x-page h1 {
+        font-size: 1.4rem;
+      }
+
+      .filters-bar select {
+        min-width: 140px;
+        font-size: 13px;
+      }
+
+      .chart-card {
+        padding: 14px;
+      }
+
+      .priorities-table {
+        font-size: 12px;
+      }
+
+      .priorities-table th,
+      .priorities-table td {
+        padding: 8px 6px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="raio-x-page">
+    <h1>🎯 Raio-X Bancas</h1>
+    <p class="subtitle">Análise detalhada por banca, matéria e tópico — identifique prioridades de estudo.</p>
+
+    <!-- Filters -->
+    <div class="filters-bar">
+      <div class="filter-group">
+        <label for="filter-banca">Banca</label>
+        <select id="filter-banca">
+          <option value="">Todas as bancas</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="filter-materia">Matéria</label>
+        <select id="filter-materia">
+          <option value="">Todas as matérias</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Balance Section -->
+    <div class="balance-section" id="balance-section" style="display:none;">
+      <h3>📊 Balanceamento de Estudo</h3>
+      <div class="balance-tags" id="balance-tags"></div>
+    </div>
+
+    <!-- Charts Grid -->
+    <div class="charts-grid">
+      <div class="chart-card">
+        <h3>📈 Tópicos Mais Cobrados (Top 15)</h3>
+        <div id="topics-chart-container">
+          <div class="loading-spinner">Carregando...</div>
+        </div>
+        <canvas id="chart-topics" style="display:none;"></canvas>
+      </div>
+
+      <div class="chart-card">
+        <h3>📚 Matérias por Peso/Questões</h3>
+        <div id="materias-chart-container">
+          <div class="loading-spinner">Carregando...</div>
+        </div>
+        <canvas id="chart-materias" style="display:none;"></canvas>
+      </div>
+
+      <div class="chart-card">
+        <h3>🎯 Desempenho por Banca</h3>
+        <div id="bancas-chart-container">
+          <div class="loading-spinner">Carregando...</div>
+        </div>
+        <canvas id="chart-bancas" style="display:none;"></canvas>
+      </div>
+    </div>
+
+    <!-- Priorities Table -->
+    <div class="priorities-section">
+      <h3>🚨 Prioridades de Estudo</h3>
+      <div id="priorities-container">
+        <div class="loading-spinner">Carregando prioridades...</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/sidebar.js"></script>
+  <script>
+    (function() {
+      'use strict';
+
+      // State
+      let chartTopics = null;
+      let chartMaterias = null;
+      let chartBancas = null;
+
+      // DOM refs
+      const filterBanca = document.getElementById('filter-banca');
+      const filterMateria = document.getElementById('filter-materia');
+
+      // Color palette
+      const COLORS = [
+        '#cba6f7', '#89b4fa', '#a6e3a1', '#f9e2af', '#f38ba8',
+        '#94e2d5', '#fab387', '#74c7ec', '#f5c2e7', '#b4befe',
+        '#89dceb', '#eba0ac', '#a6adc8', '#f5e0dc', '#cdd6f4'
+      ];
+
+      // ==================== Data Fetching ====================
+
+      async function fetchJSON(url) {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('Erro ao carregar dados: ' + res.status);
+        return res.json();
+      }
+
+      async function loadFilters() {
+        try {
+          const data = await fetchJSON('/api/analytics/raio-x?banca=&materia=');
+          const filtros = data.filtros || {};
+
+          // Populate banca filter
+          (filtros.bancas || []).forEach(function(b) {
+            const opt = document.createElement('option');
+            opt.value = b;
+            opt.textContent = b;
+            filterBanca.appendChild(opt);
+          });
+
+          // Populate materia filter
+          (filtros.materias || []).forEach(function(m) {
+            const opt = document.createElement('option');
+            opt.value = m;
+            opt.textContent = m;
+            filterMateria.appendChild(opt);
+          });
+
+          return data;
+        } catch (e) {
+          console.error('Erro ao carregar filtros:', e);
+          return null;
+        }
+      }
+
+      async function loadRaioX() {
+        const banca = filterBanca.value;
+        const materia = filterMateria.value;
+        const params = new URLSearchParams({ banca: banca, materia: materia });
+        try {
+          const data = await fetchJSON('/api/analytics/raio-x?' + params.toString());
+          renderTopicsChart(data.topicos || []);
+          renderMateriasFromAnalytics(data.materias || []);
+        } catch (e) {
+          console.error('Erro raio-x:', e);
+          showEmpty('topics-chart-container', 'Erro ao carregar tópicos');
+          showEmpty('materias-chart-container', 'Erro ao carregar matérias');
+        }
+      }
+
+      async function loadBancas() {
+        try {
+          const data = await fetchJSON('/api/analytics/raio-x/bancas');
+          renderBancasChart(data || []);
+        } catch (e) {
+          console.error('Erro bancas:', e);
+          showEmpty('bancas-chart-container', 'Erro ao carregar bancas');
+        }
+      }
+
+      async function loadPrioridades() {
+        const banca = filterBanca.value;
+        const params = new URLSearchParams({ banca: banca, edital_nome: '', cargo: '' });
+        try {
+          const data = await fetchJSON('/api/analytics/raio-x/prioridades?' + params.toString());
+          renderPrioridades(data.prioridades || []);
+        } catch (e) {
+          console.error('Erro prioridades:', e);
+          document.getElementById('priorities-container').innerHTML =
+            '<div class="empty-state"><div class="icon">⚠️</div><p>Erro ao carregar prioridades</p></div>';
+        }
+      }
+
+      async function loadBalance() {
+        try {
+          const data = await fetchJSON('/api/raio-x');
+          renderBalance(data.materias || []);
+        } catch (e) {
+          console.error('Erro balance:', e);
+        }
+      }
+
+      // ==================== Chart Rendering ====================
+
+      function showEmpty(containerId, msg) {
+        var container = document.getElementById(containerId);
+        if (container) {
+          container.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>' + msg + '</p></div>';
+        }
+      }
+
+      function renderTopicsChart(topicos) {
+        var container = document.getElementById('topics-chart-container');
+        var canvas = document.getElementById('chart-topics');
+
+        if (!topicos.length) {
+          container.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>Nenhum tópico encontrado</p></div>';
+          canvas.style.display = 'none';
+          return;
+        }
+
+        // Sort by total_questoes desc and take top 15
+        var sorted = topicos.slice().sort(function(a, b) { return b.total_questoes - a.total_questoes; });
+        var top15 = sorted.slice(0, 15);
+
+        var labels = top15.map(function(t) {
+          var label = t.topico || t.materia;
+          return label.length > 30 ? label.substring(0, 27) + '...' : label;
+        });
+        var values = top15.map(function(t) { return t.total_questoes; });
+
+        container.style.display = 'none';
+        canvas.style.display = 'block';
+
+        if (chartTopics) chartTopics.destroy();
+
+        chartTopics = new Chart(canvas, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Questões',
+              data: values,
+              backgroundColor: COLORS.slice(0, top15.length),
+              borderRadius: 4
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false }
+            },
+            scales: {
+              x: {
+                ticks: { color: '#a6adc8', maxRotation: 45, font: { size: 11 } },
+                grid: { color: 'rgba(69,71,90,0.3)' }
+              },
+              y: {
+                ticks: { color: '#a6adc8' },
+                grid: { color: 'rgba(69,71,90,0.3)' }
+              }
+            }
+          }
+        });
+      }
+
+      function renderMateriasFromAnalytics(materias) {
+        var container = document.getElementById('materias-chart-container');
+        var canvas = document.getElementById('chart-materias');
+
+        if (!materias.length) {
+          container.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>Nenhuma matéria encontrada</p></div>';
+          canvas.style.display = 'none';
+          return;
+        }
+
+        var sorted = materias.slice().sort(function(a, b) { return b.total - a.total; });
+        var labels = sorted.map(function(m) {
+          return m.materia.length > 25 ? m.materia.substring(0, 22) + '...' : m.materia;
+        });
+        var values = sorted.map(function(m) { return m.total; });
+
+        container.style.display = 'none';
+        canvas.style.display = 'block';
+
+        if (chartMaterias) chartMaterias.destroy();
+
+        chartMaterias = new Chart(canvas, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Questões',
+              data: values,
+              backgroundColor: '#89b4fa',
+              borderRadius: 4
+            }]
+          },
+          options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false }
+            },
+            scales: {
+              x: {
+                ticks: { color: '#a6adc8' },
+                grid: { color: 'rgba(69,71,90,0.3)' }
+              },
+              y: {
+                ticks: { color: '#a6adc8', font: { size: 11 } },
+                grid: { display: false }
+              }
+            }
+          }
+        });
+      }
+
+      function renderBancasChart(bancas) {
+        var container = document.getElementById('bancas-chart-container');
+        var canvas = document.getElementById('chart-bancas');
+
+        if (!bancas.length) {
+          container.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>Nenhuma banca encontrada</p></div>';
+          canvas.style.display = 'none';
+          return;
+        }
+
+        var labels = bancas.map(function(b) { return b.banca; });
+        var values = bancas.map(function(b) { return b.pct_acerto; });
+
+        container.style.display = 'none';
+        canvas.style.display = 'block';
+
+        if (chartBancas) chartBancas.destroy();
+
+        chartBancas = new Chart(canvas, {
+          type: 'doughnut',
+          data: {
+            labels: labels,
+            datasets: [{
+              data: values,
+              backgroundColor: COLORS.slice(0, bancas.length),
+              borderColor: '#1e1e2e',
+              borderWidth: 2
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                position: 'bottom',
+                labels: {
+                  color: '#cdd6f4',
+                  padding: 12,
+                  font: { size: 12 }
+                }
+              },
+              tooltip: {
+                callbacks: {
+                  label: function(ctx) {
+                    return ctx.label + ': ' + ctx.parsed.toFixed(1) + '% acerto';
+                  }
+                }
+              }
+            }
+          }
+        });
+      }
+
+      // ==================== Balance Tags ====================
+
+      function renderBalance(materias) {
+        var section = document.getElementById('balance-section');
+        var container = document.getElementById('balance-tags');
+
+        if (!materias.length) {
+          section.style.display = 'none';
+          return;
+        }
+
+        section.style.display = 'block';
+        container.innerHTML = '';
+
+        materias.forEach(function(m) {
+          var bal = (m.balanceamento || '').toLowerCase();
+          var cssClass = 'equilibrado';
+          var icon = '⚖️';
+
+          if (bal.indexOf('sub') !== -1) {
+            cssClass = 'subestudado';
+            icon = '⬇️';
+          } else if (bal.indexOf('super') !== -1 || bal.indexOf('sobre') !== -1) {
+            cssClass = 'superestudado';
+            icon = '⬆️';
+          }
+
+          var tag = document.createElement('span');
+          tag.className = 'balance-tag ' + cssClass;
+          tag.textContent = icon + ' ' + m.materia + ' (' + m.balanceamento + ')';
+          container.appendChild(tag);
+        });
+      }
+
+      // ==================== Priorities Table ====================
+
+      function renderPrioridades(prioridades) {
+        var container = document.getElementById('priorities-container');
+
+        if (!prioridades.length) {
+          container.innerHTML = '<div class="empty-state"><div class="icon">✅</div><p>Nenhuma prioridade identificada — continue praticando!</p></div>';
+          return;
+        }
+
+        var html = '<table class="priorities-table">';
+        html += '<thead><tr>';
+        html += '<th>Matéria</th><th>Tópico</th><th>Domínio</th><th>Frequência</th><th>Score</th><th>Recomendação</th>';
+        html += '</tr></thead><tbody>';
+
+        prioridades.forEach(function(p) {
+          var rec = (p.recomendacao || '').toUpperCase();
+          var badgeClass = 'normal';
+          if (rec.indexOf('URGENTE') !== -1) badgeClass = 'urgente';
+          else if (rec.indexOf('IMPORTANTE') !== -1) badgeClass = 'importante';
+
+          html += '<tr>';
+          html += '<td>' + escapeHtml(p.materia) + '</td>';
+          html += '<td>' + escapeHtml(p.topico) + '</td>';
+          html += '<td>' + escapeHtml(p.mastery_level || '-') + '</td>';
+          html += '<td>' + (p.frequencia || 0) + '</td>';
+          html += '<td>' + (p.priority_score != null ? p.priority_score.toFixed(1) : '-') + '</td>';
+          html += '<td><span class="rec-badge ' + badgeClass + '">' + escapeHtml(p.recomendacao) + '</span></td>';
+          html += '</tr>';
+        });
+
+        html += '</tbody></table>';
+        container.innerHTML = html;
+      }
+
+      function escapeHtml(str) {
+        if (!str) return '';
+        var div = document.createElement('div');
+        div.appendChild(document.createTextNode(str));
+        return div.innerHTML;
+      }
+
+      // ==================== Event Listeners ====================
+
+      filterBanca.addEventListener('change', function() {
+        loadRaioX();
+        loadPrioridades();
+      });
+
+      filterMateria.addEventListener('change', function() {
+        loadRaioX();
+      });
+
+      // ==================== Init ====================
+
+      async function init() {
+        var initialData = await loadFilters();
+        if (initialData) {
+          renderTopicsChart(initialData.topicos || []);
+          renderMateriasFromAnalytics(initialData.materias || []);
+        }
+        loadBancas();
+        loadPrioridades();
+        loadBalance();
+      }
+
+      init();
+    })();
+  </script>
+</body>
+</html>

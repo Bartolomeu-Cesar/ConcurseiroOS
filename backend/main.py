@@ -51,10 +51,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net; "
-            "style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data: blob:; "
-            "font-src 'self'; "
-            "connect-src 'self'; "
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            "img-src 'self' data: blob: https:; "
+            "font-src 'self' https://cdn.jsdelivr.net; "
+            "connect-src 'self' http://localhost:* ws://localhost:*; "
             "worker-src 'self' blob:; "
             "frame-src 'self' blob:"
         )

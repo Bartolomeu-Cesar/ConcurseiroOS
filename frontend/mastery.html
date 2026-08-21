@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Domínio - ConcurseiroOS</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#1e1e2e">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/layout.css">
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: sans-serif; background: #1e1e2e; color: #cdd6f4; min-height: 100vh; padding: 24px; }
+    a { color: #89b4fa; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+    .header h1 { font-size: 1.5rem; color: #cba6f7; }
+
+    /* Filters */
+    .filters-bar {
+      display: flex; gap: 12px; align-items: center; margin-bottom: 20px; flex-wrap: wrap;
+    }
+    .filters-bar select {
+      background: #313244; border: 1px solid #45475a; border-radius: 8px;
+      padding: 10px 14px; color: #cdd6f4; font-size: 0.9rem; min-width: 180px;
+      cursor: pointer;
+    }
+    .filters-bar select:focus { outline: none; border-color: #cba6f7; }
+
+    .btn-recalc {
+      background: #cba6f7; color: #1e1e2e; border: none; border-radius: 8px;
+      padding: 10px 18px; font-size: 0.9rem; font-weight: 600; cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+    }
+    .btn-recalc:hover { background: #b48bf2; }
+    .btn-recalc:active { transform: scale(0.97); }
+    .btn-recalc:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Summary cards */
+    .summary-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px; margin-bottom: 24px;
+    }
+    .summary-card {
+      background: #313244; border-radius: 12px; padding: 16px; text-align: center;
+    }
+    .summary-card .value { font-size: 1.6rem; font-weight: 700; margin-bottom: 4px; }
+    .summary-card .label { font-size: 0.8rem; color: #9399b2; text-transform: uppercase; letter-spacing: 0.5px; }
+    .summary-card.red .value { color: #f38ba8; }
+    .summary-card.yellow .value { color: #f9e2af; }
+    .summary-card.blue .value { color: #89b4fa; }
+    .summary-card.green .value { color: #a6e3a1; }
+    .summary-card.accent .value { color: #cba6f7; }
+
+    /* Matéria sections */
+    .materia-list { display: flex; flex-direction: column; gap: 8px; }
+
+    .materia-card {
+      background: #313244; border-radius: 12px; overflow: hidden;
+      transition: box-shadow 0.2s;
+    }
+    .materia-card:hover { box-shadow: 0 0 0 1px #45475a; }
+
+    .materia-header {
+      display: flex; align-items: center; gap: 12px; padding: 16px 20px;
+      cursor: pointer; user-select: none; transition: background 0.2s;
+    }
+    .materia-header:hover { background: #3b3b52; }
+
+    .materia-expand-icon {
+      font-size: 0.75rem; color: #9399b2; transition: transform 0.3s ease;
+      flex-shrink: 0; width: 16px; text-align: center;
+    }
+    .materia-card.expanded .materia-expand-icon { transform: rotate(90deg); }
+
+    .materia-info { flex: 1; min-width: 0; }
+    .materia-name { font-size: 0.95rem; font-weight: 600; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .materia-meta { font-size: 0.78rem; color: #9399b2; }
+
+    .materia-progress-wrap { width: 140px; flex-shrink: 0; }
+    .progress-bar-container {
+      width: 100%; height: 8px; background: #1e1e2e; border-radius: 4px; overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%; border-radius: 4px; transition: width 0.4s ease;
+    }
+    .materia-pct { font-size: 0.78rem; text-align: right; margin-top: 3px; font-weight: 600; }
+
+    /* Topics */
+    .materia-topics {
+      max-height: 0; overflow: hidden; transition: max-height 0.4s ease, padding 0.3s ease;
+      background: #2a2a3c; padding: 0 20px;
+    }
+    .materia-card.expanded .materia-topics {
+      max-height: 2000px; padding: 12px 20px 16px;
+    }
+
+    .topic-row {
+      display: flex; align-items: center; gap: 12px; padding: 10px 0;
+      border-bottom: 1px solid #3b3b52;
+    }
+    .topic-row:last-child { border-bottom: none; }
+
+    .topic-name { flex: 1; font-size: 0.85rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .topic-progress-wrap { width: 120px; flex-shrink: 0; }
+    .topic-badge {
+      font-size: 0.7rem; padding: 3px 8px; border-radius: 10px; font-weight: 600;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .topic-date { font-size: 0.72rem; color: #6c7086; white-space: nowrap; flex-shrink: 0; }
+
+    /* Badge colors */
+    .badge-red { background: rgba(243,139,168,0.15); color: #f38ba8; }
+    .badge-yellow { background: rgba(249,226,175,0.15); color: #f9e2af; }
+    .badge-blue { background: rgba(137,180,250,0.15); color: #89b4fa; }
+    .badge-green { background: rgba(166,227,161,0.15); color: #a6e3a1; }
+
+    /* Loading & empty */
+    .loading-state, .empty-state {
+      text-align: center; padding: 60px 20px; color: #6c7086;
+    }
+    .loading-state .spinner {
+      display: inline-block; width: 32px; height: 32px; border: 3px solid #45475a;
+      border-top-color: #cba6f7; border-radius: 50%; animation: spin 0.8s linear infinite;
+      margin-bottom: 12px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .empty-state .empty-icon { font-size: 2.5rem; margin-bottom: 12px; }
+
+    /* Toast */
+    .toast {
+      position: fixed; bottom: 24px; right: 24px; padding: 12px 20px;
+      border-radius: 8px; font-size: 0.88rem; font-weight: 500; z-index: 9999;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3); opacity: 0; transform: translateY(10px);
+      transition: opacity 0.3s, transform 0.3s; pointer-events: none;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
+    .toast.success { background: #a6e3a1; color: #1e1e2e; }
+    .toast.error { background: #f38ba8; color: #1e1e2e; }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+      body { padding: 12px; }
+      .materia-header { padding: 12px 14px; flex-wrap: wrap; }
+      .materia-progress-wrap { width: 100%; order: 3; margin-top: 8px; }
+      .summary-grid { grid-template-columns: repeat(2, 1fr); }
+      .topic-row { flex-wrap: wrap; gap: 6px; }
+      .topic-progress-wrap { width: 100%; order: 3; }
+      .topic-date { display: none; }
+      .filters-bar { flex-direction: column; align-items: stretch; }
+      .filters-bar select { min-width: unset; width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>📈 Domínio do Edital</h1>
+  </div>
+
+  <div class="filters-bar">
+    <select id="filter-edital" aria-label="Filtrar por edital">
+      <option value="">Todos os editais</option>
+    </select>
+    <select id="filter-cargo" aria-label="Filtrar por cargo">
+      <option value="">Todos os cargos</option>
+    </select>
+    <button class="btn-recalc" id="btn-recalcular" type="button">🔄 Recalcular</button>
+  </div>
+
+  <div class="summary-grid" id="summary-grid">
+    <div class="summary-card accent">
+      <div class="value" id="sum-topics">—</div>
+      <div class="label">Total Tópicos</div>
+    </div>
+    <div class="summary-card accent">
+      <div class="value" id="sum-avg">—</div>
+      <div class="label">Média Geral</div>
+    </div>
+    <div class="summary-card red">
+      <div class="value" id="sum-red">—</div>
+      <div class="label">Não Dominado</div>
+    </div>
+    <div class="summary-card yellow">
+      <div class="value" id="sum-yellow">—</div>
+      <div class="label">Em Progresso</div>
+    </div>
+    <div class="summary-card blue">
+      <div class="value" id="sum-blue">—</div>
+      <div class="label">Dominado</div>
+    </div>
+    <div class="summary-card green">
+      <div class="value" id="sum-green">—</div>
+      <div class="label">Consolidado</div>
+    </div>
+  </div>
+
+  <div id="materia-container">
+    <div class="loading-state" id="loading-state">
+      <div class="spinner"></div>
+      <p>Carregando dados de domínio...</p>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="/sidebar.js"></script>
+  <script src="/timer-global.js"></script>
+  <script>
+  (function() {
+    'use strict';
+
+    // State
+    let currentData = null;
+    let editais = [];
+    let cargos = [];
+
+    // DOM refs
+    const filterEdital = document.getElementById('filter-edital');
+    const filterCargo = document.getElementById('filter-cargo');
+    const btnRecalcular = document.getElementById('btn-recalcular');
+    const container = document.getElementById('materia-container');
+    const loadingState = document.getElementById('loading-state');
+    const toastEl = document.getElementById('toast');
+
+    // Utilities
+    function getMasteryColor(level) {
+      if (level <= 20) return '#f38ba8';
+      if (level <= 50) return '#f9e2af';
+      if (level <= 80) return '#89b4fa';
+      return '#a6e3a1';
+    }
+
+    function getMasteryBadgeClass(level) {
+      if (level <= 20) return 'badge-red';
+      if (level <= 50) return 'badge-yellow';
+      if (level <= 80) return 'badge-blue';
+      return 'badge-green';
+    }
+
+    function getMasteryLabel(level) {
+      if (level <= 20) return 'Não Dominado';
+      if (level <= 50) return 'Em Progresso';
+      if (level <= 80) return 'Dominado';
+      return 'Consolidado';
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '—';
+      var d = new Date(dateStr);
+      if (isNaN(d.getTime())) return '—';
+      return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+    }
+
+    function escapeHtml(str) {
+      var div = document.createElement('div');
+      div.textContent = str || '';
+      return div.innerHTML;
+    }
+
+    function showToast(msg, type) {
+      toastEl.textContent = msg;
+      toastEl.className = 'toast ' + type + ' show';
+      setTimeout(function() {
+        toastEl.classList.remove('show');
+      }, 3000);
+    }
+
+    // Fetch data
+    function fetchMastery() {
+      var editalNome = filterEdital.value;
+      var cargo = filterCargo.value;
+      var params = new URLSearchParams();
+      if (editalNome) params.set('edital_nome', editalNome);
+      if (cargo) params.set('cargo', cargo);
+
+      loadingState.style.display = 'block';
+      container.querySelectorAll('.materia-card').forEach(function(el) { el.remove(); });
+
+      fetch('/api/edital/mastery-overview?' + params.toString())
+        .then(function(r) {
+          if (!r.ok) throw new Error('Erro ' + r.status);
+          return r.json();
+        })
+        .then(function(data) {
+          currentData = data;
+          loadingState.style.display = 'none';
+          renderSummary(data.materias || []);
+          renderMaterias(data.materias || []);
+          extractFilters(data.materias || []);
+        })
+        .catch(function(err) {
+          loadingState.style.display = 'none';
+          container.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Erro ao carregar dados: ' + escapeHtml(err.message) + '</p></div>';
+        });
+    }
+
+    // Extract unique editais/cargos for filters (from first load only)
+    function extractFilters(materias) {
+      // Only populate on first load if empty
+      if (filterEdital.options.length <= 1) {
+        fetch('/api/editais')
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            var list = Array.isArray(data) ? data : (data.editais || []);
+            list.forEach(function(e) {
+              var nome = e.nome || e.edital_nome || e;
+              if (typeof nome === 'string' && nome) {
+                var opt = document.createElement('option');
+                opt.value = nome;
+                opt.textContent = nome;
+                filterEdital.appendChild(opt);
+              }
+            });
+          })
+          .catch(function() {});
+
+        fetch('/api/editais/cargos')
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            var list = Array.isArray(data) ? data : (data.cargos || []);
+            list.forEach(function(c) {
+              var nome = c.cargo || c.nome || c;
+              if (typeof nome === 'string' && nome) {
+                var opt = document.createElement('option');
+                opt.value = nome;
+                opt.textContent = nome;
+                filterCargo.appendChild(opt);
+              }
+            });
+          })
+          .catch(function() {});
+      }
+    }
+
+    // Render summary
+    function renderSummary(materias) {
+      var totalTopics = 0;
+      var sumMastery = 0;
+      var countRed = 0, countYellow = 0, countBlue = 0, countGreen = 0;
+
+      materias.forEach(function(m) {
+        var topics = m.topics || [];
+        totalTopics += topics.length;
+        topics.forEach(function(t) {
+          var lvl = t.mastery_level || 0;
+          sumMastery += lvl;
+          if (lvl <= 20) countRed++;
+          else if (lvl <= 50) countYellow++;
+          else if (lvl <= 80) countBlue++;
+          else countGreen++;
+        });
+      });
+
+      var avgMastery = totalTopics > 0 ? Math.round(sumMastery / totalTopics) : 0;
+
+      document.getElementById('sum-topics').textContent = totalTopics;
+      document.getElementById('sum-avg').textContent = avgMastery + '%';
+      document.getElementById('sum-red').textContent = countRed;
+      document.getElementById('sum-yellow').textContent = countYellow;
+      document.getElementById('sum-blue').textContent = countBlue;
+      document.getElementById('sum-green').textContent = countGreen;
+    }
+
+    // Render matérias
+    function renderMaterias(materias) {
+      if (!materias || materias.length === 0) {
+        container.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><p>Nenhuma matéria encontrada. Selecione um edital ou cadastre tópicos.</p></div>';
+        return;
+      }
+
+      var fragment = document.createDocumentFragment();
+
+      materias.forEach(function(m, idx) {
+        var card = document.createElement('div');
+        card.className = 'materia-card';
+        card.setAttribute('data-idx', idx);
+
+        var avg = Math.round(m.avg_mastery || 0);
+        var color = getMasteryColor(avg);
+        var topicCount = (m.topics || []).length;
+
+        // Header
+        var header = document.createElement('div');
+        header.className = 'materia-header';
+        header.setAttribute('role', 'button');
+        header.setAttribute('aria-expanded', 'false');
+        header.setAttribute('tabindex', '0');
+        header.innerHTML =
+          '<span class="materia-expand-icon">▶</span>' +
+          '<div class="materia-info">' +
+            '<div class="materia-name">' + escapeHtml(m.materia) + '</div>' +
+            '<div class="materia-meta">' + topicCount + ' tópico' + (topicCount !== 1 ? 's' : '') + ' • ' + escapeHtml(m.avg_mastery_label || getMasteryLabel(avg)) + '</div>' +
+          '</div>' +
+          '<div class="materia-progress-wrap">' +
+            '<div class="progress-bar-container">' +
+              '<div class="progress-bar-fill" style="width:' + avg + '%;background:' + color + '"></div>' +
+            '</div>' +
+            '<div class="materia-pct" style="color:' + color + '">' + avg + '%</div>' +
+          '</div>';
+
+        header.addEventListener('click', function() { toggleMateria(card); });
+        header.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            toggleMateria(card);
+          }
+        });
+
+        // Topics
+        var topicsDiv = document.createElement('div');
+        topicsDiv.className = 'materia-topics';
+
+        (m.topics || []).forEach(function(t) {
+          var tLvl = Math.round(t.mastery_level || 0);
+          var tColor = getMasteryColor(tLvl);
+          var tBadge = getMasteryBadgeClass(tLvl);
+
+          var row = document.createElement('div');
+          row.className = 'topic-row';
+          row.innerHTML =
+            '<div class="topic-name" title="' + escapeHtml(t.topico) + '">' + escapeHtml(t.topico) + '</div>' +
+            '<div class="topic-progress-wrap">' +
+              '<div class="progress-bar-container">' +
+                '<div class="progress-bar-fill" style="width:' + tLvl + '%;background:' + tColor + '"></div>' +
+              '</div>' +
+            '</div>' +
+            '<span class="topic-badge ' + tBadge + '">' + escapeHtml(t.mastery_label || getMasteryLabel(tLvl)) + '</span>' +
+            '<span class="topic-date">' + formatDate(t.mastery_updated_at) + '</span>';
+          topicsDiv.appendChild(row);
+        });
+
+        card.appendChild(header);
+        card.appendChild(topicsDiv);
+        fragment.appendChild(card);
+      });
+
+      // Remove old content and append
+      container.querySelectorAll('.materia-card, .empty-state').forEach(function(el) { el.remove(); });
+      container.appendChild(fragment);
+    }
+
+    // Toggle expand/collapse
+    function toggleMateria(card) {
+      var isExpanded = card.classList.contains('expanded');
+      card.classList.toggle('expanded');
+      var header = card.querySelector('.materia-header');
+      header.setAttribute('aria-expanded', !isExpanded ? 'true' : 'false');
+    }
+
+    // Recalculate
+    btnRecalcular.addEventListener('click', function() {
+      btnRecalcular.disabled = true;
+      btnRecalcular.textContent = '⏳ Recalculando...';
+
+      fetch('/api/edital/mastery/recalculate', { method: 'POST' })
+        .then(function(r) {
+          if (!r.ok) throw new Error('Erro ' + r.status);
+          return r.json();
+        })
+        .then(function() {
+          showToast('Mastery recalculado com sucesso!', 'success');
+          fetchMastery();
+        })
+        .catch(function(err) {
+          showToast('Erro ao recalcular: ' + err.message, 'error');
+        })
+        .finally(function() {
+          btnRecalcular.disabled = false;
+          btnRecalcular.textContent = '🔄 Recalcular';
+        });
+    });
+
+    // Filter change
+    filterEdital.addEventListener('change', fetchMastery);
+    filterCargo.addEventListener('change', fetchMastery);
+
+    // Init
+    fetchMastery();
+  })();
+  </script>
+</body>
+</html>

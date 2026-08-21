@@ -631,15 +631,29 @@ def _extract_metadados(pdf_path: str) -> dict:
     # PDFs often break URLs across lines. Strategy: find all URL occurrences,
     # clean them, and pick the longest/most complete one.
     all_links = []
-    
+
+    # Strategy 0: Tribunal/TCE URLs (often from state-specific sites)
+    # Continuation segments must contain URL path chars (/, _, -, .) to avoid grabbing regular text
+    for m in re.finditer(r"(https?://(?:www\.)?(?:tce|tcm|tribunal)[^\s\"]*(?:\s[^\s,.)\"]*[/_\-.][^\s,.)\"]*)*)", text_inicio, re.IGNORECASE):
+        raw = m.group(1)
+        cleaned = re.sub(r"\s+", "", raw)
+        cleaned = re.sub(r"[,;.)]+$", "", cleaned)
+        url_end = re.search(r"[^a-zA-Z0-9_/:.\-~%?&=#]", cleaned)
+        if url_end:
+            cleaned = cleaned[:url_end.start()]
+        if len(cleaned) > 15:
+            all_links.append(cleaned)
+
     # Strategy 1: Find cebraspe URLs (may have spaces from PDF line breaks)
-    for m in re.finditer(r"(https?://www\.cebraspe\.org\.br/concursos/[^\s\"]{2,}(?:\s[^\s,.)\"]{1,10})*)", text_inicio):
+    # Uses broader domain match to handle breaks within path segments (e.g., /concu rsos/TCE_MA_24)
+    # Continuation segments must contain URL path chars to avoid grabbing regular text
+    for m in re.finditer(r"(https?://www\.cebraspe\.org\.br/[^\s\"]{2,}(?:\s[^\s,.)\"]*[/_\-.][^\s,.)\"]*)*)", text_inicio):
         raw = m.group(1)
         # Remove PDF line-break spaces within the URL
         cleaned = re.sub(r"\s+", "", raw)
         # Remove trailing punctuation/words that aren't part of URL
         cleaned = re.sub(r"[,;.)]+$", "", cleaned)
-        # URL should only contain valid URL chars
+        # URL should only contain valid URL chars (including underscore for paths like TCE_MA_24)
         url_end = re.search(r"[^a-zA-Z0-9_/:.\-~%?&=#]", cleaned)
         if url_end:
             cleaned = cleaned[:url_end.start()]

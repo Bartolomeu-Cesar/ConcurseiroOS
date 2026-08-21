@@ -1,9 +1,14 @@
+import os
 import sqlite3
 from collections.abc import Generator
 from contextlib import contextmanager
 
 from logger import log
 from settings import settings
+
+# PostgreSQL support: if DATABASE_URL is set, delegate to database_pg module
+_DATABASE_URL = os.environ.get("DATABASE_URL", "")
+_USE_PG = _DATABASE_URL.startswith("postgresql://") or _DATABASE_URL.startswith("postgres://")
 
 DB_PATH = settings.DB_PATH
 
@@ -623,6 +628,16 @@ def _run_migrations(conn):
         conn.execute("ALTER TABLE questoes ADD COLUMN banca TEXT DEFAULT ''")
         log.info("Migration: added column banca to questoes")
 
+    # Coluna ano nas questões (ano da prova, para CSV import)
+    try:
+        conn.execute("SELECT ano FROM questoes LIMIT 1")
+    except Exception:
+        try:
+            conn.execute("ALTER TABLE questoes ADD COLUMN ano TEXT DEFAULT ''")
+            log.info("Migration: added column ano to questoes")
+        except Exception:
+            pass
+
     # Lote D: SM-2 para flashcards
     try:
         conn.execute("SELECT easiness_factor FROM flashcards LIMIT 1")
@@ -1116,3 +1131,12 @@ def init_db():
     _create_fts5_triggers(conn)
     conn.close()
     log.info("Database initialized (WAL mode)")
+
+
+# ---------------------------------------------------------------------------
+# PostgreSQL override: if DATABASE_URL is set, replace all public symbols
+# with their PostgreSQL equivalents. The SQLite definitions above become dead code.
+# ---------------------------------------------------------------------------
+if _USE_PG:
+    from database_pg import get_db, get_db_session, init_db  # noqa: F811, F401
+    from database_pg import rebuild_search_index, DB_PATH  # noqa: F811, F401

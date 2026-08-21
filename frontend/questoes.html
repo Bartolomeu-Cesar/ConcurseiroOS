@@ -1230,5 +1230,146 @@
   </script>
 <script src="/timer-global.js"></script>
   <script src="/sidebar.js"></script>
+
+<!-- CSV Import Button (injected into header) -->
+<script>
+(function() {
+  const headerLinks = document.querySelector('.header-links');
+  if (headerLinks) {
+    const csvBtn = document.createElement('button');
+    csvBtn.className = 'btn btn-secondary';
+    csvBtn.style.cssText = 'font-size:0.82rem;padding:6px 12px;';
+    csvBtn.textContent = '📥 Importar CSV';
+    csvBtn.onclick = () => document.getElementById('csv-import-modal').style.display = 'flex';
+    headerLinks.insertBefore(csvBtn, headerLinks.firstChild);
+  }
+})();
+</script>
+
+<!-- CSV Import Modal -->
+<div id="csv-import-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:99999;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#313244;border-radius:16px;padding:28px;max-width:520px;width:100%;max-height:90vh;overflow-y:auto;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <h3 style="color:#cba6f7;margin:0;">📥 Importar Questões via CSV</h3>
+      <button onclick="document.getElementById('csv-import-modal').style.display='none'" style="background:none;border:none;color:#9399b2;font-size:1.4rem;cursor:pointer;">&times;</button>
+    </div>
+
+    <p style="font-size:0.82rem;color:#9399b2;margin-bottom:16px;">
+      Envie um CSV exportado do <strong>QConcursos</strong> ou <strong>Gran Cursos</strong>. O formato é detectado automaticamente pelos cabeçalhos.
+    </p>
+
+    <div style="margin-bottom:14px;">
+      <label style="font-size:0.8rem;color:#a6adc8;display:block;margin-bottom:6px;">Arquivo CSV</label>
+      <label for="csv-import-file" style="display:inline-flex;align-items:center;gap:6px;padding:10px 16px;background:#1e1e2e;border:1px dashed #45475a;border-radius:8px;cursor:pointer;color:#89b4fa;font-size:0.85rem;width:100%;justify-content:center;">
+        📎 Selecionar arquivo CSV
+      </label>
+      <input id="csv-import-file" type="file" accept=".csv" style="display:none" onchange="csvFileSelected(this)">
+      <span id="csv-import-filename" style="font-size:0.78rem;color:#9399b2;display:block;margin-top:6px;"></span>
+    </div>
+
+    <div style="margin-bottom:18px;">
+      <label style="font-size:0.8rem;color:#a6adc8;display:block;margin-bottom:6px;">Formato</label>
+      <select id="csv-import-formato" style="width:100%;padding:10px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.88rem;">
+        <option value="auto">🔍 Auto-detectar</option>
+        <option value="qconcursos">QConcursos</option>
+        <option value="gran">Gran Cursos</option>
+      </select>
+    </div>
+
+    <button onclick="executarImportCSV()" class="btn btn-success" style="width:100%;padding:12px;font-size:0.95rem;">
+      🚀 Importar
+    </button>
+
+    <div id="csv-import-results" style="display:none;margin-top:16px;padding:14px;border-radius:10px;font-size:0.85rem;line-height:1.6;"></div>
+
+    <details style="margin-top:14px;">
+      <summary style="font-size:0.78rem;color:#89b4fa;cursor:pointer;">ℹ️ Formatos esperados</summary>
+      <div style="font-size:0.75rem;color:#9399b2;margin-top:8px;padding:10px;background:#1e1e2e;border-radius:6px;line-height:1.7;">
+        <strong style="color:#a6e3a1;">QConcursos:</strong><br>
+        Disciplina, Assunto, Banca, Ano, Enunciado, A, B, C, D, E, Gabarito<br><br>
+        <strong style="color:#a6e3a1;">Gran Cursos:</strong><br>
+        Matéria, Tópico, Questão, Alternativa A, Alternativa B, Alternativa C, Alternativa D, Alternativa E, Resposta, Banca, Ano<br><br>
+        <em>Limite: 5.000 questões por importação. Duplicatas (mesmo enunciado + banca) são ignoradas.</em>
+      </div>
+    </details>
+  </div>
+</div>
+
+<script>
+function csvFileSelected(input) {
+  const file = input.files[0];
+  const el = document.getElementById('csv-import-filename');
+  if (file) {
+    el.textContent = `📄 ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+  } else {
+    el.textContent = '';
+  }
+  // Ocultar resultados anteriores
+  document.getElementById('csv-import-results').style.display = 'none';
+}
+
+async function executarImportCSV() {
+  const fileInput = document.getElementById('csv-import-file');
+  const file = fileInput.files[0];
+  if (!file) {
+    alert('Selecione um arquivo CSV.');
+    return;
+  }
+
+  const formato = document.getElementById('csv-import-formato').value;
+  const resultsEl = document.getElementById('csv-import-results');
+
+  // Mostrar loading
+  resultsEl.style.display = 'block';
+  resultsEl.style.background = '#45475a';
+  resultsEl.style.color = '#cdd6f4';
+  resultsEl.innerHTML = '⏳ Importando questões...';
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const url = `/api/questoes/importar-csv?formato=${encodeURIComponent(formato)}`;
+
+  try {
+    const res = await fetch(url, { method: 'POST', body: formData });
+    const data = await res.json();
+
+    if (res.ok) {
+      resultsEl.style.background = '#1e3a2e';
+      resultsEl.style.color = '#a6e3a1';
+      let html = `✅ <strong>${data.imported}</strong> questões importadas com sucesso!<br>`;
+      html += `<small>Formato: ${data.format_detected} · Total linhas: ${data.total_rows}</small><br>`;
+      if (data.duplicates > 0) {
+        html += `<span style="color:#fab387;">⚠️ ${data.duplicates} duplicata(s) ignorada(s)</span><br>`;
+      }
+      if (data.errors && data.errors.length > 0) {
+        html += `<details style="margin-top:8px;"><summary style="cursor:pointer;color:#f38ba8;">❌ ${data.errors.length} erro(s)</summary>`;
+        html += `<ul style="margin-top:6px;padding-left:16px;font-size:0.78rem;color:#f38ba8;">`;
+        data.errors.slice(0, 20).forEach(e => { html += `<li>${e}</li>`; });
+        if (data.errors.length > 20) html += `<li>... e mais ${data.errors.length - 20}</li>`;
+        html += `</ul></details>`;
+      }
+      resultsEl.innerHTML = html;
+
+      // Recarregar dados
+      if (typeof loadBanco === 'function') loadBanco();
+      if (typeof loadMaterias === 'function') loadMaterias();
+      if (typeof loadLoteOptions === 'function') loadLoteOptions();
+    } else {
+      resultsEl.style.background = '#3a1e1e';
+      resultsEl.style.color = '#f38ba8';
+      resultsEl.innerHTML = `❌ Erro: ${data.detail || 'Falha na importação'}`;
+    }
+  } catch (e) {
+    resultsEl.style.background = '#3a1e1e';
+    resultsEl.style.color = '#f38ba8';
+    resultsEl.innerHTML = `❌ Erro de conexão: ${e.message}`;
+  }
+
+  // Limpar file input
+  fileInput.value = '';
+  document.getElementById('csv-import-filename').textContent = '';
+}
+</script>
 </body>
 </html>
