@@ -7,6 +7,9 @@ let flashSessao = [], flashSessaoIndex = 0, flashSessaoMode = '';
 let _loadMetas = null, _loadStreakBadge = null, _getConfigSessoes = null;
 let _flashReviewedToday = 0; // Total revisados hoje (persiste na sessão)
 let _flashOriginalTotal = 0; // Total original (pendentes + já revisados)
+let _flashSessionStart = null; // Timestamp início da sessão de revisão
+let _flashCardStart = null; // Timestamp início do card atual
+let _flashSessionSeconds = 0; // Segundos acumulados na sessão
 
 export async function loadFlashcardsToday() {
   try {
@@ -65,6 +68,9 @@ function showCurrentFlashcard() {
   a.style.display = 'none';
   rb.style.display = 'inline-block';
   rv.style.display = 'none';
+  // Track time per card
+  _flashCardStart = Date.now();
+  if (!_flashSessionStart) _flashSessionStart = Date.now();
 }
 
 export function revealAnswer() {
@@ -88,6 +94,14 @@ export async function reviewFlashcard(quality) {
   const card = flashcardsToday[currentFlashIndex];
   if (!card) return;
   try {
+    // Acumular tempo gasto neste card
+    if (_flashCardStart) {
+      const elapsed = Math.round((Date.now() - _flashCardStart) / 1000);
+      // Cap em 5 min por card (evita tempo inflado se usuário saiu)
+      _flashSessionSeconds += Math.min(elapsed, 300);
+      _flashCardStart = null;
+    }
+
     const data = await api(`/api/flashcards/${card.id}/review-sm2`, { method: 'POST', body: { quality } });
     const msgs = ['Esqueceu — recomeçar','Quase — recomeçar','Errou — recomeçar','Difícil — +1d','Bom — +' + data.intervalo_dias + 'd','Fácil — +' + data.intervalo_dias + 'd'];
     toast(`${msgs[quality]} (EF: ${data.easiness_factor.toFixed(2)})`, quality >= 3 ? 'success' : 'warning', 3000);
@@ -96,6 +110,18 @@ export async function reviewFlashcard(quality) {
     loadAllFlashcards();
     if (_loadStreakBadge) _loadStreakBadge();
     if (_loadMetas) _loadMetas();
+
+    // Registrar sessão de estudo a cada 5 cards ou ao terminar
+    const isFinished = currentFlashIndex >= flashcardsToday.length;
+    if ((currentFlashIndex % 5 === 0 || isFinished) && _flashSessionSeconds > 30) {
+      const horas = Math.round(_flashSessionSeconds / 3600 * 100) / 100;
+      fetch('/api/sessoes-estudo/registrar', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ horas: horas, materia: 'Flashcards (Revisão)', tipo: 'flashcard' })
+      }).catch(() => {});
+      _flashSessionSeconds = 0; // Reset para próximo bloco
+    }
   } catch (e) { toast('Erro ao revisar', 'error'); }
 }
 
