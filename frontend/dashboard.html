@@ -2664,8 +2664,9 @@
 
     function renderCalendario(data, editable) {
       const el = document.getElementById('calendario-grid');
-      const hoje = new Date().toISOString().split('T')[0];
-      const horaAtual = new Date().getHours();
+      const _now = new Date();
+      const hoje = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}-${String(_now.getDate()).padStart(2,'0')}`;
+      const horaAtual = _now.getHours();
       const icons = {revisao: '🧠', estudo: '📚', questoes: '❓', pausa: '☕'};
       const diasNomes = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
       const turnoIcons = {manha: '🌅', tarde: '☀️', noite: '🌙'};
@@ -2857,7 +2858,8 @@
     let concluidasHoje = new Set();
     async function loadConcluidasHoje() {
       try {
-        const hoje = new Date().toISOString().split('T')[0];
+        const _n = new Date();
+        const hoje = `${_n.getFullYear()}-${String(_n.getMonth()+1).padStart(2,'0')}-${String(_n.getDate()).padStart(2,'0')}`;
 
         // 1. Buscar atividades marcadas manualmente
         const data = await fetch('/api/calendario/concluidas').then(r => r.json());
@@ -3113,10 +3115,11 @@
         const idxTurnoAtual = ordemTurnos.indexOf(turnoAgora);
 
         // Mover atividades de turnos passados para o turno atual (se não foram concluídas)
+        const _hojeLocal = `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-${String(new Date().getDate()).padStart(2,'0')}`;
         for (let i = 0; i < idxTurnoAtual; i++) {
           const turnoPassado = ordemTurnos[i];
           const naoFeitas = turnos[turnoPassado].filter(a => {
-            const key = `${new Date().toISOString().split('T')[0]}|${a.materia || ''}|${a.tipo}`;
+            const key = `${_hojeLocal}|${a.materia || ''}|${a.tipo}`;
             return !concluidasHoje.has(key);
           });
           if (naoFeitas.length > 0) {
@@ -3124,7 +3127,7 @@
             naoFeitas.forEach(a => { a._adiada = true; });
             turnos[turnoAgora] = [...naoFeitas, ...turnos[turnoAgora]];
             // Remover do turno passado
-            turnos[turnoPassado] = turnos[turnoPassado].filter(a => !a._adiada || concluidasHoje.has(`${new Date().toISOString().split('T')[0]}|${a.materia || ''}|${a.tipo}`));
+            turnos[turnoPassado] = turnos[turnoPassado].filter(a => !a._adiada || concluidasHoje.has(`${_hojeLocal}|${a.materia || ''}|${a.tipo}`));
           }
         }
       }
