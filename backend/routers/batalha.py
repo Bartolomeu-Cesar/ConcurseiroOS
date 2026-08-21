@@ -643,12 +643,25 @@ def responder_rodada(
             conn.execute("UPDATE battles SET status = 'finalizada', rodada_atual = ? WHERE id = ?", (rodada_num, battle["id"]))
             # Calcular posições
             players = conn.execute(
-                "SELECT user_id, pontos FROM battle_players WHERE battle_id = ? ORDER BY pontos DESC, tempo_total_seg ASC",
+                "SELECT user_id, pontos, tempo_total_seg FROM battle_players WHERE battle_id = ? ORDER BY pontos DESC, tempo_total_seg ASC",
                 (battle["id"],)
             ).fetchall()
             for i, p in enumerate(players, 1):
                 conn.execute("UPDATE battle_players SET posicao = ? WHERE battle_id = ? AND user_id = ?",
                              (i, battle["id"], p["user_id"]))
+
+            # Registrar tempo de batalha como tempo de estudo para cada jogador
+            materias_batalha = json.loads(battle["materias"]) or []
+            materia_registro = materias_batalha[0] if materias_batalha else "Batalha de Questões"
+            data_hoje = today_str()
+            for p in players:
+                horas = round(p["tempo_total_seg"] / 3600, 4)
+                if horas > 0:
+                    conn.execute(
+                        "INSERT INTO sessoes_estudo (materia, horas, data, tipo, user_id) VALUES (?, ?, ?, 'batalha', ?)",
+                        (materia_registro, horas, data_hoje, p["user_id"])
+                    )
+
             batalha_finalizada = True
         else:
             # Avançar para próxima rodada
