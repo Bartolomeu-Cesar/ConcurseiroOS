@@ -28,6 +28,8 @@ function showCurrentFlashcard() {
     document.getElementById('flash-progress-bar').style.width = `${pct}%`;
     const bar = document.getElementById('flash-progress-bar');
     bar.style.background = pct >= 100 ? '#a6e3a1' : pct >= 50 ? '#f9e2af' : '#89b4fa';
+    // Garantir largura mínima visível quando progresso > 0
+    if (done > 0 && pct < 5) bar.style.width = '5%';
   } else if (progressEl) { progressEl.style.display = 'none'; }
   if (currentFlashIndex >= total) {
     q.innerHTML = `<span style="color:#a6e3a1;font-size:1.3rem;font-weight:600;">🎉 Parabéns! ${total} flashcards revisados hoje!</span>`;
