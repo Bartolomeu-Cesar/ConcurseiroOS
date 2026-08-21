@@ -77,7 +77,51 @@
     <span id="title"></span>
     <span id="timer-display">00:00:00</span>
     <span id="page-info"></span>
+    <!-- Study Tools -->
+    <div id="study-tools" style="display:flex;gap:6px;align-items:center;">
+      <button onclick="toggleNotePanel()" title="Anotações da página" style="background:#45475a;border:none;color:#f9e2af;border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">📝</button>
+      <button onclick="addBookmark()" title="Marcar página" style="background:#45475a;border:none;color:#89b4fa;border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🔖</button>
+      <button onclick="quickFlashcard()" title="Criar flashcard desta página" style="background:#45475a;border:none;color:#cba6f7;border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🧠</button>
+      <button onclick="togglePomodoroMode()" id="btn-pomodoro" title="Modo Pomodoro" style="background:#45475a;border:none;color:#f38ba8;border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🍅</button>
+      <button onclick="toggleStudySummary()" title="Resumo da sessão" style="background:#45475a;border:none;color:#a6e3a1;border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">📊</button>
+    </div>
     <button id="btn-toggle-panel" onclick="toggleSidePanel()">❓ Questões</button>
+  </div>
+
+  <!-- Notes Panel (slide from left) -->
+  <div id="notes-panel" style="display:none;position:fixed;top:44px;left:0;width:320px;bottom:0;background:#313244;border-right:1px solid #45475a;z-index:100;flex-direction:column;overflow:hidden;">
+    <div style="padding:10px 14px;background:#1e1e2e;display:flex;align-items:center;gap:8px;border-bottom:1px solid #45475a;">
+      <h3 style="font-size:0.9rem;color:#f9e2af;flex:1;margin:0;">📝 Notas — Página <span id="note-page-num">1</span></h3>
+      <button onclick="toggleNotePanel()" style="background:none;border:none;color:#f38ba8;cursor:pointer;font-size:1.1rem;">✕</button>
+    </div>
+    <div id="notes-list" style="flex:1;overflow-y:auto;padding:10px;"></div>
+    <div style="padding:10px;border-top:1px solid #45475a;">
+      <textarea id="note-input" placeholder="Escreva uma anotação para esta página..." style="width:100%;height:60px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;padding:8px;font-size:0.82rem;resize:none;outline:none;"></textarea>
+      <button onclick="saveNote()" style="width:100%;margin-top:6px;background:#f9e2af;color:#1e1e2e;border:none;border-radius:6px;padding:8px;font-weight:600;cursor:pointer;font-size:0.82rem;">💾 Salvar Nota</button>
+    </div>
+  </div>
+
+  <!-- Quick Flashcard Modal -->
+  <div id="flashcard-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:999;align-items:center;justify-content:center;">
+    <div style="background:#313244;border-radius:16px;padding:24px;max-width:420px;width:90%;">
+      <h3 style="color:#cba6f7;margin:0 0 12px;">🧠 Flashcard Rápido — Página <span id="fc-page-num">1</span></h3>
+      <input type="text" id="fc-pergunta" placeholder="Pergunta (ex: O que é...?)" style="width:100%;padding:10px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.9rem;margin-bottom:10px;outline:none;">
+      <textarea id="fc-resposta" placeholder="Resposta..." style="width:100%;height:80px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;padding:10px;font-size:0.85rem;resize:none;outline:none;margin-bottom:12px;"></textarea>
+      <div style="display:flex;gap:8px;">
+        <button onclick="closeFlashcardModal()" style="flex:1;background:#45475a;color:#cdd6f4;border:none;border-radius:8px;padding:10px;cursor:pointer;">Cancelar</button>
+        <button onclick="saveQuickFlashcard()" style="flex:1;background:#cba6f7;color:#1e1e2e;border:none;border-radius:8px;padding:10px;font-weight:600;cursor:pointer;">Salvar 🧠</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Study Summary Panel -->
+  <div id="summary-panel" style="display:none;position:fixed;top:44px;right:0;width:320px;bottom:0;background:#313244;border-left:1px solid #45475a;z-index:100;flex-direction:column;overflow:hidden;">
+    <div style="padding:10px 14px;background:#1e1e2e;display:flex;align-items:center;gap:8px;border-bottom:1px solid #45475a;">
+      <h3 style="font-size:0.9rem;color:#a6e3a1;flex:1;margin:0;">📊 Resumo da Sessão</h3>
+      <button onclick="toggleStudySummary()" style="background:none;border:none;color:#f38ba8;cursor:pointer;font-size:1.1rem;">✕</button>
+    </div>
+    <div id="summary-body" style="flex:1;overflow-y:auto;padding:12px;"></div>
+  </div>
   </div>
 
   <div id="viewer">
@@ -512,6 +556,262 @@
 
     initProgress();
     initTimer();
+
+    // ========== STUDY TOOLS ==========
+
+    // --- Notes ---
+    let notesVisible = false;
+    function toggleNotePanel() {
+      notesVisible = !notesVisible;
+      const panel = document.getElementById('notes-panel');
+      panel.style.display = notesVisible ? 'flex' : 'none';
+      if (notesVisible) loadNotesForPage();
+    }
+
+    async function loadNotesForPage() {
+      document.getElementById('note-page-num').textContent = currentPage;
+      const list = document.getElementById('notes-list');
+      try {
+        const notes = await fetch(`/api/notas?pdf_path=${encodeURIComponent(path)}&pagina=${currentPage}`).then(r => r.json());
+        if (notes.length === 0) {
+          list.innerHTML = '<div style="color:#585b70;font-size:0.82rem;text-align:center;padding:20px;">Nenhuma nota nesta página.<br>Adicione abaixo! ⬇</div>';
+        } else {
+          list.innerHTML = notes.map(n => `
+            <div style="background:#1e1e2e;border-radius:8px;padding:10px;margin-bottom:8px;position:relative;">
+              <div style="font-size:0.82rem;color:#cdd6f4;line-height:1.5;white-space:pre-wrap;">${n.conteudo}</div>
+              <div style="display:flex;justify-content:space-between;margin-top:6px;">
+                <span style="font-size:0.7rem;color:#585b70;">${n.created_at?.split('T')[0] || ''}</span>
+                <button onclick="deleteNote(${n.id})" style="background:none;border:none;color:#f38ba855;cursor:pointer;font-size:0.75rem;">🗑</button>
+              </div>
+            </div>
+          `).join('');
+        }
+      } catch { list.innerHTML = '<div style="color:#f38ba8;">Erro ao carregar notas</div>'; }
+    }
+
+    async function saveNote() {
+      const input = document.getElementById('note-input');
+      const text = input.value.trim();
+      if (!text) return;
+      await fetch('/api/notas', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ pdf_path: path, pagina: currentPage, conteudo: text })
+      });
+      input.value = '';
+      loadNotesForPage();
+    }
+
+    async function deleteNote(id) {
+      await fetch(`/api/notas/${id}`, { method: 'DELETE' });
+      loadNotesForPage();
+    }
+
+    // Update notes when page changes
+    let lastNotePage = 0;
+    setInterval(() => {
+      if (notesVisible && currentPage !== lastNotePage) {
+        lastNotePage = currentPage;
+        loadNotesForPage();
+      }
+    }, 500);
+
+    // --- Bookmarks ---
+    async function addBookmark() {
+      const label = prompt('Label para o bookmark (opcional):') || '';
+      const cores = ['blue', 'green', 'yellow', 'red', 'purple'];
+      const cor = cores[Math.floor(Math.random() * cores.length)];
+      await fetch('/api/bookmarks', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ pdf_path: path, pagina: currentPage, label, cor })
+      });
+      showStudyToast(`🔖 Página ${currentPage} marcada!`);
+    }
+
+    // --- Quick Flashcard ---
+    function quickFlashcard() {
+      document.getElementById('fc-page-num').textContent = currentPage;
+      document.getElementById('fc-pergunta').value = '';
+      document.getElementById('fc-resposta').value = '';
+      document.getElementById('flashcard-modal').style.display = 'flex';
+      document.getElementById('fc-pergunta').focus();
+    }
+
+    function closeFlashcardModal() {
+      document.getElementById('flashcard-modal').style.display = 'none';
+    }
+
+    async function saveQuickFlashcard() {
+      const pergunta = document.getElementById('fc-pergunta').value.trim();
+      const resposta = document.getElementById('fc-resposta').value.trim();
+      if (!pergunta || !resposta) { alert('Preencha pergunta e resposta.'); return; }
+
+      // Try to get materia from PDF name or edital link
+      let materia = '';
+      try {
+        const editalData = await fetch('/api/edital').then(r => r.json());
+        const vinc = editalData.find(e => e.pdf_link === path);
+        if (vinc) materia = vinc.materia;
+      } catch {}
+
+      await fetch('/api/flashcards', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ pergunta, resposta, materia })
+      });
+      closeFlashcardModal();
+      showStudyToast('🧠 Flashcard criado! Será revisado amanhã.');
+    }
+
+    // --- Pomodoro Mode ---
+    let pomodoroActive = false;
+    let pomodoroCount = 0;
+    function togglePomodoroMode() {
+      pomodoroActive = !pomodoroActive;
+      const btn = document.getElementById('btn-pomodoro');
+      if (pomodoroActive) {
+        btn.style.background = '#f38ba8';
+        btn.style.color = '#1e1e2e';
+        btn.textContent = '🍅 ON';
+        // Start 25 min timer
+        startTimer(25, 0);
+        showStudyToast('🍅 Pomodoro ativado! 25 min de foco.');
+        pomodoroCount++;
+      } else {
+        btn.style.background = '#45475a';
+        btn.style.color = '#f38ba8';
+        btn.textContent = '🍅';
+        showStudyToast('🍅 Pomodoro desativado.');
+      }
+    }
+
+    // Override finish timer for Pomodoro
+    const _origFinishTimer = finishTimer;
+    finishTimer = function(showOverlay) {
+      _origFinishTimer(showOverlay);
+      if (pomodoroActive) {
+        // After 25 min work, suggest 5 min break
+        setTimeout(() => {
+          if (confirm('🍅 Pomodoro completo! Fazer pausa de 5 min?')) {
+            startTimer(5, 0);
+            showStudyToast('☕ Pausa de 5 min. Relaxe!');
+          } else {
+            // Continue with next pomodoro
+            startTimer(25, 0);
+            pomodoroCount++;
+            showStudyToast(`🍅 Pomodoro ${pomodoroCount} iniciado!`);
+          }
+        }, 500);
+      }
+    };
+
+    // --- Study Summary ---
+    let summaryVisible = false;
+    function toggleStudySummary() {
+      summaryVisible = !summaryVisible;
+      const panel = document.getElementById('summary-panel');
+      panel.style.display = summaryVisible ? 'flex' : 'none';
+      if (summaryVisible) loadStudySummary();
+    }
+
+    async function loadStudySummary() {
+      const body = document.getElementById('summary-body');
+      const sessionTime = elapsed || 0;
+      const pagesRead = currentPage - (lastSavedPage || 1);
+
+      // Load bookmarks and notes for this PDF
+      let bookmarks = [], notes = [];
+      try {
+        bookmarks = await fetch(`/api/bookmarks?pdf_path=${encodeURIComponent(path)}`).then(r => r.json());
+        notes = await fetch(`/api/notas?pdf_path=${encodeURIComponent(path)}`).then(r => r.json());
+      } catch {}
+
+      const mins = Math.floor(sessionTime / 60);
+      const secs = sessionTime % 60;
+
+      body.innerHTML = `
+        <div style="background:#1e1e2e;border-radius:10px;padding:14px;margin-bottom:12px;">
+          <div style="font-size:0.85rem;color:#cba6f7;font-weight:600;margin-bottom:10px;">⏱ Sessão Atual</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div style="text-align:center;">
+              <div style="font-size:1.3rem;font-weight:700;color:#f9e2af;">${mins}:${String(secs).padStart(2,'0')}</div>
+              <div style="font-size:0.7rem;color:#9399b2;">Tempo</div>
+            </div>
+            <div style="text-align:center;">
+              <div style="font-size:1.3rem;font-weight:700;color:#89b4fa;">${currentPage}/${totalPages}</div>
+              <div style="font-size:0.7rem;color:#9399b2;">Página</div>
+            </div>
+          </div>
+          ${pomodoroActive ? `<div style="margin-top:8px;text-align:center;font-size:0.8rem;color:#f38ba8;">🍅 Pomodoro ${pomodoroCount} ativo</div>` : ''}
+        </div>
+
+        <div style="background:#1e1e2e;border-radius:10px;padding:14px;margin-bottom:12px;">
+          <div style="font-size:0.85rem;color:#a6e3a1;font-weight:600;margin-bottom:8px;">📊 Progresso</div>
+          <div style="height:8px;background:#45475a;border-radius:4px;overflow:hidden;margin-bottom:6px;">
+            <div style="width:${Math.round((currentPage/totalPages)*100)}%;height:100%;background:linear-gradient(90deg,#89b4fa,#a6e3a1);border-radius:4px;"></div>
+          </div>
+          <div style="font-size:0.75rem;color:#9399b2;text-align:center;">${Math.round((currentPage/totalPages)*100)}% concluído</div>
+        </div>
+
+        ${bookmarks.length > 0 ? `
+        <div style="background:#1e1e2e;border-radius:10px;padding:14px;margin-bottom:12px;">
+          <div style="font-size:0.85rem;color:#89b4fa;font-weight:600;margin-bottom:8px;">🔖 Bookmarks (${bookmarks.length})</div>
+          ${bookmarks.slice(0, 8).map(b => `
+            <div style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:0.8rem;cursor:pointer;" onclick="goToPage(${b.pagina})">
+              <span style="color:#89b4fa;">p.${b.pagina}</span>
+              <span style="color:#cdd6f4;">${b.label || 'Sem label'}</span>
+            </div>
+          `).join('')}
+        </div>` : ''}
+
+        ${notes.length > 0 ? `
+        <div style="background:#1e1e2e;border-radius:10px;padding:14px;margin-bottom:12px;">
+          <div style="font-size:0.85rem;color:#f9e2af;font-weight:600;margin-bottom:8px;">📝 Notas (${notes.length})</div>
+          ${notes.slice(0, 5).map(n => `
+            <div style="padding:4px 0;font-size:0.78rem;border-bottom:1px solid #313244;cursor:pointer;" onclick="goToPage(${n.pagina})">
+              <span style="color:#89b4fa;">p.${n.pagina}</span> — <span style="color:#9399b2;">${n.conteudo.substring(0, 60)}${n.conteudo.length > 60 ? '...' : ''}</span>
+            </div>
+          `).join('')}
+        </div>` : ''}
+
+        <div style="background:#1e1e2e;border-radius:10px;padding:14px;">
+          <div style="font-size:0.85rem;color:#fab387;font-weight:600;margin-bottom:8px;">💡 Dicas de Estudo Ativo</div>
+          <ul style="font-size:0.78rem;color:#9399b2;padding-left:16px;line-height:1.8;">
+            <li>📝 Anote conceitos-chave de cada página</li>
+            <li>🧠 Crie flashcards do que aprendeu</li>
+            <li>🔖 Marque páginas para revisar depois</li>
+            <li>❓ Resolva questões ao terminar o capítulo</li>
+            <li>🍅 Use Pomodoro: 25 min foco + 5 min pausa</li>
+          </ul>
+        </div>
+      `;
+    }
+
+    // --- Go to page helper ---
+    function goToPage(page) {
+      const frame = document.getElementById('pdf-frame');
+      try {
+        const app = frame.contentWindow?.PDFViewerApplication;
+        if (app) app.page = page;
+      } catch {}
+    }
+
+    // --- Toast for study tools ---
+    function showStudyToast(msg) {
+      const toast = document.createElement('div');
+      toast.style.cssText = 'position:fixed;top:50px;left:50%;transform:translateX(-50%);background:#313244;color:#cdd6f4;padding:10px 20px;border-radius:8px;font-size:0.85rem;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.3);animation:fadeIn 0.3s;';
+      toast.textContent = msg;
+      document.body.appendChild(toast);
+      setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; setTimeout(() => toast.remove(), 300); }, 2500);
+    }
+
+    // --- Keyboard shortcuts ---
+    document.addEventListener('keydown', e => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (e.key === 'n' || e.key === 'N') toggleNotePanel();
+      if (e.key === 'b' || e.key === 'B') addBookmark();
+      if (e.key === 'f' || e.key === 'F') quickFlashcard();
+      if (e.key === 'p' || e.key === 'P') togglePomodoroMode();
+      if (e.key === 's' || e.key === 'S') toggleStudySummary();
+    });
   </script>
   <script src="/sidebar.js"></script>
 </body>
