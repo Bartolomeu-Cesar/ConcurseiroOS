@@ -646,3 +646,110 @@ body.light-theme .btn-secondary:hover { background: #ccd0da; }
 body.light-theme .btn-primary { background: #8839ef; color: #eff1f5; }
 body.light-theme .btn-success { background: #40a02b; color: #eff1f5; }
 body.light-theme .btn-danger { background: #d20f39; color: #eff1f5; }
+
+/* Light theme — panels, cards, surfaces */
+body.light-theme .card,
+body.light-theme .panel,
+body.light-theme .lobby-card,
+body.light-theme .materia-card,
+body.light-theme .ranking-card { background: #e6e9ef; color: #4c4f69; }
+
+body.light-theme .materia-header:hover { background: #dce0e8; }
+body.light-theme .materia-topics { background: #dce0e8; }
+body.light-theme .materia-name { color: #4c4f69; }
+body.light-theme .materia-meta { color: #6c6f85; }
+body.light-theme .materia-pct { color: #4c4f69; }
+body.light-theme .topic-name { color: #4c4f69; }
+body.light-theme .topic-row { border-bottom-color: #ccd0da; }
+body.light-theme .topic-date { color: #7c7f93; }
+body.light-theme .topic-badge { color: #4c4f69; }
+body.light-theme .materia-expand-icon { color: #6c6f85; }
+
+/* Light theme — summary cards */
+body.light-theme .summary-card { background: #e6e9ef; }
+body.light-theme .summary-card .label { color: #6c6f85; }
+body.light-theme .summary-card .value { color: #4c4f69; }
+body.light-theme .summary-card.red .value { color: #d20f39; }
+body.light-theme .summary-card.yellow .value { color: #df8e1d; }
+body.light-theme .summary-card.blue .value { color: #1e66f5; }
+body.light-theme .summary-card.green .value { color: #40a02b; }
+body.light-theme .summary-card.accent .value { color: #8839ef; }
+
+/* Light theme — progress bars */
+body.light-theme .progress-bar { background: #ccd0da; }
+
+/* Light theme — badges */
+body.light-theme .badge { background: #dce0e8; color: #4c4f69; }
+body.light-theme .badge-green { background: #d4edda; color: #40a02b; }
+body.light-theme .badge-red { background: #f8d7da; color: #d20f39; }
+body.light-theme .badge-yellow { background: #fff3cd; color: #df8e1d; }
+body.light-theme .badge-blue { background: #d1ecf1; color: #1e66f5; }
+
+/* Light theme — forms, inputs */
+body.light-theme input,
+body.light-theme select,
+body.light-theme textarea { background: #eff1f5; color: #4c4f69; border-color: #bcc0cc; }
+body.light-theme input::placeholder { color: #9ca0b0; }
+
+/* Light theme — tables */
+body.light-theme .users-table th { background: #dce0e8; color: #5c5f77; }
+body.light-theme .users-table td { border-bottom-color: #dce0e8; color: #4c4f69; }
+
+/* Light theme — config rows (batalha) */
+body.light-theme .config-row label { color: #6c6f85; }
+body.light-theme .config-row select,
+body.light-theme .config-row input { background: #eff1f5; border-color: #bcc0cc; color: #4c4f69; }
+
+/* Light theme — filter bars */
+body.light-theme .filters-bar select { background: #e6e9ef; color: #4c4f69; border-color: #bcc0cc; }
+
+/* Light theme — modals */
+body.light-theme .modal { background: #eff1f5; color: #4c4f69; }
+body.light-theme .modal-overlay { background: rgba(0,0,0,0.4); }
+
+/* Light theme — misc text */
+body.light-theme h1, body.light-theme h2, body.light-theme h3 { color: #4c4f69; }
+body.light-theme a { color: #1e66f5; }
+body.light-theme .code-display { color: #4c4f69; background: #dce0e8; }
+
+/* Light theme — raio-x charts & priorities */
+body.light-theme .chart-card { background: #e6e9ef; border-color: #bcc0cc; }
+body.light-theme .priorities-section { background: #e6e9ef; border-color: #bcc0cc; }
+body.light-theme .priorities-table th { color: #5c5f77; border-bottom-color: #bcc0cc; }
+body.light-theme .priorities-table td { color: #4c4f69; border-bottom-color: rgba(188,192,204,0.5); }
+body.light-theme .loading-spinner { color: #6c6f85; }
+
+/* Light theme — social / league */
+body.light-theme .tabs { background: #dce0e8; }
+body.light-theme .tab-btn { color: #6c6f85; }
+body.light-theme .tab-btn:hover { color: #4c4f69; background: #e6e9ef; }
+body.light-theme .tab-btn.active { background: #e6e9ef; color: #8839ef; }
+body.light-theme .tier-badge { background: #dce0e8; }
+body.light-theme .leaderboard td { border-top-color: #bcc0cc; }
+body.light-theme .leaderboard .xp { color: #df8e1d; }
+body.light-theme .zone-promo { background: #40a02b; color: #eff1f5; }
+body.light-theme .zone-demo { background: #d20f39; color: #eff1f5; }
+body.light-theme .chat-msg.user { background: #1e66f5; color: #eff1f5; }
+body.light-theme .chat-msg.ai { background: #dce0e8; color: #4c4f69; }
+body.light-theme .typing-indicator { background: #dce0e8; }
+body.light-theme .friend-item, body.light-theme .group-item { background: #dce0e8; }
+body.light-theme .friend-item:hover, body.light-theme .group-item:hover { background: #ccd0da; }
+body.light-theme .feed-item { background: #dce0e8; border-left-color: #1e66f5; }
+body.light-theme .loading-skeleton { background: linear-gradient(90deg, #dce0e8 25%, #ccd0da 50%, #dce0e8 75%); background-size: 200% 100%; }
+
+/* Light theme — batalha */
+body.light-theme .question-card { background: #e6e9ef; }
+body.light-theme .option-btn { background: #eff1f5; border-color: #bcc0cc; color: #4c4f69; }
+body.light-theme .option-btn:hover { border-color: #1e66f5; background: #dce0e8; }
+body.light-theme .option-letter { background: #dce0e8; }
+body.light-theme .player-chip { background: #dce0e8; }
+body.light-theme .rank-row { background: #eff1f5; }
+body.light-theme .rank-stats { color: #6c6f85; }
+body.light-theme .rank-points { color: #df8e1d; }
+body.light-theme .btn-battle { background: #40a02b; color: #eff1f5; }
+body.light-theme .btn-battle.secondary { background: #1e66f5; color: #eff1f5; }
+body.light-theme .btn-battle.danger { background: #d20f39; color: #eff1f5; }
+body.light-theme .input-battle { background: #eff1f5; border-color: #bcc0cc; color: #4c4f69; }
+body.light-theme .timer-bar { background: #ccd0da; }
+body.light-theme .materia-badge { background: #dce0e8; color: #1e66f5; }
+body.light-theme .round-badge { background: #8839ef; color: #eff1f5; }

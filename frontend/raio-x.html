@@ -16,13 +16,13 @@
     }
 
     .raio-x-page h1 {
-      color: #cba6f7;
+      color: var(--accent);
       font-size: 1.8rem;
       margin-bottom: 8px;
     }
 
     .raio-x-page .subtitle {
-      color: #a6adc8;
+      color: var(--text-sub);
       margin-bottom: 24px;
     }
 
@@ -36,9 +36,9 @@
     }
 
     .filters-bar select {
-      background: #313244;
-      color: #cdd6f4;
-      border: 1px solid #45475a;
+      background: var(--bg-surface);
+      color: var(--text);
+      border: 1px solid var(--border);
       border-radius: 8px;
       padding: 8px 14px;
       font-size: 14px;
@@ -49,11 +49,11 @@
 
     .filters-bar select:focus {
       outline: none;
-      border-color: #cba6f7;
+      border-color: var(--accent);
     }
 
     .filters-bar label {
-      color: #a6adc8;
+      color: var(--text-sub);
       font-size: 13px;
       font-weight: 500;
     }
@@ -73,14 +73,14 @@
     }
 
     .chart-card {
-      background: #313244;
+      background: var(--bg-surface);
       border-radius: 12px;
       padding: 20px;
-      border: 1px solid #45475a;
+      border: 1px solid var(--border);
     }
 
     .chart-card h3 {
-      color: #cdd6f4;
+      color: var(--text);
       font-size: 1rem;
       margin-bottom: 16px;
       display: flex;
@@ -103,7 +103,7 @@
     }
 
     .balance-section h3 {
-      color: #cdd6f4;
+      color: var(--text);
       font-size: 1rem;
       margin-bottom: 12px;
     }
@@ -126,33 +126,33 @@
 
     .balance-tag.subestudado {
       background: rgba(243, 139, 168, 0.15);
-      color: #f38ba8;
+      color: var(--red);
       border: 1px solid rgba(243, 139, 168, 0.3);
     }
 
     .balance-tag.equilibrado {
       background: rgba(166, 227, 161, 0.15);
-      color: #a6e3a1;
+      color: var(--green);
       border: 1px solid rgba(166, 227, 161, 0.3);
     }
 
     .balance-tag.superestudado {
       background: rgba(249, 226, 175, 0.15);
-      color: #f9e2af;
+      color: var(--yellow);
       border: 1px solid rgba(249, 226, 175, 0.3);
     }
 
     /* Priorities table */
     .priorities-section {
-      background: #313244;
+      background: var(--bg-surface);
       border-radius: 12px;
       padding: 20px;
-      border: 1px solid #45475a;
+      border: 1px solid var(--border);
       overflow-x: auto;
     }
 
     .priorities-section h3 {
-      color: #cdd6f4;
+      color: var(--text);
       font-size: 1rem;
       margin-bottom: 16px;
       display: flex;
@@ -168,15 +168,15 @@
 
     .priorities-table th {
       text-align: left;
-      color: #a6adc8;
+      color: var(--text-sub);
       font-weight: 600;
       padding: 10px 12px;
-      border-bottom: 1px solid #45475a;
+      border-bottom: 1px solid var(--border);
       white-space: nowrap;
     }
 
     .priorities-table td {
-      color: #cdd6f4;
+      color: var(--text);
       padding: 10px 12px;
       border-bottom: 1px solid rgba(69, 71, 90, 0.5);
     }
@@ -195,17 +195,17 @@
 
     .rec-badge.urgente {
       background: rgba(243, 139, 168, 0.2);
-      color: #f38ba8;
+      color: var(--red);
     }
 
     .rec-badge.importante {
       background: rgba(249, 226, 175, 0.2);
-      color: #f9e2af;
+      color: var(--yellow);
     }
 
     .rec-badge.normal {
       background: rgba(166, 227, 161, 0.2);
-      color: #a6e3a1;
+      color: var(--green);
     }
 
     /* Loading */
@@ -214,7 +214,7 @@
       align-items: center;
       justify-content: center;
       padding: 40px;
-      color: #a6adc8;
+      color: var(--text-sub);
       gap: 10px;
     }
 
@@ -222,8 +222,8 @@
       content: '';
       width: 20px;
       height: 20px;
-      border: 2px solid #45475a;
-      border-top-color: #cba6f7;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
     }
@@ -236,7 +236,7 @@
     .empty-state {
       text-align: center;
       padding: 40px 20px;
-      color: #6c7086;
+      color: var(--text-muted);
     }
 
     .empty-state .icon {
