@@ -783,12 +783,10 @@
       _allMaterias = list.filter(m => m && m.trim());
     }).catch(() => {});
 
-    const _input = document.getElementById('cfg-materias');
-    const _dropdown = document.getElementById('materias-dropdown');
-    const _tagsContainer = document.getElementById('materias-tags');
+    let _input, _dropdown, _tagsContainer;
 
     function renderTags() {
-      // Remove existing tags (keep input)
+      if (!_tagsContainer || !_input) return;
       _tagsContainer.querySelectorAll('.mat-tag').forEach(el => el.remove());
       _selectedMaterias.forEach((mat, i) => {
         const tag = document.createElement('span');
@@ -806,6 +804,7 @@
     };
 
     function showDropdown(filter) {
+      if (!_dropdown) return;
       const filtered = _allMaterias.filter(m =>
         !_selectedMaterias.includes(m) &&
         m.toLowerCase().includes(filter.toLowerCase())
@@ -827,43 +826,51 @@
         _selectedMaterias.push(mat);
         renderTags();
       }
-      _input.value = '';
-      _dropdown.style.display = 'none';
-      _input.focus();
+      if (_input) _input.value = '';
+      if (_dropdown) _dropdown.style.display = 'none';
+      if (_input) _input.focus();
     };
 
-    _input.addEventListener('input', () => {
-      const val = _input.value.trim();
-      if (val.length >= 1) { showDropdown(val); }
-      else { _dropdown.style.display = 'none'; }
-    });
+    function setupAutocomplete() {
+      _input = document.getElementById('cfg-materias');
+      _dropdown = document.getElementById('materias-dropdown');
+      _tagsContainer = document.getElementById('materias-tags');
+      if (!_input || !_dropdown || !_tagsContainer) return;
 
-    _input.addEventListener('focus', () => {
-      if (_input.value.trim().length >= 1) showDropdown(_input.value.trim());
-      else if (!_selectedMaterias.length) showDropdown('');
-    });
+      _input.addEventListener('input', () => {
+        const val = _input.value.trim();
+        if (val.length >= 1) { showDropdown(val); }
+        else { _dropdown.style.display = 'none'; }
+      });
 
-    _input.addEventListener('keydown', (e) => {
-      if (e.key === 'Backspace' && !_input.value && _selectedMaterias.length) {
-        _selectedMaterias.pop();
-        renderTags();
-      }
-      if (e.key === 'Escape') _dropdown.style.display = 'none';
-    });
+      _input.addEventListener('focus', () => {
+        if (_input.value.trim().length >= 1) showDropdown(_input.value.trim());
+        else if (!_selectedMaterias.length) showDropdown('');
+      });
 
-    document.addEventListener('click', (e) => {
-      if (!document.getElementById('materias-autocomplete').contains(e.target)) {
-        _dropdown.style.display = 'none';
-      }
-    });
+      _input.addEventListener('keydown', (e) => {
+        if (e.key === 'Backspace' && !_input.value && _selectedMaterias.length) {
+          _selectedMaterias.pop();
+          renderTags();
+        }
+        if (e.key === 'Escape') _dropdown.style.display = 'none';
+      });
 
-    // Mostrar todas ao clicar sem filtro
-    _tagsContainer.addEventListener('click', () => {
-      if (!_input.value && !_selectedMaterias.length) showDropdown('');
-    });
+      document.addEventListener('click', (e) => {
+        const ac = document.getElementById('materias-autocomplete');
+        if (ac && !ac.contains(e.target)) {
+          _dropdown.style.display = 'none';
+        }
+      });
+
+      _tagsContainer.addEventListener('click', () => {
+        if (!_input.value && !_selectedMaterias.length) showDropdown('');
+      });
+    }
 
     // Init
     showMenu();
+    setTimeout(setupAutocomplete, 0);
   })();
   </script>
 </body>
