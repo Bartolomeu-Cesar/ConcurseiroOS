@@ -119,41 +119,76 @@ else {
     Write-Status "pip $pipVersionInfo disponivel." "OK"
 }
 
-# --- 3. Instalar dependências ---
-Write-Status "Verificando dependencias Python..."
+# --- 3. Criar/Ativar Virtual Environment ---
+$VenvDir = Join-Path $BackendDir "venv"
+$VenvActivate = Join-Path $VenvDir "Scripts\Activate.ps1"
 
-$requirements = Get-Content $RequirementsFile | Where-Object { $_ -match '\S' }
-$todasInstaladas = $true
-
-foreach ($pacote in $requirements) {
-    $checkResult = & $pythonCmd -m pip show $pacote 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        $todasInstaladas = $false
-    }
+# Se o venv existe mas foi criado no Linux (WSL), recriar para Windows
+if ((Test-Path $VenvDir) -and -not (Test-Path $VenvActivate)) {
+    Write-Status "venv existente e incompativel (Linux/WSL). Recriando para Windows..." "AVISO"
+    Remove-Item $VenvDir -Recurse -Force
 }
 
-if (-not $todasInstaladas) {
-    Write-Status "Instalando dependencias..."
-    & $pythonCmd -m pip install -r $RequirementsFile --quiet 2>&1 | Out-Null
+if (-not (Test-Path $VenvDir)) {
+    Write-Status "Criando virtual environment (venv)..."
+    & $pythonCmd -m venv $VenvDir
     if ($LASTEXITCODE -ne 0) {
-        Write-Status "Erro ao instalar dependencias." "ERRO"
+        Write-Status "Falha ao criar venv." "ERRO"
         Read-Host "Pressione Enter para sair"
         exit 1
     }
-    Write-Status "Dependencias instaladas." "OK"
+    Write-Status "Virtual environment criado em backend/venv." "OK"
+}
+else {
+    Write-Status "Virtual environment encontrado." "OK"
+}
+
+Write-Status "Ativando virtual environment..."
+. $VenvActivate
+Write-Status "venv ativado." "OK"
+
+# --- 4. Instalar dependências (dentro do venv) ---
+Write-Status "Verificando dependencias Python..."
+
+$pipInstallNeeded = $false
+$installedPkgs = & pip list --format=freeze 2>&1 | Out-String
+
+$reqLines = Get-Content $RequirementsFile | Where-Object { $_ -match '^\w' }
+foreach ($linha in $reqLines) {
+    $pkgName = ($linha -split '==|>=|<=|~=|!=')[0].Trim().ToLower()
+    if ($installedPkgs -notmatch "(?i)^$pkgName==") {
+        $pipInstallNeeded = $true
+        break
+    }
+}
+
+if ($pipInstallNeeded) {
+    # Instalar tudo exceto psycopg2 (PostgreSQL é opcional, requer pg_config no Windows)
+    $tempReq = Join-Path $env:TEMP "requirements_no_pg.txt"
+    Get-Content $RequirementsFile | Where-Object { $_ -notmatch 'psycopg2' } | Set-Content $tempReq
+    Write-Status "Instalando dependencias no venv..."
+    & pip install -r $tempReq
+    if ($LASTEXITCODE -ne 0) {
+        Write-Status "Erro ao instalar dependencias." "ERRO"
+        Remove-Item $tempReq -ErrorAction SilentlyContinue
+        Read-Host "Pressione Enter para sair"
+        exit 1
+    }
+    Remove-Item $tempReq -ErrorAction SilentlyContinue
+    Write-Status "Dependencias instaladas (SQLite mode - PostgreSQL opcional)." "OK"
 }
 else {
     Write-Status "Todas as dependencias ja instaladas." "OK"
 }
 
-# --- 4. Limpar cache Python (garante código atualizado) ---
+# --- 5. Limpar cache Python (garante código atualizado) ---
 $cacheDir = Join-Path $BackendDir "__pycache__"
 if (Test-Path $cacheDir) {
     Remove-Item $cacheDir -Recurse -Force -ErrorAction SilentlyContinue
     Write-Status "Cache Python limpo (__pycache__ removido)." "OK"
 }
 
-# --- 5. Verificar porta 8000 ---
+# --- 6. Verificar porta 8000 ---
 Write-Status "Verificando porta 8000..."
 
 $portaEmUso = Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue
@@ -169,7 +204,7 @@ else {
     Write-Status "Porta 8000 livre." "OK"
 }
 
-# --- 6. Iniciar aplicação ---
+# --- 7. Iniciar aplicação ---
 Write-Host ""
 Write-Host "=================================================" -ForegroundColor Green
 Write-Host "   ConcurseiroOS iniciando...                     " -ForegroundColor Green
@@ -203,8 +238,8 @@ Set-Location $BackendDir
 # Para testar login: Email teste@concurseiroos.com (código aparece no terminal)
 $env:AUTH_ENABLED = "true"
 $env:JWT_SECRET = "test-secret-concurseiroos-2026"
-& $pythonCmd -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+& python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 # === MODO PADRÃO (sem login, tudo liberado) ===
 # Descomente a linha abaixo e comente as 3 linhas acima para voltar ao normal
-# & $pythonCmd -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+# & python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
