@@ -5,20 +5,23 @@ Usa TestClient do FastAPI (síncrono) com banco de dados temporário.
 Executar: pytest tests/ -v
 """
 import os
+import sqlite3
 import sys
 import tempfile
 
 import pytest
 
 # Configurar DB temporário ANTES de importar o app
-_tmp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+_tmp_db = tempfile.NamedTemporaryFile(suffix="_endpoints.db", delete=False)
 _tmp_db.close()
 os.environ.setdefault("TEST_DB", _tmp_db.name)
+os.environ.setdefault("AUTH_ENABLED", "false")
 
 # Ajustar path para imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import database
+from database import get_db_session
 
 database.DB_PATH = _tmp_db.name
 database.init_db()
@@ -27,11 +30,32 @@ from fastapi.testclient import TestClient
 from main import app
 
 
+def _override_db_session():
+    conn = sqlite3.connect(_tmp_db.name, check_same_thread=False, timeout=10)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
 @pytest.fixture(scope="module")
 def client():
     """TestClient compartilhado por todo o módulo de testes."""
+    database.DB_PATH = _tmp_db.name
+    app.dependency_overrides[get_db_session] = _override_db_session
     with TestClient(app) as c:
         yield c
+    app.dependency_overrides.pop(get_db_session, None)
+
+
+@pytest.fixture(autouse=True)
+def _ensure_db_endpoints():
+    """Garante que o DB correto está ativo antes de cada teste."""
+    database.DB_PATH = _tmp_db.name
+    app.dependency_overrides[get_db_session] = _override_db_session
+    yield
 
 
 @pytest.fixture(autouse=True)
