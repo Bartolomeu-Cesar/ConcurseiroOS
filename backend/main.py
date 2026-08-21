@@ -180,9 +180,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         # Exempt static assets from rate limiting (CSS, JS, images, fonts, PDF.js, etc.)
-        static_exts = ('.css', '.js', '.svg', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.woff', '.woff2', '.ttf', '.mjs', '.map', '.json')
-        static_paths = ('/pdfjs/', '/css/', '/js/', '/icons/', '/images/')
+        static_exts = ('.css', '.js', '.svg', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.woff', '.woff2', '.ttf', '.mjs', '.map', '.json', '.html', '.pdf')
+        static_paths = ('/pdfjs/', '/css/', '/js/', '/icons/', '/images/', '/fonts/')
         if path.endswith(static_exts) or any(path.startswith(sp) for sp in static_paths):
+            return await call_next(request)
+
+        # Also exempt non-API paths (frontend files served as static)
+        if not path.startswith("/api/"):
             return await call_next(request)
 
         now = time.time()
