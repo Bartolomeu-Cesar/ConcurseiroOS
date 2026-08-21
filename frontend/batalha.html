@@ -236,6 +236,24 @@
       const ranking = data.ranking || [];
       const top3 = ranking.slice(0, 3);
 
+      // Prêmio surpresa para batalhas 1v1
+      let premioHtml = '';
+      if (ranking.length === 2) {
+        const vencedor = ranking[0];
+        const perdedor = ranking[1];
+        const premio = getRandomPrize(vencedor.nome);
+        premioHtml = `
+          <div style="background:linear-gradient(135deg, #1e1e2e, #313244);border:2px solid #f9e2af;border-radius:14px;padding:20px;margin:16px 0;text-align:center;">
+            <div style="font-size:1.3rem;margin-bottom:8px;">🎁 Prêmio Surpresa!</div>
+            <div style="color:#f9e2af;font-size:0.95rem;font-weight:600;margin-bottom:6px;">${perdedor.nome}, você deve:</div>
+            <div style="color:#cdd6f4;font-size:1.1rem;padding:12px;background:#45475a;border-radius:10px;margin:8px 0;">
+              ${premio.emoji} ${premio.texto}
+            </div>
+            <div style="font-size:0.75rem;color:#9399b2;margin-top:8px;">Valide a entrega com o vencedor! 🤝</div>
+          </div>
+        `;
+      }
+
       // Podium order: 2nd, 1st, 3rd
       const podiumOrder = top3.length >= 3 ? [top3[1], top3[0], top3[2]] : top3;
       const podiumClasses = top3.length >= 3 ? ['second', 'first', 'third'] : ['first', 'second', 'third'];
@@ -273,8 +291,35 @@
           <button class="btn-battle" style="margin-top:20px;" onclick="showMenu()">🔙 Voltar ao Menu</button>
           <button class="btn-battle secondary" style="margin-top:8px;" onclick="criarRevanche('${data.codigo}')">🔄 Revanche</button>
           <button class="btn-battle" style="margin-top:8px;background:#45475a;color:#cdd6f4;" onclick="showReview('${data.codigo}')">📖 Revisar Questões</button>
+          ${premioHtml}
         </div>
       `;
+    }
+
+    function getRandomPrize(vencedorNome) {
+      const premios = [
+        { emoji: '🧆', texto: `Envie um cento de salgados para ${vencedorNome}!` },
+        { emoji: '🌯', texto: `Pague uma shawarma para ${vencedorNome}!` },
+        { emoji: '🍨', texto: `Um açaí de 500ml para ${vencedorNome}!` },
+        { emoji: '💸', texto: `PIX de R$10 para ${vencedorNome}!` },
+        { emoji: '🍕', texto: `Uma pizza para ${vencedorNome}!` },
+        { emoji: '☕', texto: `Um café especial para ${vencedorNome}!` },
+        { emoji: '🍫', texto: `Uma caixa de bombons para ${vencedorNome}!` },
+        { emoji: '🥤', texto: `Um milkshake para ${vencedorNome}!` },
+        { emoji: '🍔', texto: `Um hambúrguer artesanal para ${vencedorNome}!` },
+        { emoji: '🧋', texto: `Um bubble tea para ${vencedorNome}!` },
+        { emoji: '🎂', texto: `Um pedaço de bolo para ${vencedorNome}!` },
+        { emoji: '🌮', texto: `Tacos mexicanos para ${vencedorNome}!` },
+        { emoji: '🍩', texto: `Uma dúzia de donuts para ${vencedorNome}!` },
+        { emoji: '📚', texto: `Um livro à escolha de ${vencedorNome}!` },
+        { emoji: '🎬', texto: `Um ingresso de cinema para ${vencedorNome}!` },
+        { emoji: '🥊', texto: `30 minutos de massagem para ${vencedorNome}!` },
+        { emoji: '🧃', texto: `Um suco natural para ${vencedorNome}!` },
+        { emoji: '🍿', texto: `Um balde de pipoca gourmet para ${vencedorNome}!` },
+        { emoji: '🥐', texto: `Um croissant com café para ${vencedorNome}!` },
+        { emoji: '💰', texto: `PIX de R$5 para ${vencedorNome}!` },
+      ];
+      return premios[Math.floor(Math.random() * premios.length)];
     }
 
     // ========== ACTIONS ==========
