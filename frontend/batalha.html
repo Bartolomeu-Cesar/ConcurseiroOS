@@ -108,7 +108,14 @@
         <div class="lobby-card">
           <h2>🎮 Criar Nova Batalha</h2>
           <div class="config-row"><label>Título:</label><input id="cfg-titulo" value="Batalha de Questões" placeholder="Nome da sala"></div>
-          <div class="config-row"><label>Matérias:</label><input id="cfg-materias" placeholder="Ex: Direito Penal, Dir. Constitucional (vazio = todas)"></div>
+          <div class="config-row"><label>Matérias:</label>
+            <div id="materias-autocomplete" style="flex:1;position:relative;">
+              <div id="materias-tags" style="display:flex;flex-wrap:wrap;gap:4px;padding:6px 10px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;min-height:38px;align-items:center;cursor:text;" onclick="document.getElementById('cfg-materias').focus()">
+                <input id="cfg-materias" placeholder="Digite para buscar... (vazio = todas)" style="border:none;background:transparent;color:#cdd6f4;font-size:0.85rem;outline:none;flex:1;min-width:120px;padding:2px 0;" autocomplete="off">
+              </div>
+              <div id="materias-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:#313244;border:1px solid #45475a;border-radius:8px;margin-top:4px;max-height:180px;overflow-y:auto;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,0.4);"></div>
+            </div>
+          </div>
           <div class="config-row"><label>Rodadas:</label><select id="cfg-rodadas">${[3,5,7,10,15,20].map(n => `<option value="${n}" ${n===5?'selected':''}>${n} rodadas</option>`).join('')}</select></div>
           <div class="config-row"><label>Tempo/questão:</label><select id="cfg-tempo">${[15,20,30,45,60].map(n => `<option value="${n}" ${n===30?'selected':''}>${n} segundos</option>`).join('')}</select></div>
           <div class="config-row"><label>Jogadores:</label><select id="cfg-max">${[2,3,4,5].map(n => `<option value="${n}" ${n===5?'selected':''}>${n} jogadores</option>`).join('')}</select></div>
@@ -244,8 +251,7 @@
 
     window.criarBatalha = async function() {
       const titulo = document.getElementById('cfg-titulo').value.trim() || 'Batalha';
-      const materiasRaw = document.getElementById('cfg-materias').value.trim();
-      const materias = materiasRaw ? materiasRaw.split(',').map(m => m.trim()).filter(Boolean) : [];
+      const materias = [..._selectedMaterias];
       const total_rodadas = parseInt(document.getElementById('cfg-rodadas').value);
       const tempo_por_questao = parseInt(document.getElementById('cfg-tempo').value);
       const max_jogadores = parseInt(document.getElementById('cfg-max').value);
@@ -534,6 +540,91 @@
         setTimeout(() => piece.remove(), 5000);
       }
     }
+
+    // ========== AUTOCOMPLETE MATÉRIAS ==========
+    const _selectedMaterias = [];
+    let _allMaterias = [];
+
+    // Carregar matérias disponíveis da API
+    fetch('/api/questoes/materias').then(r => r.json()).then(list => {
+      _allMaterias = list.filter(m => m && m.trim());
+    }).catch(() => {});
+
+    const _input = document.getElementById('cfg-materias');
+    const _dropdown = document.getElementById('materias-dropdown');
+    const _tagsContainer = document.getElementById('materias-tags');
+
+    function renderTags() {
+      // Remove existing tags (keep input)
+      _tagsContainer.querySelectorAll('.mat-tag').forEach(el => el.remove());
+      _selectedMaterias.forEach((mat, i) => {
+        const tag = document.createElement('span');
+        tag.className = 'mat-tag';
+        tag.style.cssText = 'display:inline-flex;align-items:center;gap:4px;background:#45475a;color:#89b4fa;padding:3px 8px;border-radius:6px;font-size:0.78rem;white-space:nowrap;';
+        tag.innerHTML = `${mat} <span style="cursor:pointer;color:#f38ba8;font-weight:bold;" onclick="removeMateria(${i})">&times;</span>`;
+        _tagsContainer.insertBefore(tag, _input);
+      });
+      _input.placeholder = _selectedMaterias.length ? '' : 'Digite para buscar... (vazio = todas)';
+    }
+
+    window.removeMateria = function(index) {
+      _selectedMaterias.splice(index, 1);
+      renderTags();
+    };
+
+    function showDropdown(filter) {
+      const filtered = _allMaterias.filter(m =>
+        !_selectedMaterias.includes(m) &&
+        m.toLowerCase().includes(filter.toLowerCase())
+      );
+      if (!filtered.length) { _dropdown.style.display = 'none'; return; }
+      _dropdown.innerHTML = filtered.map(m =>
+        `<div style="padding:8px 12px;cursor:pointer;font-size:0.85rem;color:#cdd6f4;border-bottom:1px solid #45475a;" 
+              onmouseover="this.style.background='#45475a'" onmouseout="this.style.background='transparent'"
+              onclick="selectMateria('${m.replace(/'/g, "\\'")}')">${m}</div>`
+      ).join('');
+      _dropdown.style.display = 'block';
+    }
+
+    window.selectMateria = function(mat) {
+      if (!_selectedMaterias.includes(mat)) {
+        _selectedMaterias.push(mat);
+        renderTags();
+      }
+      _input.value = '';
+      _dropdown.style.display = 'none';
+      _input.focus();
+    };
+
+    _input.addEventListener('input', () => {
+      const val = _input.value.trim();
+      if (val.length >= 1) { showDropdown(val); }
+      else { _dropdown.style.display = 'none'; }
+    });
+
+    _input.addEventListener('focus', () => {
+      if (_input.value.trim().length >= 1) showDropdown(_input.value.trim());
+      else if (!_selectedMaterias.length) showDropdown('');
+    });
+
+    _input.addEventListener('keydown', (e) => {
+      if (e.key === 'Backspace' && !_input.value && _selectedMaterias.length) {
+        _selectedMaterias.pop();
+        renderTags();
+      }
+      if (e.key === 'Escape') _dropdown.style.display = 'none';
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!document.getElementById('materias-autocomplete').contains(e.target)) {
+        _dropdown.style.display = 'none';
+      }
+    });
+
+    // Mostrar todas ao clicar sem filtro
+    _tagsContainer.addEventListener('click', () => {
+      if (!_input.value && !_selectedMaterias.length) showDropdown('');
+    });
 
     // Init
     showMenu();
