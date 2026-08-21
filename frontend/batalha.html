@@ -230,6 +230,8 @@
           </div>
 
           <button class="btn-battle" style="margin-top:20px;" onclick="showMenu()">🔙 Voltar ao Menu</button>
+          <button class="btn-battle secondary" style="margin-top:8px;" onclick="criarRevanche('${data.codigo}')">🔄 Revanche</button>
+          <button class="btn-battle" style="margin-top:8px;background:#45475a;color:#cdd6f4;" onclick="showReview('${data.codigo}')">📖 Revisar Questões</button>
         </div>
       `;
     }
@@ -311,6 +313,7 @@
 
       const tempoUsado = state.battle.tempo_por_questao - state.timeLeft;
 
+      // Enviar a letra VISUAL (o backend traduz via mapping)
       try {
         const res = await fetch(`/api/batalha/responder/${state.battle.codigo}`, {
           method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -319,29 +322,65 @@
         const data = await res.json();
         stopTimer();
 
-        // Show result
+        // Show result — resposta_correta agora é a letra VISUAL
+        const correctVisual = data.resposta_correta.toLowerCase();
         document.querySelectorAll('.option-btn').forEach(b => {
-          if (b.dataset.letter === data.resposta_correta.toLowerCase()) b.classList.add('correct');
+          if (b.dataset.letter === correctVisual) b.classList.add('correct');
           if (b.dataset.letter === state.selectedAnswer && !data.acertou) b.classList.add('wrong');
           b.style.pointerEvents = 'none';
         });
 
-        btn.textContent = data.acertou ? `✅ +${data.pontos_ganhos} pontos!` : `❌ Resposta: ${data.resposta_correta.toUpperCase()}`;
+        let feedbackText = data.acertou ? `✅ +${data.pontos_ganhos} pontos!` : `❌ Resposta: ${data.resposta_correta}`;
+        if (data.streak_bonus) feedbackText += ` ${data.streak_bonus}`;
+        btn.textContent = feedbackText;
         btn.style.background = data.acertou ? '#a6e3a1' : '#f38ba8';
+
+        // Show streak fire animation
+        if (data.streak >= 3) {
+          const streakEl = document.createElement('div');
+          streakEl.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:3rem;z-index:9999;animation:confetti-fall 1.5s ease-out forwards;';
+          streakEl.textContent = data.streak >= 5 ? '🔥🔥 2x!' : '⚡ 1.5x!';
+          document.body.appendChild(streakEl);
+          setTimeout(() => streakEl.remove(), 2000);
+        }
 
         // Wait and advance
         setTimeout(async () => {
           if (data.batalha_finalizada) {
             const rk = await fetch(`/api/batalha/ranking/${state.battle.codigo}`).then(r => r.json());
             showRanking(rk);
-          } else {
+          } else if (data.rodada_completa) {
             const sala = await fetch(`/api/batalha/sala/${state.battle.codigo}`).then(r => r.json());
             showQuestion(sala);
+          } else {
+            // Aguardar outros jogadores
+            btn.textContent = '⏳ Aguardando outros jogadores...';
+            btn.style.background = '#45475a';
+            pollForNextRound();
           }
-        }, 2500);
+        }, 2000);
 
       } catch(e) { alert('Erro ao enviar resposta.'); }
     };
+
+    // Poll para esperar outros jogadores responderem
+    function pollForNextRound() {
+      const poll = setInterval(async () => {
+        try {
+          const sala = await fetch(`/api/batalha/sala/${state.battle.codigo}`).then(r => r.json());
+          if (sala.status === 'finalizada') {
+            clearInterval(poll);
+            const rk = await fetch(`/api/batalha/ranking/${state.battle.codigo}`).then(r => r.json());
+            showRanking(rk);
+          } else if (sala.rodada_atual > state.battle.rodada_atual) {
+            clearInterval(poll);
+            showQuestion(sala);
+          }
+        } catch(e) {}
+      }, 2000);
+      // Timeout after 60s
+      setTimeout(() => clearInterval(poll), 60000);
+    }
 
     window.refreshLobby = async function() {
       if (!state.battle) return;
@@ -365,6 +404,48 @@
         else if (sala.status === 'finalizada') { const rk = await fetch(`/api/batalha/ranking/${codigo}`).then(r=>r.json()); showRanking(rk); }
         else showLobby(sala);
       } catch(e) { alert('Erro ao abrir sala.'); }
+    };
+
+    window.criarRevanche = async function(codigo) {
+      try {
+        const res = await fetch(`/api/batalha/revanche/${codigo}`, { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) {
+          alert(`Revanche criada! Código: ${data.codigo}`);
+          const sala = await fetch(`/api/batalha/sala/${data.codigo}`).then(r => r.json());
+          showLobby(sala);
+        } else {
+          alert(data.detail || 'Erro ao criar revanche.');
+        }
+      } catch(e) { alert('Erro.'); }
+    };
+
+    window.showReview = async function(codigo) {
+      try {
+        const data = await fetch(`/api/batalha/review/${codigo}`).then(r => r.json());
+        view.innerHTML = `
+          <h1 style="text-align:center;">📖 Revisão da Batalha</h1>
+          <div class="lobby-card" style="text-align:center;margin-bottom:16px;">
+            <div style="font-size:1.6rem;font-weight:700;color:${data.resumo.pct_acerto >= 70 ? '#a6e3a1' : '#f9e2af'};">${data.resumo.pct_acerto}%</div>
+            <div style="font-size:0.82rem;color:#9399b2;">${data.resumo.acertos}/${data.resumo.total} acertos</div>
+          </div>
+          ${data.questoes.map((q, i) => `
+            <div class="lobby-card" style="margin-bottom:10px;border-left:4px solid ${q.acertei ? '#a6e3a1' : '#f38ba8'};">
+              <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+                <span class="materia-badge">${q.materia}</span>
+                <span style="font-size:0.75rem;color:${q.acertei ? '#a6e3a1' : '#f38ba8'};">${q.acertei ? '✅' : '❌'} ${q.pontos}pts · ${q.tempo_seg}s</span>
+              </div>
+              <div style="font-size:0.88rem;margin-bottom:8px;line-height:1.4;">${q.enunciado}</div>
+              <div style="font-size:0.8rem;color:#a6e3a1;background:#1e1e2e;padding:8px;border-radius:6px;">
+                <strong>Correta:</strong> ${q.resposta_correta.toUpperCase()}) ${q.alternativas[q.resposta_correta] || ''}
+              </div>
+              ${!q.acertei && q.minha_resposta ? `<div style="font-size:0.78rem;color:#f38ba8;margin-top:4px;">Sua resposta: ${q.minha_resposta.toUpperCase()}) ${q.alternativas[q.minha_resposta] || ''}</div>` : ''}
+              ${q.explicacao ? `<div style="font-size:0.78rem;color:#89b4fa;margin-top:6px;padding:6px;background:#45475a;border-radius:4px;">💡 ${q.explicacao}</div>` : ''}
+            </div>
+          `).join('')}
+          <button class="btn-battle" onclick="showMenu()">🔙 Voltar</button>
+        `;
+      } catch(e) { alert('Erro ao carregar revisão.'); }
     };
 
     // ========== HELPERS ==========

@@ -104,8 +104,8 @@ def _generate_code():
     return "".join(random.choices(chars, k=6))
 
 
-def _calculate_points(acertou: bool, tempo_seg: int, tempo_max: int) -> int:
-    """Calcula pontos estilo Duolingo: acerto + bonus por velocidade."""
+def _calculate_points(acertou: bool, tempo_seg: int, tempo_max: int, streak: int = 0) -> int:
+    """Calcula pontos estilo Duolingo: acerto + bonus por velocidade + streak multiplier."""
     if not acertou:
         return 0
     # Base: 100 pontos por acerto
@@ -115,7 +115,13 @@ def _calculate_points(acertou: bool, tempo_seg: int, tempo_max: int) -> int:
         speed_bonus = int(50 * (1 - tempo_seg / tempo_max))
     else:
         speed_bonus = 0
-    return base + speed_bonus
+    # Streak multiplier: 1.5x após 3 acertos, 2x após 5 acertos
+    subtotal = base + speed_bonus
+    if streak >= 5:
+        subtotal = int(subtotal * 2.0)
+    elif streak >= 3:
+        subtotal = int(subtotal * 1.5)
+    return subtotal
 
 
 # ============================================================
@@ -248,19 +254,48 @@ def status_sala(
             (battle["id"], battle["rodada_atual"])
         ).fetchone()
         if round_data:
-            # Quem já respondeu nesta rodada
+            # Quem já respondeu nesta rodada (NÃO revelar se acertou até todos responderem)
             answers = conn.execute(
                 "SELECT user_id, acertou, tempo_seg, pontos_ganhos FROM battle_answers WHERE battle_id = ? AND rodada_num = ?",
                 (battle["id"], battle["rodada_atual"])
             ).fetchall()
+            total_players_count = conn.execute(
+                "SELECT COUNT(*) as cnt FROM battle_players WHERE battle_id = ?", (battle["id"],)
+            ).fetchone()["cnt"]
+            all_answered = len(answers) >= total_players_count
+
+            # Randomizar alternativas para anti-cola (seed baseado em user_id + rodada)
+            alts_original = json.loads(round_data["alternativas"])
+            alt_items = [(k, v) for k, v in alts_original.items() if v]  # Filtrar vazias
+            # Shuffle com seed determinístico por usuário (para que o mesmo user veja a mesma ordem ao recarregar)
+            rng = random.Random(user_id * 1000 + battle["rodada_atual"])
+            rng.shuffle(alt_items)
+            # Criar mapeamento: posição visual → letra real
+            visual_letters = ['a', 'b', 'c', 'd', 'e'][:len(alt_items)]
+            alternativas_shuffled = {}
+            mapping = {}  # visual_letter → real_letter
+            for i, (real_letter, text) in enumerate(alt_items):
+                vl = visual_letters[i]
+                alternativas_shuffled[vl] = text
+                mapping[vl] = real_letter
+
             current_round = {
                 "rodada_num": round_data["rodada_num"],
                 "materia": round_data["materia"],
                 "topico": round_data["topico"],
                 "enunciado": round_data["enunciado"],
-                "alternativas": json.loads(round_data["alternativas"]),
-                "responderam": [{"user_id": a["user_id"], "acertou": bool(a["acertou"]), "tempo_seg": a["tempo_seg"], "pontos": a["pontos_ganhos"]} for a in answers],
+                "alternativas": alternativas_shuffled,
+                "_mapping": mapping,  # Para o frontend traduzir ao responder
+                # Só revelar acertos depois que todos responderam
+                "responderam": [
+                    {"user_id": a["user_id"], "respondeu": True,
+                     "acertou": bool(a["acertou"]) if all_answered else None,
+                     "tempo_seg": a["tempo_seg"] if all_answered else None,
+                     "pontos": a["pontos_ganhos"] if all_answered else None}
+                    for a in answers
+                ],
                 "total_responderam": len(answers),
+                "todos_responderam": all_answered,
             }
 
     return {
@@ -361,7 +396,7 @@ def responder_rodada(
     conn=Depends(get_db_session),
     user_id: int = Depends(get_user_id)
 ):
-    """Jogador responde a questão da rodada atual."""
+    """Jogador responde a questão da rodada atual. Resposta é a letra VISUAL (já mapeada no frontend)."""
     _ensure_battle_tables(conn)
     battle = conn.execute("SELECT * FROM battles WHERE codigo = ?", (codigo.upper(),)).fetchone()
     if not battle:
@@ -378,7 +413,7 @@ def responder_rodada(
         raise HTTPException(status_code=403, detail="Você não está nesta batalha.")
 
     rodada_num = battle["rodada_atual"]
-    resposta = body.get("resposta", "").strip().lower()
+    resposta_visual = body.get("resposta", "").strip().lower()
     tempo_seg = max(0, min(battle["tempo_por_questao"] * 2, int(body.get("tempo_seg", 0))))
 
     # Verificar se já respondeu esta rodada
@@ -389,21 +424,59 @@ def responder_rodada(
     if existing:
         raise HTTPException(status_code=400, detail="Você já respondeu esta rodada.")
 
-    # Buscar resposta correta
+    # Buscar dados da rodada
     round_data = conn.execute(
-        "SELECT resposta_correta FROM battle_rounds WHERE battle_id = ? AND rodada_num = ?",
+        "SELECT resposta_correta, alternativas FROM battle_rounds WHERE battle_id = ? AND rodada_num = ?",
         (battle["id"], rodada_num)
     ).fetchone()
     if not round_data:
         raise HTTPException(status_code=400, detail="Rodada não encontrada.")
 
-    acertou = resposta == round_data["resposta_correta"].strip().lower()
-    pontos = _calculate_points(acertou, tempo_seg, battle["tempo_por_questao"])
+    # Desfazer o shuffle: converter letra visual → letra real
+    # Rebuild mapping para este user (mesma seed que no status_sala)
+    alts_original = json.loads(round_data["alternativas"])
+    alt_items = [(k, v) for k, v in alts_original.items() if v]
+    rng = random.Random(user_id * 1000 + rodada_num)
+    rng.shuffle(alt_items)
+    visual_letters = ['a', 'b', 'c', 'd', 'e'][:len(alt_items)]
+    mapping = {}  # visual → real
+    for i, (real_letter, _text) in enumerate(alt_items):
+        mapping[visual_letters[i]] = real_letter
+
+    # Traduzir resposta visual → real
+    resposta_real = mapping.get(resposta_visual, resposta_visual)
+
+    resposta_correta = round_data["resposta_correta"].strip().lower()
+    acertou = resposta_real == resposta_correta
+
+    # Calcular streak (acertos consecutivos nesta batalha)
+    prev_answers = conn.execute("""
+        SELECT acertou FROM battle_answers
+        WHERE battle_id = ? AND user_id = ?
+        ORDER BY rodada_num DESC
+    """, (battle["id"], user_id)).fetchall()
+    streak = 0
+    for pa in prev_answers:
+        if pa["acertou"]:
+            streak += 1
+        else:
+            break
+    if acertou:
+        streak += 1  # Inclui a resposta atual
+
+    pontos = _calculate_points(acertou, tempo_seg, battle["tempo_por_questao"], streak if acertou else 0)
+
+    # Determinar a letra visual da resposta correta (para feedback ao jogador)
+    resposta_correta_visual = resposta_visual  # fallback
+    for vl, rl in mapping.items():
+        if rl == resposta_correta:
+            resposta_correta_visual = vl
+            break
 
     conn.execute("""
         INSERT INTO battle_answers (battle_id, rodada_num, user_id, resposta, acertou, tempo_seg, pontos_ganhos, answered_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, (battle["id"], rodada_num, user_id, resposta, int(acertou), tempo_seg, pontos, datetime.now().isoformat()))
+    """, (battle["id"], rodada_num, user_id, resposta_real, int(acertou), tempo_seg, pontos, datetime.now().isoformat()))
 
     # Atualizar pontos do jogador
     conn.execute("""
@@ -446,7 +519,9 @@ def responder_rodada(
     return {
         "acertou": acertou,
         "pontos_ganhos": pontos,
-        "resposta_correta": round_data["resposta_correta"],
+        "resposta_correta": resposta_correta_visual.upper(),  # Letra VISUAL para o frontend
+        "streak": streak if acertou else 0,
+        "streak_bonus": "🔥 2x!" if streak >= 5 else "⚡ 1.5x!" if streak >= 3 else None,
         "rodada_completa": rodada_completa,
         "batalha_finalizada": batalha_finalizada,
         "proxima_rodada": rodada_num + 1 if rodada_completa and not batalha_finalizada else rodada_num,
@@ -597,3 +672,109 @@ def avancar_rodada(
         conn.execute("UPDATE battles SET rodada_atual = ? WHERE id = ?", (rodada_num + 1, battle["id"]))
         conn.commit()
         return {"message": f"Rodada {rodada_num + 1} iniciada!", "finalizada": False, "rodada": rodada_num + 1}
+
+
+@router.get("/review/{codigo}", summary="Revisão pós-batalha")
+def review_batalha(
+    codigo: str,
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Retorna todas as questões da batalha com explicações para estudo pós-batalha."""
+    _ensure_battle_tables(conn)
+    battle = conn.execute("SELECT * FROM battles WHERE codigo = ?", (codigo.upper(),)).fetchone()
+    if not battle:
+        raise HTTPException(status_code=404, detail="Sala não encontrada.")
+
+    rounds = conn.execute("""
+        SELECT rodada_num, materia, topico, enunciado, alternativas, resposta_correta
+        FROM battle_rounds WHERE battle_id = ? ORDER BY rodada_num
+    """, (battle["id"],)).fetchall()
+
+    # Respostas do usuário
+    my_answers = conn.execute("""
+        SELECT rodada_num, resposta, acertou, tempo_seg, pontos_ganhos
+        FROM battle_answers WHERE battle_id = ? AND user_id = ?
+    """, (battle["id"], user_id)).fetchall()
+    my_map = {a["rodada_num"]: dict(a) for a in my_answers}
+
+    # Buscar explicações das questões originais
+    review = []
+    for r in rounds:
+        my_resp = my_map.get(r["rodada_num"], {})
+        # Tentar buscar explicação do banco de questões
+        explicacao = ""
+        q_id_row = conn.execute(
+            "SELECT questao_id FROM battle_rounds WHERE battle_id = ? AND rodada_num = ?",
+            (battle["id"], r["rodada_num"])
+        ).fetchone()
+        if q_id_row and q_id_row["questao_id"]:
+            q_orig = conn.execute("SELECT explicacao FROM questoes WHERE id = ?", (q_id_row["questao_id"],)).fetchone()
+            if q_orig and q_orig["explicacao"]:
+                explicacao = q_orig["explicacao"]
+
+        review.append({
+            "rodada": r["rodada_num"],
+            "materia": r["materia"],
+            "topico": r["topico"],
+            "enunciado": r["enunciado"],
+            "alternativas": json.loads(r["alternativas"]),
+            "resposta_correta": r["resposta_correta"],
+            "minha_resposta": my_resp.get("resposta", ""),
+            "acertei": bool(my_resp.get("acertou", 0)),
+            "tempo_seg": my_resp.get("tempo_seg", 0),
+            "pontos": my_resp.get("pontos_ganhos", 0),
+            "explicacao": explicacao,
+        })
+
+    acertos = sum(1 for r in review if r["acertei"])
+    total = len(review)
+
+    return {
+        "titulo": battle["titulo"],
+        "materias": json.loads(battle["materias"]),
+        "questoes": review,
+        "resumo": {
+            "total": total,
+            "acertos": acertos,
+            "pct_acerto": round(acertos / total * 100, 1) if total > 0 else 0,
+        },
+    }
+
+
+@router.post("/revanche/{codigo}", summary="Criar revanche")
+def revanche(
+    codigo: str,
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Cria nova batalha com as mesmas configurações (revanche rápida)."""
+    _ensure_battle_tables(conn)
+    battle = conn.execute("SELECT * FROM battles WHERE codigo = ?", (codigo.upper(),)).fetchone()
+    if not battle:
+        raise HTTPException(status_code=404, detail="Sala original não encontrada.")
+
+    # Criar nova sala com mesmas configs
+    novo_codigo = _generate_code()
+    while conn.execute("SELECT id FROM battles WHERE codigo = ?", (novo_codigo,)).fetchone():
+        novo_codigo = _generate_code()
+
+    now = datetime.now().isoformat()
+    conn.execute("""
+        INSERT INTO battles (codigo, criador_id, titulo, materias, total_rodadas, tempo_por_questao, max_jogadores, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'aguardando', ?)
+    """, (novo_codigo, user_id, f"Revanche: {battle['titulo']}", battle["materias"],
+          battle["total_rodadas"], battle["tempo_por_questao"], battle["max_jogadores"], now))
+
+    new_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+    # Adicionar criador
+    user = conn.execute("SELECT nome, avatar FROM users WHERE id = ?", (user_id,)).fetchone()
+    nome = user["nome"] if user else "Jogador"
+    conn.execute(
+        "INSERT INTO battle_players (battle_id, user_id, nome, avatar, joined_at) VALUES (?, ?, ?, ?, ?)",
+        (new_id, user_id, nome, user["avatar"] if user else "", now)
+    )
+    conn.commit()
+
+    return {"codigo": novo_codigo, "id": new_id, "message": "Revanche criada! Compartilhe o novo código."}
