@@ -52,25 +52,31 @@ router = APIRouter(prefix="", tags=["Social"])
 
 def _are_friends(db, user_a: int, user_b: int) -> bool:
     """Check if two users are friends (accepted status)."""
-    row = db.execute(
-        """SELECT id FROM friendships
-           WHERE status = 'accepted'
-             AND ((user_a = ? AND user_b = ?) OR (user_a = ? AND user_b = ?))""",
-        (user_a, user_b, user_b, user_a)
-    ).fetchone()
-    return row is not None
+    try:
+        row = db.execute(
+            """SELECT id FROM friendships
+               WHERE status = 'accepted'
+                 AND ((user_a = ? AND user_b = ?) OR (user_a = ? AND user_b = ?))""",
+            (user_a, user_b, user_b, user_a)
+        ).fetchone()
+        return row is not None
+    except Exception:
+        return False
 
 
 def _share_group(db, user_a: int, user_b: int) -> bool:
     """Check if two users share at least one group."""
-    row = db.execute(
-        """SELECT gm1.group_id FROM group_members gm1
-           INNER JOIN group_members gm2 ON gm1.group_id = gm2.group_id
-           WHERE gm1.user_id = ? AND gm2.user_id = ?
-           LIMIT 1""",
-        (user_a, user_b)
-    ).fetchone()
-    return row is not None
+    try:
+        row = db.execute(
+            """SELECT gm1.group_id FROM group_members gm1
+               INNER JOIN group_members gm2 ON gm1.group_id = gm2.group_id
+               WHERE gm1.user_id = ? AND gm2.user_id = ?
+               LIMIT 1""",
+            (user_a, user_b)
+        ).fetchone()
+        return row is not None
+    except Exception:
+        return False
 
 
 def _can_view_profile(db, viewer_id: int, target_id: int) -> bool:
@@ -82,13 +88,16 @@ def _can_view_profile(db, viewer_id: int, target_id: int) -> bool:
 
 def _get_friend_ids(db, user_id: int) -> List[int]:
     """Get list of friend user IDs for a user."""
-    rows = db.execute(
-        """SELECT CASE WHEN user_a = ? THEN user_b ELSE user_a END as friend_id
-           FROM friendships
-           WHERE status = 'accepted' AND (user_a = ? OR user_b = ?)""",
-        (user_id, user_id, user_id)
-    ).fetchall()
-    return [r["friend_id"] for r in rows]
+    try:
+        rows = db.execute(
+            """SELECT CASE WHEN user_a = ? THEN user_b ELSE user_a END as friend_id
+               FROM friendships
+               WHERE status = 'accepted' AND (user_a = ? OR user_b = ?)""",
+            (user_id, user_id, user_id)
+        ).fetchall()
+        return [r["friend_id"] for r in rows]
+    except Exception:
+        return []
 
 
 def _is_group_admin(db, group_id: int, user_id: int) -> bool:
@@ -110,14 +119,28 @@ def list_friends(
 ):
     """List user's friends (accepted status)."""
     log.info(f"[social] list_friends user_id={user_id}")
-    rows = db.execute(
-        """SELECT f.id,
-                  CASE WHEN f.user_a = ? THEN f.user_b ELSE f.user_a END as friend_id,
-                  f.created_at
-           FROM friendships f
-           WHERE f.status = 'accepted' AND (f.user_a = ? OR f.user_b = ?)""",
-        (user_id, user_id, user_id)
-    ).fetchall()
+    try:
+        rows = db.execute(
+            """SELECT f.id,
+                      CASE WHEN f.user_a = ? THEN f.user_b ELSE f.user_a END as friend_id,
+                      f.created_at
+               FROM friendships f
+               WHERE f.status = 'accepted' AND (f.user_a = ? OR f.user_b = ?)""",
+            (user_id, user_id, user_id)
+        ).fetchall()
+    except Exception:
+        # Table may not exist yet - create it
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS friendships (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_a INTEGER NOT NULL,
+                user_b INTEGER NOT NULL,
+                status TEXT DEFAULT 'pending',
+                created_at TEXT NOT NULL
+            )
+        """)
+        db.commit()
+        return {"friends": []}
 
     friends = []
     for r in rows:
@@ -269,13 +292,16 @@ def pending_requests(
     """List pending friend requests (incoming)."""
     log.info(f"[social] pending_requests user_id={user_id}")
 
-    rows = db.execute(
-        """SELECT f.id, f.user_a as from_user_id, f.created_at
-           FROM friendships f
-           WHERE f.user_b = ? AND f.status = 'pending'
-           ORDER BY f.created_at DESC""",
-        (user_id,)
-    ).fetchall()
+    try:
+        rows = db.execute(
+            """SELECT f.id, f.user_a as from_user_id, f.created_at
+               FROM friendships f
+               WHERE f.user_b = ? AND f.status = 'pending'
+               ORDER BY f.created_at DESC""",
+            (user_id,)
+        ).fetchall()
+    except Exception:
+        return {"pending": []}
 
     requests = []
     for r in rows:
@@ -302,14 +328,17 @@ def list_groups(
     """List groups user is member of."""
     log.info(f"[social] list_groups user_id={user_id}")
 
-    rows = db.execute(
-        """SELECT sg.*, gm.role, gm.joined_at
-           FROM study_groups sg
-           INNER JOIN group_members gm ON sg.id = gm.group_id
-           WHERE gm.user_id = ?
-           ORDER BY gm.joined_at DESC""",
-        (user_id,)
-    ).fetchall()
+    try:
+        rows = db.execute(
+            """SELECT sg.*, gm.role, gm.joined_at
+               FROM study_groups sg
+               INNER JOIN group_members gm ON sg.id = gm.group_id
+               WHERE gm.user_id = ?
+               ORDER BY gm.joined_at DESC""",
+            (user_id,)
+        ).fetchall()
+    except Exception:
+        return {"groups": []}
 
     groups = []
     for r in rows:
@@ -342,25 +371,28 @@ def discover_groups(
     """List public groups user can join."""
     log.info(f"[social] discover_groups user_id={user_id} q={q}")
 
-    if q:
-        rows = db.execute(
-            """SELECT sg.* FROM study_groups sg
-               WHERE sg.publico = 1
-                 AND sg.id NOT IN (SELECT group_id FROM group_members WHERE user_id = ?)
-                 AND (sg.nome LIKE ? OR sg.edital_nome LIKE ?)
-               ORDER BY sg.created_at DESC
-               LIMIT 50""",
-            (user_id, f"%{q}%", f"%{q}%")
-        ).fetchall()
-    else:
-        rows = db.execute(
-            """SELECT sg.* FROM study_groups sg
-               WHERE sg.publico = 1
-                 AND sg.id NOT IN (SELECT group_id FROM group_members WHERE user_id = ?)
-               ORDER BY sg.created_at DESC
-               LIMIT 50""",
-            (user_id,)
-        ).fetchall()
+    try:
+        if q:
+            rows = db.execute(
+                """SELECT sg.* FROM study_groups sg
+                   WHERE sg.publico = 1
+                     AND sg.id NOT IN (SELECT group_id FROM group_members WHERE user_id = ?)
+                     AND (sg.nome LIKE ? OR sg.edital_nome LIKE ?)
+                   ORDER BY sg.created_at DESC
+                   LIMIT 50""",
+                (user_id, f"%{q}%", f"%{q}%")
+            ).fetchall()
+        else:
+            rows = db.execute(
+                """SELECT sg.* FROM study_groups sg
+                   WHERE sg.publico = 1
+                     AND sg.id NOT IN (SELECT group_id FROM group_members WHERE user_id = ?)
+                   ORDER BY sg.created_at DESC
+                   LIMIT 50""",
+                (user_id,)
+            ).fetchall()
+    except Exception:
+        return {"groups": []}
 
     groups = []
     for r in rows:
@@ -673,16 +705,19 @@ def get_activity_feed(
     friend_ids = _get_friend_ids(db, user_id)
     visible_ids = [user_id] + friend_ids
 
-    placeholders = ",".join("?" * len(visible_ids))
-    rows = db.execute(
-        f"""SELECT af.*, u.username
-            FROM activity_feed af
-            LEFT JOIN users u ON af.user_id = u.id
-            WHERE af.user_id IN ({placeholders})
-            ORDER BY af.created_at DESC
-            LIMIT ?""",
-        (*visible_ids, limit)
-    ).fetchall()
+    try:
+        placeholders = ",".join("?" * len(visible_ids))
+        rows = db.execute(
+            f"""SELECT af.*, u.username
+                FROM activity_feed af
+                LEFT JOIN users u ON af.user_id = u.id
+                WHERE af.user_id IN ({placeholders})
+                ORDER BY af.created_at DESC
+                LIMIT ?""",
+            (*visible_ids, limit)
+        ).fetchall()
+    except Exception:
+        return {"feed": []}
 
     feed = []
     for r in rows:

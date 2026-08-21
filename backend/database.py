@@ -968,6 +968,14 @@ def _seed_defaults(conn):
         VALUES (1, 3.0, 30, 10, 20)
     """)
 
+    # Garantir que user_id=1 existe na tabela users (modo guest)
+    user_exists = conn.execute("SELECT id FROM users WHERE id = 1").fetchone()
+    if not user_exists:
+        conn.execute("""
+            INSERT OR IGNORE INTO users (id, email, nome, username, plano, created_at)
+            VALUES (1, 'guest@concurseiroos.local', 'Bartholomew Caesar', 'Bartholomew', 'ilimitado', datetime('now'))
+        """)
+        log.info("Seed: created default user (id=1, Bartholomew Caesar)")
     # Seed metadados dos editais (se tabela vazia)
     count = conn.execute("SELECT COUNT(*) FROM edital_info").fetchone()[0]
     if count == 0:
