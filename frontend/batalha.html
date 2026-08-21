@@ -343,21 +343,18 @@
             Não há questões suficientes para as matérias: <strong style="color:#89b4fa;">${materias}</strong>
           </p>
           <p style="color:#9399b2;font-size:0.82rem;margin-bottom:20px;">
-            Adicione questões ao banco para poder iniciar a batalha. Você pode adicionar manualmente ou importar em massa.
+            Reconfigure a batalha com filtros diferentes ou selecione questões do banco manualmente.
           </p>
           
           <div style="display:flex;flex-direction:column;gap:10px;">
-            <button onclick="openAddQuestionInline()" style="width:100%;padding:12px;background:#a6e3a1;color:#1e1e2e;border:none;border-radius:10px;font-weight:600;font-size:0.9rem;cursor:pointer;">
-              ✏️ Adicionar Questão Manualmente
+            <button onclick="document.getElementById('no-questions-modal').remove(); openQuestionPoolSelector()" style="width:100%;padding:12px;background:#a6e3a1;color:#1e1e2e;border:none;border-radius:10px;font-weight:600;font-size:0.9rem;cursor:pointer;">
+              🎯 Selecionar Questões do Banco
             </button>
-            <button onclick="openCsvImportModal()" style="width:100%;padding:12px;background:#89b4fa;color:#1e1e2e;border:none;border-radius:10px;font-weight:600;font-size:0.9rem;cursor:pointer;">
-              📥 Importar CSV (QConcursos / Gran)
-            </button>
-            <button onclick="reconfigurarBatalha()" style="width:100%;padding:12px;background:#f9e2af;color:#1e1e2e;border:none;border-radius:10px;font-weight:600;font-size:0.9rem;cursor:pointer;">
-              🔄 Reconfigurar Batalha
+            <button onclick="document.getElementById('no-questions-modal').remove(); reconfigurarBatalha()" style="width:100%;padding:12px;background:#f9e2af;color:#1e1e2e;border:none;border-radius:10px;font-weight:600;font-size:0.9rem;cursor:pointer;">
+              🔄 Reconfigurar Batalha (alterar matérias)
             </button>
             <a href="/questoes.html" style="display:block;width:100%;padding:12px;background:#45475a;color:#cdd6f4;border:none;border-radius:10px;font-size:0.85rem;cursor:pointer;text-align:center;text-decoration:none;">
-              📚 Ir para Banco de Questões
+              📚 Ir para Banco de Questões (adicionar novas)
             </a>
           </div>
         </div>
@@ -365,191 +362,162 @@
       document.body.appendChild(overlay);
     }
 
-    // ===== MODAL: Adicionar questão manual inline =====
-    window.openAddQuestionInline = function() {
-      document.getElementById('no-questions-modal')?.remove();
-      const materias = _allMaterias.length ? _allMaterias : ['Direito Constitucional', 'Direito Administrativo', 'Língua Portuguesa'];
-      const materiasOptions = materias.map(m => `<option value="${m}">${m}</option>`).join('');
-      
+    // ===== MODAL: Selecionar Pool de Questões =====
+    window.openQuestionPoolSelector = async function() {
+      // Buscar questões disponíveis
+      let questoes = [];
+      try {
+        const res = await fetch('/api/questoes?limit=500');
+        const data = await res.json();
+        questoes = (data.items || data || []).filter(q => q.resposta_correta);
+      } catch(e) { showBatalhaToast('Erro ao carregar questões', 'error'); return; }
+
+      if (!questoes.length) { showBatalhaToast('Nenhuma questão com gabarito no banco.', 'error'); return; }
+
+      // Extrair filtros
+      const materiasList = [...new Set(questoes.map(q => q.materia).filter(Boolean))].sort();
+      const bancasList = [...new Set(questoes.map(q => q.banca).filter(Boolean))].sort();
+      const dificuldades = ['Fácil', 'Médio', 'Difícil'];
+
       const overlay = document.createElement('div');
-      overlay.id = 'add-question-modal';
+      overlay.id = 'pool-selector-modal';
       overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto;';
       overlay.innerHTML = `
-        <div style="background:#313244;border-radius:16px;padding:24px;max-width:560px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+        <div style="background:#313244;border-radius:16px;padding:24px;max-width:600px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-            <h3 style="color:#a6e3a1;margin:0;">✏️ Nova Questão</h3>
-            <span onclick="document.getElementById('add-question-modal').remove()" style="cursor:pointer;color:#9399b2;font-size:1.4rem;">&times;</span>
+            <h3 style="color:#a6e3a1;margin:0;">🎯 Selecionar Questões para a Batalha</h3>
+            <span onclick="document.getElementById('pool-selector-modal').remove()" style="cursor:pointer;color:#9399b2;font-size:1.4rem;">&times;</span>
           </div>
           
-          <div style="display:flex;flex-direction:column;gap:10px;">
-            <div style="display:flex;gap:8px;">
-              <select id="aq-materia" style="flex:1;padding:10px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.85rem;">
-                ${materiasOptions}
-                <option value="_nova">+ Nova matéria...</option>
-              </select>
-              <select id="aq-dificuldade" style="width:110px;padding:10px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.85rem;">
-                <option value="Fácil">Fácil</option>
-                <option value="Médio" selected>Médio</option>
-                <option value="Difícil">Difícil</option>
-              </select>
-            </div>
-            <input id="aq-nova-materia" placeholder="Nome da nova matéria" style="display:none;padding:10px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.85rem;">
-            <input id="aq-banca" placeholder="Banca (ex: CESPE, FCC)" style="padding:10px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.85rem;">
-            <textarea id="aq-enunciado" rows="3" placeholder="Enunciado da questão..." style="padding:10px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.85rem;resize:vertical;"></textarea>
-            <input id="aq-alt-a" placeholder="A) ..." style="padding:8px 10px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.85rem;">
-            <input id="aq-alt-b" placeholder="B) ..." style="padding:8px 10px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.85rem;">
-            <input id="aq-alt-c" placeholder="C) ..." style="padding:8px 10px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.85rem;">
-            <input id="aq-alt-d" placeholder="D) ..." style="padding:8px 10px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.85rem;">
-            <input id="aq-alt-e" placeholder="E) ... (opcional)" style="padding:8px 10px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.85rem;">
-            <div style="display:flex;gap:8px;align-items:center;">
-              <label style="color:#9399b2;font-size:0.82rem;">Gabarito:</label>
-              <select id="aq-gabarito" style="padding:8px 12px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#a6e3a1;font-size:0.9rem;font-weight:600;">
-                <option value="a">A</option><option value="b">B</option><option value="c">C</option><option value="d">D</option><option value="e">E</option>
-              </select>
-            </div>
-            <div style="display:flex;gap:8px;margin-top:6px;">
-              <button onclick="document.getElementById('add-question-modal').remove()" style="flex:1;padding:10px;background:#45475a;color:#cdd6f4;border:none;border-radius:8px;cursor:pointer;">Cancelar</button>
-              <button onclick="submitInlineQuestion()" style="flex:1;padding:10px;background:#a6e3a1;color:#1e1e2e;border:none;border-radius:8px;font-weight:600;cursor:pointer;">💾 Salvar e Adicionar</button>
-            </div>
-            <p id="aq-status" style="color:#9399b2;font-size:0.78rem;text-align:center;margin:4px 0 0;"></p>
+          <p style="color:#9399b2;font-size:0.82rem;margin-bottom:16px;">
+            Filtre as questões por matéria, banca ou dificuldade. As selecionadas formarão o pool — o sistema sorteará aleatoriamente entre elas, com alternativas embaralhadas por jogador.
+          </p>
+
+          <!-- Filtros -->
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+            <select id="pool-filter-materia" onchange="filterPoolQuestions()" style="padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.82rem;">
+              <option value="">Todas matérias</option>
+              ${materiasList.map(m => '<option value="' + m + '">' + m + '</option>').join('')}
+            </select>
+            <select id="pool-filter-banca" onchange="filterPoolQuestions()" style="padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.82rem;">
+              <option value="">Todas bancas</option>
+              ${bancasList.map(b => '<option value="' + b + '">' + b + '</option>').join('')}
+            </select>
+            <select id="pool-filter-dif" onchange="filterPoolQuestions()" style="padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.82rem;">
+              <option value="">Todas dificuldades</option>
+              ${dificuldades.map(d => '<option value="' + d + '">' + d + '</option>').join('')}
+            </select>
+          </div>
+
+          <!-- Ações em massa -->
+          <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;">
+            <button onclick="toggleAllPool(true)" style="padding:6px 12px;background:#89b4fa;color:#1e1e2e;border:none;border-radius:6px;font-size:0.78rem;cursor:pointer;font-weight:600;">✅ Selecionar todos</button>
+            <button onclick="toggleAllPool(false)" style="padding:6px 12px;background:#45475a;color:#cdd6f4;border:none;border-radius:6px;font-size:0.78rem;cursor:pointer;">❌ Desmarcar todos</button>
+            <span id="pool-count" style="margin-left:auto;color:#a6e3a1;font-size:0.82rem;font-weight:600;">0 selecionadas</span>
+          </div>
+
+          <!-- Lista de questões -->
+          <div id="pool-questions-list" style="max-height:300px;overflow-y:auto;border:1px solid #45475a;border-radius:10px;background:#1e1e2e;"></div>
+
+          <!-- Confirmar -->
+          <div style="display:flex;gap:8px;margin-top:16px;">
+            <button onclick="document.getElementById('pool-selector-modal').remove()" style="flex:1;padding:10px;background:#45475a;color:#cdd6f4;border:none;border-radius:8px;cursor:pointer;">Cancelar</button>
+            <button onclick="confirmPoolSelection()" style="flex:1;padding:10px;background:#a6e3a1;color:#1e1e2e;border:none;border-radius:8px;font-weight:600;cursor:pointer;">🎲 Confirmar e Iniciar</button>
           </div>
         </div>
       `;
       document.body.appendChild(overlay);
-      
-      // Toggle nova matéria
-      document.getElementById('aq-materia').onchange = function() {
-        document.getElementById('aq-nova-materia').style.display = this.value === '_nova' ? 'block' : 'none';
-      };
+
+      // Armazenar questões e renderizar
+      window._poolQuestions = questoes;
+      window._poolSelected = new Set(questoes.map(q => q.id)); // Todas selecionadas por padrão
+      filterPoolQuestions();
     };
 
-    window.submitInlineQuestion = async function() {
-      const materiaSelect = document.getElementById('aq-materia').value;
-      const materia = materiaSelect === '_nova' 
-        ? document.getElementById('aq-nova-materia').value.trim() 
-        : materiaSelect;
-      
-      if (!materia) { document.getElementById('aq-status').textContent = '❌ Selecione uma matéria'; return; }
-      
-      const body = {
-        materia,
-        enunciado: document.getElementById('aq-enunciado').value.trim(),
-        alternativa_a: document.getElementById('aq-alt-a').value.trim(),
-        alternativa_b: document.getElementById('aq-alt-b').value.trim(),
-        alternativa_c: document.getElementById('aq-alt-c').value.trim(),
-        alternativa_d: document.getElementById('aq-alt-d').value.trim(),
-        alternativa_e: document.getElementById('aq-alt-e').value.trim(),
-        resposta_correta: document.getElementById('aq-gabarito').value,
-        dificuldade: document.getElementById('aq-dificuldade').value,
-        banca: document.getElementById('aq-banca').value.trim(),
-      };
+    window.filterPoolQuestions = function() {
+      const materia = document.getElementById('pool-filter-materia')?.value || '';
+      const banca = document.getElementById('pool-filter-banca')?.value || '';
+      const dif = document.getElementById('pool-filter-dif')?.value || '';
 
-      if (!body.enunciado || !body.alternativa_a || !body.alternativa_b) {
-        document.getElementById('aq-status').textContent = '❌ Preencha enunciado e pelo menos 2 alternativas';
+      let filtered = window._poolQuestions || [];
+      if (materia) filtered = filtered.filter(q => q.materia === materia);
+      if (banca) filtered = filtered.filter(q => q.banca === banca);
+      if (dif) filtered = filtered.filter(q => q.dificuldade === dif);
+
+      const listEl = document.getElementById('pool-questions-list');
+      if (!listEl) return;
+
+      listEl.innerHTML = filtered.map(q => {
+        const checked = window._poolSelected.has(q.id) ? 'checked' : '';
+        const enunciado = (q.enunciado || '').substring(0, 80) + (q.enunciado?.length > 80 ? '...' : '');
+        return `<label style="display:flex;align-items:flex-start;gap:8px;padding:10px 12px;border-bottom:1px solid #313244;cursor:pointer;font-size:0.82rem;color:#cdd6f4;" onmouseover="this.style.background='#313244'" onmouseout="this.style.background='transparent'">
+          <input type="checkbox" ${checked} onchange="togglePoolQuestion(${q.id}, this.checked)" style="margin-top:2px;accent-color:#a6e3a1;">
+          <div style="flex:1;">
+            <div>${enunciado}</div>
+            <div style="font-size:0.72rem;color:#9399b2;margin-top:3px;">${q.materia || ''} · ${q.banca || ''} · ${q.dificuldade || 'Médio'}</div>
+          </div>
+        </label>`;
+      }).join('');
+
+      updatePoolCount();
+    };
+
+    window.togglePoolQuestion = function(id, checked) {
+      if (checked) window._poolSelected.add(id);
+      else window._poolSelected.delete(id);
+      updatePoolCount();
+    };
+
+    window.toggleAllPool = function(selectAll) {
+      const materia = document.getElementById('pool-filter-materia')?.value || '';
+      const banca = document.getElementById('pool-filter-banca')?.value || '';
+      const dif = document.getElementById('pool-filter-dif')?.value || '';
+
+      let filtered = window._poolQuestions || [];
+      if (materia) filtered = filtered.filter(q => q.materia === materia);
+      if (banca) filtered = filtered.filter(q => q.banca === banca);
+      if (dif) filtered = filtered.filter(q => q.dificuldade === dif);
+
+      filtered.forEach(q => {
+        if (selectAll) window._poolSelected.add(q.id);
+        else window._poolSelected.delete(q.id);
+      });
+      filterPoolQuestions();
+    };
+
+    function updatePoolCount() {
+      const el = document.getElementById('pool-count');
+      if (el) el.textContent = `${window._poolSelected.size} selecionadas`;
+    }
+
+    window.confirmPoolSelection = async function() {
+      const selected = [...window._poolSelected];
+      if (selected.length < 3) {
+        showBatalhaToast('Selecione pelo menos 3 questões para a batalha.', 'error');
         return;
       }
 
+      if (!state.battle || !state.battle.codigo) {
+        showBatalhaToast('Nenhuma sala ativa. Crie uma primeiro.', 'error');
+        return;
+      }
+
+      // Reconfigurar com o pool selecionado e iniciar
       try {
-        const res = await fetch('/api/questoes', {
-          method: 'POST', headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify(body)
+        const res = await fetch(`/api/batalha/iniciar/${state.battle.codigo}`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ questao_ids: selected })
         });
         const data = await res.json();
         if (res.ok) {
-          document.getElementById('aq-status').innerHTML = '<span style="color:#a6e3a1;">✅ Questão salva! Adicione mais ou feche para iniciar.</span>';
-          // Limpar campos para nova questão
-          document.getElementById('aq-enunciado').value = '';
-          document.getElementById('aq-alt-a').value = '';
-          document.getElementById('aq-alt-b').value = '';
-          document.getElementById('aq-alt-c').value = '';
-          document.getElementById('aq-alt-d').value = '';
-          document.getElementById('aq-alt-e').value = '';
-          document.getElementById('aq-enunciado').focus();
-          // Recarregar matérias
-          fetch('/api/questoes/materias').then(r => r.json()).then(list => { _allMaterias = list.filter(m => m && m.trim()); });
+          document.getElementById('pool-selector-modal')?.remove();
+          const sala = await fetch(`/api/batalha/sala/${state.battle.codigo}`).then(r => r.json());
+          showQuestion(sala);
         } else {
-          document.getElementById('aq-status').textContent = '❌ ' + (data.detail || 'Erro ao salvar');
+          showBatalhaToast(data.detail || 'Erro ao iniciar.', 'error');
         }
-      } catch(e) {
-        document.getElementById('aq-status').textContent = '❌ Erro de conexão';
-      }
-    };
-
-    // ===== MODAL: Import CSV =====
-    window.openCsvImportModal = function() {
-      document.getElementById('no-questions-modal')?.remove();
-      const overlay = document.createElement('div');
-      overlay.id = 'csv-import-battle-modal';
-      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;';
-      overlay.innerHTML = `
-        <div style="background:#313244;border-radius:16px;padding:24px;max-width:480px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-            <h3 style="color:#89b4fa;margin:0;">📥 Importar CSV</h3>
-            <span onclick="document.getElementById('csv-import-battle-modal').remove()" style="cursor:pointer;color:#9399b2;font-size:1.4rem;">&times;</span>
-          </div>
-          
-          <p style="color:#9399b2;font-size:0.82rem;margin-bottom:12px;">
-            Formatos aceitos: <strong>QConcursos</strong> ou <strong>Gran Cursos</strong> (detecção automática pelo cabeçalho).
-          </p>
-          
-          <div style="margin-bottom:16px;">
-            <label for="csv-battle-file" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:16px;background:#1e1e2e;border:2px dashed #45475a;border-radius:10px;cursor:pointer;color:#89b4fa;font-size:0.9rem;transition:border-color 0.2s;">
-              📄 Selecionar arquivo CSV
-            </label>
-            <input id="csv-battle-file" type="file" accept=".csv" style="display:none;">
-            <p id="csv-battle-filename" style="font-size:0.78rem;color:#9399b2;margin-top:6px;text-align:center;"></p>
-          </div>
-          
-          <select id="csv-battle-formato" style="width:100%;padding:10px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.85rem;margin-bottom:12px;">
-            <option value="auto">🔍 Detecção automática</option>
-            <option value="qconcursos">QConcursos</option>
-            <option value="gran">Gran Cursos</option>
-          </select>
-          
-          <button id="csv-battle-submit" onclick="submitCsvBattle()" disabled style="width:100%;padding:12px;background:#89b4fa;color:#1e1e2e;border:none;border-radius:10px;font-weight:600;font-size:0.9rem;cursor:pointer;opacity:0.5;">
-            🚀 Importar
-          </button>
-          
-          <p id="csv-battle-status" style="font-size:0.82rem;margin-top:10px;text-align:center;color:#9399b2;"></p>
-        </div>
-      `;
-      document.body.appendChild(overlay);
-      
-      document.getElementById('csv-battle-file').onchange = function() {
-        const name = this.files[0]?.name || '';
-        document.getElementById('csv-battle-filename').textContent = name;
-        document.getElementById('csv-battle-submit').disabled = !name;
-        document.getElementById('csv-battle-submit').style.opacity = name ? '1' : '0.5';
-      };
-    };
-
-    window.submitCsvBattle = async function() {
-      const fileInput = document.getElementById('csv-battle-file');
-      const file = fileInput.files[0];
-      if (!file) return;
-      
-      const formato = document.getElementById('csv-battle-formato').value;
-      const formData = new FormData();
-      formData.append('file', file);
-      
-      const statusEl = document.getElementById('csv-battle-status');
-      statusEl.innerHTML = '<span style="color:#f9e2af;">⏳ Importando...</span>';
-      
-      try {
-        const res = await fetch(`/api/questoes/importar-csv?formato=${formato}`, {
-          method: 'POST', body: formData
-        });
-        const data = await res.json();
-        if (res.ok) {
-          statusEl.innerHTML = `<span style="color:#a6e3a1;">✅ ${data.imported || data.total || 0} questões importadas! Feche e clique em Iniciar novamente.</span>`;
-          // Recarregar matérias
-          fetch('/api/questoes/materias').then(r => r.json()).then(list => { _allMaterias = list.filter(m => m && m.trim()); });
-        } else {
-          statusEl.innerHTML = `<span style="color:#f38ba8;">❌ ${data.detail || 'Erro na importação'}</span>`;
-        }
-      } catch(e) {
-        statusEl.innerHTML = '<span style="color:#f38ba8;">❌ Erro de conexão</span>';
-      }
+      } catch(e) { showBatalhaToast('Erro de conexão.', 'error'); }
     };
 
     // ===== RECONFIGURAR BATALHA =====

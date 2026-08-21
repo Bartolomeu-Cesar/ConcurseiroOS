@@ -369,10 +369,11 @@ def status_sala(
 
 
 @router.post("/iniciar/{codigo}", summary="Iniciar batalha",
-             description="Inicia a batalha (apenas o criador pode). Gera as questões das rodadas baseado nas matérias selecionadas.",
+             description="Inicia a batalha (apenas o criador pode). Gera as questões das rodadas baseado nas matérias selecionadas ou IDs específicos.",
              responses={403: {"description": "Apenas o criador pode iniciar"}, 404: {"description": "Sala não encontrada"}})
 def iniciar_batalha(
     codigo: str,
+    body: dict = Body({}),
     conn=Depends(get_db_session),
     user_id: int = Depends(get_user_id)
 ):
@@ -398,56 +399,81 @@ def iniciar_batalha(
     materias = json.loads(battle["materias"])
     total = battle["total_rodadas"]
 
-    # Buscar questões disponíveis, organizadas por dificuldade
-    # Dificuldade: Fácil → Médio → Difícil (progressivo ao longo das rodadas)
-    difficulty_order = "CASE dificuldade WHEN 'Fácil' THEN 1 WHEN 'Médio' THEN 2 WHEN 'Difícil' THEN 3 ELSE 2 END"
+    # Se o criador enviou IDs específicos, usar essas questões
+    questao_ids = body.get("questao_ids", []) if body else []
 
-    if materias:
-        placeholders = ",".join("?" * len(materias))
+    if questao_ids:
+        # Pool manual selecionado pelo criador
+        placeholders = ",".join("?" * len(questao_ids))
         questoes_raw = conn.execute(f"""
             SELECT id, materia, topico, enunciado, alternativa_a, alternativa_b,
                    alternativa_c, alternativa_d, alternativa_e, resposta_correta, dificuldade
-            FROM questoes WHERE materia IN ({placeholders}) AND user_id = ?
-            ORDER BY {difficulty_order}, RANDOM()
-        """, (*materias, user_id)).fetchall()
-    else:
-        questoes_raw = conn.execute(f"""
-            SELECT id, materia, topico, enunciado, alternativa_a, alternativa_b,
-                   alternativa_c, alternativa_d, alternativa_e, resposta_correta, dificuldade
-            FROM questoes WHERE user_id = ?
-            ORDER BY {difficulty_order}, RANDOM()
-        """, (user_id,)).fetchall()
-
-    # Distribuir progressivamente: 1/3 fácil, 1/3 médio, 1/3 difícil
-    faceis = [q for q in questoes_raw if (q["dificuldade"] or "Médio") == "Fácil"]
-    medias = [q for q in questoes_raw if (q["dificuldade"] or "Médio") == "Médio"]
-    dificeis = [q for q in questoes_raw if (q["dificuldade"] or "Médio") == "Difícil"]
-
-    # Embaralhar dentro de cada grupo
-    random.shuffle(faceis)
-    random.shuffle(medias)
-    random.shuffle(dificeis)
-
-    # Distribuir: primeiras rodadas fáceis, meio médias, finais difíceis
-    terco = max(1, total // 3)
-    questoes = []
-    questoes.extend(faceis[:terco])
-    questoes.extend(medias[:terco])
-    questoes.extend(dificeis[:total - 2 * terco])
-
-    # Se não tem questões suficientes de algum nível, completar com as disponíveis
-    todas = faceis + medias + dificeis
-    random.shuffle(todas)
-    while len(questoes) < total and todas:
-        q = todas.pop(0)
-        if q not in questoes:
-            questoes.append(q)
-
-    if len(questoes) < total:
-        # Preencher com repetições se necessário
+            FROM questoes WHERE id IN ({placeholders}) AND user_id = ?
+            AND resposta_correta != '' AND resposta_correta IS NOT NULL
+        """, (*questao_ids, user_id)).fetchall()
+        # Embaralhar aleatoriamente
+        questoes_raw = list(questoes_raw)
+        random.shuffle(questoes_raw)
+        # Pegar a quantidade de rodadas
+        todas = questoes_raw
+        questoes = todas[:total]
+        # Se precisar mais, repetir
         while len(questoes) < total and questoes:
             questoes.extend(questoes[:total - len(questoes)])
         questoes = questoes[:total]
+    else:
+        # Buscar questões disponíveis, organizadas por dificuldade
+        # Dificuldade: Fácil → Médio → Difícil (progressivo ao longo das rodadas)
+        difficulty_order = "CASE dificuldade WHEN 'Fácil' THEN 1 WHEN 'Médio' THEN 2 WHEN 'Difícil' THEN 3 ELSE 2 END"
+
+        if materias:
+            placeholders = ",".join("?" * len(materias))
+            questoes_raw = conn.execute(f"""
+                SELECT id, materia, topico, enunciado, alternativa_a, alternativa_b,
+                       alternativa_c, alternativa_d, alternativa_e, resposta_correta, dificuldade
+                FROM questoes WHERE materia IN ({placeholders}) AND user_id = ?
+                AND resposta_correta != '' AND resposta_correta IS NOT NULL
+                ORDER BY {difficulty_order}, RANDOM()
+            """, (*materias, user_id)).fetchall()
+        else:
+            questoes_raw = conn.execute(f"""
+                SELECT id, materia, topico, enunciado, alternativa_a, alternativa_b,
+                       alternativa_c, alternativa_d, alternativa_e, resposta_correta, dificuldade
+                FROM questoes WHERE user_id = ?
+                AND resposta_correta != '' AND resposta_correta IS NOT NULL
+                ORDER BY {difficulty_order}, RANDOM()
+            """, (user_id,)).fetchall()
+
+        # Distribuir progressivamente: 1/3 fácil, 1/3 médio, 1/3 difícil
+        faceis = [q for q in questoes_raw if (q["dificuldade"] or "Médio") == "Fácil"]
+        medias = [q for q in questoes_raw if (q["dificuldade"] or "Médio") == "Médio"]
+        dificeis = [q for q in questoes_raw if (q["dificuldade"] or "Médio") == "Difícil"]
+
+        # Embaralhar dentro de cada grupo
+        random.shuffle(faceis)
+        random.shuffle(medias)
+        random.shuffle(dificeis)
+
+        # Distribuir: primeiras rodadas fáceis, meio médias, finais difíceis
+        terco = max(1, total // 3)
+        questoes = []
+        questoes.extend(faceis[:terco])
+        questoes.extend(medias[:terco])
+        questoes.extend(dificeis[:total - 2 * terco])
+
+        # Se não tem questões suficientes de algum nível, completar com as disponíveis
+        todas = faceis + medias + dificeis
+        random.shuffle(todas)
+        while len(questoes) < total and todas:
+            q = todas.pop(0)
+            if q not in questoes:
+                questoes.append(q)
+
+        if len(questoes) < total:
+            # Preencher com repetições se necessário
+            while len(questoes) < total and questoes:
+                questoes.extend(questoes[:total - len(questoes)])
+            questoes = questoes[:total]
 
     if not questoes:
         raise HTTPException(status_code=400, detail="Sem questões disponíveis para as matérias selecionadas.")
