@@ -27,6 +27,14 @@
         <button class="sidebar-collapse-btn" onclick="toggleCollapse()" title="Recolher menu" aria-label="Recolher/expandir menu">◀</button>
       </div>
 
+      <!-- CTA: Iniciar Sessão -->
+      <div class="sidebar-cta" id="sidebar-cta">
+        <button onclick="iniciarSessaoRapida()" class="cta-btn" title="Inicia estudo com a matéria sugerida pelo treinador">
+          <span class="cta-icon">▶</span>
+          <span class="cta-text">Iniciar Sessão</span>
+        </button>
+      </div>
+
       <div class="sidebar-section">
         <div class="sidebar-section-title">Hoje</div>
         <ul class="sidebar-nav">
@@ -47,15 +55,15 @@
       <div class="sidebar-section">
         <div class="sidebar-section-title">Praticar</div>
         <ul class="sidebar-nav">
-          <li><a href="/questoes.html" class="${activeClass('/questoes')}"><span class="nav-icon">❓</span><span class="nav-label">Questões</span></a></li>
-          <li><a href="/#flashcards" onclick="goSection('tab-flashcards')"><span class="nav-icon">🧠</span><span class="nav-label">Flashcards</span></a></li>
-          <li><a href="/#sumulas" onclick="goSection('tab-sumulas')"><span class="nav-icon">⚖️</span><span class="nav-label">Súmulas</span></a></li>
+          <li><a href="/questoes.html" class="${activeClass('/questoes')}"><span class="nav-icon">❓</span><span class="nav-label">Questões</span><span class="nav-badge" id="badge-questoes"></span></a></li>
+          <li><a href="/#flashcards" onclick="goSection('tab-flashcards')"><span class="nav-icon">🧠</span><span class="nav-label">Flashcards</span><span class="nav-badge" id="badge-flashcards"></span></a></li>
+          <li><a href="/#sumulas" onclick="goSection('tab-sumulas')"><span class="nav-icon">⚖️</span><span class="nav-label">Súmulas</span><span class="nav-badge" id="badge-sumulas"></span></a></li>
           <li><a href="/social.html#ai" onclick="goSocialTab('ai')"><span class="nav-icon">🤖</span><span class="nav-label">AI Tutor</span></a></li>
         </ul>
       </div>
 
       <div class="sidebar-section">
-        <div class="sidebar-section-title">Analisar</div>
+        <div class="sidebar-section-title">Progresso</div>
         <ul class="sidebar-nav">
           <li><a href="/dashboard.html#analytics" onclick="goPanel('panel-analytics')"><span class="nav-icon">📊</span><span class="nav-label">Analytics</span></a></li>
           <li><a href="/dashboard.html#raio-x" onclick="goPanel('panel-analytics')"><span class="nav-icon">🎯</span><span class="nav-label">Raio-X Bancas</span></a></li>
@@ -71,6 +79,15 @@
         </div>
       </div>
     </aside>
+
+    <!-- Bottom Navigation Mobile -->
+    <nav class="bottom-nav" id="bottom-nav" aria-label="Navegação principal">
+      <a href="/dashboard.html" class="${activeClass('/dashboard')}"><span class="bnav-icon">⚡</span><span class="bnav-label">Hoje</span></a>
+      <a href="/" class="${activeClass('/')}"><span class="bnav-icon">📖</span><span class="bnav-label">Estudar</span></a>
+      <a href="/questoes.html" class="${activeClass('/questoes')}"><span class="bnav-icon">❓</span><span class="bnav-label">Praticar</span><span class="bnav-badge" id="bnav-badge-praticar"></span></a>
+      <a href="/dashboard.html#analytics" onclick="goPanel('panel-analytics')"><span class="bnav-icon">📊</span><span class="bnav-label">Progresso</span></a>
+      <a href="/social.html" class="${activeClass('/social')}"><span class="bnav-icon">👤</span><span class="bnav-label">Perfil</span></a>
+    </nav>
   `;
 
   // Inject sidebar before body content
@@ -130,6 +147,30 @@
     if (el) el.textContent = data.freezes_available || 0;
   }).catch(() => {});
 
+  // Load badges (pending counts)
+  fetch('/api/flashcards/today').then(r => r.json()).then(data => {
+    const count = data.length || 0;
+    const el = document.getElementById('badge-flashcards');
+    const bnavEl = document.getElementById('bnav-badge-praticar');
+    if (el && count > 0) el.textContent = count;
+    if (bnavEl && count > 0) bnavEl.textContent = count;
+  }).catch(() => {});
+
+  fetch('/api/sumulas/today').then(r => r.json()).then(data => {
+    const count = Array.isArray(data) ? data.length : (data.pendentes || 0);
+    const el = document.getElementById('badge-sumulas');
+    if (el && count > 0) el.textContent = count;
+  }).catch(() => {});
+
+  // CTA: load suggested materia for quick session
+  fetch('/api/treinador/sugestao-rapida').then(r => r.json()).then(data => {
+    const cta = document.getElementById('sidebar-cta');
+    if (cta && data.materia) {
+      cta.setAttribute('data-materia', data.materia);
+      cta.setAttribute('data-tempo', data.tempo_min || 25);
+    }
+  }).catch(() => {});
+
   // Global functions
   window.toggleSidebar = function () {
     document.getElementById('sidebar').classList.toggle('open');
@@ -187,6 +228,23 @@
     localStorage.setItem('concurseiro_social_tab', tabName);
     window.location.href = '/social.html';
     return false;
+  };
+
+  // CTA: Iniciar sessão rápida com a matéria sugerida
+  window.iniciarSessaoRapida = function () {
+    const cta = document.getElementById('sidebar-cta');
+    const materia = cta?.getAttribute('data-materia') || 'Estudos';
+    const tempo = parseInt(cta?.getAttribute('data-tempo') || '25');
+
+    // If startGlobalTimer exists (timer-global.js loaded), use it
+    if (typeof startGlobalTimer === 'function') {
+      startGlobalTimer(materia, tempo, 'estudo');
+      closeSidebar();
+    } else {
+      // Redirect to dashboard and start there
+      localStorage.setItem('concurseiro_start_timer', JSON.stringify({ materia, tempo }));
+      window.location.href = '/dashboard.html';
+    }
   };
 })();
 

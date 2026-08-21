@@ -648,3 +648,109 @@ body {
 }
 
 /* PDF progress bar — uses original styles from styles.css */
+
+/* === CTA Button in Sidebar === */
+.sidebar-cta {
+  padding: 8px 12px;
+  margin-bottom: 4px;
+}
+.sidebar-cta .cta-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #a6e3a1, #94e2d5);
+  color: #1e1e2e;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+  box-shadow: 0 2px 8px rgba(166, 227, 161, 0.3);
+}
+.sidebar-cta .cta-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(166, 227, 161, 0.4);
+}
+.sidebar-cta .cta-btn:active { transform: translateY(0); }
+.sidebar-cta .cta-icon { font-size: 1rem; }
+.sidebar.collapsed .sidebar-cta .cta-text { display: none; }
+.sidebar.collapsed .sidebar-cta .cta-btn { padding: 10px; justify-content: center; }
+
+/* === Nav Badges (pending counts) === */
+.nav-badge {
+  display: none;
+  min-width: 18px;
+  height: 18px;
+  background: #f38ba8;
+  color: #1e1e2e;
+  border-radius: 9px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-align: center;
+  line-height: 18px;
+  margin-left: auto;
+  padding: 0 5px;
+}
+.nav-badge:not(:empty) { display: inline-block; }
+.sidebar.collapsed .nav-badge { display: none; }
+
+/* === Bottom Navigation (Mobile) === */
+.bottom-nav {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #1e1e2e;
+  border-top: 1px solid #313244;
+  padding: 6px 0 env(safe-area-inset-bottom, 6px);
+  z-index: 9998;
+  justify-content: space-around;
+  align-items: center;
+}
+.bottom-nav a {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-decoration: none;
+  color: #9399b2;
+  font-size: 0.68rem;
+  padding: 4px 8px;
+  border-radius: 8px;
+  transition: color 0.2s;
+  position: relative;
+}
+.bottom-nav a.active {
+  color: #cba6f7;
+}
+.bottom-nav a .bnav-icon { font-size: 1.3rem; }
+.bottom-nav a .bnav-label { font-weight: 500; }
+.bottom-nav a .bnav-badge {
+  position: absolute;
+  top: 0;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  background: #f38ba8;
+  color: #1e1e2e;
+  border-radius: 8px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-align: center;
+  line-height: 16px;
+  display: none;
+  padding: 0 4px;
+}
+.bottom-nav a .bnav-badge:not(:empty) { display: inline-block; }
+
+@media (max-width: 768px) {
+  .bottom-nav { display: flex; }
+  .sidebar { display: none; }
+  .sidebar.open { display: block; }
+  .main-content { padding-bottom: 70px !important; }
+}
