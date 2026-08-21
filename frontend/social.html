@@ -280,9 +280,23 @@
   </style>
 </head>
 <body>
-  <div class="header">
-    <h1>🏆 Social & Liga</h1>
-  </div>
+  <!-- Top Bar com perfil do usuário -->
+  <header class="header" style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:#313244;border-radius:12px;margin-bottom:16px;">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <a href="/dashboard.html" style="text-decoration:none;font-size:1.3rem;" title="Voltar ao Dashboard">←</a>
+      <h1 style="margin:0;font-size:1.2rem;color:#cdd6f4;">🏆 Social & Liga</h1>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div id="user-plan-badge" style="font-size:0.72rem;padding:3px 10px;border-radius:12px;font-weight:600;"></div>
+      <div style="display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="showProfileModal()" title="Seu perfil">
+        <div id="user-avatar" style="width:34px;height:34px;border-radius:50%;background:#cba6f7;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.85rem;color:#1e1e2e;"></div>
+        <div>
+          <div id="user-name" style="font-size:0.85rem;color:#cdd6f4;font-weight:600;"></div>
+          <div id="user-stats-mini" style="font-size:0.68rem;color:#9399b2;"></div>
+        </div>
+      </div>
+    </div>
+  </header>
 
   <div class="tabs">
     <button class="tab-btn active" onclick="switchTab('liga')">🏆 Liga</button>
@@ -864,7 +878,96 @@
       }
     }
 
+    // ===== USER PROFILE =====
+    async function loadUserProfile() {
+      try {
+        // Load from /api/social/profile (has streak, xp, level)
+        const profile = await fetch('/api/social/profile').then(r => r.json());
+        const nome = profile.username || 'Concurseiro';
+        const initials = nome.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+
+        document.getElementById('user-avatar').textContent = initials || '👤';
+        document.getElementById('user-name').textContent = nome;
+        document.getElementById('user-stats-mini').textContent = `🔥 ${profile.streak || 0}d · ⭐ Nível ${profile.level || 1}`;
+
+        // Plan badge
+        const planBadge = document.getElementById('user-plan-badge');
+        const planLabels = { ilimitado: '👑 Ilimitado', premium: '⭐ Premium', free: '🆓 Free' };
+        const planColors = { ilimitado: '#f9e2af', premium: '#cba6f7', free: '#9399b2' };
+
+        // Get plan from auth/me or profile
+        let plano = 'premium';
+        try {
+          const me = await fetch('/api/auth/me').then(r => r.json());
+          plano = me.plano || me.plan || 'premium';
+        } catch { }
+
+        planBadge.textContent = planLabels[plano] || '⭐ ' + plano;
+        planBadge.style.background = (planColors[plano] || '#9399b2') + '22';
+        planBadge.style.color = planColors[plano] || '#9399b2';
+        planBadge.style.border = `1px solid ${planColors[plano] || '#9399b2'}44`;
+      } catch (e) {
+        document.getElementById('user-avatar').textContent = '👤';
+        document.getElementById('user-name').textContent = 'Estudante';
+      }
+    }
+
+    function showProfileModal() {
+      // Fetch full profile data and show modal
+      fetch('/api/social/profile').then(r => r.json()).then(profile => {
+        const overlay = document.createElement('div');
+        overlay.id = 'profile-modal';
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);';
+        overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+
+        const nome = profile.username || 'Concurseiro';
+        const initials = nome.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+
+        overlay.innerHTML = `
+          <div style="background:#313244;border-radius:16px;padding:28px;max-width:380px;width:90%;text-align:center;">
+            <div style="width:64px;height:64px;border-radius:50%;background:#cba6f7;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1.5rem;color:#1e1e2e;margin:0 auto 12px;">${initials}</div>
+            <h3 style="color:#cdd6f4;margin:0 0 4px;font-size:1.1rem;">${nome}</h3>
+            <p style="color:#9399b2;font-size:0.8rem;margin:0 0 16px;">user_id: ${profile.user_id}</p>
+
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;">
+              <div style="background:#1e1e2e;border-radius:10px;padding:12px;">
+                <div style="font-size:1.3rem;font-weight:700;color:#fab387;">🔥 ${profile.streak || 0}</div>
+                <div style="font-size:0.7rem;color:#9399b2;">Streak</div>
+              </div>
+              <div style="background:#1e1e2e;border-radius:10px;padding:12px;">
+                <div style="font-size:1.3rem;font-weight:700;color:#89b4fa;">⭐ ${profile.level || 1}</div>
+                <div style="font-size:0.7rem;color:#9399b2;">Nível</div>
+              </div>
+              <div style="background:#1e1e2e;border-radius:10px;padding:12px;">
+                <div style="font-size:1.3rem;font-weight:700;color:#a6e3a1;">${(profile.xp || 0).toLocaleString()}</div>
+                <div style="font-size:0.7rem;color:#9399b2;">XP</div>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;">
+              <div style="background:#1e1e2e;border-radius:10px;padding:10px;">
+                <div style="font-size:1.1rem;font-weight:600;color:#cba6f7;">${profile.badges_count || 0}</div>
+                <div style="font-size:0.68rem;color:#9399b2;">Badges</div>
+              </div>
+              <div style="background:#1e1e2e;border-radius:10px;padding:10px;">
+                <div style="font-size:1.1rem;font-weight:600;color:#f9e2af;">${profile.friends_count || 0}</div>
+                <div style="font-size:0.68rem;color:#9399b2;">Amigos</div>
+              </div>
+              <div style="background:#1e1e2e;border-radius:10px;padding:10px;">
+                <div style="font-size:1.1rem;font-weight:600;color:#94e2d5;">${profile.groups_count || 0}</div>
+                <div style="font-size:0.68rem;color:#9399b2;">Grupos</div>
+              </div>
+            </div>
+
+            <button onclick="document.getElementById('profile-modal').remove()" style="background:#45475a;color:#cdd6f4;border:none;border-radius:8px;padding:10px 24px;cursor:pointer;font-size:0.9rem;">Fechar</button>
+          </div>
+        `;
+        document.body.appendChild(overlay);
+      }).catch(() => showToast('Erro ao carregar perfil', 'error'));
+    }
+
     // ===== INIT =====
+    loadUserProfile();
     loadLeague();
     loadLeagueHistory();
     checkAIStatus();
