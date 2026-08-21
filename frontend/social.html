@@ -854,6 +854,13 @@
 
     // Modals
     function openAddFriend() { document.getElementById('modal-add-friend').classList.add('open'); }
+
+    function doLogout() {
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('auth_user');
+      document.getElementById('profile-modal')?.remove();
+      window.location.href = '/login.html';
+    }
     function openCreateGroup() { document.getElementById('modal-create-group').classList.add('open'); }
     function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 
@@ -1108,6 +1115,7 @@
             </div>
 
             <button onclick="document.getElementById('profile-modal').remove()" style="background:#45475a;color:#cdd6f4;border:none;border-radius:8px;padding:10px 24px;cursor:pointer;font-size:0.9rem;">Fechar</button>
+            <button onclick="doLogout()" style="background:#f38ba8;color:#1e1e2e;border:none;border-radius:8px;padding:10px 24px;cursor:pointer;font-size:0.9rem;font-weight:600;margin-left:8px;">🚪 Sair</button>
           </div>
         `;
         document.body.appendChild(overlay);

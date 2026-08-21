@@ -75,6 +75,7 @@
 
       <div class="sidebar-footer">
         <a href="/admin.html" class="${activeClass('/admin')}" style="display:block;padding:6px 12px;font-size:0.75rem;color:#585b70;text-decoration:none;margin-bottom:4px;">⚙️ <span class="nav-label">Admin</span></a>
+        <a href="#" onclick="localStorage.removeItem('auth_token');localStorage.removeItem('auth_user');window.location.href='/login.html';return false;" style="display:block;padding:6px 12px;font-size:0.75rem;color:#f38ba8;text-decoration:none;margin-bottom:4px;">🚪 <span class="nav-label">Sair</span></a>
         <div class="sidebar-gamify">
           <div class="streak-box"><span class="fire">🔥</span><span class="num" id="sidebar-streak">0</span></div>
           <div class="freeze-box" id="sidebar-freeze" title="Streak Freezes">🧊 <span id="sidebar-freeze-count">0</span></div>
