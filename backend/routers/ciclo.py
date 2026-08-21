@@ -91,6 +91,21 @@ def _calcular_score_materia(materia: str, conn, user_id: int) -> dict:
         deficit = (horas_esperadas - horas) / horas_esperadas
         score += deficit * 10  # 0-10 pontos
 
+    # Mastery System: baixo domínio = mais prioridade
+    try:
+        mastery_row = conn.execute("""
+            SELECT AVG(mastery_level) as avg_mastery
+            FROM edital WHERE materia = ? AND arquivado = 0 AND user_id = ? AND mastery_level > 0
+        """, (materia, user_id)).fetchone()
+        avg_mastery = mastery_row[0] if mastery_row and mastery_row[0] else 0
+        # Inverso: mastery baixo = score alto. Escala: 0-15 pontos
+        if avg_mastery > 0:
+            score += (100 - avg_mastery) * 0.15  # 0-15 pontos
+        else:
+            score += 10  # Sem dados de mastery = prioridade moderada
+    except Exception:
+        pass  # mastery columns may not exist yet
+
     return {
         "materia": materia,
         "score": round(score, 2),

@@ -714,6 +714,17 @@ def _run_migrations(conn):
         except Exception:
             pass
 
+    # Mastery System: nível de domínio por tópico
+    try:
+        conn.execute("SELECT mastery_level FROM edital LIMIT 1")
+    except Exception:
+        try:
+            conn.execute("ALTER TABLE edital ADD COLUMN mastery_level REAL DEFAULT 0")
+            conn.execute("ALTER TABLE edital ADD COLUMN mastery_updated_at TEXT DEFAULT ''")
+            log.info("Migration: added mastery columns to edital")
+        except Exception:
+            pass
+
     # ========== MULTI-USER ISOLATION: user_id em todas as tabelas ==========
     _migrate_user_id(conn)
 

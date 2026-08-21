@@ -147,10 +147,27 @@ def _get_priority_activities(conn, desempenho: dict, ultima_sessao: dict,
     materias_priority = []
     hoje_date = date.today()
 
+    # Pre-fetch avg mastery per materia for scoring
+    mastery_by_materia = {}
+    try:
+        mastery_rows = conn.execute("""
+            SELECT materia, AVG(mastery_level) as avg_mastery
+            FROM edital WHERE user_id = ? AND arquivado = 0 AND mastery_level > 0
+            GROUP BY materia
+        """, (user_id,)).fetchall()
+        for mr in mastery_rows:
+            mastery_by_materia[mr["materia"]] = mr["avg_mastery"] or 0
+    except Exception:
+        pass  # mastery columns may not exist yet
+
     for mat, stats in desempenho.items():
         if stats["total"] >= 3:
             dias_sem = _days_since_last_session(mat, ultima_sessao, hoje_date)
             priority_score = (100 - stats["pct"]) + dias_sem * 2
+            # Mastery factor: low mastery increases priority
+            avg_mastery = mastery_by_materia.get(mat, 0)
+            if avg_mastery > 0:
+                priority_score += (100 - avg_mastery) * 0.3
             materias_priority.append({"materia": mat, "pct": stats["pct"], "dias_sem": dias_sem, "score": priority_score})
 
     materias_edital_query = "SELECT DISTINCT materia FROM edital WHERE status != 'Concluído' AND user_id = ?"

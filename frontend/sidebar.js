@@ -148,3 +148,113 @@
     return false;
   };
 })();
+
+
+// ===== OFFLINE INDICATOR =====
+(function initOfflineIndicator() {
+  let indicator = null;
+
+  function createIndicator() {
+    if (indicator) return indicator;
+    indicator = document.createElement('div');
+    indicator.id = 'offline-indicator';
+    indicator.setAttribute('role', 'status');
+    indicator.setAttribute('aria-live', 'polite');
+    indicator.style.cssText = `
+      position: fixed;
+      bottom: 16px;
+      right: 16px;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      transition: opacity 0.3s, transform 0.3s;
+      transform: translateY(0);
+      opacity: 1;
+    `;
+    document.body.appendChild(indicator);
+    return indicator;
+  }
+
+  function updateStatus(online, pending = 0) {
+    const el = createIndicator();
+    if (!online) {
+      el.style.background = '#ff6b35';
+      el.style.color = '#fff';
+      el.innerHTML = `<span>⚡</span><span>Offline${pending > 0 ? ` · ${pending} pendente${pending > 1 ? 's' : ''}` : ''}</span>`;
+      el.style.display = 'flex';
+      el.style.opacity = '1';
+      el.style.transform = 'translateY(0)';
+    } else if (pending > 0) {
+      el.style.background = '#f59e0b';
+      el.style.color = '#fff';
+      el.innerHTML = `<span>🔄</span><span>Sincronizando... ${pending} pendente${pending > 1 ? 's' : ''}</span>`;
+      el.style.display = 'flex';
+      el.style.opacity = '1';
+      el.style.transform = 'translateY(0)';
+    } else {
+      // Online with nothing pending — hide after brief "synced" message
+      el.style.background = '#10b981';
+      el.style.color = '#fff';
+      el.innerHTML = `<span>✓</span><span>Sincronizado</span>`;
+      el.style.display = 'flex';
+      el.style.opacity = '1';
+      setTimeout(() => {
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(10px)';
+        setTimeout(() => { el.style.display = 'none'; }, 300);
+      }, 2500);
+    }
+  }
+
+  function showSyncToast(count) {
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 12px 20px;
+      background: #10b981;
+      color: #fff;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      z-index: 10001;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      animation: slideIn 0.3s ease;
+    `;
+    toast.textContent = `✓ ${count} item${count > 1 ? 'ns' : ''} sincronizado${count > 1 ? 's' : ''}`;
+    document.body.appendChild(toast);
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transition = 'opacity 0.3s';
+      setTimeout(() => toast.remove(), 300);
+    }, 3000);
+  }
+
+  window.addEventListener('online', () => updateStatus(true));
+  window.addEventListener('offline', () => updateStatus(false));
+
+  // Listen for SW sync messages
+  navigator.serviceWorker?.addEventListener('message', (event) => {
+    if (event.data?.type === 'SYNC_COMPLETE') {
+      updateStatus(true, event.data.pending);
+      if (event.data.replayed > 0) {
+        showSyncToast(event.data.replayed);
+      }
+    }
+    if (event.data?.type === 'PENDING_COUNT') {
+      updateStatus(navigator.onLine, event.data.count);
+    }
+  });
+
+  // Check on load
+  if (!navigator.onLine) updateStatus(false);
+  // Ask SW for pending count
+  navigator.serviceWorker?.controller?.postMessage({ type: 'GET_PENDING_COUNT' });
+})();

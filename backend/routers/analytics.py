@@ -900,3 +900,163 @@ def analytics_ranking_materias(conn=Depends(get_db_session), user_id: int = Depe
             "fortes": len([r for r in ranking if r["status"] == "forte"]),
             "medias": len([r for r in ranking if r["status"] == "medio"]),
             "fracas": len([r for r in ranking if r["status"] == "fraco"])}
+
+
+@router.get("/api/analytics/raio-x")
+def raio_x(banca: str = "", materia: str = "", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """
+    Raio-X: Análise de frequência de tópicos por banca.
+    Shows which topics are most tested by specific bancas.
+    """
+    # Build query with optional filters
+    where_clauses = ["qr.user_id = ?"]
+    params = [user_id]
+
+    if banca:
+        where_clauses.append("q.banca = ?")
+        params.append(banca)
+    if materia:
+        where_clauses.append("q.materia = ?")
+        params.append(materia)
+
+    where = " AND ".join(where_clauses)
+
+    # Topic frequency: how many questions per topic
+    topic_freq = conn.execute(f"""
+        SELECT q.materia, q.topico, q.banca,
+               COUNT(*) as total_questoes,
+               SUM(qr.acertou) as acertos,
+               ROUND(CAST(SUM(qr.acertou) AS REAL) / COUNT(*) * 100, 1) as pct_acerto
+        FROM questoes_respostas qr
+        JOIN questoes q ON q.id = qr.questao_id
+        WHERE {where}
+        GROUP BY q.materia, q.topico
+        ORDER BY total_questoes DESC
+    """, params).fetchall()
+
+    # Overall stats per materia
+    materia_stats = conn.execute(f"""
+        SELECT q.materia,
+               COUNT(*) as total,
+               SUM(qr.acertou) as acertos,
+               ROUND(CAST(SUM(qr.acertou) AS REAL) / COUNT(*) * 100, 1) as pct_acerto,
+               COUNT(DISTINCT q.topico) as topicos_cobrados
+        FROM questoes_respostas qr
+        JOIN questoes q ON q.id = qr.questao_id
+        WHERE {where}
+        GROUP BY q.materia
+        ORDER BY total DESC
+    """, params).fetchall()
+
+    # Available bancas for filter
+    bancas = conn.execute(
+        "SELECT DISTINCT banca FROM questoes WHERE banca != '' AND user_id = ? ORDER BY banca", (user_id,)
+    ).fetchall()
+
+    # Available materias for filter
+    materias = conn.execute(
+        "SELECT DISTINCT materia FROM questoes WHERE user_id = ? ORDER BY materia", (user_id,)
+    ).fetchall()
+
+    return {
+        "topicos": [dict(r) for r in topic_freq],
+        "materias": [dict(r) for r in materia_stats],
+        "filtros": {
+            "bancas": [r[0] for r in bancas],
+            "materias": [r[0] for r in materias]
+        },
+        "banca_selecionada": banca,
+        "materia_selecionada": materia
+    }
+
+
+@router.get("/api/analytics/raio-x/prioridades")
+def raio_x_prioridades(banca: str = "", edital_nome: str = "", cargo: str = "", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """
+    Combines Raio-X frequency data with edital topics to suggest study priorities.
+    Topics that are frequently tested but have low mastery get highest priority.
+    """
+    # Get question frequency per topic from this banca
+    freq_query = "SELECT q.materia, q.topico, COUNT(*) as freq FROM questoes q WHERE q.user_id = ?"
+    freq_params = [user_id]
+    if banca:
+        freq_query += " AND q.banca = ?"
+        freq_params.append(banca)
+    freq_query += " GROUP BY q.materia, q.topico"
+
+    freq_data = conn.execute(freq_query, freq_params).fetchall()
+    freq_map = {(r[0], r[1]): r[2] for r in freq_data}
+
+    # Get edital topics with mastery
+    edital_where = "user_id = ? AND arquivado = 0"
+    edital_params = [user_id]
+    if edital_nome:
+        edital_where += " AND edital_nome = ?"
+        edital_params.append(edital_nome)
+    if cargo:
+        edital_where += " AND cargo = ?"
+        edital_params.append(cargo)
+
+    topics = conn.execute(f"""
+        SELECT id, materia, topico, status, mastery_level
+        FROM edital WHERE {edital_where}
+        ORDER BY materia, topico
+    """, edital_params).fetchall()
+
+    # Calculate priority score for each topic
+    priorities = []
+    for t in topics:
+        mastery = t["mastery_level"] or 0
+        # Find frequency match (fuzzy: check if edital topic appears in question topics)
+        freq = 0
+        for (mat, top), count in freq_map.items():
+            if mat == t["materia"] or (t["topico"] and t["topico"].lower() in top.lower()):
+                freq += count
+
+        # Priority formula: high frequency + low mastery = high priority
+        # Normalize: freq_score (0-100), mastery_gap (0-100)
+        max_freq = max((v for v in freq_map.values()), default=1)
+        freq_score = (freq / max_freq) * 100 if max_freq > 0 else 0
+        mastery_gap = 100 - mastery
+
+        priority_score = round(freq_score * 0.6 + mastery_gap * 0.4, 1)
+
+        priorities.append({
+            "id": t["id"],
+            "materia": t["materia"],
+            "topico": t["topico"],
+            "status": t["status"],
+            "mastery_level": mastery,
+            "frequencia": freq,
+            "priority_score": priority_score,
+            "recomendacao": "URGENTE" if priority_score >= 70 else "IMPORTANTE" if priority_score >= 40 else "NORMAL"
+        })
+
+    # Sort by priority (highest first)
+    priorities.sort(key=lambda x: x["priority_score"], reverse=True)
+
+    return {
+        "prioridades": priorities[:50],  # Top 50
+        "total_topicos": len(priorities),
+        "banca": banca,
+        "edital_nome": edital_nome
+    }
+
+
+@router.get("/api/analytics/raio-x/bancas")
+def raio_x_bancas(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Performance comparison across different bancas."""
+    stats = conn.execute("""
+        SELECT q.banca,
+               COUNT(*) as total_questoes,
+               SUM(qr.acertou) as acertos,
+               ROUND(CAST(SUM(qr.acertou) AS REAL) / COUNT(*) * 100, 1) as pct_acerto,
+               COUNT(DISTINCT q.materia) as materias_praticadas
+        FROM questoes_respostas qr
+        JOIN questoes q ON q.id = qr.questao_id
+        WHERE qr.user_id = ? AND q.banca != ''
+        GROUP BY q.banca
+        ORDER BY total_questoes DESC
+    """, (user_id,)).fetchall()
+
+    return [dict(r) for r in stats]

@@ -12,6 +12,14 @@ from pydantic import BaseModel, Field
 from database import get_db_session
 from deps import get_user_id
 from logger import log
+from notification_templates import (
+    get_streak_notification,
+    get_flashcard_notification,
+    get_exam_notification,
+    get_challenge_notification,
+    get_inactivity_notification,
+    get_study_suggestion,
+)
 
 # ============================================================
 # CONDITIONAL IMPORT: pywebpush
@@ -363,10 +371,11 @@ def check_triggers(conn=Depends(get_db_session)):
     """Verifica todas as condições de notificação e envia para usuários elegíveis.
 
     Chamado pelo background scheduler. Verifica:
-    - Streak em risco: sem atividade hoje e após 20:00
+    - Streak em risco: sem atividade hoje, com urgência escalável (gentle/urgent/critical)
     - Flashcards atrasados: >10 flashcards pendentes
     - Prova se aproximando: data da prova dentro de 30 dias
     - Desafio prestes a expirar: <1 dia restante em desafio ativo
+    - Inatividade: sem estudo há 2+ dias
     """
     _ensure_tables(conn)
 
@@ -375,6 +384,7 @@ def check_triggers(conn=Depends(get_db_session)):
         "flashcards_overdue": 0,
         "exam_approaching": 0,
         "challenge_expiring": 0,
+        "inactivity": 0,
     }
 
     # Get all users with active subscriptions
@@ -405,9 +415,21 @@ def check_triggers(conn=Depends(get_db_session)):
         if _is_quiet_hours(conn, uid):
             continue
 
-        # --- 1. STREAK AT RISK ---
-        if streak_enabled and now.hour >= 20:
-            if not _already_sent_today(conn, uid, "streak_at_risk"):
+        # --- 1. STREAK AT RISK (escalating urgency) ---
+        if streak_enabled and now.hour >= 18:
+            # Determine urgency level based on time of day
+            if now.hour >= 22:
+                urgency = "critical"
+                tag_suffix = "critical"
+            elif now.hour >= 20:
+                urgency = "urgent"
+                tag_suffix = "urgent"
+            else:
+                urgency = "gentle"
+                tag_suffix = "gentle"
+
+            streak_tag = f"streak_{tag_suffix}"
+            if not _already_sent_today(conn, uid, streak_tag):
                 # Check if user has any activity today
                 activity = conn.execute(
                     "SELECT * FROM streaks WHERE data = ? AND user_id = ? AND (horas_estudadas > 0 OR questoes_resolvidas > 0 OR flashcards_revisados > 0)",
@@ -415,11 +437,20 @@ def check_triggers(conn=Depends(get_db_session)):
                 ).fetchone()
 
                 if not activity:
-                    title = "🔥 Seu streak está em risco!"
-                    body = "Você ainda não estudou hoje. Mantenha sua sequência!"
-                    sent = _send_push_to_user(conn, uid, title, body, "/streaks", "streak_at_risk")
+                    # Get current streak count
+                    streak_row = conn.execute(
+                        "SELECT COUNT(*) as cnt FROM streaks WHERE user_id = ? AND data >= ? AND (horas_estudadas > 0 OR questoes_resolvidas > 0 OR flashcards_revisados > 0)",
+                        (uid, (date.today() - timedelta(days=90)).isoformat())
+                    ).fetchone()
+                    streak_count = streak_row["cnt"] if streak_row else 0
+
+                    # Get personalized study suggestion
+                    suggestion = get_study_suggestion(conn, uid)
+
+                    notif = get_streak_notification(streak=streak_count, urgency=urgency, suggestion=suggestion)
+                    sent = _send_push_to_user(conn, uid, notif["title"], notif["body"], notif["url"], notif["tag"])
                     if sent > 0:
-                        _log_notification(conn, uid, "streak_at_risk", title, body)
+                        _log_notification(conn, uid, streak_tag, notif["title"], notif["body"])
                         results["streak_at_risk"] += 1
 
         # --- 2. FLASHCARDS OVERDUE ---
@@ -431,11 +462,10 @@ def check_triggers(conn=Depends(get_db_session)):
                 ).fetchone()
 
                 if overdue and overdue["cnt"] > 10:
-                    title = "🧠 Flashcards acumulando!"
-                    body = f"Você tem {overdue['cnt']} flashcards pendentes de revisão."
-                    sent = _send_push_to_user(conn, uid, title, body, "/flashcards", "flashcards_overdue")
+                    notif = get_flashcard_notification(count=overdue["cnt"])
+                    sent = _send_push_to_user(conn, uid, notif["title"], notif["body"], notif["url"], notif["tag"])
                     if sent > 0:
-                        _log_notification(conn, uid, "flashcards_overdue", title, body)
+                        _log_notification(conn, uid, "flashcards_overdue", notif["title"], notif["body"])
                         results["flashcards_overdue"] += 1
 
         # --- 3. EXAM APPROACHING ---
@@ -444,7 +474,7 @@ def check_triggers(conn=Depends(get_db_session)):
                 # Check calendario_eventos for upcoming exams
                 threshold = (date.today() + timedelta(days=30)).isoformat()
                 exams = conn.execute(
-                    """SELECT titulo, data_inicio FROM calendario_eventos
+                    """SELECT titulo, data_inicio, banca FROM calendario_eventos
                        WHERE user_id = ? AND tipo = 'prova' AND data_inicio >= ? AND data_inicio <= ?
                        ORDER BY data_inicio ASC LIMIT 1""",
                     (uid, hoje, threshold)
@@ -453,11 +483,15 @@ def check_triggers(conn=Depends(get_db_session)):
                 if exams:
                     exam_date = exams["data_inicio"][:10]
                     days_left = (date.fromisoformat(exam_date) - date.today()).days
-                    title = "📅 Prova se aproximando!"
-                    body = f"'{exams['titulo']}' em {days_left} dias. Intensifique seus estudos!"
-                    sent = _send_push_to_user(conn, uid, title, body, "/calendario", "exam_approaching")
+                    banca = exams["banca"] if "banca" in exams.keys() else ""
+                    notif = get_exam_notification(
+                        exam_name=exams["titulo"],
+                        days_until=days_left,
+                        banca=banca or ""
+                    )
+                    sent = _send_push_to_user(conn, uid, notif["title"], notif["body"], notif["url"], notif["tag"])
                     if sent > 0:
-                        _log_notification(conn, uid, "exam_approaching", title, body)
+                        _log_notification(conn, uid, "exam_approaching", notif["title"], notif["body"])
                         results["exam_approaching"] += 1
 
         # --- 4. CHALLENGE ABOUT TO EXPIRE ---
@@ -465,7 +499,7 @@ def check_triggers(conn=Depends(get_db_session)):
             if not _already_sent_today(conn, uid, "challenge_expiring"):
                 # Active challenges with <1 day remaining
                 desafios = conn.execute(
-                    "SELECT id, titulo, dias, created_at FROM desafios WHERE user_id = ? AND finalizado = 0",
+                    "SELECT id, titulo, dias, created_at, progresso, meta FROM desafios WHERE user_id = ? AND finalizado = 0",
                     (uid,)
                 ).fetchall()
 
@@ -475,15 +509,42 @@ def check_triggers(conn=Depends(get_db_session)):
                         expires = created + timedelta(days=desafio["dias"])
                         remaining = expires - now
                         if timedelta(0) < remaining < timedelta(days=1):
-                            title = "⚡ Desafio quase expirando!"
-                            body = f"'{desafio['titulo']}' expira em menos de 24h. Corra!"
-                            sent = _send_push_to_user(conn, uid, title, body, "/desafios", "challenge_expiring")
+                            progresso = desafio["progresso"] if "progresso" in desafio.keys() else 0
+                            meta = desafio["meta"] if "meta" in desafio.keys() else 1
+                            pct = int((progresso / meta) * 100) if meta > 0 else 0
+                            notif = get_challenge_notification(
+                                titulo=desafio["titulo"],
+                                progresso=progresso,
+                                meta=meta,
+                                pct=pct
+                            )
+                            sent = _send_push_to_user(conn, uid, notif["title"], notif["body"], notif["url"], notif["tag"])
                             if sent > 0:
-                                _log_notification(conn, uid, "challenge_expiring", title, body)
+                                _log_notification(conn, uid, "challenge_expiring", notif["title"], notif["body"])
                                 results["challenge_expiring"] += 1
                             break  # Only one challenge notification per day
                     except (ValueError, TypeError):
                         continue
+
+        # --- 5. INACTIVITY DETECTION ---
+        if streak_enabled:
+            if not _already_sent_today(conn, uid, "inactivity"):
+                # Check last activity date
+                last_activity = conn.execute(
+                    """SELECT MAX(data) as last_date FROM streaks
+                       WHERE user_id = ? AND (horas_estudadas > 0 OR questoes_resolvidas > 0 OR flashcards_revisados > 0)""",
+                    (uid,)
+                ).fetchone()
+
+                if last_activity and last_activity["last_date"]:
+                    last_date = date.fromisoformat(last_activity["last_date"])
+                    days_inactive = (date.today() - last_date).days
+                    if days_inactive >= 2:
+                        notif = get_inactivity_notification(days_inactive=days_inactive)
+                        sent = _send_push_to_user(conn, uid, notif["title"], notif["body"], notif["url"], notif["tag"])
+                        if sent > 0:
+                            _log_notification(conn, uid, "inactivity", notif["title"], notif["body"])
+                            results["inactivity"] += 1
 
     return {"ok": True, "notifications_sent": results}
 

@@ -318,6 +318,22 @@ def responder_questao(id: int, body: QuestaoResposta, conn=Depends(get_db_sessio
         update_streak(conn, "horas_estudadas", horas, user_id=user_id)
 
     conn.commit()
+
+    # After recording the answer, update mastery for the relevant topic
+    try:
+        questao_full = conn.execute("SELECT materia, topico FROM questoes WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
+        if questao_full and questao_full["topico"]:
+            edital_topic = conn.execute(
+                "SELECT id FROM edital WHERE (topico LIKE ? OR materia = ?) AND user_id = ? LIMIT 1",
+                (f'%{questao_full["topico"]}%', questao_full["materia"], user_id)
+            ).fetchone()
+            if edital_topic:
+                from routers.edital import _update_single_mastery
+                _update_single_mastery(conn, edital_topic["id"], user_id)
+                conn.commit()
+    except Exception:
+        pass  # Don't break question answering if mastery calc fails
+
     return {"acertou": bool(acertou), "resposta_correta": questao[0]}
 
 

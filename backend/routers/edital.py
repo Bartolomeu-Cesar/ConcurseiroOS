@@ -893,3 +893,178 @@ def importar_edital(file: UploadFile = File(...), conn=Depends(get_db_session), 
     conn.commit()
     log.info(f"Edital imported: {count} items, {meta_count} metadados")
     return {"ok": True, "importados": count, "metadados_importados": meta_count}
+
+
+# ============================================================
+# MASTERY SYSTEM: nível de domínio por tópico
+# ============================================================
+
+def _mastery_label(level: float) -> str:
+    """Converte mastery_level numérico em label textual."""
+    if level <= 20:
+        return "Não Dominado"
+    elif level <= 50:
+        return "Em Progresso"
+    elif level <= 80:
+        return "Dominado"
+    else:
+        return "Consolidado"
+
+
+def _update_single_mastery(conn, edital_id: int, user_id: int):
+    """Recalcula mastery para um único tópico do edital."""
+    topic = conn.execute(
+        "SELECT id, materia, topico FROM edital WHERE id = ? AND user_id = ?",
+        (edital_id, user_id)
+    ).fetchone()
+    if not topic:
+        return
+
+    materia = topic["materia"]
+    topico = topic["topico"]
+
+    # Buscar respostas relacionadas a esse tópico
+    rows = conn.execute("""
+        SELECT qr.acertou, qr.data
+        FROM questoes_respostas qr
+        JOIN questoes q ON q.id = qr.questao_id
+        WHERE qr.user_id = ? AND (q.topico LIKE ? OR q.materia = ?)
+        ORDER BY qr.data DESC
+    """, (user_id, f'%{topico}%', materia)).fetchall()
+
+    if not rows:
+        # Sem dados: mastery = 0
+        conn.execute(
+            "UPDATE edital SET mastery_level = 0, mastery_updated_at = ? WHERE id = ? AND user_id = ?",
+            (today_str(), edital_id, user_id)
+        )
+        return
+
+    total = len(rows)
+    acertos = sum(1 for r in rows if r["acertou"])
+
+    # base_accuracy: percentual de acerto (0-100)
+    base_accuracy = (acertos / total) * 100
+
+    # recency_factor: decaimento com base na última revisão
+    last_date_str = rows[0]["data"] if rows else ""
+    days_since = 0
+    if last_date_str:
+        try:
+            last_date = date.fromisoformat(last_date_str)
+            days_since = (date.today() - last_date).days
+        except (ValueError, TypeError):
+            days_since = 30
+    recency_factor = max(0.3, 1.0 - days_since * 0.02)
+
+    # volume_factor: confiança baseada no número de questões
+    volume_factor = min(1.0, total / 10)
+
+    # Mastery final
+    mastery = base_accuracy * recency_factor * volume_factor
+    mastery = max(0, min(100, round(mastery, 2)))
+
+    conn.execute(
+        "UPDATE edital SET mastery_level = ?, mastery_updated_at = ? WHERE id = ? AND user_id = ?",
+        (mastery, today_str(), edital_id, user_id)
+    )
+
+
+@router.get("/api/edital/mastery-overview", summary="Visão geral de mastery",
+            description="Retorna níveis de domínio de todos os tópicos, agrupados por matéria")
+def mastery_overview(edital_nome: str = "", cargo: str = "", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Retorna mastery levels para todos os tópicos, agrupados por matéria."""
+    query = "SELECT id, materia, topico, mastery_level, mastery_updated_at FROM edital WHERE user_id = ? AND arquivado = 0"
+    params = [user_id]
+    if edital_nome:
+        query += " AND edital_nome = ?"
+        params.append(edital_nome)
+    if cargo:
+        query += " AND cargo = ?"
+        params.append(cargo)
+    query += " ORDER BY materia, topico"
+
+    rows = conn.execute(query, params).fetchall()
+
+    # Agrupar por matéria
+    materias_map = {}
+    for r in rows:
+        mat = r["materia"]
+        if mat not in materias_map:
+            materias_map[mat] = {"materia": mat, "topics": [], "total_mastery": 0.0}
+        level = r["mastery_level"] or 0
+        materias_map[mat]["topics"].append({
+            "id": r["id"],
+            "topico": r["topico"],
+            "mastery_level": round(level, 2),
+            "mastery_label": _mastery_label(level),
+            "mastery_updated_at": r["mastery_updated_at"] or "",
+        })
+        materias_map[mat]["total_mastery"] += level
+
+    # Calcular média por matéria
+    result = []
+    for mat_data in materias_map.values():
+        n_topics = len(mat_data["topics"])
+        avg = mat_data["total_mastery"] / n_topics if n_topics > 0 else 0
+        result.append({
+            "materia": mat_data["materia"],
+            "avg_mastery": round(avg, 2),
+            "avg_mastery_label": _mastery_label(avg),
+            "topics": mat_data["topics"],
+        })
+
+    # Ordenar por menor mastery primeiro (mais urgentes no topo)
+    result.sort(key=lambda x: x["avg_mastery"])
+
+    return {"materias": result}
+
+
+@router.post("/api/edital/mastery/recalculate", summary="Recalcular mastery de todos os tópicos",
+             description="Recalcula mastery para todos os tópicos baseado em desempenho + decaimento temporal")
+def recalculate_mastery(edital_nome: str = "", cargo: str = "", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Recalcula mastery para todos os tópicos baseado em performance + time decay."""
+    query = "SELECT id FROM edital WHERE user_id = ? AND arquivado = 0"
+    params = [user_id]
+    if edital_nome:
+        query += " AND edital_nome = ?"
+        params.append(edital_nome)
+    if cargo:
+        query += " AND cargo = ?"
+        params.append(cargo)
+
+    topics = conn.execute(query, params).fetchall()
+    updated = 0
+    for topic in topics:
+        _update_single_mastery(conn, topic["id"], user_id)
+        updated += 1
+
+    conn.commit()
+    log.info(f"Mastery recalculated for {updated} topics (user={user_id})")
+    return {"ok": True, "updated": updated}
+
+
+@router.post("/api/edital/{id}/mastery-update", summary="Atualizar mastery de um tópico",
+             description="Recalcula mastery para um único tópico. Chamado após responder questões.")
+def update_mastery_single(id: int, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Recalcula mastery para um único tópico."""
+    topic = conn.execute("SELECT id FROM edital WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
+    if not topic:
+        raise HTTPException(status_code=404, detail="Tópico não encontrado")
+
+    _update_single_mastery(conn, id, user_id)
+    conn.commit()
+
+    # Retornar o valor atualizado
+    updated = conn.execute(
+        "SELECT mastery_level, mastery_updated_at FROM edital WHERE id = ? AND user_id = ?",
+        (id, user_id)
+    ).fetchone()
+    level = updated["mastery_level"] or 0
+    return {
+        "ok": True,
+        "id": id,
+        "mastery_level": round(level, 2),
+        "mastery_label": _mastery_label(level),
+        "mastery_updated_at": updated["mastery_updated_at"] or "",
+    }
