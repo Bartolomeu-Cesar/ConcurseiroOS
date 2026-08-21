@@ -300,10 +300,243 @@
         if (res.ok) {
           const sala = await fetch(`/api/batalha/sala/${state.battle.codigo}`).then(r => r.json());
           showQuestion(sala);
+        } else if (data.detail && data.detail.includes('Sem questões')) {
+          showNoQuestionsModal(data.detail);
         } else {
-          alert(data.detail || 'Erro ao iniciar.');
+          showBatalhaToast(data.detail || 'Erro ao iniciar.', 'error');
         }
-      } catch(e) { alert('Erro.'); }
+      } catch(e) { showBatalhaToast('Erro de conexão.', 'error'); }
+    };
+
+    function showBatalhaToast(msg, type = 'info') {
+      const t = document.createElement('div');
+      t.style.cssText = 'position:fixed;top:20px;right:20px;padding:12px 20px;border-radius:10px;font-size:0.88rem;z-index:99999;animation:fadeIn 0.3s;max-width:320px;box-shadow:0 4px 12px rgba(0,0,0,0.4);';
+      t.style.background = type === 'error' ? '#f38ba8' : type === 'success' ? '#a6e3a1' : '#89b4fa';
+      t.style.color = '#1e1e2e';
+      t.textContent = msg;
+      document.body.appendChild(t);
+      setTimeout(() => t.remove(), 4000);
+    }
+
+    function showNoQuestionsModal(detail) {
+      const materias = state.battle?.materias?.length ? state.battle.materias.join(', ') : 'todas';
+      const overlay = document.createElement('div');
+      overlay.id = 'no-questions-modal';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;';
+      overlay.innerHTML = `
+        <div style="background:#313244;border-radius:16px;padding:28px;max-width:480px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <h3 style="color:#f38ba8;margin:0;font-size:1.1rem;">⚠️ Sem questões disponíveis</h3>
+            <span onclick="document.getElementById('no-questions-modal').remove()" style="cursor:pointer;color:#9399b2;font-size:1.4rem;">&times;</span>
+          </div>
+          <p style="color:#cdd6f4;font-size:0.9rem;margin-bottom:8px;">
+            Não há questões suficientes para as matérias: <strong style="color:#89b4fa;">${materias}</strong>
+          </p>
+          <p style="color:#9399b2;font-size:0.82rem;margin-bottom:20px;">
+            Adicione questões ao banco para poder iniciar a batalha. Você pode adicionar manualmente ou importar em massa.
+          </p>
+          
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <button onclick="openAddQuestionInline()" style="width:100%;padding:12px;background:#a6e3a1;color:#1e1e2e;border:none;border-radius:10px;font-weight:600;font-size:0.9rem;cursor:pointer;">
+              ✏️ Adicionar Questão Manualmente
+            </button>
+            <button onclick="openCsvImportModal()" style="width:100%;padding:12px;background:#89b4fa;color:#1e1e2e;border:none;border-radius:10px;font-weight:600;font-size:0.9rem;cursor:pointer;">
+              📥 Importar CSV (QConcursos / Gran)
+            </button>
+            <a href="/questoes.html" style="display:block;width:100%;padding:12px;background:#45475a;color:#cdd6f4;border:none;border-radius:10px;font-size:0.85rem;cursor:pointer;text-align:center;text-decoration:none;">
+              📚 Ir para Banco de Questões
+            </a>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+    }
+
+    // ===== MODAL: Adicionar questão manual inline =====
+    window.openAddQuestionInline = function() {
+      document.getElementById('no-questions-modal')?.remove();
+      const materias = _allMaterias.length ? _allMaterias : ['Direito Constitucional', 'Direito Administrativo', 'Língua Portuguesa'];
+      const materiasOptions = materias.map(m => `<option value="${m}">${m}</option>`).join('');
+      
+      const overlay = document.createElement('div');
+      overlay.id = 'add-question-modal';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto;';
+      overlay.innerHTML = `
+        <div style="background:#313244;border-radius:16px;padding:24px;max-width:560px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <h3 style="color:#a6e3a1;margin:0;">✏️ Nova Questão</h3>
+            <span onclick="document.getElementById('add-question-modal').remove()" style="cursor:pointer;color:#9399b2;font-size:1.4rem;">&times;</span>
+          </div>
+          
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <div style="display:flex;gap:8px;">
+              <select id="aq-materia" style="flex:1;padding:10px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.85rem;">
+                ${materiasOptions}
+                <option value="_nova">+ Nova matéria...</option>
+              </select>
+              <select id="aq-dificuldade" style="width:110px;padding:10px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.85rem;">
+                <option value="Fácil">Fácil</option>
+                <option value="Médio" selected>Médio</option>
+                <option value="Difícil">Difícil</option>
+              </select>
+            </div>
+            <input id="aq-nova-materia" placeholder="Nome da nova matéria" style="display:none;padding:10px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.85rem;">
+            <input id="aq-banca" placeholder="Banca (ex: CESPE, FCC)" style="padding:10px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.85rem;">
+            <textarea id="aq-enunciado" rows="3" placeholder="Enunciado da questão..." style="padding:10px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.85rem;resize:vertical;"></textarea>
+            <input id="aq-alt-a" placeholder="A) ..." style="padding:8px 10px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.85rem;">
+            <input id="aq-alt-b" placeholder="B) ..." style="padding:8px 10px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.85rem;">
+            <input id="aq-alt-c" placeholder="C) ..." style="padding:8px 10px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.85rem;">
+            <input id="aq-alt-d" placeholder="D) ..." style="padding:8px 10px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.85rem;">
+            <input id="aq-alt-e" placeholder="E) ... (opcional)" style="padding:8px 10px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.85rem;">
+            <div style="display:flex;gap:8px;align-items:center;">
+              <label style="color:#9399b2;font-size:0.82rem;">Gabarito:</label>
+              <select id="aq-gabarito" style="padding:8px 12px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#a6e3a1;font-size:0.9rem;font-weight:600;">
+                <option value="a">A</option><option value="b">B</option><option value="c">C</option><option value="d">D</option><option value="e">E</option>
+              </select>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:6px;">
+              <button onclick="document.getElementById('add-question-modal').remove()" style="flex:1;padding:10px;background:#45475a;color:#cdd6f4;border:none;border-radius:8px;cursor:pointer;">Cancelar</button>
+              <button onclick="submitInlineQuestion()" style="flex:1;padding:10px;background:#a6e3a1;color:#1e1e2e;border:none;border-radius:8px;font-weight:600;cursor:pointer;">💾 Salvar e Adicionar</button>
+            </div>
+            <p id="aq-status" style="color:#9399b2;font-size:0.78rem;text-align:center;margin:4px 0 0;"></p>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      
+      // Toggle nova matéria
+      document.getElementById('aq-materia').onchange = function() {
+        document.getElementById('aq-nova-materia').style.display = this.value === '_nova' ? 'block' : 'none';
+      };
+    };
+
+    window.submitInlineQuestion = async function() {
+      const materiaSelect = document.getElementById('aq-materia').value;
+      const materia = materiaSelect === '_nova' 
+        ? document.getElementById('aq-nova-materia').value.trim() 
+        : materiaSelect;
+      
+      if (!materia) { document.getElementById('aq-status').textContent = '❌ Selecione uma matéria'; return; }
+      
+      const body = {
+        materia,
+        enunciado: document.getElementById('aq-enunciado').value.trim(),
+        alternativa_a: document.getElementById('aq-alt-a').value.trim(),
+        alternativa_b: document.getElementById('aq-alt-b').value.trim(),
+        alternativa_c: document.getElementById('aq-alt-c').value.trim(),
+        alternativa_d: document.getElementById('aq-alt-d').value.trim(),
+        alternativa_e: document.getElementById('aq-alt-e').value.trim(),
+        resposta_correta: document.getElementById('aq-gabarito').value,
+        dificuldade: document.getElementById('aq-dificuldade').value,
+        banca: document.getElementById('aq-banca').value.trim(),
+      };
+
+      if (!body.enunciado || !body.alternativa_a || !body.alternativa_b) {
+        document.getElementById('aq-status').textContent = '❌ Preencha enunciado e pelo menos 2 alternativas';
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/questoes', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (res.ok) {
+          document.getElementById('aq-status').innerHTML = '<span style="color:#a6e3a1;">✅ Questão salva! Adicione mais ou feche para iniciar.</span>';
+          // Limpar campos para nova questão
+          document.getElementById('aq-enunciado').value = '';
+          document.getElementById('aq-alt-a').value = '';
+          document.getElementById('aq-alt-b').value = '';
+          document.getElementById('aq-alt-c').value = '';
+          document.getElementById('aq-alt-d').value = '';
+          document.getElementById('aq-alt-e').value = '';
+          document.getElementById('aq-enunciado').focus();
+          // Recarregar matérias
+          fetch('/api/questoes/materias').then(r => r.json()).then(list => { _allMaterias = list.filter(m => m && m.trim()); });
+        } else {
+          document.getElementById('aq-status').textContent = '❌ ' + (data.detail || 'Erro ao salvar');
+        }
+      } catch(e) {
+        document.getElementById('aq-status').textContent = '❌ Erro de conexão';
+      }
+    };
+
+    // ===== MODAL: Import CSV =====
+    window.openCsvImportModal = function() {
+      document.getElementById('no-questions-modal')?.remove();
+      const overlay = document.createElement('div');
+      overlay.id = 'csv-import-battle-modal';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;';
+      overlay.innerHTML = `
+        <div style="background:#313244;border-radius:16px;padding:24px;max-width:480px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <h3 style="color:#89b4fa;margin:0;">📥 Importar CSV</h3>
+            <span onclick="document.getElementById('csv-import-battle-modal').remove()" style="cursor:pointer;color:#9399b2;font-size:1.4rem;">&times;</span>
+          </div>
+          
+          <p style="color:#9399b2;font-size:0.82rem;margin-bottom:12px;">
+            Formatos aceitos: <strong>QConcursos</strong> ou <strong>Gran Cursos</strong> (detecção automática pelo cabeçalho).
+          </p>
+          
+          <div style="margin-bottom:16px;">
+            <label for="csv-battle-file" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:16px;background:#1e1e2e;border:2px dashed #45475a;border-radius:10px;cursor:pointer;color:#89b4fa;font-size:0.9rem;transition:border-color 0.2s;">
+              📄 Selecionar arquivo CSV
+            </label>
+            <input id="csv-battle-file" type="file" accept=".csv" style="display:none;">
+            <p id="csv-battle-filename" style="font-size:0.78rem;color:#9399b2;margin-top:6px;text-align:center;"></p>
+          </div>
+          
+          <select id="csv-battle-formato" style="width:100%;padding:10px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.85rem;margin-bottom:12px;">
+            <option value="auto">🔍 Detecção automática</option>
+            <option value="qconcursos">QConcursos</option>
+            <option value="gran">Gran Cursos</option>
+          </select>
+          
+          <button id="csv-battle-submit" onclick="submitCsvBattle()" disabled style="width:100%;padding:12px;background:#89b4fa;color:#1e1e2e;border:none;border-radius:10px;font-weight:600;font-size:0.9rem;cursor:pointer;opacity:0.5;">
+            🚀 Importar
+          </button>
+          
+          <p id="csv-battle-status" style="font-size:0.82rem;margin-top:10px;text-align:center;color:#9399b2;"></p>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      
+      document.getElementById('csv-battle-file').onchange = function() {
+        const name = this.files[0]?.name || '';
+        document.getElementById('csv-battle-filename').textContent = name;
+        document.getElementById('csv-battle-submit').disabled = !name;
+        document.getElementById('csv-battle-submit').style.opacity = name ? '1' : '0.5';
+      };
+    };
+
+    window.submitCsvBattle = async function() {
+      const fileInput = document.getElementById('csv-battle-file');
+      const file = fileInput.files[0];
+      if (!file) return;
+      
+      const formato = document.getElementById('csv-battle-formato').value;
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const statusEl = document.getElementById('csv-battle-status');
+      statusEl.innerHTML = '<span style="color:#f9e2af;">⏳ Importando...</span>';
+      
+      try {
+        const res = await fetch(`/api/questoes/importar-csv?formato=${formato}`, {
+          method: 'POST', body: formData
+        });
+        const data = await res.json();
+        if (res.ok) {
+          statusEl.innerHTML = `<span style="color:#a6e3a1;">✅ ${data.imported || data.total || 0} questões importadas! Feche e clique em Iniciar novamente.</span>`;
+          // Recarregar matérias
+          fetch('/api/questoes/materias').then(r => r.json()).then(list => { _allMaterias = list.filter(m => m && m.trim()); });
+        } else {
+          statusEl.innerHTML = `<span style="color:#f38ba8;">❌ ${data.detail || 'Erro na importação'}</span>`;
+        }
+      } catch(e) {
+        statusEl.innerHTML = '<span style="color:#f38ba8;">❌ Erro de conexão</span>';
+      }
     };
 
     window.selectAnswer = function(letter) {
