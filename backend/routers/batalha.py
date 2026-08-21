@@ -104,6 +104,17 @@ def _generate_code():
     return "".join(random.choices(chars, k=6))
 
 
+def _round_difficulty(rodada_num: int, total_rodadas: int) -> dict:
+    """Retorna indicador de dificuldade baseado na posição da rodada."""
+    terco = max(1, total_rodadas // 3)
+    if rodada_num <= terco:
+        return {"nivel": "Fácil", "emoji": "🟢", "cor": "#a6e3a1"}
+    elif rodada_num <= terco * 2:
+        return {"nivel": "Médio", "emoji": "🟡", "cor": "#f9e2af"}
+    else:
+        return {"nivel": "Difícil", "emoji": "🔴", "cor": "#f38ba8"}
+
+
 def _calculate_points(acertou: bool, tempo_seg: int, tempo_max: int, streak: int = 0) -> int:
     """Calcula pontos estilo Duolingo: acerto + bonus por velocidade + streak multiplier."""
     if not acertou:
@@ -286,6 +297,7 @@ def status_sala(
                 "enunciado": round_data["enunciado"],
                 "alternativas": alternativas_shuffled,
                 "_mapping": mapping,  # Para o frontend traduzir ao responder
+                "dificuldade": _round_difficulty(round_data["rodada_num"], battle["total_rodadas"]),
                 # Só revelar acertos depois que todos responderam
                 "responderam": [
                     {"user_id": a["user_id"], "respondeu": True,
@@ -338,29 +350,58 @@ def iniciar_batalha(
     if player_count < 2:
         raise HTTPException(status_code=400, detail="Mínimo 2 jogadores para iniciar.")
 
-    # Gerar questões para todas as rodadas
+    # Gerar questões para todas as rodadas — DIFICULDADE PROGRESSIVA
     materias = json.loads(battle["materias"])
     total = battle["total_rodadas"]
 
-    # Buscar questões disponíveis
+    # Buscar questões disponíveis, organizadas por dificuldade
+    # Dificuldade: Fácil → Médio → Difícil (progressivo ao longo das rodadas)
+    difficulty_order = "CASE dificuldade WHEN 'Fácil' THEN 1 WHEN 'Médio' THEN 2 WHEN 'Difícil' THEN 3 ELSE 2 END"
+
     if materias:
         placeholders = ",".join("?" * len(materias))
-        questoes = conn.execute(f"""
+        questoes_raw = conn.execute(f"""
             SELECT id, materia, topico, enunciado, alternativa_a, alternativa_b,
-                   alternativa_c, alternativa_d, alternativa_e, resposta_correta
+                   alternativa_c, alternativa_d, alternativa_e, resposta_correta, dificuldade
             FROM questoes WHERE materia IN ({placeholders}) AND user_id = ?
-            ORDER BY RANDOM() LIMIT ?
-        """, (*materias, user_id, total)).fetchall()
+            ORDER BY {difficulty_order}, RANDOM()
+        """, (*materias, user_id)).fetchall()
     else:
-        questoes = conn.execute("""
+        questoes_raw = conn.execute(f"""
             SELECT id, materia, topico, enunciado, alternativa_a, alternativa_b,
-                   alternativa_c, alternativa_d, alternativa_e, resposta_correta
-            FROM questoes WHERE user_id = ? ORDER BY RANDOM() LIMIT ?
-        """, (user_id, total)).fetchall()
+                   alternativa_c, alternativa_d, alternativa_e, resposta_correta, dificuldade
+            FROM questoes WHERE user_id = ?
+            ORDER BY {difficulty_order}, RANDOM()
+        """, (user_id,)).fetchall()
+
+    # Distribuir progressivamente: 1/3 fácil, 1/3 médio, 1/3 difícil
+    faceis = [q for q in questoes_raw if (q["dificuldade"] or "Médio") == "Fácil"]
+    medias = [q for q in questoes_raw if (q["dificuldade"] or "Médio") == "Médio"]
+    dificeis = [q for q in questoes_raw if (q["dificuldade"] or "Médio") == "Difícil"]
+
+    # Embaralhar dentro de cada grupo
+    random.shuffle(faceis)
+    random.shuffle(medias)
+    random.shuffle(dificeis)
+
+    # Distribuir: primeiras rodadas fáceis, meio médias, finais difíceis
+    terco = max(1, total // 3)
+    questoes = []
+    questoes.extend(faceis[:terco])
+    questoes.extend(medias[:terco])
+    questoes.extend(dificeis[:total - 2 * terco])
+
+    # Se não tem questões suficientes de algum nível, completar com as disponíveis
+    todas = faceis + medias + dificeis
+    random.shuffle(todas)
+    while len(questoes) < total and todas:
+        q = todas.pop(0)
+        if q not in questoes:
+            questoes.append(q)
 
     if len(questoes) < total:
         # Preencher com repetições se necessário
-        while len(questoes) < total:
+        while len(questoes) < total and questoes:
             questoes.extend(questoes[:total - len(questoes)])
         questoes = questoes[:total]
 

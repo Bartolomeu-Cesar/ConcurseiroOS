@@ -162,12 +162,16 @@
 
       const alts = r.alternativas;
       const letters = ['a','b','c','d','e'].filter(l => alts[l]);
+      const diff = r.dificuldade || {};
 
       view.innerHTML = `
         <div class="question-card">
           <div class="round-badge">Rodada ${data.rodada_atual}/${data.total_rodadas}</div>
           <div class="timer-bar"><div class="timer-fill" id="timer-fill" style="width:100%;"></div></div>
-          <div style="font-size:0.82rem;color:#9399b2;margin-bottom:4px;" id="timer-text">${data.tempo_por_questao}s</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <div style="font-size:0.82rem;color:#9399b2;" id="timer-text">${data.tempo_por_questao}s</div>
+            <div style="font-size:0.72rem;padding:3px 10px;border-radius:12px;background:${diff.cor || '#45475a'}22;color:${diff.cor || '#9399b2'};border:1px solid ${diff.cor || '#45475a'}44;font-weight:600;">${diff.emoji || ''} ${diff.nivel || ''}</div>
+          </div>
           <div class="materia-badge">📚 ${r.materia}</div>
           <div class="question-text">${r.enunciado}</div>
           <div class="options">
