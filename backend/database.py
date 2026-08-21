@@ -533,6 +533,187 @@ def _run_migrations(conn):
         except Exception:
             pass
 
+    # Streak Freeze: colunas para congelar streak
+    try:
+        conn.execute("SELECT streak_freezes_available FROM metas_config LIMIT 1")
+    except Exception:
+        try:
+            conn.execute("ALTER TABLE metas_config ADD COLUMN streak_freezes_available INTEGER DEFAULT 1")
+            conn.execute("ALTER TABLE metas_config ADD COLUMN streak_freezes_used INTEGER DEFAULT 0")
+            conn.execute("ALTER TABLE metas_config ADD COLUMN last_freeze_earned TEXT DEFAULT ''")
+            log.info("Migration: added streak_freeze columns to metas_config")
+        except Exception:
+            pass
+
+    # Sessões de estudo: timestamp para badges Night Owl / Early Bird
+    try:
+        conn.execute("SELECT created_at FROM sessoes_estudo LIMIT 1")
+    except Exception:
+        try:
+            conn.execute("ALTER TABLE sessoes_estudo ADD COLUMN created_at TEXT DEFAULT ''")
+            log.info("Migration: added column created_at to sessoes_estudo")
+        except Exception:
+            pass
+
+    # ========== FSRS columns for flashcards ==========
+    try:
+        conn.execute("SELECT stability FROM flashcards LIMIT 1")
+    except Exception:
+        try:
+            conn.execute("ALTER TABLE flashcards ADD COLUMN stability REAL DEFAULT 0")
+            log.info("Migration: added column stability to flashcards")
+        except Exception:
+            pass
+
+    try:
+        conn.execute("SELECT difficulty FROM flashcards LIMIT 1")
+    except Exception:
+        try:
+            conn.execute("ALTER TABLE flashcards ADD COLUMN difficulty REAL DEFAULT 0")
+            log.info("Migration: added column difficulty to flashcards")
+        except Exception:
+            pass
+
+    try:
+        conn.execute("SELECT fsrs_state FROM flashcards LIMIT 1")
+    except Exception:
+        try:
+            conn.execute("ALTER TABLE flashcards ADD COLUMN fsrs_state INTEGER DEFAULT 0")
+            log.info("Migration: added column fsrs_state to flashcards")
+        except Exception:
+            pass
+
+    # ========== FSRS columns for edital ==========
+    try:
+        conn.execute("SELECT stability_edital FROM edital LIMIT 1")
+    except Exception:
+        try:
+            conn.execute("ALTER TABLE edital ADD COLUMN stability_edital REAL DEFAULT 0")
+            log.info("Migration: added column stability_edital to edital")
+        except Exception:
+            pass
+
+    try:
+        conn.execute("SELECT difficulty_edital FROM edital LIMIT 1")
+    except Exception:
+        try:
+            conn.execute("ALTER TABLE edital ADD COLUMN difficulty_edital REAL DEFAULT 0")
+            log.info("Migration: added column difficulty_edital to edital")
+        except Exception:
+            pass
+
+    try:
+        conn.execute("SELECT fsrs_state_edital FROM edital LIMIT 1")
+    except Exception:
+        try:
+            conn.execute("ALTER TABLE edital ADD COLUMN fsrs_state_edital INTEGER DEFAULT 0")
+            log.info("Migration: added column fsrs_state_edital to edital")
+        except Exception:
+            pass
+
+    # ========== FSRS columns for sumulas ==========
+    try:
+        conn.execute("SELECT stability FROM sumulas LIMIT 1")
+    except Exception:
+        try:
+            conn.execute("ALTER TABLE sumulas ADD COLUMN stability REAL DEFAULT 0")
+            log.info("Migration: added column stability to sumulas")
+        except Exception:
+            pass
+
+    try:
+        conn.execute("SELECT difficulty_sumulas FROM sumulas LIMIT 1")
+    except Exception:
+        try:
+            conn.execute("ALTER TABLE sumulas ADD COLUMN difficulty_sumulas REAL DEFAULT 0")
+            log.info("Migration: added column difficulty_sumulas to sumulas")
+        except Exception:
+            pass
+
+    try:
+        conn.execute("SELECT fsrs_state FROM sumulas LIMIT 1")
+    except Exception:
+        try:
+            conn.execute("ALTER TABLE sumulas ADD COLUMN fsrs_state INTEGER DEFAULT 0")
+            log.info("Migration: added column fsrs_state to sumulas")
+        except Exception:
+            pass
+
+    # ========== desired_retention in metas_config ==========
+    try:
+        conn.execute("SELECT desired_retention FROM metas_config LIMIT 1")
+    except Exception:
+        try:
+            conn.execute("ALTER TABLE metas_config ADD COLUMN desired_retention REAL DEFAULT 0.9")
+            log.info("Migration: added column desired_retention to metas_config")
+        except Exception:
+            pass
+
+    # ========== Push Notification tables ==========
+    try:
+        conn.execute("SELECT id FROM push_subscriptions LIMIT 1")
+    except Exception:
+        try:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS push_subscriptions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    endpoint TEXT NOT NULL UNIQUE,
+                    p256dh TEXT NOT NULL,
+                    auth TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT DEFAULT ''
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id ON push_subscriptions(user_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_push_subscriptions_endpoint ON push_subscriptions(endpoint)")
+            log.info("Migration: created table push_subscriptions")
+        except Exception:
+            pass
+
+    try:
+        conn.execute("SELECT id FROM notification_preferences LIMIT 1")
+    except Exception:
+        try:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS notification_preferences (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL UNIQUE,
+                    streak_risk INTEGER DEFAULT 1,
+                    flashcards_overdue INTEGER DEFAULT 1,
+                    exam_approaching INTEGER DEFAULT 1,
+                    challenge_expiring INTEGER DEFAULT 1,
+                    quiet_hours_start INTEGER DEFAULT 22,
+                    quiet_hours_end INTEGER DEFAULT 7,
+                    updated_at TEXT DEFAULT ''
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_notification_preferences_user_id ON notification_preferences(user_id)")
+            log.info("Migration: created table notification_preferences")
+        except Exception:
+            pass
+
+    try:
+        conn.execute("SELECT id FROM notification_log LIMIT 1")
+    except Exception:
+        try:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS notification_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    tag TEXT NOT NULL,
+                    title TEXT DEFAULT '',
+                    body TEXT DEFAULT '',
+                    sent_at TEXT NOT NULL,
+                    success INTEGER DEFAULT 1
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_notification_log_user_id ON notification_log(user_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_notification_log_sent_at ON notification_log(sent_at)")
+            log.info("Migration: created table notification_log")
+        except Exception:
+            pass
+
     # ========== MULTI-USER ISOLATION: user_id em todas as tabelas ==========
     _migrate_user_id(conn)
 
@@ -644,6 +825,108 @@ def _seed_defaults(conn):
             log.info(f"Seeded {len(metadados)} edital_info entries")
 
 
+def _create_fts5_triggers(conn):
+    """Cria triggers para manter o índice FTS5 atualizado em tempo real."""
+    # Edital: INSERT
+    conn.execute("""
+        CREATE TRIGGER IF NOT EXISTS trg_edital_fts_insert AFTER INSERT ON edital
+        BEGIN
+            INSERT INTO search_index (source, source_id, title, content)
+            VALUES ('edital', CAST(NEW.id AS TEXT), NEW.materia, NEW.topico);
+        END
+    """)
+    # Edital: UPDATE
+    conn.execute("""
+        CREATE TRIGGER IF NOT EXISTS trg_edital_fts_update AFTER UPDATE OF materia, topico ON edital
+        BEGIN
+            DELETE FROM search_index WHERE source = 'edital' AND source_id = CAST(OLD.id AS TEXT);
+            INSERT INTO search_index (source, source_id, title, content)
+            VALUES ('edital', CAST(NEW.id AS TEXT), NEW.materia, NEW.topico);
+        END
+    """)
+    # Edital: DELETE
+    conn.execute("""
+        CREATE TRIGGER IF NOT EXISTS trg_edital_fts_delete AFTER DELETE ON edital
+        BEGIN
+            DELETE FROM search_index WHERE source = 'edital' AND source_id = CAST(OLD.id AS TEXT);
+        END
+    """)
+    # Questões: INSERT
+    conn.execute("""
+        CREATE TRIGGER IF NOT EXISTS trg_questoes_fts_insert AFTER INSERT ON questoes
+        BEGIN
+            INSERT INTO search_index (source, source_id, title, content)
+            VALUES ('questao', CAST(NEW.id AS TEXT), NEW.materia, NEW.enunciado);
+        END
+    """)
+    # Questões: UPDATE
+    conn.execute("""
+        CREATE TRIGGER IF NOT EXISTS trg_questoes_fts_update AFTER UPDATE OF materia, enunciado ON questoes
+        BEGIN
+            DELETE FROM search_index WHERE source = 'questao' AND source_id = CAST(OLD.id AS TEXT);
+            INSERT INTO search_index (source, source_id, title, content)
+            VALUES ('questao', CAST(NEW.id AS TEXT), NEW.materia, NEW.enunciado);
+        END
+    """)
+    # Questões: DELETE
+    conn.execute("""
+        CREATE TRIGGER IF NOT EXISTS trg_questoes_fts_delete AFTER DELETE ON questoes
+        BEGIN
+            DELETE FROM search_index WHERE source = 'questao' AND source_id = CAST(OLD.id AS TEXT);
+        END
+    """)
+    # Flashcards: INSERT
+    conn.execute("""
+        CREATE TRIGGER IF NOT EXISTS trg_flashcards_fts_insert AFTER INSERT ON flashcards
+        BEGIN
+            INSERT INTO search_index (source, source_id, title, content)
+            VALUES ('flashcard', CAST(NEW.id AS TEXT), NEW.pergunta, NEW.resposta);
+        END
+    """)
+    # Flashcards: UPDATE
+    conn.execute("""
+        CREATE TRIGGER IF NOT EXISTS trg_flashcards_fts_update AFTER UPDATE OF pergunta, resposta ON flashcards
+        BEGIN
+            DELETE FROM search_index WHERE source = 'flashcard' AND source_id = CAST(OLD.id AS TEXT);
+            INSERT INTO search_index (source, source_id, title, content)
+            VALUES ('flashcard', CAST(NEW.id AS TEXT), NEW.pergunta, NEW.resposta);
+        END
+    """)
+    # Flashcards: DELETE
+    conn.execute("""
+        CREATE TRIGGER IF NOT EXISTS trg_flashcards_fts_delete AFTER DELETE ON flashcards
+        BEGIN
+            DELETE FROM search_index WHERE source = 'flashcard' AND source_id = CAST(OLD.id AS TEXT);
+        END
+    """)
+    # Notas PDF: INSERT
+    conn.execute("""
+        CREATE TRIGGER IF NOT EXISTS trg_notas_fts_insert AFTER INSERT ON notas_pdf
+        BEGIN
+            INSERT INTO search_index (source, source_id, title, content)
+            VALUES ('nota', CAST(NEW.id AS TEXT), '', NEW.conteudo);
+        END
+    """)
+    # Notas PDF: UPDATE
+    conn.execute("""
+        CREATE TRIGGER IF NOT EXISTS trg_notas_fts_update AFTER UPDATE OF conteudo ON notas_pdf
+        BEGIN
+            DELETE FROM search_index WHERE source = 'nota' AND source_id = CAST(OLD.id AS TEXT);
+            INSERT INTO search_index (source, source_id, title, content)
+            VALUES ('nota', CAST(NEW.id AS TEXT), '', NEW.conteudo);
+        END
+    """)
+    # Notas PDF: DELETE
+    conn.execute("""
+        CREATE TRIGGER IF NOT EXISTS trg_notas_fts_delete AFTER DELETE ON notas_pdf
+        BEGIN
+            DELETE FROM search_index WHERE source = 'nota' AND source_id = CAST(OLD.id AS TEXT);
+        END
+    """)
+    conn.commit()
+    log.info("FTS5 real-time triggers created")
+
+
 def init_db():
     """Inicializa o banco de dados: tabelas, migrações, índices e dados padrão."""
     conn = sqlite3.connect(DB_PATH)
@@ -657,5 +940,6 @@ def init_db():
     _seed_defaults(conn)
     conn.commit()
     rebuild_search_index(conn)
+    _create_fts5_triggers(conn)
     conn.close()
     log.info("Database initialized (WAL mode)")

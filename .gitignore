@@ -31,3 +31,5 @@ Thumbs.db
 .idea/
 *.db-shm
 *.db-wal
+backend/.vapid_private_key
+backend/.vapid_public_key

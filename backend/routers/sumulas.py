@@ -215,6 +215,105 @@ def review_sumula_sm2(id: int, body: SumulaReviewSM2, conn=Depends(get_db_sessio
     }
 
 
+@router.post("/api/sumulas/{id}/review-fsrs", summary="Revisar súmula (FSRS)")
+def review_sumula_fsrs(id: int, body: SumulaReviewSM2, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Revisão de súmula usando algoritmo FSRS-5.
+    quality: 0-5 (mapeado internamente para rating 1-4 do FSRS)
+    """
+    import sys
+    import os
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from fsrs import FSRSCard, review_card, sm2_to_fsrs_rating
+    from constants import FSRS_DEFAULT_RETENTION
+
+    row = conn.execute(
+        "SELECT intervalo_dias, easiness_factor, repetitions FROM sumulas WHERE id = ? AND user_id = ?", (id, user_id)
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Súmula não encontrada")
+
+    # Try to read FSRS columns
+    stability = 0.0
+    difficulty = 0.0
+    fsrs_state = 0
+    try:
+        fsrs_row = conn.execute(
+            "SELECT stability, difficulty_sumulas, fsrs_state FROM sumulas WHERE id = ? AND user_id = ?", (id, user_id)
+        ).fetchone()
+        if fsrs_row:
+            stability = fsrs_row[0] or 0.0
+            difficulty = fsrs_row[1] or 0.0
+            fsrs_state = fsrs_row[2] or 0
+    except Exception:
+        pass
+
+    # Get desired_retention from user's metas_config
+    desired_retention = FSRS_DEFAULT_RETENTION
+    try:
+        meta_row = conn.execute(
+            "SELECT desired_retention FROM metas_config WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        if meta_row and meta_row[0]:
+            desired_retention = meta_row[0]
+    except Exception:
+        pass
+
+    # Build FSRS card state
+    reps = row[2] if row[2] is not None else 0
+    card = FSRSCard(
+        stability=stability,
+        difficulty=difficulty,
+        state=fsrs_state,
+        reps=reps
+    )
+
+    # Map SM-2 quality (0-5) to FSRS rating (1-4)
+    rating = sm2_to_fsrs_rating(body.quality)
+
+    # Call FSRS algorithm
+    output = review_card(card, rating, desired_retention=desired_retention)
+
+    proxima = (date.today() + timedelta(days=output.interval)).isoformat()
+    new_reps = reps + 1
+
+    # Update sumula with FSRS results
+    try:
+        conn.execute(
+            """UPDATE sumulas SET intervalo_dias = ?, proxima_revisao = ?,
+               stability = ?, difficulty_sumulas = ?, fsrs_state = ?, repetitions = ?
+               WHERE id = ? AND user_id = ?""",
+            (output.interval, proxima, round(output.stability, 6),
+             round(output.difficulty, 4), output.state, new_reps, id, user_id)
+        )
+    except Exception:
+        # Fallback if FSRS columns don't exist
+        conn.execute(
+            "UPDATE sumulas SET intervalo_dias = ?, proxima_revisao = ? WHERE id = ? AND user_id = ?",
+            (output.interval, proxima, id, user_id)
+        )
+
+    # Update streak
+    update_streak(conn, "flashcards_revisados", user_id=user_id)
+    conn.execute("""
+        INSERT INTO streaks (data, sumulas_revisadas, user_id) VALUES (?, 1, ?)
+        ON CONFLICT(data) DO UPDATE SET sumulas_revisadas = COALESCE(sumulas_revisadas, 0) + 1
+    """, (today_str(), user_id))
+    conn.commit()
+
+    log.info(f"Súmula FSRS: id={id} rating={rating} S={output.stability:.4f} D={output.difficulty:.4f} I={output.interval}")
+    return {
+        "id": id,
+        "intervalo_dias": output.interval,
+        "proxima_revisao": proxima,
+        "stability": round(output.stability, 6),
+        "difficulty": round(output.difficulty, 4),
+        "fsrs_state": output.state,
+        "repetitions": new_reps,
+        "rating": rating,
+        "retrievability": round(output.retrievability, 4) if output.retrievability else None
+    }
+
+
 @router.post("/api/sumulas/importar", summary="Importar súmulas em lote")
 def importar_sumulas(body: list = Body(...), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Importa lista de súmulas. Body: [{tribunal, numero, enunciado, tema?, observacao?, vinculante?}]"""

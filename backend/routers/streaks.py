@@ -1,5 +1,5 @@
 import random
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 
@@ -134,11 +134,44 @@ def get_gamification(conn=Depends(get_db_session), user_id: int = Depends(get_us
 
     # Verificar badges
     accuracy = (questoes_certas / questoes_total * 100) if questoes_total > 0 else 0
+
+    # Check time-based badges (Night Owl / Early Bird)
+    has_night_session = conn.execute(
+        "SELECT 1 FROM sessoes_estudo WHERE created_at != '' AND CAST(substr(created_at, 12, 2) AS INTEGER) >= 22 AND user_id = ? LIMIT 1",
+        (user_id,)
+    ).fetchone() is not None
+    has_early_session = conn.execute(
+        "SELECT 1 FROM sessoes_estudo WHERE created_at != '' AND CAST(substr(created_at, 12, 2) AS INTEGER) < 6 AND user_id = ? LIMIT 1",
+        (user_id,)
+    ).fetchone() is not None
+
+    # Check flashcards_dia_ok (all due flashcards reviewed today)
+    flashcards_pending_today = conn.execute(
+        "SELECT COUNT(*) FROM flashcards WHERE proxima_revisao <= ? AND user_id = ?", (today_str(), user_id)
+    ).fetchone()[0]
+    hoje_streak = conn.execute("SELECT * FROM streaks WHERE data = ? AND user_id = ?", (today_str(), user_id)).fetchone()
+    flashcards_today_done = hoje_streak["flashcards_revisados"] if hoje_streak else 0
+    flashcards_dia_ok = flashcards_pending_today == 0 and flashcards_today_done > 0
+
     badges_earned = []
     for badge in BADGES:
         earned = False
         cond = badge["condition"]
-        if cond == "horas >= 1" and horas >= 1 or cond == "horas >= 10" and horas >= 10 or cond == "horas >= 50" and horas >= 50 or cond == "questoes >= 1" and questoes_total >= 1 or cond == "questoes >= 100" and questoes_total >= 100 or cond == "questoes >= 500" and questoes_total >= 500 or cond == "streak >= 7" and streak >= 7 or cond == "streak >= 30" and streak >= 30 or cond == "simulados >= 1" and simulados_feitos >= 1 or cond == "accuracy >= 80" and accuracy >= 80 and questoes_total >= 20 or cond == "topicos >= 10" and topicos_concluidos >= 10 or cond == "topicos >= 50" and topicos_concluidos >= 50: earned = True
+        if cond == "special":
+            if badge["id"] == "night_owl":
+                earned = has_night_session
+            elif badge["id"] == "early_bird":
+                earned = has_early_session
+        elif cond == "flashcards_dia_ok":
+            earned = flashcards_dia_ok
+        elif (cond == "horas >= 1" and horas >= 1 or cond == "horas >= 10" and horas >= 10 or
+              cond == "horas >= 50" and horas >= 50 or cond == "questoes >= 1" and questoes_total >= 1 or
+              cond == "questoes >= 100" and questoes_total >= 100 or cond == "questoes >= 500" and questoes_total >= 500 or
+              cond == "streak >= 7" and streak >= 7 or cond == "streak >= 30" and streak >= 30 or
+              cond == "simulados >= 1" and simulados_feitos >= 1 or
+              cond == "accuracy >= 80" and accuracy >= 80 and questoes_total >= 20 or
+              cond == "topicos >= 10" and topicos_concluidos >= 10 or cond == "topicos >= 50" and topicos_concluidos >= 50):
+            earned = True
 
         if earned:
             badges_earned.append(badge)
@@ -252,12 +285,14 @@ def atualizar_progresso_desafios(conn=Depends(get_db_session), user_id: int = De
     """Atualiza o progresso de TODOS os desafios ativos baseado nos dados reais."""
     desafios = conn.execute("SELECT * FROM desafios WHERE finalizado = 0 AND user_id = ?", (user_id,)).fetchall()
     atualizados = 0
+    just_completed = []
 
     for d in desafios:
         criado = d["created_at"]
         meta_tipo = d["meta_tipo"]
         materia = d["materia"]
         meta_valor = d["meta_valor"]
+        was_incomplete = d["progresso"] < meta_valor
 
         progresso = 0
         if meta_tipo == "questoes":
@@ -302,8 +337,18 @@ def atualizar_progresso_desafios(conn=Depends(get_db_session), user_id: int = De
         )
         atualizados += 1
 
+        # Track just-completed challenges for celebration
+        if was_incomplete and finalizado:
+            just_completed.append({
+                "id": d["id"],
+                "titulo": d["titulo"],
+                "meta_tipo": meta_tipo,
+                "meta_valor": meta_valor,
+                "materia": materia or ""
+            })
+
     conn.commit()
-    return {"ok": True, "atualizados": atualizados}
+    return {"ok": True, "atualizados": atualizados, "just_completed": just_completed}
 
 
 @router.get("/api/desafios/sugestoes")
@@ -394,3 +439,165 @@ def sugestoes_desafios(conn=Depends(get_db_session), user_id: int = Depends(get_
         })
 
     return sugestoes[:4]  # Max 4 sugestões
+
+
+# ============================================================
+# STREAK FREEZE
+# ============================================================
+
+MAX_STREAK_FREEZES = 3
+STREAK_FREEZE_EARN_INTERVAL = 7  # Ganha 1 freeze a cada 7 dias de streak
+
+
+@router.get("/api/streak-freeze")
+def get_streak_freeze(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Retorna informações sobre streak freeze do usuário."""
+    config = conn.execute("SELECT * FROM metas_config WHERE user_id = ?", (user_id,)).fetchone()
+    freezes_available = config["streak_freezes_available"] if config and "streak_freezes_available" in config.keys() else 1
+    freezes_used = config["streak_freezes_used"] if config and "streak_freezes_used" in config.keys() else 0
+
+    streak_info = calculate_streak(conn, user_id)
+    streak = streak_info["streak_atual"]
+
+    # Check if user would earn a new freeze today
+    can_earn = freezes_available < MAX_STREAK_FREEZES and streak > 0 and streak % STREAK_FREEZE_EARN_INTERVAL == 0
+
+    return {
+        "freezes_available": freezes_available,
+        "freezes_used": freezes_used,
+        "max_freezes": MAX_STREAK_FREEZES,
+        "streak_atual": streak,
+        "earn_next_at": ((streak // STREAK_FREEZE_EARN_INTERVAL) + 1) * STREAK_FREEZE_EARN_INTERVAL if not can_earn else streak,
+        "can_earn_today": can_earn
+    }
+
+
+@router.post("/api/streak-freeze/use")
+def use_streak_freeze(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Usa um streak freeze para proteger o streak de ontem. Deve ser chamado antes de o streak ser recalculado."""
+    config = conn.execute("SELECT * FROM metas_config WHERE user_id = ?", (user_id,)).fetchone()
+    if not config:
+        raise HTTPException(status_code=404, detail="Configuração não encontrada")
+
+    freezes_available = config["streak_freezes_available"] if "streak_freezes_available" in config.keys() else 1
+    if freezes_available <= 0:
+        raise HTTPException(status_code=400, detail="Sem freezes disponíveis")
+
+    # Check if yesterday had no activity (freeze would be needed)
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    yesterday_data = conn.execute(
+        "SELECT * FROM streaks WHERE data = ? AND user_id = ?", (yesterday, user_id)
+    ).fetchone()
+
+    had_activity = False
+    if yesterday_data:
+        had_activity = (
+            yesterday_data["horas_estudadas"] > 0 or
+            yesterday_data["questoes_resolvidas"] > 0 or
+            yesterday_data["flashcards_revisados"] > 0
+        )
+
+    if had_activity:
+        return {"ok": False, "message": "Ontem já teve atividade — freeze não necessário"}
+
+    # Insert a minimal streak record for yesterday to preserve the streak
+    if yesterday_data:
+        # Mark as freeze day
+        conn.execute(
+            "UPDATE streaks SET horas_estudadas = 0.001 WHERE data = ? AND user_id = ?",
+            (yesterday, user_id)
+        )
+    else:
+        conn.execute(
+            "INSERT INTO streaks (data, horas_estudadas, questoes_resolvidas, flashcards_revisados, user_id) VALUES (?, 0.001, 0, 0, ?)",
+            (yesterday, user_id)
+        )
+
+    # Decrement freeze
+    conn.execute(
+        "UPDATE metas_config SET streak_freezes_available = streak_freezes_available - 1, streak_freezes_used = streak_freezes_used + 1 WHERE user_id = ?",
+        (user_id,)
+    )
+    conn.commit()
+
+    return {"ok": True, "message": "Streak freeze ativado! Seu streak está protegido.", "freezes_remaining": freezes_available - 1}
+
+
+@router.post("/api/streak-freeze/earn")
+def earn_streak_freeze(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Ganha um streak freeze por manter streak de 7+ dias. Chamado automaticamente."""
+    config = conn.execute("SELECT * FROM metas_config WHERE user_id = ?", (user_id,)).fetchone()
+    if not config:
+        raise HTTPException(status_code=404, detail="Configuração não encontrada")
+
+    freezes_available = config["streak_freezes_available"] if "streak_freezes_available" in config.keys() else 1
+    last_earned = config["last_freeze_earned"] if "last_freeze_earned" in config.keys() else ""
+
+    if freezes_available >= MAX_STREAK_FREEZES:
+        return {"ok": False, "message": f"Máximo de {MAX_STREAK_FREEZES} freezes atingido"}
+
+    streak_info = calculate_streak(conn, user_id)
+    streak = streak_info["streak_atual"]
+
+    # Only earn if streak is a multiple of 7 and haven't earned today
+    if streak < STREAK_FREEZE_EARN_INTERVAL or streak % STREAK_FREEZE_EARN_INTERVAL != 0:
+        return {"ok": False, "message": f"Precisa de streak múltiplo de {STREAK_FREEZE_EARN_INTERVAL} dias"}
+
+    if last_earned == today_str():
+        return {"ok": False, "message": "Já ganhou um freeze hoje"}
+
+    conn.execute(
+        "UPDATE metas_config SET streak_freezes_available = streak_freezes_available + 1, last_freeze_earned = ? WHERE user_id = ?",
+        (today_str(), user_id)
+    )
+    conn.commit()
+
+    return {"ok": True, "message": "🧊 Streak Freeze ganho! Agora você pode perder 1 dia sem quebrar o streak.", "freezes_available": freezes_available + 1}
+
+
+# ============================================================
+# DESIRED RETENTION (FSRS Settings)
+# ============================================================
+
+@router.get("/api/settings/desired-retention", summary="Obter desired retention", tags=["FSRS"])
+def get_desired_retention(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Retorna o valor de desired_retention do usuário (padrão: 0.9)."""
+    from constants import FSRS_DEFAULT_RETENTION
+
+    desired_retention = FSRS_DEFAULT_RETENTION
+    try:
+        row = conn.execute(
+            "SELECT desired_retention FROM metas_config WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        if row and row[0] is not None:
+            desired_retention = row[0]
+    except Exception:
+        pass  # Column doesn't exist yet
+
+    return {"desired_retention": desired_retention}
+
+
+@router.put("/api/settings/desired-retention", summary="Atualizar desired retention", tags=["FSRS"])
+def update_desired_retention(body: dict = Body(...), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Atualiza o desired_retention do usuário.
+    Body: {"desired_retention": 0.9}
+    Valor aceito: 0.7 a 0.99
+    """
+    desired_retention = body.get("desired_retention", 0.9)
+
+    # Validate range
+    if not isinstance(desired_retention, (int, float)):
+        raise HTTPException(status_code=400, detail="desired_retention deve ser um número entre 0.7 e 0.99")
+    if desired_retention < 0.7 or desired_retention > 0.99:
+        raise HTTPException(status_code=400, detail="desired_retention deve estar entre 0.7 e 0.99")
+
+    try:
+        conn.execute(
+            "UPDATE metas_config SET desired_retention = ? WHERE user_id = ?",
+            (round(desired_retention, 4), user_id)
+        )
+        conn.commit()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao atualizar desired_retention: {str(e)}")
+
+    return {"ok": True, "desired_retention": round(desired_retention, 4)}

@@ -247,9 +247,11 @@ class SessaoEstudoRegistrar(BaseModel):
 def registrar_sessao_estudo(body: SessaoEstudoRegistrar, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     if body.horas <= 0:
         return {"ok": False, "message": "Tempo inválido"}
+    from datetime import datetime
+    now_iso = datetime.now().isoformat()
     conn.execute(
-        "INSERT INTO sessoes_estudo (materia, horas, data, tipo, user_id) VALUES (?, ?, ?, ?, ?)",
-        (body.materia, body.horas, today_str(), body.tipo, user_id)
+        "INSERT INTO sessoes_estudo (materia, horas, data, tipo, user_id, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (body.materia, body.horas, today_str(), body.tipo, user_id, now_iso)
     )
     conn.execute("""
         INSERT INTO streaks (data, horas_estudadas, user_id) VALUES (?, ?, ?)

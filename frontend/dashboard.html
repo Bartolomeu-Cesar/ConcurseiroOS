@@ -900,6 +900,23 @@
   </div>
 
   <script>
+    // ===== TOAST NOTIFICATION =====
+    function showToast(message, type = 'info') {
+      const existing = document.getElementById('app-toast');
+      if (existing) existing.remove();
+      const toast = document.createElement('div');
+      toast.id = 'app-toast';
+      const colors = { success: '#a6e3a1', error: '#f38ba8', info: '#89b4fa', warning: '#f9e2af' };
+      const bg = colors[type] || colors.info;
+      toast.style.cssText = `position:fixed;top:20px;right:20px;background:#313244;border-left:4px solid ${bg};color:#cdd6f4;padding:12px 20px;border-radius:8px;z-index:99999;font-size:0.9rem;box-shadow:0 4px 20px rgba(0,0,0,0.4);max-width:340px;animation:slideInToast 0.3s ease;`;
+      toast.textContent = message;
+      const style = document.createElement('style');
+      style.textContent = '@keyframes slideInToast { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }';
+      toast.appendChild(style);
+      document.body.appendChild(toast);
+      setTimeout(() => { if (toast.parentNode) toast.remove(); }, 4000);
+    }
+
     // Dashboard Tab Navigation
     document.querySelectorAll('.dash-tab').forEach(tab => {
       tab.addEventListener('click', () => {
@@ -986,6 +1003,37 @@
     function renderStreak(data) {
       document.getElementById('streak-atual').textContent = data.streak_atual;
       document.getElementById('streak-best').textContent = data.melhor_streak;
+
+      // Load and show streak freeze info
+      fetch('/api/streak-freeze').then(r => r.json()).then(freeze => {
+        let freezeEl = document.getElementById('streak-freeze-indicator');
+        if (!freezeEl) {
+          freezeEl = document.createElement('div');
+          freezeEl.id = 'streak-freeze-indicator';
+          freezeEl.style.cssText = 'display:flex;align-items:center;gap:4px;margin-left:auto;';
+          const streakBar = document.querySelector('.streak-bar');
+          if (streakBar) streakBar.insertBefore(freezeEl, streakBar.querySelector('.streak-best'));
+        }
+        const freezeIcons = '🧊'.repeat(freeze.freezes_available) + '<span style="opacity:0.3;">🧊</span>'.repeat(freeze.max_freezes - freeze.freezes_available);
+        freezeEl.innerHTML = `
+          <div style="display:flex;flex-direction:column;align-items:center;cursor:pointer;" title="Streak Freezes: ${freeze.freezes_available}/${freeze.max_freezes}\nProtege seu streak se perder 1 dia\nGanhe a cada ${freeze.earn_next_at - data.streak_atual > 0 ? freeze.earn_next_at - data.streak_atual + ' dias' : 'agora!'}" onclick="showStreakFreezeModal()">
+            <div style="font-size:0.85rem;">${freezeIcons}</div>
+            <div style="font-size:0.6rem;color:#89dceb;">${freeze.freezes_available}/${freeze.max_freezes}</div>
+          </div>
+        `;
+
+        // Auto-earn freeze if eligible
+        if (freeze.can_earn_today) {
+          fetch('/api/streak-freeze/earn', { method: 'POST' }).then(r => r.json()).then(res => {
+            if (res.ok) showToast('🧊 Streak Freeze ganho! Agora você tem proteção extra.', 'success');
+          }).catch(() => {});
+        }
+
+        // Check if yesterday was missed and offer freeze
+        if (data.streak_atual === 0 && freeze.freezes_available > 0) {
+          showStreakFreezeOffer(freeze.freezes_available);
+        }
+      }).catch(() => {});
     }
 
     function renderCards(dash, streaks) {
@@ -1351,10 +1399,78 @@
       } catch(e) {}
     }
 
+    // ===== CHALLENGE CELEBRATION =====
+    function showChallengeCelebration(completedChallenges) {
+      const challenge = completedChallenges[0]; // Show first, queue rest
+      const overlay = document.createElement('div');
+      overlay.id = 'challenge-celebration-overlay';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(30,30,46,0.92);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;animation:fadeInCelebration 0.3s ease;';
+      overlay.innerHTML = `
+        <style>
+          @keyframes fadeInCelebration { from { opacity: 0; } to { opacity: 1; } }
+          @keyframes bounceIn { 0% { transform: scale(0) rotate(-10deg); } 60% { transform: scale(1.1) rotate(2deg); } 100% { transform: scale(1) rotate(0); } }
+          @keyframes confettiDrop { 0% { transform: translateY(-100vh) rotate(0deg); opacity: 1; } 100% { transform: translateY(100vh) rotate(720deg); opacity: 0; } }
+          @keyframes shine { 0% { background-position: -200% center; } 100% { background-position: 200% center; } }
+          .confetti-piece { position: absolute; width: 10px; height: 10px; animation: confettiDrop 3s ease-out forwards; }
+        </style>
+        <div id="challenge-confetti" style="position:absolute;inset:0;overflow:hidden;pointer-events:none;"></div>
+        <div style="animation:bounceIn 0.6s ease;text-align:center;z-index:1;max-width:360px;">
+          <div style="font-size:4.5rem;margin-bottom:12px;">🏆</div>
+          <h2 style="color:#f9e2af;font-size:1.6rem;margin:0 0 8px;background:linear-gradient(90deg,#f9e2af,#fab387,#f9e2af);background-size:200%;-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:shine 2s linear infinite;">Desafio Completo!</h2>
+          <p style="color:#cdd6f4;font-size:1.1rem;margin:0 0 6px;font-weight:600;">${challenge.titulo}</p>
+          <p style="color:#a6e3a1;font-size:0.9rem;margin:0 0 20px;">✅ Meta atingida: ${challenge.meta_valor} ${challenge.meta_tipo}</p>
+          ${completedChallenges.length > 1 ? `<p style="color:#cba6f7;font-size:0.8rem;margin:0 0 16px;">+${completedChallenges.length - 1} outro(s) desafio(s) concluído(s)!</p>` : ''}
+          <button onclick="document.getElementById('challenge-celebration-overlay').remove()" style="background:linear-gradient(135deg,#cba6f7,#89b4fa);color:#1e1e2e;border:none;border-radius:8px;padding:12px 32px;font-size:1rem;font-weight:700;cursor:pointer;box-shadow:0 4px 15px rgba(203,166,247,0.3);">🎉 Excelente!</button>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+
+      // Spawn confetti
+      const container = overlay.querySelector('#challenge-confetti');
+      const colors = ['#f38ba8','#a6e3a1','#89b4fa','#f9e2af','#cba6f7','#fab387','#94e2d5'];
+      for (let i = 0; i < 80; i++) {
+        const piece = document.createElement('div');
+        piece.className = 'confetti-piece';
+        piece.style.left = Math.random() * 100 + '%';
+        piece.style.background = colors[Math.floor(Math.random() * colors.length)];
+        piece.style.borderRadius = Math.random() > 0.5 ? '50%' : '2px';
+        piece.style.width = (6 + Math.random() * 8) + 'px';
+        piece.style.height = (6 + Math.random() * 8) + 'px';
+        piece.style.animationDelay = Math.random() * 2 + 's';
+        piece.style.animationDuration = (2 + Math.random() * 2) + 's';
+        container.appendChild(piece);
+      }
+
+      // Play celebration sound
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6
+        notes.forEach((freq, i) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain); gain.connect(ctx.destination);
+          osc.type = 'sine'; osc.frequency.value = freq;
+          gain.gain.setValueAtTime(0.2, ctx.currentTime + i * 0.15);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + i * 0.15 + 0.4);
+          osc.start(ctx.currentTime + i * 0.15);
+          osc.stop(ctx.currentTime + i * 0.15 + 0.4);
+        });
+      } catch(e) {}
+
+      // Auto-dismiss after 8 seconds
+      setTimeout(() => { if (overlay.parentNode) overlay.remove(); }, 8000);
+    }
+
     async function loadDesafios() {
       try {
         // Atualizar progresso automaticamente
-        await fetch('/api/desafios/atualizar-progresso', { method: 'POST' }).catch(() => {});
+        const progressResult = await fetch('/api/desafios/atualizar-progresso', { method: 'POST' }).then(r => r.json()).catch(() => ({just_completed: []}));
+
+        // 🎉 Celebration for just-completed challenges
+        if (progressResult.just_completed && progressResult.just_completed.length > 0) {
+          showChallengeCelebration(progressResult.just_completed);
+        }
+
         const [desafios, sugestoes] = await Promise.all([
           fetch('/api/desafios').then(r => r.json()),
           fetch('/api/desafios/sugestoes').then(r => r.json()).catch(() => [])
@@ -1428,6 +1544,68 @@
     async function deleteDesafio(id) {
       await fetch(`/api/desafios/${id}`, { method: 'DELETE' });
       loadDesafios();
+    }
+
+    // ===== STREAK FREEZE FUNCTIONS =====
+    function showStreakFreezeOffer(freezesAvailable) {
+      // Only show once per session
+      if (sessionStorage.getItem('freeze_offered')) return;
+      sessionStorage.setItem('freeze_offered', '1');
+
+      const overlay = document.createElement('div');
+      overlay.id = 'streak-freeze-offer';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(30,30,46,0.9);z-index:99999;display:flex;align-items:center;justify-content:center;animation:fadeInCelebration 0.3s ease;';
+      overlay.innerHTML = `
+        <div style="background:#313244;border-radius:16px;padding:32px;max-width:360px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.5);border:2px solid #89dceb;">
+          <div style="font-size:3.5rem;margin-bottom:12px;">🧊</div>
+          <h3 style="color:#89dceb;margin:0 0 8px;font-size:1.3rem;">Streak em risco!</h3>
+          <p style="color:#cdd6f4;font-size:0.9rem;margin:0 0 16px;">Você não estudou ontem. Quer usar um <strong>Streak Freeze</strong> para proteger seu streak?</p>
+          <p style="color:#9399b2;font-size:0.8rem;margin:0 0 20px;">Freezes disponíveis: ${freezesAvailable}</p>
+          <div style="display:flex;gap:10px;justify-content:center;">
+            <button onclick="useStreakFreeze()" style="background:#89dceb;color:#1e1e2e;border:none;border-radius:8px;padding:10px 24px;font-weight:600;cursor:pointer;font-size:0.9rem;">🧊 Usar Freeze</button>
+            <button onclick="document.getElementById('streak-freeze-offer').remove()" style="background:#45475a;color:#cdd6f4;border:none;border-radius:8px;padding:10px 24px;cursor:pointer;font-size:0.9rem;">Deixar quebrar</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+    }
+
+    async function useStreakFreeze() {
+      const result = await fetch('/api/streak-freeze/use', { method: 'POST' }).then(r => r.json()).catch(() => null);
+      const offer = document.getElementById('streak-freeze-offer');
+      if (offer) offer.remove();
+      if (result && result.ok) {
+        showToast('🧊 Streak protegido! Seu streak continua.', 'success');
+        // Reload streak data
+        const streaks = await fetch('/api/streaks').then(r => r.json());
+        renderStreak(streaks);
+      } else {
+        showToast(result?.message || 'Não foi possível usar o freeze', 'error');
+      }
+    }
+
+    function showStreakFreezeModal() {
+      fetch('/api/streak-freeze').then(r => r.json()).then(freeze => {
+        const overlay = document.createElement('div');
+        overlay.id = 'streak-freeze-modal';
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(30,30,46,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;';
+        overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+        overlay.innerHTML = `
+          <div style="background:#313244;border-radius:16px;padding:28px;max-width:340px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+            <div style="font-size:2.5rem;margin-bottom:8px;">🧊</div>
+            <h3 style="color:#89dceb;margin:0 0 12px;">Streak Freeze</h3>
+            <p style="color:#cdd6f4;font-size:0.85rem;margin:0 0 16px;">Protege seu streak se você perder 1 dia de estudo. O streak não será zerado!</p>
+            <div style="display:flex;justify-content:center;gap:8px;margin-bottom:12px;">
+              ${'🧊'.repeat(freeze.freezes_available)}${'<span style="opacity:0.3;font-size:1.3rem;">🧊</span>'.repeat(freeze.max_freezes - freeze.freezes_available)}
+            </div>
+            <p style="color:#a6e3a1;font-size:0.8rem;margin:0 0 6px;">Disponíveis: ${freeze.freezes_available}/${freeze.max_freezes}</p>
+            <p style="color:#9399b2;font-size:0.75rem;margin:0 0 6px;">Usados: ${freeze.freezes_used}</p>
+            <p style="color:#cba6f7;font-size:0.75rem;margin:0 0 16px;">Próximo ganho: streak de ${freeze.earn_next_at} dias</p>
+            <button onclick="document.getElementById('streak-freeze-modal').remove()" style="background:#45475a;color:#cdd6f4;border:none;border-radius:8px;padding:8px 20px;cursor:pointer;">Fechar</button>
+          </div>
+        `;
+        document.body.appendChild(overlay);
+      });
     }
 
     function showCriarDesafioModal() {

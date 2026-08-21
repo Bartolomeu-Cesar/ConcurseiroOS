@@ -12,8 +12,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from routers import (
     analytics, auth, bookmarks, cadernos, calendario, ciclo, dashboard,
-    desafios, edital, feynman, flashcards, misc, notas, pdf, planejador,
-    questoes, simulados, streaks, sumulas, treinador
+    desafios, edital, feynman, flashcards, misc, notas, notifications, pdf,
+    planejador, questoes, simulados, streaks, sumulas, treinador
 )
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
@@ -141,6 +141,7 @@ app.include_router(notas.router)
 app.include_router(cadernos.router)
 app.include_router(feynman.router)
 app.include_router(desafios.router)
+app.include_router(notifications.router)
 app.include_router(misc.router)
 
 
