@@ -1000,10 +1000,56 @@
         if (!prox) prox = futuras[0];
         const cor = prox.dias <= 30 ? '#f38ba8' : prox.dias <= 60 ? '#fab387' : '#f9e2af';
         el.style.color = cor;
-        el.innerHTML = `⏳ <strong>${prox.cargo}</strong>: ${prox.dias} dias`;
-        el.title = futuras.map(p => `${p.cargo}: ${p.dias}d`).join('\n');
+        el.style.cursor = 'pointer';
+        el.innerHTML = `⏳ <strong>${prox.cargo}</strong>: ${prox.dias} dias ⭐`;
+        el.title = 'Clique para trocar a prova favorita\n' + futuras.map(p => `${p.cargo}: ${p.dias}d`).join('\n');
+        el.onclick = function() { showCountdownSelector(futuras); };
       } catch(e) {}
     }
+
+    function showCountdownSelector(futuras) {
+      const existing = document.getElementById('countdown-selector-modal');
+      if (existing) existing.remove();
+
+      const overlay = document.createElement('div');
+      overlay.id = 'countdown-selector-modal';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+      overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+
+      const favorito = localStorage.getItem('countdown_favorito') || '';
+      let html = '<div style="background:#313244;border-radius:12px;padding:20px;max-width:400px;width:90%;max-height:70vh;overflow-y:auto;">';
+      html += '<h3 style="color:#cba6f7;margin:0 0 12px;">⏳ Escolher Prova para Acompanhar</h3>';
+      html += '<div style="display:grid;gap:8px;">';
+      futuras.forEach(p => {
+        const key = `${p.edital}|${p.cargo}`;
+        const isFav = key === favorito;
+        const cor = p.dias <= 30 ? '#f38ba8' : p.dias <= 60 ? '#fab387' : '#f9e2af';
+        html += `<button onclick="selectCountdownFavorito('${key}')" style="display:flex;align-items:center;gap:10px;padding:12px;background:${isFav ? '#45475a' : '#1e1e2e'};border:2px solid ${isFav ? '#cba6f7' : '#45475a'};border-radius:10px;cursor:pointer;text-align:left;width:100%;">
+          <span style="font-size:1.2rem;">${isFav ? '⭐' : '📅'}</span>
+          <div style="flex:1;">
+            <div style="font-size:0.85rem;font-weight:600;color:#cdd6f4;">${p.edital} — ${p.cargo}</div>
+            <div style="font-size:0.75rem;color:#9399b2;">${p.data_objetiva || ''}</div>
+          </div>
+          <span style="font-size:0.9rem;font-weight:700;color:${cor};">${p.dias}d</span>
+        </button>`;
+      });
+      html += '</div>';
+      html += '<button onclick="selectCountdownFavorito(\'\')" style="display:block;width:100%;margin-top:10px;padding:10px;background:#45475a;color:#cdd6f4;border:none;border-radius:8px;cursor:pointer;font-size:0.82rem;">🔄 Automático (mais próxima)</button>';
+      html += '</div>';
+      overlay.innerHTML = html;
+      document.body.appendChild(overlay);
+    }
+
+    window.selectCountdownFavorito = function(key) {
+      if (key) {
+        localStorage.setItem('countdown_favorito', key);
+      } else {
+        localStorage.removeItem('countdown_favorito');
+      }
+      document.getElementById('countdown-selector-modal')?.remove();
+      loadDashCountdown();
+    };
+
     loadDashCountdown();
 
     document.getElementById('date-label').textContent = new Date().toLocaleDateString('pt-BR', {
