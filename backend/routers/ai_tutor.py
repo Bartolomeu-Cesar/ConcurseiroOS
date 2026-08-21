@@ -205,7 +205,9 @@ PROVIDERS = {
 
 
 def _get_ai_config() -> dict:
-    """Detect the best available AI provider and return configuration."""
+    """Detect the best available AI provider and return configuration.
+    Checks: 1) env var AI_PROVIDER override, 2) user DB config (via ai_config table), 3) auto-detect from env keys.
+    """
     provider_override = os.environ.get("AI_PROVIDER", "auto")
     model_override = os.environ.get("AI_MODEL", "")
 
@@ -967,3 +969,170 @@ def get_ai_status(
             else "AI não configurada. Defina uma das chaves: OPENAI_API_KEY, GEMINI_API_KEY, KIMI_API_KEY, GLM_API_KEY, AWS_BEDROCK_REGION, ou inicie o Ollama."
         ),
     }
+
+
+# ---------------------------------------------------------------------------
+# AI Config Endpoints (per-user provider configuration via UI)
+# ---------------------------------------------------------------------------
+
+class AIConfigUpdate(BaseModel):
+    provider: str = "auto"
+    api_key: str = ""
+    model: str = ""
+
+
+@router.get("/api/ai/config")
+def get_ai_config_endpoint(
+    db=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Get user's AI provider configuration."""
+    try:
+        row = db.execute(
+            "SELECT provider, api_key, model FROM ai_config WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        if row:
+            key = row[1] or ""
+            masked = key[:4] + "..." + key[-4:] if len(key) > 8 else ("***" if key else "")
+            return {
+                "provider": row[0] or "auto",
+                "api_key_masked": masked,
+                "model_override": row[2] or "",
+                "has_key": bool(key),
+            }
+    except Exception:
+        pass
+    return {"provider": "auto", "api_key_masked": "", "model_override": "", "has_key": False}
+
+
+@router.put("/api/ai/config")
+def update_ai_config_endpoint(
+    body: AIConfigUpdate,
+    db=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Save user's AI provider configuration."""
+    # Create table if not exists
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS ai_config (
+            user_id INTEGER PRIMARY KEY,
+            provider TEXT DEFAULT 'auto',
+            api_key TEXT DEFAULT '',
+            model TEXT DEFAULT ''
+        )
+    """)
+
+    db.execute(
+        """INSERT INTO ai_config (user_id, provider, api_key, model)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(user_id) DO UPDATE SET
+             provider = ?, api_key = ?, model = ?""",
+        (user_id, body.provider, body.api_key, body.model, body.provider, body.api_key, body.model),
+    )
+    db.commit()
+
+    # Apply config to environment for immediate effect
+    if body.provider and body.provider != "auto":
+        os.environ["AI_PROVIDER"] = body.provider
+    elif body.provider == "auto":
+        os.environ.pop("AI_PROVIDER", None)
+
+    if body.api_key:
+        prov = PROVIDERS.get(body.provider, {})
+        env_key = prov.get("env_key", "")
+        if env_key:
+            os.environ[env_key] = body.api_key
+
+    if body.model:
+        os.environ["AI_MODEL"] = body.model
+
+    log.info(f"[AI Config] user={user_id} provider={body.provider} model={body.model or 'default'}")
+    return {"ok": True}
+
+
+@router.post("/api/ai/config/test")
+def test_ai_config_endpoint(
+    body: AIConfigUpdate,
+    user_id: int = Depends(get_user_id),
+):
+    """Test an AI provider configuration without saving."""
+    provider = body.provider or "auto"
+    api_key = body.api_key
+    model = body.model
+
+    if provider == "auto":
+        return {"ok": False, "error": "Selecione um provider para testar."}
+
+    prov = PROVIDERS.get(provider)
+    if not prov:
+        return {"ok": False, "error": f"Provider '{provider}' não reconhecido."}
+
+    # For Ollama, test connectivity
+    if provider == "ollama":
+        ollama_url = api_key or "http://localhost:11434"
+        try:
+            with httpx.Client(timeout=5) as client:
+                resp = client.get(f"{ollama_url}/api/tags")
+                if resp.status_code == 200:
+                    models = [m["name"] for m in resp.json().get("models", [])[:5]]
+                    return {"ok": True, "provider_label": "Ollama (local)", "model": model or "llama3.1", "models_available": models}
+                return {"ok": False, "error": f"Ollama respondeu {resp.status_code}"}
+        except Exception as e:
+            return {"ok": False, "error": f"Não foi possível conectar ao Ollama: {str(e)[:80]}"}
+
+    # For Bedrock, just validate region
+    if provider == "bedrock":
+        region = api_key or "us-east-1"
+        if len(region) < 5 or "-" not in region:
+            return {"ok": False, "error": "Informe uma região AWS válida (ex: us-east-1)"}
+        return {"ok": True, "provider_label": "Amazon Bedrock", "model": model or prov["default_model"]}
+
+    # For API-key providers, make a minimal test call
+    if not api_key:
+        return {"ok": False, "error": "Informe a API key para testar."}
+
+    test_model = model or prov["default_model"]
+    test_messages = [{"role": "user", "content": "Diga apenas 'OK' em uma palavra."}]
+
+    try:
+        # Temporarily set env vars for the test
+        old_provider = os.environ.get("AI_PROVIDER", "")
+        old_key = ""
+        env_key = prov.get("env_key", "")
+        if env_key:
+            old_key = os.environ.get(env_key, "")
+            os.environ[env_key] = api_key
+        os.environ["AI_PROVIDER"] = provider
+        if model:
+            old_model = os.environ.get("AI_MODEL", "")
+            os.environ["AI_MODEL"] = model
+
+        text, tokens = call_llm_sync(test_messages, max_tokens=10)
+
+        # Restore
+        if old_provider:
+            os.environ["AI_PROVIDER"] = old_provider
+        else:
+            os.environ.pop("AI_PROVIDER", None)
+        if env_key:
+            if old_key:
+                os.environ[env_key] = old_key
+            else:
+                os.environ.pop(env_key, None)
+        if model:
+            if old_model:
+                os.environ["AI_MODEL"] = old_model
+            else:
+                os.environ.pop("AI_MODEL", None)
+
+        provider_labels = {k: v for k, v in zip(
+            PROVIDERS.keys(),
+            ["OpenAI", "Anthropic Claude", "Google Gemini", "xAI Grok", "DeepSeek", "Mistral AI", "Groq", "Together AI", "Cohere", "Perplexity", "Kimi", "GLM", "Amazon Bedrock", "Ollama"]
+        )}
+
+        return {"ok": True, "provider_label": provider_labels.get(provider, provider), "model": test_model, "response_preview": text[:50], "tokens": tokens}
+
+    except HTTPException as e:
+        return {"ok": False, "error": e.detail if isinstance(e.detail, str) else str(e.detail)}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:100]}

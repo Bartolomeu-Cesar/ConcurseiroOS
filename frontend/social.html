@@ -318,9 +318,12 @@
   <!-- TAB: AI Tutor -->
   <div class="tab-content" id="tab-ai">
     <div class="card">
-      <div class="ai-status" id="ai-status">
-        <span class="status-dot"></span>
-        <span>Verificando status...</span>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <div class="ai-status" id="ai-status">
+          <span class="status-dot"></span>
+          <span>Verificando status...</span>
+        </div>
+        <button onclick="openAIConfig()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;opacity:0.7;transition:opacity 0.2s;" title="Configurar Provider de IA" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.7">⚙️</button>
       </div>
       <div class="chat-container">
         <div class="chat-messages" id="chat-messages">
@@ -396,6 +399,52 @@
       <div class="modal-actions">
         <button class="btn-sm btn-secondary" onclick="closeModal('modal-create-group')">Cancelar</button>
         <button class="btn-sm btn-primary" onclick="createGroup()">Criar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: AI Provider Config -->
+  <div class="modal-overlay" id="modal-ai-config" onclick="if(event.target===this)closeModal('modal-ai-config')">
+    <div class="modal" style="max-width:500px;">
+      <h3>⚙️ Configurar AI Provider</h3>
+      <p style="font-size:0.8rem;color:#9399b2;margin-bottom:16px;">Escolha qual provedor de IA usar. Configure a API key do provider desejado.</p>
+
+      <label style="font-size:0.82rem;color:#cdd6f4;font-weight:500;display:block;margin-bottom:4px;">Provider</label>
+      <select id="ai-config-provider" onchange="onProviderChange()" style="width:100%;padding:10px 14px;border-radius:8px;border:1px solid #45475a;background:#181825;color:#cdd6f4;font-size:0.9rem;margin-bottom:12px;">
+        <option value="auto">🔄 Auto-detectar</option>
+        <option value="openai">🟢 OpenAI (GPT-4o-mini, GPT-4o)</option>
+        <option value="claude">🟣 Anthropic Claude (Sonnet, Haiku)</option>
+        <option value="gemini">🔵 Google Gemini (Flash, Pro)</option>
+        <option value="grok">⚡ xAI Grok (Grok-2)</option>
+        <option value="deepseek">🐋 DeepSeek (Chat, Reasoner)</option>
+        <option value="mistral">🟠 Mistral AI (Small, Large)</option>
+        <option value="groq">🚀 Groq (Inferência ultrarrápida)</option>
+        <option value="together">🤝 Together AI (Open-source)</option>
+        <option value="cohere">🔶 Cohere (Command-R)</option>
+        <option value="perplexity">🔍 Perplexity (Com busca web)</option>
+        <option value="kimi">🌙 Kimi / Moonshot AI</option>
+        <option value="glm">🇨🇳 GLM / ChatGLM (ZhipuAI)</option>
+        <option value="bedrock">☁️ Amazon Bedrock (AWS)</option>
+        <option value="ollama">🏠 Ollama (Local)</option>
+      </select>
+
+      <label style="font-size:0.82rem;color:#cdd6f4;font-weight:500;display:block;margin-bottom:4px;">API Key</label>
+      <div style="position:relative;">
+        <input type="password" id="ai-config-key" placeholder="Cole sua API key aqui..." style="padding-right:40px;">
+        <button onclick="toggleKeyVisibility()" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1rem;opacity:0.6;" title="Mostrar/Ocultar">👁</button>
+      </div>
+
+      <label style="font-size:0.82rem;color:#cdd6f4;font-weight:500;display:block;margin-bottom:4px;">Modelo <span style="color:#9399b2;font-weight:400;">(deixe vazio para usar o padrão)</span></label>
+      <input type="text" id="ai-config-model" placeholder="Ex: gpt-4o-mini, claude-3-5-sonnet...">
+
+      <div id="ai-config-info" style="background:#181825;border-radius:8px;padding:10px;margin-bottom:12px;font-size:0.78rem;color:#9399b2;display:none;"></div>
+
+      <div id="ai-config-status" style="margin-bottom:12px;"></div>
+
+      <div class="modal-actions">
+        <button class="btn-sm btn-secondary" onclick="closeModal('modal-ai-config')">Cancelar</button>
+        <button class="btn-sm" onclick="testAIConfig()" style="background:#f9e2af;color:#1e1e2e;border:none;border-radius:8px;padding:8px 16px;cursor:pointer;font-weight:600;">🧪 Testar</button>
+        <button class="btn-sm btn-primary" onclick="saveAIConfig()">💾 Salvar</button>
       </div>
     </div>
   </div>
@@ -498,18 +547,130 @@
     }
 
     // ===== AI TUTOR =====
+    const providerInfo = {
+      openai: { name: 'OpenAI', keyPrefix: 'sk-', models: 'gpt-4o-mini, gpt-4o, o1-mini', link: 'https://platform.openai.com/api-keys' },
+      claude: { name: 'Anthropic Claude', keyPrefix: 'sk-ant-', models: 'claude-3-5-sonnet, claude-3-5-haiku', link: 'https://console.anthropic.com/settings/keys' },
+      gemini: { name: 'Google Gemini', keyPrefix: 'AIza', models: 'gemini-2.0-flash, gemini-1.5-pro', link: 'https://aistudio.google.com/apikey' },
+      grok: { name: 'xAI Grok', keyPrefix: 'xai-', models: 'grok-2, grok-2-mini', link: 'https://console.x.ai/' },
+      deepseek: { name: 'DeepSeek', keyPrefix: 'sk-', models: 'deepseek-chat, deepseek-reasoner', link: 'https://platform.deepseek.com/api_keys' },
+      mistral: { name: 'Mistral AI', keyPrefix: '', models: 'mistral-small-latest, mistral-large-latest', link: 'https://console.mistral.ai/api-keys/' },
+      groq: { name: 'Groq', keyPrefix: 'gsk_', models: 'llama-3.1-70b-versatile, mixtral-8x7b-32768', link: 'https://console.groq.com/keys' },
+      together: { name: 'Together AI', keyPrefix: '', models: 'Meta-Llama-3.1-70B-Instruct-Turbo', link: 'https://api.together.xyz/settings/api-keys' },
+      cohere: { name: 'Cohere', keyPrefix: '', models: 'command-r-plus, command-r', link: 'https://dashboard.cohere.com/api-keys' },
+      perplexity: { name: 'Perplexity', keyPrefix: 'pplx-', models: 'sonar-large (com busca web)', link: 'https://www.perplexity.ai/settings/api' },
+      kimi: { name: 'Kimi / Moonshot', keyPrefix: 'sk-', models: 'moonshot-v1-8k, moonshot-v1-32k', link: 'https://platform.moonshot.cn/console/api-keys' },
+      glm: { name: 'GLM / ZhipuAI', keyPrefix: '', models: 'glm-4-flash, glm-4', link: 'https://open.bigmodel.cn/usercenter/apikeys' },
+      bedrock: { name: 'Amazon Bedrock', keyPrefix: '', models: 'claude-3-haiku, titan, llama', link: 'https://console.aws.amazon.com/bedrock/' },
+      ollama: { name: 'Ollama (Local)', keyPrefix: '', models: 'llama3.1, mistral, phi3', link: 'https://ollama.com/download' },
+    };
+
     async function checkAIStatus() {
       try {
         const res = await fetch('/api/ai/status');
         const data = await res.json();
         const el = document.getElementById('ai-status');
-        if (data.available) {
-          el.innerHTML = `<span class="status-dot online"></span><span>Online — Provider: ${data.provider || 'auto'}</span>`;
+        if (data.disponivel) {
+          el.innerHTML = `<span class="status-dot online"></span><span>${data.provider_label || data.provider} — ${data.modelo}</span>`;
         } else {
-          el.innerHTML = `<span class="status-dot offline"></span><span>Offline — Nenhum provider disponível</span>`;
+          el.innerHTML = `<span class="status-dot offline"></span><span>Offline — <a href="#" onclick="openAIConfig();return false;" style="color:#89b4fa;">Configurar provider</a></span>`;
         }
       } catch {
         document.getElementById('ai-status').innerHTML = '<span class="status-dot offline"></span><span>Erro de conexão</span>';
+      }
+    }
+
+    function openAIConfig() {
+      // Load current config
+      fetch('/api/ai/config').then(r => r.json()).then(config => {
+        document.getElementById('ai-config-provider').value = config.provider || 'auto';
+        document.getElementById('ai-config-key').value = config.api_key_masked || '';
+        document.getElementById('ai-config-model').value = config.model_override || '';
+        onProviderChange();
+      }).catch(() => {
+        onProviderChange();
+      });
+      document.getElementById('modal-ai-config').classList.add('open');
+    }
+
+    function onProviderChange() {
+      const provider = document.getElementById('ai-config-provider').value;
+      const infoEl = document.getElementById('ai-config-info');
+      const keyInput = document.getElementById('ai-config-key');
+
+      if (provider === 'auto') {
+        infoEl.style.display = 'none';
+        keyInput.placeholder = 'Cole a API key do provider que deseja usar...';
+        return;
+      }
+
+      const info = providerInfo[provider];
+      if (info) {
+        infoEl.style.display = 'block';
+        infoEl.innerHTML = `
+          <div style="margin-bottom:6px;"><strong style="color:#cba6f7;">${info.name}</strong></div>
+          <div>📋 Modelos: ${info.models}</div>
+          <div>🔑 Obter key: <a href="${info.link}" target="_blank" style="color:#89b4fa;">${info.link.replace('https://','').split('/')[0]}</a></div>
+          ${provider === 'ollama' ? '<div style="margin-top:4px;">💡 Não precisa de API key — basta rodar <code style="background:#1e1e2e;padding:2px 6px;border-radius:4px;">ollama serve</code></div>' : ''}
+          ${provider === 'bedrock' ? '<div style="margin-top:4px;">💡 Usa credenciais AWS IAM — configure via <code>aws configure</code></div>' : ''}
+        `;
+        keyInput.placeholder = info.keyPrefix ? `${info.keyPrefix}...` : 'API key...';
+        if (provider === 'ollama' || provider === 'bedrock') {
+          keyInput.placeholder = provider === 'ollama' ? 'http://localhost:11434 (URL do Ollama)' : 'us-east-1 (região AWS)';
+        }
+      }
+    }
+
+    function toggleKeyVisibility() {
+      const input = document.getElementById('ai-config-key');
+      input.type = input.type === 'password' ? 'text' : 'password';
+    }
+
+    async function testAIConfig() {
+      const statusEl = document.getElementById('ai-config-status');
+      statusEl.innerHTML = '<span style="color:#f9e2af;">🔄 Testando conexão...</span>';
+
+      const provider = document.getElementById('ai-config-provider').value;
+      const key = document.getElementById('ai-config-key').value;
+      const model = document.getElementById('ai-config-model').value;
+
+      try {
+        const res = await fetch('/api/ai/config/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider, api_key: key, model })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          statusEl.innerHTML = `<span style="color:#a6e3a1;">✅ Conexão OK! Provider: ${data.provider_label}, Modelo: ${data.model}</span>`;
+        } else {
+          statusEl.innerHTML = `<span style="color:#f38ba8;">❌ ${data.error || 'Falha na conexão'}</span>`;
+        }
+      } catch (e) {
+        statusEl.innerHTML = `<span style="color:#f38ba8;">❌ Erro: ${e.message}</span>`;
+      }
+    }
+
+    async function saveAIConfig() {
+      const provider = document.getElementById('ai-config-provider').value;
+      const key = document.getElementById('ai-config-key').value;
+      const model = document.getElementById('ai-config-model').value;
+
+      try {
+        const res = await fetch('/api/ai/config', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider, api_key: key, model })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          showToast('✅ Provider configurado com sucesso!', 'success');
+          closeModal('modal-ai-config');
+          checkAIStatus();
+        } else {
+          showToast(data.error || 'Erro ao salvar', 'error');
+        }
+      } catch (e) {
+        showToast('Erro ao salvar configuração', 'error');
       }
     }
 
