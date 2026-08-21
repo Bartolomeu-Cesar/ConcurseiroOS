@@ -1,6 +1,20 @@
 // ==================== ConcurseiroOS — App Orchestrator ====================
 // Importa todos os módulos e registra funções globais para onclick inline
 
+// Global fetch interceptor: injeta auth token em todas as requests para /api/
+const _originalFetch = window.fetch;
+window.fetch = function(url, options = {}) {
+  const token = localStorage.getItem('auth_token');
+  if (token && typeof url === 'string' && url.startsWith('/api/')) {
+    options = options || {};
+    options.headers = options.headers || {};
+    if (!options.headers['Authorization'] && !options.headers['authorization']) {
+      options.headers['Authorization'] = `Bearer ${token}`;
+    }
+  }
+  return _originalFetch.call(this, url, options);
+};
+
 import { initOfflineListeners, escapeHtml, confirmModal, toast, removeToast, showLoading, showSpinner, showEmpty, api, undoableDelete, debounce, formatHours } from './modules/utils.js';
 import { switchTab, initTabs } from './modules/tabs.js';
 import { initShortcuts, goToEditalItem } from './modules/shortcuts.js';

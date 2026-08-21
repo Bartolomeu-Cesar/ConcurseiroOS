@@ -121,6 +121,13 @@ export function initOfflineListeners() {
 export async function api(url, options = {}) {
   const { method = 'GET', body = null, retries = 2, timeout = 10000 } = options;
   const fetchOptions = { method, headers: {} };
+
+  // Incluir token de autenticação se disponível
+  const token = localStorage.getItem('auth_token');
+  if (token) {
+    fetchOptions.headers['Authorization'] = `Bearer ${token}`;
+  }
+
   if (body) {
     fetchOptions.headers['Content-Type'] = 'application/json';
     fetchOptions.body = JSON.stringify(body);
