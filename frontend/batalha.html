@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>⚔️ Batalha de Questões - ConcurseiroOS</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#1e1e2e">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/layout.css">
+  <style>
+    body { font-family: sans-serif; background: #1e1e2e; color: #cdd6f4; min-height: 100vh; padding: 24px; }
+    h1 { font-size: 1.4rem; color: #cba6f7; margin-bottom: 4px; }
+
+    .battle-container { max-width: 700px; margin: 0 auto; }
+
+    /* Lobby */
+    .lobby-card { background: #313244; border-radius: 16px; padding: 24px; margin-bottom: 16px; }
+    .lobby-card h2 { color: #cba6f7; font-size: 1.1rem; margin-bottom: 12px; }
+    .code-display { font-size: 2.4rem; font-weight: 800; color: #f9e2af; letter-spacing: 6px; text-align: center; padding: 16px; background: #1e1e2e; border-radius: 12px; margin: 12px 0; font-family: monospace; }
+    .players-list { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; }
+    .player-chip { display: flex; align-items: center; gap: 6px; background: #45475a; border-radius: 20px; padding: 6px 14px; }
+    .player-chip .avatar { width: 28px; height: 28px; border-radius: 50%; background: #89b4fa; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; }
+    .player-chip .name { font-size: 0.82rem; font-weight: 600; }
+
+    /* Question */
+    .question-card { background: #313244; border-radius: 16px; padding: 24px; margin-bottom: 16px; position: relative; overflow: hidden; }
+    .round-badge { position: absolute; top: 12px; right: 12px; background: #cba6f7; color: #1e1e2e; border-radius: 20px; padding: 4px 12px; font-size: 0.72rem; font-weight: 700; }
+    .timer-bar { height: 4px; background: #45475a; border-radius: 2px; margin-bottom: 16px; overflow: hidden; }
+    .timer-fill { height: 100%; background: #a6e3a1; border-radius: 2px; transition: width 1s linear; }
+    .question-text { font-size: 1rem; color: #cdd6f4; margin-bottom: 16px; line-height: 1.5; }
+    .materia-badge { font-size: 0.72rem; background: #45475a; color: #89b4fa; padding: 3px 10px; border-radius: 12px; margin-bottom: 12px; display: inline-block; }
+
+    .options { display: grid; gap: 8px; }
+    .option-btn { background: #1e1e2e; border: 2px solid #45475a; border-radius: 12px; padding: 12px 16px; text-align: left; font-size: 0.88rem; color: #cdd6f4; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 10px; }
+    .option-btn:hover { border-color: #89b4fa; background: #45475a; }
+    .option-btn.selected { border-color: #89b4fa; background: rgba(137,180,250,0.15); }
+    .option-btn.correct { border-color: #a6e3a1; background: rgba(166,227,161,0.15); }
+    .option-btn.wrong { border-color: #f38ba8; background: rgba(243,139,168,0.15); }
+    .option-letter { width: 28px; height: 28px; border-radius: 50%; background: #45475a; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.78rem; }
+
+    /* Ranking / Podium */
+    .ranking-card { background: #313244; border-radius: 16px; padding: 24px; text-align: center; }
+    .podium { display: flex; align-items: flex-end; justify-content: center; gap: 12px; margin: 24px 0; }
+    .podium-place { display: flex; flex-direction: column; align-items: center; }
+    .podium-bar { border-radius: 8px 8px 0 0; width: 80px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding: 12px 8px; }
+    .podium-bar.first { height: 140px; background: linear-gradient(180deg, #f9e2af, #fab387); }
+    .podium-bar.second { height: 110px; background: linear-gradient(180deg, #9399b2, #6c7086); }
+    .podium-bar.third { height: 85px; background: linear-gradient(180deg, #fab387, #f38ba8); }
+    .podium-name { font-size: 0.78rem; font-weight: 700; color: #1e1e2e; margin-top: 4px; }
+    .podium-points { font-size: 0.72rem; color: #1e1e2e; opacity: 0.8; }
+    .podium-emoji { font-size: 1.8rem; margin-bottom: 4px; }
+
+    .ranking-list { margin-top: 16px; }
+    .rank-row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: #1e1e2e; border-radius: 10px; margin-bottom: 6px; }
+    .rank-pos { font-size: 1.2rem; min-width: 30px; text-align: center; }
+    .rank-info { flex: 1; }
+    .rank-name { font-size: 0.88rem; font-weight: 600; }
+    .rank-stats { font-size: 0.72rem; color: #9399b2; }
+    .rank-points { font-size: 1.1rem; font-weight: 700; color: #f9e2af; }
+
+    /* Buttons */
+    .btn-battle { background: #a6e3a1; color: #1e1e2e; border: none; border-radius: 12px; padding: 12px 24px; font-size: 0.95rem; font-weight: 700; cursor: pointer; width: 100%; transition: transform 0.1s; }
+    .btn-battle:hover { transform: scale(1.02); }
+    .btn-battle:active { transform: scale(0.98); }
+    .btn-battle.secondary { background: #89b4fa; }
+    .btn-battle.danger { background: #f38ba8; }
+
+    .input-battle { background: #1e1e2e; border: 2px solid #45475a; border-radius: 10px; padding: 12px 16px; font-size: 1rem; color: #cdd6f4; width: 100%; box-sizing: border-box; text-align: center; letter-spacing: 3px; font-weight: 600; }
+    .input-battle:focus { outline: none; border-color: #cba6f7; }
+    .input-battle::placeholder { letter-spacing: normal; font-weight: 400; color: #585b70; }
+
+    .config-row { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; }
+    .config-row label { font-size: 0.82rem; color: #9399b2; min-width: 100px; }
+    .config-row select, .config-row input { background: #1e1e2e; border: 1px solid #45475a; border-radius: 8px; padding: 8px 12px; color: #cdd6f4; font-size: 0.85rem; flex: 1; }
+
+    /* Confetti */
+    @keyframes confetti-fall { 0% { transform: translateY(-100vh) rotate(0deg); opacity: 1; } 100% { transform: translateY(100vh) rotate(720deg); opacity: 0; } }
+    .confetti-piece { position: fixed; top: -10px; width: 10px; height: 10px; border-radius: 2px; animation: confetti-fall 3s ease-out forwards; pointer-events: none; z-index: 9999; }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+      .podium-bar { width: 60px; }
+      .code-display { font-size: 1.8rem; letter-spacing: 4px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="battle-container">
+    <!-- Views managed by JS -->
+    <div id="battle-view"></div>
+  </div>
+
+  <script src="/sidebar.js"></script>
+  <script>
+  (function() {
+    'use strict';
+
+    const view = document.getElementById('battle-view');
+    let state = { screen: 'menu', battle: null, timer: null, timeLeft: 0, selectedAnswer: null };
+
+    // ========== SCREENS ==========
+
+    function showMenu() {
+      state.screen = 'menu';
+      view.innerHTML = `
+        <h1 style="text-align:center;font-size:1.6rem;margin-bottom:24px;">⚔️ Batalha de Questões</h1>
+
+        <div class="lobby-card">
+          <h2>🎮 Criar Nova Batalha</h2>
+          <div class="config-row"><label>Título:</label><input id="cfg-titulo" value="Batalha de Questões" placeholder="Nome da sala"></div>
+          <div class="config-row"><label>Matérias:</label><input id="cfg-materias" placeholder="Ex: Direito Penal, Dir. Constitucional (vazio = todas)"></div>
+          <div class="config-row"><label>Rodadas:</label><select id="cfg-rodadas">${[3,5,7,10,15,20].map(n => `<option value="${n}" ${n===5?'selected':''}>${n} rodadas</option>`).join('')}</select></div>
+          <div class="config-row"><label>Tempo/questão:</label><select id="cfg-tempo">${[15,20,30,45,60].map(n => `<option value="${n}" ${n===30?'selected':''}>${n} segundos</option>`).join('')}</select></div>
+          <div class="config-row"><label>Jogadores:</label><select id="cfg-max">${[2,3,4,5].map(n => `<option value="${n}" ${n===5?'selected':''}>${n} jogadores</option>`).join('')}</select></div>
+          <button class="btn-battle" onclick="criarBatalha()">⚔️ Criar Sala</button>
+        </div>
+
+        <div class="lobby-card">
+          <h2>🚪 Entrar em Sala</h2>
+          <input class="input-battle" id="join-code" placeholder="CÓDIGO" maxlength="6" style="margin-bottom:12px;" onkeyup="this.value=this.value.toUpperCase()">
+          <button class="btn-battle secondary" onclick="entrarBatalha()">Entrar</button>
+        </div>
+
+        <div class="lobby-card">
+          <h2>📋 Minhas Batalhas</h2>
+          <div id="my-battles" style="color:#9399b2;font-size:0.85rem;">Carregando...</div>
+        </div>
+      `;
+      loadMyBattles();
+    }
+
+    function showLobby(data) {
+      state.screen = 'lobby';
+      state.battle = data;
+      const isCreator = true; // Single user mode
+
+      view.innerHTML = `
+        <h1 style="text-align:center;">🏟️ Sala de Batalha</h1>
+        <div class="lobby-card" style="text-align:center;">
+          <div style="font-size:0.82rem;color:#9399b2;">Compartilhe o código:</div>
+          <div class="code-display">${data.codigo}</div>
+          <div style="font-size:0.78rem;color:#9399b2;margin-bottom:12px;">
+            ${data.titulo} · ${data.total_rodadas} rodadas · ${data.tempo_por_questao}s/questão
+            ${data.materias.length ? '<br>📚 ' + data.materias.join(', ') : ''}
+          </div>
+          <div class="players-list" id="lobby-players"></div>
+          <div style="margin-top:16px;">
+            ${isCreator ? '<button class="btn-battle" onclick="iniciarBatalha()">🚀 Iniciar Batalha</button>' : '<div style="color:#f9e2af;font-size:0.85rem;">Aguardando o moderador iniciar...</div>'}
+          </div>
+          <button class="btn-battle secondary" style="margin-top:8px;" onclick="refreshLobby()">🔄 Atualizar</button>
+        </div>
+      `;
+      renderPlayers(data.jogadores || []);
+    }
+
+    function showQuestion(data) {
+      state.screen = 'question';
+      state.battle = data;
+      state.selectedAnswer = null;
+      const r = data.rodada;
+      if (!r) { refreshBattle(); return; }
+
+      const alts = r.alternativas;
+      const letters = ['a','b','c','d','e'].filter(l => alts[l]);
+
+      view.innerHTML = `
+        <div class="question-card">
+          <div class="round-badge">Rodada ${data.rodada_atual}/${data.total_rodadas}</div>
+          <div class="timer-bar"><div class="timer-fill" id="timer-fill" style="width:100%;"></div></div>
+          <div style="font-size:0.82rem;color:#9399b2;margin-bottom:4px;" id="timer-text">${data.tempo_por_questao}s</div>
+          <div class="materia-badge">📚 ${r.materia}</div>
+          <div class="question-text">${r.enunciado}</div>
+          <div class="options">
+            ${letters.map(l => `
+              <button class="option-btn" data-letter="${l}" onclick="selectAnswer('${l}')">
+                <span class="option-letter">${l.toUpperCase()}</span>
+                <span>${alts[l]}</span>
+              </button>
+            `).join('')}
+          </div>
+          <button class="btn-battle" style="margin-top:16px;opacity:0.5;" id="btn-confirm" onclick="confirmarResposta()" disabled>Confirmar</button>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;" id="round-players"></div>
+      `;
+
+      // Start timer
+      startTimer(data.tempo_por_questao);
+      renderRoundPlayers(r.responderam || [], data.jogadores);
+    }
+
+    function showRanking(data) {
+      state.screen = 'ranking';
+      launchConfetti();
+
+      const ranking = data.ranking || [];
+      const top3 = ranking.slice(0, 3);
+
+      // Podium order: 2nd, 1st, 3rd
+      const podiumOrder = top3.length >= 3 ? [top3[1], top3[0], top3[2]] : top3;
+      const podiumClasses = top3.length >= 3 ? ['second', 'first', 'third'] : ['first', 'second', 'third'];
+
+      view.innerHTML = `
+        <div class="ranking-card">
+          <h1 style="font-size:1.4rem;margin-bottom:4px;">🏆 Resultado Final</h1>
+          <div style="font-size:0.82rem;color:#9399b2;margin-bottom:8px;">${data.titulo} · ${data.total_rodadas} rodadas</div>
+
+          <div class="podium">
+            ${podiumOrder.map((p, i) => p ? `
+              <div class="podium-place">
+                <div class="podium-bar ${podiumClasses[i]}">
+                  <div class="podium-emoji">${p.emoji}</div>
+                  <div class="podium-name">${p.nome}</div>
+                  <div class="podium-points">${p.pontos} pts</div>
+                </div>
+              </div>
+            ` : '').join('')}
+          </div>
+
+          <div class="ranking-list">
+            ${ranking.map(r => `
+              <div class="rank-row">
+                <div class="rank-pos">${r.emoji}</div>
+                <div class="rank-info">
+                  <div class="rank-name">${r.nome}</div>
+                  <div class="rank-stats">${r.acertos}/${r.acertos + r.erros} acertos (${r.pct_acerto}%) · ⏱ ${r.tempo_medio_seg}s/q</div>
+                </div>
+                <div class="rank-points">${r.pontos}</div>
+              </div>
+            `).join('')}
+          </div>
+
+          <button class="btn-battle" style="margin-top:20px;" onclick="showMenu()">🔙 Voltar ao Menu</button>
+        </div>
+      `;
+    }
+
+    // ========== ACTIONS ==========
+
+    window.criarBatalha = async function() {
+      const titulo = document.getElementById('cfg-titulo').value.trim() || 'Batalha';
+      const materiasRaw = document.getElementById('cfg-materias').value.trim();
+      const materias = materiasRaw ? materiasRaw.split(',').map(m => m.trim()).filter(Boolean) : [];
+      const total_rodadas = parseInt(document.getElementById('cfg-rodadas').value);
+      const tempo_por_questao = parseInt(document.getElementById('cfg-tempo').value);
+      const max_jogadores = parseInt(document.getElementById('cfg-max').value);
+
+      try {
+        const res = await fetch('/api/batalha/criar', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ titulo, materias, total_rodadas, tempo_por_questao, max_jogadores })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          // Go to lobby
+          const sala = await fetch(`/api/batalha/sala/${data.codigo}`).then(r => r.json());
+          showLobby(sala);
+        } else {
+          alert(data.detail || 'Erro ao criar sala.');
+        }
+      } catch(e) { alert('Erro de conexão.'); }
+    };
+
+    window.entrarBatalha = async function() {
+      const codigo = document.getElementById('join-code').value.trim().toUpperCase();
+      if (!codigo || codigo.length < 4) { alert('Informe um código válido.'); return; }
+      try {
+        const res = await fetch('/api/batalha/entrar', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ codigo })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          const sala = await fetch(`/api/batalha/sala/${codigo}`).then(r => r.json());
+          if (sala.status === 'em_andamento') showQuestion(sala);
+          else if (sala.status === 'finalizada') { const rk = await fetch(`/api/batalha/ranking/${codigo}`).then(r=>r.json()); showRanking(rk); }
+          else showLobby(sala);
+        } else {
+          alert(data.detail || 'Erro ao entrar.');
+        }
+      } catch(e) { alert('Erro de conexão.'); }
+    };
+
+    window.iniciarBatalha = async function() {
+      if (!state.battle) return;
+      try {
+        const res = await fetch(`/api/batalha/iniciar/${state.battle.codigo}`, { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) {
+          const sala = await fetch(`/api/batalha/sala/${state.battle.codigo}`).then(r => r.json());
+          showQuestion(sala);
+        } else {
+          alert(data.detail || 'Erro ao iniciar.');
+        }
+      } catch(e) { alert('Erro.'); }
+    };
+
+    window.selectAnswer = function(letter) {
+      state.selectedAnswer = letter;
+      document.querySelectorAll('.option-btn').forEach(b => b.classList.remove('selected'));
+      document.querySelector(`.option-btn[data-letter="${letter}"]`).classList.add('selected');
+      const btn = document.getElementById('btn-confirm');
+      btn.disabled = false;
+      btn.style.opacity = '1';
+    };
+
+    window.confirmarResposta = async function() {
+      if (!state.selectedAnswer || !state.battle) return;
+      const btn = document.getElementById('btn-confirm');
+      btn.disabled = true;
+      btn.textContent = '⏳ Enviando...';
+
+      const tempoUsado = state.battle.tempo_por_questao - state.timeLeft;
+
+      try {
+        const res = await fetch(`/api/batalha/responder/${state.battle.codigo}`, {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ resposta: state.selectedAnswer, tempo_seg: tempoUsado })
+        });
+        const data = await res.json();
+        stopTimer();
+
+        // Show result
+        document.querySelectorAll('.option-btn').forEach(b => {
+          if (b.dataset.letter === data.resposta_correta.toLowerCase()) b.classList.add('correct');
+          if (b.dataset.letter === state.selectedAnswer && !data.acertou) b.classList.add('wrong');
+          b.style.pointerEvents = 'none';
+        });
+
+        btn.textContent = data.acertou ? `✅ +${data.pontos_ganhos} pontos!` : `❌ Resposta: ${data.resposta_correta.toUpperCase()}`;
+        btn.style.background = data.acertou ? '#a6e3a1' : '#f38ba8';
+
+        // Wait and advance
+        setTimeout(async () => {
+          if (data.batalha_finalizada) {
+            const rk = await fetch(`/api/batalha/ranking/${state.battle.codigo}`).then(r => r.json());
+            showRanking(rk);
+          } else {
+            const sala = await fetch(`/api/batalha/sala/${state.battle.codigo}`).then(r => r.json());
+            showQuestion(sala);
+          }
+        }, 2500);
+
+      } catch(e) { alert('Erro ao enviar resposta.'); }
+    };
+
+    window.refreshLobby = async function() {
+      if (!state.battle) return;
+      const sala = await fetch(`/api/batalha/sala/${state.battle.codigo}`).then(r => r.json());
+      if (sala.status === 'em_andamento') showQuestion(sala);
+      else showLobby(sala);
+    };
+
+    window.refreshBattle = async function() {
+      if (!state.battle) return;
+      const sala = await fetch(`/api/batalha/sala/${state.battle.codigo}`).then(r => r.json());
+      if (sala.status === 'em_andamento') showQuestion(sala);
+      else if (sala.status === 'finalizada') { const rk = await fetch(`/api/batalha/ranking/${state.battle.codigo}`).then(r=>r.json()); showRanking(rk); }
+      else showLobby(sala);
+    };
+
+    window.openBattle = async function(codigo) {
+      try {
+        const sala = await fetch(`/api/batalha/sala/${codigo}`).then(r => r.json());
+        if (sala.status === 'em_andamento') showQuestion(sala);
+        else if (sala.status === 'finalizada') { const rk = await fetch(`/api/batalha/ranking/${codigo}`).then(r=>r.json()); showRanking(rk); }
+        else showLobby(sala);
+      } catch(e) { alert('Erro ao abrir sala.'); }
+    };
+
+    // ========== HELPERS ==========
+
+    function renderPlayers(players) {
+      const el = document.getElementById('lobby-players');
+      if (!el) return;
+      el.innerHTML = players.map(p => `
+        <div class="player-chip">
+          <div class="avatar">${p.avatar || '👤'}</div>
+          <span class="name">${p.nome}</span>
+          <span style="font-size:0.72rem;color:#a6e3a1;">${p.pontos || 0}pts</span>
+        </div>
+      `).join('') || '<div style="color:#9399b2;font-size:0.82rem;">Aguardando jogadores...</div>';
+    }
+
+    function renderRoundPlayers(responderam, jogadores) {
+      const el = document.getElementById('round-players');
+      if (!el || !jogadores) return;
+      el.innerHTML = jogadores.map(p => {
+        const answered = responderam.find(r => r.user_id === p.user_id);
+        const status = answered ? (answered.acertou ? '✅' : '❌') : '⏳';
+        return `<div class="player-chip"><span class="name" style="font-size:0.75rem;">${status} ${p.nome}</span></div>`;
+      }).join('');
+    }
+
+    function startTimer(seconds) {
+      state.timeLeft = seconds;
+      const fill = document.getElementById('timer-fill');
+      const text = document.getElementById('timer-text');
+      if (fill) fill.style.width = '100%';
+
+      state.timer = setInterval(() => {
+        state.timeLeft--;
+        if (text) text.textContent = state.timeLeft + 's';
+        if (fill) fill.style.width = (state.timeLeft / seconds * 100) + '%';
+        if (fill && state.timeLeft <= 5) fill.style.background = '#f38ba8';
+
+        if (state.timeLeft <= 0) {
+          stopTimer();
+          // Auto-submit if time runs out
+          if (!state.selectedAnswer) {
+            state.selectedAnswer = 'x'; // wrong answer
+          }
+          confirmarResposta();
+        }
+      }, 1000);
+    }
+
+    function stopTimer() {
+      if (state.timer) { clearInterval(state.timer); state.timer = null; }
+    }
+
+    async function loadMyBattles() {
+      try {
+        const data = await fetch('/api/batalha/minhas').then(r => r.json());
+        const el = document.getElementById('my-battles');
+        if (!el) return;
+        if (!data.length) { el.innerHTML = '<div style="color:#585b70;">Nenhuma batalha ainda</div>'; return; }
+        el.innerHTML = data.slice(0, 5).map(b => {
+          const statusIcon = b.status === 'finalizada' ? '🏁' : b.status === 'em_andamento' ? '⚔️' : '⏳';
+          const posText = b.posicao ? ` · ${b.posicao}º lugar` : '';
+          return `<div onclick="openBattle('${b.codigo}')" style="display:flex;align-items:center;gap:10px;padding:8px;background:#1e1e2e;border-radius:8px;margin-bottom:6px;cursor:pointer;">
+            <span style="font-size:1.1rem;">${statusIcon}</span>
+            <div style="flex:1;"><div style="font-size:0.82rem;font-weight:600;">${b.titulo}</div><div style="font-size:0.7rem;color:#9399b2;">${b.codigo} · ${b.total_rodadas} rodadas${posText}</div></div>
+            <span style="font-size:0.85rem;font-weight:700;color:#f9e2af;">${b.pontos || 0}pts</span>
+          </div>`;
+        }).join('');
+      } catch(e) {}
+    }
+
+    function launchConfetti() {
+      const colors = ['#f38ba8','#a6e3a1','#89b4fa','#f9e2af','#cba6f7','#fab387'];
+      for (let i = 0; i < 60; i++) {
+        const piece = document.createElement('div');
+        piece.className = 'confetti-piece';
+        piece.style.left = Math.random() * 100 + 'vw';
+        piece.style.background = colors[Math.floor(Math.random() * colors.length)];
+        piece.style.animationDelay = Math.random() * 2 + 's';
+        piece.style.animationDuration = (2 + Math.random() * 2) + 's';
+        document.body.appendChild(piece);
+        setTimeout(() => piece.remove(), 5000);
+      }
+    }
+
+    // Init
+    showMenu();
+  })();
+  </script>
+</body>
+</html>

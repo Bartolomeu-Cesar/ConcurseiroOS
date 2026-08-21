@@ -59,6 +59,7 @@
           <li><a href="/#flashcards" onclick="goSection('tab-flashcards')"><span class="nav-icon">🧠</span><span class="nav-label">Flashcards</span><span class="nav-badge" id="badge-flashcards"></span></a></li>
           <li><a href="/#sumulas" onclick="goSection('tab-sumulas')"><span class="nav-icon">⚖️</span><span class="nav-label">Súmulas</span><span class="nav-badge" id="badge-sumulas"></span></a></li>
           <li><a href="/social.html#ai" onclick="goSocialTab('ai')"><span class="nav-icon">🤖</span><span class="nav-label">AI Tutor</span></a></li>
+          <li><a href="/batalha.html" class="${activeClass('/batalha')}"><span class="nav-icon">⚔️</span><span class="nav-label">Batalha</span></a></li>
         </ul>
       </div>
 

@@ -14,7 +14,7 @@ from routers import (
     analytics, auth, bookmarks, cadernos, calendario, ciclo, dashboard,
     desafios, edital, feynman, flashcards, misc, notas, notifications, pdf,
     planejador, questoes, simulados, streaks, sumulas, treinador,
-    leagues, ai_tutor, social
+    leagues, ai_tutor, social, batalha
 )
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
@@ -146,6 +146,7 @@ app.include_router(notifications.router)
 app.include_router(leagues.router)
 app.include_router(ai_tutor.router)
 app.include_router(social.router)
+app.include_router(batalha.router)
 app.include_router(misc.router)
 
 
