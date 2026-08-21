@@ -28,6 +28,10 @@ PLANS = {
             "pdfs": 3,                 # arquivos PDF
             "simulados": 1,            # simulados criados
             "ciclo_materias": 3,       # matérias no ciclo
+            # Batalha
+            "batalha": False,          # sem acesso
+            "batalha_max_jogadores": 0,
+            "batalha_max_rodadas": 0,
             # Recursos
             "treinador": False,        # técnicas de estudo
             "dashboard_completo": False,# analytics completo
@@ -57,6 +61,10 @@ PLANS = {
             "pdfs": 10,                # arquivos PDF
             "simulados": 3,            # simulados
             "ciclo_materias": 8,       # matérias no ciclo
+            # Batalha
+            "batalha": True,           # acesso à batalha
+            "batalha_max_jogadores": 3,# máx 3 jogadores
+            "batalha_max_rodadas": 5,  # máx 5 rodadas
             # Recursos
             "treinador": True,         # 3 técnicas básicas
             "dashboard_completo": True,# dashboard principal
@@ -86,6 +94,10 @@ PLANS = {
             "pdfs": -1,
             "simulados": -1,
             "ciclo_materias": -1,
+            # Batalha
+            "batalha": True,           # acesso completo
+            "batalha_max_jogadores": 5,# máx 5 jogadores
+            "batalha_max_rodadas": 20, # máx 20 rodadas
             # Recursos — TUDO HABILITADO
             "treinador": True,         # todas as 14 técnicas
             "dashboard_completo": True,
@@ -115,6 +127,10 @@ PLANS = {
             "pdfs": -1,
             "simulados": -1,
             "ciclo_materias": -1,
+            # Batalha
+            "batalha": True,           # acesso total
+            "batalha_max_jogadores": 5,# máx 5 jogadores
+            "batalha_max_rodadas": 20, # máx 20 rodadas
             "treinador": True,
             "dashboard_completo": True,
             "export_import": True,

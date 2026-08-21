@@ -148,14 +148,28 @@ def criar_batalha(
     """
     Cria uma nova sala de batalha.
     Body: {titulo, materias: ["Dir. Penal", "Dir. Const."], total_rodadas: 5-20, tempo_por_questao: 15-60, max_jogadores: 2-5}
+    Limites por plano: Guest=sem acesso, Free=3 jogadores/5 rodadas, Premium/Vitalício=5 jogadores/20 rodadas.
     """
     _ensure_battle_tables(conn)
 
+    # Verificar plano do usuário
+    from plans import get_limits, check_feature, PLANS, get_plan
+    user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    user_dict = dict(user) if user else {}
+    limites = get_limits(user_dict)
+
+    if not limites.get("batalha", False):
+        plano = get_plan(user_dict)
+        raise HTTPException(status_code=403, detail=f"Batalha não disponível no plano {PLANS[plano]['nome']}. Faça upgrade!")
+
+    plan_max_jogadores = limites.get("batalha_max_jogadores", 5)
+    plan_max_rodadas = limites.get("batalha_max_rodadas", 20)
+
     titulo = body.get("titulo", "Batalha de Questões")
     materias = body.get("materias", [])
-    total_rodadas = max(3, min(20, int(body.get("total_rodadas", 5))))
+    total_rodadas = max(3, min(plan_max_rodadas, int(body.get("total_rodadas", 5))))
     tempo_por_questao = max(10, min(120, int(body.get("tempo_por_questao", 30))))
-    max_jogadores = max(2, min(5, int(body.get("max_jogadores", 5))))
+    max_jogadores = max(2, min(plan_max_jogadores, int(body.get("max_jogadores", 5))))
 
     codigo = _generate_code()
     # Garantir unicidade
