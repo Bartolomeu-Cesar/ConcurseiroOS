@@ -1116,7 +1116,7 @@
 
     async function loadMetaDetails() {
       try {
-        const resumo = await fetch('/api/analytics/resumo-diario').then(r => r.json());
+        const resumo = await fetch('/api/resumo-diario').then(r => r.json());
 
         // Horas detail
         const horasEl = document.getElementById('meta-detail-horas');
