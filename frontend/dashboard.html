@@ -3651,6 +3651,14 @@
       } catch { }
     })();
 
+    // Restore panel from sidebar navigation (if redirected)
+    const savedPanel = localStorage.getItem('concurseiro_dash_panel');
+    if (savedPanel) {
+      localStorage.removeItem('concurseiro_dash_panel');
+      const tab = document.querySelector(`.dash-tab[data-panel="${savedPanel}"]`);
+      if (tab) tab.click();
+    }
+
     // Carga inicial
     loadActivePanel();
     loadMasteryOverview();

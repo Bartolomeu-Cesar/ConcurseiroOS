@@ -969,6 +969,13 @@
       }).catch(() => showToast('Erro ao carregar perfil', 'error'));
     }
 
+    // Restore tab from sidebar navigation (if redirected)
+    const savedTab = localStorage.getItem('concurseiro_social_tab');
+    if (savedTab) {
+      localStorage.removeItem('concurseiro_social_tab');
+      switchTab(savedTab);
+    }
+
     // ===== INIT =====
     loadUserProfile();
     loadLeague();

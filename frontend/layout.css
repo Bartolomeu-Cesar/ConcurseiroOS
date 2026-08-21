@@ -215,6 +215,18 @@
   color: #a6e3a1;
 }
 
+.sidebar-gamify .freeze-box {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  background: #313244;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #89dceb;
+}
+
 /* Main content area */
 .main-content {
   flex: 1;

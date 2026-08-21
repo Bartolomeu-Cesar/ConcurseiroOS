@@ -28,35 +28,45 @@
       </div>
 
       <div class="sidebar-section">
-        <div class="sidebar-section-title">Estudos</div>
+        <div class="sidebar-section-title">Hoje</div>
         <ul class="sidebar-nav">
-          <li><a href="/" class="${activeClass('/')}"><span class="nav-icon">📖</span><span class="nav-label">PDFs</span></a></li>
-          <li><a href="/#edital" onclick="goSection('tab-edital')" class="${currentPath === '/' ? '' : ''}"><span class="nav-icon">📋</span><span class="nav-label">Edital</span></a></li>
-          <li><a href="/#ciclo" onclick="goSection('tab-ciclo')" class="${currentPath === '/' ? '' : ''}"><span class="nav-icon">🔄</span><span class="nav-label">Ciclo</span></a></li>
+          <li><a href="/dashboard.html" class="${activeClass('/dashboard')}"><span class="nav-icon">⚡</span><span class="nav-label">Meu Dia</span></a></li>
+          <li><a href="/dashboard.html#calendario" onclick="goPanel('panel-calendario')"><span class="nav-icon">📅</span><span class="nav-label">Calendário</span></a></li>
         </ul>
       </div>
 
       <div class="sidebar-section">
-        <div class="sidebar-section-title">Prática</div>
+        <div class="sidebar-section-title">Estudar</div>
+        <ul class="sidebar-nav">
+          <li><a href="/" class="${activeClass('/')}"><span class="nav-icon">📖</span><span class="nav-label">PDFs / Leitura</span></a></li>
+          <li><a href="/#edital" onclick="goSection('tab-edital')"><span class="nav-icon">📋</span><span class="nav-label">Edital</span></a></li>
+          <li><a href="/#ciclo" onclick="goSection('tab-ciclo')"><span class="nav-icon">🔄</span><span class="nav-label">Ciclo</span></a></li>
+        </ul>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">Praticar</div>
         <ul class="sidebar-nav">
           <li><a href="/questoes.html" class="${activeClass('/questoes')}"><span class="nav-icon">❓</span><span class="nav-label">Questões</span></a></li>
           <li><a href="/#flashcards" onclick="goSection('tab-flashcards')"><span class="nav-icon">🧠</span><span class="nav-label">Flashcards</span></a></li>
           <li><a href="/#sumulas" onclick="goSection('tab-sumulas')"><span class="nav-icon">⚖️</span><span class="nav-label">Súmulas</span></a></li>
+          <li><a href="/social.html#ai" onclick="goSocialTab('ai')"><span class="nav-icon">🤖</span><span class="nav-label">AI Tutor</span></a></li>
         </ul>
       </div>
 
       <div class="sidebar-section">
-        <div class="sidebar-section-title">Progresso</div>
+        <div class="sidebar-section-title">Analisar</div>
         <ul class="sidebar-nav">
-          <li><a href="/dashboard.html" class="${activeClass('/dashboard')}"><span class="nav-icon">📊</span><span class="nav-label">Dashboard</span></a></li>
-          <li><a href="/#metas" onclick="goSection('tab-metas')"><span class="nav-icon">🎯</span><span class="nav-label">Metas</span></a></li>
-          <li><a href="/social.html" class="${activeClass('/social')}"><span class="nav-icon">🏆</span><span class="nav-label">Social</span></a></li>
+          <li><a href="/dashboard.html#analytics" onclick="goPanel('panel-analytics')"><span class="nav-icon">📊</span><span class="nav-label">Analytics</span></a></li>
+          <li><a href="/dashboard.html#raio-x" onclick="goPanel('panel-analytics')"><span class="nav-icon">🎯</span><span class="nav-label">Raio-X Bancas</span></a></li>
+          <li><a href="/social.html" class="${activeClass('/social')}"><span class="nav-icon">🏆</span><span class="nav-label">Liga & Social</span></a></li>
         </ul>
       </div>
 
       <div class="sidebar-footer">
         <div class="sidebar-gamify">
           <div class="streak-box"><span class="fire">🔥</span><span class="num" id="sidebar-streak">0</span></div>
+          <div class="freeze-box" id="sidebar-freeze" title="Streak Freezes">🧊 <span id="sidebar-freeze-count">0</span></div>
           <div class="xp-box" id="sidebar-xp">⭐ Nv.1</div>
         </div>
       </div>
@@ -104,7 +114,7 @@
     }
   }
 
-  // Load streak/XP
+  // Load streak/XP/freezes
   fetch('/api/streaks').then(r => r.json()).then(data => {
     const el = document.getElementById('sidebar-streak');
     if (el) el.textContent = data.streak_atual || 0;
@@ -113,6 +123,11 @@
   fetch('/api/gamification').then(r => r.json()).then(data => {
     const el = document.getElementById('sidebar-xp');
     if (el) el.textContent = `⭐ Nv.${data.nivel || 1}`;
+  }).catch(() => {});
+
+  fetch('/api/streak-freeze').then(r => r.json()).then(data => {
+    const el = document.getElementById('sidebar-freeze-count');
+    if (el) el.textContent = data.freezes_available || 0;
   }).catch(() => {});
 
   // Global functions
@@ -146,6 +161,31 @@
     // If on another page, redirect
     localStorage.setItem('concurseiro_active_tab', tabId);
     window.location.href = '/';
+    return false;
+  };
+
+  window.goPanel = function (panelId) {
+    // If we're on dashboard, switch panel directly
+    if (currentPath === '/dashboard.html' || currentPath.includes('dashboard')) {
+      const tab = document.querySelector(`.dash-tab[data-panel="${panelId}"]`);
+      if (tab) tab.click();
+      closeSidebar();
+      return false;
+    }
+    // If on another page, redirect to dashboard with panel
+    localStorage.setItem('concurseiro_dash_panel', panelId);
+    window.location.href = '/dashboard.html';
+    return false;
+  };
+
+  window.goSocialTab = function (tabName) {
+    if (currentPath === '/social.html' || currentPath.includes('social')) {
+      if (typeof switchTab === 'function') switchTab(tabName);
+      closeSidebar();
+      return false;
+    }
+    localStorage.setItem('concurseiro_social_tab', tabName);
+    window.location.href = '/social.html';
     return false;
   };
 })();
