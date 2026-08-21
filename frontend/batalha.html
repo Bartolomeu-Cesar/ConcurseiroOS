@@ -151,13 +151,43 @@
             ${data.materias.length ? '<br>📚 ' + data.materias.join(', ') : ''}
           </div>
           <div class="players-list" id="lobby-players"></div>
+          <div id="lobby-status" style="color:#f9e2af;font-size:0.82rem;margin-top:8px;">⏳ Atualizando automaticamente...</div>
           <div style="margin-top:16px;">
             ${isCreator ? '<button class="btn-battle" onclick="iniciarBatalha()">🚀 Iniciar Batalha</button><button class="btn-battle secondary" style="margin-top:8px;" onclick="reconfigurarBatalha()">🔄 Reconfigurar</button>' : '<div style="color:#f9e2af;font-size:0.85rem;">Aguardando o moderador iniciar...</div>'}
           </div>
-          <button class="btn-battle secondary" style="margin-top:8px;" onclick="refreshLobby()">🔄 Atualizar</button>
         </div>
       `;
       renderPlayers(data.jogadores || []);
+      // Start auto-polling lobby
+      startLobbyPolling(data.codigo);
+    }
+
+    let _lobbyPollInterval = null;
+    function startLobbyPolling(codigo) {
+      stopLobbyPolling();
+      _lobbyPollInterval = setInterval(async () => {
+        if (state.screen !== 'lobby') { stopLobbyPolling(); return; }
+        try {
+          const sala = await fetch(`/api/batalha/sala/${codigo}`).then(r => r.json());
+          if (sala.status === 'em_andamento') {
+            stopLobbyPolling();
+            showBatalhaToast('🚀 Batalha iniciada!', 'success');
+            showQuestion(sala);
+          } else if (sala.status === 'finalizada') {
+            stopLobbyPolling();
+            const rk = await fetch(`/api/batalha/ranking/${codigo}`).then(r => r.json());
+            showRanking(rk);
+          } else {
+            // Atualizar lista de jogadores
+            renderPlayers(sala.jogadores || []);
+            state.battle = sala;
+          }
+        } catch(e) {}
+      }, 3000); // A cada 3 segundos
+    }
+
+    function stopLobbyPolling() {
+      if (_lobbyPollInterval) { clearInterval(_lobbyPollInterval); _lobbyPollInterval = null; }
     }
 
     function showQuestion(data) {
@@ -880,6 +910,24 @@
     // Init
     showMenu();
     setTimeout(setupAutocomplete, 0);
+
+    // Auto-join if ?code= param present (from battle notification)
+    const urlCode = new URLSearchParams(window.location.search).get('code');
+    if (urlCode) {
+      setTimeout(async () => {
+        try {
+          // Try to enter the room first
+          await fetch('/api/batalha/entrar', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ codigo: urlCode })
+          });
+          const sala = await fetch(`/api/batalha/sala/${urlCode}`).then(r => r.json());
+          if (sala.status === 'em_andamento') showQuestion(sala);
+          else if (sala.status === 'finalizada') { const rk = await fetch(`/api/batalha/ranking/${urlCode}`).then(r=>r.json()); showRanking(rk); }
+          else showLobby(sala);
+        } catch(e) { showBatalhaToast('Erro ao entrar na sala.', 'error'); }
+      }, 100);
+    }
   })();
   </script>
 </body>

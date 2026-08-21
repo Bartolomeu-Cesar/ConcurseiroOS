@@ -370,3 +370,11 @@
   // Ask SW for pending count
   navigator.serviceWorker?.controller?.postMessage({ type: 'GET_PENDING_COUNT' });
 })();
+
+// Load battle notification system (global)
+(function() {
+  const s = document.createElement('script');
+  s.src = '/battle-notify.js';
+  s.defer = true;
+  document.body.appendChild(s);
+})();
