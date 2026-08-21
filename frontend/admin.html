@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>⚙️ Admin - ConcurseiroOS</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/layout.css">
+  <style>
+    body { font-family: sans-serif; background: #1e1e2e; color: #cdd6f4; min-height: 100vh; padding: 24px; }
+    .admin-container { max-width: 900px; margin: 0 auto; }
+    h1 { color: #cba6f7; font-size: 1.4rem; margin-bottom: 16px; }
+
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 20px; }
+    .stat-card { background: #313244; border-radius: 10px; padding: 14px; text-align: center; }
+    .stat-value { font-size: 1.5rem; font-weight: 700; color: #89b4fa; }
+    .stat-label { font-size: 0.72rem; color: #9399b2; margin-top: 2px; }
+
+    .toolbar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+    .toolbar input, .toolbar select { background: #313244; border: 1px solid #45475a; border-radius: 8px; padding: 8px 12px; color: #cdd6f4; font-size: 0.85rem; }
+    .toolbar input { flex: 1; min-width: 200px; }
+    .btn { background: #a6e3a1; color: #1e1e2e; border: none; border-radius: 8px; padding: 8px 16px; font-weight: 600; cursor: pointer; font-size: 0.82rem; }
+    .btn:hover { opacity: 0.9; }
+    .btn.secondary { background: #89b4fa; }
+    .btn.danger { background: #f38ba8; }
+    .btn.small { padding: 4px 10px; font-size: 0.75rem; border-radius: 6px; }
+
+    .users-table { width: 100%; border-collapse: collapse; background: #313244; border-radius: 10px; overflow: hidden; }
+    .users-table th { background: #45475a; padding: 10px 12px; text-align: left; font-size: 0.75rem; color: #9399b2; text-transform: uppercase; }
+    .users-table td { padding: 10px 12px; border-bottom: 1px solid #45475a; font-size: 0.82rem; }
+    .users-table tr:hover td { background: #45475a44; }
+    .users-table tr:last-child td { border-bottom: none; }
+
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.7rem; font-weight: 600; }
+    .badge-guest { background: #585b70; color: #cdd6f4; }
+    .badge-free { background: #89b4fa33; color: #89b4fa; }
+    .badge-premium { background: #f9e2af33; color: #f9e2af; }
+    .badge-ilimitado { background: #a6e3a133; color: #a6e3a1; }
+
+    .pagination { display: flex; justify-content: center; gap: 8px; margin-top: 16px; }
+    .pagination button { background: #45475a; border: none; color: #cdd6f4; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.82rem; }
+    .pagination button.active { background: #cba6f7; color: #1e1e2e; }
+    .pagination button:disabled { opacity: 0.4; cursor: default; }
+
+    /* Modal */
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; }
+    .modal-overlay.open { display: flex; }
+    .modal { background: #313244; border-radius: 12px; padding: 24px; max-width: 450px; width: 90%; max-height: 80vh; overflow-y: auto; }
+    .modal h3 { color: #cba6f7; margin-bottom: 12px; }
+    .modal label { font-size: 0.78rem; color: #9399b2; display: block; margin-top: 10px; margin-bottom: 4px; }
+    .modal input, .modal select { width: 100%; background: #1e1e2e; border: 1px solid #45475a; border-radius: 6px; padding: 8px 12px; color: #cdd6f4; font-size: 0.85rem; box-sizing: border-box; }
+    .modal-actions { display: flex; gap: 8px; margin-top: 16px; justify-content: flex-end; }
+  </style>
+</head>
+<body>
+  <div class="admin-container">
+    <h1>⚙️ Painel Administrativo</h1>
+
+    <!-- Stats -->
+    <div class="stats-grid" id="stats-grid">
+      <div class="stat-card"><div class="stat-value" id="st-users">—</div><div class="stat-label">Usuários</div></div>
+      <div class="stat-card"><div class="stat-value" id="st-ativos">—</div><div class="stat-label">Ativos (7d)</div></div>
+      <div class="stat-card"><div class="stat-value" id="st-questoes">—</div><div class="stat-label">Questões</div></div>
+      <div class="stat-card"><div class="stat-value" id="st-flash">—</div><div class="stat-label">Flashcards</div></div>
+      <div class="stat-card"><div class="stat-value" id="st-horas">—</div><div class="stat-label">Horas Estudo</div></div>
+      <div class="stat-card"><div class="stat-value" id="st-respostas">—</div><div class="stat-label">Respostas</div></div>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <input type="text" id="search-input" placeholder="🔍 Buscar por nome, email ou username..." onkeyup="if(event.key==='Enter')loadUsers()">
+      <button class="btn" onclick="loadUsers()">Buscar</button>
+      <button class="btn secondary" onclick="openCreateModal()">+ Novo Usuário</button>
+    </div>
+
+    <!-- Table -->
+    <div style="overflow-x:auto;">
+      <table class="users-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Nome</th>
+            <th>Email</th>
+            <th>Plano</th>
+            <th>Criado</th>
+            <th>Último Login</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody id="users-tbody">
+          <tr><td colspan="7" style="text-align:center;color:#9399b2;padding:20px;">Carregando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pagination" id="pagination"></div>
+  </div>
+
+  <!-- Modal: Criar/Editar Usuário -->
+  <div class="modal-overlay" id="modal-user" onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+      <h3 id="modal-title">Novo Usuário</h3>
+      <input type="hidden" id="edit-id">
+      <label>Nome</label>
+      <input type="text" id="field-nome" placeholder="Nome completo">
+      <label>Email</label>
+      <input type="email" id="field-email" placeholder="email@exemplo.com">
+      <label>Username</label>
+      <input type="text" id="field-username" placeholder="username">
+      <label>Plano</label>
+      <select id="field-plano">
+        <option value="guest">Visitante</option>
+        <option value="free" selected>Estudante (Free)</option>
+        <option value="premium">Premium</option>
+        <option value="ilimitado">Vitalício</option>
+      </select>
+      <label>Senha (deixe vazio para manter)</label>
+      <input type="password" id="field-password" placeholder="Nova senha">
+      <div class="modal-actions">
+        <button class="btn danger small" onclick="closeModal()">Cancelar</button>
+        <button class="btn" id="modal-save-btn" onclick="saveUser()">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/sidebar.js"></script>
+  <script>
+  (function() {
+    let currentPage = 1;
+    const perPage = 15;
+
+    // Load stats
+    async function loadStats() {
+      try {
+        const data = await fetch('/api/admin/stats').then(r => r.json());
+        document.getElementById('st-users').textContent = data.total_users;
+        document.getElementById('st-ativos').textContent = data.ativos_7d;
+        document.getElementById('st-questoes').textContent = data.total_questoes_banco;
+        document.getElementById('st-flash').textContent = data.total_flashcards;
+        document.getElementById('st-horas').textContent = data.total_horas_estudo + 'h';
+        document.getElementById('st-respostas').textContent = data.total_respostas;
+      } catch(e) {}
+    }
+
+    // Load users
+    window.loadUsers = async function(page) {
+      if (page) currentPage = page;
+      const search = document.getElementById('search-input').value.trim();
+      const params = new URLSearchParams({page: currentPage, limit: perPage});
+      if (search) params.set('search', search);
+
+      try {
+        const data = await fetch('/api/admin/users?' + params).then(r => r.json());
+        if (data.detail) { alert(data.detail); return; }
+
+        const tbody = document.getElementById('users-tbody');
+        if (!data.users.length) {
+          tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#9399b2;">Nenhum usuário encontrado</td></tr>';
+          document.getElementById('pagination').innerHTML = '';
+          return;
+        }
+
+        tbody.innerHTML = data.users.map(u => `
+          <tr>
+            <td style="color:#9399b2;">#${u.id}</td>
+            <td><strong>${esc(u.nome || '—')}</strong>${u.username ? '<br><span style="font-size:0.7rem;color:#9399b2;">@' + esc(u.username) + '</span>' : ''}</td>
+            <td style="font-size:0.78rem;">${esc(u.email)}</td>
+            <td><span class="badge badge-${u.plano}">${u.plano_nome}</span></td>
+            <td style="font-size:0.75rem;color:#9399b2;">${formatDate(u.created_at)}</td>
+            <td style="font-size:0.75rem;color:#9399b2;">${formatDate(u.last_login)}</td>
+            <td>
+              <button class="btn small secondary" onclick="editUser(${u.id})">✏️</button>
+              ${u.id !== 1 ? '<button class="btn small danger" onclick="deleteUser(' + u.id + ',\'' + esc(u.nome) + '\')">🗑</button>' : ''}
+            </td>
+          </tr>
+        `).join('');
+
+        // Pagination
+        let pagHtml = '';
+        pagHtml += `<button ${currentPage <= 1 ? 'disabled' : ''} onclick="loadUsers(${currentPage-1})">◀</button>`;
+        for (let p = 1; p <= data.pages; p++) {
+          pagHtml += `<button class="${p === currentPage ? 'active' : ''}" onclick="loadUsers(${p})">${p}</button>`;
+        }
+        pagHtml += `<button ${currentPage >= data.pages ? 'disabled' : ''} onclick="loadUsers(${currentPage+1})">▶</button>`;
+        document.getElementById('pagination').innerHTML = pagHtml;
+      } catch(e) {
+        document.getElementById('users-tbody').innerHTML = '<tr><td colspan="7" style="color:#f38ba8;text-align:center;">Erro ao carregar usuários</td></tr>';
+      }
+    };
+
+    // Create modal
+    window.openCreateModal = function() {
+      document.getElementById('modal-title').textContent = 'Novo Usuário';
+      document.getElementById('edit-id').value = '';
+      document.getElementById('field-nome').value = '';
+      document.getElementById('field-email').value = '';
+      document.getElementById('field-username').value = '';
+      document.getElementById('field-plano').value = 'free';
+      document.getElementById('field-password').value = '';
+      document.getElementById('modal-user').classList.add('open');
+    };
+
+    // Edit user
+    window.editUser = async function(uid) {
+      try {
+        const data = await fetch(`/api/admin/users/${uid}`).then(r => r.json());
+        const u = data.user;
+        document.getElementById('modal-title').textContent = `Editar: ${u.nome || u.email}`;
+        document.getElementById('edit-id').value = uid;
+        document.getElementById('field-nome').value = u.nome || '';
+        document.getElementById('field-email').value = u.email || '';
+        document.getElementById('field-username').value = u.username || '';
+        document.getElementById('field-plano').value = u.plano || 'free';
+        document.getElementById('field-password').value = '';
+        document.getElementById('modal-user').classList.add('open');
+      } catch(e) { alert('Erro ao carregar usuário.'); }
+    };
+
+    // Save user (create or update)
+    window.saveUser = async function() {
+      const uid = document.getElementById('edit-id').value;
+      const body = {
+        nome: document.getElementById('field-nome').value.trim(),
+        email: document.getElementById('field-email').value.trim(),
+        username: document.getElementById('field-username').value.trim(),
+        plano: document.getElementById('field-plano').value,
+      };
+      const pw = document.getElementById('field-password').value;
+      if (pw) body.password = pw;
+
+      if (!body.email) { alert('Email é obrigatório.'); return; }
+
+      try {
+        let res;
+        if (uid) {
+          res = await fetch(`/api/admin/users/${uid}`, {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+        } else {
+          res = await fetch('/api/admin/users', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+        }
+        const data = await res.json();
+        if (res.ok) {
+          closeModal();
+          loadUsers();
+          loadStats();
+        } else {
+          alert(data.detail || 'Erro ao salvar.');
+        }
+      } catch(e) { alert('Erro de conexão.'); }
+    };
+
+    // Delete user
+    window.deleteUser = async function(uid, nome) {
+      if (!confirm(`⚠️ EXCLUIR "${nome}" (ID ${uid})?\n\nIsso remove TODOS os dados deste usuário permanentemente!`)) return;
+      try {
+        const res = await fetch(`/api/admin/users/${uid}`, {method: 'DELETE'});
+        const data = await res.json();
+        if (res.ok) {
+          loadUsers();
+          loadStats();
+        } else {
+          alert(data.detail || 'Erro ao excluir.');
+        }
+      } catch(e) { alert('Erro.'); }
+    };
+
+    window.closeModal = function() {
+      document.getElementById('modal-user').classList.remove('open');
+    };
+
+    // Helpers
+    function esc(str) { const d = document.createElement('div'); d.textContent = str || ''; return d.innerHTML; }
+    function formatDate(str) {
+      if (!str) return '—';
+      try { return new Date(str).toLocaleDateString('pt-BR'); } catch(e) { return str.split('T')[0]; }
+    }
+
+    // Init
+    loadStats();
+    loadUsers();
+  })();
+  </script>
+</body>
+</html>
