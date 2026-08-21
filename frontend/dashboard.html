@@ -14,79 +14,79 @@
     /* Gráficos */
     .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
     .chart-box {
-      background: #313244; border-radius: 12px; padding: 20px;
+      background: var(--bg-surface); border-radius: 12px; padding: 20px;
     }
-    .chart-box h3 { font-size: 0.95rem; color: #cba6f7; margin-bottom: 12px; }
+    .chart-box h3 { font-size: 0.95rem; color: var(--accent); margin-bottom: 12px; }
     .chart-box canvas { max-height: 220px; }
 
     /* Streak */
     .streak-bar {
-      background: #313244; border-radius: 12px; padding: 16px 20px;
+      background: var(--bg-surface); border-radius: 12px; padding: 16px 20px;
       display: flex; align-items: center; gap: 16px; margin-bottom: 24px;
     }
     .streak-fire { font-size: 2rem; }
     .streak-info { flex: 1; }
-    .streak-info .streak-num { font-size: 1.4rem; font-weight: 700; color: #fab387; }
+    .streak-info .streak-num { font-size: 1.4rem; font-weight: 700; color: var(--peach); }
     .streak-info .streak-label { font-size: 0.82rem; color: #a6adc8; }
     .streak-best { text-align: right; }
-    .streak-best .num { font-size: 1.1rem; font-weight: 700; color: #a6e3a1; }
-    .streak-best .lbl { font-size: 0.75rem; color: #9399b2; }
+    .streak-best .num { font-size: 1.1rem; font-weight: 700; color: var(--green); }
+    .streak-best .lbl { font-size: 0.75rem; color: var(--text-sub); }
 
     /* Metas */
     .metas-section { margin-bottom: 24px; }
-    .metas-section h2 { font-size: 1.1rem; color: #cba6f7; margin-bottom: 12px; }
+    .metas-section h2 { font-size: 1.1rem; color: var(--accent); margin-bottom: 12px; }
     .meta-row {
       display: flex; align-items: center; gap: 12px;
-      background: #313244; border-radius: 8px; padding: 12px 16px; margin-bottom: 8px;
+      background: var(--bg-surface); border-radius: 8px; padding: 12px 16px; margin-bottom: 8px;
     }
     .meta-icon { font-size: 1.3rem; }
     .meta-info { flex: 1; }
     .meta-info .meta-title { font-size: 0.88rem; font-weight: 600; }
     .meta-info .meta-progress-bar {
-      height: 6px; background: #45475a; border-radius: 3px; margin-top: 4px; overflow: hidden;
+      height: 6px; background: var(--bg-elevated); border-radius: 3px; margin-top: 4px; overflow: hidden;
     }
     .meta-info .meta-progress-fill { height: 100%; border-radius: 3px; transition: width 0.4s; }
     .meta-pct { font-size: 0.85rem; font-weight: 700; min-width: 48px; text-align: right; }
-    .meta-row:hover { background: #45475a !important; }
+    .meta-row:hover { background: var(--bg-elevated) !important; }
     @keyframes slideDown { from { opacity: 0; max-height: 0; } to { opacity: 1; max-height: 300px; } }
 
     /* Relatório semanal */
     .relatorio {
-      background: #313244; border-radius: 12px; padding: 20px; margin-bottom: 24px;
+      background: var(--bg-surface); border-radius: 12px; padding: 20px; margin-bottom: 24px;
     }
-    .relatorio h2 { font-size: 1.1rem; color: #cba6f7; margin-bottom: 12px; }
+    .relatorio h2 { font-size: 1.1rem; color: var(--accent); margin-bottom: 12px; }
     .relatorio-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
     .relatorio-item { padding: 8px 0; }
-    .relatorio-item .r-label { font-size: 0.78rem; color: #9399b2; }
+    .relatorio-item .r-label { font-size: 0.78rem; color: var(--text-sub); }
     .relatorio-item .r-value { font-size: 1.1rem; font-weight: 600; }
     .sugestao-box {
-      background: #1e1e2e; border-radius: 8px; padding: 12px; margin-top: 12px;
+      background: var(--bg); border-radius: 8px; padding: 12px; margin-top: 12px;
     }
-    .sugestao-box h4 { font-size: 0.85rem; color: #fab387; margin-bottom: 6px; }
-    .sugestao-box ul { padding-left: 16px; font-size: 0.85rem; color: #cdd6f4; }
+    .sugestao-box h4 { font-size: 0.85rem; color: var(--peach); margin-bottom: 6px; }
+    .sugestao-box ul { padding-left: 16px; font-size: 0.85rem; color: var(--text); }
     .sugestao-box li { margin-bottom: 4px; }
 
     /* Prática deliberada */
     .pratica-panel {
-      background: #313244; border-radius: 12px; padding: 20px; margin-bottom: 24px;
+      background: var(--bg-surface); border-radius: 12px; padding: 20px; margin-bottom: 24px;
     }
-    .pratica-panel h2 { font-size: 1.1rem; color: #cba6f7; margin-bottom: 12px; }
+    .pratica-panel h2 { font-size: 1.1rem; color: var(--accent); margin-bottom: 12px; }
     .pratica-item {
       display: flex; align-items: center; gap: 12px;
-      padding: 10px 12px; border-bottom: 1px solid #45475a;
+      padding: 10px 12px; border-bottom: 1px solid var(--border);
     }
     .pratica-item:last-child { border-bottom: none; }
     .pratica-badge {
       font-size: 0.72rem; font-weight: 700; padding: 3px 8px; border-radius: 4px;
     }
-    .pratica-badge.alta { background: #f38ba8; color: #1e1e2e; }
-    .pratica-badge.media { background: #fab387; color: #1e1e2e; }
+    .pratica-badge.alta { background: #f38ba8; color: var(--bg); }
+    .pratica-badge.media { background: #fab387; color: var(--bg); }
     .pratica-materia { flex: 1; font-size: 0.9rem; }
     .pratica-pct { font-size: 0.85rem; font-weight: 700; }
 
     /* Exportar */
     .export-btn {
-      background: #45475a; color: #cdd6f4; border: none; border-radius: 8px;
+      background: var(--bg-elevated); color: var(--text); border: none; border-radius: 8px;
       padding: 10px 20px; font-size: 0.9rem; font-weight: 600; cursor: pointer;
     }
     .export-btn:hover { background: #585b70; }
@@ -117,13 +117,13 @@
     body.light-theme .metas-section h2 { color: #8839ef; }
 
     .heatmap-grid { display: flex; gap: 2px; flex-wrap: wrap; }
-    .heatmap-cell { width: 12px; height: 12px; border-radius: 2px; background: #45475a; border: 1px solid #585b70; }
-    .heatmap-cell.future { background: #313244; border: 1px dashed #45475a; opacity: 0.5; }
+    .heatmap-cell { width: 12px; height: 12px; border-radius: 2px; background: var(--bg-elevated); border: 1px solid #585b70; }
+    .heatmap-cell.future { background: var(--bg-surface); border: 1px dashed #45475a; opacity: 0.5; }
     .heatmap-cell.l1 { background: #1e4620; opacity: 1; }
     .heatmap-cell.l2 { background: #2d6a30; opacity: 1; }
     .heatmap-cell.l3 { background: #3da140; opacity: 1; }
     .heatmap-cell.l4 { background: #a6e3a1; opacity: 1; }
-    .heatmap-months { display: flex; gap: 2px; font-size: 0.6rem; color: #9399b2; margin-bottom: 2px; }
+    .heatmap-months { display: flex; gap: 2px; font-size: 0.6rem; color: var(--text-sub); margin-bottom: 2px; }
     /* Heatmap - tema claro */
     body.light-theme .heatmap-cell { background: #ccd0da; border: 1px solid #bcc0cc; }
     body.light-theme .heatmap-cell.future { background: #e6e9ef; border: 1px dashed #ccd0da; opacity: 0.5; }
@@ -132,32 +132,32 @@
     body.light-theme .heatmap-cell.l3 { background: #40a02b; border-color: #339022; }
     body.light-theme .heatmap-cell.l4 { background: #1a7f12; border-color: #146b0e; }
     body.light-theme .heatmap-months { color: #5c5f77; }
-    .share-card { background: linear-gradient(135deg, #1e1e2e, #313244); border: 1px solid #45475a; border-radius: 12px; padding: 16px; text-align: center; }
-    .share-card .share-text { font-size: 0.85rem; color: #cdd6f4; margin-bottom: 12px; line-height: 1.6; }
+    .share-card { background: linear-gradient(135deg, #1e1e2e, #313244); border: 1px solid var(--border); border-radius: 12px; padding: 16px; text-align: center; }
+    .share-card .share-text { font-size: 0.85rem; color: var(--text); margin-bottom: 12px; line-height: 1.6; }
     .share-btns { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
     .share-btns button { border: none; border-radius: 6px; padding: 6px 14px; font-size: 0.78rem; cursor: pointer; font-weight: 600; }
 
     .gam-level { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
-    .gam-level .level-num { font-size: 1.8rem; font-weight: 700; color: #cba6f7; }
+    .gam-level .level-num { font-size: 1.8rem; font-weight: 700; color: var(--accent); }
     .gam-level .level-info { flex: 1; }
     .gam-level .level-title { font-size: 0.85rem; color: #a6adc8; }
-    .gam-xp-bar { height: 8px; background: #45475a; border-radius: 4px; overflow: hidden; margin-bottom: 4px; }
+    .gam-xp-bar { height: 8px; background: var(--bg-elevated); border-radius: 4px; overflow: hidden; margin-bottom: 4px; }
     .gam-xp-fill { height: 100%; background: linear-gradient(90deg, #cba6f7, #89b4fa); border-radius: 4px; transition: width 0.5s; }
-    .gam-xp-text { font-size: 0.75rem; color: #9399b2; text-align: right; }
+    .gam-xp-text { font-size: 0.75rem; color: var(--text-sub); text-align: right; }
     .gam-badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-    .gam-badge { display: flex; align-items: center; gap: 4px; background: #45475a; padding: 4px 10px; border-radius: 16px; font-size: 0.78rem; }
+    .gam-badge { display: flex; align-items: center; gap: 4px; background: var(--bg-elevated); padding: 4px 10px; border-radius: 16px; font-size: 0.78rem; }
     .gam-badge .badge-icon { font-size: 1.1rem; }
-    .gam-badge .badge-name { color: #cdd6f4; }
+    .gam-badge .badge-name { color: var(--text); }
     .gam-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 12px; }
-    .gam-stat { text-align: center; padding: 6px; background: #45475a; border-radius: 6px; }
-    .gam-stat .num { font-size: 1rem; font-weight: 700; color: #89b4fa; }
-    .gam-stat .lbl { font-size: 0.68rem; color: #9399b2; }
+    .gam-stat { text-align: center; padding: 6px; background: var(--bg-elevated); border-radius: 6px; }
+    .gam-stat .num { font-size: 1rem; font-weight: 700; color: var(--blue); }
+    .gam-stat .lbl { font-size: 0.68rem; color: var(--text-sub); }
 
     /* Dashboard Tabs */
     .dash-tabs {
       display: flex;
       gap: 0;
-      background: #313244;
+      background: var(--bg-surface);
       border-radius: 10px;
       margin-bottom: 20px;
       overflow-x: auto;
@@ -170,7 +170,7 @@
       padding: 12px 16px;
       border: none;
       background: transparent;
-      color: #9399b2;
+      color: var(--text-sub);
       font-size: 0.85rem;
       font-weight: 600;
       cursor: pointer;
@@ -178,8 +178,8 @@
       transition: all 0.2s;
       white-space: nowrap;
     }
-    .dash-tab:hover { color: #cdd6f4; background: #45475a; }
-    .dash-tab.active { color: #cdd6f4; border-bottom-color: #cba6f7; background: #45475a; }
+    .dash-tab:hover { color: var(--text); background: var(--bg-elevated); }
+    .dash-tab.active { color: var(--text); border-bottom-color: var(--accent); background: var(--bg-elevated); }
     .dash-panel { display: none; }
     .dash-panel.active { display: block; }
     body.light-theme .dash-tabs { background: #e6e9ef; }
@@ -204,42 +204,42 @@
       .cal-grid { grid-template-columns: 1fr; }
     }
     .cal-day {
-      background: #1e1e2e;
+      background: var(--bg);
       border-radius: 10px;
       padding: 12px;
       min-height: 200px;
-      border: 1px solid #45475a;
+      border: 1px solid var(--border);
       transition: border-color 0.2s;
     }
-    .cal-day:hover { border-color: #cba6f7; }
-    .cal-day.today { border-color: #a6e3a1; border-width: 2px; }
+    .cal-day:hover { border-color: var(--accent); }
+    .cal-day.today { border-color: var(--green); border-width: 2px; }
     .cal-day-header {
       font-size: 0.82rem;
       font-weight: 700;
-      color: #cba6f7;
+      color: var(--accent);
       margin-bottom: 8px;
       padding-bottom: 6px;
-      border-bottom: 1px solid #45475a;
+      border-bottom: 1px solid var(--border);
     }
-    .cal-day-header .cal-date { font-size: 0.72rem; color: #9399b2; font-weight: 400; }
+    .cal-day-header .cal-date { font-size: 0.72rem; color: var(--text-sub); font-weight: 400; }
     .cal-activity {
       display: flex;
       align-items: flex-start;
       gap: 6px;
       padding: 5px 0;
       font-size: 0.75rem;
-      border-bottom: 1px solid #313244;
+      border-bottom: 1px solid var(--border);
     }
     .cal-activity:last-child { border-bottom: none; }
     .cal-activity-icon { font-size: 0.85rem; min-width: 18px; }
     .cal-activity-info { flex: 1; }
-    .cal-activity-materia { font-weight: 600; color: #cdd6f4; }
-    .cal-activity-detail { color: #9399b2; font-size: 0.7rem; margin-top: 2px; }
+    .cal-activity-materia { font-weight: 600; color: var(--text); }
+    .cal-activity-detail { color: var(--text-sub); font-size: 0.7rem; margin-top: 2px; }
     .cal-detail-truncated { cursor: pointer; }
-    .cal-detail-truncated:hover { color: #89b4fa; }
-    .cal-detail-truncated .cal-detail-short::after { content: ' ▸'; color: #89b4fa; font-size: 0.6rem; }
-    .cal-activity-time { font-size: 0.7rem; color: #89b4fa; white-space: nowrap; }
-    .cal-day-footer { margin-top: 8px; padding-top: 6px; border-top: 1px solid #45475a; font-size: 0.72rem; color: #9399b2; }
+    .cal-detail-truncated:hover { color: var(--blue); }
+    .cal-detail-truncated .cal-detail-short::after { content: ' ▸'; color: var(--blue); font-size: 0.6rem; }
+    .cal-activity-time { font-size: 0.7rem; color: var(--blue); white-space: nowrap; }
+    .cal-day-footer { margin-top: 8px; padding-top: 6px; border-top: 1px solid #45475a; font-size: 0.72rem; color: var(--text-sub); }
     body.light-theme .cal-day { background: #dce0e8; border-color: #bcc0cc; }
     body.light-theme .cal-day:hover { border-color: #8839ef; }
     body.light-theme .cal-day.today { border-color: #40a02b; }
@@ -249,42 +249,42 @@
     /* Calendar mode buttons */
     .cal-mode-btn {
       padding: 6px 12px; border: none; background: transparent;
-      color: #9399b2; font-size: 0.78rem; font-weight: 600; cursor: pointer;
+      color: var(--text-sub); font-size: 0.78rem; font-weight: 600; cursor: pointer;
       transition: all 0.2s;
     }
-    .cal-mode-btn:hover { color: #cdd6f4; background: #45475a; }
-    .cal-mode-btn.active { color: #1e1e2e; background: #cba6f7; }
+    .cal-mode-btn:hover { color: var(--text); background: var(--bg-elevated); }
+    .cal-mode-btn.active { color: var(--bg); background: #cba6f7; }
     body.light-theme .cal-mode-btn.active { background: #8839ef; color: #fff; }
     .plan-mode-btn {
       padding: 6px 12px; border: none; background: transparent;
-      color: #9399b2; font-size: 0.78rem; font-weight: 600; cursor: pointer;
+      color: var(--text-sub); font-size: 0.78rem; font-weight: 600; cursor: pointer;
       transition: all 0.2s;
     }
-    .plan-mode-btn:hover { color: #cdd6f4; background: #45475a; }
-    .plan-mode-btn.active { color: #1e1e2e; background: #89b4fa; }
+    .plan-mode-btn:hover { color: var(--text); background: var(--bg-elevated); }
+    .plan-mode-btn.active { color: var(--bg); background: #89b4fa; }
     body.light-theme .plan-mode-btn.active { background: #1e66f5; color: #fff; }
     .cal-delete-btn {
-      background: none; border: none; color: #f38ba8; cursor: pointer;
+      background: none; border: none; color: var(--red); cursor: pointer;
       font-size: 0.75rem; opacity: 0.6; transition: opacity 0.2s;
     }
     .cal-delete-btn:hover { opacity: 1; }
     /* Check de conclusão */
     .cal-check {
-      width: 14px; height: 14px; accent-color: #a6e3a1; cursor: pointer;
+      width: 14px; height: 14px; accent-color: var(--green); cursor: pointer;
       margin-right: 2px; flex-shrink: 0;
     }
     .cal-activity.concluida {
       opacity: 0.5; text-decoration: line-through; background: rgba(166,227,161,0.05);
       border-radius: 4px; padding-left: 4px;
     }
-    .cal-activity.concluida .cal-activity-materia { color: #a6e3a1; }
+    .cal-activity.concluida .cal-activity-materia { color: var(--green); }
     /* Pomodoro btn */
     .cal-pomo-btn {
-      background: none; border: 1px solid #45475a; color: #a6e3a1; cursor: pointer;
+      background: none; border: 1px solid var(--border); color: var(--green); cursor: pointer;
       font-size: 0.7rem; border-radius: 4px; padding: 1px 5px;
       opacity: 0.7; transition: all 0.2s;
     }
-    .cal-pomo-btn:hover { opacity: 1; background: #a6e3a1; color: #1e1e2e; }
+    .cal-pomo-btn:hover { opacity: 1; background: #a6e3a1; color: var(--bg); }
     /* Drag-and-drop */
     .cal-activity[draggable] { cursor: grab; transition: transform 0.15s, opacity 0.15s; }
     .cal-activity[draggable]:active { cursor: grabbing; }
@@ -949,7 +949,7 @@
           prox = futuras.find(p => `${p.edital}|${p.cargo}` === favorito);
         }
         if (!prox) prox = futuras[0];
-        const cor = prox.dias <= 30 ? '#f38ba8' : prox.dias <= 60 ? '#fab387' : '#f9e2af';
+        const cor = prox.dias <= 30 ? 'var(--red)' : prox.dias <= 60 ? 'var(--peach)' : 'var(--yellow)';
         el.style.color = cor;
         el.style.cursor = 'pointer';
         el.innerHTML = `⏳ <strong>${prox.cargo}</strong>: ${prox.dias} dias ⭐`;
@@ -968,24 +968,24 @@
       overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
 
       const favorito = localStorage.getItem('countdown_favorito') || '';
-      let html = '<div style="background:#313244;border-radius:12px;padding:20px;max-width:400px;width:90%;max-height:70vh;overflow-y:auto;">';
-      html += '<h3 style="color:#cba6f7;margin:0 0 12px;">⏳ Escolher Prova para Acompanhar</h3>';
+      let html = '<div style="background:var(--bg-surface);border-radius:12px;padding:20px;max-width:400px;width:90%;max-height:70vh;overflow-y:auto;">';
+      html += '<h3 style="color:var(--accent);margin:0 0 12px;">⏳ Escolher Prova para Acompanhar</h3>';
       html += '<div style="display:grid;gap:8px;">';
       futuras.forEach(p => {
         const key = `${p.edital}|${p.cargo}`;
         const isFav = key === favorito;
-        const cor = p.dias <= 30 ? '#f38ba8' : p.dias <= 60 ? '#fab387' : '#f9e2af';
-        html += `<button onclick="selectCountdownFavorito('${key}')" style="display:flex;align-items:center;gap:10px;padding:12px;background:${isFav ? '#45475a' : '#1e1e2e'};border:2px solid ${isFav ? '#cba6f7' : '#45475a'};border-radius:10px;cursor:pointer;text-align:left;width:100%;">
+        const cor = p.dias <= 30 ? 'var(--red)' : p.dias <= 60 ? 'var(--peach)' : 'var(--yellow)';
+        html += `<button onclick="selectCountdownFavorito('${key}')" style="display:flex;align-items:center;gap:10px;padding:12px;background:${isFav ? 'var(--bg-elevated)' : 'var(--bg)'};border:2px solid ${isFav ? 'var(--accent)' : 'var(--bg-elevated)'};border-radius:10px;cursor:pointer;text-align:left;width:100%;">
           <span style="font-size:1.2rem;">${isFav ? '⭐' : '📅'}</span>
           <div style="flex:1;">
-            <div style="font-size:0.85rem;font-weight:600;color:#cdd6f4;">${p.edital} — ${p.cargo}</div>
-            <div style="font-size:0.75rem;color:#9399b2;">${p.data_objetiva || ''}</div>
+            <div style="font-size:0.85rem;font-weight:600;color:var(--text);">${p.edital} — ${p.cargo}</div>
+            <div style="font-size:0.75rem;color:var(--text-sub);">${p.data_objetiva || ''}</div>
           </div>
           <span style="font-size:0.9rem;font-weight:700;color:${cor};">${p.dias}d</span>
         </button>`;
       });
       html += '</div>';
-      html += '<button onclick="selectCountdownFavorito(\'\')" style="display:block;width:100%;margin-top:10px;padding:10px;background:#45475a;color:#cdd6f4;border:none;border-radius:8px;cursor:pointer;font-size:0.82rem;">🔄 Automático (mais próxima)</button>';
+      html += '<button onclick="selectCountdownFavorito(\'\')" style="display:block;width:100%;margin-top:10px;padding:10px;background:var(--bg-elevated);color:var(--text);border:none;border-radius:8px;cursor:pointer;font-size:0.82rem;">🔄 Automático (mais próxima)</button>';
       html += '</div>';
       overlay.innerHTML = html;
       document.body.appendChild(overlay);
@@ -1008,15 +1008,15 @@
     });
 
     const COLORS = {
-      green: '#a6e3a1', blue: '#89b4fa', pink: '#f38ba8',
-      peach: '#fab387', mauve: '#cba6f7', teal: '#89dceb',
-      yellow: '#f9e2af', text: '#cdd6f4', surface: '#45475a'
+      green: 'var(--green)', blue: 'var(--blue)', pink: 'var(--red)',
+      peach: 'var(--peach)', mauve: 'var(--accent)', teal: '#89dceb',
+      yellow: 'var(--yellow)', text: '#cdd6f4', surface: 'var(--bg-elevated)'
     };
 
     // Chart.js defaults
     if (typeof Chart !== 'undefined') {
       Chart.defaults.color = '#a6adc8';
-      Chart.defaults.borderColor = '#45475a';
+      Chart.defaults.borderColor = 'var(--bg-elevated)';
     }
 
     async function loadDashboard() {
@@ -1055,7 +1055,7 @@
         freezeEl.innerHTML = `
           <div style="display:flex;flex-direction:column;align-items:center;cursor:pointer;" title="Streak Freezes: ${freeze.freezes_available}/${freeze.max_freezes}\nProtege seu streak se perder 1 dia\nGanhe a cada ${freeze.earn_next_at - data.streak_atual > 0 ? freeze.earn_next_at - data.streak_atual + ' dias' : 'agora!'}" onclick="showStreakFreezeModal()">
             <div style="font-size:0.85rem;">${freezeIcons}</div>
-            <div style="font-size:0.6rem;color:#89dceb;">${freeze.freezes_available}/${freeze.max_freezes}</div>
+            <div style="font-size:0.6rem;color:#94e2d5;">${freeze.freezes_available}/${freeze.max_freezes}</div>
           </div>
         `;
 
@@ -1125,9 +1125,9 @@
             </div>
           </div>
           <span class="meta-pct" style="color:${m.color}">${Math.round(m.pct)}%</span>
-          <span style="font-size:0.7rem;color:#9399b2;margin-left:4px;">▼</span>
+          <span style="font-size:0.7rem;color:var(--text-sub);margin-left:4px;">▼</span>
         </div>
-        <div id="meta-detail-${m.id}" style="display:none;padding:8px 12px 12px 36px;font-size:0.8rem;color:#9399b2;background:#1e1e2e;border-radius:8px;margin:-2px 0 8px;animation:slideDown 0.2s ease;">
+        <div id="meta-detail-${m.id}" style="display:none;padding:8px 12px 12px 36px;font-size:0.8rem;color:var(--text-sub);background:var(--bg);border-radius:8px;margin:-2px 0 8px;animation:slideDown 0.2s ease;">
           <div style="text-align:center;padding:8px;"><span style="opacity:0.5;">Carregando...</span></div>
         </div>
       `).join('');
@@ -1145,17 +1145,17 @@
         if (horasEl) {
           if (resumo.sessoes && resumo.sessoes.length > 0) {
             horasEl.innerHTML = `
-              <div style="font-weight:600;color:#cdd6f4;margin-bottom:6px;">📚 Sessões de hoje:</div>
+              <div style="font-weight:600;color:var(--text);margin-bottom:6px;">📚 Sessões de hoje:</div>
               ${resumo.sessoes.map(s => `
-                <div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #313244;">
+                <div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border);">
                   <span>${s.materia}</span>
-                  <span style="color:#89b4fa;font-weight:600;">${s.horas}h</span>
+                  <span style="color:var(--blue);font-weight:600;">${s.horas}h</span>
                 </div>
               `).join('')}
-              <div style="margin-top:8px;font-size:0.75rem;color:#585b70;">Total: ${resumo.sessoes.reduce((a,s) => a + s.horas, 0).toFixed(1)}h em ${resumo.sessoes.length} matéria(s)</div>
+              <div style="margin-top:8px;font-size:0.75rem;color:var(--text-muted);">Total: ${resumo.sessoes.reduce((a,s) => a + s.horas, 0).toFixed(1)}h em ${resumo.sessoes.length} matéria(s)</div>
             `;
           } else {
-            horasEl.innerHTML = '<div style="color:#585b70;font-style:italic;">Nenhuma sessão registrada hoje. Inicie um timer ou registre estudo manual.</div>';
+            horasEl.innerHTML = '<div style="color:var(--text-muted);font-style:italic;">Nenhuma sessão registrada hoje. Inicie um timer ou registre estudo manual.</div>';
           }
         }
 
@@ -1167,25 +1167,25 @@
             const totalA = resumo.questoes_detalhes.reduce((a,q) => a + q.acertos, 0);
             const pctGeral = totalQ > 0 ? Math.round(totalA / totalQ * 100) : 0;
             questoesEl.innerHTML = `
-              <div style="font-weight:600;color:#cdd6f4;margin-bottom:6px;">📊 Desempenho por matéria:</div>
+              <div style="font-weight:600;color:var(--text);margin-bottom:6px;">📊 Desempenho por matéria:</div>
               ${resumo.questoes_detalhes.map(q => {
                 const pct = q.total > 0 ? Math.round(q.acertos / q.total * 100) : 0;
-                const cor = pct >= 70 ? '#a6e3a1' : pct >= 50 ? '#f9e2af' : '#f38ba8';
+                const cor = pct >= 70 ? 'var(--green)' : pct >= 50 ? 'var(--yellow)' : 'var(--red)';
                 return `
-                  <div style="display:flex;align-items:center;gap:8px;padding:3px 0;border-bottom:1px solid #313244;">
+                  <div style="display:flex;align-items:center;gap:8px;padding:3px 0;border-bottom:1px solid var(--border);">
                     <span style="flex:1;">${q.materia}</span>
                     <span style="font-size:0.75rem;">${q.acertos}/${q.total}</span>
                     <span style="color:${cor};font-weight:600;min-width:36px;text-align:right;">${pct}%</span>
                   </div>
                 `;
               }).join('')}
-              <div style="margin-top:8px;display:flex;justify-content:space-between;padding-top:6px;border-top:1px solid #45475a;">
-                <span style="font-weight:600;color:#cdd6f4;">Total: ${totalQ} questões</span>
-                <span style="font-weight:600;color:${pctGeral >= 70 ? '#a6e3a1' : pctGeral >= 50 ? '#f9e2af' : '#f38ba8'};">${pctGeral}% acerto geral</span>
+              <div style="margin-top:8px;display:flex;justify-content:space-between;padding-top:6px;border-top:1px solid var(--border);">
+                <span style="font-weight:600;color:var(--text);">Total: ${totalQ} questões</span>
+                <span style="font-weight:600;color:${pctGeral >= 70 ? 'var(--green)' : pctGeral >= 50 ? 'var(--yellow)' : 'var(--red)'};">${pctGeral}% acerto geral</span>
               </div>
             `;
           } else {
-            questoesEl.innerHTML = '<div style="color:#585b70;font-style:italic;">Nenhuma questão resolvida hoje. Vá para o Banco de Questões!</div>';
+            questoesEl.innerHTML = '<div style="color:var(--text-muted);font-style:italic;">Nenhuma questão resolvida hoje. Vá para o Banco de Questões!</div>';
           }
         }
 
@@ -1198,22 +1198,22 @@
           const materias = {};
           pendentes.forEach(f => { const m = f.materia || 'Sem matéria'; materias[m] = (materias[m] || 0) + 1; });
 
-          let html = `<div style="font-weight:600;color:#cdd6f4;margin-bottom:6px;">🧠 Status dos flashcards:</div>`;
+          let html = `<div style="font-weight:600;color:var(--text);margin-bottom:6px;">🧠 Status dos flashcards:</div>`;
           html += `<div style="display:flex;gap:16px;margin-bottom:8px;">
-            <div style="background:#313244;border-radius:8px;padding:8px 12px;flex:1;text-align:center;">
-              <div style="font-size:1.1rem;font-weight:700;color:#a6e3a1;">${revisados}</div>
+            <div style="background:var(--bg-surface);border-radius:8px;padding:8px 12px;flex:1;text-align:center;">
+              <div style="font-size:1.1rem;font-weight:700;color:var(--green);">${revisados}</div>
               <div style="font-size:0.7rem;">Revisados hoje</div>
             </div>
-            <div style="background:#313244;border-radius:8px;padding:8px 12px;flex:1;text-align:center;">
-              <div style="font-size:1.1rem;font-weight:700;color:#f9e2af;">${totalPendentes}</div>
+            <div style="background:var(--bg-surface);border-radius:8px;padding:8px 12px;flex:1;text-align:center;">
+              <div style="font-size:1.1rem;font-weight:700;color:var(--yellow);">${totalPendentes}</div>
               <div style="font-size:0.7rem;">Pendentes ainda</div>
             </div>
           </div>`;
 
           if (Object.keys(materias).length > 0) {
-            html += '<div style="font-size:0.75rem;color:#585b70;">Pendentes por matéria:</div>';
+            html += '<div style="font-size:0.75rem;color:var(--text-muted);">Pendentes por matéria:</div>';
             html += Object.entries(materias).sort((a,b) => b[1]-a[1]).slice(0, 5).map(([m, c]) =>
-              `<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>${m}</span><span style="color:#cba6f7;">${c}</span></div>`
+              `<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>${m}</span><span style="color:var(--accent);">${c}</span></div>`
             ).join('');
           }
           flashEl.innerHTML = html;
@@ -1236,7 +1236,7 @@
     function renderChartHoras(data) {
       if (typeof Chart === 'undefined') { setTimeout(() => renderChartHoras(data), 200); return; }
       if (!data || data.length === 0) {
-        document.getElementById('chart-horas').parentElement.innerHTML = '<p style="color:#9399b2;font-size:0.82rem;text-align:center;padding:20px;">Estude para gerar o gráfico de horas.</p>';
+        document.getElementById('chart-horas').parentElement.innerHTML = '<p style="color:var(--text-sub);font-size:0.82rem;text-align:center;padding:20px;">Estude para gerar o gráfico de horas.</p>';
         return;
       }
       const ctx = document.getElementById('chart-horas')?.getContext('2d');
@@ -1302,7 +1302,7 @@
           datasets: [{
             data: data.map(d => d.total),
             backgroundColor: data.map((_, i) => colors[i % colors.length] + 'CC'),
-            borderColor: '#1e1e2e',
+            borderColor: 'var(--bg)',
             borderWidth: 2,
           }]
         },
@@ -1326,7 +1326,7 @@
           datasets: [{
             data: [data.concluido, pendente],
             backgroundColor: [COLORS.green + 'CC', COLORS.surface],
-            borderColor: '#1e1e2e',
+            borderColor: 'var(--bg)',
             borderWidth: 2,
           }]
         },
@@ -1340,7 +1340,7 @@
     function renderPratica(data) {
       const list = document.getElementById('pratica-list');
       if (data.materias_para_focar.length === 0 && data.materias_nao_estudadas.length === 0) {
-        list.innerHTML = '<p style="color:#9399b2;font-size:0.9rem;padding:12px;">Resolva mais questões para obter recomendações de prática deliberada.</p>';
+        list.innerHTML = '<p style="color:var(--text-sub);font-size:0.9rem;padding:12px;">Resolva mais questões para obter recomendações de prática deliberada.</p>';
         return;
       }
 
@@ -1355,7 +1355,7 @@
         `;
       }
       if (data.materias_nao_estudadas.length > 0) {
-        html += `<div style="padding:10px 12px;font-size:0.85rem;color:#9399b2;border-top:1px solid #45475a;margin-top:8px;">
+        html += `<div style="padding:10px 12px;font-size:0.85rem;color:var(--text-sub);border-top:1px solid var(--border);margin-top:8px;">
           ⚠ Matérias sem questões respondidas: ${data.materias_nao_estudadas.join(', ')}
         </div>`;
       }
@@ -1402,16 +1402,16 @@
           datasets: [{
             label: 'Score (%)',
             data: sorted.map(d => d.score),
-            borderColor: '#cba6f7',
+            borderColor: 'var(--accent)',
             backgroundColor: '#cba6f733',
-            pointBackgroundColor: '#cba6f7',
+            pointBackgroundColor: 'var(--accent)',
             pointRadius: 4,
           }]
         },
         options: {
           responsive: true,
           plugins: { legend: { display: false } },
-          scales: { r: { beginAtZero: true, max: 100, grid: { color: '#45475a' }, angleLines: { color: '#45475a' }, pointLabels: { font: { size: 9 }, color: '#a6adc8' }, ticks: { display: false } } }
+          scales: { r: { beginAtZero: true, max: 100, grid: { color: 'var(--bg-elevated)' }, angleLines: { color: 'var(--bg-elevated)' }, pointLabels: { font: { size: 9 }, color: '#a6adc8' }, ticks: { display: false } } }
         }
       });
     }
@@ -1434,7 +1434,7 @@
         </div>
         <div class="gam-badges">
           ${data.badges_earned.map(b => `<div class="gam-badge" title="${b.desc}"><span class="badge-icon">${b.icon}</span><span class="badge-name">${b.name}</span></div>`).join('')}
-          ${data.badges_earned.length === 0 ? '<span style="color:#9399b2;font-size:0.82rem;">Continue estudando para desbloquear badges!</span>' : ''}
+          ${data.badges_earned.length === 0 ? '<span style="color:var(--text-sub);font-size:0.82rem;">Continue estudando para desbloquear badges!</span>' : ''}
         </div>
       `;
     }
@@ -1443,15 +1443,15 @@
       const data = await fetch('/api/planejador-aprovacao').then(r => r.json());
       const container = document.getElementById('planejador-aprov');
       if (!container) return;
-      if (!data.materias.length) { container.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Estude e resolva questões para gerar o planejador.</p>'; return; }
-      let html = `<p style="font-size:0.82rem;color:#9399b2;margin-bottom:8px;">Meta: ${data.meta_edital}% edital + ${data.meta_questoes}% questões por matéria</p>`;
+      if (!data.materias.length) { container.innerHTML = '<p style="color:var(--text-sub);font-size:0.85rem;">Estude e resolva questões para gerar o planejador.</p>'; return; }
+      let html = `<p style="font-size:0.82rem;color:var(--text-sub);margin-bottom:8px;">Meta: ${data.meta_edital}% edital + ${data.meta_questoes}% questões por matéria</p>`;
       data.materias.slice(0, 12).forEach(m => {
-        const color = m.status === 'ok' ? '#a6e3a1' : m.status === 'atencao' ? '#fab387' : '#f38ba8';
-        html += `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #45475a;font-size:0.82rem;">
+        const color = m.status === 'ok' ? 'var(--green)' : m.status === 'atencao' ? 'var(--peach)' : 'var(--red)';
+        html += `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:0.82rem;">
           <span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0;"></span>
           <span style="flex:1;">${m.materia}</span>
-          <span style="color:#9399b2;">${m.pct_edital}%ed</span>
-          <span style="color:#9399b2;">${m.pct_questoes}%q</span>
+          <span style="color:var(--text-sub);">${m.pct_edital}%ed</span>
+          <span style="color:var(--text-sub);">${m.pct_questoes}%q</span>
         </div>`;
       });
       container.innerHTML = html;
@@ -1461,14 +1461,14 @@
       const data = await fetch('/api/comparador-progresso').then(r => r.json());
       const container = document.getElementById('comparador-prog');
       if (!container) return;
-      if (!data.length) { container.innerHTML = '<p style="color:#9399b2;">Sem dados.</p>'; return; }
+      if (!data.length) { container.innerHTML = '<p style="color:var(--text-sub);">Sem dados.</p>'; return; }
       let html = '';
       data.forEach(d => {
-        html += `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #45475a;font-size:0.82rem;">
+        html += `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:0.82rem;">
           <span style="flex:1;font-weight:600;">${d.cargo}</span>
-          <span style="color:#9399b2;">${d.horas}h</span>
-          <div style="width:60px;height:6px;background:#45475a;border-radius:3px;overflow:hidden;"><div style="height:100%;width:${d.pct}%;background:#a6e3a1;border-radius:3px;"></div></div>
-          <span style="min-width:36px;text-align:right;color:#a6e3a1;font-weight:700;">${d.pct}%</span>
+          <span style="color:var(--text-sub);">${d.horas}h</span>
+          <div style="width:60px;height:6px;background:var(--bg-elevated);border-radius:3px;overflow:hidden;"><div style="height:100%;width:${d.pct}%;background:var(--green);border-radius:3px;"></div></div>
+          <span style="min-width:36px;text-align:right;color:var(--green);font-weight:700;">${d.pct}%</span>
         </div>`;
       });
       container.innerHTML = html;
@@ -1479,8 +1479,8 @@
         const data = await fetch('/api/edital/revisoes-pendentes').then(r => r.json());
         const container = document.getElementById('revisoes-pend');
         if (!container) return;
-        if (!data.length) { container.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Nenhuma revisão pendente. Agende revisões nos tópicos do edital.</p>'; return; }
-        container.innerHTML = data.slice(0, 10).map(d => `<div style="padding:6px 0;border-bottom:1px solid #45475a;font-size:0.83rem;"><span style="color:#fab387;">${d.materia}</span> — ${d.topico}</div>`).join('');
+        if (!data.length) { container.innerHTML = '<p style="color:var(--text-sub);font-size:0.85rem;">Nenhuma revisão pendente. Agende revisões nos tópicos do edital.</p>'; return; }
+        container.innerHTML = data.slice(0, 10).map(d => `<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:0.83rem;"><span style="color:var(--peach);">${d.materia}</span> — ${d.topico}</div>`).join('');
       } catch(e) {}
     }
 
@@ -1488,9 +1488,9 @@
       try {
         const data = await fetch('/api/daily-challenge').then(r => r.json());
         const el = document.getElementById('daily-challenge');
-        if (!data.questao) { el.innerHTML = `<p style="color:#a6e3a1;font-size:0.9rem;">${data.message}</p>`; return; }
+        if (!data.questao) { el.innerHTML = `<p style="color:var(--green);font-size:0.9rem;">${data.message}</p>`; return; }
         const q = data.questao;
-        el.innerHTML = `<div style="font-size:0.88rem;line-height:1.5;margin-bottom:10px;">${q.enunciado}</div><div style="font-size:0.78rem;color:#9399b2;margin-bottom:10px;">${q.materia}${q.topico ? ' • '+q.topico : ''}</div><div style="display:flex;flex-direction:column;gap:6px;">${['A','B','C','D','E'].filter(l => q['alternativa_'+l.toLowerCase()]).map(l => `<button onclick="responderDailyChallenge(${q.id},'${l}',this)" style="background:#45475a;border:none;color:#cdd6f4;padding:8px 12px;border-radius:6px;cursor:pointer;font-size:0.82rem;text-align:left;"><strong>${l})</strong> ${q['alternativa_'+l.toLowerCase()]}</button>`).join('')}</div><div id="daily-feedback" style="margin-top:10px;display:none;"></div>`;
+        el.innerHTML = `<div style="font-size:0.88rem;line-height:1.5;margin-bottom:10px;">${q.enunciado}</div><div style="font-size:0.78rem;color:var(--text-sub);margin-bottom:10px;">${q.materia}${q.topico ? ' • '+q.topico : ''}</div><div style="display:flex;flex-direction:column;gap:6px;">${['A','B','C','D','E'].filter(l => q['alternativa_'+l.toLowerCase()]).map(l => `<button onclick="responderDailyChallenge(${q.id},'${l}',this)" style="background:var(--bg-elevated);border:none;color:var(--text);padding:8px 12px;border-radius:6px;cursor:pointer;font-size:0.82rem;text-align:left;"><strong>${l})</strong> ${q['alternativa_'+l.toLowerCase()]}</button>`).join('')}</div><div id="daily-feedback" style="margin-top:10px;display:none;"></div>`;
       } catch(e) {}
     }
 
@@ -1504,11 +1504,11 @@
         const fb = document.getElementById('daily-feedback');
         fb.style.display = 'block';
         if (res.acertou) {
-          fb.innerHTML = `<span style="color:#a6e3a1;font-weight:600;">✓ Correto!</span>`;
-          btn.style.background = '#a6e3a1'; btn.style.color = '#1e1e2e';
+          fb.innerHTML = `<span style="color:var(--green);font-weight:600;">✓ Correto!</span>`;
+          btn.style.background = 'var(--green)'; btn.style.color = 'var(--bg)';
         } else {
-          fb.innerHTML = `<span style="color:#f38ba8;font-weight:600;">✗ Errado. Resposta: ${res.resposta_correta}</span>`;
-          btn.style.background = '#f38ba8'; btn.style.color = '#1e1e2e';
+          fb.innerHTML = `<span style="color:var(--red);font-weight:600;">✗ Errado. Resposta: ${res.resposta_correta}</span>`;
+          btn.style.background = 'var(--red)'; btn.style.color = 'var(--bg)';
         }
         // Desabilitar todos os botões
         btn.parentElement.querySelectorAll('button').forEach(b => { b.disabled = true; b.style.opacity = '0.6'; });
@@ -1520,13 +1520,13 @@
       try {
         const data = await fetch('/api/analise-erros').then(r => r.json());
         const el = document.getElementById('analise-erros');
-        if (!data.erros_por_materia.length) { el.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Resolva questões para gerar análise.</p>'; return; }
+        if (!data.erros_por_materia.length) { el.innerHTML = '<p style="color:var(--text-sub);font-size:0.85rem;">Resolva questões para gerar análise.</p>'; return; }
         let html = '';
         data.erros_por_materia.slice(0, 5).forEach(m => {
-          const color = m.pct_erro > 60 ? '#f38ba8' : m.pct_erro > 40 ? '#fab387' : '#a6e3a1';
+          const color = m.pct_erro > 60 ? 'var(--red)' : m.pct_erro > 40 ? 'var(--peach)' : 'var(--green)';
           html += `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:0.82rem;"><span style="flex:1;">${m.materia}</span><span style="color:${color};font-weight:700;">${m.pct_erro}% erro</span></div>`;
         });
-        if (data.sugestoes.length) html += `<div style="margin-top:8px;padding:8px;background:#45475a;border-radius:6px;font-size:0.78rem;color:#fab387;">💡 ${data.sugestoes[0]}</div>`;
+        if (data.sugestoes.length) html += `<div style="margin-top:8px;padding:8px;background:var(--bg-elevated);border-radius:6px;font-size:0.78rem;color:var(--peach);">💡 ${data.sugestoes[0]}</div>`;
         el.innerHTML = html;
       } catch(e) {}
     }
@@ -1535,8 +1535,8 @@
       try {
         const data = await fetch('/api/previsao-data-aprovacao').then(r => r.json());
         const el = document.getElementById('previsao-data');
-        if (!data.data_prevista) { el.innerHTML = `<p style="color:#9399b2;font-size:0.85rem;">${data.message}</p>`; return; }
-        el.innerHTML = `<div style="text-align:center;"><div style="font-size:1.5rem;font-weight:700;color:#a6e3a1;">${data.data_prevista}</div><div style="font-size:0.82rem;color:#9399b2;margin-top:4px;">${data.semanas_restantes} semanas restantes</div><div style="font-size:0.78rem;color:#9399b2;margin-top:4px;">Ritmo: ${data.ritmo_semanal} tópicos/semana (${data.horas_semana}h/sem)</div><div style="font-size:0.78rem;color:#9399b2;">${data.restantes} tópicos restantes</div></div>`;
+        if (!data.data_prevista) { el.innerHTML = `<p style="color:var(--text-sub);font-size:0.85rem;">${data.message}</p>`; return; }
+        el.innerHTML = `<div style="text-align:center;"><div style="font-size:1.5rem;font-weight:700;color:var(--green);">${data.data_prevista}</div><div style="font-size:0.82rem;color:var(--text-sub);margin-top:4px;">${data.semanas_restantes} semanas restantes</div><div style="font-size:0.78rem;color:var(--text-sub);margin-top:4px;">Ritmo: ${data.ritmo_semanal} tópicos/semana (${data.horas_semana}h/sem)</div><div style="font-size:0.78rem;color:var(--text-sub);">${data.restantes} tópicos restantes</div></div>`;
       } catch(e) {}
     }
 
@@ -1557,18 +1557,18 @@
         <div id="challenge-confetti" style="position:absolute;inset:0;overflow:hidden;pointer-events:none;"></div>
         <div style="animation:bounceIn 0.6s ease;text-align:center;z-index:1;max-width:360px;">
           <div style="font-size:4.5rem;margin-bottom:12px;">🏆</div>
-          <h2 style="color:#f9e2af;font-size:1.6rem;margin:0 0 8px;background:linear-gradient(90deg,#f9e2af,#fab387,#f9e2af);background-size:200%;-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:shine 2s linear infinite;">Desafio Completo!</h2>
-          <p style="color:#cdd6f4;font-size:1.1rem;margin:0 0 6px;font-weight:600;">${challenge.titulo}</p>
-          <p style="color:#a6e3a1;font-size:0.9rem;margin:0 0 20px;">✅ Meta atingida: ${challenge.meta_valor} ${challenge.meta_tipo}</p>
-          ${completedChallenges.length > 1 ? `<p style="color:#cba6f7;font-size:0.8rem;margin:0 0 16px;">+${completedChallenges.length - 1} outro(s) desafio(s) concluído(s)!</p>` : ''}
-          <button onclick="document.getElementById('challenge-celebration-overlay').remove()" style="background:linear-gradient(135deg,#cba6f7,#89b4fa);color:#1e1e2e;border:none;border-radius:8px;padding:12px 32px;font-size:1rem;font-weight:700;cursor:pointer;box-shadow:0 4px 15px rgba(203,166,247,0.3);">🎉 Excelente!</button>
+          <h2 style="color:var(--yellow);font-size:1.6rem;margin:0 0 8px;background:linear-gradient(90deg,#f9e2af,#fab387,#f9e2af);background-size:200%;-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:shine 2s linear infinite;">Desafio Completo!</h2>
+          <p style="color:var(--text);font-size:1.1rem;margin:0 0 6px;font-weight:600;">${challenge.titulo}</p>
+          <p style="color:var(--green);font-size:0.9rem;margin:0 0 20px;">✅ Meta atingida: ${challenge.meta_valor} ${challenge.meta_tipo}</p>
+          ${completedChallenges.length > 1 ? `<p style="color:var(--accent);font-size:0.8rem;margin:0 0 16px;">+${completedChallenges.length - 1} outro(s) desafio(s) concluído(s)!</p>` : ''}
+          <button onclick="document.getElementById('challenge-celebration-overlay').remove()" style="background:linear-gradient(135deg,#cba6f7,#89b4fa);color:var(--bg);border:none;border-radius:8px;padding:12px 32px;font-size:1rem;font-weight:700;cursor:pointer;box-shadow:0 4px 15px rgba(203,166,247,0.3);">🎉 Excelente!</button>
         </div>
       `;
       document.body.appendChild(overlay);
 
       // Spawn confetti
       const container = overlay.querySelector('#challenge-confetti');
-      const colors = ['#f38ba8','#a6e3a1','#89b4fa','#f9e2af','#cba6f7','#fab387','#94e2d5'];
+      const colors = ['var(--red)','var(--green)','var(--blue)','var(--yellow)','var(--accent)','var(--peach)','#94e2d5'];
       for (let i = 0; i < 80; i++) {
         const piece = document.createElement('div');
         piece.className = 'confetti-piece';
@@ -1627,48 +1627,48 @@
 
         if (ativos.length > 0) {
           html += ativos.map(d => {
-            const cor = d.pct >= 100 ? '#a6e3a1' : d.pct >= 50 ? '#f9e2af' : '#89b4fa';
-            return `<div style="padding:8px;margin-bottom:6px;background:#1e1e2e;border-radius:8px;border-left:3px solid ${cor};">
+            const cor = d.pct >= 100 ? 'var(--green)' : d.pct >= 50 ? 'var(--yellow)' : 'var(--blue)';
+            return `<div style="padding:8px;margin-bottom:6px;background:var(--bg);border-radius:8px;border-left:3px solid ${cor};">
               <div style="display:flex;align-items:center;gap:6px;font-size:0.82rem;">
-                <span style="flex:1;color:#cdd6f4;font-weight:500;">${d.titulo}</span>
-                <span style="font-size:0.72rem;color:#9399b2;">${d.dias_restantes}d restantes</span>
-                <button onclick="editarDesafio(${d.id},'${d.titulo.replace(/'/g,"\\'")}','${d.meta_tipo}',${d.meta_valor},'${(d.materia||'').replace(/'/g,"\\'")}',${d.dias})" style="background:none;border:none;color:#89b4fa88;cursor:pointer;font-size:0.8rem;" title="Editar">✏️</button>
-                <button onclick="deleteDesafio(${d.id})" style="background:none;border:none;color:#f38ba855;cursor:pointer;font-size:0.8rem;" title="Remover">×</button>
+                <span style="flex:1;color:var(--text);font-weight:500;">${d.titulo}</span>
+                <span style="font-size:0.72rem;color:var(--text-sub);">${d.dias_restantes}d restantes</span>
+                <button onclick="editarDesafio(${d.id},'${d.titulo.replace(/'/g,"\\'")}','${d.meta_tipo}',${d.meta_valor},'${(d.materia||'').replace(/'/g,"\\'")}',${d.dias})" style="background:none;border:none;color:var(--blue)88;cursor:pointer;font-size:0.8rem;" title="Editar">✏️</button>
+                <button onclick="deleteDesafio(${d.id})" style="background:none;border:none;color:var(--red)55;cursor:pointer;font-size:0.8rem;" title="Remover">×</button>
               </div>
               <div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
-                <div style="flex:1;height:6px;background:#45475a;border-radius:3px;overflow:hidden;">
+                <div style="flex:1;height:6px;background:var(--bg-elevated);border-radius:3px;overflow:hidden;">
                   <div style="width:${d.pct}%;height:100%;background:${cor};border-radius:3px;transition:width 0.3s;"></div>
                 </div>
                 <span style="font-size:0.72rem;color:${cor};font-weight:600;min-width:60px;text-align:right;">${d.progresso}/${d.meta_valor}</span>
               </div>
-              ${d.materia ? `<div style="font-size:0.68rem;color:#585b70;margin-top:2px;">📚 ${d.materia}</div>` : ''}
+              ${d.materia ? `<div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px;">📚 ${d.materia}</div>` : ''}
             </div>`;
           }).join('');
         }
 
         // Concluídos recentes
         if (concluidos.length > 0) {
-          html += `<div style="margin-top:8px;font-size:0.72rem;color:#a6e3a1;font-weight:600;">✅ Concluídos</div>`;
-          html += concluidos.slice(0, 3).map(d => `<div style="padding:4px 8px;font-size:0.75rem;color:#9399b2;display:flex;align-items:center;gap:4px;"><span>✓</span><span style="flex:1;text-decoration:line-through;">${d.titulo}</span><button onclick="deleteDesafio(${d.id})" style="background:none;border:none;color:#f38ba855;cursor:pointer;">×</button></div>`).join('');
+          html += `<div style="margin-top:8px;font-size:0.72rem;color:var(--green);font-weight:600;">✅ Concluídos</div>`;
+          html += concluidos.slice(0, 3).map(d => `<div style="padding:4px 8px;font-size:0.75rem;color:var(--text-sub);display:flex;align-items:center;gap:4px;"><span>✓</span><span style="flex:1;text-decoration:line-through;">${d.titulo}</span><button onclick="deleteDesafio(${d.id})" style="background:none;border:none;color:var(--red)55;cursor:pointer;">×</button></div>`).join('');
         }
 
         // Sugestões
         if (sugestoes.length > 0 && ativos.length < 3) {
-          html += `<div style="margin-top:10px;padding-top:8px;border-top:1px solid #45475a;">
-            <div style="font-size:0.75rem;color:#cba6f7;font-weight:600;margin-bottom:6px;">💡 Desafios Sugeridos</div>`;
-          html += sugestoes.slice(0, 3).map(s => `<div style="display:flex;align-items:center;gap:6px;padding:6px;background:#313244;border-radius:6px;margin-bottom:4px;font-size:0.78rem;">
+          html += `<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border);">
+            <div style="font-size:0.75rem;color:var(--accent);font-weight:600;margin-bottom:6px;">💡 Desafios Sugeridos</div>`;
+          html += sugestoes.slice(0, 3).map(s => `<div style="display:flex;align-items:center;gap:6px;padding:6px;background:var(--bg-surface);border-radius:6px;margin-bottom:4px;font-size:0.78rem;">
             <span style="font-size:1rem;">${s.icon}</span>
             <div style="flex:1;">
-              <div style="color:#cdd6f4;font-weight:500;">${s.titulo}</div>
-              <div style="font-size:0.68rem;color:#9399b2;">${s.descricao}</div>
+              <div style="color:var(--text);font-weight:500;">${s.titulo}</div>
+              <div style="font-size:0.68rem;color:var(--text-sub);">${s.descricao}</div>
             </div>
-            <button onclick="aceitarDesafio('${s.titulo.replace(/'/g,"\\'")}','${s.meta_tipo}',${s.meta_valor},'${s.materia}',${s.dias})" style="background:#cba6f7;color:#1e1e2e;border:none;border-radius:4px;padding:4px 8px;font-size:0.7rem;font-weight:600;cursor:pointer;white-space:nowrap;">Aceitar</button>
+            <button onclick="aceitarDesafio('${s.titulo.replace(/'/g,"\\'")}','${s.meta_tipo}',${s.meta_valor},'${s.materia}',${s.dias})" style="background:var(--accent);color:var(--bg);border:none;border-radius:4px;padding:4px 8px;font-size:0.7rem;font-weight:600;cursor:pointer;white-space:nowrap;">Aceitar</button>
           </div>`).join('');
           html += '</div>';
         }
 
         // Botão criar manual
-        html += `<button onclick="showCriarDesafioModal()" style="width:100%;margin-top:8px;padding:8px;background:#45475a;color:#cdd6f4;border:none;border-radius:6px;cursor:pointer;font-size:0.8rem;">+ Criar Desafio</button>`;
+        html += `<button onclick="showCriarDesafioModal()" style="width:100%;margin-top:8px;padding:8px;background:var(--bg-elevated);color:var(--text);border:none;border-radius:6px;cursor:pointer;font-size:0.8rem;">+ Criar Desafio</button>`;
 
         el.innerHTML = html;
       } catch(e) { console.error('Desafios error:', e); }
@@ -1697,14 +1697,14 @@
       overlay.id = 'streak-freeze-offer';
       overlay.style.cssText = 'position:fixed;inset:0;background:rgba(30,30,46,0.9);z-index:99999;display:flex;align-items:center;justify-content:center;animation:fadeInCelebration 0.3s ease;';
       overlay.innerHTML = `
-        <div style="background:#313244;border-radius:16px;padding:32px;max-width:360px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.5);border:2px solid #89dceb;">
+        <div style="background:var(--bg-surface);border-radius:16px;padding:32px;max-width:360px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.5);border:2px solid #89dceb;">
           <div style="font-size:3.5rem;margin-bottom:12px;">🧊</div>
-          <h3 style="color:#89dceb;margin:0 0 8px;font-size:1.3rem;">Streak em risco!</h3>
-          <p style="color:#cdd6f4;font-size:0.9rem;margin:0 0 16px;">Você não estudou ontem. Quer usar um <strong>Streak Freeze</strong> para proteger seu streak?</p>
-          <p style="color:#9399b2;font-size:0.8rem;margin:0 0 20px;">Freezes disponíveis: ${freezesAvailable}</p>
+          <h3 style="color:#94e2d5;margin:0 0 8px;font-size:1.3rem;">Streak em risco!</h3>
+          <p style="color:var(--text);font-size:0.9rem;margin:0 0 16px;">Você não estudou ontem. Quer usar um <strong>Streak Freeze</strong> para proteger seu streak?</p>
+          <p style="color:var(--text-sub);font-size:0.8rem;margin:0 0 20px;">Freezes disponíveis: ${freezesAvailable}</p>
           <div style="display:flex;gap:10px;justify-content:center;">
-            <button onclick="useStreakFreeze()" style="background:#89dceb;color:#1e1e2e;border:none;border-radius:8px;padding:10px 24px;font-weight:600;cursor:pointer;font-size:0.9rem;">🧊 Usar Freeze</button>
-            <button onclick="document.getElementById('streak-freeze-offer').remove()" style="background:#45475a;color:#cdd6f4;border:none;border-radius:8px;padding:10px 24px;cursor:pointer;font-size:0.9rem;">Deixar quebrar</button>
+            <button onclick="useStreakFreeze()" style="background:#89dceb;color:var(--bg);border:none;border-radius:8px;padding:10px 24px;font-weight:600;cursor:pointer;font-size:0.9rem;">🧊 Usar Freeze</button>
+            <button onclick="document.getElementById('streak-freeze-offer').remove()" style="background:var(--bg-elevated);color:var(--text);border:none;border-radius:8px;padding:10px 24px;cursor:pointer;font-size:0.9rem;">Deixar quebrar</button>
           </div>
         </div>
       `;
@@ -1732,17 +1732,17 @@
         overlay.style.cssText = 'position:fixed;inset:0;background:rgba(30,30,46,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;';
         overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
         overlay.innerHTML = `
-          <div style="background:#313244;border-radius:16px;padding:28px;max-width:340px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+          <div style="background:var(--bg-surface);border-radius:16px;padding:28px;max-width:340px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
             <div style="font-size:2.5rem;margin-bottom:8px;">🧊</div>
-            <h3 style="color:#89dceb;margin:0 0 12px;">Streak Freeze</h3>
-            <p style="color:#cdd6f4;font-size:0.85rem;margin:0 0 16px;">Protege seu streak se você perder 1 dia de estudo. O streak não será zerado!</p>
+            <h3 style="color:#94e2d5;margin:0 0 12px;">Streak Freeze</h3>
+            <p style="color:var(--text);font-size:0.85rem;margin:0 0 16px;">Protege seu streak se você perder 1 dia de estudo. O streak não será zerado!</p>
             <div style="display:flex;justify-content:center;gap:8px;margin-bottom:12px;">
               ${'🧊'.repeat(freeze.freezes_available)}${'<span style="opacity:0.3;font-size:1.3rem;">🧊</span>'.repeat(freeze.max_freezes - freeze.freezes_available)}
             </div>
-            <p style="color:#a6e3a1;font-size:0.8rem;margin:0 0 6px;">Disponíveis: ${freeze.freezes_available}/${freeze.max_freezes}</p>
-            <p style="color:#9399b2;font-size:0.75rem;margin:0 0 6px;">Usados: ${freeze.freezes_used}</p>
-            <p style="color:#cba6f7;font-size:0.75rem;margin:0 0 16px;">Próximo ganho: streak de ${freeze.earn_next_at} dias</p>
-            <button onclick="document.getElementById('streak-freeze-modal').remove()" style="background:#45475a;color:#cdd6f4;border:none;border-radius:8px;padding:8px 20px;cursor:pointer;">Fechar</button>
+            <p style="color:var(--green);font-size:0.8rem;margin:0 0 6px;">Disponíveis: ${freeze.freezes_available}/${freeze.max_freezes}</p>
+            <p style="color:var(--text-sub);font-size:0.75rem;margin:0 0 6px;">Usados: ${freeze.freezes_used}</p>
+            <p style="color:var(--accent);font-size:0.75rem;margin:0 0 16px;">Próximo ganho: streak de ${freeze.earn_next_at} dias</p>
+            <button onclick="document.getElementById('streak-freeze-modal').remove()" style="background:var(--bg-elevated);color:var(--text);border:none;border-radius:8px;padding:8px 20px;cursor:pointer;">Fechar</button>
           </div>
         `;
         document.body.appendChild(overlay);
@@ -1753,37 +1753,37 @@
       const overlay = document.createElement('div');
       overlay.id = 'criar-desafio-modal';
       overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;';
-      overlay.innerHTML = `<div style="background:#313244;border-radius:12px;padding:24px;max-width:400px;width:100%;">
-        <h3 style="color:#cba6f7;margin-bottom:12px;">🏆 Criar Desafio</h3>
+      overlay.innerHTML = `<div style="background:var(--bg-surface);border-radius:12px;padding:24px;max-width:400px;width:100%;">
+        <h3 style="color:var(--accent);margin-bottom:12px;">🏆 Criar Desafio</h3>
         <div style="display:flex;flex-direction:column;gap:10px;">
-          <label style="font-size:0.8rem;color:#9399b2;">Título
-            <input id="desafio-titulo" type="text" placeholder="Ex: Dominar Direito Constitucional" style="width:100%;padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;margin-top:4px;">
+          <label style="font-size:0.8rem;color:var(--text-sub);">Título
+            <input id="desafio-titulo" type="text" placeholder="Ex: Dominar Direito Constitucional" style="width:100%;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);margin-top:4px;">
           </label>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-            <label style="font-size:0.8rem;color:#9399b2;">Tipo
-              <select id="desafio-tipo" style="width:100%;padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;margin-top:4px;">
+            <label style="font-size:0.8rem;color:var(--text-sub);">Tipo
+              <select id="desafio-tipo" style="width:100%;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);margin-top:4px;">
                 <option value="questoes">❓ Questões</option>
                 <option value="horas">⏱ Horas</option>
                 <option value="flashcards">🧠 Flashcards</option>
                 <option value="topicos">📋 Tópicos</option>
               </select>
             </label>
-            <label style="font-size:0.8rem;color:#9399b2;">Meta (quantidade)
-              <input id="desafio-meta" type="number" value="30" min="1" style="width:100%;padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;margin-top:4px;">
+            <label style="font-size:0.8rem;color:var(--text-sub);">Meta (quantidade)
+              <input id="desafio-meta" type="number" value="30" min="1" style="width:100%;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);margin-top:4px;">
             </label>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-            <label style="font-size:0.8rem;color:#9399b2;">Matéria (opcional)
-              <input id="desafio-materia" type="text" placeholder="Todas" style="width:100%;padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;margin-top:4px;">
+            <label style="font-size:0.8rem;color:var(--text-sub);">Matéria (opcional)
+              <input id="desafio-materia" type="text" placeholder="Todas" style="width:100%;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);margin-top:4px;">
             </label>
-            <label style="font-size:0.8rem;color:#9399b2;">Prazo (dias)
-              <input id="desafio-dias" type="number" value="7" min="1" max="30" style="width:100%;padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;margin-top:4px;">
+            <label style="font-size:0.8rem;color:var(--text-sub);">Prazo (dias)
+              <input id="desafio-dias" type="number" value="7" min="1" max="30" style="width:100%;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);margin-top:4px;">
             </label>
           </div>
         </div>
         <div style="display:flex;gap:8px;margin-top:16px;">
-          <button onclick="document.getElementById('criar-desafio-modal').remove()" style="flex:1;padding:10px;background:#45475a;color:#cdd6f4;border:none;border-radius:6px;cursor:pointer;">Cancelar</button>
-          <button onclick="criarDesafioManual()" style="flex:1;padding:10px;background:#cba6f7;color:#1e1e2e;border:none;border-radius:6px;font-weight:600;cursor:pointer;">Criar</button>
+          <button onclick="document.getElementById('criar-desafio-modal').remove()" style="flex:1;padding:10px;background:var(--bg-elevated);color:var(--text);border:none;border-radius:6px;cursor:pointer;">Cancelar</button>
+          <button onclick="criarDesafioManual()" style="flex:1;padding:10px;background:var(--accent);color:var(--bg);border:none;border-radius:6px;font-weight:600;cursor:pointer;">Criar</button>
         </div>
       </div>`;
       document.body.appendChild(overlay);
@@ -1809,37 +1809,37 @@
       const overlay = document.createElement('div');
       overlay.id = 'editar-desafio-modal';
       overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;';
-      overlay.innerHTML = `<div style="background:#313244;border-radius:12px;padding:24px;max-width:400px;width:100%;">
-        <h3 style="color:#cba6f7;margin-bottom:12px;">✏️ Editar Desafio</h3>
+      overlay.innerHTML = `<div style="background:var(--bg-surface);border-radius:12px;padding:24px;max-width:400px;width:100%;">
+        <h3 style="color:var(--accent);margin-bottom:12px;">✏️ Editar Desafio</h3>
         <div style="display:flex;flex-direction:column;gap:10px;">
-          <label style="font-size:0.8rem;color:#9399b2;">Título
-            <input id="edit-desafio-titulo" type="text" value="${titulo}" style="width:100%;padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;margin-top:4px;">
+          <label style="font-size:0.8rem;color:var(--text-sub);">Título
+            <input id="edit-desafio-titulo" type="text" value="${titulo}" style="width:100%;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);margin-top:4px;">
           </label>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-            <label style="font-size:0.8rem;color:#9399b2;">Tipo
-              <select id="edit-desafio-tipo" style="width:100%;padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;margin-top:4px;">
+            <label style="font-size:0.8rem;color:var(--text-sub);">Tipo
+              <select id="edit-desafio-tipo" style="width:100%;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);margin-top:4px;">
                 <option value="questoes" ${metaTipo==='questoes'?'selected':''}>❓ Questões</option>
                 <option value="horas" ${metaTipo==='horas'?'selected':''}>⏱ Horas</option>
                 <option value="flashcards" ${metaTipo==='flashcards'?'selected':''}>🧠 Flashcards</option>
                 <option value="topicos" ${metaTipo==='topicos'?'selected':''}>📋 Tópicos</option>
               </select>
             </label>
-            <label style="font-size:0.8rem;color:#9399b2;">Meta (quantidade)
-              <input id="edit-desafio-meta" type="number" value="${metaValor}" min="1" style="width:100%;padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;margin-top:4px;">
+            <label style="font-size:0.8rem;color:var(--text-sub);">Meta (quantidade)
+              <input id="edit-desafio-meta" type="number" value="${metaValor}" min="1" style="width:100%;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);margin-top:4px;">
             </label>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-            <label style="font-size:0.8rem;color:#9399b2;">Matéria (opcional)
-              <input id="edit-desafio-materia" type="text" value="${materia}" placeholder="Todas" style="width:100%;padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;margin-top:4px;">
+            <label style="font-size:0.8rem;color:var(--text-sub);">Matéria (opcional)
+              <input id="edit-desafio-materia" type="text" value="${materia}" placeholder="Todas" style="width:100%;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);margin-top:4px;">
             </label>
-            <label style="font-size:0.8rem;color:#9399b2;">Prazo (dias)
-              <input id="edit-desafio-dias" type="number" value="${dias}" min="1" max="30" style="width:100%;padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;margin-top:4px;">
+            <label style="font-size:0.8rem;color:var(--text-sub);">Prazo (dias)
+              <input id="edit-desafio-dias" type="number" value="${dias}" min="1" max="30" style="width:100%;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);margin-top:4px;">
             </label>
           </div>
         </div>
         <div style="display:flex;gap:8px;margin-top:16px;">
-          <button onclick="document.getElementById('editar-desafio-modal').remove()" style="flex:1;padding:10px;background:#45475a;color:#cdd6f4;border:none;border-radius:6px;cursor:pointer;">Cancelar</button>
-          <button onclick="salvarEdicaoDesafio(${id})" style="flex:1;padding:10px;background:#cba6f7;color:#1e1e2e;border:none;border-radius:6px;font-weight:600;cursor:pointer;">💾 Salvar</button>
+          <button onclick="document.getElementById('editar-desafio-modal').remove()" style="flex:1;padding:10px;background:var(--bg-elevated);color:var(--text);border:none;border-radius:6px;cursor:pointer;">Cancelar</button>
+          <button onclick="salvarEdicaoDesafio(${id})" style="flex:1;padding:10px;background:var(--accent);color:var(--bg);border:none;border-radius:6px;font-weight:600;cursor:pointer;">💾 Salvar</button>
         </div>
       </div>`;
       document.body.appendChild(overlay);
@@ -1866,7 +1866,7 @@
         const data = await fetch('/api/resumo-diario').then(r => r.json());
         const el = document.getElementById('resumo-diario');
         const hFmt = (h) => { const hrs = Math.floor(h); const mins = Math.round((h - hrs) * 60); if (hrs === 0) return `${mins}min`; if (mins === 0) return `${hrs}h`; return `${hrs}h ${mins}min`; };
-        el.innerHTML = `<div style="font-size:0.85rem;line-height:1.8;"><div>⏱ <strong>${hFmt(data.horas || 0)}</strong> estudadas</div><div>❓ <strong>${data.questoes || 0}</strong> questões resolvidas</div><div>🧠 <strong>${data.flashcards || 0}</strong> flashcards revisados</div>${data.sugestao_amanha?.length ? `<div style="margin-top:8px;padding:8px;background:#313244;border:1px solid #45475a;border-radius:6px;font-size:0.78rem;color:#cdd6f4;">💡 Amanhã foque em: <strong style="color:#f9e2af;">${data.sugestao_amanha.join(', ')}</strong></div>` : ''}</div>`;
+        el.innerHTML = `<div style="font-size:0.85rem;line-height:1.8;"><div>⏱ <strong>${hFmt(data.horas || 0)}</strong> estudadas</div><div>❓ <strong>${data.questoes || 0}</strong> questões resolvidas</div><div>🧠 <strong>${data.flashcards || 0}</strong> flashcards revisados</div>${data.sugestao_amanha?.length ? `<div style="margin-top:8px;padding:8px;background:var(--bg-surface);border:1px solid var(--border);border-radius:6px;font-size:0.78rem;color:var(--text);">💡 Amanhã foque em: <strong style="color:var(--yellow);">${data.sugestao_amanha.join(', ')}</strong></div>` : ''}</div>`;
       } catch(e) {}
     }
 
@@ -1874,9 +1874,9 @@
       try {
         const data = await fetch('/api/intercalacao').then(r => r.json());
         const el = document.getElementById('intercalacao-box');
-        if (!data.topicos?.length) { el.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Estudo intercalado requer tópicos não concluídos.</p>'; return; }
-        el.innerHTML = `<p style="font-size:0.78rem;color:#9399b2;margin-bottom:8px;">Estude estes tópicos misturados (interleaving):</p>` +
-          data.topicos.map(t => `<div style="padding:5px 0;border-bottom:1px solid #45475a;font-size:0.82rem;"><span style="color:#89b4fa;">${t.materia}</span> — ${t.topico}</div>`).join('');
+        if (!data.topicos?.length) { el.innerHTML = '<p style="color:var(--text-sub);font-size:0.85rem;">Estudo intercalado requer tópicos não concluídos.</p>'; return; }
+        el.innerHTML = `<p style="font-size:0.78rem;color:var(--text-sub);margin-bottom:8px;">Estude estes tópicos misturados (interleaving):</p>` +
+          data.topicos.map(t => `<div style="padding:5px 0;border-bottom:1px solid var(--border);font-size:0.82rem;"><span style="color:var(--blue);">${t.materia}</span> — ${t.topico}</div>`).join('');
       } catch(e) {}
     }
 
@@ -1885,13 +1885,13 @@
       try {
         const data = await fetch('/api/pratica-deliberada').then(r => r.json()).catch(() => null);
         const el = document.getElementById('pratica-delib-box');
-        if (!data || !data.foco) { el.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Responda questões para gerar análise de prática deliberada.</p>'; return; }
+        if (!data || !data.foco) { el.innerHTML = '<p style="color:var(--text-sub);font-size:0.85rem;">Responda questões para gerar análise de prática deliberada.</p>'; return; }
         el.innerHTML = `
-          <div style="padding:8px;background:#1e1e2e;border-radius:8px;margin-bottom:8px;">
-            <div style="font-size:0.82rem;color:#f9e2af;font-weight:600;">🎯 Foco: ${data.foco}</div>
-            <div style="font-size:0.75rem;color:#9399b2;margin-top:4px;">${data.motivo || 'Matéria com maior potencial de melhoria'}</div>
+          <div style="padding:8px;background:var(--bg);border-radius:8px;margin-bottom:8px;">
+            <div style="font-size:0.82rem;color:var(--yellow);font-weight:600;">🎯 Foco: ${data.foco}</div>
+            <div style="font-size:0.75rem;color:var(--text-sub);margin-top:4px;">${data.motivo || 'Matéria com maior potencial de melhoria'}</div>
           </div>
-          ${(data.exercicios || []).map(e => `<div style="padding:4px 0;font-size:0.8rem;border-bottom:1px solid #313244;">• ${e}</div>`).join('')}
+          ${(data.exercicios || []).map(e => `<div style="padding:4px 0;font-size:0.8rem;border-bottom:1px solid var(--border);">• ${e}</div>`).join('')}
         `;
       } catch(e) {}
     }
@@ -2022,18 +2022,18 @@
         const porMateria = tempo.por_materia || [];
 
         if (porMateria.length === 0) {
-          el.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Responda questões para identificar pontos fracos.</p>';
+          el.innerHTML = '<p style="color:var(--text-sub);font-size:0.85rem;">Responda questões para identificar pontos fracos.</p>';
           return;
         }
 
         // Ordenar por pior desempenho (mais tempo = mais dificuldade)
         porMateria.sort((a, b) => b.tempo_medio_seg - a.tempo_medio_seg);
         el.innerHTML = porMateria.slice(0, 5).map((m, i) => `
-          <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #313244;font-size:0.8rem;">
-            <span style="color:${i < 2 ? '#f38ba8' : '#f9e2af'};font-weight:700;">#${i+1}</span>
+          <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:0.8rem;">
+            <span style="color:${i < 2 ? 'var(--red)' : 'var(--yellow)'};font-weight:700;">#${i+1}</span>
             <span style="flex:1;">${m.materia}</span>
-            <span style="color:#fab387;font-size:0.75rem;">${m.tempo_medio_seg}s/questão</span>
-            <span style="color:#9399b2;font-size:0.72rem;">(${m.questoes} questões)</span>
+            <span style="color:var(--peach);font-size:0.75rem;">${m.tempo_medio_seg}s/questão</span>
+            <span style="color:var(--text-sub);font-size:0.72rem;">(${m.questoes} questões)</span>
           </div>
         `).join('');
       } catch(e) { console.error(e); }
@@ -2044,7 +2044,7 @@
       try {
         const el = document.getElementById('conexoes-box');
         const mats = await fetch('/api/questoes/materias').then(r => r.json()).catch(() => []);
-        if (mats.length < 2) { el.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Adicione mais matérias para ver conexões.</p>'; return; }
+        if (mats.length < 2) { el.innerHTML = '<p style="color:var(--text-sub);font-size:0.85rem;">Adicione mais matérias para ver conexões.</p>'; return; }
 
         // Mapa de conexões entre matérias de concursos (estáticas mas úteis)
         const conexoes = [
@@ -2066,13 +2066,13 @@
         );
 
         el.innerHTML = (relevantes.length > 0 ? relevantes : conexoes).slice(0, 6).map(c => `
-          <div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid #313244;font-size:0.78rem;">
-            <span style="color:#89b4fa;font-weight:600;">${c.a}</span>
-            <span style="color:#cba6f7;">↔</span>
-            <span style="color:#a6e3a1;font-weight:600;">${c.b}</span>
-            <span style="color:#9399b2;margin-left:auto;font-size:0.7rem;">${c.desc}</span>
+          <div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--border);font-size:0.78rem;">
+            <span style="color:var(--blue);font-weight:600;">${c.a}</span>
+            <span style="color:var(--accent);">↔</span>
+            <span style="color:var(--green);font-weight:600;">${c.b}</span>
+            <span style="color:var(--text-sub);margin-left:auto;font-size:0.7rem;">${c.desc}</span>
           </div>
-        `).join('') + '<p style="font-size:0.7rem;color:#585b70;margin-top:8px;">💡 Estude matérias conectadas na mesma semana para criar associações mentais mais fortes.</p>';
+        `).join('') + '<p style="font-size:0.7rem;color:var(--text-muted);margin-top:8px;">💡 Estude matérias conectadas na mesma semana para criar associações mentais mais fortes.</p>';
       } catch(e) {}
     }
 
@@ -2084,21 +2084,21 @@
         const porMateria = tempo.por_materia || [];
 
         if (porMateria.length === 0) {
-          el.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Responda questões com timer para análise de eficiência.</p>';
+          el.innerHTML = '<p style="color:var(--text-sub);font-size:0.85rem;">Responda questões com timer para análise de eficiência.</p>';
           return;
         }
 
         // Eficiência = questões por tempo (mais questões em menos tempo = melhor)
         porMateria.sort((a, b) => a.tempo_medio_seg - b.tempo_medio_seg);
-        el.innerHTML = `<p style="font-size:0.72rem;color:#9399b2;margin-bottom:6px;">⚡ Matérias por velocidade de resolução (mais rápida = mais dominada):</p>` +
+        el.innerHTML = `<p style="font-size:0.72rem;color:var(--text-sub);margin-bottom:6px;">⚡ Matérias por velocidade de resolução (mais rápida = mais dominada):</p>` +
           porMateria.slice(0, 6).map((m, i) => {
             const barW = Math.min(100, Math.max(10, 100 - m.tempo_medio_seg));
-            const cor = i < 2 ? '#a6e3a1' : i < 4 ? '#f9e2af' : '#f38ba8';
+            const cor = i < 2 ? 'var(--green)' : i < 4 ? 'var(--yellow)' : 'var(--red)';
             return `<div style="margin-bottom:4px;">
               <div style="display:flex;justify-content:space-between;font-size:0.75rem;margin-bottom:2px;">
                 <span>${m.materia}</span><span style="color:${cor};">${m.tempo_medio_seg}s · ${m.questoes}q</span>
               </div>
-              <div style="height:5px;background:#45475a;border-radius:3px;overflow:hidden;"><div style="width:${barW}%;height:100%;background:${cor};border-radius:3px;"></div></div>
+              <div style="height:5px;background:var(--bg-elevated);border-radius:3px;overflow:hidden;"><div style="width:${barW}%;height:100%;background:${cor};border-radius:3px;"></div></div>
             </div>`;
           }).join('');
       } catch(e) {}
@@ -2120,11 +2120,11 @@
     function showMicroItem() {
       const area = document.getElementById('micro-revisao-area');
       if (microIdx >= microItems.length) {
-        area.innerHTML = `<div style="text-align:center;padding:12px;background:#1e1e2e;border-radius:8px;"><div style="font-size:1.2rem;margin-bottom:6px;">🎉 Micro-revisão concluída!</div><div style="color:#a6e3a1;font-size:0.9rem;">${microAcertos}/${microItems.length} acertos</div><button onclick="document.getElementById('micro-revisao-box').style.display='block';document.getElementById('micro-revisao-area').style.display='none';" style="margin-top:8px;background:#89b4fa;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-weight:600;">OK</button></div>`;
+        area.innerHTML = `<div style="text-align:center;padding:12px;background:var(--bg);border-radius:8px;"><div style="font-size:1.2rem;margin-bottom:6px;">🎉 Micro-revisão concluída!</div><div style="color:var(--green);font-size:0.9rem;">${microAcertos}/${microItems.length} acertos</div><button onclick="document.getElementById('micro-revisao-box').style.display='block';document.getElementById('micro-revisao-area').style.display='none';" style="margin-top:8px;background:var(--blue);color:var(--bg);border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-weight:600;">OK</button></div>`;
         return;
       }
       const item = microItems[microIdx];
-      area.innerHTML = `<div style="padding:12px;background:#1e1e2e;border-radius:8px;"><div style="font-size:0.7rem;color:#9399b2;margin-bottom:4px;">${microIdx+1}/${microItems.length} · ${item.materia}</div><div style="font-size:0.9rem;color:#cdd6f4;margin-bottom:10px;font-weight:600;">${item.pergunta}</div><div id="micro-resp" style="display:none;padding:8px;background:#313244;border-radius:6px;color:#a6e3a1;font-size:0.82rem;margin-bottom:8px;">${item.resposta}</div><div style="display:flex;gap:6px;"><button onclick="document.getElementById('micro-resp').style.display='block';this.style.display='none';document.getElementById('micro-btns').style.display='flex';" style="background:#f9e2af;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;font-weight:600;cursor:pointer;">👁 Revelar</button><div id="micro-btns" style="display:none;gap:6px;"><button onclick="microAcertos++;microIdx++;showMicroItem();" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;font-weight:600;cursor:pointer;">✓ Sabia</button><button onclick="microIdx++;showMicroItem();" style="background:#f38ba8;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;font-weight:600;cursor:pointer;">✗ Não sabia</button></div></div></div>`;
+      area.innerHTML = `<div style="padding:12px;background:var(--bg);border-radius:8px;"><div style="font-size:0.7rem;color:var(--text-sub);margin-bottom:4px;">${microIdx+1}/${microItems.length} · ${item.materia}</div><div style="font-size:0.9rem;color:var(--text);margin-bottom:10px;font-weight:600;">${item.pergunta}</div><div id="micro-resp" style="display:none;padding:8px;background:var(--bg-surface);border-radius:6px;color:var(--green);font-size:0.82rem;margin-bottom:8px;">${item.resposta}</div><div style="display:flex;gap:6px;"><button onclick="document.getElementById('micro-resp').style.display='block';this.style.display='none';document.getElementById('micro-btns').style.display='flex';" style="background:var(--yellow);color:var(--bg);border:none;border-radius:6px;padding:6px 12px;font-weight:600;cursor:pointer;">👁 Revelar</button><div id="micro-btns" style="display:none;gap:6px;"><button onclick="microAcertos++;microIdx++;showMicroItem();" style="background:var(--green);color:var(--bg);border:none;border-radius:6px;padding:6px 12px;font-weight:600;cursor:pointer;">✓ Sabia</button><button onclick="microIdx++;showMicroItem();" style="background:var(--red);color:var(--bg);border:none;border-radius:6px;padding:6px 12px;font-weight:600;cursor:pointer;">✗ Não sabia</button></div></div></div>`;
     }
 
     // === AUTOAVALIAÇÃO DE CONFIANÇA ===
@@ -2145,12 +2145,12 @@
       if (autoIdx >= autoItems.length) {
         // Enviar resultados
         fetch('/api/autoavaliacao/registrar', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({resultados:autoResultados})}).then(r=>r.json()).then(res => {
-          area.innerHTML = `<div style="text-align:center;padding:16px;background:#1e1e2e;border-radius:8px;"><div style="font-size:1.1rem;margin-bottom:8px;">📊 Resultado</div><div style="font-size:2rem;font-weight:700;color:#cba6f7;">${res.calibracao_pct}%</div><div style="font-size:0.82rem;color:#9399b2;">calibração</div><div style="margin-top:8px;font-size:0.82rem;color:#cdd6f4;">${res.feedback}</div><div style="margin-top:6px;font-size:0.75rem;color:#9399b2;">Superconfiante: ${res.superconfiante} | Subconfiante: ${res.subconfiante} | Calibrado: ${res.calibrados}</div><button onclick="document.getElementById('autoavaliacao-box').style.display='block';document.getElementById('autoavaliacao-area').style.display='none';" style="margin-top:10px;background:#89b4fa;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-weight:600;">OK</button></div>`;
+          area.innerHTML = `<div style="text-align:center;padding:16px;background:var(--bg);border-radius:8px;"><div style="font-size:1.1rem;margin-bottom:8px;">📊 Resultado</div><div style="font-size:2rem;font-weight:700;color:var(--accent);">${res.calibracao_pct}%</div><div style="font-size:0.82rem;color:var(--text-sub);">calibração</div><div style="margin-top:8px;font-size:0.82rem;color:var(--text);">${res.feedback}</div><div style="margin-top:6px;font-size:0.75rem;color:var(--text-sub);">Superconfiante: ${res.superconfiante} | Subconfiante: ${res.subconfiante} | Calibrado: ${res.calibrados}</div><button onclick="document.getElementById('autoavaliacao-box').style.display='block';document.getElementById('autoavaliacao-area').style.display='none';" style="margin-top:10px;background:var(--blue);color:var(--bg);border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-weight:600;">OK</button></div>`;
         });
         return;
       }
       const item = autoItems[autoIdx];
-      area.innerHTML = `<div style="padding:12px;background:#1e1e2e;border-radius:8px;"><div style="font-size:0.7rem;color:#9399b2;margin-bottom:4px;">${autoIdx+1}/${autoItems.length} · ${item.materia}</div><div style="font-size:0.9rem;color:#cdd6f4;margin-bottom:10px;">${item.pergunta}</div><div style="margin-bottom:8px;font-size:0.82rem;color:#f9e2af;">Antes de ver a resposta, qual sua confiança?</div><div style="display:flex;gap:6px;margin-bottom:10px;" id="auto-conf-btns"><button onclick="autoConfianca(1)" style="background:#f38ba8;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-weight:600;">😟 Não sei</button><button onclick="autoConfianca(2)" style="background:#f9e2af;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-weight:600;">🤔 Acho que sei</button><button onclick="autoConfianca(3)" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-weight:600;">😎 Tenho certeza</button></div><div id="auto-reveal" style="display:none;"></div></div>`;
+      area.innerHTML = `<div style="padding:12px;background:var(--bg);border-radius:8px;"><div style="font-size:0.7rem;color:var(--text-sub);margin-bottom:4px;">${autoIdx+1}/${autoItems.length} · ${item.materia}</div><div style="font-size:0.9rem;color:var(--text);margin-bottom:10px;">${item.pergunta}</div><div style="margin-bottom:8px;font-size:0.82rem;color:var(--yellow);">Antes de ver a resposta, qual sua confiança?</div><div style="display:flex;gap:6px;margin-bottom:10px;" id="auto-conf-btns"><button onclick="autoConfianca(1)" style="background:var(--red);color:var(--bg);border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-weight:600;">😟 Não sei</button><button onclick="autoConfianca(2)" style="background:var(--yellow);color:var(--bg);border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-weight:600;">🤔 Acho que sei</button><button onclick="autoConfianca(3)" style="background:var(--green);color:var(--bg);border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-weight:600;">😎 Tenho certeza</button></div><div id="auto-reveal" style="display:none;"></div></div>`;
     }
     let autoConfAtual = 0;
     function autoConfianca(nivel) {
@@ -2158,7 +2158,7 @@
       document.getElementById('auto-conf-btns').style.display = 'none';
       const item = autoItems[autoIdx];
       document.getElementById('auto-reveal').style.display = 'block';
-      document.getElementById('auto-reveal').innerHTML = `<div style="padding:8px;background:#313244;border-radius:6px;color:#a6e3a1;font-size:0.82rem;margin-bottom:8px;"><strong>Resposta:</strong> ${item.resposta}</div><div style="display:flex;gap:6px;"><button onclick="autoRegistrar(true)" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-weight:600;">✓ Eu sabia</button><button onclick="autoRegistrar(false)" style="background:#f38ba8;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-weight:600;">✗ Errei</button></div>`;
+      document.getElementById('auto-reveal').innerHTML = `<div style="padding:8px;background:var(--bg-surface);border-radius:6px;color:var(--green);font-size:0.82rem;margin-bottom:8px;"><strong>Resposta:</strong> ${item.resposta}</div><div style="display:flex;gap:6px;"><button onclick="autoRegistrar(true)" style="background:var(--green);color:var(--bg);border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-weight:600;">✓ Eu sabia</button><button onclick="autoRegistrar(false)" style="background:var(--red);color:var(--bg);border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-weight:600;">✗ Errei</button></div>`;
     }
     function autoRegistrar(acertou) {
       autoResultados.push({flashcard_id: autoItems[autoIdx].id, confianca_pre: autoConfAtual, acertou});
@@ -2183,7 +2183,7 @@
       dissertAtual = data;
       const area = document.getElementById('dissertativa-area');
       area.style.display = 'block';
-      area.innerHTML = `<div style="padding:10px;background:#1e1e2e;border-radius:8px;"><div style="font-size:0.75rem;color:#89b4fa;margin-bottom:4px;">${data.materia} — ${data.topico}</div><div style="font-size:0.88rem;color:#cdd6f4;margin-bottom:8px;font-weight:600;">${data.pergunta}</div><textarea id="dissert-resposta" placeholder="Escreva sua resposta completa aqui..." rows="5" style="width:100%;background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:6px;padding:8px;font-size:0.82rem;resize:vertical;"></textarea><div style="display:flex;gap:8px;margin-top:8px;align-items:center;"><span style="font-size:0.75rem;color:#9399b2;">Confiança:</span><select id="dissert-conf" style="background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:4px;padding:4px;font-size:0.78rem;"><option value="1">😟 Baixa</option><option value="2">🤔 Média</option><option value="3" selected>😎 Alta</option></select><button onclick="salvarDissertativa()" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;font-weight:600;cursor:pointer;">💾 Salvar</button></div></div>`;
+      area.innerHTML = `<div style="padding:10px;background:var(--bg);border-radius:8px;"><div style="font-size:0.75rem;color:var(--blue);margin-bottom:4px;">${data.materia} — ${data.topico}</div><div style="font-size:0.88rem;color:var(--text);margin-bottom:8px;font-weight:600;">${data.pergunta}</div><textarea id="dissert-resposta" placeholder="Escreva sua resposta completa aqui..." rows="5" style="width:100%;background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px;font-size:0.82rem;resize:vertical;"></textarea><div style="display:flex;gap:8px;margin-top:8px;align-items:center;"><span style="font-size:0.75rem;color:var(--text-sub);">Confiança:</span><select id="dissert-conf" style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px;font-size:0.78rem;"><option value="1">😟 Baixa</option><option value="2">🤔 Média</option><option value="3" selected>😎 Alta</option></select><button onclick="salvarDissertativa()" style="background:var(--green);color:var(--bg);border:none;border-radius:6px;padding:6px 12px;font-weight:600;cursor:pointer;">💾 Salvar</button></div></div>`;
     }
     async function salvarDissertativa() {
       const resp = document.getElementById('dissert-resposta').value.trim();
@@ -2230,7 +2230,7 @@
       const locais = ['🚪 Entrada','🛋️ Sala','🍳 Cozinha','🛏️ Quarto','🚿 Banheiro'];
       const teste = document.getElementById('loci-teste');
       teste.style.display = 'block';
-      teste.innerHTML = `<div style="padding:8px;background:#1e1e2e;border-radius:6px;font-size:0.8rem;"><div style="color:#f9e2af;font-weight:600;margin-bottom:6px;">🧠 Feche os olhos e percorra seu palácio mentalmente. Depois confira:</div>${valores.map((v, i) => `<div style="padding:3px 0;"><span style="color:#89b4fa;">${locais[i]}:</span> <span class="loci-hidden" onclick="this.style.color='#a6e3a1'" style="color:#313244;background:#313244;border-radius:3px;padding:0 4px;cursor:pointer;">${v}</span></div>`).join('')}<p style="font-size:0.7rem;color:#585b70;margin-top:6px;">Clique em cada local para revelar o conceito.</p></div>`;
+      teste.innerHTML = `<div style="padding:8px;background:var(--bg);border-radius:6px;font-size:0.8rem;"><div style="color:var(--yellow);font-weight:600;margin-bottom:6px;">🧠 Feche os olhos e percorra seu palácio mentalmente. Depois confira:</div>${valores.map((v, i) => `<div style="padding:3px 0;"><span style="color:var(--blue);">${locais[i]}:</span> <span class="loci-hidden" onclick="this.style.color='var(--green)'" style="color:#313244;background:var(--bg-surface);border-radius:3px;padding:0 4px;cursor:pointer;">${v}</span></div>`).join('')}<p style="font-size:0.7rem;color:var(--text-muted);margin-top:6px;">Clique em cada local para revelar o conceito.</p></div>`;
     }
     function limparLoci() {
       for (let i = 1; i <= 5; i++) document.getElementById(`loci-${i}`).value = '';
@@ -2256,7 +2256,7 @@
         if (vozSeg <= 0) {
           clearInterval(vozInterval);
           document.getElementById('voz-timer').textContent = '🎉 FIM!';
-          document.getElementById('voz-timer').style.color = '#a6e3a1';
+          document.getElementById('voz-timer').style.color = 'var(--green)';
           if (Notification.permission === 'granted') new Notification('🗣️ Leitura em voz alta concluída!');
         }
       }, 1000);
@@ -2265,7 +2265,7 @@
     function updateVozDisplay() {
       const m = Math.floor(vozSeg / 60), s = vozSeg % 60;
       document.getElementById('voz-timer').textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-      document.getElementById('voz-timer').style.color = vozSeg < 30 ? '#f38ba8' : '#cdd6f4';
+      document.getElementById('voz-timer').style.color = vozSeg < 30 ? 'var(--red)' : '#cdd6f4';
     }
 
     // === PRÁTICA DISTRIBUÍDA (SPACING) ===
@@ -2273,15 +2273,15 @@
       try {
         const data = await fetch('/api/spacing-indicator').then(r => r.json());
         const el = document.getElementById('spacing-box');
-        if (!data.materias?.length) { el.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Estude por alguns dias para visualizar o espaçamento ideal.</p>'; return; }
+        if (!data.materias?.length) { el.innerHTML = '<p style="color:var(--text-sub);font-size:0.85rem;">Estude por alguns dias para visualizar o espaçamento ideal.</p>'; return; }
         el.innerHTML = data.materias.map(m => `
-          <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #313244;font-size:0.8rem;">
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:0.8rem;">
             <span style="width:8px;height:8px;border-radius:50%;background:${m.cor};flex-shrink:0;"></span>
             <span style="flex:1;">${m.materia}</span>
             <span style="color:${m.cor};font-size:0.75rem;white-space:nowrap;">⌀ ${m.intervalo_medio_dias}d entre sessões</span>
-            <span style="font-size:0.7rem;color:#9399b2;">(${m.sessoes_30d}x/mês)</span>
+            <span style="font-size:0.7rem;color:var(--text-sub);">(${m.sessoes_30d}x/mês)</span>
           </div>
-          <div style="font-size:0.68rem;color:#585b70;padding:0 0 4px 16px;">${m.sugestao}</div>
+          <div style="font-size:0.68rem;color:var(--text-muted);padding:0 0 4px 16px;">${m.sugestao}</div>
         `).join('');
       } catch(e) {}
     }
@@ -2290,7 +2290,7 @@
       try {
         const data = await fetch('/api/heatmap').then(r => r.json());
         const el = document.getElementById('heatmap-box');
-        if (!data.length) { el.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Estude para gerar o heatmap.</p>'; return; }
+        if (!data.length) { el.innerHTML = '<p style="color:var(--text-sub);font-size:0.85rem;">Estude para gerar o heatmap.</p>'; return; }
         const dateMap = {};
         data.forEach(d => { dateMap[d.data] = d.intensidade; });
         let html = '<div class="heatmap-grid">';
@@ -2314,9 +2314,9 @@
       try {
         const data = await fetch('/api/projecao-nota').then(r => r.json());
         const el = document.getElementById('projecao-nota');
-        const color = data.aprovado_estimado ? '#a6e3a1' : '#f38ba8';
-        let html = `<div style="text-align:center;margin-bottom:12px;"><div style="font-size:2rem;font-weight:700;color:${color};">${data.nota_projetada}%</div><div style="font-size:0.8rem;color:#9399b2;">Nota projetada (corte: ${data.nota_corte_estimada}%)</div><div style="font-size:0.85rem;color:${color};font-weight:600;">${data.aprovado_estimado ? '\u2705 Dentro da zona de aprova\u00e7\u00e3o' : '\u26a0\ufe0f Abaixo do corte estimado'}</div></div>`;
-        html += data.materias.slice(0,6).map(m => `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:0.78rem;"><span style="flex:1;">${m.materia}</span><span style="color:${m.pct_acerto>=60?'#a6e3a1':'#f38ba8'};font-weight:600;">${m.pct_acerto}%</span></div>`).join('');
+        const color = data.aprovado_estimado ? 'var(--green)' : 'var(--red)';
+        let html = `<div style="text-align:center;margin-bottom:12px;"><div style="font-size:2rem;font-weight:700;color:${color};">${data.nota_projetada}%</div><div style="font-size:0.8rem;color:var(--text-sub);">Nota projetada (corte: ${data.nota_corte_estimada}%)</div><div style="font-size:0.85rem;color:${color};font-weight:600;">${data.aprovado_estimado ? '\u2705 Dentro da zona de aprova\u00e7\u00e3o' : '\u26a0\ufe0f Abaixo do corte estimado'}</div></div>`;
+        html += data.materias.slice(0,6).map(m => `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:0.78rem;"><span style="flex:1;">${m.materia}</span><span style="color:${m.pct_acerto>=60?'var(--green)':'var(--red)'};font-weight:600;">${m.pct_acerto}%</span></div>`).join('');
         el.innerHTML = html;
       } catch(e) {}
     }
@@ -2325,8 +2325,8 @@
       try {
         const data = await fetch('/api/plano-automatico').then(r => r.json());
         const el = document.getElementById('plano-auto');
-        let html = `<div style="font-size:0.82rem;color:#9399b2;margin-bottom:8px;">${data.dias_ate_prova} dias | ${data.horas_dia}h/dia | ${data.topicos_restantes} t\u00f3picos</div>`;
-        html += data.plano.slice(0,8).map(p => `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid #45475a;font-size:0.8rem;"><span style="flex:1;">${p.materia}</span><span style="color:#89b4fa;">${p.horas_semana}h/sem</span></div>`).join('');
+        let html = `<div style="font-size:0.82rem;color:var(--text-sub);margin-bottom:8px;">${data.dias_ate_prova} dias | ${data.horas_dia}h/dia | ${data.topicos_restantes} t\u00f3picos</div>`;
+        html += data.plano.slice(0,8).map(p => `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--border);font-size:0.8rem;"><span style="flex:1;">${p.materia}</span><span style="color:var(--blue);">${p.horas_semana}h/sem</span></div>`).join('');
         el.innerHTML = html;
       } catch(e) {}
     }
@@ -2335,14 +2335,14 @@
       try {
         const data = await fetch('/api/linha-tempo').then(r => r.json());
         const el = document.getElementById('linha-tempo');
-        if (!data.length) { el.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Sem sess\u00f5es registradas.</p>'; return; }
-        el.innerHTML = data.slice(0,8).map(s => `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #45475a;font-size:0.8rem;"><span style="color:#9399b2;min-width:70px;">${s.data}</span><span style="flex:1;">${s.materia}</span><span style="color:#89b4fa;">${s.horas?.toFixed?.(1) || s.horas}h</span></div>`).join('');
+        if (!data.length) { el.innerHTML = '<p style="color:var(--text-sub);font-size:0.85rem;">Sem sess\u00f5es registradas.</p>'; return; }
+        el.innerHTML = data.slice(0,8).map(s => `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border);font-size:0.8rem;"><span style="color:var(--text-sub);min-width:70px;">${s.data}</span><span style="flex:1;">${s.materia}</span><span style="color:var(--blue);">${s.horas?.toFixed?.(1) || s.horas}h</span></div>`).join('');
       } catch(e) {}
     }
 
     // === PLANEJADOR SEMANAL ===
     const DIAS_NOMES = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
-    const DIAS_CORES = ['#89b4fa','#a6e3a1','#f9e2af','#fab387','#cba6f7','#f38ba8','#94e2d5'];
+    const DIAS_CORES = ['var(--blue)','var(--green)','var(--yellow)','var(--peach)','var(--accent)','var(--red)','#94e2d5'];
     let planMode = 'auto';
 
     function setPlanMode(mode) {
@@ -2413,23 +2413,23 @@
           const horasDia = diaItems.reduce((a, i) => a + i.horas, 0);
           totalHoras += horasDia;
 
-          html += `<div style="background:#313244;border-radius:8px;padding:8px;min-height:120px;border-top:3px solid ${DIAS_CORES[dia]};">`;
+          html += `<div style="background:var(--bg-surface);border-radius:8px;padding:8px;min-height:120px;border-top:3px solid ${DIAS_CORES[dia]};">`;
           html += `<div style="font-size:0.75rem;font-weight:700;color:${DIAS_CORES[dia]};margin-bottom:6px;text-align:center;">${DIAS_NOMES[dia]}</div>`;
 
           if (diaItems.length === 0) {
-            html += `<div style="color:#585b70;font-size:0.7rem;text-align:center;padding:10px 0;">Livre</div>`;
+            html += `<div style="color:var(--text-muted);font-size:0.7rem;text-align:center;padding:10px 0;">Livre</div>`;
           } else {
             for (const it of diaItems) {
               materiasSet.add(it.materia);
-              html += `<div style="display:flex;align-items:center;gap:4px;padding:3px 0;border-bottom:1px solid #45475a;font-size:0.72rem;">
-                <span style="flex:1;color:#cdd6f4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${it.materia}">${it.materia}</span>
-                <span style="color:#89b4fa;font-size:0.68rem;white-space:nowrap;">${it.horas}h</span>
-                ${planMode === 'manual' && it.id ? `<button onclick="removePlanejadorItem(${it.id})" style="background:none;border:none;color:#f38ba8;cursor:pointer;font-size:0.7rem;padding:0 2px;" title="Remover">&#10005;</button>` : ''}
+              html += `<div style="display:flex;align-items:center;gap:4px;padding:3px 0;border-bottom:1px solid var(--border);font-size:0.72rem;">
+                <span style="flex:1;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${it.materia}">${it.materia}</span>
+                <span style="color:var(--blue);font-size:0.68rem;white-space:nowrap;">${it.horas}h</span>
+                ${planMode === 'manual' && it.id ? `<button onclick="removePlanejadorItem(${it.id})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:0.7rem;padding:0 2px;" title="Remover">&#10005;</button>` : ''}
               </div>`;
             }
           }
 
-          html += `<div style="margin-top:4px;padding-top:4px;border-top:1px solid #45475a;font-size:0.68rem;color:#9399b2;text-align:center;">${horasDia.toFixed(1)}h</div>`;
+          html += `<div style="margin-top:4px;padding-top:4px;border-top:1px solid var(--border);font-size:0.68rem;color:var(--text-sub);text-align:center;">${horasDia.toFixed(1)}h</div>`;
           html += `</div>`;
         }
 
@@ -2443,7 +2443,7 @@
             <span>&#9200; <strong>${totalHoras.toFixed(1)}h</strong>/semana</span>
             <span>&#128197; <strong>${diasAtivos}</strong> dias ativos</span>
             <span>&#8960; <strong>${diasAtivos > 0 ? (totalHoras / diasAtivos).toFixed(1) : 0}h</strong>/dia</span>
-            ${planMode === 'auto' ? '<span style="color:#a6e3a1;font-size:0.75rem;">🤖 Gerado automaticamente</span>' : '<span style="color:#89b4fa;font-size:0.75rem;">✏️ Configurado manualmente</span>'}
+            ${planMode === 'auto' ? '<span style="color:var(--green);font-size:0.75rem;">🤖 Gerado automaticamente</span>' : '<span style="color:var(--blue);font-size:0.75rem;">✏️ Configurado manualmente</span>'}
           </div>
         `;
       } catch(e) {
@@ -2495,7 +2495,7 @@
       try {
         const data = await fetch('/api/conquistas-diarias').then(r => r.json());
         const el = document.getElementById('missoes-box');
-        el.innerHTML = data.map(m => `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #45475a;font-size:0.85rem;"><span style="font-size:1.1rem;">\u2b50</span><span style="flex:1;">${m.titulo}</span><span style="color:#f9e2af;font-size:0.75rem;">+${m.xp}xp</span></div>`).join('');
+        el.innerHTML = data.map(m => `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:0.85rem;"><span style="font-size:1.1rem;">\u2b50</span><span style="flex:1;">${m.titulo}</span><span style="color:var(--yellow);font-size:0.75rem;">+${m.xp}xp</span></div>`).join('');
       } catch(e) {}
     }
 
@@ -2503,7 +2503,7 @@
       try {
         const data = await fetch('/api/compartilhar').then(r => r.json());
         const el = document.getElementById('share-box');
-        el.innerHTML = `<div class="share-card"><div class="share-text">${data.texto}</div><div class="share-btns"><button style="background:#a6e3a1;color:#1e1e2e;" onclick="navigator.clipboard.writeText('${data.texto.replace(/'/g,"\\'")}')">\ud83d\udccb Copiar</button><button style="background:#45475a;color:#cdd6f4;" onclick="window.open('/api/exportar-tudo')">\u2b07 Backup JSON</button></div></div>`;
+        el.innerHTML = `<div class="share-card"><div class="share-text">${data.texto}</div><div class="share-btns"><button style="background:var(--green);color:var(--bg);" onclick="navigator.clipboard.writeText('${data.texto.replace(/'/g,"\\'")}')">\ud83d\udccb Copiar</button><button style="background:var(--bg-elevated);color:var(--text);" onclick="window.open('/api/exportar-tudo')">\u2b07 Backup JSON</button></div></div>`;
       } catch(e) {}
     }
 
@@ -2521,43 +2521,43 @@
         }
         const data = await fetch(url).then(r => r.json());
         const el = document.getElementById('treinador-box');
-        const scoreColor = data.score_prontidao >= 60 ? '#a6e3a1' : data.score_prontidao >= 30 ? '#fab387' : '#f38ba8';
+        const scoreColor = data.score_prontidao >= 60 ? 'var(--green)' : data.score_prontidao >= 30 ? 'var(--peach)' : 'var(--red)';
         const intel = data.inteligencia || {};
 
         let html = `
           <div style="display:flex;align-items:center;gap:20px;margin-bottom:16px;flex-wrap:wrap;">
             <div style="text-align:center;">
               <div style="font-size:2.2rem;font-weight:700;color:${scoreColor};">${data.score_prontidao}</div>
-              <div style="font-size:0.75rem;color:#9399b2;">Score de Prontidão</div>
+              <div style="font-size:0.75rem;color:var(--text-sub);">Score de Prontidão</div>
               <div style="font-size:0.82rem;color:${scoreColor};font-weight:600;">${data.nivel}</div>
             </div>
             <div style="flex:1;min-width:200px;">
-              <div style="background:#45475a;border-radius:8px;height:10px;overflow:hidden;">
+              <div style="background:var(--bg-elevated);border-radius:8px;height:10px;overflow:hidden;">
                 <div style="width:${data.score_prontidao}%;height:100%;background:${scoreColor};border-radius:8px;transition:width 0.6s;"></div>
               </div>
-              <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:#9399b2;margin-top:4px;">
+              <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:var(--text-sub);margin-top:4px;">
                 <span>Iniciante</span><span>Intermediário</span><span>Avançado</span><span>Pronto</span>
               </div>
             </div>
             <div style="text-align:center;">
-              <div style="font-size:0.8rem;color:#9399b2;">Revisões pendentes</div>
-              <div style="font-size:1.2rem;font-weight:700;color:#89b4fa;">🧠 ${data.revisoes_pendentes.flashcards} | 📝 ${data.revisoes_pendentes.topicos}</div>
+              <div style="font-size:0.8rem;color:var(--text-sub);">Revisões pendentes</div>
+              <div style="font-size:1.2rem;font-weight:700;color:var(--blue);">🧠 ${data.revisoes_pendentes.flashcards} | 📝 ${data.revisoes_pendentes.topicos}</div>
             </div>
           </div>`;
 
         // Ritmo adaptativo card
         if (intel.ritmo_adaptativo) {
           const r = intel.ritmo_adaptativo;
-          const ritmoColor = r.status === 'acima' ? '#a6e3a1' : r.status === 'adequado' ? '#89b4fa' : r.status === 'insuficiente' ? '#fab387' : '#f38ba8';
-          html += `<div style="background:#1e1e2e;border-radius:10px;padding:12px 16px;margin-bottom:12px;border-left:4px solid ${ritmoColor};">
+          const ritmoColor = r.status === 'acima' ? 'var(--green)' : r.status === 'adequado' ? 'var(--blue)' : r.status === 'insuficiente' ? 'var(--peach)' : 'var(--red)';
+          html += `<div style="background:var(--bg);border-radius:10px;padding:12px 16px;margin-bottom:12px;border-left:4px solid ${ritmoColor};">
             <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
               <div>
                 <div style="font-size:0.82rem;font-weight:600;color:${ritmoColor};">${r.msg}</div>
-                <div style="font-size:0.72rem;color:#9399b2;margin-top:2px;">${r.topicos_pendentes} tópicos restantes • ${r.dias_restantes} dias até a prova</div>
+                <div style="font-size:0.72rem;color:var(--text-sub);margin-top:2px;">${r.topicos_pendentes} tópicos restantes • ${r.dias_restantes} dias até a prova</div>
               </div>
               <div style="text-align:center;">
                 <div style="font-size:1.4rem;font-weight:700;color:${ritmoColor};">${r.pct_ritmo}%</div>
-                <div style="font-size:0.68rem;color:#9399b2;">do ritmo ideal</div>
+                <div style="font-size:0.68rem;color:var(--text-sub);">do ritmo ideal</div>
               </div>
             </div>
           </div>`;
@@ -2567,12 +2567,12 @@
         if (intel.sprint_mode && intel.sprint_mode.ativo) {
           const sp = intel.sprint_mode;
           html += `<div style="background:linear-gradient(135deg,#f38ba822,#fab38722);border-radius:10px;padding:12px 16px;margin-bottom:12px;border:1px solid #f38ba844;">
-            <div style="font-size:0.88rem;font-weight:700;color:#f38ba8;">🏃 MODO SPRINT — ${sp.dias_restantes} dias</div>
-            <div style="font-size:0.75rem;color:#cdd6f4;margin-top:4px;">${sp.estrategia}</div>
+            <div style="font-size:0.88rem;font-weight:700;color:var(--red);">🏃 MODO SPRINT — ${sp.dias_restantes} dias</div>
+            <div style="font-size:0.75rem;color:var(--text);margin-top:4px;">${sp.estrategia}</div>
             <div style="display:flex;gap:12px;margin-top:8px;font-size:0.72rem;">
-              <span style="color:#89b4fa;">📖 ${sp.distribuicao.revisao_pct}% revisão</span>
-              <span style="color:#cba6f7;">❓ ${sp.distribuicao.questoes_pct}% questões</span>
-              <span style="color:#fab387;">📝 ${sp.distribuicao.simulado_pct}% simulado</span>
+              <span style="color:var(--blue);">📖 ${sp.distribuicao.revisao_pct}% revisão</span>
+              <span style="color:var(--accent);">❓ ${sp.distribuicao.questoes_pct}% questões</span>
+              <span style="color:var(--peach);">📝 ${sp.distribuicao.simulado_pct}% simulado</span>
             </div>
           </div>`;
         }
@@ -2581,8 +2581,8 @@
         html += `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:8px;margin-bottom:12px;">
             ${data.recomendacoes.map(r => {
               const icons = {revisar:'🧠',questoes:'❓',estudar:'📚',alerta:'🚨'};
-              const colors = {revisar:'#89b4fa',questoes:'#cba6f7',estudar:'#a6e3a1',alerta:'#f38ba8'};
-              return `<div style="background:#1e1e2e;border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:8px;border-left:3px solid ${colors[r.tipo]||'#45475a'};">
+              const colors = {revisar:'var(--blue)',questoes:'var(--accent)',estudar:'var(--green)',alerta:'var(--red)'};
+              return `<div style="background:var(--bg);border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:8px;border-left:3px solid ${colors[r.tipo]||'var(--bg-elevated)'};">
                 <span style="font-size:1.1rem;">${icons[r.tipo]||'💡'}</span>
                 <span style="font-size:0.82rem;">${r.msg}</span>
               </div>`;
@@ -2592,14 +2592,14 @@
         // Curva de Esquecimento (itens em risco)
         if (intel.forgetting_risk && intel.forgetting_risk.length > 0) {
           html += `<div style="margin-bottom:12px;">
-            <div style="font-size:0.8rem;color:#9399b2;margin-bottom:6px;font-weight:600;">⚠️ Risco de Esquecimento (FSRS):</div>
+            <div style="font-size:0.8rem;color:var(--text-sub);margin-bottom:6px;font-weight:600;">⚠️ Risco de Esquecimento (FSRS):</div>
             <div style="display:grid;gap:4px;">
               ${intel.forgetting_risk.slice(0, 5).map(item => {
-                const urgColor = item.urgencia === 'critica' ? '#f38ba8' : item.urgencia === 'alta' ? '#fab387' : '#f9e2af';
-                return `<div style="display:flex;align-items:flex-start;gap:8px;font-size:0.78rem;padding:8px 10px;background:#1e1e2e;border-radius:6px;">
+                const urgColor = item.urgencia === 'critica' ? 'var(--red)' : item.urgencia === 'alta' ? 'var(--peach)' : 'var(--yellow)';
+                return `<div style="display:flex;align-items:flex-start;gap:8px;font-size:0.78rem;padding:8px 10px;background:var(--bg);border-radius:6px;">
                   <div style="min-width:44px;text-align:center;font-weight:700;color:${urgColor};padding-top:1px;">${item.recall_estimado}%</div>
-                  <div style="flex:1;color:#cdd6f4;line-height:1.4;">${item.descricao}</div>
-                  <div style="font-size:0.68rem;color:#9399b2;min-width:55px;text-align:right;padding-top:1px;">${item.tipo}</div>
+                  <div style="flex:1;color:var(--text);line-height:1.4;">${item.descricao}</div>
+                  <div style="font-size:0.68rem;color:var(--text-sub);min-width:55px;text-align:right;padding-top:1px;">${item.tipo}</div>
                 </div>`;
               }).join('')}
             </div>
@@ -2609,8 +2609,8 @@
         // Micro-metas
         if (intel.micro_metas && intel.micro_metas.length > 0) {
           html += `<div style="margin-bottom:12px;">
-            <div style="font-size:0.8rem;color:#9399b2;margin-bottom:6px;font-weight:600;">🎯 Micro-Metas do Dia:</div>
-            ${intel.micro_metas.map(mm => `<div style="font-size:0.78rem;padding:6px 10px;background:#1e1e2e;border-radius:6px;margin-bottom:3px;border-left:3px solid ${mm.prioridade==='ALTA'?'#f38ba8':'#fab387'};">
+            <div style="font-size:0.8rem;color:var(--text-sub);margin-bottom:6px;font-weight:600;">🎯 Micro-Metas do Dia:</div>
+            ${intel.micro_metas.map(mm => `<div style="font-size:0.78rem;padding:6px 10px;background:var(--bg);border-radius:6px;margin-bottom:3px;border-left:3px solid ${mm.prioridade==='ALTA'?'var(--red)':'var(--peach)'};">
               ${mm.meta}
             </div>`).join('')}
           </div>`;
@@ -2619,8 +2619,8 @@
         // Platôs detectados
         if (intel.plateaus && intel.plateaus.length > 0) {
           html += `<div style="margin-bottom:12px;">
-            <div style="font-size:0.8rem;color:#f9e2af;margin-bottom:6px;font-weight:600;">📊 Platôs Detectados:</div>
-            ${intel.plateaus.map(p => `<div style="font-size:0.78rem;padding:6px 10px;background:#1e1e2e;border-radius:6px;margin-bottom:3px;border-left:3px solid #f9e2af;">
+            <div style="font-size:0.8rem;color:var(--yellow);margin-bottom:6px;font-weight:600;">📊 Platôs Detectados:</div>
+            ${intel.plateaus.map(p => `<div style="font-size:0.78rem;padding:6px 10px;background:var(--bg);border-radius:6px;margin-bottom:3px;border-left:3px solid #f9e2af;">
               <strong>${p.materia}</strong> (${p.pct_anterior}% → ${p.pct_atual}%): ${p.sugestao}
             </div>`).join('')}
           </div>`;
@@ -2629,16 +2629,16 @@
         // Horário ótimo + Matérias foco (row)
         html += `<div style="display:flex;gap:12px;flex-wrap:wrap;">`;
         if (intel.horario_otimo) {
-          html += `<div style="flex:1;min-width:180px;background:#1e1e2e;border-radius:8px;padding:10px 12px;">
-            <div style="font-size:0.75rem;color:#9399b2;font-weight:600;">⏰ Seu Melhor Horário</div>
-            <div style="font-size:0.9rem;font-weight:600;color:#89b4fa;margin-top:4px;">${intel.horario_otimo.label}</div>
+          html += `<div style="flex:1;min-width:180px;background:var(--bg);border-radius:8px;padding:10px 12px;">
+            <div style="font-size:0.75rem;color:var(--text-sub);font-weight:600;">⏰ Seu Melhor Horário</div>
+            <div style="font-size:0.9rem;font-weight:600;color:var(--blue);margin-top:4px;">${intel.horario_otimo.label}</div>
             <div style="font-size:0.7rem;color:#a6adc8;margin-top:2px;">${intel.horario_otimo.pct}% das sessões</div>
           </div>`;
         }
         if (data.materias_foco && data.materias_foco.length > 0) {
           html += `<div style="flex:2;min-width:200px;">
-            <div style="font-size:0.8rem;color:#9399b2;margin-bottom:6px;font-weight:600;">🎯 Matérias Foco:</div>
-            <div>${data.materias_foco.map(m => `<span style="display:inline-block;background:${m.prioridade==='ALTA'?'#f38ba8':'#fab387'};color:#1e1e2e;padding:3px 10px;border-radius:12px;font-size:0.75rem;font-weight:600;margin:2px 4px;">${m.materia} (${m.pct_acerto}%)</span>`).join('')}</div>
+            <div style="font-size:0.8rem;color:var(--text-sub);margin-bottom:6px;font-weight:600;">🎯 Matérias Foco:</div>
+            <div>${data.materias_foco.map(m => `<span style="display:inline-block;background:${m.prioridade==='ALTA'?'var(--red)':'var(--peach)'};color:var(--bg);padding:3px 10px;border-radius:12px;font-size:0.75rem;font-weight:600;margin:2px 4px;">${m.materia} (${m.pct_acerto}%)</span>`).join('')}</div>
           </div>`;
         }
         html += `</div>`;
@@ -2652,17 +2652,17 @@
         const data = await fetch('/api/trilha-diaria').then(r => r.json());
         const el = document.getElementById('trilha-box');
         const icons = {revisao:'🧠',estudo:'📚',questoes:'❓',pausa:'☕'};
-        const colors = {revisao:'#89b4fa',estudo:'#a6e3a1',questoes:'#cba6f7',pausa:'#9399b2'};
-        let html = `<div style="font-size:0.78rem;color:#9399b2;margin-bottom:10px;">${data.tempo_total_min} min planejados | Foco: <strong style="color:#cba6f7;">${data.foco_principal || 'Geral'}</strong></div>`;
+        const colors = {revisao:'var(--blue)',estudo:'var(--green)',questoes:'var(--accent)',pausa:'var(--text-sub)'};
+        let html = `<div style="font-size:0.78rem;color:var(--text-sub);margin-bottom:10px;">${data.tempo_total_min} min planejados | Foco: <strong style="color:var(--accent);">${data.foco_principal || 'Geral'}</strong></div>`;
         html += data.atividades.map((a, i) => `
-          <div style="display:flex;align-items:center;gap:10px;padding:8px 0;${i < data.atividades.length-1 ? 'border-bottom:1px solid #45475a;':''}">
-            <div style="width:24px;height:24px;border-radius:50%;background:${colors[a.tipo]||'#45475a'};display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:#1e1e2e;font-weight:700;">${i+1}</div>
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 0;${i < data.atividades.length-1 ? 'border-bottom:1px solid var(--border);':''}">
+            <div style="width:24px;height:24px;border-radius:50%;background:${colors[a.tipo]||'var(--bg-elevated)'};display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:var(--bg);font-weight:700;">${i+1}</div>
             <span style="font-size:1rem;">${icons[a.tipo]||'📌'}</span>
             <span style="flex:1;font-size:0.82rem;">${a.descricao || (a.materia + ': ' + (a.qtd ? a.qtd + ' questões' : a.topicos?.join(', ') || 'estudo'))}</span>
-            <span style="font-size:0.75rem;color:#9399b2;min-width:40px;text-align:right;">${a.tempo_min}min</span>
+            <span style="font-size:0.75rem;color:var(--text-sub);min-width:40px;text-align:right;">${a.tempo_min}min</span>
           </div>
         `).join('');
-        if (data.motivo) html += `<div style="margin-top:10px;font-size:0.75rem;color:#fab387;font-style:italic;">💡 ${data.motivo}</div>`;
+        if (data.motivo) html += `<div style="margin-top:10px;font-size:0.75rem;color:var(--peach);font-style:italic;">💡 ${data.motivo}</div>`;
         el.innerHTML = html;
       } catch(e) { console.error('Trilha error:', e); }
     }
@@ -2671,18 +2671,18 @@
       try {
         const data = await fetch('/api/curva-esquecimento').then(r => r.json());
         const el = document.getElementById('curva-box');
-        if (!data.length) { el.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Complete revisões para gerar a curva.</p>'; return; }
+        if (!data.length) { el.innerHTML = '<p style="color:var(--text-sub);font-size:0.85rem;">Complete revisões para gerar a curva.</p>'; return; }
         data.sort((a, b) => a.retencao_pct - b.retencao_pct);
         el.innerHTML = data.slice(0, 8).map(t => {
-          const color = t.retencao_pct >= 70 ? '#a6e3a1' : t.retencao_pct >= 40 ? '#fab387' : '#f38ba8';
+          const color = t.retencao_pct >= 70 ? 'var(--green)' : t.retencao_pct >= 40 ? 'var(--peach)' : 'var(--red)';
           const urgente = t.retencao_pct < 40;
-          return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #45475a;${urgente?'background:#1e1e2e;border-radius:6px;padding:6px 8px;margin:2px 0;':''}">
+          return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);${urgente?'background:var(--bg);border-radius:6px;padding:6px 8px;margin:2px 0;':''}">
             <div style="width:36px;height:36px;border-radius:50%;border:3px solid ${color};display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;color:${color};">${t.retencao_pct}%</div>
             <div style="flex:1;">
               <div style="font-size:0.8rem;font-weight:600;">${t.materia}</div>
-              <div style="font-size:0.72rem;color:#9399b2;">${t.topico?.substring(0,40) || ''}</div>
+              <div style="font-size:0.72rem;color:var(--text-sub);">${t.topico?.substring(0,40) || ''}</div>
             </div>
-            <div style="font-size:0.7rem;color:#9399b2;text-align:right;">${t.dias_desde_revisao}d atrás${urgente ? '<br><span style="color:#f38ba8;font-weight:600;">URGENTE</span>' : ''}</div>
+            <div style="font-size:0.7rem;color:var(--text-sub);text-align:right;">${t.dias_desde_revisao}d atrás${urgente ? '<br><span style="color:var(--red);font-weight:600;">URGENTE</span>' : ''}</div>
           </div>`;
         }).join('');
       } catch(e) { console.error('Curva error:', e); }
@@ -2692,7 +2692,7 @@
       try {
         const data = await fetch('/api/evolucao?semanas=8').then(r => r.json());
         if (!data.evolucao || data.evolucao.length === 0) {
-          document.getElementById('evolucao-chart').parentElement.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;text-align:center;padding:20px;">Resolva questões para gerar o gráfico de evolução semanal.</p>';
+          document.getElementById('evolucao-chart').parentElement.innerHTML = '<p style="color:var(--text-sub);font-size:0.85rem;text-align:center;padding:20px;">Resolva questões para gerar o gráfico de evolução semanal.</p>';
           return;
         }
         const labels = data.evolucao.map(e => e.semana);
@@ -2708,7 +2708,7 @@
             datasets: [{
               label: 'Acerto %',
               data: geral,
-              borderColor: '#cba6f7',
+              borderColor: 'var(--accent)',
               backgroundColor: 'rgba(203,166,247,0.1)',
               fill: true,
               tension: 0.3,
@@ -2716,7 +2716,7 @@
             },{
               label: 'Questões',
               data: questoes,
-              borderColor: '#89b4fa',
+              borderColor: 'var(--blue)',
               backgroundColor: 'rgba(137,180,250,0.1)',
               fill: false,
               tension: 0.3,
@@ -2724,7 +2724,7 @@
             },{
               label: 'Horas',
               data: horas,
-              borderColor: '#a6e3a1',
+              borderColor: 'var(--green)',
               backgroundColor: 'rgba(166,227,161,0.1)',
               fill: false,
               tension: 0.3,
@@ -2735,9 +2735,9 @@
             responsive: true,
             plugins: { legend: { labels: { color: '#cdd6f4' } } },
             scales: {
-              y: { min: 0, max: 100, position: 'left', title: { display: true, text: '% Acerto', color: '#9399b2' }, ticks: { color: '#9399b2' }, grid: { color: '#45475a' } },
-              y1: { min: 0, position: 'right', title: { display: true, text: 'Qtd', color: '#9399b2' }, ticks: { color: '#9399b2' }, grid: { display: false } },
-              x: { ticks: { color: '#9399b2' }, grid: { color: '#45475a' } }
+              y: { min: 0, max: 100, position: 'left', title: { display: true, text: '% Acerto', color: 'var(--text-sub)' }, ticks: { color: 'var(--text-sub)' }, grid: { color: 'var(--bg-elevated)' } },
+              y1: { min: 0, position: 'right', title: { display: true, text: 'Qtd', color: 'var(--text-sub)' }, ticks: { color: 'var(--text-sub)' }, grid: { display: false } },
+              x: { ticks: { color: 'var(--text-sub)' }, grid: { color: 'var(--bg-elevated)' } }
             }
           }
         });
@@ -2748,11 +2748,11 @@
       try {
         const data = await fetch('/api/heatmap-erros').then(r => r.json());
         const el = document.getElementById('heatmap-erros-box');
-        if (!data.materias || !data.materias.length) { el.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Resolva questões para gerar o mapa de erros.</p>'; return; }
-        const intensityColors = ['#313244','#a6e3a1','#f9e2af','#fab387','#f38ba8'];
+        if (!data.materias || !data.materias.length) { el.innerHTML = '<p style="color:var(--text-sub);font-size:0.85rem;">Resolva questões para gerar o mapa de erros.</p>'; return; }
+        const intensityColors = ['var(--bg-surface)','var(--green)','var(--yellow)','var(--peach)','var(--red)'];
         let html = '';
         data.materias.slice(0, 5).forEach(m => {
-          html += `<div style="margin-bottom:10px;"><div style="font-size:0.82rem;font-weight:600;margin-bottom:4px;">${m.materia} <span style="color:#9399b2;font-weight:400;">(${m.pct_erro.toFixed(0)}% erro)</span></div>`;
+          html += `<div style="margin-bottom:10px;"><div style="font-size:0.82rem;font-weight:600;margin-bottom:4px;">${m.materia} <span style="color:var(--text-sub);font-weight:400;">(${m.pct_erro.toFixed(0)}% erro)</span></div>`;
           html += `<div style="display:flex;flex-wrap:wrap;gap:3px;">`;
           m.topicos.slice(0, 8).forEach(t => {
             html += `<div title="${t.topico}: ${t.erros}/${t.total} erros (${t.pct_erro.toFixed(0)}%)" style="width:28px;height:28px;border-radius:4px;background:${intensityColors[t.intensidade]};cursor:help;" ></div>`;
@@ -2767,20 +2767,20 @@
       try {
         const data = await fetch('/api/raio-x').then(r => r.json());
         const el = document.getElementById('raio-x-box');
-        if (!data.materias || !data.materias.length) { el.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Adicione questões para gerar o Raio-X.</p>'; return; }
-        let html = `<div style="font-size:0.78rem;color:#9399b2;margin-bottom:8px;">${data.total_questoes} questões analisadas</div>`;
+        if (!data.materias || !data.materias.length) { el.innerHTML = '<p style="color:var(--text-sub);font-size:0.85rem;">Adicione questões para gerar o Raio-X.</p>'; return; }
+        let html = `<div style="font-size:0.78rem;color:var(--text-sub);margin-bottom:8px;">${data.total_questoes} questões analisadas</div>`;
         data.materias.forEach(m => {
-          const balColor = m.balanceamento === 'equilibrado' ? '#a6e3a1' : m.balanceamento === 'subestudado' ? '#f38ba8' : '#fab387';
+          const balColor = m.balanceamento === 'equilibrado' ? 'var(--green)' : m.balanceamento === 'subestudado' ? 'var(--red)' : 'var(--peach)';
           html += `<div style="margin-bottom:8px;">
             <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.8rem;margin-bottom:3px;">
               <span>${m.materia}</span>
               <span style="color:${balColor};font-size:0.72rem;font-weight:600;">${m.balanceamento}</span>
             </div>
             <div style="display:flex;gap:4px;align-items:center;">
-              <div style="flex:1;height:6px;background:#45475a;border-radius:3px;overflow:hidden;">
-                <div style="width:${m.peso_pct}%;height:100%;background:#cba6f7;border-radius:3px;"></div>
+              <div style="flex:1;height:6px;background:var(--bg-elevated);border-radius:3px;overflow:hidden;">
+                <div style="width:${m.peso_pct}%;height:100%;background:var(--accent);border-radius:3px;"></div>
               </div>
-              <span style="font-size:0.7rem;color:#9399b2;min-width:35px;">${m.peso_pct.toFixed(0)}%</span>
+              <span style="font-size:0.7rem;color:var(--text-sub);min-width:35px;">${m.peso_pct.toFixed(0)}%</span>
             </div>
           </div>`;
         });
@@ -2814,7 +2814,7 @@
           if (agora.progresso_dia) {
             const p = agora.progresso_dia.pct;
             pctEl.textContent = `${p}%`;
-            pctEl.style.color = p >= 100 ? '#a6e3a1' : p >= 50 ? '#f9e2af' : '#89b4fa';
+            pctEl.style.color = p >= 100 ? 'var(--green)' : p >= 50 ? 'var(--yellow)' : 'var(--blue)';
           }
           // Store for iniciar button
           window._calAgoraSugestao = agora.sugestao;
@@ -2832,14 +2832,14 @@
           let bars = '';
           for (const dia of prog.dias) {
             const h = Math.max(4, dia.pct * 0.3); // max height 30px
-            let color = '#45475a'; // pendente/futuro
-            if (dia.status === 'completo') color = '#a6e3a1';
-            else if (dia.status === 'parcial') color = '#f9e2af';
+            let color = 'var(--bg-elevated)'; // pendente/futuro
+            if (dia.status === 'completo') color = 'var(--green)';
+            else if (dia.status === 'parcial') color = 'var(--yellow)';
             else if (dia.status === 'perdido') color = '#f38ba822';
             const border = dia.is_today ? 'border:1px solid #cba6f7;' : '';
             bars += `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">
               <div style="width:100%;height:${h}px;background:${color};border-radius:3px;${border}transition:height 0.3s;"></div>
-              <span style="font-size:0.6rem;color:${dia.is_today ? '#cba6f7' : '#9399b2'};font-weight:${dia.is_today ? '700' : '400'};">${dia.nome}</span>
+              <span style="font-size:0.6rem;color:${dia.is_today ? 'var(--accent)' : 'var(--text-sub)'};font-weight:${dia.is_today ? '700' : '400'};">${dia.nome}</span>
             </div>`;
           }
           barsEl.innerHTML = bars;
@@ -2879,7 +2879,7 @@
         // Feedback
         const el = document.getElementById('calendario-resumo');
         if (el) {
-          el.innerHTML += '<div style="color:#a6e3a1;font-size:0.8rem;margin-top:6px;">✅ Calendário regenerado com sucesso!</div>';
+          el.innerHTML += '<div style="color:var(--green);font-size:0.8rem;margin-top:6px;">✅ Calendário regenerado com sucesso!</div>';
         }
       } catch(e) {
         alert('Erro ao regerar calendário: ' + e.message);
@@ -2890,7 +2890,7 @@
       const el = document.getElementById('calendario-grid');
       const resumoEl = document.getElementById('calendario-resumo');
       const horas = document.getElementById('cal-horas')?.value || '3';
-      el.innerHTML = '<div style="text-align:center;color:#9399b2;padding:20px;">Gerando calendário...</div>';
+      el.innerHTML = '<div style="text-align:center;color:var(--text-sub);padding:20px;">Gerando calendário...</div>';
 
       try {
         let data;
@@ -2936,16 +2936,16 @@
         // Resumo
         if (data.resumo) {
           let rhtml = `<div style="display:flex;flex-wrap:wrap;gap:12px;font-size:0.8rem;">`;
-          rhtml += `<span style="color:#9399b2;">📚 ${data.resumo.total_materias || '?'} matérias</span>`;
-          rhtml += `<span style="color:#9399b2;">⏰ ${data.resumo.horas_semana || '?'}h/semana</span>`;
+          rhtml += `<span style="color:var(--text-sub);">📚 ${data.resumo.total_materias || '?'} matérias</span>`;
+          rhtml += `<span style="color:var(--text-sub);">⏰ ${data.resumo.horas_semana || '?'}h/semana</span>`;
           rhtml += `</div>`;
           resumoEl.innerHTML = rhtml;
         } else {
           const totalMin = data.dias.reduce((a, d) => a + d.tempo_total_min, 0);
-          resumoEl.innerHTML = `<div style="font-size:0.8rem;color:#9399b2;">⏰ ${Math.round(totalMin/60*10)/10}h/semana planejadas</div>`;
+          resumoEl.innerHTML = `<div style="font-size:0.8rem;color:var(--text-sub);">⏰ ${Math.round(totalMin/60*10)/10}h/semana planejadas</div>`;
         }
       } catch(e) {
-        el.innerHTML = '<div style="color:#f38ba8;text-align:center;padding:20px;">Erro ao gerar calendário.</div>';
+        el.innerHTML = '<div style="color:var(--red);text-align:center;padding:20px;">Erro ao gerar calendário.</div>';
         console.error('Calendario error:', e);
       }
     }
@@ -2961,18 +2961,18 @@
       const diasNomes = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
       const turnoIcons = {manha: '🌅', tarde: '☀️', noite: '🌙'};
       const turnoNomes = {manha: 'Manhã', tarde: 'Tarde', noite: 'Noite'};
-      const turnoCores = {manha: '#f9e2af', tarde: '#fab387', noite: '#89b4fa'};
+      const turnoCores = {manha: 'var(--yellow)', tarde: 'var(--peach)', noite: 'var(--blue)'};
 
       // Carregar atividades concluídas de hoje
       loadConcluidasHoje();
 
       let html = '';
       // Streak do calendário no topo
-      html += `<div id="cal-streak-bar" style="display:flex;align-items:center;gap:12px;padding:8px 12px;background:#313244;border-radius:8px;margin-bottom:12px;">
+      html += `<div id="cal-streak-bar" style="display:flex;align-items:center;gap:12px;padding:8px 12px;background:var(--bg-surface);border-radius:8px;margin-bottom:12px;">
         <span style="font-size:1.3rem;">🏆</span>
-        <span style="font-size:0.85rem;color:#f9e2af;font-weight:600;" id="cal-streak-num">...</span>
-        <div style="flex:1;height:6px;background:#45475a;border-radius:3px;overflow:hidden;" id="cal-progress-bar"><div id="cal-progress-fill" style="height:100%;background:#a6e3a1;width:0%;border-radius:3px;transition:width 0.5s;"></div></div>
-        <span style="font-size:0.75rem;color:#9399b2;" id="cal-progress-txt">0%</span>
+        <span style="font-size:0.85rem;color:var(--yellow);font-weight:600;" id="cal-streak-num">...</span>
+        <div style="flex:1;height:6px;background:var(--bg-elevated);border-radius:3px;overflow:hidden;" id="cal-progress-bar"><div id="cal-progress-fill" style="height:100%;background:var(--green);width:0%;border-radius:3px;transition:width 0.5s;"></div></div>
+        <span style="font-size:0.75rem;color:var(--text-sub);" id="cal-progress-txt">0%</span>
       </div>`;
 
       // Alerta de matérias negligenciadas
@@ -2993,7 +2993,7 @@
         html += `<div class="cal-day-header">${nome} <span class="cal-date">${dataFormatada}</span></div>`;
 
         if (dia.atividades.length === 0) {
-          html += `<div style="color:#9399b2;font-size:0.75rem;padding:8px 0;text-align:center;">Descanso</div>`;
+          html += `<div style="color:var(--text-sub);font-size:0.75rem;padding:8px 0;text-align:center;">Descanso</div>`;
         } else {
           // Distribuir atividades em turnos (Manhã: 6-12, Tarde: 12-18, Noite: 18-23)
           const turnos = distribuirEmTurnos(dia.atividades, isToday, horaAtual);
@@ -3019,11 +3019,11 @@
               const pctPos = Math.min(95, Math.max(5, (minutosNoTurno / totalMinTurno) * 100));
 
               html += `<div class="cal-timeline" style="position:relative;margin:8px 0;height:14px;">
-                <div style="position:absolute;top:6px;left:0;right:0;height:2px;background:#45475a;border-radius:1px;"></div>
-                <div style="position:absolute;top:6px;left:0;width:${pctPos}%;height:2px;background:#a6e3a1;border-radius:1px;"></div>
+                <div style="position:absolute;top:6px;left:0;right:0;height:2px;background:var(--bg-elevated);border-radius:1px;"></div>
+                <div style="position:absolute;top:6px;left:0;width:${pctPos}%;height:2px;background:var(--green);border-radius:1px;"></div>
                 <div style="position:absolute;top:0;left:${pctPos}%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;">
-                  <span style="font-size:0.6rem;color:#a6e3a1;font-weight:700;background:#313244;padding:0 3px;border-radius:2px;white-space:nowrap;">${horaStr}</span>
-                  <div style="width:2px;height:6px;background:#a6e3a1;border-radius:1px;"></div>
+                  <span style="font-size:0.6rem;color:var(--green);font-weight:700;background:var(--bg-surface);padding:0 3px;border-radius:2px;white-space:nowrap;">${horaStr}</span>
+                  <div style="width:2px;height:6px;background:var(--green);border-radius:1px;"></div>
                 </div>
               </div>`;
               timelineInserida = true;
@@ -3036,7 +3036,7 @@
             html += `<div class="cal-turno-header" style="display:flex;align-items:center;gap:4px;padding:3px 6px;margin:4px 0 2px;background:${turnoAtivo ? 'rgba(166,227,161,0.15)' : 'rgba(69,71,90,0.5)'};border-radius:4px;border-left:3px solid ${turnoCores[turno]};">
               <span style="font-size:0.7rem;">${turnoIcons[turno]}</span>
               <span style="font-size:0.68rem;font-weight:600;color:${turnoCores[turno]};">${turnoNomes[turno]}</span>
-              ${turnoAtivo ? '<span style="font-size:0.6rem;color:#a6e3a1;margin-left:auto;">● agora</span>' : ''}
+              ${turnoAtivo ? '<span style="font-size:0.6rem;color:var(--green);margin-left:auto;">● agora</span>' : ''}
             </div>`;
 
             for (let i = 0; i < ativsTurno.length; i++) {
@@ -3062,7 +3062,7 @@
 
               html += `<span class="cal-activity-icon">${icon}</span>`;
               html += `<div class="cal-activity-info">`;
-              if (materia) html += `<div class="cal-activity-materia">${materia}${adiada ? ' <span style="font-size:0.6rem;color:#f9e2af;">⏩ adiada</span>' : ''}</div>`;
+              if (materia) html += `<div class="cal-activity-materia">${materia}${adiada ? ' <span style="font-size:0.6rem;color:var(--yellow);">⏩ adiada</span>' : ''}</div>`;
               if (detail) {
                 const isLong = detail.length > 60;
                 if (isLong) {
@@ -3100,15 +3100,15 @@
       html += '</div>';
 
       // Timer Pomodoro overlay
-      html += `<div id="pomodoro-overlay" style="display:none;position:fixed;bottom:20px;right:20px;background:#313244;border:2px solid #cba6f7;border-radius:16px;padding:16px 24px;z-index:1000;box-shadow:0 8px 32px rgba(0,0,0,0.5);min-width:240px;">
+      html += `<div id="pomodoro-overlay" style="display:none;position:fixed;bottom:20px;right:20px;background:var(--bg-surface);border:2px solid #cba6f7;border-radius:16px;padding:16px 24px;z-index:1000;box-shadow:0 8px 32px rgba(0,0,0,0.5);min-width:240px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-          <span style="font-size:0.8rem;color:#cba6f7;font-weight:600;" id="pomo-materia">...</span>
-          <button onclick="closePomodoro()" style="background:none;border:none;color:#f38ba8;cursor:pointer;font-size:1rem;">✕</button>
+          <span style="font-size:0.8rem;color:var(--accent);font-weight:600;" id="pomo-materia">...</span>
+          <button onclick="closePomodoro()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:1rem;">✕</button>
         </div>
-        <div style="font-size:2.2rem;font-weight:700;color:#cdd6f4;text-align:center;font-family:monospace;" id="pomo-timer">25:00</div>
+        <div style="font-size:2.2rem;font-weight:700;color:var(--text);text-align:center;font-family:monospace;" id="pomo-timer">25:00</div>
         <div style="display:flex;gap:8px;justify-content:center;margin-top:10px;">
-          <button onclick="togglePomodoro()" id="pomo-toggle-btn" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:6px 16px;font-weight:600;cursor:pointer;">⏸ Pausar</button>
-          <button onclick="resetPomodoro()" style="background:#45475a;color:#cdd6f4;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;">🔄</button>
+          <button onclick="togglePomodoro()" id="pomo-toggle-btn" style="background:var(--green);color:var(--bg);border:none;border-radius:6px;padding:6px 16px;font-weight:600;cursor:pointer;">⏸ Pausar</button>
+          <button onclick="resetPomodoro()" style="background:var(--bg-elevated);color:var(--text);border:none;border-radius:6px;padding:6px 12px;cursor:pointer;">🔄</button>
         </div>
       </div>`;
 
@@ -3205,12 +3205,12 @@
       if (container.style.display === 'none') {
         container.style.display = 'block';
         btn.textContent = '··· recolher';
-        btn.style.color = '#9399b2';
+        btn.style.color = 'var(--text-sub)';
       } else {
         container.style.display = 'none';
         const extras = container.querySelectorAll('.cal-activity').length;
         btn.textContent = `··· ver mais (${extras})`;
-        btn.style.color = '#89b4fa';
+        btn.style.color = 'var(--blue)';
       }
     }
 
@@ -3279,8 +3279,8 @@
         el.style.display = 'block';
         const top3 = data.negligenciadas.slice(0, 3);
         el.innerHTML = `<div style="background:#3a2a1e;border:1px solid #f9e2af;border-radius:8px;padding:10px 12px;font-size:0.8rem;">
-          <div style="color:#f9e2af;font-weight:600;margin-bottom:6px;">⚠️ Matérias negligenciadas</div>
-          ${top3.map(m => `<div style="color:#cdd6f4;padding:2px 0;">• <strong>${m.materia}</strong> — ${m.dias_sem_estudar} dias sem estudar${m.urgencia === 'alta' ? ' 🔴' : ' 🟡'}</div>`).join('')}
+          <div style="color:var(--yellow);font-weight:600;margin-bottom:6px;">⚠️ Matérias negligenciadas</div>
+          ${top3.map(m => `<div style="color:var(--text);padding:2px 0;">• <strong>${m.materia}</strong> — ${m.dias_sem_estudar} dias sem estudar${m.urgencia === 'alta' ? ' 🔴' : ' 🟡'}</div>`).join('')}
         </div>`;
       } catch(e) {}
     }
@@ -3304,7 +3304,7 @@
           if (pomoSeconds <= 0) {
             clearInterval(pomoInterval);
             document.getElementById('pomo-timer').textContent = '🎉 FIM!';
-            document.getElementById('pomo-timer').style.color = '#a6e3a1';
+            document.getElementById('pomo-timer').style.color = 'var(--green)';
             // Notificação
             if (Notification.permission === 'granted') new Notification('⏰ Pomodoro finalizado!', {body: `Sessão de ${materia} concluída!`});
             else if (Notification.permission !== 'denied') Notification.requestPermission();
@@ -3346,7 +3346,7 @@
       const m = Math.floor(pomoSeconds / 60);
       const s = pomoSeconds % 60;
       document.getElementById('pomo-timer').textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-      document.getElementById('pomo-timer').style.color = pomoSeconds < 60 ? '#f38ba8' : '#cdd6f4';
+      document.getElementById('pomo-timer').style.color = pomoSeconds < 60 ? 'var(--red)' : '#cdd6f4';
     }
     function togglePomodoro() {
       pomoPaused = !pomoPaused;
@@ -3500,32 +3500,32 @@
         const data = await fetch('/api/analytics/velocidade').then(r => r.json());
         const el = document.getElementById('velocidade-box');
         if (!data.por_materia || data.por_materia.length === 0) {
-          el.innerHTML = '<p style="color:#9399b2;font-size:0.82rem;">Responda questões para gerar análise de velocidade.</p>';
+          el.innerHTML = '<p style="color:var(--text-sub);font-size:0.82rem;">Responda questões para gerar análise de velocidade.</p>';
           return;
         }
         const mediaGeral = data.media_geral_seg;
         const fmtTime = (s) => s >= 60 ? `${Math.floor(s/60)}:${String(Math.round(s%60)).padStart(2,'0')}` : `${Math.round(s)}s`;
         let html = `<div style="display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap;">
-          <div style="background:#1e1e2e;border-radius:8px;padding:10px 16px;text-align:center;">
-            <div style="font-size:1.4rem;font-weight:700;color:#89b4fa;">${fmtTime(mediaGeral)}</div>
-            <div style="font-size:0.72rem;color:#9399b2;">Média geral/questão</div>
+          <div style="background:var(--bg);border-radius:8px;padding:10px 16px;text-align:center;">
+            <div style="font-size:1.4rem;font-weight:700;color:var(--blue);">${fmtTime(mediaGeral)}</div>
+            <div style="font-size:0.72rem;color:var(--text-sub);">Média geral/questão</div>
           </div>
-          <div style="background:#1e1e2e;border-radius:8px;padding:10px 16px;text-align:center;">
-            <div style="font-size:1.4rem;font-weight:700;color:#a6e3a1;">${data.por_materia.length}</div>
-            <div style="font-size:0.72rem;color:#9399b2;">Matérias analisadas</div>
+          <div style="background:var(--bg);border-radius:8px;padding:10px 16px;text-align:center;">
+            <div style="font-size:1.4rem;font-weight:700;color:var(--green);">${data.por_materia.length}</div>
+            <div style="font-size:0.72rem;color:var(--text-sub);">Matérias analisadas</div>
           </div>
         </div>`;
         html += '<div style="display:flex;flex-direction:column;gap:6px;">';
         data.por_materia.slice(0, 10).forEach(m => {
           const pctBar = Math.min(100, (m.media_seg / (mediaGeral * 2)) * 100);
-          const cor = m.media_seg <= mediaGeral ? '#a6e3a1' : m.media_seg <= mediaGeral * 1.5 ? '#f9e2af' : '#f38ba8';
+          const cor = m.media_seg <= mediaGeral ? 'var(--green)' : m.media_seg <= mediaGeral * 1.5 ? 'var(--yellow)' : 'var(--red)';
           html += `<div style="display:flex;align-items:center;gap:8px;font-size:0.78rem;">
-            <span style="min-width:120px;color:#cdd6f4;">${m.materia.length > 18 ? m.materia.slice(0,18)+'…' : m.materia}</span>
-            <div style="flex:1;height:6px;background:#45475a;border-radius:3px;overflow:hidden;">
+            <span style="min-width:120px;color:var(--text);">${m.materia.length > 18 ? m.materia.slice(0,18)+'…' : m.materia}</span>
+            <div style="flex:1;height:6px;background:var(--bg-elevated);border-radius:3px;overflow:hidden;">
               <div style="width:${pctBar}%;height:100%;background:${cor};border-radius:3px;"></div>
             </div>
             <span style="min-width:45px;text-align:right;color:${cor};font-weight:600;">${fmtTime(m.media_seg)}</span>
-            <span style="min-width:40px;text-align:right;color:#9399b2;">${m.pct_acerto}%</span>
+            <span style="min-width:40px;text-align:right;color:var(--text-sub);">${m.pct_acerto}%</span>
           </div>`;
         });
         html += '</div>';
@@ -3538,34 +3538,34 @@
         const data = await fetch('/api/analytics/consistencia').then(r => r.json());
         const el = document.getElementById('consistencia-box');
         const pct = data.pct_consistencia;
-        const corPct = pct >= 80 ? '#a6e3a1' : pct >= 50 ? '#f9e2af' : '#f38ba8';
+        const corPct = pct >= 80 ? 'var(--green)' : pct >= 50 ? 'var(--yellow)' : 'var(--red)';
         let html = `
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
-            <div style="background:#1e1e2e;border-radius:8px;padding:10px;text-align:center;">
+            <div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center;">
               <div style="font-size:1.3rem;font-weight:700;color:${corPct};">${data.dias_estudados}/${data.dias_totais}</div>
-              <div style="font-size:0.7rem;color:#9399b2;">Dias estudados</div>
+              <div style="font-size:0.7rem;color:var(--text-sub);">Dias estudados</div>
             </div>
-            <div style="background:#1e1e2e;border-radius:8px;padding:10px;text-align:center;">
-              <div style="font-size:1.3rem;font-weight:700;color:#89b4fa;">${data.media_horas_dia}h</div>
-              <div style="font-size:0.7rem;color:#9399b2;">Média/dia</div>
+            <div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center;">
+              <div style="font-size:1.3rem;font-weight:700;color:var(--blue);">${data.media_horas_dia}h</div>
+              <div style="font-size:0.7rem;color:var(--text-sub);">Média/dia</div>
             </div>
-            <div style="background:#1e1e2e;border-radius:8px;padding:10px;text-align:center;">
-              <div style="font-size:1.3rem;font-weight:700;color:#cba6f7;">${data.horas_total}h</div>
-              <div style="font-size:0.7rem;color:#9399b2;">Total 4 semanas</div>
+            <div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center;">
+              <div style="font-size:1.3rem;font-weight:700;color:var(--accent);">${data.horas_total}h</div>
+              <div style="font-size:0.7rem;color:var(--text-sub);">Total 4 semanas</div>
             </div>
-            <div style="background:#1e1e2e;border-radius:8px;padding:10px;text-align:center;">
-              <div style="font-size:1.3rem;font-weight:700;color:#fab387;">🔥 ${data.streak_atual}</div>
-              <div style="font-size:0.7rem;color:#9399b2;">Streak atual</div>
+            <div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center;">
+              <div style="font-size:1.3rem;font-weight:700;color:var(--peach);">🔥 ${data.streak_atual}</div>
+              <div style="font-size:0.7rem;color:var(--text-sub);">Streak atual</div>
             </div>
           </div>
-          <div style="font-size:0.75rem;color:#9399b2;margin-bottom:6px;">Distribuição semanal (horas)</div>
+          <div style="font-size:0.75rem;color:var(--text-sub);margin-bottom:6px;">Distribuição semanal (horas)</div>
           <div style="display:flex;gap:4px;align-items:flex-end;height:60px;">`;
         const maxH = Math.max(...data.distribuicao_semana, 1);
         data.distribuicao_semana.forEach((h, i) => {
           const altura = Math.max(4, (h / maxH) * 55);
           html += `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">
-            <div style="width:100%;height:${altura}px;background:#89b4fa88;border-radius:3px;"></div>
-            <span style="font-size:0.6rem;color:#9399b2;">${data.dias_semana_nomes[i]}</span>
+            <div style="width:100%;height:${altura}px;background:var(--blue)88;border-radius:3px;"></div>
+            <span style="font-size:0.6rem;color:var(--text-sub);">${data.dias_semana_nomes[i]}</span>
           </div>`;
         });
         html += '</div>';
@@ -3585,7 +3585,7 @@
           data: {
             labels: data.semanas.map(s => s.semana),
             datasets: [
-              { label: 'Horas (real)', data: data.semanas.map(s => s.horas_real), backgroundColor: '#89b4fa99', borderColor: '#89b4fa', borderWidth: 1, borderRadius: 3 },
+              { label: 'Horas (real)', data: data.semanas.map(s => s.horas_real), backgroundColor: '#89b4fa99', borderColor: 'var(--blue)', borderWidth: 1, borderRadius: 3 },
               { label: 'Horas (meta)', data: data.semanas.map(s => s.horas_meta), backgroundColor: '#89b4fa22', borderColor: '#89b4fa55', borderWidth: 1, borderRadius: 3, borderDash: [3, 3] },
             ]
           },
@@ -3593,8 +3593,8 @@
             responsive: true,
             plugins: { legend: { labels: { color: '#a6adc8', font: { size: 10 } } } },
             scales: {
-              y: { beginAtZero: true, ticks: { color: '#9399b2' }, grid: { color: '#45475a' } },
-              x: { ticks: { color: '#9399b2', font: { size: 9 } }, grid: { color: '#45475a' } }
+              y: { beginAtZero: true, ticks: { color: 'var(--text-sub)' }, grid: { color: 'var(--bg-elevated)' } },
+              x: { ticks: { color: 'var(--text-sub)', font: { size: 9 } }, grid: { color: 'var(--bg-elevated)' } }
             }
           }
         });
@@ -3606,25 +3606,25 @@
         const data = await fetch('/api/analytics/ranking-materias').then(r => r.json());
         const el = document.getElementById('ranking-materias-box');
         if (!data.ranking || data.ranking.length === 0) {
-          el.innerHTML = '<p style="color:#9399b2;font-size:0.82rem;">Responda pelo menos 3 questões por matéria para gerar o ranking.</p>';
+          el.innerHTML = '<p style="color:var(--text-sub);font-size:0.82rem;">Responda pelo menos 3 questões por matéria para gerar o ranking.</p>';
           return;
         }
-        const statusColors = { forte: '#a6e3a1', medio: '#f9e2af', fraco: '#f38ba8' };
+        const statusColors = { forte: 'var(--green)', medio: 'var(--yellow)', fraco: 'var(--red)' };
         const statusIcons = { forte: '💪', medio: '⚡', fraco: '⚠️' };
         let html = `<div style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
-          <span style="font-size:0.75rem;color:#a6e3a1;background:#a6e3a122;padding:3px 8px;border-radius:4px;">💪 Fortes: ${data.fortes}</span>
-          <span style="font-size:0.75rem;color:#f9e2af;background:#f9e2af22;padding:3px 8px;border-radius:4px;">⚡ Médias: ${data.medias}</span>
-          <span style="font-size:0.75rem;color:#f38ba8;background:#f38ba822;padding:3px 8px;border-radius:4px;">⚠️ Fracas: ${data.fracas}</span>
+          <span style="font-size:0.75rem;color:var(--green);background:var(--green)22;padding:3px 8px;border-radius:4px;">💪 Fortes: ${data.fortes}</span>
+          <span style="font-size:0.75rem;color:var(--yellow);background:var(--yellow)22;padding:3px 8px;border-radius:4px;">⚡ Médias: ${data.medias}</span>
+          <span style="font-size:0.75rem;color:var(--red);background:var(--red)22;padding:3px 8px;border-radius:4px;">⚠️ Fracas: ${data.fracas}</span>
         </div>`;
         html += '<div style="display:flex;flex-direction:column;gap:6px;">';
         data.ranking.forEach((m, i) => {
           const cor = statusColors[m.status];
-          html += `<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:#1e1e2e;border-radius:6px;border-left:3px solid ${cor};font-size:0.78rem;">
-            <span style="min-width:20px;color:#585b70;font-weight:600;">#${i+1}</span>
-            <span style="flex:1;color:#cdd6f4;">${m.materia}</span>
+          html += `<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--bg);border-radius:6px;border-left:3px solid ${cor};font-size:0.78rem;">
+            <span style="min-width:20px;color:var(--text-muted);font-weight:600;">#${i+1}</span>
+            <span style="flex:1;color:var(--text);">${m.materia}</span>
             <span style="font-weight:700;color:${cor};">${m.pct_acerto}%</span>
-            <span style="font-size:0.68rem;color:#9399b2;min-width:50px;text-align:right;">${m.total}q</span>
-            <span style="font-size:0.65rem;color:#585b70;min-width:100px;text-align:right;">${m.acao}</span>
+            <span style="font-size:0.68rem;color:var(--text-sub);min-width:50px;text-align:right;">${m.total}q</span>
+            <span style="font-size:0.65rem;color:var(--text-muted);min-width:100px;text-align:right;">${m.acao}</span>
           </div>`;
         });
         html += '</div>';
@@ -3706,26 +3706,26 @@
         const el = document.getElementById('mastery-overview');
         if (!el) return;
         if (!data.materias || data.materias.length === 0) {
-          el.innerHTML = '<span style="color:#9399b2;font-size:0.8rem;">Responda questões para ver seu domínio</span>';
+          el.innerHTML = '<span style="color:var(--text-sub);font-size:0.8rem;">Responda questões para ver seu domínio</span>';
           return;
         }
         el.innerHTML = data.materias.slice(0, 8).map(m => {
           const pct = Math.round(m.avg_mastery || 0);
-          const color = pct >= 80 ? '#a6e3a1' : pct >= 50 ? '#f9e2af' : pct >= 20 ? '#fab387' : '#f38ba8';
+          const color = pct >= 80 ? 'var(--green)' : pct >= 50 ? 'var(--yellow)' : pct >= 20 ? 'var(--peach)' : 'var(--red)';
           const label = pct >= 80 ? 'Consolidado' : pct >= 50 ? 'Dominado' : pct >= 20 ? 'Em Progresso' : 'Não Dominado';
           return `<div style="margin-bottom:6px;">
-            <div style="display:flex;justify-content:space-between;font-size:0.75rem;color:#cdd6f4;">
+            <div style="display:flex;justify-content:space-between;font-size:0.75rem;color:var(--text);">
               <span style="max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${m.materia}</span>
               <span style="color:${color};font-weight:600;">${pct}% ${label}</span>
             </div>
-            <div style="height:4px;background:#45475a;border-radius:2px;overflow:hidden;">
+            <div style="height:4px;background:var(--bg-elevated);border-radius:2px;overflow:hidden;">
               <div style="width:${pct}%;height:100%;background:${color};border-radius:2px;transition:width 0.5s;"></div>
             </div>
           </div>`;
         }).join('');
       } catch(e) {
         const el = document.getElementById('mastery-overview');
-        if (el) el.innerHTML = '<span style="color:#9399b2;font-size:0.8rem;">Responda questões para ver seu domínio</span>';
+        if (el) el.innerHTML = '<span style="color:var(--text-sub);font-size:0.8rem;">Responda questões para ver seu domínio</span>';
       }
     }
 
@@ -3746,7 +3746,7 @@
         const emoji = tierEmojis[data.tier] || '🏆';
         badge.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;" title="Liga ${data.tier} - #${data.user_rank}">
           <span style="font-size:1.2rem;">${emoji}</span>
-          <span style="font-size:0.6rem;color:#cba6f7;">#${data.user_rank}</span>
+          <span style="font-size:0.6rem;color:var(--accent);">#${data.user_rank}</span>
         </div>`;
       } catch(e) {}
     }
@@ -3758,14 +3758,14 @@
         const banner = document.createElement('div');
         banner.id = 'push-permission-banner';
         banner.innerHTML = `
-          <div style="background:#313244;border:1px solid #cba6f7;border-radius:8px;padding:12px 16px;margin-bottom:12px;display:flex;align-items:center;gap:10px;">
+          <div style="background:var(--bg-surface);border:1px solid #cba6f7;border-radius:8px;padding:12px 16px;margin-bottom:12px;display:flex;align-items:center;gap:10px;">
             <span style="font-size:1.2rem;">🔔</span>
             <div style="flex:1;">
-              <div style="color:#cdd6f4;font-size:0.85rem;font-weight:500;">Ativar notificações?</div>
-              <div style="color:#9399b2;font-size:0.75rem;">Receba lembretes de streak, flashcards e provas</div>
+              <div style="color:var(--text);font-size:0.85rem;font-weight:500;">Ativar notificações?</div>
+              <div style="color:var(--text-sub);font-size:0.75rem;">Receba lembretes de streak, flashcards e provas</div>
             </div>
-            <button onclick="requestPushPermission()" style="background:#cba6f7;color:#1e1e2e;border:none;border-radius:6px;padding:6px 14px;font-size:0.8rem;font-weight:600;cursor:pointer;">Ativar</button>
-            <button onclick="this.parentNode.parentNode.remove()" style="background:none;border:none;color:#9399b2;cursor:pointer;">✕</button>
+            <button onclick="requestPushPermission()" style="background:var(--accent);color:var(--bg);border:none;border-radius:6px;padding:6px 14px;font-size:0.8rem;font-weight:600;cursor:pointer;">Ativar</button>
+            <button onclick="this.parentNode.parentNode.remove()" style="background:none;border:none;color:var(--text-sub);cursor:pointer;">✕</button>
           </div>
         `;
         const main = document.querySelector('.main-content') || document.querySelector('.dash-panel.active');
