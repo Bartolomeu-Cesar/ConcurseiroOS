@@ -335,9 +335,14 @@
     window.iniciarBatalha = async function() {
       if (!state.battle) return;
       try {
-        const res = await fetch(`/api/batalha/iniciar/${state.battle.codigo}`, { method: 'POST' });
+        const res = await fetch(`/api/batalha/iniciar/${state.battle.codigo}`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({})
+        });
         const data = await res.json();
         if (res.ok) {
+          stopLobbyPolling();
           const sala = await fetch(`/api/batalha/sala/${state.battle.codigo}`).then(r => r.json());
           showQuestion(sala);
         } else if (data.detail && data.detail.includes('Sem questões')) {

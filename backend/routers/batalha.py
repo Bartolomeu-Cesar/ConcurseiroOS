@@ -399,7 +399,7 @@ def status_sala(
              responses={403: {"description": "Apenas o criador pode iniciar"}, 404: {"description": "Sala não encontrada"}})
 def iniciar_batalha(
     codigo: str,
-    body: dict = Body({}),
+    body: dict = Body(default=None),
     conn=Depends(get_db_session),
     user_id: int = Depends(get_user_id)
 ):
@@ -426,7 +426,7 @@ def iniciar_batalha(
     total = battle["total_rodadas"]
 
     # Se o criador enviou IDs específicos, usar essas questões
-    questao_ids = body.get("questao_ids", []) if body else []
+    questao_ids = (body or {}).get("questao_ids", [])
 
     if questao_ids:
         # Pool manual selecionado pelo criador
