@@ -299,17 +299,30 @@ def verify_code(body: dict = Body(...), request: Request = None, conn=Depends(ge
 
 
 @router.get("/me")
-def get_me(user=Depends(get_current_user), conn=Depends(get_db_session)):
-    """Retorna dados do perfil do usuário autenticado."""
+def get_me(user=Depends(get_optional_user), conn=Depends(get_db_session)):
+    """Retorna dados do perfil do usuário autenticado (ou guest fallback)."""
     if not user:
-        return {"id": 0, "email": "", "nome": "Estudante", "avatar": "", "plano": "free", "auth_enabled": False}
+        # Fallback: return guest/default user info
+        default_user = conn.execute("SELECT * FROM users WHERE id = 1").fetchone()
+        if default_user:
+            keys = default_user.keys()
+            return {
+                "id": default_user["id"],
+                "email": default_user["email"] or "",
+                "nome": default_user["nome"] or "Estudante",
+                "avatar": default_user["avatar"] or "",
+                "plano": default_user["plano"] if "plano" in keys else "ilimitado",
+                "plano_expira": default_user["plano_expira"] if "plano_expira" in keys else "",
+                "auth_enabled": settings.AUTH_ENABLED,
+            }
+        return {"id": 1, "email": "", "nome": "Estudante", "avatar": "", "plano": "ilimitado", "auth_enabled": settings.AUTH_ENABLED}
 
     return {
         "id": user["id"],
         "email": user["email"],
         "nome": user["nome"],
         "avatar": user["avatar"],
-        "plano": user.get("plano", "free"),
+        "plano": user.get("plano", "ilimitado"),
         "plano_expira": user.get("plano_expira", ""),
         "email_verified": bool(user["email_verified"]),
         "created_at": user["created_at"],
