@@ -453,18 +453,7 @@
   <script src="/sidebar.js"></script>
   <script src="/timer-global.js"></script>
   <script>
-    // ===== TOAST =====
-    function showToast(msg, type = 'success') {
-      const toast = document.createElement('div');
-      toast.className = 'toast ' + type;
-      toast.textContent = msg;
-      document.body.appendChild(toast);
-      setTimeout(() => {
-        toast.style.opacity = '0';
-        toast.style.transition = 'opacity 0.3s';
-        setTimeout(() => toast.remove(), 300);
-      }, 3000);
-    }
+    // showToast imported via ES module (see bottom of page)
 
     // ===== TAB SWITCHING =====
     function switchTab(tab) {
@@ -1099,6 +1088,10 @@
     loadFriends();
     loadGroups();
     loadFeed();
+  </script>
+  <script type="module">
+    import { showToast } from './js/modules/toast.js';
+    window.showToast = showToast;
   </script>
 </body>
 </html>

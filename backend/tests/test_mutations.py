@@ -42,7 +42,7 @@ client = TestClient(app)
 def _get_db():
     """Get a direct DB connection for test assertions."""
     import sqlite3
-    conn = sqlite3.connect(_tmp_db.name, check_same_thread=False)
+    conn = sqlite3.connect(database.DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 

@@ -163,8 +163,6 @@
     </div>
   </div>
 
-  <div class="toast" id="toast"></div>
-
   <script src="/auth-interceptor.js"></script>
   <script src="/sidebar.js"></script>
   <script src="/timer-global.js"></script>
@@ -183,7 +181,6 @@
     const btnRecalcular = document.getElementById('btn-recalcular');
     const container = document.getElementById('materia-container');
     const loadingState = document.getElementById('loading-state');
-    const toastEl = document.getElementById('toast');
 
     // Utilities
     function getMasteryColor(level) {
@@ -220,13 +217,7 @@
       return div.innerHTML;
     }
 
-    function showToast(msg, type) {
-      toastEl.textContent = msg;
-      toastEl.className = 'toast ' + type + ' show';
-      setTimeout(function() {
-        toastEl.classList.remove('show');
-      }, 3000);
-    }
+    // showToast imported via ES module (see bottom of page)
 
     // Fetch data
     function fetchMastery() {
@@ -462,6 +453,10 @@
     // Init
     fetchMastery();
   })();
+  </script>
+  <script type="module">
+    import { showToast } from './js/modules/toast.js';
+    window.showToast = showToast;
   </script>
 </body>
 </html>

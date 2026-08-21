@@ -1,0 +1,50 @@
+# Virtual environments
+venv/
+backend/venv/
+.venv/
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+
+# Git
+.git/
+.gitignore
+
+# Databases
+*.db
+progress.db
+
+# Node
+node_modules/
+
+# Tests
+tests/
+backend/tests/
+.pytest_cache/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# IDE / Editor
+.vscode/
+.idea/
+
+# Ruff cache
+.ruff_cache/
+
+# Backups (data lives in volumes)
+backups/
+backend/backups/
+
+# Misc
+*.md
+*.ps1
+*.cmd
+pyproject.toml
+package.json
+package-lock.json
+.github/

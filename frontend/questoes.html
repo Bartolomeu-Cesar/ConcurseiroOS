@@ -403,11 +403,8 @@
   </div>
 
   <script>
-    if (localStorage.getItem('theme') === 'light') document.body.classList.add('light-theme');
-    function toggleTheme() {
-      const isDark = document.body.classList.toggle('light-theme');
-      localStorage.setItem('theme', isDark ? 'light' : 'dark');
-    }
+    // toggleTheme imported via ES module (see bottom of page)
+    // Theme init handled by theme.js module
 
     // Tab navigation
     document.querySelectorAll('.qtab-btn').forEach(btn => {
@@ -1320,6 +1317,11 @@ async function executarImportCSV() {
   fileInput.value = '';
   document.getElementById('csv-import-filename').textContent = '';
 }
+</script>
+<script type="module">
+  import { toggleTheme, initTheme } from './js/modules/theme.js';
+  window.toggleTheme = toggleTheme;
+  initTheme();
 </script>
 </body>
 </html>
