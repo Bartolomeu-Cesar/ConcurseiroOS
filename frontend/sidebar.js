@@ -2,6 +2,17 @@
  * Sidebar global — injeta em qualquer página do ConcurseiroOS.
  * Incluir em cada página: <script src="/sidebar.js"></script>
  */
+
+// Apply saved theme immediately (before render to avoid flash)
+(function() {
+  const theme = localStorage.getItem('theme');
+  if (theme === 'light') {
+    document.body.classList.add('light-theme', 'theme-forced');
+  } else {
+    document.body.classList.add('theme-forced');
+  }
+})();
+
 (function () {
   const currentPath = window.location.pathname;
 

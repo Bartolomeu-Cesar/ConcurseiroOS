@@ -110,10 +110,10 @@
           <div class="config-row"><label>Título:</label><input id="cfg-titulo" value="Batalha de Questões" placeholder="Nome da sala"></div>
           <div class="config-row"><label>Matérias:</label>
             <div id="materias-autocomplete" style="flex:1;position:relative;">
-              <div id="materias-tags" style="display:flex;flex-wrap:wrap;gap:4px;padding:6px 10px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;min-height:38px;align-items:center;cursor:text;" onclick="document.getElementById('cfg-materias').focus()">
-                <input id="cfg-materias" placeholder="Digite para buscar... (vazio = todas)" style="border:none;background:transparent;color:#cdd6f4;font-size:0.85rem;outline:none;flex:1;min-width:120px;padding:2px 0;" autocomplete="off">
+              <div id="materias-tags" style="display:flex;flex-wrap:wrap;gap:4px;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;min-height:38px;align-items:center;cursor:text;" onclick="document.getElementById('cfg-materias').focus()">
+                <input id="cfg-materias" placeholder="Digite para buscar... (vazio = todas)" style="border:none;background:transparent;color:var(--text);font-size:0.85rem;outline:none;flex:1;min-width:120px;padding:2px 0;" autocomplete="off">
               </div>
-              <div id="materias-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:#313244;border:1px solid #45475a;border-radius:8px;margin-top:4px;max-height:180px;overflow-y:auto;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,0.4);"></div>
+              <div id="materias-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg-surface);border:1px solid var(--border);border-radius:8px;margin-top:4px;max-height:180px;overflow-y:auto;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,0.4);"></div>
             </div>
           </div>
           <div class="config-row"><label>Rodadas:</label><select id="cfg-rodadas">${[3,5,7,10,15,20].map(n => `<option value="${n}" ${n===5?'selected':''}>${n} rodadas</option>`).join('')}</select></div>
@@ -130,7 +130,7 @@
 
         <div class="lobby-card">
           <h2>📋 Minhas Batalhas</h2>
-          <div id="my-battles" style="color:#9399b2;font-size:0.85rem;">Carregando...</div>
+          <div id="my-battles" style="color:var(--text-sub);font-size:0.85rem;">Carregando...</div>
         </div>
       `;
       loadMyBattles();
@@ -144,16 +144,16 @@
       view.innerHTML = `
         <h1 style="text-align:center;">🏟️ Sala de Batalha</h1>
         <div class="lobby-card" style="text-align:center;">
-          <div style="font-size:0.82rem;color:#9399b2;">Compartilhe o código:</div>
+          <div style="font-size:0.82rem;color:var(--text-sub);">Compartilhe o código:</div>
           <div class="code-display">${data.codigo}</div>
-          <div style="font-size:0.78rem;color:#9399b2;margin-bottom:12px;">
+          <div style="font-size:0.78rem;color:var(--text-sub);margin-bottom:12px;">
             ${data.titulo} · ${data.total_rodadas} rodadas · ${data.tempo_por_questao}s/questão
             ${data.materias.length ? '<br>📚 ' + data.materias.join(', ') : ''}
           </div>
           <div class="players-list" id="lobby-players"></div>
-          <div id="lobby-status" style="color:#f9e2af;font-size:0.82rem;margin-top:8px;">⏳ Atualizando automaticamente...</div>
+          <div id="lobby-status" style="color:var(--yellow);font-size:0.82rem;margin-top:8px;">⏳ Atualizando automaticamente...</div>
           <div style="margin-top:16px;">
-            ${isCreator ? '<button class="btn-battle" onclick="iniciarBatalha()">🚀 Iniciar Batalha</button><button class="btn-battle secondary" style="margin-top:8px;" onclick="reconfigurarBatalha()">🔄 Reconfigurar</button>' : '<div style="color:#f9e2af;font-size:0.85rem;">Aguardando o moderador iniciar...</div>'}
+            ${isCreator ? '<button class="btn-battle" onclick="iniciarBatalha()">🚀 Iniciar Batalha</button><button class="btn-battle secondary" style="margin-top:8px;" onclick="reconfigurarBatalha()">🔄 Reconfigurar</button>' : '<div style="color:var(--yellow);font-size:0.85rem;">Aguardando o moderador iniciar...</div>'}
           </div>
         </div>
       `;
@@ -206,7 +206,7 @@
           <div class="round-badge">Rodada ${data.rodada_atual}/${data.total_rodadas}</div>
           <div class="timer-bar"><div class="timer-fill" id="timer-fill" style="width:100%;"></div></div>
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-            <div style="font-size:0.82rem;color:#9399b2;" id="timer-text">${data.tempo_por_questao}s</div>
+            <div style="font-size:0.82rem;color:var(--text-sub);" id="timer-text">${data.tempo_por_questao}s</div>
             <div style="font-size:0.72rem;padding:3px 10px;border-radius:12px;background:${diff.cor || '#45475a'}22;color:${diff.cor || '#9399b2'};border:1px solid ${diff.cor || '#45475a'}44;font-weight:600;">${diff.emoji || ''} ${diff.nivel || ''}</div>
           </div>
           <div class="materia-badge">📚 ${r.materia}</div>
@@ -243,13 +243,13 @@
         const perdedor = ranking[1];
         const premio = getRandomPrize(vencedor.nome);
         premioHtml = `
-          <div style="background:linear-gradient(135deg, #1e1e2e, #313244);border:2px solid #f9e2af;border-radius:14px;padding:20px;margin:16px 0;text-align:center;">
+          <div style="background:linear-gradient(135deg, var(--bg), var(--bg-surface));border:2px solid var(--yellow);border-radius:14px;padding:20px;margin:16px 0;text-align:center;">
             <div style="font-size:1.3rem;margin-bottom:8px;">🎁 Prêmio Surpresa!</div>
-            <div style="color:#f9e2af;font-size:0.95rem;font-weight:600;margin-bottom:6px;">${perdedor.nome}, você deve:</div>
-            <div style="color:#cdd6f4;font-size:1.1rem;padding:12px;background:#45475a;border-radius:10px;margin:8px 0;">
+            <div style="color:var(--yellow);font-size:0.95rem;font-weight:600;margin-bottom:6px;">${perdedor.nome}, você deve:</div>
+            <div style="color:var(--text);font-size:1.1rem;padding:12px;background:var(--bg-elevated);border-radius:10px;margin:8px 0;">
               ${premio.emoji} ${premio.texto}
             </div>
-            <div style="font-size:0.75rem;color:#9399b2;margin-top:8px;">Valide a entrega com o vencedor! 🤝</div>
+            <div style="font-size:0.75rem;color:var(--text-sub);margin-top:8px;">Valide a entrega com o vencedor! 🤝</div>
           </div>
         `;
       }
@@ -261,7 +261,7 @@
       view.innerHTML = `
         <div class="ranking-card">
           <h1 style="font-size:1.4rem;margin-bottom:4px;">🏆 Resultado Final</h1>
-          <div style="font-size:0.82rem;color:#9399b2;margin-bottom:8px;">${data.titulo} · ${data.total_rodadas} rodadas</div>
+          <div style="font-size:0.82rem;color:var(--text-sub);margin-bottom:8px;">${data.titulo} · ${data.total_rodadas} rodadas</div>
 
           <div class="podium">
             ${podiumOrder.map((p, i) => p ? `
@@ -290,7 +290,7 @@
 
           <button class="btn-battle" style="margin-top:20px;" onclick="showMenu()">🔙 Voltar ao Menu</button>
           <button class="btn-battle secondary" style="margin-top:8px;" onclick="criarRevanche('${data.codigo}')">🔄 Revanche</button>
-          <button class="btn-battle" style="margin-top:8px;background:#45475a;color:#cdd6f4;" onclick="showReview('${data.codigo}')">📖 Revisar Questões</button>
+          <button class="btn-battle" style="margin-top:8px;background:var(--bg-elevated);color:var(--text);" onclick="showReview('${data.codigo}')">📖 Revisar Questões</button>
           ${premioHtml}
         </div>
       `;
@@ -414,26 +414,26 @@
       overlay.id = 'no-questions-modal';
       overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;';
       overlay.innerHTML = `
-        <div style="background:#313244;border-radius:16px;padding:28px;max-width:480px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+        <div style="background:var(--bg-surface);border-radius:16px;padding:28px;max-width:480px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-            <h3 style="color:#f38ba8;margin:0;font-size:1.1rem;">⚠️ Sem questões disponíveis</h3>
-            <span onclick="document.getElementById('no-questions-modal').remove()" style="cursor:pointer;color:#9399b2;font-size:1.4rem;">&times;</span>
+            <h3 style="color:var(--red);margin:0;font-size:1.1rem;">⚠️ Sem questões disponíveis</h3>
+            <span onclick="document.getElementById('no-questions-modal').remove()" style="cursor:pointer;color:var(--text-sub);font-size:1.4rem;">&times;</span>
           </div>
-          <p style="color:#cdd6f4;font-size:0.9rem;margin-bottom:8px;">
-            Não há questões suficientes para as matérias: <strong style="color:#89b4fa;">${materias}</strong>
+          <p style="color:var(--text);font-size:0.9rem;margin-bottom:8px;">
+            Não há questões suficientes para as matérias: <strong style="color:var(--blue);">${materias}</strong>
           </p>
-          <p style="color:#9399b2;font-size:0.82rem;margin-bottom:20px;">
+          <p style="color:var(--text-sub);font-size:0.82rem;margin-bottom:20px;">
             Reconfigure a batalha com filtros diferentes ou selecione questões do banco manualmente.
           </p>
           
           <div style="display:flex;flex-direction:column;gap:10px;">
-            <button onclick="document.getElementById('no-questions-modal').remove(); openQuestionPoolSelector()" style="width:100%;padding:12px;background:#a6e3a1;color:#1e1e2e;border:none;border-radius:10px;font-weight:600;font-size:0.9rem;cursor:pointer;">
+            <button onclick="document.getElementById('no-questions-modal').remove(); openQuestionPoolSelector()" style="width:100%;padding:12px;background:var(--green);color:#1e1e2e;border:none;border-radius:10px;font-weight:600;font-size:0.9rem;cursor:pointer;">
               🎯 Selecionar Questões do Banco
             </button>
-            <button onclick="document.getElementById('no-questions-modal').remove(); reconfigurarBatalha()" style="width:100%;padding:12px;background:#f9e2af;color:#1e1e2e;border:none;border-radius:10px;font-weight:600;font-size:0.9rem;cursor:pointer;">
+            <button onclick="document.getElementById('no-questions-modal').remove(); reconfigurarBatalha()" style="width:100%;padding:12px;background:var(--yellow);color:#1e1e2e;border:none;border-radius:10px;font-weight:600;font-size:0.9rem;cursor:pointer;">
               🔄 Reconfigurar Batalha (alterar matérias)
             </button>
-            <a href="/questoes.html" style="display:block;width:100%;padding:12px;background:#45475a;color:#cdd6f4;border:none;border-radius:10px;font-size:0.85rem;cursor:pointer;text-align:center;text-decoration:none;">
+            <a href="/questoes.html" style="display:block;width:100%;padding:12px;background:var(--bg-elevated);color:var(--text);border:none;border-radius:10px;font-size:0.85rem;cursor:pointer;text-align:center;text-decoration:none;">
               📚 Ir para Banco de Questões (adicionar novas)
             </a>
           </div>
@@ -463,27 +463,27 @@
       overlay.id = 'pool-selector-modal';
       overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto;';
       overlay.innerHTML = `
-        <div style="background:#313244;border-radius:16px;padding:24px;max-width:600px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+        <div style="background:var(--bg-surface);border-radius:16px;padding:24px;max-width:600px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-            <h3 style="color:#a6e3a1;margin:0;">🎯 Selecionar Questões para a Batalha</h3>
-            <span onclick="document.getElementById('pool-selector-modal').remove()" style="cursor:pointer;color:#9399b2;font-size:1.4rem;">&times;</span>
+            <h3 style="color:var(--green);margin:0;">🎯 Selecionar Questões para a Batalha</h3>
+            <span onclick="document.getElementById('pool-selector-modal').remove()" style="cursor:pointer;color:var(--text-sub);font-size:1.4rem;">&times;</span>
           </div>
           
-          <p style="color:#9399b2;font-size:0.82rem;margin-bottom:16px;">
+          <p style="color:var(--text-sub);font-size:0.82rem;margin-bottom:16px;">
             Filtre as questões por matéria, banca ou dificuldade. As selecionadas formarão o pool — o sistema sorteará aleatoriamente entre elas, com alternativas embaralhadas por jogador.
           </p>
 
           <!-- Filtros -->
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
-            <select id="pool-filter-materia" onchange="filterPoolQuestions()" style="padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.82rem;">
+            <select id="pool-filter-materia" onchange="filterPoolQuestions()" style="padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.82rem;">
               <option value="">Todas matérias</option>
               ${materiasList.map(m => '<option value="' + m + '">' + m + '</option>').join('')}
             </select>
-            <select id="pool-filter-banca" onchange="filterPoolQuestions()" style="padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.82rem;">
+            <select id="pool-filter-banca" onchange="filterPoolQuestions()" style="padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.82rem;">
               <option value="">Todas bancas</option>
               ${bancasList.map(b => '<option value="' + b + '">' + b + '</option>').join('')}
             </select>
-            <select id="pool-filter-dif" onchange="filterPoolQuestions()" style="padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.82rem;">
+            <select id="pool-filter-dif" onchange="filterPoolQuestions()" style="padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.82rem;">
               <option value="">Todas dificuldades</option>
               ${dificuldades.map(d => '<option value="' + d + '">' + d + '</option>').join('')}
             </select>
@@ -491,18 +491,18 @@
 
           <!-- Ações em massa -->
           <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;">
-            <button onclick="toggleAllPool(true)" style="padding:6px 12px;background:#89b4fa;color:#1e1e2e;border:none;border-radius:6px;font-size:0.78rem;cursor:pointer;font-weight:600;">✅ Selecionar todos</button>
-            <button onclick="toggleAllPool(false)" style="padding:6px 12px;background:#45475a;color:#cdd6f4;border:none;border-radius:6px;font-size:0.78rem;cursor:pointer;">❌ Desmarcar todos</button>
-            <span id="pool-count" style="margin-left:auto;color:#a6e3a1;font-size:0.82rem;font-weight:600;">0 selecionadas</span>
+            <button onclick="toggleAllPool(true)" style="padding:6px 12px;background:var(--blue);color:#1e1e2e;border:none;border-radius:6px;font-size:0.78rem;cursor:pointer;font-weight:600;">✅ Selecionar todos</button>
+            <button onclick="toggleAllPool(false)" style="padding:6px 12px;background:var(--bg-elevated);color:var(--text);border:none;border-radius:6px;font-size:0.78rem;cursor:pointer;">❌ Desmarcar todos</button>
+            <span id="pool-count" style="margin-left:auto;color:var(--green);font-size:0.82rem;font-weight:600;">0 selecionadas</span>
           </div>
 
           <!-- Lista de questões -->
-          <div id="pool-questions-list" style="max-height:300px;overflow-y:auto;border:1px solid #45475a;border-radius:10px;background:#1e1e2e;"></div>
+          <div id="pool-questions-list" style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:10px;background:var(--bg);"></div>
 
           <!-- Confirmar -->
           <div style="display:flex;gap:8px;margin-top:16px;">
-            <button onclick="document.getElementById('pool-selector-modal').remove()" style="flex:1;padding:10px;background:#45475a;color:#cdd6f4;border:none;border-radius:8px;cursor:pointer;">Cancelar</button>
-            <button onclick="confirmPoolSelection()" style="flex:1;padding:10px;background:#a6e3a1;color:#1e1e2e;border:none;border-radius:8px;font-weight:600;cursor:pointer;">🎲 Confirmar e Iniciar</button>
+            <button onclick="document.getElementById('pool-selector-modal').remove()" style="flex:1;padding:10px;background:var(--bg-elevated);color:var(--text);border:none;border-radius:8px;cursor:pointer;">Cancelar</button>
+            <button onclick="confirmPoolSelection()" style="flex:1;padding:10px;background:var(--green);color:#1e1e2e;border:none;border-radius:8px;font-weight:600;cursor:pointer;">🎲 Confirmar e Iniciar</button>
           </div>
         </div>
       `;
@@ -530,11 +530,11 @@
       listEl.innerHTML = filtered.map(q => {
         const checked = window._poolSelected.has(q.id) ? 'checked' : '';
         const enunciado = (q.enunciado || '').substring(0, 80) + (q.enunciado?.length > 80 ? '...' : '');
-        return `<label style="display:flex;align-items:flex-start;gap:8px;padding:10px 12px;border-bottom:1px solid #313244;cursor:pointer;font-size:0.82rem;color:#cdd6f4;" onmouseover="this.style.background='#313244'" onmouseout="this.style.background='transparent'">
-          <input type="checkbox" ${checked} onchange="togglePoolQuestion(${q.id}, this.checked)" style="margin-top:2px;accent-color:#a6e3a1;">
+        return `<label style="display:flex;align-items:flex-start;gap:8px;padding:10px 12px;border-bottom:1px solid #313244;cursor:pointer;font-size:0.82rem;color:var(--text);" onmouseover="this.style.background='#313244'" onmouseout="this.style.background='transparent'">
+          <input type="checkbox" ${checked} onchange="togglePoolQuestion(${q.id}, this.checked)" style="margin-top:2px;accent-color:var(--green);">
           <div style="flex:1;">
             <div>${enunciado}</div>
-            <div style="font-size:0.72rem;color:#9399b2;margin-top:3px;">${q.materia || ''} · ${q.banca || ''} · ${q.dificuldade || 'Médio'}</div>
+            <div style="font-size:0.72rem;color:var(--text-sub);margin-top:3px;">${q.materia || ''} · ${q.banca || ''} · ${q.dificuldade || 'Médio'}</div>
           </div>
         </label>`;
       }).join('');
@@ -751,7 +751,7 @@
           <h1 style="text-align:center;">📖 Revisão da Batalha</h1>
           <div class="lobby-card" style="text-align:center;margin-bottom:16px;">
             <div style="font-size:1.6rem;font-weight:700;color:${data.resumo.pct_acerto >= 70 ? '#a6e3a1' : '#f9e2af'};">${data.resumo.pct_acerto}%</div>
-            <div style="font-size:0.82rem;color:#9399b2;">${data.resumo.acertos}/${data.resumo.total} acertos</div>
+            <div style="font-size:0.82rem;color:var(--text-sub);">${data.resumo.acertos}/${data.resumo.total} acertos</div>
           </div>
           ${data.questoes.map((q, i) => `
             <div class="lobby-card" style="margin-bottom:10px;border-left:4px solid ${q.acertei ? '#a6e3a1' : '#f38ba8'};">
@@ -760,11 +760,11 @@
                 <span style="font-size:0.75rem;color:${q.acertei ? '#a6e3a1' : '#f38ba8'};">${q.acertei ? '✅' : '❌'} ${q.pontos}pts · ${q.tempo_seg}s</span>
               </div>
               <div style="font-size:0.88rem;margin-bottom:8px;line-height:1.4;">${q.enunciado}</div>
-              <div style="font-size:0.8rem;color:#a6e3a1;background:#1e1e2e;padding:8px;border-radius:6px;">
+              <div style="font-size:0.8rem;color:var(--green);background:var(--bg);padding:8px;border-radius:6px;">
                 <strong>Correta:</strong> ${q.resposta_correta.toUpperCase()}) ${q.alternativas[q.resposta_correta] || ''}
               </div>
-              ${!q.acertei && q.minha_resposta ? `<div style="font-size:0.78rem;color:#f38ba8;margin-top:4px;">Sua resposta: ${q.minha_resposta.toUpperCase()}) ${q.alternativas[q.minha_resposta] || ''}</div>` : ''}
-              ${q.explicacao ? `<div style="font-size:0.78rem;color:#89b4fa;margin-top:6px;padding:6px;background:#45475a;border-radius:4px;">💡 ${q.explicacao}</div>` : ''}
+              ${!q.acertei && q.minha_resposta ? `<div style="font-size:0.78rem;color:var(--red);margin-top:4px;">Sua resposta: ${q.minha_resposta.toUpperCase()}) ${q.alternativas[q.minha_resposta] || ''}</div>` : ''}
+              ${q.explicacao ? `<div style="font-size:0.78rem;color:var(--blue);margin-top:6px;padding:6px;background:var(--bg-elevated);border-radius:4px;">💡 ${q.explicacao}</div>` : ''}
             </div>
           `).join('')}
           <button class="btn-battle" onclick="showMenu()">🔙 Voltar</button>
@@ -781,9 +781,9 @@
         <div class="player-chip">
           <div class="avatar">${p.avatar || '👤'}</div>
           <span class="name">${p.nome}</span>
-          <span style="font-size:0.72rem;color:#a6e3a1;">${p.pontos || 0}pts</span>
+          <span style="font-size:0.72rem;color:var(--green);">${p.pontos || 0}pts</span>
         </div>
-      `).join('') || '<div style="color:#9399b2;font-size:0.82rem;">Aguardando jogadores...</div>';
+      `).join('') || '<div style="color:var(--text-sub);font-size:0.82rem;">Aguardando jogadores...</div>';
     }
 
     function renderRoundPlayers(responderam, jogadores) {
@@ -845,7 +845,7 @@
     function renderMyBattles() {
       const el = document.getElementById('my-battles');
       if (!el) return;
-      if (!_myBattlesData.length) { el.innerHTML = '<div style="color:#585b70;">Nenhuma batalha ainda</div>'; return; }
+      if (!_myBattlesData.length) { el.innerHTML = '<div style="color:var(--text-muted);">Nenhuma batalha ainda</div>'; return; }
 
       const perPage = 3;
       const totalPages = Math.ceil(_myBattlesData.length / perPage);
@@ -855,17 +855,17 @@
       let html = page.map(b => {
         const statusIcon = b.status === 'finalizada' ? '🏁' : b.status === 'em_andamento' ? '⚔️' : '⏳';
         const posText = b.posicao ? ` · ${b.posicao}º lugar` : '';
-        return `<div onclick="openBattle('${b.codigo}')" style="display:flex;align-items:center;gap:10px;padding:8px;background:#1e1e2e;border-radius:8px;margin-bottom:6px;cursor:pointer;">
+        return `<div onclick="openBattle('${b.codigo}')" style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg);border-radius:8px;margin-bottom:6px;cursor:pointer;">
           <span style="font-size:1.1rem;">${statusIcon}</span>
-          <div style="flex:1;"><div style="font-size:0.82rem;font-weight:600;">${b.titulo}</div><div style="font-size:0.7rem;color:#9399b2;">${b.codigo} · ${b.total_rodadas} rodadas${posText}</div></div>
-          <span style="font-size:0.85rem;font-weight:700;color:#f9e2af;">${b.pontos || 0}pts</span>
+          <div style="flex:1;"><div style="font-size:0.82rem;font-weight:600;">${b.titulo}</div><div style="font-size:0.7rem;color:var(--text-sub);">${b.codigo} · ${b.total_rodadas} rodadas${posText}</div></div>
+          <span style="font-size:0.85rem;font-weight:700;color:var(--yellow);">${b.pontos || 0}pts</span>
         </div>`;
       }).join('');
 
       if (totalPages > 1) {
         html += `<div style="display:flex;justify-content:center;align-items:center;gap:12px;margin-top:8px;">
           <button onclick="myBattlesNav(-1)" ${_myBattlesPage === 0 ? 'disabled' : ''} style="padding:4px 10px;background:${_myBattlesPage === 0 ? '#45475a' : '#89b4fa'};color:${_myBattlesPage === 0 ? '#585b70' : '#1e1e2e'};border:none;border-radius:6px;font-size:0.75rem;cursor:pointer;">◀</button>
-          <span style="font-size:0.75rem;color:#9399b2;">${_myBattlesPage + 1}/${totalPages}</span>
+          <span style="font-size:0.75rem;color:var(--text-sub);">${_myBattlesPage + 1}/${totalPages}</span>
           <button onclick="myBattlesNav(1)" ${_myBattlesPage >= totalPages - 1 ? 'disabled' : ''} style="padding:4px 10px;background:${_myBattlesPage >= totalPages - 1 ? '#45475a' : '#89b4fa'};color:${_myBattlesPage >= totalPages - 1 ? '#585b70' : '#1e1e2e'};border:none;border-radius:6px;font-size:0.75rem;cursor:pointer;">▶</button>
         </div>`;
       }
@@ -910,8 +910,8 @@
       _selectedMaterias.forEach((mat, i) => {
         const tag = document.createElement('span');
         tag.className = 'mat-tag';
-        tag.style.cssText = 'display:inline-flex;align-items:center;gap:4px;background:#45475a;color:#89b4fa;padding:3px 8px;border-radius:6px;font-size:0.78rem;white-space:nowrap;';
-        tag.innerHTML = `${mat} <span style="cursor:pointer;color:#f38ba8;font-weight:bold;" onclick="removeMateria(${i})">&times;</span>`;
+        tag.style.cssText = 'display:inline-flex;align-items:center;gap:4px;background:var(--bg-elevated);color:var(--blue);padding:3px 8px;border-radius:6px;font-size:0.78rem;white-space:nowrap;';
+        tag.innerHTML = `${mat} <span style="cursor:pointer;color:var(--red);font-weight:bold;" onclick="removeMateria(${i})">&times;</span>`;
         _tagsContainer.insertBefore(tag, _input);
       });
       _input.placeholder = _selectedMaterias.length ? '' : 'Digite para buscar... (vazio = todas)';
@@ -930,7 +930,7 @@
       );
       if (!filtered.length) { _dropdown.style.display = 'none'; return; }
       _dropdown.innerHTML = filtered.map((m, idx) =>
-        `<div style="padding:8px 12px;cursor:pointer;font-size:0.85rem;color:#cdd6f4;border-bottom:1px solid #45475a;" 
+        `<div style="padding:8px 12px;cursor:pointer;font-size:0.85rem;color:var(--text);border-bottom:1px solid var(--border);" 
               onmouseover="this.style.background='#45475a'" onmouseout="this.style.background='transparent'"
               data-idx="${idx}">${m}</div>`
       ).join('');

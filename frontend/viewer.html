@@ -62,15 +62,6 @@
     #overlay.show { display: flex; }
   </style>
   <link rel="stylesheet" href="/layout.css">
-  <script>
-    // Apply saved theme immediately to avoid flash
-    (function() {
-      const theme = localStorage.getItem('theme');
-      if (theme === 'light') {
-        document.addEventListener('DOMContentLoaded', () => document.body.classList.add('light-theme'));
-      }
-    })();
-  </script>
 </head>
 <body>
   <div id="overlay">
