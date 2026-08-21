@@ -5,11 +5,23 @@ import { switchTab } from './tabs.js';
 let flashcardsToday = [], currentFlashIndex = 0;
 let flashSessao = [], flashSessaoIndex = 0, flashSessaoMode = '';
 let _loadMetas = null, _loadStreakBadge = null, _getConfigSessoes = null;
+let _flashReviewedToday = 0; // Total revisados hoje (persiste na sessão)
+let _flashOriginalTotal = 0; // Total original (pendentes + já revisados)
 
 export async function loadFlashcardsToday() {
   try {
     flashcardsToday = await fetch('/api/flashcards/today').then(r => r.json());
     currentFlashIndex = 0;
+
+    // Buscar quantos já foram revisados hoje do streak
+    try {
+      const streak = await fetch('/api/streaks').then(r => r.json());
+      _flashReviewedToday = (streak && streak.hoje && streak.hoje.flashcards_revisados) ? streak.hoje.flashcards_revisados : 0;
+    } catch(e) {
+      _flashReviewedToday = parseInt(sessionStorage.getItem('flash_reviewed_today') || '0');
+    }
+    _flashOriginalTotal = flashcardsToday.length + _flashReviewedToday;
+
     showCurrentFlashcard();
   } catch (e) { toast('Erro ao carregar flashcards de hoje', 'error'); }
 }
@@ -18,11 +30,14 @@ function showCurrentFlashcard() {
   const q = document.getElementById('flash-question'), a = document.getElementById('flash-answer');
   const rb = document.getElementById('flash-reveal-btn'), rv = document.getElementById('flash-review-btns');
   const progressEl = document.getElementById('flash-progress');
-  const total = flashcardsToday.length;
-  if (progressEl && total > 0) {
+  const pendentes = flashcardsToday.length;
+  const totalOriginal = _flashOriginalTotal || pendentes;
+  const done = _flashReviewedToday + currentFlashIndex;
+  const total = totalOriginal || 1;
+
+  if (progressEl && totalOriginal > 0) {
     progressEl.style.display = 'block';
-    const done = currentFlashIndex;
-    const pct = Math.round((done / total) * 100);
+    const pct = Math.min(100, Math.round((done / total) * 100));
     document.getElementById('flash-progress-text').textContent = `${done}/${total} revisados`;
     document.getElementById('flash-progress-pct').textContent = `${pct}%`;
     document.getElementById('flash-progress-bar').style.width = `${pct}%`;
@@ -31,11 +46,12 @@ function showCurrentFlashcard() {
     // Garantir largura mínima visível quando progresso > 0
     if (done > 0 && pct < 5) bar.style.width = '5%';
   } else if (progressEl) { progressEl.style.display = 'none'; }
-  if (currentFlashIndex >= total) {
-    q.innerHTML = `<span style="color:#a6e3a1;font-size:1.3rem;font-weight:600;">🎉 Parabéns! ${total} flashcards revisados hoje!</span>`;
+  if (currentFlashIndex >= pendentes) {
+    const doneAll = _flashReviewedToday + currentFlashIndex;
+    q.innerHTML = `<span style="color:#a6e3a1;font-size:1.3rem;font-weight:600;">🎉 Parabéns! ${doneAll} flashcards revisados hoje!</span>`;
     a.style.display = 'none'; rb.style.display = 'none'; rv.style.display = 'none';
-    if (progressEl && total > 0) {
-      document.getElementById('flash-progress-text').textContent = `${total}/${total} revisados ✓`;
+    if (progressEl) {
+      document.getElementById('flash-progress-text').textContent = `${doneAll}/${total} revisados ✓`;
       document.getElementById('flash-progress-pct').textContent = '100%';
       document.getElementById('flash-progress-bar').style.width = '100%';
       document.getElementById('flash-progress-bar').style.background = '#a6e3a1';
