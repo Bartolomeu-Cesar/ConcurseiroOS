@@ -98,14 +98,20 @@ def get_progress_bulk(conn=Depends(get_db_session), user_id: int = Depends(get_u
 
 @router.get("/pdf/{path:path}")
 def serve_pdf(path: str):
-    full = (Path(PDF_ROOT) / path).resolve()
-    root_resolved = Path(PDF_ROOT).resolve()
-    # Path traversal protection: ensure resolved path is within PDF_ROOT
-    if not full.is_relative_to(root_resolved):
+    # Path traversal protection: reject obvious traversal attempts
+    if ".." in path or path.startswith("/"):
         raise HTTPException(status_code=403, detail="Acesso negado")
-    if not full.exists() or full.suffix.lower() != ".pdf":
+    full = Path(PDF_ROOT) / path
+    # Verify the logical path stays within PDF_ROOT (without resolving symlinks)
+    try:
+        full.relative_to(Path(PDF_ROOT))
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Acesso negado")
+    # Resolve for actual file access
+    resolved = full.resolve()
+    if not resolved.exists() or resolved.suffix.lower() != ".pdf":
         raise HTTPException(status_code=404, detail="PDF não encontrado")
-    return FileResponse(str(full), media_type="application/pdf")
+    return FileResponse(str(resolved), media_type="application/pdf")
 
 
 @router.get("/api/export")
