@@ -375,6 +375,150 @@ def _create_tables(conn):
         )
     """)
 
+    # ========== LEAGUES ==========
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS leagues (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            week_start TEXT NOT NULL,
+            week_end TEXT NOT NULL,
+            tier TEXT NOT NULL DEFAULT 'bronze',
+            created_at TEXT NOT NULL
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS league_members (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            league_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            weekly_xp INTEGER DEFAULT 0,
+            rank INTEGER DEFAULT 0,
+            promoted INTEGER DEFAULT 0,
+            demoted INTEGER DEFAULT 0,
+            is_bot INTEGER DEFAULT 0,
+            bot_name TEXT DEFAULT '',
+            joined_at TEXT DEFAULT '',
+            FOREIGN KEY (league_id) REFERENCES leagues(id)
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS league_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            week_start TEXT NOT NULL,
+            week_end TEXT NOT NULL,
+            tier TEXT NOT NULL,
+            final_rank INTEGER NOT NULL DEFAULT 0,
+            final_xp INTEGER DEFAULT 0,
+            promoted INTEGER DEFAULT 0,
+            demoted INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT ''
+        )
+    """)
+
+    # ========== AI TUTOR ==========
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS ai_usage (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL DEFAULT 1,
+            data TEXT NOT NULL,
+            tokens_used INTEGER DEFAULT 0,
+            requests_count INTEGER DEFAULT 0,
+            UNIQUE(user_id, data)
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS ai_conversations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL DEFAULT 1,
+            tipo TEXT NOT NULL DEFAULT 'chat',
+            pergunta TEXT NOT NULL,
+            resposta TEXT NOT NULL,
+            tokens INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL
+        )
+    """)
+
+    # ========== SOCIAL ==========
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS friendships (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_a INTEGER NOT NULL,
+            user_b INTEGER NOT NULL,
+            status TEXT DEFAULT 'pending',
+            created_at TEXT NOT NULL
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS study_groups (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            descricao TEXT DEFAULT '',
+            edital_nome TEXT DEFAULT '',
+            criador_id INTEGER NOT NULL,
+            max_membros INTEGER DEFAULT 30,
+            publico INTEGER DEFAULT 1,
+            created_at TEXT NOT NULL
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS group_members (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            group_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            role TEXT DEFAULT 'membro',
+            joined_at TEXT NOT NULL,
+            FOREIGN KEY (group_id) REFERENCES study_groups(id)
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS group_challenges (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            group_id INTEGER NOT NULL,
+            titulo TEXT NOT NULL,
+            meta_tipo TEXT NOT NULL,
+            meta_valor INTEGER NOT NULL,
+            dias INTEGER DEFAULT 7,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (group_id) REFERENCES study_groups(id)
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS activity_feed (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            tipo TEXT NOT NULL,
+            descricao TEXT DEFAULT '',
+            dados TEXT DEFAULT '{}',
+            created_at TEXT NOT NULL
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS user_gamification (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL UNIQUE,
+            xp INTEGER DEFAULT 0,
+            streak INTEGER DEFAULT 0,
+            level INTEGER DEFAULT 1
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS user_badges (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            badge_name TEXT NOT NULL,
+            earned_at TEXT NOT NULL
+        )
+    """)
+
     # Usuários
     conn.execute("""
         CREATE TABLE IF NOT EXISTS users (
@@ -727,6 +871,16 @@ def _run_migrations(conn):
 
     # ========== MULTI-USER ISOLATION: user_id em todas as tabelas ==========
     _migrate_user_id(conn)
+
+    # ========== SOCIAL: username na tabela users ==========
+    try:
+        conn.execute("SELECT username FROM users LIMIT 1")
+    except Exception:
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN username TEXT DEFAULT ''")
+            log.info("Migration: added column username to users")
+        except Exception:
+            pass
 
 
 def _migrate_user_id(conn):

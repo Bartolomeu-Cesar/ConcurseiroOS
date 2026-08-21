@@ -50,6 +50,7 @@
         <ul class="sidebar-nav">
           <li><a href="/dashboard.html" class="${activeClass('/dashboard')}"><span class="nav-icon">📊</span><span class="nav-label">Dashboard</span></a></li>
           <li><a href="/#metas" onclick="goSection('tab-metas')"><span class="nav-icon">🎯</span><span class="nav-label">Metas</span></a></li>
+          <li><a href="/social.html" class="${activeClass('/social')}"><span class="nav-icon">🏆</span><span class="nav-label">Social</span></a></li>
         </ul>
       </div>
 
