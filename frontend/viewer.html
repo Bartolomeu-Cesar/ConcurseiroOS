@@ -79,11 +79,21 @@
     <span id="page-info"></span>
     <!-- Study Tools -->
     <div id="study-tools" style="display:flex;gap:6px;align-items:center;">
-      <button onclick="toggleNotePanel()" title="Anotações da página" style="background:#45475a;border:none;color:#f9e2af;border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">📝</button>
-      <button onclick="addBookmark()" title="Marcar página" style="background:#45475a;border:none;color:#89b4fa;border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🔖</button>
-      <button onclick="quickFlashcard()" title="Criar flashcard desta página" style="background:#45475a;border:none;color:#cba6f7;border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🧠</button>
-      <button onclick="togglePomodoroMode()" id="btn-pomodoro" title="Modo Pomodoro" style="background:#45475a;border:none;color:#f38ba8;border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🍅</button>
-      <button onclick="toggleStudySummary()" title="Resumo da sessão" style="background:#45475a;border:none;color:#a6e3a1;border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">📊</button>
+      <button onclick="toggleNotePanel()" title="Anotações [N]" style="background:#45475a;border:none;color:#f9e2af;border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">📝</button>
+      <button onclick="addBookmark()" title="Bookmark [B]" style="background:#45475a;border:none;color:#89b4fa;border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🔖</button>
+      <button onclick="quickFlashcard()" title="Flashcard rápido [F]" style="background:#45475a;border:none;color:#cba6f7;border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🧠</button>
+      <button onclick="togglePomodoroMode()" id="btn-pomodoro" title="Pomodoro [P]" style="background:#45475a;border:none;color:#f38ba8;border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🍅</button>
+      <button onclick="toggleStudySummary()" title="Resumo [S]" style="background:#45475a;border:none;color:#a6e3a1;border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">📊</button>
+      <button onclick="toggleActiveRecall()" id="btn-recall" title="Active Recall [R]" style="background:#45475a;border:none;color:#94e2d5;border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🔒</button>
+      <button onclick="askAIAboutPage()" title="Perguntar à IA sobre esta página [A]" style="background:#45475a;border:none;color:#fab387;border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🤖</button>
+      <select id="study-technique" onchange="setStudyTechnique(this.value)" title="Técnica de estudo" style="background:#45475a;border:1px solid #585b70;color:#cdd6f4;border-radius:6px;padding:3px 6px;font-size:0.75rem;cursor:pointer;">
+        <option value="livre">📖 Livre</option>
+        <option value="sq3r">📐 SQ3R</option>
+        <option value="cornell">📋 Cornell</option>
+        <option value="feynman">🧪 Feynman</option>
+        <option value="pomodoro">🍅 Pomodoro</option>
+      </select>
+      <span id="reading-speed" title="Velocidade de leitura" style="font-size:0.7rem;color:#585b70;min-width:50px;text-align:center;"></span>
     </div>
     <button id="btn-toggle-panel" onclick="toggleSidePanel()">❓ Questões</button>
   </div>
@@ -112,6 +122,46 @@
         <button onclick="saveQuickFlashcard()" style="flex:1;background:#cba6f7;color:#1e1e2e;border:none;border-radius:8px;padding:10px;font-weight:600;cursor:pointer;">Salvar 🧠</button>
       </div>
     </div>
+  </div>
+
+  <!-- Active Recall Panel (bottom overlay) -->
+  <div id="recall-panel" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#1e1e2e;border-top:2px solid #94e2d5;z-index:200;padding:16px 24px;max-height:40vh;overflow-y:auto;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <h3 style="color:#94e2d5;margin:0;font-size:1rem;">🔒 Active Recall — Página <span id="recall-page">1</span></h3>
+      <div style="display:flex;gap:8px;">
+        <button onclick="checkRecall()" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:6px 14px;font-size:0.82rem;font-weight:600;cursor:pointer;">✓ Verificar</button>
+        <button onclick="toggleActiveRecall()" style="background:none;border:none;color:#f38ba8;cursor:pointer;font-size:1.1rem;">✕</button>
+      </div>
+    </div>
+    <p style="font-size:0.8rem;color:#9399b2;margin-bottom:10px;">Sem olhar o texto, responda: O que você acabou de ler nesta página? Quais os conceitos principais?</p>
+    <textarea id="recall-input" placeholder="Escreva tudo que lembra desta página..." style="width:100%;height:100px;background:#313244;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;padding:12px;font-size:0.88rem;resize:none;outline:none;line-height:1.6;"></textarea>
+    <div id="recall-feedback" style="display:none;margin-top:10px;padding:12px;background:#313244;border-radius:8px;"></div>
+  </div>
+
+  <!-- AI Page Analysis Modal -->
+  <div id="ai-page-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:999;align-items:center;justify-content:center;">
+    <div style="background:#313244;border-radius:16px;padding:24px;max-width:500px;width:90%;max-height:80vh;overflow-y:auto;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <h3 style="color:#fab387;margin:0;">🤖 AI — Página <span id="ai-page-num">1</span></h3>
+        <button onclick="closeAIModal()" style="background:none;border:none;color:#f38ba8;cursor:pointer;font-size:1.2rem;">✕</button>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
+        <button onclick="aiAction('resumir')" class="ai-act-btn" style="background:#45475a;border:none;color:#cdd6f4;border-radius:6px;padding:6px 12px;font-size:0.8rem;cursor:pointer;">📝 Resumir página</button>
+        <button onclick="aiAction('flashcards')" class="ai-act-btn" style="background:#45475a;border:none;color:#cdd6f4;border-radius:6px;padding:6px 12px;font-size:0.8rem;cursor:pointer;">🧠 Gerar flashcards</button>
+        <button onclick="aiAction('questoes')" class="ai-act-btn" style="background:#45475a;border:none;color:#cdd6f4;border-radius:6px;padding:6px 12px;font-size:0.8rem;cursor:pointer;">❓ Gerar questões</button>
+        <button onclick="aiAction('simplificar')" class="ai-act-btn" style="background:#45475a;border:none;color:#cdd6f4;border-radius:6px;padding:6px 12px;font-size:0.8rem;cursor:pointer;">💡 Simplificar</button>
+        <button onclick="aiAction('mapa')" class="ai-act-btn" style="background:#45475a;border:none;color:#cdd6f4;border-radius:6px;padding:6px 12px;font-size:0.8rem;cursor:pointer;">🗺 Mapa mental</button>
+      </div>
+      <textarea id="ai-page-input" placeholder="Ou faça uma pergunta específica sobre o conteúdo..." style="width:100%;height:50px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;padding:10px;font-size:0.85rem;resize:none;outline:none;margin-bottom:10px;"></textarea>
+      <button onclick="aiAction('pergunta')" style="width:100%;background:#fab387;color:#1e1e2e;border:none;border-radius:8px;padding:10px;font-weight:600;cursor:pointer;margin-bottom:12px;">Perguntar 🤖</button>
+      <div id="ai-page-response" style="display:none;background:#1e1e2e;border-radius:8px;padding:14px;font-size:0.85rem;color:#cdd6f4;line-height:1.7;white-space:pre-wrap;"></div>
+    </div>
+  </div>
+
+  <!-- Study Technique Guide Panel -->
+  <div id="technique-guide" style="display:none;position:fixed;top:44px;left:50%;transform:translateX(-50%);background:#313244;border:1px solid #cba6f7;border-radius:12px;padding:14px 18px;z-index:150;max-width:400px;width:90%;box-shadow:0 8px 24px rgba(0,0,0,0.4);">
+    <div id="technique-content" style="font-size:0.82rem;color:#cdd6f4;line-height:1.6;"></div>
+    <button onclick="document.getElementById('technique-guide').style.display='none'" style="margin-top:8px;background:#45475a;border:none;color:#9399b2;border-radius:6px;padding:4px 12px;font-size:0.75rem;cursor:pointer;">Entendi ✓</button>
   </div>
 
   <!-- Study Summary Panel -->
@@ -811,7 +861,207 @@
       if (e.key === 'f' || e.key === 'F') quickFlashcard();
       if (e.key === 'p' || e.key === 'P') togglePomodoroMode();
       if (e.key === 's' || e.key === 'S') toggleStudySummary();
+      if (e.key === 'r' || e.key === 'R') toggleActiveRecall();
+      if (e.key === 'a' || e.key === 'A') askAIAboutPage();
     });
+
+    // --- Active Recall Mode (MarginNote-style) ---
+    let recallActive = false;
+    function toggleActiveRecall() {
+      recallActive = !recallActive;
+      const panel = document.getElementById('recall-panel');
+      const btn = document.getElementById('btn-recall');
+      if (recallActive) {
+        panel.style.display = 'block';
+        btn.style.background = '#94e2d5';
+        btn.style.color = '#1e1e2e';
+        btn.textContent = '🔓';
+        document.getElementById('recall-page').textContent = currentPage;
+        document.getElementById('recall-input').value = '';
+        document.getElementById('recall-feedback').style.display = 'none';
+        document.getElementById('recall-input').focus();
+      } else {
+        panel.style.display = 'none';
+        btn.style.background = '#45475a';
+        btn.style.color = '#94e2d5';
+        btn.textContent = '🔒';
+      }
+    }
+
+    async function checkRecall() {
+      const input = document.getElementById('recall-input').value.trim();
+      if (!input) return;
+      const fb = document.getElementById('recall-feedback');
+      fb.style.display = 'block';
+
+      // Try AI check if available
+      try {
+        const notes = await fetch(`/api/notas?pdf_path=${encodeURIComponent(path)}&pagina=${currentPage}`).then(r => r.json());
+        const hasNotes = notes.length > 0;
+
+        // Simple self-assessment (AI-powered if available)
+        fb.innerHTML = `
+          <div style="font-size:0.85rem;color:#a6e3a1;font-weight:600;margin-bottom:8px;">✓ Recall registrado!</div>
+          <p style="font-size:0.8rem;color:#cdd6f4;margin-bottom:10px;">Agora volte ao texto e verifique o que esqueceu. Pontos que você não lembrou são os que mais precisa revisar.</p>
+          <div style="font-size:0.8rem;color:#9399b2;margin-bottom:8px;">Como avalia seu recall?</div>
+          <div style="display:flex;gap:6px;">
+            <button onclick="rateRecall(1)" style="flex:1;background:#f38ba8;color:#1e1e2e;border:none;border-radius:6px;padding:8px;cursor:pointer;font-size:0.8rem;font-weight:600;">😣 Ruim</button>
+            <button onclick="rateRecall(3)" style="flex:1;background:#f9e2af;color:#1e1e2e;border:none;border-radius:6px;padding:8px;cursor:pointer;font-size:0.8rem;font-weight:600;">😐 Ok</button>
+            <button onclick="rateRecall(5)" style="flex:1;background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:8px;cursor:pointer;font-size:0.8rem;font-weight:600;">😊 Ótimo</button>
+          </div>
+          ${hasNotes ? '<div style="margin-top:8px;font-size:0.75rem;color:#585b70;">💡 Compare com suas notas desta página</div>' : ''}
+        `;
+      } catch {
+        fb.innerHTML = '<div style="color:#a6e3a1;">✓ Recall salvo. Confira o texto agora!</div>';
+      }
+    }
+
+    function rateRecall(quality) {
+      // Save recall attempt to notes as a special recall entry
+      const input = document.getElementById('recall-input').value.trim();
+      fetch('/api/notas', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ pdf_path: path, pagina: currentPage, conteudo: `[RECALL q=${quality}] ${input}` })
+      });
+      showStudyToast(`🔒 Recall avaliado (${quality}/5) — salvo como nota!`);
+      toggleActiveRecall();
+    }
+
+    // --- AI Page Actions ---
+    function askAIAboutPage() {
+      document.getElementById('ai-page-num').textContent = currentPage;
+      document.getElementById('ai-page-response').style.display = 'none';
+      document.getElementById('ai-page-input').value = '';
+      document.getElementById('ai-page-modal').style.display = 'flex';
+    }
+
+    function closeAIModal() {
+      document.getElementById('ai-page-modal').style.display = 'none';
+    }
+
+    async function aiAction(action) {
+      const responseEl = document.getElementById('ai-page-response');
+      responseEl.style.display = 'block';
+      responseEl.innerHTML = '<span style="color:#fab387;">🤖 Processando...</span>';
+
+      // Get context: notes from this page + PDF name
+      let context = `PDF: ${name}, Página: ${currentPage}`;
+      try {
+        const notes = await fetch(`/api/notas?pdf_path=${encodeURIComponent(path)}&pagina=${currentPage}`).then(r => r.json());
+        if (notes.length > 0) {
+          context += `\nNotas do estudante: ${notes.map(n => n.conteudo).join('; ')}`;
+        }
+      } catch {}
+
+      let mensagem = '';
+      switch(action) {
+        case 'resumir': mensagem = `Resuma os pontos principais da página ${currentPage} do material "${name}". ${context}`; break;
+        case 'flashcards': mensagem = `Gere 5 flashcards dos conceitos-chave. Contexto: ${context}`; break;
+        case 'questoes': mensagem = `Gere 3 questões de concurso sobre o conteúdo. Contexto: ${context}`; break;
+        case 'simplificar': mensagem = `Simplifique o conteúdo jurídico desta página em linguagem acessível. ${context}`; break;
+        case 'mapa': mensagem = `Crie um mapa mental em texto (hierarquia com - e →) dos conceitos. ${context}`; break;
+        case 'pergunta':
+          mensagem = document.getElementById('ai-page-input').value.trim();
+          if (!mensagem) { responseEl.innerHTML = '<span style="color:#f38ba8;">Digite uma pergunta.</span>'; return; }
+          mensagem += ` (Contexto: ${context})`;
+          break;
+      }
+
+      try {
+        const res = await fetch('/api/ai/chat', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ mensagem, contexto: context })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          responseEl.innerHTML = data.resposta || data.detail || 'Sem resposta';
+        } else {
+          responseEl.innerHTML = `<span style="color:#f38ba8;">${data.detail || 'AI não disponível. Configure um provider em Social → AI Tutor → ⚙️'}</span>`;
+        }
+      } catch (e) {
+        responseEl.innerHTML = `<span style="color:#f38ba8;">Erro: ${e.message}</span>`;
+      }
+    }
+
+    // --- Study Technique Selector ---
+    const TECHNIQUES = {
+      livre: { name: '📖 Leitura Livre', guide: '' },
+      sq3r: {
+        name: '📐 SQ3R',
+        guide: `<strong>SQ3R — Survey, Question, Read, Recite, Review:</strong><br>
+        1️⃣ <strong>Survey:</strong> Folheie rapidamente — títulos, gráficos, resumos<br>
+        2️⃣ <strong>Question:</strong> Transforme títulos em perguntas ("O que é...", "Por que...")<br>
+        3️⃣ <strong>Read:</strong> Leia buscando responder suas perguntas<br>
+        4️⃣ <strong>Recite:</strong> Feche o livro e responda de memória (use 🔒 Recall)<br>
+        5️⃣ <strong>Review:</strong> Revise ao final — crie flashcards do que esqueceu`
+      },
+      cornell: {
+        name: '📋 Cornell',
+        guide: `<strong>Método Cornell:</strong><br>
+        📝 Divida suas notas em 3 áreas:<br>
+        • <strong>Direita (70%):</strong> Anotações durante a leitura<br>
+        • <strong>Esquerda (30%):</strong> Palavras-chave e perguntas (depois)<br>
+        • <strong>Rodapé:</strong> Resumo em 1-2 frases (ao terminar)<br><br>
+        💡 Use o painel de Notas (📝) para anotar e depois revise criando flashcards.`
+      },
+      feynman: {
+        name: '🧪 Feynman',
+        guide: `<strong>Técnica Feynman:</strong><br>
+        1️⃣ Leia o conceito<br>
+        2️⃣ Explique como se fosse para uma criança (use 🔒 Recall)<br>
+        3️⃣ Identifique lacunas — onde travou?<br>
+        4️⃣ Volte ao texto e simplifique mais<br><br>
+        💡 Se não consegue explicar simples, não entendeu de verdade.`
+      },
+      pomodoro: {
+        name: '🍅 Pomodoro',
+        guide: `<strong>Técnica Pomodoro:</strong><br>
+        🍅 25 min de foco total (sem distrações)<br>
+        ☕ 5 min de pausa (levante, hidrate)<br>
+        🔄 A cada 4 pomodoros: pausa longa (15-30 min)<br><br>
+        💡 Ative o botão 🍅 na toolbar para timer automático.`
+      }
+    };
+
+    function setStudyTechnique(technique) {
+      const guide = document.getElementById('technique-guide');
+      const content = document.getElementById('technique-content');
+      const t = TECHNIQUES[technique];
+      if (t && t.guide) {
+        content.innerHTML = t.guide;
+        guide.style.display = 'block';
+        setTimeout(() => { guide.style.display = 'none'; }, 15000);
+      } else {
+        guide.style.display = 'none';
+      }
+      localStorage.setItem('study_technique', technique);
+      showStudyToast(`Técnica: ${t.name}`);
+    }
+
+    // Restore technique on load
+    const savedTechnique = localStorage.getItem('study_technique');
+    if (savedTechnique) document.getElementById('study-technique').value = savedTechnique;
+
+    // --- Reading Speed Tracker ---
+    let pageTimestamps = [];
+    let lastPageForSpeed = currentPage;
+    setInterval(() => {
+      if (currentPage !== lastPageForSpeed) {
+        pageTimestamps.push({ page: currentPage, time: Date.now() });
+        lastPageForSpeed = currentPage;
+        // Calculate pages/minute (last 5 pages)
+        if (pageTimestamps.length >= 2) {
+          const recent = pageTimestamps.slice(-6);
+          const timeDiff = (recent[recent.length-1].time - recent[0].time) / 60000; // minutes
+          const pagesDiff = recent.length - 1;
+          if (timeDiff > 0) {
+            const ppm = (pagesDiff / timeDiff).toFixed(1);
+            const speedEl = document.getElementById('reading-speed');
+            if (speedEl) speedEl.textContent = `${ppm} pg/min`;
+          }
+        }
+      }
+    }, 1000);
   </script>
   <script src="/sidebar.js"></script>
 </body>
