@@ -36,6 +36,12 @@ RE_CARGO_FCC = re.compile(
     re.IGNORECASE
 )
 
+# Matches VUNESP/IBFC-style cargo lines: "CARGO: Nome" or "FUNÇÃO: Nome"
+RE_CARGO_VUNESP = re.compile(
+    r"^(?:CARGO|FUNÇÃO)\s*:?\s+([A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇÑ][A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇÑ\s\-/]+)",
+    re.IGNORECASE
+)
+
 # Matches the EXCETO clause in subject names
 RE_EXCETO = re.compile(
     r"\(EXCETO\s+PARA\s+O\s+(.+?)\)",
@@ -183,6 +189,11 @@ def find_content_start(text: str) -> int:
         r"(?:14|15|16)\.\d+\s+CONHECIMENTOS",
         r"CONHECIMENTOS\s+GERAIS\s*[–\-]\s*PARA\s+TODOS",
         r"CONHECIMENTOS\s+GERAIS\s*\n\s*L[ÍI]NGUA\s+PORTUGUESA",
+        # VUNESP / IBFC patterns
+        r"PROGRAMA\s+DAS\s+PROVAS",
+        r"CONTE[ÚU]DO\s+PROGRAM[ÁA]TICO",
+        r"PROGRAMA\s+DE\s+MAT[ÉE]RIAS",
+        r"ANEXO\s+(?:I{1,3}|IV|V|VI{0,3})\s*[\-–]?\s*CONTE[ÚU]DO\s+PROGRAM[ÁA]TICO",
     ]
     for pattern in patterns:
         match = re.search(pattern, text, re.IGNORECASE)
@@ -246,7 +257,18 @@ def split_topics(topic_text: str) -> list[str]:
         if item:
             topics.append(item)
 
-    # Fallback: if no numbered topics found, split by sentence (FCC style)
+    # Fallback: if no numbered topics found, try other strategies
+    # Strategy 2: semicolon-separated topics (VUNESP / IBFC style)
+    if not topics and ';' in topic_text:
+        items = [item.strip().rstrip('.') for item in topic_text.split(';')]
+        topics = [item for item in items if len(item) > 3]
+
+    # Strategy 3: dash/bullet-separated topics (IBFC style)
+    if not topics and re.search(r'(?:^|\n)\s*[-–•]\s', topic_text):
+        items = re.split(r'(?:^|\n)\s*[-–•]\s+', topic_text)
+        topics = [item.strip().rstrip('.;') for item in items if len(item.strip()) > 3]
+
+    # Strategy 4: split by sentence (FCC style)
     # FCC editais use "Tópico. Outro tópico. Mais um." without numbers
     if not topics and len(topic_text) > 20:
         sentences = re.split(r'\.\s+(?=[A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇÑ])', topic_text)
@@ -406,6 +428,14 @@ def _parse_cargo_name(cargo_line: str) -> tuple[str, str]:
                 especialidade = " - ".join(p.strip() for p in parts[1:])
             return code, _smart_title_case(f"{tipo} - {especialidade}")
         return code, _smart_title_case(name)
+
+    # Try VUNESP/IBFC format: "CARGO: Nome" or "FUNÇÃO: Nome"
+    match_vunesp = RE_CARGO_VUNESP.match(cargo_line.strip())
+    if match_vunesp:
+        name = match_vunesp.group(1).strip()
+        name = re.sub(r"\s*[\n\r]+\s*", " ", name).strip()
+        name = re.sub(r"\s+", " ", name)
+        return "", _smart_title_case(name)
 
     return "", _smart_title_case(cargo_line.strip()[:60])
 
@@ -598,19 +628,41 @@ def _extract_metadados(pdf_path: str) -> dict:
             metadados["local_prova"] = f"Capital do Estado ({estado_match.group(1).title()})"
 
     # === LINK DO EDITAL ===
-    link_match = re.search(r"(https?://www\.cebraspe\.org\.br/concursos/[^\s\"]{3,})", text_inicio)
-    if not link_match:
-        link_match = re.search(r"(https?://[^\s\"]{20,80}concurso[^\s\"]*)", text_inicio, re.IGNORECASE)
-    if not link_match:
-        # Try www. without protocol
-        link_match = re.search(r"(www\.[^\s,\)]{10,60})", text_inicio)
-    if link_match:
-        link = link_match.group(1).rstrip(".,;)")
-        # Fix PDF line breaks in URL
-        link = re.sub(r"\s+", "", link)
-        if not link.startswith("http"):
-            link = "https://" + link
-        metadados["link_edital"] = link
+    # PDFs often break URLs across lines. Strategy: find all URL occurrences,
+    # clean them, and pick the longest/most complete one.
+    all_links = []
+    
+    # Strategy 1: Find cebraspe URLs (may have spaces from PDF line breaks)
+    for m in re.finditer(r"(https?://www\.cebraspe\.org\.br/concursos/[^\s\"]{2,}(?:\s[^\s,.)\"]{1,10})*)", text_inicio):
+        raw = m.group(1)
+        # Remove PDF line-break spaces within the URL
+        cleaned = re.sub(r"\s+", "", raw)
+        # Remove trailing punctuation/words that aren't part of URL
+        cleaned = re.sub(r"[,;.)]+$", "", cleaned)
+        # URL should only contain valid URL chars
+        url_end = re.search(r"[^a-zA-Z0-9_/:.\-~%?&=#]", cleaned)
+        if url_end:
+            cleaned = cleaned[:url_end.start()]
+        if len(cleaned) > 10:
+            all_links.append(cleaned)
+    
+    # Strategy 2: Generic concurso URLs
+    if not all_links:
+        for m in re.finditer(r"(https?://[^\s\"]{20,80}concurso[^\s\"]*)", text_inicio, re.IGNORECASE):
+            all_links.append(m.group(1).rstrip(".,;)"))
+    
+    # Strategy 3: www. without protocol
+    if not all_links:
+        for m in re.finditer(r"(www\.[^\s,\)]{10,60})", text_inicio):
+            link = m.group(1).rstrip(".,;)")
+            all_links.append("https://" + link)
+    
+    if all_links:
+        # Pick the longest URL (most complete version)
+        best_link = max(all_links, key=len)
+        if not best_link.startswith("http"):
+            best_link = "https://" + best_link
+        metadados["link_edital"] = best_link
 
     # === ESCOLARIDADE ===
     if "NÍVEL SUPERIOR" in text_inicio.upper() and "NÍVEL MÉDIO" in text_inicio.upper():
@@ -740,6 +792,15 @@ def parse_edital_pdf(pdf_path: str) -> dict:
                 re.MULTILINE
             ):
                 cargo_positions.append((match.start(), match.group(1)))
+
+        # Fallback 3: VUNESP/IBFC style - "CARGO: Nome" or "FUNÇÃO: Nome"
+        if not cargo_positions:
+            for match in re.finditer(
+                r"^(?:CARGO|FUNÇÃO)\s*:?\s+([A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇÑ][A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇÑ\s\-/()]+?)\s*$",
+                especificos_text,
+                re.MULTILINE
+            ):
+                cargo_positions.append((match.start(), match.group(0)))
 
         # Extract content for each cargo
         for i, (pos, cargo_line) in enumerate(cargo_positions):

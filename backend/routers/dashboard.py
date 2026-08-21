@@ -36,9 +36,57 @@ def get_dashboard(conn=Depends(get_db_session), user_id: int = Depends(get_user_
     )
     horas_questoes = round(horas_tipo_map.get("questoes", 0) + horas_tipo_map.get("simulado", 0), 1)
 
-    # Progresso do edital
-    edital_total = conn.execute("SELECT COUNT(*) FROM edital WHERE user_id = ?", (user_id,)).fetchone()[0]
-    edital_concluido = conn.execute("SELECT COUNT(*) FROM edital WHERE status = 'Concluído' AND user_id = ?", (user_id,)).fetchone()[0]
+    # Progresso do edital — somente tópicos do edital/cargo do ciclo ativo
+    # Estratégia: encontrar o edital/cargo cujas matérias melhor correspondem ao ciclo
+    has_ciclo = conn.execute(
+        "SELECT COUNT(*) FROM ciclo_estudos WHERE ativo = 1 AND user_id = ?", (user_id,)
+    ).fetchone()[0]
+    if has_ciclo:
+        # Matérias do ciclo
+        materias_ciclo = [r[0] for r in conn.execute(
+            "SELECT materia FROM ciclo_estudos WHERE ativo = 1 AND user_id = ?", (user_id,)
+        ).fetchall()]
+        materias_set = set(materias_ciclo)
+
+        # Encontrar o edital/cargo com maior overlap com o ciclo
+        editais_cargos = conn.execute("""
+            SELECT edital_nome, cargo, GROUP_CONCAT(DISTINCT materia) as materias
+            FROM edital WHERE arquivado = 0 AND user_id = ?
+            GROUP BY edital_nome, cargo
+        """, (user_id,)).fetchall()
+
+        best_match = None
+        best_overlap = 0
+        for row in editais_cargos:
+            e_materias = set(row[2].split(',')) if row[2] else set()
+            overlap = len(materias_set & e_materias)
+            if overlap > best_overlap:
+                best_overlap = overlap
+                best_match = (row[0], row[1])
+
+        if best_match:
+            edital_total = conn.execute(
+                "SELECT COUNT(*) FROM edital WHERE edital_nome = ? AND cargo = ? AND arquivado = 0 AND user_id = ?",
+                (best_match[0], best_match[1], user_id)
+            ).fetchone()[0]
+            edital_concluido = conn.execute(
+                "SELECT COUNT(*) FROM edital WHERE status = 'Concluído' AND edital_nome = ? AND cargo = ? AND arquivado = 0 AND user_id = ?",
+                (best_match[0], best_match[1], user_id)
+            ).fetchone()[0]
+        else:
+            edital_total = conn.execute(
+                "SELECT COUNT(*) FROM edital WHERE arquivado = 0 AND user_id = ?", (user_id,)
+            ).fetchone()[0]
+            edital_concluido = conn.execute(
+                "SELECT COUNT(*) FROM edital WHERE status = 'Concluído' AND arquivado = 0 AND user_id = ?", (user_id,)
+            ).fetchone()[0]
+    else:
+        edital_total = conn.execute(
+            "SELECT COUNT(*) FROM edital WHERE arquivado = 0 AND user_id = ?", (user_id,)
+        ).fetchone()[0]
+        edital_concluido = conn.execute(
+            "SELECT COUNT(*) FROM edital WHERE status = 'Concluído' AND arquivado = 0 AND user_id = ?", (user_id,)
+        ).fetchone()[0]
 
     # Questões stats
     questoes_total = conn.execute("SELECT COUNT(*) FROM questoes_respostas WHERE user_id = ?", (user_id,)).fetchone()[0]
