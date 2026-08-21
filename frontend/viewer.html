@@ -9,50 +9,50 @@
     body { padding: 0; display: flex; flex-direction: column; height: 100vh; }
     #toolbar {
       display: flex; align-items: center; gap: 12px;
-      padding: 8px 16px; background: #313244; flex-shrink: 0;
+      padding: 8px 16px; background: var(--bg-surface); flex-shrink: 0;
     }
-    #toolbar a { color: #89b4fa; text-decoration: none; font-size: 0.9rem; }
+    #toolbar a { color: var(--blue); text-decoration: none; font-size: 0.9rem; }
     #toolbar a:hover { text-decoration: underline; }
     #title { flex: 1; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    #page-info { font-size: 0.85rem; color: #a6e3a1; white-space: nowrap; }
+    #page-info { font-size: 0.85rem; color: var(--green); white-space: nowrap; }
     #timer-display {
-      font-size: 0.95rem; font-weight: 700; color: #f38ba8;
+      font-size: 0.95rem; font-weight: 700; color: var(--red);
       min-width: 72px; text-align: center;
-      background: #1e1e2e; padding: 4px 10px; border-radius: 6px;
+      background: var(--bg); padding: 4px 10px; border-radius: 6px;
     }
-    #timer-display.done { color: #a6e3a1; }
+    #timer-display.done { color: var(--green); }
     #viewer { flex: 1; overflow: hidden; display: flex; }
     #viewer iframe { flex: 1; height: 100%; border: none; }
     #side-panel {
-      width: 0; overflow: hidden; transition: width 0.3s; background: #313244;
-      display: flex; flex-direction: column; border-left: 1px solid #45475a;
+      width: 0; overflow: hidden; transition: width 0.3s; background: var(--bg-surface);
+      display: flex; flex-direction: column; border-left: 1px solid var(--border);
     }
     #side-panel.open { width: 380px; }
     #side-panel-header {
-      padding: 10px 14px; background: #1e1e2e; display: flex; align-items: center; gap: 8px;
-      border-bottom: 1px solid #45475a; flex-shrink: 0;
+      padding: 10px 14px; background: var(--bg); display: flex; align-items: center; gap: 8px;
+      border-bottom: 1px solid var(--border); flex-shrink: 0;
     }
-    #side-panel-header h3 { font-size: 0.9rem; color: #cba6f7; flex: 1; margin: 0; }
-    #side-panel-header button { background: none; border: none; color: #f38ba8; cursor: pointer; font-size: 1.1rem; }
+    #side-panel-header h3 { font-size: 0.9rem; color: var(--accent); flex: 1; margin: 0; }
+    #side-panel-header button { background: none; border: none; color: var(--red); cursor: pointer; font-size: 1.1rem; }
     #side-panel-body { flex: 1; overflow-y: auto; padding: 12px; }
-    .sp-question { background: #1e1e2e; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+    .sp-question { background: var(--bg); border-radius: 8px; padding: 12px; margin-bottom: 10px; }
     .sp-question .sp-enunciado { font-size: 0.85rem; line-height: 1.5; margin-bottom: 10px; }
     .sp-question .sp-alt {
       display: flex; align-items: center; gap: 8px; padding: 7px 10px;
       border-radius: 6px; cursor: pointer; font-size: 0.82rem; margin-bottom: 4px;
-      border: 1px solid #45475a; transition: all 0.15s;
+      border: 1px solid var(--border); transition: all 0.15s;
     }
-    .sp-question .sp-alt:hover { border-color: #89b4fa; }
-    .sp-question .sp-alt.selected { border-color: #cba6f7; background: #45475a; }
-    .sp-question .sp-alt.correct { border-color: #a6e3a1; background: #a6e3a122; }
-    .sp-question .sp-alt.wrong { border-color: #f38ba8; background: #f38ba822; }
-    .sp-question .sp-alt .letter { font-weight: 700; color: #cba6f7; min-width: 16px; }
-    .sp-question .sp-feedback { margin-top: 8px; padding: 8px; background: #45475a; border-radius: 6px; font-size: 0.8rem; display: none; }
+    .sp-question .sp-alt:hover { border-color: var(--blue); }
+    .sp-question .sp-alt.selected { border-color: var(--accent); background: var(--bg-elevated); }
+    .sp-question .sp-alt.correct { border-color: var(--green); background: rgba(166, 227, 161, 0.13); }
+    .sp-question .sp-alt.wrong { border-color: var(--red); background: rgba(243, 139, 168, 0.13); }
+    .sp-question .sp-alt .letter { font-weight: 700; color: var(--accent); min-width: 16px; }
+    .sp-question .sp-feedback { margin-top: 8px; padding: 8px; background: var(--bg-elevated); border-radius: 6px; font-size: 0.8rem; display: none; }
     .sp-question .sp-feedback.show { display: block; }
-    .sp-meta { font-size: 0.75rem; color: #9399b2; margin-bottom: 6px; }
-    .sp-empty { color: #9399b2; font-size: 0.85rem; text-align: center; padding: 20px; }
+    .sp-meta { font-size: 0.75rem; color: var(--text-sub); margin-bottom: 6px; }
+    .sp-empty { color: var(--text-sub); font-size: 0.85rem; text-align: center; padding: 20px; }
     #btn-toggle-panel {
-      background: #cba6f7; color: #1e1e2e; border: none; border-radius: 6px;
+      background: var(--accent); color: var(--bg); border: none; border-radius: 6px;
       padding: 4px 10px; font-size: 0.8rem; font-weight: 600; cursor: pointer;
     }
     #overlay {
@@ -62,71 +62,80 @@
     #overlay.show { display: flex; }
   </style>
   <link rel="stylesheet" href="/layout.css">
+  <script>
+    // Apply saved theme immediately to avoid flash
+    (function() {
+      const theme = localStorage.getItem('theme');
+      if (theme === 'light') {
+        document.addEventListener('DOMContentLoaded', () => document.body.classList.add('light-theme'));
+      }
+    })();
+  </script>
 </head>
 <body>
   <div id="overlay">
-    <div style="background:#313244;border-radius:16px;padding:40px 48px;text-align:center;max-width:360px;">
+    <div style="background:var(--bg-surface);border-radius:16px;padding:40px 48px;text-align:center;max-width:360px;">
       <div style="font-size:2.5rem;margin-bottom:12px;">☕</div>
-      <div style="font-size:1.2rem;font-weight:700;color:#cba6f7;margin-bottom:8px;">Hora de descansar!</div>
-      <div style="font-size:0.9rem;color:#cdd6f4;margin-bottom:24px;">Faça uma pausa e volte descansado para continuar seus estudos.</div>
-      <button id="btn-overlay-ok" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:8px;padding:8px 24px;font-size:0.95rem;font-weight:700;cursor:pointer;">OK, entendido!</button>
+      <div style="font-size:1.2rem;font-weight:700;color:var(--accent);margin-bottom:8px;">Hora de descansar!</div>
+      <div style="font-size:0.9rem;color:var(--text);margin-bottom:24px;">Faça uma pausa e volte descansado para continuar seus estudos.</div>
+      <button id="btn-overlay-ok" style="background:var(--green);color:var(--bg);border:none;border-radius:8px;padding:8px 24px;font-size:0.95rem;font-weight:700;cursor:pointer;">OK, entendido!</button>
     </div>
   </div>
 
   <div id="toolbar">
-    <a href="/" id="btn-voltar" style="background:#cba6f7;color:#1e1e2e;border-radius:6px;padding:5px 12px;font-weight:600;font-size:0.82rem;text-decoration:none;">🏠 Início</a>
+    <a href="/" id="btn-voltar" style="background:var(--accent);color:var(--bg);border-radius:6px;padding:5px 12px;font-weight:600;font-size:0.82rem;text-decoration:none;">🏠 Início</a>
     <span id="title"></span>
     <span id="timer-display">00:00:00</span>
     <span id="page-info"></span>
     <!-- Study Tools -->
     <div id="study-tools" style="display:flex;gap:6px;align-items:center;">
-      <button onclick="toggleNotePanel()" title="Anotações [N]" style="background:#45475a;border:none;color:#f9e2af;border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">📝</button>
-      <button onclick="addBookmark()" title="Bookmark [B]" style="background:#45475a;border:none;color:#89b4fa;border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🔖</button>
-      <button onclick="quickFlashcard()" title="Flashcard rápido [F]" style="background:#45475a;border:none;color:#cba6f7;border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🧠</button>
-      <button onclick="togglePomodoroMode()" id="btn-pomodoro" title="Pomodoro [P]" style="background:#45475a;border:none;color:#f38ba8;border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🍅</button>
-      <button onclick="toggleStudySummary()" title="Resumo [S]" style="background:#45475a;border:none;color:#a6e3a1;border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">📊</button>
-      <button onclick="toggleActiveRecall()" id="btn-recall" title="Active Recall [R]" style="background:#45475a;border:none;color:#94e2d5;border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🔒</button>
-      <button onclick="askAIAboutPage()" title="Perguntar à IA sobre esta página [A]" style="background:#45475a;border:none;color:#fab387;border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🤖</button>
-      <select id="study-technique" onchange="setStudyTechnique(this.value)" title="Técnica de estudo" style="background:#45475a;border:1px solid #585b70;color:#cdd6f4;border-radius:6px;padding:3px 6px;font-size:0.75rem;cursor:pointer;">
+      <button onclick="toggleNotePanel()" title="Anotações [N]" style="background:var(--bg-elevated);border:none;color:var(--yellow);border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">📝</button>
+      <button onclick="addBookmark()" title="Bookmark [B]" style="background:var(--bg-elevated);border:none;color:var(--blue);border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🔖</button>
+      <button onclick="quickFlashcard()" title="Flashcard rápido [F]" style="background:var(--bg-elevated);border:none;color:var(--accent);border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🧠</button>
+      <button onclick="togglePomodoroMode()" id="btn-pomodoro" title="Pomodoro [P]" style="background:var(--bg-elevated);border:none;color:var(--red);border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🍅</button>
+      <button onclick="toggleStudySummary()" title="Resumo [S]" style="background:var(--bg-elevated);border:none;color:var(--green);border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">📊</button>
+      <button onclick="toggleActiveRecall()" id="btn-recall" title="Active Recall [R]" style="background:var(--bg-elevated);border:none;color:#94e2d5;border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🔒</button>
+      <button onclick="askAIAboutPage()" title="Perguntar à IA sobre esta página [A]" style="background:var(--bg-elevated);border:none;color:var(--peach);border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🤖</button>
+      <select id="study-technique" onchange="setStudyTechnique(this.value)" title="Técnica de estudo" style="background:var(--bg-elevated);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:3px 6px;font-size:0.75rem;cursor:pointer;">
         <option value="livre">📖 Livre</option>
         <option value="sq3r">📐 SQ3R</option>
         <option value="cornell">📋 Cornell</option>
         <option value="feynman">🧪 Feynman</option>
         <option value="pomodoro">🍅 Pomodoro</option>
       </select>
-      <span id="reading-speed" title="Velocidade de leitura" style="font-size:0.7rem;color:#585b70;min-width:50px;text-align:center;"></span>
+      <span id="reading-speed" title="Velocidade de leitura" style="font-size:0.7rem;color:var(--text-muted);min-width:50px;text-align:center;"></span>
     </div>
     <button id="btn-toggle-panel" onclick="toggleSidePanel()">❓ Questões</button>
   </div>
 
   <!-- Notes Panel (slide from left) -->
-  <div id="notes-panel" style="display:none;position:fixed;top:44px;left:0;width:320px;bottom:0;background:#313244;border-right:1px solid #45475a;z-index:100;flex-direction:column;overflow:hidden;">
-    <div style="padding:10px 14px;background:#1e1e2e;display:flex;align-items:center;gap:8px;border-bottom:1px solid #45475a;">
-      <h3 style="font-size:0.9rem;color:#f9e2af;flex:1;margin:0;">📝 Notas — Página <span id="note-page-num">1</span></h3>
-      <button onclick="toggleNotePanel()" style="background:none;border:none;color:#f38ba8;cursor:pointer;font-size:1.1rem;">✕</button>
+  <div id="notes-panel" style="display:none;position:fixed;top:44px;left:0;width:320px;bottom:0;background:var(--bg-surface);border-right:1px solid var(--border);z-index:100;flex-direction:column;overflow:hidden;">
+    <div style="padding:10px 14px;background:var(--bg);display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);">
+      <h3 style="font-size:0.9rem;color:var(--yellow);flex:1;margin:0;">📝 Notas — Página <span id="note-page-num">1</span></h3>
+      <button onclick="toggleNotePanel()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:1.1rem;">✕</button>
     </div>
     <div id="notes-list" style="flex:1;overflow-y:auto;padding:10px;"></div>
-    <div style="padding:10px;border-top:1px solid #45475a;">
-      <textarea id="note-input" placeholder="Escreva uma anotação para esta página..." style="width:100%;height:60px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;padding:8px;font-size:0.82rem;resize:none;outline:none;"></textarea>
-      <button onclick="saveNote()" style="width:100%;margin-top:6px;background:#f9e2af;color:#1e1e2e;border:none;border-radius:6px;padding:8px;font-weight:600;cursor:pointer;font-size:0.82rem;">💾 Salvar Nota</button>
+    <div style="padding:10px;border-top:1px solid var(--border);">
+      <textarea id="note-input" placeholder="Escreva uma anotação para esta página..." style="width:100%;height:60px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px;font-size:0.82rem;resize:none;outline:none;"></textarea>
+      <button onclick="saveNote()" style="width:100%;margin-top:6px;background:var(--yellow);color:var(--bg);border:none;border-radius:6px;padding:8px;font-weight:600;cursor:pointer;font-size:0.82rem;">💾 Salvar Nota</button>
     </div>
   </div>
 
   <!-- Quick Flashcard Modal -->
   <div id="flashcard-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:999;align-items:center;justify-content:center;">
-    <div style="background:#313244;border-radius:16px;padding:24px;max-width:420px;width:90%;">
-      <h3 style="color:#cba6f7;margin:0 0 12px;">🧠 Flashcard Rápido — Página <span id="fc-page-num">1</span></h3>
-      <input type="text" id="fc-pergunta" placeholder="Pergunta (ex: O que é...?)" style="width:100%;padding:10px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.9rem;margin-bottom:10px;outline:none;">
-      <textarea id="fc-resposta" placeholder="Resposta..." style="width:100%;height:80px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;padding:10px;font-size:0.85rem;resize:none;outline:none;margin-bottom:12px;"></textarea>
+    <div style="background:var(--bg-surface);border-radius:16px;padding:24px;max-width:420px;width:90%;">
+      <h3 style="color:var(--accent);margin:0 0 12px;">🧠 Flashcard Rápido — Página <span id="fc-page-num">1</span></h3>
+      <input type="text" id="fc-pergunta" placeholder="Pergunta (ex: O que é...?)" style="width:100%;padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.9rem;margin-bottom:10px;outline:none;">
+      <textarea id="fc-resposta" placeholder="Resposta..." style="width:100%;height:80px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px;font-size:0.85rem;resize:none;outline:none;margin-bottom:12px;"></textarea>
       <div style="display:flex;gap:8px;">
-        <button onclick="closeFlashcardModal()" style="flex:1;background:#45475a;color:#cdd6f4;border:none;border-radius:8px;padding:10px;cursor:pointer;">Cancelar</button>
-        <button onclick="saveQuickFlashcard()" style="flex:1;background:#cba6f7;color:#1e1e2e;border:none;border-radius:8px;padding:10px;font-weight:600;cursor:pointer;">Salvar 🧠</button>
+        <button onclick="closeFlashcardModal()" style="flex:1;background:var(--bg-elevated);color:var(--text);border:none;border-radius:8px;padding:10px;cursor:pointer;">Cancelar</button>
+        <button onclick="saveQuickFlashcard()" style="flex:1;background:var(--accent);color:var(--bg);border:none;border-radius:8px;padding:10px;font-weight:600;cursor:pointer;">Salvar 🧠</button>
       </div>
     </div>
   </div>
 
   <!-- Active Recall Panel (bottom overlay) -->
-  <div id="recall-panel" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#1e1e2e;border-top:2px solid #94e2d5;z-index:200;padding:16px 24px;max-height:40vh;overflow-y:auto;">
+  <div id="recall-panel" style="display:none;position:fixed;bottom:0;left:0;right:0;background:var(--bg);border-top:2px solid #94e2d5;z-index:200;padding:16px 24px;max-height:40vh;overflow-y:auto;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
       <h3 style="color:#94e2d5;margin:0;font-size:1rem;">🔒 Active Recall — Página <span id="recall-page">1</span></h3>
       <div style="display:flex;gap:8px;">
