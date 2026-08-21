@@ -479,6 +479,12 @@
       fetch('/api/auth/me')
         .then(r => r.json())
         .then(user => {
+          // Atualizar auth_user no localStorage com role atualizado
+          const stored = JSON.parse(localStorage.getItem('auth_user') || '{}');
+          if (user.role) stored.role = user.role;
+          if (user.plano) stored.plano = user.plano;
+          localStorage.setItem('auth_user', JSON.stringify({...stored, ...user}));
+
           const nameEl = document.getElementById('user-name-display');
           const avatarEl = document.getElementById('user-avatar-initials');
           const nome = user.nome || user.email || 'Estudante';

@@ -280,7 +280,7 @@ def verify_code(body: dict = Body(...), request: Request = None, conn=Depends(ge
     conn.commit()
 
     # Buscar usuário
-    user = conn.execute("SELECT id, email, nome, avatar, plano, plano_expira FROM users WHERE email = ?", (email,)).fetchone()
+    user = conn.execute("SELECT id, email, nome, avatar, plano, plano_expira, role FROM users WHERE email = ?", (email,)).fetchone()
 
     # Gerar token
     token = _create_token(user["id"], user["email"])
@@ -314,9 +314,10 @@ def get_me(user=Depends(get_optional_user), conn=Depends(get_db_session)):
                 "avatar": default_user["avatar"] or "",
                 "plano": default_user["plano"] if "plano" in keys else "ilimitado",
                 "plano_expira": default_user["plano_expira"] if "plano_expira" in keys else "",
+                "role": default_user["role"] if "role" in keys else "admin",
                 "auth_enabled": settings.AUTH_ENABLED,
             }
-        return {"id": 1, "email": "", "nome": "Estudante", "avatar": "", "plano": "ilimitado", "auth_enabled": settings.AUTH_ENABLED}
+        return {"id": 1, "email": "", "nome": "Estudante", "avatar": "", "plano": "ilimitado", "role": "admin", "auth_enabled": settings.AUTH_ENABLED}
 
     return {
         "id": user["id"],
@@ -325,6 +326,7 @@ def get_me(user=Depends(get_optional_user), conn=Depends(get_db_session)):
         "avatar": user["avatar"],
         "plano": user.get("plano", "ilimitado"),
         "plano_expira": user.get("plano_expira", ""),
+        "role": user.get("role", "user"),
         "email_verified": bool(user["email_verified"]),
         "created_at": user["created_at"],
         "last_login": user["last_login"],
