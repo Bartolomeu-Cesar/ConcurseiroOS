@@ -811,11 +811,14 @@
         m.toLowerCase().includes(filter.toLowerCase())
       );
       if (!filtered.length) { _dropdown.style.display = 'none'; return; }
-      _dropdown.innerHTML = filtered.map(m =>
+      _dropdown.innerHTML = filtered.map((m, idx) =>
         `<div style="padding:8px 12px;cursor:pointer;font-size:0.85rem;color:#cdd6f4;border-bottom:1px solid #45475a;" 
               onmouseover="this.style.background='#45475a'" onmouseout="this.style.background='transparent'"
-              onclick="selectMateria('${m.replace(/'/g, "\\'")}')">${m}</div>`
+              data-idx="${idx}">${m}</div>`
       ).join('');
+      _dropdown.querySelectorAll('[data-idx]').forEach(el => {
+        el.onclick = () => selectMateria(filtered[parseInt(el.dataset.idx)]);
+      });
       _dropdown.style.display = 'block';
     }
 
