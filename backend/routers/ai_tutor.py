@@ -111,36 +111,128 @@ class AIChatRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# LLM Integration (synchronous httpx)
+# LLM Integration — Multi-Provider (synchronous httpx)
+# Supported: OpenAI, Gemini, Kimi (Moonshot), GLM (ZhipuAI), Amazon Bedrock, Ollama
 # ---------------------------------------------------------------------------
+
+# Provider configurations: (base_url, default_model, auth_header_format)
+PROVIDERS = {
+    "openai": {
+        "url": "https://api.openai.com/v1/chat/completions",
+        "default_model": "gpt-4o-mini",
+        "env_key": "OPENAI_API_KEY",
+        "format": "openai",  # OpenAI-compatible chat/completions API
+    },
+    "gemini": {
+        "url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+        "default_model": "gemini-2.0-flash",
+        "env_key": "GEMINI_API_KEY",
+        "format": "openai",  # Gemini supports OpenAI-compatible format
+    },
+    "kimi": {
+        "url": "https://api.moonshot.cn/v1/chat/completions",
+        "default_model": "moonshot-v1-8k",
+        "env_key": "KIMI_API_KEY",
+        "format": "openai",  # Kimi/Moonshot is OpenAI-compatible
+    },
+    "glm": {
+        "url": "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+        "default_model": "glm-4-flash",
+        "env_key": "GLM_API_KEY",
+        "format": "openai",  # ZhipuAI GLM is OpenAI-compatible
+    },
+    "bedrock": {
+        "url": "",  # Uses boto3, not httpx
+        "default_model": "anthropic.claude-3-haiku-20240307-v1:0",
+        "env_key": "AWS_BEDROCK_REGION",
+        "format": "bedrock",
+    },
+    "ollama": {
+        "url": "http://localhost:11434/api/chat",
+        "default_model": "llama3.1",
+        "env_key": "",
+        "format": "ollama",
+    },
+}
 
 
 def _get_ai_config() -> dict:
-    """Return current AI configuration."""
-    return {
-        "api_key": os.environ.get("OPENAI_API_KEY", ""),
-        "ollama_url": os.environ.get("OLLAMA_URL", "http://localhost:11434"),
-        "model": os.environ.get("AI_MODEL", "gpt-4o-mini"),
-    }
+    """Detect the best available AI provider and return configuration."""
+    provider_override = os.environ.get("AI_PROVIDER", "auto")
+    model_override = os.environ.get("AI_MODEL", "")
+
+    # If user specified a provider, use it directly
+    if provider_override != "auto" and provider_override in PROVIDERS:
+        prov = PROVIDERS[provider_override]
+        api_key = os.environ.get(prov["env_key"], "") if prov["env_key"] else ""
+        return {
+            "provider": provider_override,
+            "api_key": api_key,
+            "url": prov["url"] if provider_override != "ollama" else os.environ.get("OLLAMA_URL", "http://localhost:11434") + "/api/chat",
+            "model": model_override or prov["default_model"],
+            "format": prov["format"],
+        }
+
+    # Auto-detect: try providers in priority order
+    priority = ["openai", "gemini", "kimi", "glm", "bedrock", "ollama"]
+    for name in priority:
+        prov = PROVIDERS[name]
+        if prov["env_key"]:
+            key = os.environ.get(prov["env_key"], "")
+            if key:
+                url = prov["url"]
+                if name == "ollama":
+                    url = os.environ.get("OLLAMA_URL", "http://localhost:11434") + "/api/chat"
+                return {
+                    "provider": name,
+                    "api_key": key,
+                    "url": url,
+                    "model": model_override or prov["default_model"],
+                    "format": prov["format"],
+                }
+        elif name == "ollama":
+            # Ollama doesn't need API key, try if URL is reachable
+            ollama_url = os.environ.get("OLLAMA_URL", "http://localhost:11434")
+            return {
+                "provider": "ollama",
+                "api_key": "",
+                "url": f"{ollama_url}/api/chat",
+                "model": model_override or prov["default_model"],
+                "format": "ollama",
+            }
+
+    return {"provider": "none", "api_key": "", "url": "", "model": "", "format": ""}
 
 
 def call_llm_sync(messages: list[dict], max_tokens: int = 1000) -> tuple[str, int]:
-    """Call LLM synchronously and return (response_text, tokens_used)."""
+    """Call LLM synchronously via the detected provider. Returns (response_text, tokens_used)."""
     config = _get_ai_config()
+    provider = config["provider"]
     api_key = config["api_key"]
-    ollama_url = config["ollama_url"]
+    url = config["url"]
     model = config["model"]
+    fmt = config["format"]
 
-    if api_key:
-        # OpenAI-compatible API
+    if provider == "none":
+        raise HTTPException(
+            status_code=503,
+            detail="AI não disponível. Configure uma das chaves: OPENAI_API_KEY, GEMINI_API_KEY, KIMI_API_KEY, GLM_API_KEY, AWS_BEDROCK_REGION, ou inicie o Ollama.",
+        )
+
+    # --- OpenAI-compatible format (OpenAI, Gemini, Kimi, GLM) ---
+    if fmt == "openai":
         try:
-            with httpx.Client(timeout=30) as client:
+            headers = {"Content-Type": "application/json"}
+            if provider == "gemini":
+                # Gemini uses key as query param or Bearer token
+                headers["Authorization"] = f"Bearer {api_key}"
+            else:
+                headers["Authorization"] = f"Bearer {api_key}"
+
+            with httpx.Client(timeout=45) as client:
                 response = client.post(
-                    "https://api.openai.com/v1/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {api_key}",
-                        "Content-Type": "application/json",
-                    },
+                    url,
+                    headers=headers,
                     json={
                         "model": model,
                         "messages": messages,
@@ -151,26 +243,70 @@ def call_llm_sync(messages: list[dict], max_tokens: int = 1000) -> tuple[str, in
                 response.raise_for_status()
                 data = response.json()
                 text = data["choices"][0]["message"]["content"]
-                tokens = data.get("usage", {}).get("total_tokens", 0)
+                tokens = data.get("usage", {}).get("total_tokens", len(text) // 3)
                 return text, tokens
         except httpx.HTTPStatusError as e:
-            log.error(f"OpenAI API error: {e.response.status_code} - {e.response.text}")
+            log.error(f"[AI:{provider}] HTTP error: {e.response.status_code} - {e.response.text[:200]}")
             raise HTTPException(
                 status_code=502,
-                detail=f"Erro na API OpenAI: {e.response.status_code}",
+                detail=f"Erro na API {provider}: {e.response.status_code}",
             )
         except httpx.RequestError as e:
-            log.error(f"OpenAI request error: {e}")
+            log.error(f"[AI:{provider}] Request error: {e}")
             raise HTTPException(
                 status_code=503,
-                detail="Não foi possível conectar à API OpenAI.",
+                detail=f"Não foi possível conectar ao {provider}.",
             )
-    else:
-        # Try Ollama
+
+    # --- Amazon Bedrock ---
+    elif fmt == "bedrock":
         try:
-            with httpx.Client(timeout=60) as client:
+            import boto3
+
+            region = os.environ.get("AWS_BEDROCK_REGION", "us-east-1")
+            bedrock = boto3.client("bedrock-runtime", region_name=region)
+
+            # Convert messages to Bedrock format
+            system_msg = ""
+            user_msgs = []
+            for msg in messages:
+                if msg["role"] == "system":
+                    system_msg = msg["content"]
+                else:
+                    user_msgs.append({"role": msg["role"], "content": [{"text": msg["content"]}]})
+
+            body = {
+                "messages": user_msgs,
+                "max_tokens": max_tokens,
+                "temperature": 0.7,
+            }
+            if system_msg:
+                body["system"] = [{"text": system_msg}]
+
+            response = bedrock.converse(
+                modelId=model,
+                messages=user_msgs,
+                system=[{"text": system_msg}] if system_msg else [],
+                inferenceConfig={"maxTokens": max_tokens, "temperature": 0.7},
+            )
+            text = response["output"]["message"]["content"][0]["text"]
+            tokens = response.get("usage", {}).get("totalTokens", len(text) // 3)
+            return text, tokens
+        except ImportError:
+            raise HTTPException(
+                status_code=503,
+                detail="boto3 não instalado. Instale com: pip install boto3",
+            )
+        except Exception as e:
+            log.error(f"[AI:bedrock] Error: {e}")
+            raise HTTPException(status_code=502, detail=f"Erro no Amazon Bedrock: {str(e)[:100]}")
+
+    # --- Ollama (local) ---
+    elif fmt == "ollama":
+        try:
+            with httpx.Client(timeout=120) as client:
                 response = client.post(
-                    f"{ollama_url}/api/chat",
+                    url,
                     json={
                         "model": model,
                         "messages": messages,
@@ -183,10 +319,10 @@ def call_llm_sync(messages: list[dict], max_tokens: int = 1000) -> tuple[str, in
                 tokens = data.get("eval_count", len(text) // 4)
                 return text, tokens
         except (httpx.RequestError, httpx.HTTPStatusError) as e:
-            log.error(f"Ollama error: {e}")
+            log.error(f"[AI:ollama] Error: {e}")
             raise HTTPException(
                 status_code=503,
-                detail="AI não disponível. Configure OPENAI_API_KEY ou inicie o Ollama localmente.",
+                detail="Ollama não está rodando. Inicie com: ollama serve",
             )
 
 
@@ -654,28 +790,46 @@ def get_ai_status(
 ):
     """Check if AI is available and which provider is configured."""
     config = _get_ai_config()
-    has_openai = bool(config["api_key"])
-    ollama_available = False
+    provider = config["provider"]
+    available = provider != "none"
 
-    if not has_openai:
-        # Check if Ollama is reachable
+    # Check Ollama reachability if it's the selected provider
+    if provider == "ollama":
         try:
+            ollama_base = os.environ.get("OLLAMA_URL", "http://localhost:11434")
             with httpx.Client(timeout=5) as client:
-                resp = client.get(f"{config['ollama_url']}/api/tags")
-                ollama_available = resp.status_code == 200
+                resp = client.get(f"{ollama_base}/api/tags")
+                available = resp.status_code == 200
         except Exception:
-            ollama_available = False
+            available = False
 
-    available = has_openai or ollama_available
+    # List all configured providers
+    configured_providers = []
+    for name, prov in PROVIDERS.items():
+        if prov["env_key"] and os.environ.get(prov["env_key"], ""):
+            configured_providers.append(name)
+        elif name == "ollama":
+            configured_providers.append("ollama (local)")
+
+    provider_labels = {
+        "openai": "OpenAI (GPT)",
+        "gemini": "Google Gemini",
+        "kimi": "Kimi (Moonshot AI)",
+        "glm": "GLM (ZhipuAI / ChatGLM)",
+        "bedrock": "Amazon Bedrock",
+        "ollama": "Ollama (local)",
+    }
 
     return {
         "disponivel": available,
-        "provider": "openai" if has_openai else ("ollama" if ollama_available else None),
+        "provider": provider,
+        "provider_label": provider_labels.get(provider, provider),
         "modelo": config["model"],
-        "ollama_url": config["ollama_url"] if not has_openai else None,
+        "providers_configurados": configured_providers,
+        "providers_suportados": list(PROVIDERS.keys()),
         "mensagem": (
             None
             if available
-            else "AI não configurada. Defina OPENAI_API_KEY ou inicie o Ollama."
+            else "AI não configurada. Defina uma das chaves: OPENAI_API_KEY, GEMINI_API_KEY, KIMI_API_KEY, GLM_API_KEY, AWS_BEDROCK_REGION, ou inicie o Ollama."
         ),
     }

@@ -65,5 +65,24 @@ class Settings:
     # Plano padrão para modo local (sem login): "guest", "free", "premium", "ilimitado"
     DEFAULT_PLAN: str = os.environ.get("DEFAULT_PLAN", "premium")
 
+    # AI Tutor — Multi-Provider Support
+    # Provider priority: uses first configured provider found
+    # Supported: openai, gemini, kimi, glm, bedrock, ollama
+    OPENAI_API_KEY: str = os.environ.get("OPENAI_API_KEY", "")
+    GEMINI_API_KEY: str = os.environ.get("GEMINI_API_KEY", "")
+    KIMI_API_KEY: str = os.environ.get("KIMI_API_KEY", "")  # Moonshot AI
+    GLM_API_KEY: str = os.environ.get("GLM_API_KEY", "")    # ZhipuAI (ChatGLM)
+    AWS_BEDROCK_REGION: str = os.environ.get("AWS_BEDROCK_REGION", "")  # Amazon Bedrock (uses IAM)
+    AWS_BEDROCK_MODEL: str = os.environ.get("AWS_BEDROCK_MODEL", "anthropic.claude-3-haiku-20240307-v1:0")
+    OLLAMA_URL: str = os.environ.get("OLLAMA_URL", "http://localhost:11434")
+    AI_MODEL: str = os.environ.get("AI_MODEL", "")  # Override model for any provider
+    AI_PROVIDER: str = os.environ.get("AI_PROVIDER", "auto")  # auto | openai | gemini | kimi | glm | bedrock | ollama
+    AI_DAILY_TOKEN_LIMIT: int = int(os.environ.get("AI_DAILY_TOKEN_LIMIT", "50000"))
+
+    # Push Notifications (VAPID)
+    VAPID_PRIVATE_KEY: str = os.environ.get("VAPID_PRIVATE_KEY", "")
+    VAPID_PUBLIC_KEY: str = os.environ.get("VAPID_PUBLIC_KEY", "")
+    VAPID_SUBJECT: str = os.environ.get("VAPID_SUBJECT", "mailto:admin@concurseiroos.app")
+
 
 settings = Settings()

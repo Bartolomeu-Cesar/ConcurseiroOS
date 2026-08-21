@@ -373,6 +373,12 @@
       <div id="metas-container"></div>
     </div>
 
+    <!-- Domínio por Matéria -->
+    <div class="card" style="margin-bottom:24px;">
+      <span class="card-label">🎯 Domínio</span>
+      <div id="mastery-overview" style="margin-top:8px;"></div>
+    </div>
+
     <!-- Gráficos de Horas e Acertos -->
     <div class="charts">
       <div class="chart-box">
@@ -3400,8 +3406,108 @@
       fetch('/api/relatorio-semanal').then(r => r.json()).then(renderRelatorio).catch(() => {});
     }
 
+    // ===== MASTERY OVERVIEW =====
+    async function loadMasteryOverview() {
+      try {
+        const data = await fetch('/api/edital/mastery-overview').then(r => r.json());
+        const el = document.getElementById('mastery-overview');
+        if (!el) return;
+        if (!data.materias || data.materias.length === 0) {
+          el.innerHTML = '<span style="color:#9399b2;font-size:0.8rem;">Responda questões para ver seu domínio</span>';
+          return;
+        }
+        el.innerHTML = data.materias.slice(0, 8).map(m => {
+          const pct = Math.round(m.avg_mastery || 0);
+          const color = pct >= 80 ? '#a6e3a1' : pct >= 50 ? '#f9e2af' : pct >= 20 ? '#fab387' : '#f38ba8';
+          const label = pct >= 80 ? 'Consolidado' : pct >= 50 ? 'Dominado' : pct >= 20 ? 'Em Progresso' : 'Não Dominado';
+          return `<div style="margin-bottom:6px;">
+            <div style="display:flex;justify-content:space-between;font-size:0.75rem;color:#cdd6f4;">
+              <span style="max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${m.materia}</span>
+              <span style="color:${color};font-weight:600;">${pct}% ${label}</span>
+            </div>
+            <div style="height:4px;background:#45475a;border-radius:2px;overflow:hidden;">
+              <div style="width:${pct}%;height:100%;background:${color};border-radius:2px;transition:width 0.5s;"></div>
+            </div>
+          </div>`;
+        }).join('');
+      } catch(e) {
+        const el = document.getElementById('mastery-overview');
+        if (el) el.innerHTML = '<span style="color:#9399b2;font-size:0.8rem;">Responda questões para ver seu domínio</span>';
+      }
+    }
+
+    // ===== LEAGUE BADGE =====
+    async function loadLeagueBadge() {
+      try {
+        const data = await fetch('/api/leagues/current').then(r => r.json());
+        let badge = document.getElementById('league-badge');
+        if (!badge) {
+          badge = document.createElement('div');
+          badge.id = 'league-badge';
+          badge.style.cssText = 'cursor:pointer;';
+          badge.onclick = () => window.location.href = '/social.html';
+          const streakBar = document.querySelector('.streak-bar');
+          if (streakBar) streakBar.appendChild(badge);
+        }
+        const tierEmojis = {bronze:'🥉', prata:'🥈', ouro:'🥇', diamante:'💎', mestre:'👑'};
+        const emoji = tierEmojis[data.tier] || '🏆';
+        badge.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;" title="Liga ${data.tier} - #${data.user_rank}">
+          <span style="font-size:1.2rem;">${emoji}</span>
+          <span style="font-size:0.6rem;color:#cba6f7;">#${data.user_rank}</span>
+        </div>`;
+      } catch(e) {}
+    }
+
+    // ===== PUSH NOTIFICATION PERMISSION =====
+    function initPushPermissionBanner() {
+      if (typeof Notification === 'undefined') return;
+      if (Notification.permission === 'default') {
+        const banner = document.createElement('div');
+        banner.id = 'push-permission-banner';
+        banner.innerHTML = `
+          <div style="background:#313244;border:1px solid #cba6f7;border-radius:8px;padding:12px 16px;margin-bottom:12px;display:flex;align-items:center;gap:10px;">
+            <span style="font-size:1.2rem;">🔔</span>
+            <div style="flex:1;">
+              <div style="color:#cdd6f4;font-size:0.85rem;font-weight:500;">Ativar notificações?</div>
+              <div style="color:#9399b2;font-size:0.75rem;">Receba lembretes de streak, flashcards e provas</div>
+            </div>
+            <button onclick="requestPushPermission()" style="background:#cba6f7;color:#1e1e2e;border:none;border-radius:6px;padding:6px 14px;font-size:0.8rem;font-weight:600;cursor:pointer;">Ativar</button>
+            <button onclick="this.parentNode.parentNode.remove()" style="background:none;border:none;color:#9399b2;cursor:pointer;">✕</button>
+          </div>
+        `;
+        const main = document.querySelector('.main-content') || document.querySelector('.dash-panel.active');
+        if (main) main.prepend(banner);
+      }
+    }
+
+    async function requestPushPermission() {
+      const result = await Notification.requestPermission();
+      document.getElementById('push-permission-banner')?.remove();
+      if (result === 'granted') {
+        try {
+          const registration = await navigator.serviceWorker.ready;
+          const vapidKey = await fetch('/api/push/vapid-key').then(r => r.json()).then(d => d.key).catch(() => null);
+          if (vapidKey) {
+            const subscription = await registration.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: vapidKey
+            });
+            await fetch('/api/push/subscribe', {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify(subscription.toJSON())
+            });
+          }
+        } catch(e) { console.error('Push subscription error:', e); }
+        if (typeof showToast === 'function') showToast('🔔 Notificações ativadas!', 'success');
+      }
+    }
+
     // Carga inicial
     loadActivePanel();
+    loadMasteryOverview();
+    loadLeagueBadge();
+    setTimeout(initPushPermissionBanner, 2000);
   </script>
 <script src="/timer-global.js"></script>
   <script src="/sidebar.js"></script>
