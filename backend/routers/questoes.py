@@ -168,6 +168,7 @@ def questoes_stats_por_banca(conn=Depends(get_db_session), user_id: int = Depend
 
 
 @router.get("/api/questoes/stats/tempo")
+@router.get("/api/questoes/tempo-medio")
 def questoes_stats_tempo(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Retorna tempo médio por questão com análise por matéria e dificuldade"""
     log.info("GET /api/questoes/stats/tempo")
