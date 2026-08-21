@@ -831,23 +831,53 @@
       if (state.timer) { clearInterval(state.timer); state.timer = null; }
     }
 
+    let _myBattlesPage = 0;
+    let _myBattlesData = [];
+
     async function loadMyBattles() {
       try {
-        const data = await fetch('/api/batalha/minhas').then(r => r.json());
-        const el = document.getElementById('my-battles');
-        if (!el) return;
-        if (!data.length) { el.innerHTML = '<div style="color:#585b70;">Nenhuma batalha ainda</div>'; return; }
-        el.innerHTML = data.slice(0, 5).map(b => {
-          const statusIcon = b.status === 'finalizada' ? '🏁' : b.status === 'em_andamento' ? '⚔️' : '⏳';
-          const posText = b.posicao ? ` · ${b.posicao}º lugar` : '';
-          return `<div onclick="openBattle('${b.codigo}')" style="display:flex;align-items:center;gap:10px;padding:8px;background:#1e1e2e;border-radius:8px;margin-bottom:6px;cursor:pointer;">
-            <span style="font-size:1.1rem;">${statusIcon}</span>
-            <div style="flex:1;"><div style="font-size:0.82rem;font-weight:600;">${b.titulo}</div><div style="font-size:0.7rem;color:#9399b2;">${b.codigo} · ${b.total_rodadas} rodadas${posText}</div></div>
-            <span style="font-size:0.85rem;font-weight:700;color:#f9e2af;">${b.pontos || 0}pts</span>
-          </div>`;
-        }).join('');
+        _myBattlesData = await fetch('/api/batalha/minhas').then(r => r.json());
+        _myBattlesPage = 0;
+        renderMyBattles();
       } catch(e) {}
     }
+
+    function renderMyBattles() {
+      const el = document.getElementById('my-battles');
+      if (!el) return;
+      if (!_myBattlesData.length) { el.innerHTML = '<div style="color:#585b70;">Nenhuma batalha ainda</div>'; return; }
+
+      const perPage = 3;
+      const totalPages = Math.ceil(_myBattlesData.length / perPage);
+      const start = _myBattlesPage * perPage;
+      const page = _myBattlesData.slice(start, start + perPage);
+
+      let html = page.map(b => {
+        const statusIcon = b.status === 'finalizada' ? '🏁' : b.status === 'em_andamento' ? '⚔️' : '⏳';
+        const posText = b.posicao ? ` · ${b.posicao}º lugar` : '';
+        return `<div onclick="openBattle('${b.codigo}')" style="display:flex;align-items:center;gap:10px;padding:8px;background:#1e1e2e;border-radius:8px;margin-bottom:6px;cursor:pointer;">
+          <span style="font-size:1.1rem;">${statusIcon}</span>
+          <div style="flex:1;"><div style="font-size:0.82rem;font-weight:600;">${b.titulo}</div><div style="font-size:0.7rem;color:#9399b2;">${b.codigo} · ${b.total_rodadas} rodadas${posText}</div></div>
+          <span style="font-size:0.85rem;font-weight:700;color:#f9e2af;">${b.pontos || 0}pts</span>
+        </div>`;
+      }).join('');
+
+      if (totalPages > 1) {
+        html += `<div style="display:flex;justify-content:center;align-items:center;gap:12px;margin-top:8px;">
+          <button onclick="myBattlesNav(-1)" ${_myBattlesPage === 0 ? 'disabled' : ''} style="padding:4px 10px;background:${_myBattlesPage === 0 ? '#45475a' : '#89b4fa'};color:${_myBattlesPage === 0 ? '#585b70' : '#1e1e2e'};border:none;border-radius:6px;font-size:0.75rem;cursor:pointer;">◀</button>
+          <span style="font-size:0.75rem;color:#9399b2;">${_myBattlesPage + 1}/${totalPages}</span>
+          <button onclick="myBattlesNav(1)" ${_myBattlesPage >= totalPages - 1 ? 'disabled' : ''} style="padding:4px 10px;background:${_myBattlesPage >= totalPages - 1 ? '#45475a' : '#89b4fa'};color:${_myBattlesPage >= totalPages - 1 ? '#585b70' : '#1e1e2e'};border:none;border-radius:6px;font-size:0.75rem;cursor:pointer;">▶</button>
+        </div>`;
+      }
+
+      el.innerHTML = html;
+    }
+
+    window.myBattlesNav = function(dir) {
+      const totalPages = Math.ceil(_myBattlesData.length / 3);
+      _myBattlesPage = Math.max(0, Math.min(totalPages - 1, _myBattlesPage + dir));
+      renderMyBattles();
+    };
 
     function launchConfetti() {
       const colors = ['#f38ba8','#a6e3a1','#89b4fa','#f9e2af','#cba6f7','#fab387'];
