@@ -271,6 +271,21 @@
     function fetchMastery() {
       var editalNome = filterEdital.value;
       var cargo = filterCargo.value;
+
+      // Auto-select favorito on first load (same as countdown/treinador)
+      if (!editalNome && !cargo && !fetchMastery._loaded) {
+        var favorito = localStorage.getItem('countdown_favorito') || '';
+        if (favorito) {
+          var parts = favorito.split('|');
+          if (parts[0]) editalNome = parts[0];
+          if (parts[1]) cargo = parts[1];
+          // Set dropdown values (will be populated later, but param goes to API)
+          filterEdital.value = editalNome;
+          filterCargo.value = cargo;
+        }
+        fetchMastery._loaded = true;
+      }
+
       var params = new URLSearchParams();
       if (editalNome) params.set('edital_nome', editalNome);
       if (cargo) params.set('cargo', cargo);
@@ -298,6 +313,11 @@
 
     // Extract unique editais/cargos for filters (from first load only)
     function extractFilters(materias) {
+      var favorito = localStorage.getItem('countdown_favorito') || '';
+      var favParts = favorito.split('|');
+      var favEdital = favParts[0] || '';
+      var favCargo = favParts[1] || '';
+
       // Only populate on first load if empty
       if (filterEdital.options.length <= 1) {
         fetch('/api/editais')
@@ -310,6 +330,7 @@
                 var opt = document.createElement('option');
                 opt.value = nome;
                 opt.textContent = nome;
+                if (nome === favEdital) opt.selected = true;
                 filterEdital.appendChild(opt);
               }
             });
@@ -326,6 +347,7 @@
                 var opt = document.createElement('option');
                 opt.value = nome;
                 opt.textContent = nome;
+                if (nome === favCargo) opt.selected = true;
                 filterCargo.appendChild(opt);
               }
             });
