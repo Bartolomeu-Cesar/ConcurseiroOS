@@ -6,7 +6,7 @@ Handles friendships, study groups, activity feed, and public profiles.
 import json
 from typing import Optional, List, Dict, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from database import get_db_session
@@ -524,6 +524,179 @@ def leave_group(
     db.commit()
 
     return {"message": "Você saiu do grupo."}
+
+
+@router.post("/api/social/groups/{id}/add-member", summary="Adicionar membro ao grupo",
+             description="Adiciona um usuário ao grupo por email ou user_id. Apenas criador/admin pode adicionar.")
+def add_member_to_group(
+    id: int,
+    body: dict = Body(...),
+    db=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Adiciona membro a um grupo existente (criador ou admin pode convidar)."""
+    log.info(f"[social] add_member group_id={id} user_id={user_id}")
+
+    # Verificar se o grupo existe
+    group = db.execute("SELECT * FROM study_groups WHERE id = ?", (id,)).fetchone()
+    if not group:
+        raise HTTPException(status_code=404, detail="Grupo não encontrado.")
+
+    # Verificar se quem está adicionando é criador ou admin
+    requester_role = db.execute(
+        "SELECT role FROM group_members WHERE group_id = ? AND user_id = ?", (id, user_id)
+    ).fetchone()
+    if not requester_role or requester_role["role"] not in ("creator", "admin"):
+        raise HTTPException(status_code=403, detail="Apenas o criador ou admin pode adicionar membros.")
+
+    # Identificar o usuário alvo
+    target_email = body.get("email", "").strip()
+    target_user_id = body.get("user_id")
+    target_username = body.get("username", "").strip()
+
+    target = None
+    if target_user_id:
+        target = db.execute("SELECT id, nome, email FROM users WHERE id = ?", (target_user_id,)).fetchone()
+    elif target_email:
+        target = db.execute("SELECT id, nome, email FROM users WHERE email = ?", (target_email,)).fetchone()
+    elif target_username:
+        target = db.execute("SELECT id, nome, email FROM users WHERE username = ?", (target_username,)).fetchone()
+
+    if not target:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado. Verifique email ou username.")
+
+    tid = target["id"]
+
+    # Verificar se já é membro
+    existing = db.execute(
+        "SELECT id FROM group_members WHERE group_id = ? AND user_id = ?", (id, tid)
+    ).fetchone()
+    if existing:
+        raise HTTPException(status_code=400, detail="Este usuário já é membro do grupo.")
+
+    # Verificar limite de membros
+    member_count = db.execute(
+        "SELECT COUNT(*) as cnt FROM group_members WHERE group_id = ?", (id,)
+    ).fetchone()["cnt"]
+    if member_count >= group["max_membros"]:
+        raise HTTPException(status_code=400, detail="Grupo atingiu o limite máximo de membros.")
+
+    # Adicionar membro
+    db.execute(
+        "INSERT INTO group_members (group_id, user_id, role, joined_at) VALUES (?, ?, 'member', ?)",
+        (id, tid, today_str())
+    )
+
+    # Post activity
+    db.execute(
+        "INSERT INTO activity_feed (user_id, tipo, descricao, dados, created_at) VALUES (?, ?, ?, ?, ?)",
+        (tid, "group_joined", f"Foi adicionado ao grupo {group['nome']}", json.dumps({"group_id": id, "added_by": user_id}), today_str())
+    )
+    db.commit()
+
+    log.info(f"[social] member added: user={tid} to group={id} by user={user_id}")
+    return {"message": f"Membro adicionado ao grupo com sucesso.", "user_id": tid, "nome": target["nome"]}
+
+
+@router.get("/api/social/groups/{id}/members", summary="Listar membros do grupo")
+def list_group_members(
+    id: int,
+    db=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Lista todos os membros de um grupo com seus dados e roles."""
+    group = db.execute("SELECT * FROM study_groups WHERE id = ?", (id,)).fetchone()
+    if not group:
+        raise HTTPException(status_code=404, detail="Grupo não encontrado.")
+
+    members = db.execute("""
+        SELECT gm.user_id, gm.role, gm.joined_at, u.nome, u.username, u.avatar, u.email
+        FROM group_members gm
+        LEFT JOIN users u ON u.id = gm.user_id
+        WHERE gm.group_id = ?
+        ORDER BY CASE gm.role WHEN 'creator' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, gm.joined_at
+    """, (id,)).fetchall()
+
+    return {
+        "group_id": id,
+        "group_name": group["nome"],
+        "max_membros": group["max_membros"],
+        "total": len(members),
+        "members": [{
+            "user_id": m["user_id"],
+            "nome": m["nome"] or "Usuário",
+            "username": m["username"] or "",
+            "avatar": m["avatar"] or "",
+            "role": m["role"],
+            "joined_at": m["joined_at"],
+        } for m in members],
+    }
+
+
+@router.put("/api/social/groups/{id}/members/{member_id}/role", summary="Alterar role de membro")
+def change_member_role(
+    id: int,
+    member_id: int,
+    body: dict = Body(...),
+    db=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Altera a role de um membro (apenas criador pode promover/rebaixar)."""
+    new_role = body.get("role", "member")
+    if new_role not in ("admin", "member"):
+        raise HTTPException(status_code=400, detail="Role deve ser 'admin' ou 'member'.")
+
+    # Verificar se é criador
+    requester = db.execute(
+        "SELECT role FROM group_members WHERE group_id = ? AND user_id = ?", (id, user_id)
+    ).fetchone()
+    if not requester or requester["role"] != "creator":
+        raise HTTPException(status_code=403, detail="Apenas o criador pode alterar roles.")
+
+    # Verificar se o membro existe
+    member = db.execute(
+        "SELECT id, role FROM group_members WHERE group_id = ? AND user_id = ?", (id, member_id)
+    ).fetchone()
+    if not member:
+        raise HTTPException(status_code=404, detail="Membro não encontrado no grupo.")
+
+    if member["role"] == "creator":
+        raise HTTPException(status_code=400, detail="Não é possível alterar a role do criador.")
+
+    db.execute("UPDATE group_members SET role = ? WHERE group_id = ? AND user_id = ?", (new_role, id, member_id))
+    db.commit()
+
+    return {"message": f"Role alterada para '{new_role}'.", "user_id": member_id, "new_role": new_role}
+
+
+@router.delete("/api/social/groups/{id}/members/{member_id}", summary="Remover membro do grupo")
+def remove_member_from_group(
+    id: int,
+    member_id: int,
+    db=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Remove um membro do grupo (criador ou admin pode remover)."""
+    # Verificar permissão
+    requester = db.execute(
+        "SELECT role FROM group_members WHERE group_id = ? AND user_id = ?", (id, user_id)
+    ).fetchone()
+    if not requester or requester["role"] not in ("creator", "admin"):
+        raise HTTPException(status_code=403, detail="Apenas criador ou admin pode remover membros.")
+
+    # Não pode remover o criador
+    target = db.execute(
+        "SELECT role FROM group_members WHERE group_id = ? AND user_id = ?", (id, member_id)
+    ).fetchone()
+    if not target:
+        raise HTTPException(status_code=404, detail="Membro não encontrado no grupo.")
+    if target["role"] == "creator":
+        raise HTTPException(status_code=400, detail="Não é possível remover o criador do grupo.")
+
+    db.execute("DELETE FROM group_members WHERE group_id = ? AND user_id = ?", (id, member_id))
+    db.commit()
+
+    return {"message": "Membro removido do grupo."}
 
 
 @router.get("/api/social/groups/{id}")
