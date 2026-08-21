@@ -1007,16 +1007,27 @@
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
     });
 
+    // Resolve CSS variables for Chart.js (doesn't understand var() strings)
+    function getCSSVar(name) {
+      return getComputedStyle(document.body).getPropertyValue(name).trim();
+    }
+
     const COLORS = {
-      green: 'var(--green)', blue: 'var(--blue)', pink: 'var(--red)',
-      peach: 'var(--peach)', mauve: 'var(--accent)', teal: '#89dceb',
-      yellow: 'var(--yellow)', text: '#cdd6f4', surface: 'var(--bg-elevated)'
+      green: getCSSVar('--green') || '#a6e3a1',
+      blue: getCSSVar('--blue') || '#89b4fa',
+      pink: getCSSVar('--red') || '#f38ba8',
+      peach: getCSSVar('--peach') || '#fab387',
+      mauve: getCSSVar('--accent') || '#cba6f7',
+      teal: '#89dceb',
+      yellow: getCSSVar('--yellow') || '#f9e2af',
+      text: getCSSVar('--text') || '#cdd6f4',
+      surface: getCSSVar('--bg-elevated') || '#45475a'
     };
 
     // Chart.js defaults
     if (typeof Chart !== 'undefined') {
-      Chart.defaults.color = '#a6adc8';
-      Chart.defaults.borderColor = 'var(--bg-elevated)';
+      Chart.defaults.color = getCSSVar('--text-sub') || '#a6adc8';
+      Chart.defaults.borderColor = getCSSVar('--bg-elevated') || '#45475a';
     }
 
     async function loadDashboard() {
@@ -1302,7 +1313,7 @@
           datasets: [{
             data: data.map(d => d.total),
             backgroundColor: data.map((_, i) => colors[i % colors.length] + 'CC'),
-            borderColor: 'var(--bg)',
+            borderColor: getCSSVar('--bg') || '#1e1e2e',
             borderWidth: 2,
           }]
         },
@@ -1326,7 +1337,7 @@
           datasets: [{
             data: [data.concluido, pendente],
             backgroundColor: [COLORS.green + 'CC', COLORS.surface],
-            borderColor: 'var(--bg)',
+            borderColor: getCSSVar('--bg') || '#1e1e2e',
             borderWidth: 2,
           }]
         },
@@ -1402,16 +1413,16 @@
           datasets: [{
             label: 'Score (%)',
             data: sorted.map(d => d.score),
-            borderColor: 'var(--accent)',
+            borderColor: getCSSVar('--accent') || '#cba6f7',
             backgroundColor: '#cba6f733',
-            pointBackgroundColor: 'var(--accent)',
+            pointBackgroundColor: getCSSVar('--accent') || '#cba6f7',
             pointRadius: 4,
           }]
         },
         options: {
           responsive: true,
           plugins: { legend: { display: false } },
-          scales: { r: { beginAtZero: true, max: 100, grid: { color: 'var(--bg-elevated)' }, angleLines: { color: 'var(--bg-elevated)' }, pointLabels: { font: { size: 9 }, color: '#a6adc8' }, ticks: { display: false } } }
+          scales: { r: { beginAtZero: true, max: 100, grid: { color: getCSSVar('--bg-elevated') || '#45475a' }, angleLines: { color: getCSSVar('--bg-elevated') || '#45475a' }, pointLabels: { font: { size: 9 }, color: getCSSVar('--text-sub') || '#a6adc8' }, ticks: { display: false } } }
         }
       });
     }
@@ -1568,7 +1579,7 @@
 
       // Spawn confetti
       const container = overlay.querySelector('#challenge-confetti');
-      const colors = ['var(--red)','var(--green)','var(--blue)','var(--yellow)','var(--accent)','var(--peach)','#94e2d5'];
+      const colors = [getCSSVar('--red')||'#f38ba8',getCSSVar('--green')||'#a6e3a1',getCSSVar('--blue')||'#89b4fa',getCSSVar('--yellow')||'#f9e2af',getCSSVar('--accent')||'#cba6f7',getCSSVar('--peach')||'#fab387','#94e2d5'];
       for (let i = 0; i < 80; i++) {
         const piece = document.createElement('div');
         piece.className = 'confetti-piece';
@@ -2708,7 +2719,7 @@
             datasets: [{
               label: 'Acerto %',
               data: geral,
-              borderColor: 'var(--accent)',
+              borderColor: getCSSVar('--accent') || '#cba6f7',
               backgroundColor: 'rgba(203,166,247,0.1)',
               fill: true,
               tension: 0.3,
