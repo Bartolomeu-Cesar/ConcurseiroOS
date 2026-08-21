@@ -336,6 +336,13 @@
       <span id="dash-countdown" style="background:#313244;border-radius:20px;padding:4px 12px;font-size:0.78rem;color:#f38ba8;font-weight:600;"></span>
       <button class="export-btn" onclick="exportStats()">⬇ Exportar</button>
       <button onclick="toggleTheme()" title="Alternar tema" style="background:#45475a;color:#cdd6f4;border:none;border-radius:6px;padding:6px 10px;font-size:0.9rem;cursor:pointer;">🌓</button>
+      <div id="dash-user-section" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-left:8px;" onclick="window.location.href='/social.html'" title="Perfil">
+        <div id="dash-user-avatar" style="width:32px;height:32px;border-radius:50%;background:#cba6f7;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.8rem;color:#1e1e2e;"></div>
+        <div>
+          <div id="dash-user-name" style="font-size:0.78rem;color:#cdd6f4;font-weight:600;"></div>
+          <div id="dash-user-plan" style="font-size:0.65rem;color:#9399b2;"></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -3505,6 +3512,38 @@
         if (typeof showToast === 'function') showToast('🔔 Notificações ativadas!', 'success');
       }
     }
+
+    // ===== USER PROFILE (header) =====
+    (async function loadDashUserProfile() {
+      try {
+        const profile = await fetch('/api/social/profile').then(r => r.json());
+        const nome = profile.username || 'Estudante';
+        const initials = nome.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+        const avatarEl = document.getElementById('dash-user-avatar');
+        const nameEl = document.getElementById('dash-user-name');
+        const planEl = document.getElementById('dash-user-plan');
+        if (avatarEl) avatarEl.textContent = initials || '👤';
+        if (nameEl) nameEl.textContent = nome.split(' ')[0];
+        // Get plan (try auth/me, fallback to 'ilimitado' for user_id=1)
+        let plano = 'ilimitado';
+        try {
+          const meRes = await fetch('/api/auth/me');
+          if (meRes.ok) {
+            const me = await meRes.json();
+            if (me.plano && me.plano !== 'free') plano = me.plano;
+            // Use nome from auth if available
+            if (me.nome && me.nome !== 'Estudante') {
+              const authName = me.nome.split(' ')[0];
+              if (nameEl) nameEl.textContent = authName;
+              const authInitials = me.nome.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+              if (avatarEl) avatarEl.textContent = authInitials;
+            }
+          }
+        } catch { }
+        const labels = { ilimitado: '👑 Ilimitado', premium: '⭐ Premium', free: '🆓 Free' };
+        if (planEl) planEl.textContent = labels[plano] || '⭐ ' + plano;
+      } catch { }
+    })();
 
     // Carga inicial
     loadActivePanel();

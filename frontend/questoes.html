@@ -209,6 +209,10 @@
     <div class="header-links">
       <a href="/dashboard.html">📊 Dashboard</a>
       <button onclick="toggleTheme()" title="Alternar tema" style="background:#45475a;color:#cdd6f4;border:none;border-radius:6px;padding:6px 10px;font-size:0.9rem;cursor:pointer;">🌓</button>
+      <div id="q-user-section" style="display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="window.location.href='/social.html'" title="Perfil">
+        <div id="q-user-avatar" style="width:30px;height:30px;border-radius:50%;background:#cba6f7;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.75rem;color:#1e1e2e;"></div>
+        <span id="q-user-name" style="font-size:0.78rem;color:#cdd6f4;font-weight:600;"></span>
+      </div>
     </div>
   </div>
 
@@ -1210,6 +1214,19 @@
     loadBanco();
     loadLoteOptions();
     loadQuestoesResolver();
+
+    // Load user profile in header
+    (async function() {
+      try {
+        const profile = await fetch('/api/social/profile').then(r => r.json());
+        const nome = profile.username || 'Estudante';
+        const initials = nome.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+        const avatarEl = document.getElementById('q-user-avatar');
+        const nameEl = document.getElementById('q-user-name');
+        if (avatarEl) avatarEl.textContent = initials || '👤';
+        if (nameEl) nameEl.textContent = nome.split(' ')[0];
+      } catch {}
+    })();
   </script>
 <script src="/timer-global.js"></script>
   <script src="/sidebar.js"></script>

@@ -895,11 +895,14 @@
         const planLabels = { ilimitado: '👑 Ilimitado', premium: '⭐ Premium', free: '🆓 Free' };
         const planColors = { ilimitado: '#f9e2af', premium: '#cba6f7', free: '#9399b2' };
 
-        // Get plan from auth/me or profile
-        let plano = 'premium';
+        // Get plan from auth/me (graceful on 401)
+        let plano = 'ilimitado';
         try {
-          const me = await fetch('/api/auth/me').then(r => r.json());
-          plano = me.plano || me.plan || 'premium';
+          const meRes = await fetch('/api/auth/me');
+          if (meRes.ok) {
+            const me = await meRes.json();
+            if (me.plano && me.plano !== 'free') plano = me.plano;
+          }
         } catch { }
 
         planBadge.textContent = planLabels[plano] || '⭐ ' + plano;
