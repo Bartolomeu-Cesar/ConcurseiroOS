@@ -750,38 +750,64 @@ def get_my_profile(
         "SELECT id, username FROM users WHERE id = ?", (user_id,)
     ).fetchone()
 
-    if not user:
-        raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+    username = user["username"] if user else f"Concurseiro #{user_id}"
 
-    # Gamification stats
-    stats = db.execute(
-        "SELECT xp, streak, level FROM user_gamification WHERE user_id = ?", (user_id,)
-    ).fetchone()
+    # Gamification stats (from real data if user_gamification doesn't exist)
+    try:
+        stats = db.execute(
+            "SELECT xp, streak, level FROM user_gamification WHERE user_id = ?", (user_id,)
+        ).fetchone()
+    except Exception:
+        stats = None
+
+    if not stats:
+        # Fallback: calculate from actual data
+        from utils import calculate_streak
+        streak_info = calculate_streak(db, user_id)
+        streak_val = streak_info["streak_atual"]
+        horas = db.execute("SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE user_id = ?", (user_id,)).fetchone()[0]
+        questoes = db.execute("SELECT COUNT(*) FROM questoes_respostas WHERE user_id = ?", (user_id,)).fetchone()[0]
+        xp_val = int(horas * 100 + questoes * 10)
+        level_val = (xp_val // 500) + 1
+    else:
+        streak_val = stats["streak"]
+        xp_val = stats["xp"]
+        level_val = stats["level"]
 
     # Badges count
-    badges = db.execute(
-        "SELECT COUNT(*) as cnt FROM user_badges WHERE user_id = ?", (user_id,)
-    ).fetchone()
+    try:
+        badges = db.execute(
+            "SELECT COUNT(*) as cnt FROM user_badges WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        badges_count = badges["cnt"] if badges else 0
+    except Exception:
+        badges_count = 0
 
     # Friends count
-    friends_count = db.execute(
-        """SELECT COUNT(*) as cnt FROM friendships
-           WHERE status = 'accepted' AND (user_a = ? OR user_b = ?)""",
-        (user_id, user_id)
-    ).fetchone()["cnt"]
+    try:
+        friends_count = db.execute(
+            """SELECT COUNT(*) as cnt FROM friendships
+               WHERE status = 'accepted' AND (user_a = ? OR user_b = ?)""",
+            (user_id, user_id)
+        ).fetchone()["cnt"]
+    except Exception:
+        friends_count = 0
 
     # Groups
-    groups_count = db.execute(
-        "SELECT COUNT(*) as cnt FROM group_members WHERE user_id = ?", (user_id,)
-    ).fetchone()["cnt"]
+    try:
+        groups_count = db.execute(
+            "SELECT COUNT(*) as cnt FROM group_members WHERE user_id = ?", (user_id,)
+        ).fetchone()["cnt"]
+    except Exception:
+        groups_count = 0
 
     return {
         "user_id": user_id,
-        "username": user["username"],
-        "streak": stats["streak"] if stats else 0,
-        "level": stats["level"] if stats else 1,
-        "xp": stats["xp"] if stats else 0,
-        "badges_count": badges["cnt"] if badges else 0,
+        "username": username,
+        "streak": streak_val,
+        "level": level_val,
+        "xp": xp_val,
+        "badges_count": badges_count,
         "friends_count": friends_count,
         "groups_count": groups_count
     }
