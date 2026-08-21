@@ -39,7 +39,7 @@
         <div class="sidebar-section-title">Hoje</div>
         <ul class="sidebar-nav">
           <li><a href="/dashboard.html" class="${activeClass('/dashboard')}"><span class="nav-icon">⚡</span><span class="nav-label">Meu Dia</span></a></li>
-          <li><a href="/dashboard.html#calendario" onclick="goPanel('panel-calendario')"><span class="nav-icon">📅</span><span class="nav-label">Calendário</span></a></li>
+          <li><a href="/dashboard.html#calendario" onclick="return goPanel('panel-calendario')"><span class="nav-icon">📅</span><span class="nav-label">Calendário</span></a></li>
         </ul>
       </div>
 
@@ -65,8 +65,8 @@
       <div class="sidebar-section">
         <div class="sidebar-section-title">Progresso</div>
         <ul class="sidebar-nav">
-          <li><a href="/dashboard.html#analytics" onclick="goPanel('panel-analytics')"><span class="nav-icon">📊</span><span class="nav-label">Analytics</span></a></li>
-          <li><a href="/dashboard.html#raio-x" onclick="goPanel('panel-analytics')"><span class="nav-icon">🎯</span><span class="nav-label">Raio-X Bancas</span></a></li>
+          <li><a href="/dashboard.html#analytics" onclick="return goPanel('panel-analytics')"><span class="nav-icon">📊</span><span class="nav-label">Analytics</span></a></li>
+          <li><a href="/dashboard.html#raio-x" onclick="return goPanel('panel-analytics')"><span class="nav-icon">🎯</span><span class="nav-label">Raio-X Bancas</span></a></li>
           <li><a href="/social.html" class="${activeClass('/social')}"><span class="nav-icon">🏆</span><span class="nav-label">Liga & Social</span></a></li>
         </ul>
       </div>
@@ -85,7 +85,7 @@
       <a href="/dashboard.html" class="${activeClass('/dashboard')}"><span class="bnav-icon">⚡</span><span class="bnav-label">Hoje</span></a>
       <a href="/" class="${activeClass('/')}"><span class="bnav-icon">📖</span><span class="bnav-label">Estudar</span></a>
       <a href="/questoes.html" class="${activeClass('/questoes')}"><span class="bnav-icon">❓</span><span class="bnav-label">Praticar</span><span class="bnav-badge" id="bnav-badge-praticar"></span></a>
-      <a href="/dashboard.html#analytics" onclick="goPanel('panel-analytics')"><span class="bnav-icon">📊</span><span class="bnav-label">Progresso</span></a>
+      <a href="/dashboard.html#analytics" onclick="return goPanel('panel-analytics')"><span class="bnav-icon">📊</span><span class="bnav-label">Progresso</span></a>
       <a href="/social.html" class="${activeClass('/social')}"><span class="bnav-icon">👤</span><span class="bnav-label">Perfil</span></a>
     </nav>
   `;
@@ -209,11 +209,20 @@
     // If we're on dashboard, switch panel directly
     if (currentPath === '/dashboard.html' || currentPath.includes('dashboard')) {
       const tab = document.querySelector(`.dash-tab[data-panel="${panelId}"]`);
-      if (tab) tab.click();
+      if (tab) {
+        // Simulate click: remove active from all, add to target
+        document.querySelectorAll('.dash-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.dash-panel').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        const panel = document.getElementById(panelId);
+        if (panel) panel.classList.add('active');
+        // Trigger panel load
+        if (typeof loadActivePanel === 'function') loadActivePanel();
+      }
       closeSidebar();
-      return false;
+      return false; // prevent href navigation
     }
-    // If on another page, redirect to dashboard with panel
+    // If on another page, save target and navigate
     localStorage.setItem('concurseiro_dash_panel', panelId);
     window.location.href = '/dashboard.html';
     return false;
