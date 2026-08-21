@@ -139,7 +139,7 @@
     function showLobby(data) {
       state.screen = 'lobby';
       state.battle = data;
-      const isCreator = true; // Single user mode
+      const isCreator = data.criador_id === 1 || (data.coautores || []).includes(1); // user_id=1 in single-user mode
 
       view.innerHTML = `
         <h1 style="text-align:center;">🏟️ Sala de Batalha</h1>
@@ -718,22 +718,30 @@
 
     function startTimer(seconds) {
       state.timeLeft = seconds;
+      state.timeMax = seconds;
       const fill = document.getElementById('timer-fill');
       const text = document.getElementById('timer-text');
       if (fill) fill.style.width = '100%';
 
       state.timer = setInterval(() => {
         state.timeLeft--;
-        if (text) text.textContent = state.timeLeft + 's';
-        if (fill) fill.style.width = (state.timeLeft / seconds * 100) + '%';
-        if (fill && state.timeLeft <= 5) fill.style.background = '#f38ba8';
+        const absTime = Math.abs(state.timeLeft);
+        if (text) text.textContent = (state.timeLeft < 0 ? '-' : '') + absTime + 's';
+        
+        if (state.timeLeft > 0) {
+          if (fill) fill.style.width = (state.timeLeft / seconds * 100) + '%';
+          if (fill && state.timeLeft <= 5) fill.style.background = '#f38ba8';
+        } else {
+          // Timer zerou — barra vazia, cor vermelha, mas NÃO bloqueia resposta
+          if (fill) { fill.style.width = '0%'; fill.style.background = '#f38ba8'; }
+          // Piscar o timer para indicar perda de pontos
+          if (text) text.style.color = state.timeLeft % 2 === 0 ? '#f38ba8' : '#f9e2af';
+        }
 
-        if (state.timeLeft <= 0) {
+        // Limite máximo: 2x o tempo original (auto-submit forçado)
+        if (state.timeLeft <= -(seconds)) {
           stopTimer();
-          // Auto-submit if time runs out
-          if (!state.selectedAnswer) {
-            state.selectedAnswer = 'x'; // wrong answer
-          }
+          if (!state.selectedAnswer) state.selectedAnswer = 'x';
           confirmarResposta();
         }
       }, 1000);

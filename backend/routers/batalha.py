@@ -40,6 +40,7 @@ def _ensure_battle_tables(conn):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             codigo TEXT UNIQUE NOT NULL,
             criador_id INTEGER NOT NULL,
+            coautores TEXT DEFAULT '[]',
             titulo TEXT DEFAULT 'Batalha de Questões',
             materias TEXT DEFAULT '[]',
             total_rodadas INTEGER DEFAULT 5,
@@ -95,6 +96,14 @@ def _ensure_battle_tables(conn):
             FOREIGN KEY (battle_id) REFERENCES battles(id)
         )
     """)
+    # Migration: add coautores column if missing
+    try:
+        conn.execute("SELECT coautores FROM battles LIMIT 1")
+    except Exception:
+        try:
+            conn.execute("ALTER TABLE battles ADD COLUMN coautores TEXT DEFAULT '[]'")
+        except Exception:
+            pass
     conn.commit()
 
 
@@ -102,6 +111,17 @@ def _generate_code():
     """Gera código de sala de 6 caracteres."""
     chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
     return "".join(random.choices(chars, k=6))
+
+
+def _is_battle_admin(battle, user_id: int) -> bool:
+    """Verifica se o usuário é criador ou coautor da batalha."""
+    if battle["criador_id"] == user_id:
+        return True
+    try:
+        coautores = json.loads(battle["coautores"] if "coautores" in battle.keys() else "[]")
+        return user_id in coautores
+    except (json.JSONDecodeError, TypeError):
+        return False
 
 
 def _round_difficulty(rodada_num: int, total_rodadas: int) -> dict:
@@ -116,18 +136,23 @@ def _round_difficulty(rodada_num: int, total_rodadas: int) -> dict:
 
 
 def _calculate_points(acertou: bool, tempo_seg: int, tempo_max: int, streak: int = 0) -> int:
-    """Calcula pontos estilo Duolingo: acerto + bonus por velocidade + streak multiplier."""
+    """Calcula pontos: acerto + bonus velocidade + streak. Após o tempo, perde pontos progressivamente."""
     if not acertou:
         return 0
     # Base: 100 pontos por acerto
     base = 100
-    # Bonus por velocidade: até 50 pontos extras (quanto mais rápido, mais pontos)
-    if tempo_max > 0 and tempo_seg < tempo_max:
-        speed_bonus = int(50 * (1 - tempo_seg / tempo_max))
+
+    if tempo_seg <= tempo_max:
+        # Respondeu dentro do tempo: bonus por velocidade (até 50 pontos extras)
+        speed_bonus = int(50 * (1 - tempo_seg / tempo_max)) if tempo_max > 0 else 0
+        subtotal = base + speed_bonus
     else:
-        speed_bonus = 0
+        # Respondeu após o tempo: penalidade progressiva (perde 10% por segundo extra)
+        excesso = tempo_seg - tempo_max
+        penalidade = min(0.9, excesso * 0.1)  # Máximo 90% de penalidade
+        subtotal = max(10, int(base * (1 - penalidade)))  # Mínimo 10 pontos
+
     # Streak multiplier: 1.5x após 3 acertos, 2x após 5 acertos
-    subtotal = base + speed_bonus
     if streak >= 5:
         subtotal = int(subtotal * 2.0)
     elif streak >= 3:
@@ -363,6 +388,7 @@ def status_sala(
         "tempo_por_questao": battle["tempo_por_questao"],
         "max_jogadores": battle["max_jogadores"],
         "criador_id": battle["criador_id"],
+        "coautores": json.loads(battle["coautores"] if "coautores" in battle.keys() else "[]"),
         "jogadores": [dict(p) for p in players],
         "rodada": current_round,
     }
@@ -383,8 +409,8 @@ def iniciar_batalha(
     if not battle:
         raise HTTPException(status_code=404, detail="Sala não encontrada.")
 
-    if battle["criador_id"] != user_id:
-        raise HTTPException(status_code=403, detail="Apenas o criador pode iniciar a batalha.")
+    if not _is_battle_admin(battle, user_id):
+        raise HTTPException(status_code=403, detail="Apenas o criador ou coautor pode iniciar a batalha.")
 
     if battle["status"] != "aguardando":
         raise HTTPException(status_code=400, detail="Batalha já foi iniciada.")
@@ -746,8 +772,8 @@ def avancar_rodada(
     if not battle:
         raise HTTPException(status_code=404, detail="Sala não encontrada.")
 
-    if battle["criador_id"] != user_id:
-        raise HTTPException(status_code=403, detail="Apenas o moderador pode avançar.")
+    if not _is_battle_admin(battle, user_id):
+            raise HTTPException(status_code=403, detail="Apenas o criador ou coautor pode avançar.")
 
     if battle["status"] != "em_andamento":
         raise HTTPException(status_code=400, detail="Batalha não está em andamento.")
@@ -913,8 +939,8 @@ def reconfigurar_batalha(
     if not battle:
         raise HTTPException(status_code=404, detail="Sala não encontrada.")
 
-    if battle["criador_id"] != user_id:
-        raise HTTPException(status_code=403, detail="Apenas o criador pode reconfigurar.")
+    if not _is_battle_admin(battle, user_id):
+        raise HTTPException(status_code=403, detail="Apenas o criador ou coautor pode reconfigurar.")
 
     if battle["status"] == "finalizada":
         raise HTTPException(status_code=400, detail="Batalha finalizada não pode ser reconfigurada. Crie uma revanche.")
