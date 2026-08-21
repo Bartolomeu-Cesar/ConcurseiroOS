@@ -301,17 +301,17 @@
   <div class="header">
     <div>
       <h1>📊 Dashboard de Desempenho</h1>
-      <span style="font-size:0.82rem;color:#9399b2;" id="date-label"></span>
+      <span style="font-size:0.82rem;color:var(--text-sub);" id="date-label"></span>
     </div>
     <div class="header-links">
-      <span id="dash-countdown" style="background:#313244;border-radius:20px;padding:4px 12px;font-size:0.78rem;color:#f38ba8;font-weight:600;"></span>
+      <span id="dash-countdown" style="background:var(--bg-surface);border-radius:20px;padding:4px 12px;font-size:0.78rem;color:var(--red);font-weight:600;"></span>
       <button class="export-btn" onclick="exportStats()">⬇ Exportar</button>
-      <button onclick="toggleTheme()" title="Alternar tema" style="background:#45475a;color:#cdd6f4;border:none;border-radius:6px;padding:6px 10px;font-size:0.9rem;cursor:pointer;">🌓</button>
+      <button onclick="toggleTheme()" title="Alternar tema" style="background:var(--bg-elevated);color:var(--text);border:none;border-radius:6px;padding:6px 10px;font-size:0.9rem;cursor:pointer;">🌓</button>
       <div id="dash-user-section" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-left:8px;" onclick="window.location.href='/social.html'" title="Perfil">
-        <div id="dash-user-avatar" style="width:32px;height:32px;border-radius:50%;background:#cba6f7;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.8rem;color:#1e1e2e;"></div>
+        <div id="dash-user-avatar" style="width:32px;height:32px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.8rem;color:var(--bg);"></div>
         <div>
-          <div id="dash-user-name" style="font-size:0.78rem;color:#cdd6f4;font-weight:600;"></div>
-          <div id="dash-user-plan" style="font-size:0.65rem;color:#9399b2;"></div>
+          <div id="dash-user-name" style="font-size:0.78rem;color:var(--text);font-weight:600;"></div>
+          <div id="dash-user-plan" style="font-size:0.65rem;color:var(--text-sub);"></div>
         </div>
       </div>
     </div>
@@ -432,32 +432,32 @@
     <div class="charts">
       <div class="chart-box">
         <h3>🧑‍🏫 Técnica Feynman</h3>
-        <p style="font-size:0.75rem;color:#9399b2;margin-bottom:8px;">Explique o tópico como se ensinasse a uma criança. Se travar, volte ao material.</p>
+        <p style="font-size:0.75rem;color:var(--text-sub);margin-bottom:8px;">Explique o tópico como se ensinasse a uma criança. Se travar, volte ao material.</p>
         <div id="feynman-box">
           <div style="margin-bottom:8px;">
-            <select id="feynman-materia" style="width:100%;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:6px;padding:6px;font-size:0.82rem;">
+            <select id="feynman-materia" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:0.82rem;">
               <option value="">Escolha uma matéria...</option>
             </select>
           </div>
-          <div id="feynman-topico" style="font-size:0.85rem;color:#cba6f7;font-weight:600;margin-bottom:6px;"></div>
-          <textarea id="feynman-texto" placeholder="Explique o tópico com suas palavras, de forma simples..." rows="4" style="width:100%;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:8px;padding:8px;font-size:0.82rem;resize:vertical;"></textarea>
+          <div id="feynman-topico" style="font-size:0.85rem;color:var(--accent);font-weight:600;margin-bottom:6px;"></div>
+          <textarea id="feynman-texto" placeholder="Explique o tópico com suas palavras, de forma simples..." rows="4" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:0.82rem;resize:vertical;"></textarea>
           <div style="display:flex;gap:8px;margin-top:8px;">
-            <button onclick="sortearFeynman()" style="background:#89b4fa;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;">🎲 Sortear Tópico</button>
-            <button onclick="salvarFeynman()" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;">💾 Salvar</button>
+            <button onclick="sortearFeynman()" style="background:var(--blue);color:var(--bg);border:none;border-radius:6px;padding:6px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;">🎲 Sortear Tópico</button>
+            <button onclick="salvarFeynman()" style="background:var(--green);color:var(--bg);border:none;border-radius:6px;padding:6px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;">💾 Salvar</button>
           </div>
         </div>
       </div>
       <div class="chart-box">
         <h3>📝 Elaboração Ativa (3 Frases)</h3>
-        <p style="font-size:0.75rem;color:#9399b2;margin-bottom:8px;">Resuma o que aprendeu em exatamente 3 frases. Força síntese e retenção.</p>
+        <p style="font-size:0.75rem;color:var(--text-sub);margin-bottom:8px;">Resuma o que aprendeu em exatamente 3 frases. Força síntese e retenção.</p>
         <div id="elaboracao-box">
-          <div id="elab-topico-atual" style="font-size:0.82rem;color:#cba6f7;font-weight:600;margin-bottom:8px;"></div>
-          <textarea id="elab-frase1" placeholder="Frase 1: O conceito principal é..." rows="1" style="width:100%;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:6px;padding:6px;font-size:0.82rem;margin-bottom:4px;"></textarea>
-          <textarea id="elab-frase2" placeholder="Frase 2: Isso é importante porque..." rows="1" style="width:100%;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:6px;padding:6px;font-size:0.82rem;margin-bottom:4px;"></textarea>
-          <textarea id="elab-frase3" placeholder="Frase 3: Um exemplo prático seria..." rows="1" style="width:100%;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:6px;padding:6px;font-size:0.82rem;margin-bottom:8px;"></textarea>
+          <div id="elab-topico-atual" style="font-size:0.82rem;color:var(--accent);font-weight:600;margin-bottom:8px;"></div>
+          <textarea id="elab-frase1" placeholder="Frase 1: O conceito principal é..." rows="1" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:0.82rem;margin-bottom:4px;"></textarea>
+          <textarea id="elab-frase2" placeholder="Frase 2: Isso é importante porque..." rows="1" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:0.82rem;margin-bottom:4px;"></textarea>
+          <textarea id="elab-frase3" placeholder="Frase 3: Um exemplo prático seria..." rows="1" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:0.82rem;margin-bottom:8px;"></textarea>
           <div style="display:flex;gap:8px;">
-            <button onclick="sortearElaboracao()" style="background:#89b4fa;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;">🎲 Sortear</button>
-            <button onclick="salvarElaboracao()" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;">💾 Salvar</button>
+            <button onclick="sortearElaboracao()" style="background:var(--blue);color:var(--bg);border:none;border-radius:6px;padding:6px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;">🎲 Sortear</button>
+            <button onclick="salvarElaboracao()" style="background:var(--green);color:var(--bg);border:none;border-radius:6px;padding:6px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;">💾 Salvar</button>
           </div>
         </div>
       </div>
@@ -467,21 +467,21 @@
     <div class="charts">
       <div class="chart-box">
         <h3>🧪 Teste de Recuperação (Retrieval Practice)</h3>
-        <p style="font-size:0.75rem;color:#9399b2;margin-bottom:8px;">Tente lembrar SEM olhar o material. A dificuldade de lembrar fortalece a memória.</p>
+        <p style="font-size:0.75rem;color:var(--text-sub);margin-bottom:8px;">Tente lembrar SEM olhar o material. A dificuldade de lembrar fortalece a memória.</p>
         <div id="retrieval-box">
-          <div id="retrieval-pergunta" style="font-size:0.9rem;color:#cdd6f4;padding:12px;background:#1e1e2e;border-radius:8px;min-height:60px;margin-bottom:8px;">Clique em "Gerar" para um teste de recuperação aleatório.</div>
-          <textarea id="retrieval-resposta" placeholder="Escreva tudo que lembra sobre o tema..." rows="3" style="width:100%;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:8px;padding:8px;font-size:0.82rem;resize:vertical;display:none;"></textarea>
-          <div id="retrieval-gabarito" style="display:none;padding:10px;background:#313244;border-radius:8px;margin-top:8px;font-size:0.82rem;color:#a6e3a1;"></div>
+          <div id="retrieval-pergunta" style="font-size:0.9rem;color:var(--text);padding:12px;background:var(--bg);border-radius:8px;min-height:60px;margin-bottom:8px;">Clique em "Gerar" para um teste de recuperação aleatório.</div>
+          <textarea id="retrieval-resposta" placeholder="Escreva tudo que lembra sobre o tema..." rows="3" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:0.82rem;resize:vertical;display:none;"></textarea>
+          <div id="retrieval-gabarito" style="display:none;padding:10px;background:var(--bg-surface);border-radius:8px;margin-top:8px;font-size:0.82rem;color:var(--green);"></div>
           <div style="display:flex;gap:8px;margin-top:8px;">
-            <button onclick="gerarRetrieval()" style="background:#cba6f7;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;">🧪 Gerar</button>
-            <button onclick="tentarRetrieval()" id="btn-retrieval-tentar" style="display:none;background:#f9e2af;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;">✍️ Responder</button>
-            <button onclick="revelarRetrieval()" id="btn-retrieval-revelar" style="display:none;background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;">👁 Revelar Resposta</button>
+            <button onclick="gerarRetrieval()" style="background:var(--accent);color:var(--bg);border:none;border-radius:6px;padding:6px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;">🧪 Gerar</button>
+            <button onclick="tentarRetrieval()" id="btn-retrieval-tentar" style="display:none;background:var(--yellow);color:var(--bg);border:none;border-radius:6px;padding:6px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;">✍️ Responder</button>
+            <button onclick="revelarRetrieval()" id="btn-retrieval-revelar" style="display:none;background:var(--green);color:var(--bg);border:none;border-radius:6px;padding:6px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;">👁 Revelar Resposta</button>
           </div>
         </div>
       </div>
       <div class="chart-box">
         <h3>📊 Análise de Pontos Fracos</h3>
-        <p style="font-size:0.75rem;color:#9399b2;margin-bottom:8px;">Matérias e tópicos onde você mais erra — foco estratégico.</p>
+        <p style="font-size:0.75rem;color:var(--text-sub);margin-bottom:8px;">Matérias e tópicos onde você mais erra — foco estratégico.</p>
         <div id="pontos-fracos-box"></div>
       </div>
     </div>
@@ -490,12 +490,12 @@
     <div class="charts">
       <div class="chart-box">
         <h3>🗺️ Mapa de Conexões entre Matérias</h3>
-        <p style="font-size:0.75rem;color:#9399b2;margin-bottom:8px;">Identifique como os temas se conectam para criar uma rede de conhecimento.</p>
+        <p style="font-size:0.75rem;color:var(--text-sub);margin-bottom:8px;">Identifique como os temas se conectam para criar uma rede de conhecimento.</p>
         <div id="conexoes-box"></div>
       </div>
       <div class="chart-box">
         <h3>⏱ Análise de Tempo vs Resultado</h3>
-        <p style="font-size:0.75rem;color:#9399b2;margin-bottom:8px;">Quais matérias dão mais retorno por hora investida?</p>
+        <p style="font-size:0.75rem;color:var(--text-sub);margin-bottom:8px;">Quais matérias dão mais retorno por hora investida?</p>
         <div id="tempo-resultado-box"></div>
       </div>
     </div>
@@ -504,17 +504,17 @@
     <div class="charts">
       <div class="chart-box">
         <h3>⚡ Micro-Revisão (2 min drill)</h3>
-        <p style="font-size:0.75rem;color:#9399b2;margin-bottom:8px;">Sessão ultra-curta: 5 perguntas rápidas para revisar ao longo do dia.</p>
+        <p style="font-size:0.75rem;color:var(--text-sub);margin-bottom:8px;">Sessão ultra-curta: 5 perguntas rápidas para revisar ao longo do dia.</p>
         <div id="micro-revisao-box">
-          <button onclick="iniciarMicroRevisao()" style="background:#cba6f7;color:#1e1e2e;border:none;border-radius:8px;padding:10px 20px;font-weight:600;cursor:pointer;font-size:0.9rem;">⚡ Iniciar Micro-Revisão (2 min)</button>
+          <button onclick="iniciarMicroRevisao()" style="background:var(--accent);color:var(--bg);border:none;border-radius:8px;padding:10px 20px;font-weight:600;cursor:pointer;font-size:0.9rem;">⚡ Iniciar Micro-Revisão (2 min)</button>
         </div>
         <div id="micro-revisao-area" style="display:none;"></div>
       </div>
       <div class="chart-box">
         <h3>📊 Autoavaliação de Confiança</h3>
-        <p style="font-size:0.75rem;color:#9399b2;margin-bottom:8px;">Avalie seu nível de certeza ANTES de ver a resposta. Calibra a metacognição.</p>
+        <p style="font-size:0.75rem;color:var(--text-sub);margin-bottom:8px;">Avalie seu nível de certeza ANTES de ver a resposta. Calibra a metacognição.</p>
         <div id="autoavaliacao-box">
-          <button onclick="iniciarAutoavaliacao()" style="background:#89b4fa;color:#1e1e2e;border:none;border-radius:8px;padding:10px 20px;font-weight:600;cursor:pointer;font-size:0.9rem;">🎯 Iniciar Autoavaliação</button>
+          <button onclick="iniciarAutoavaliacao()" style="background:var(--blue);color:var(--bg);border:none;border-radius:8px;padding:10px 20px;font-weight:600;cursor:pointer;font-size:0.9rem;">🎯 Iniciar Autoavaliação</button>
         </div>
         <div id="autoavaliacao-area" style="display:none;"></div>
       </div>
@@ -524,29 +524,29 @@
     <div class="charts">
       <div class="chart-box">
         <h3>✍️ Questão Dissertativa</h3>
-        <p style="font-size:0.75rem;color:#9399b2;margin-bottom:8px;">Escrever a resposta completa fortalece mais a memória que múltipla escolha.</p>
+        <p style="font-size:0.75rem;color:var(--text-sub);margin-bottom:8px;">Escrever a resposta completa fortalece mais a memória que múltipla escolha.</p>
         <div id="dissertativa-box">
           <div style="margin-bottom:8px;">
-            <select id="dissert-materia" style="width:100%;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:6px;padding:6px;font-size:0.82rem;">
+            <select id="dissert-materia" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:0.82rem;">
               <option value="">Qualquer matéria</option>
             </select>
           </div>
-          <button onclick="gerarDissertativa()" style="background:#f9e2af;color:#1e1e2e;border:none;border-radius:6px;padding:8px 16px;font-weight:600;cursor:pointer;font-size:0.85rem;">📝 Gerar Questão</button>
+          <button onclick="gerarDissertativa()" style="background:var(--yellow);color:var(--bg);border:none;border-radius:6px;padding:8px 16px;font-weight:600;cursor:pointer;font-size:0.85rem;">📝 Gerar Questão</button>
           <div id="dissertativa-area" style="display:none;margin-top:12px;"></div>
         </div>
       </div>
       <div class="chart-box">
         <h3>📖 Cornell Notes</h3>
-        <p style="font-size:0.75rem;color:#9399b2;margin-bottom:8px;">Divida suas anotações em: Dicas (esquerda), Notas (direita) e Resumo (abaixo).</p>
+        <p style="font-size:0.75rem;color:var(--text-sub);margin-bottom:8px;">Divida suas anotações em: Dicas (esquerda), Notas (direita) e Resumo (abaixo).</p>
         <div id="cornell-box">
-          <div style="font-size:0.82rem;color:#cba6f7;font-weight:600;margin-bottom:6px;" id="cornell-topico">Selecione um tópico para anotar:</div>
-          <button onclick="sortearCornell()" style="background:#89b4fa;color:#1e1e2e;border:none;border-radius:6px;padding:5px 12px;font-size:0.78rem;font-weight:600;cursor:pointer;margin-bottom:8px;">🎲 Sortear Tópico</button>
+          <div style="font-size:0.82rem;color:var(--accent);font-weight:600;margin-bottom:6px;" id="cornell-topico">Selecione um tópico para anotar:</div>
+          <button onclick="sortearCornell()" style="background:var(--blue);color:var(--bg);border:none;border-radius:6px;padding:5px 12px;font-size:0.78rem;font-weight:600;cursor:pointer;margin-bottom:8px;">🎲 Sortear Tópico</button>
           <div style="display:grid;grid-template-columns:1fr 2fr;gap:6px;margin-bottom:6px;">
-            <textarea id="cornell-dicas" placeholder="📌 Palavras-chave / Dicas" rows="4" style="background:#1e1e2e;color:#f9e2af;border:1px solid #45475a;border-radius:6px;padding:6px;font-size:0.78rem;resize:vertical;"></textarea>
-            <textarea id="cornell-notas" placeholder="📝 Notas detalhadas durante o estudo" rows="4" style="background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:6px;padding:6px;font-size:0.78rem;resize:vertical;"></textarea>
+            <textarea id="cornell-dicas" placeholder="📌 Palavras-chave / Dicas" rows="4" style="background:var(--bg);color:var(--yellow);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:0.78rem;resize:vertical;"></textarea>
+            <textarea id="cornell-notas" placeholder="📝 Notas detalhadas durante o estudo" rows="4" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:0.78rem;resize:vertical;"></textarea>
           </div>
-          <textarea id="cornell-resumo" placeholder="📋 Resumo com suas palavras (preencha depois de estudar, sem olhar as notas)" rows="2" style="width:100%;background:#1e1e2e;color:#a6e3a1;border:1px solid #45475a;border-radius:6px;padding:6px;font-size:0.78rem;resize:vertical;"></textarea>
-          <button onclick="salvarCornell()" style="margin-top:6px;background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:5px 12px;font-size:0.78rem;font-weight:600;cursor:pointer;">💾 Salvar Cornell Note</button>
+          <textarea id="cornell-resumo" placeholder="📋 Resumo com suas palavras (preencha depois de estudar, sem olhar as notas)" rows="2" style="width:100%;background:var(--bg);color:var(--green);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:0.78rem;resize:vertical;"></textarea>
+          <button onclick="salvarCornell()" style="margin-top:6px;background:var(--green);color:var(--bg);border:none;border-radius:6px;padding:5px 12px;font-size:0.78rem;font-weight:600;cursor:pointer;">💾 Salvar Cornell Note</button>
         </div>
       </div>
     </div>
@@ -555,39 +555,39 @@
     <div class="charts">
       <div class="chart-box">
         <h3>🏛️ Método Loci (Palácio da Memória)</h3>
-        <p style="font-size:0.75rem;color:#9399b2;margin-bottom:8px;">Associe conceitos a locais familiares. Percorra mentalmente o caminho para lembrar.</p>
+        <p style="font-size:0.75rem;color:var(--text-sub);margin-bottom:8px;">Associe conceitos a locais familiares. Percorra mentalmente o caminho para lembrar.</p>
         <div id="loci-box">
-          <div style="padding:10px;background:#1e1e2e;border-radius:8px;margin-bottom:8px;">
-            <div style="font-size:0.8rem;color:#cba6f7;font-weight:600;margin-bottom:6px;">🗺️ Crie seu Palácio:</div>
+          <div style="padding:10px;background:var(--bg);border-radius:8px;margin-bottom:8px;">
+            <div style="font-size:0.8rem;color:var(--accent);font-weight:600;margin-bottom:6px;">🗺️ Crie seu Palácio:</div>
             <div style="display:grid;grid-template-columns:auto 1fr;gap:4px;font-size:0.78rem;">
-              <span style="color:#89b4fa;">🚪 Entrada:</span><input id="loci-1" placeholder="Conceito 1..." style="background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:4px;padding:4px 6px;font-size:0.75rem;">
-              <span style="color:#89b4fa;">🛋️ Sala:</span><input id="loci-2" placeholder="Conceito 2..." style="background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:4px;padding:4px 6px;font-size:0.75rem;">
-              <span style="color:#89b4fa;">🍳 Cozinha:</span><input id="loci-3" placeholder="Conceito 3..." style="background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:4px;padding:4px 6px;font-size:0.75rem;">
-              <span style="color:#89b4fa;">🛏️ Quarto:</span><input id="loci-4" placeholder="Conceito 4..." style="background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:4px;padding:4px 6px;font-size:0.75rem;">
-              <span style="color:#89b4fa;">🚿 Banheiro:</span><input id="loci-5" placeholder="Conceito 5..." style="background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:4px;padding:4px 6px;font-size:0.75rem;">
+              <span style="color:var(--blue);">🚪 Entrada:</span><input id="loci-1" placeholder="Conceito 1..." style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 6px;font-size:0.75rem;">
+              <span style="color:var(--blue);">🛋️ Sala:</span><input id="loci-2" placeholder="Conceito 2..." style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 6px;font-size:0.75rem;">
+              <span style="color:var(--blue);">🍳 Cozinha:</span><input id="loci-3" placeholder="Conceito 3..." style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 6px;font-size:0.75rem;">
+              <span style="color:var(--blue);">🛏️ Quarto:</span><input id="loci-4" placeholder="Conceito 4..." style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 6px;font-size:0.75rem;">
+              <span style="color:var(--blue);">🚿 Banheiro:</span><input id="loci-5" placeholder="Conceito 5..." style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 6px;font-size:0.75rem;">
             </div>
           </div>
           <div style="display:flex;gap:6px;">
-            <button onclick="testarLoci()" style="background:#f9e2af;color:#1e1e2e;border:none;border-radius:6px;padding:5px 12px;font-size:0.78rem;font-weight:600;cursor:pointer;">🧠 Testar Memória</button>
-            <button onclick="limparLoci()" style="background:#45475a;color:#cdd6f4;border:none;border-radius:6px;padding:5px 12px;font-size:0.78rem;cursor:pointer;">🗑 Limpar</button>
+            <button onclick="testarLoci()" style="background:var(--yellow);color:var(--bg);border:none;border-radius:6px;padding:5px 12px;font-size:0.78rem;font-weight:600;cursor:pointer;">🧠 Testar Memória</button>
+            <button onclick="limparLoci()" style="background:var(--bg-elevated);color:var(--text);border:none;border-radius:6px;padding:5px 12px;font-size:0.78rem;cursor:pointer;">🗑 Limpar</button>
           </div>
           <div id="loci-teste" style="display:none;margin-top:8px;"></div>
         </div>
       </div>
       <div class="chart-box">
         <h3>🗣️ Leitura em Voz Alta + Timer</h3>
-        <p style="font-size:0.75rem;color:#9399b2;margin-bottom:8px;">Ler em voz alta ativa memória auditiva. Use o timer para sessões de 5 min.</p>
+        <p style="font-size:0.75rem;color:var(--text-sub);margin-bottom:8px;">Ler em voz alta ativa memória auditiva. Use o timer para sessões de 5 min.</p>
         <div id="voz-alta-box">
-          <div id="voz-topico" style="font-size:0.82rem;color:#cba6f7;font-weight:600;margin-bottom:8px;">Clique em sortear para escolher um tópico.</div>
-          <button onclick="sortearVozAlta()" style="background:#89b4fa;color:#1e1e2e;border:none;border-radius:6px;padding:5px 12px;font-size:0.78rem;font-weight:600;cursor:pointer;margin-bottom:8px;">🎲 Sortear Tópico</button>
-          <div style="text-align:center;padding:12px;background:#1e1e2e;border-radius:8px;">
-            <div style="font-size:1.8rem;font-weight:700;font-family:monospace;color:#cdd6f4;" id="voz-timer">05:00</div>
+          <div id="voz-topico" style="font-size:0.82rem;color:var(--accent);font-weight:600;margin-bottom:8px;">Clique em sortear para escolher um tópico.</div>
+          <button onclick="sortearVozAlta()" style="background:var(--blue);color:var(--bg);border:none;border-radius:6px;padding:5px 12px;font-size:0.78rem;font-weight:600;cursor:pointer;margin-bottom:8px;">🎲 Sortear Tópico</button>
+          <div style="text-align:center;padding:12px;background:var(--bg);border-radius:8px;">
+            <div style="font-size:1.8rem;font-weight:700;font-family:monospace;color:var(--text);" id="voz-timer">05:00</div>
             <div style="display:flex;gap:8px;justify-content:center;margin-top:8px;">
-              <button onclick="startVozTimer()" id="voz-start-btn" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:6px 14px;font-weight:600;cursor:pointer;">▶ Iniciar 5min</button>
-              <button onclick="stopVozTimer()" style="background:#f38ba8;color:#1e1e2e;border:none;border-radius:6px;padding:6px 14px;font-weight:600;cursor:pointer;">⏹ Parar</button>
+              <button onclick="startVozTimer()" id="voz-start-btn" style="background:var(--green);color:var(--bg);border:none;border-radius:6px;padding:6px 14px;font-weight:600;cursor:pointer;">▶ Iniciar 5min</button>
+              <button onclick="stopVozTimer()" style="background:var(--red);color:var(--bg);border:none;border-radius:6px;padding:6px 14px;font-weight:600;cursor:pointer;">⏹ Parar</button>
             </div>
           </div>
-          <p style="font-size:0.7rem;color:#585b70;margin-top:6px;">💡 Dica: explique o tópico em voz alta como se estivesse ensinando alguém.</p>
+          <p style="font-size:0.7rem;color:var(--text-muted);margin-top:6px;">💡 Dica: explique o tópico em voz alta como se estivesse ensinando alguém.</p>
         </div>
       </div>
     </div>
@@ -596,7 +596,7 @@
     <div class="charts">
       <div class="chart-box" style="grid-column: span 2;">
         <h3>🔄 Prática Distribuída (Spacing Effect)</h3>
-        <p style="font-size:0.75rem;color:#9399b2;margin-bottom:8px;">Intervalo ideal entre sessões de uma mesma matéria: 2-4 dias. Veja como está seu espaçamento.</p>
+        <p style="font-size:0.75rem;color:var(--text-sub);margin-bottom:8px;">Intervalo ideal entre sessões de uma mesma matéria: 2-4 dias. Veja como está seu espaçamento.</p>
         <div id="spacing-box"></div>
       </div>
     </div>
@@ -611,12 +611,12 @@
           <h3 style="margin:0;">📅 Calendário Semanal de Estudos</h3>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
             <!-- Seletor de modo -->
-            <div style="display:flex;gap:0;background:#1e1e2e;border-radius:8px;overflow:hidden;border:1px solid #45475a;">
+            <div style="display:flex;gap:0;background:var(--bg);border-radius:8px;overflow:hidden;border:1px solid var(--border);">
               <button class="cal-mode-btn active" data-mode="auto" onclick="setCalMode('auto')">🤖 Auto</button>
               <button class="cal-mode-btn" data-mode="manual" onclick="setCalMode('manual')">✏️ Manual</button>
               <button class="cal-mode-btn" data-mode="hibrido" onclick="setCalMode('hibrido')">🔀 Híbrido</button>
             </div>
-            <select id="cal-horas" onchange="loadCalendario()" style="background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:6px;padding:4px 8px;font-size:0.85rem;">
+            <select id="cal-horas" onchange="loadCalendario()" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:0.85rem;">
               <option value="2">2h/dia</option>
               <option value="3" selected>3h/dia</option>
               <option value="4">4h/dia</option>
@@ -624,55 +624,55 @@
               <option value="6">6h/dia</option>
               <option value="8">8h/dia</option>
             </select>
-            <button onclick="regenerarCalendario()" style="background:#f9e2af;color:#1e1e2e;border:none;border-radius:6px;padding:5px 12px;font-size:0.82rem;font-weight:600;cursor:pointer;" title="Regerar calendário (apaga personalizado e gera novo)">🔄 Regerar</button>
+            <button onclick="regenerarCalendario()" style="background:var(--yellow);color:var(--bg);border:none;border-radius:6px;padding:5px 12px;font-size:0.82rem;font-weight:600;cursor:pointer;" title="Regerar calendário (apaga personalizado e gera novo)">🔄 Regerar</button>
           </div>
         </div>
 
         <!-- Formulário de adição manual (hidden por default) -->
-        <div id="cal-manual-form" style="display:none;background:#1e1e2e;border-radius:8px;padding:12px;margin-bottom:16px;border:1px solid #45475a;">
-          <div style="font-size:0.82rem;font-weight:600;color:#cba6f7;margin-bottom:8px;">➕ Adicionar atividade</div>
+        <div id="cal-manual-form" style="display:none;background:var(--bg);border-radius:8px;padding:12px;margin-bottom:16px;border:1px solid var(--border);">
+          <div style="font-size:0.82rem;font-weight:600;color:var(--accent);margin-bottom:8px;">➕ Adicionar atividade</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-            <select id="cal-add-dia" style="background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:6px;padding:6px 10px;font-size:0.82rem;">
+            <select id="cal-add-dia" style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:0.82rem;">
               <option value="0">Segunda</option><option value="1">Terça</option><option value="2">Quarta</option>
               <option value="3">Quinta</option><option value="4">Sexta</option><option value="5">Sábado</option><option value="6">Domingo</option>
             </select>
-            <select id="cal-add-tipo" style="background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:6px;padding:6px 10px;font-size:0.82rem;">
+            <select id="cal-add-tipo" style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:0.82rem;">
               <option value="estudo">📚 Estudo</option><option value="questoes">❓ Questões</option><option value="revisao">🧠 Revisão</option>
             </select>
-            <input id="cal-add-materia" type="text" placeholder="Matéria" style="background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:6px;padding:6px 10px;font-size:0.82rem;min-width:140px;">
-            <input id="cal-add-topicos" type="text" placeholder="Tópicos (opcional)" style="background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:6px;padding:6px 10px;font-size:0.82rem;min-width:140px;">
-            <input id="cal-add-tempo" type="number" value="60" min="10" step="10" style="background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:6px;padding:6px 10px;font-size:0.82rem;width:70px;">
-            <span style="font-size:0.75rem;color:#9399b2;">min</span>
-            <button onclick="addCalendarioItem()" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:6px 14px;font-size:0.82rem;font-weight:600;cursor:pointer;">+ Adicionar</button>
+            <input id="cal-add-materia" type="text" placeholder="Matéria" style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:0.82rem;min-width:140px;">
+            <input id="cal-add-topicos" type="text" placeholder="Tópicos (opcional)" style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:0.82rem;min-width:140px;">
+            <input id="cal-add-tempo" type="number" value="60" min="10" step="10" style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:0.82rem;width:70px;">
+            <span style="font-size:0.75rem;color:var(--text-sub);">min</span>
+            <button onclick="addCalendarioItem()" style="background:var(--green);color:var(--bg);border:none;border-radius:6px;padding:6px 14px;font-size:0.82rem;font-weight:600;cursor:pointer;">+ Adicionar</button>
           </div>
         </div>
 
         <!-- Info do modo híbrido -->
-        <div id="cal-hibrido-info" style="display:none;background:#313244;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:0.8rem;color:#fab387;">
+        <div id="cal-hibrido-info" style="display:none;background:var(--bg-surface);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:0.8rem;color:var(--peach);">
           💡 Modo Híbrido: O sistema gerou uma sugestão. Clique no ❌ para remover atividades ou use o formulário acima para adicionar. As alterações são salvas automaticamente.
         </div>
 
         <!-- Banner: O que estudar agora + Progresso semanal -->
-        <div id="cal-agora-banner" style="display:none;background:linear-gradient(135deg,#313244,#1e1e2e);border:1px solid #45475a;border-radius:10px;padding:14px 16px;margin-bottom:14px;">
+        <div id="cal-agora-banner" style="display:none;background:linear-gradient(135deg,var(--bg-surface),var(--bg));border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:14px;">
           <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
             <div>
-              <div style="font-size:0.72rem;color:#9399b2;text-transform:uppercase;font-weight:600;">📍 Agora</div>
-              <div style="font-size:1rem;font-weight:700;color:#cdd6f4;" id="cal-agora-materia">—</div>
+              <div style="font-size:0.72rem;color:var(--text-sub);text-transform:uppercase;font-weight:600;">📍 Agora</div>
+              <div style="font-size:1rem;font-weight:700;color:var(--text);" id="cal-agora-materia">—</div>
               <div style="font-size:0.78rem;color:#a6adc8;" id="cal-agora-motivo"></div>
             </div>
             <div style="text-align:center;">
-              <div style="font-size:0.68rem;color:#9399b2;">Dia</div>
-              <div style="font-size:1.3rem;font-weight:700;" id="cal-agora-pct" style="color:#a6e3a1;">—</div>
+              <div style="font-size:0.68rem;color:var(--text-sub);">Dia</div>
+              <div style="font-size:1.3rem;font-weight:700;" id="cal-agora-pct" style="color:var(--green);">—</div>
             </div>
-            <button onclick="iniciarAtividadeAgora()" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:8px;padding:8px 16px;font-size:0.82rem;font-weight:700;cursor:pointer;">▶ Iniciar</button>
+            <button onclick="iniciarAtividadeAgora()" style="background:var(--green);color:var(--bg);border:none;border-radius:8px;padding:8px 16px;font-size:0.82rem;font-weight:700;cursor:pointer;">▶ Iniciar</button>
           </div>
         </div>
 
         <!-- Progresso semanal visual -->
-        <div id="cal-week-progress" style="display:none;margin-bottom:14px;background:#313244;border-radius:8px;padding:10px 14px;">
+        <div id="cal-week-progress" style="display:none;margin-bottom:14px;background:var(--bg-surface);border-radius:8px;padding:10px 14px;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-            <span style="font-size:0.78rem;font-weight:600;color:#cba6f7;">📊 Semana</span>
-            <span style="font-size:0.75rem;color:#9399b2;" id="cal-week-pct-text">0%</span>
+            <span style="font-size:0.78rem;font-weight:600;color:var(--accent);">📊 Semana</span>
+            <span style="font-size:0.75rem;color:var(--text-sub);" id="cal-week-pct-text">0%</span>
           </div>
           <div style="display:flex;gap:4px;align-items:flex-end;" id="cal-week-bars"></div>
         </div>
@@ -683,8 +683,8 @@
 
         <!-- Botões de ação -->
         <div id="cal-actions" style="display:none;margin-top:12px;gap:8px;flex-wrap:wrap;">
-          <button onclick="salvarCalendario()" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:6px 14px;font-size:0.82rem;font-weight:600;cursor:pointer;">💾 Salvar Calendário</button>
-          <button onclick="limparCalendario()" style="background:#f38ba8;color:#1e1e2e;border:none;border-radius:6px;padding:6px 14px;font-size:0.82rem;font-weight:600;cursor:pointer;">🗑 Limpar</button>
+          <button onclick="salvarCalendario()" style="background:var(--green);color:var(--bg);border:none;border-radius:6px;padding:6px 14px;font-size:0.82rem;font-weight:600;cursor:pointer;">💾 Salvar Calendário</button>
+          <button onclick="limparCalendario()" style="background:var(--red);color:var(--bg);border:none;border-radius:6px;padding:6px 14px;font-size:0.82rem;font-weight:600;cursor:pointer;">🗑 Limpar</button>
         </div>
       </div>
     </div>
@@ -851,29 +851,29 @@
           <h3 style="margin:0;">📅 Planejador Semanal</h3>
           <div style="display:flex;gap:6px;align-items:center;">
             <!-- Modo Auto/Manual -->
-            <div style="display:flex;gap:0;background:#1e1e2e;border-radius:8px;overflow:hidden;border:1px solid #45475a;">
+            <div style="display:flex;gap:0;background:var(--bg);border-radius:8px;overflow:hidden;border:1px solid var(--border);">
               <button class="plan-mode-btn active" data-mode="auto" onclick="setPlanMode('auto')">🤖 Auto</button>
               <button class="plan-mode-btn" data-mode="manual" onclick="setPlanMode('manual')">✏️ Manual</button>
             </div>
-            <select id="plan-horas-dia" onchange="loadPlanejadorSemanal()" style="background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:6px;padding:4px 8px;font-size:0.82rem;">
+            <select id="plan-horas-dia" onchange="loadPlanejadorSemanal()" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:0.82rem;">
               <option value="2">2h/dia</option>
               <option value="3" selected>3h/dia</option>
               <option value="4">4h/dia</option>
               <option value="5">5h/dia</option>
               <option value="6">6h/dia</option>
             </select>
-            <button onclick="regenerarPlanejador()" style="background:#f9e2af;color:#1e1e2e;border:none;border-radius:6px;padding:5px 10px;font-size:0.78rem;font-weight:600;cursor:pointer;" title="Regerar plano automático">🔄 Regerar</button>
+            <button onclick="regenerarPlanejador()" style="background:var(--yellow);color:var(--bg);border:none;border-radius:6px;padding:5px 10px;font-size:0.78rem;font-weight:600;cursor:pointer;" title="Regerar plano automático">🔄 Regerar</button>
           </div>
         </div>
 
-        <p style="font-size:0.78rem;color:#9399b2;margin-bottom:12px;" id="plan-descricao">O modo automático distribui matérias do edital inteligentemente com base no desempenho.</p>
+        <p style="font-size:0.78rem;color:var(--text-sub);margin-bottom:12px;" id="plan-descricao">O modo automático distribui matérias do edital inteligentemente com base no desempenho.</p>
 
         <!-- Formulário manual (hidden no modo auto) -->
-        <div id="plan-manual-form" style="display:none;margin-bottom:16px;padding:12px;background:#1e1e2e;border-radius:8px;border:1px solid #45475a;">
+        <div id="plan-manual-form" style="display:none;margin-bottom:16px;padding:12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
             <div>
-              <label style="font-size:0.72rem;color:#9399b2;display:block;margin-bottom:2px;">Dia</label>
-              <select id="plan-dia" style="background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:6px;padding:6px 10px;font-size:0.82rem;">
+              <label style="font-size:0.72rem;color:var(--text-sub);display:block;margin-bottom:2px;">Dia</label>
+              <select id="plan-dia" style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:0.82rem;">
                 <option value="0">Segunda</option>
                 <option value="1">Terça</option>
                 <option value="2">Quarta</option>
@@ -884,18 +884,18 @@
               </select>
             </div>
             <div style="flex:1;min-width:150px;">
-              <label style="font-size:0.72rem;color:#9399b2;display:block;margin-bottom:2px;">Matéria</label>
-              <input type="text" id="plan-materia" placeholder="Ex: Direito Constitucional" list="plan-materias-list" style="width:100%;background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:6px;padding:6px 10px;font-size:0.82rem;">
+              <label style="font-size:0.72rem;color:var(--text-sub);display:block;margin-bottom:2px;">Matéria</label>
+              <input type="text" id="plan-materia" placeholder="Ex: Direito Constitucional" list="plan-materias-list" style="width:100%;background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:0.82rem;">
               <datalist id="plan-materias-list"></datalist>
             </div>
             <div>
-              <label style="font-size:0.72rem;color:#9399b2;display:block;margin-bottom:2px;">Horas</label>
-              <input type="number" id="plan-horas" value="1.5" min="0.5" max="8" step="0.5" style="width:70px;background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:6px;padding:6px 10px;font-size:0.82rem;">
+              <label style="font-size:0.72rem;color:var(--text-sub);display:block;margin-bottom:2px;">Horas</label>
+              <input type="number" id="plan-horas" value="1.5" min="0.5" max="8" step="0.5" style="width:70px;background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:0.82rem;">
             </div>
-            <button onclick="addPlanejadorItem()" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:7px 14px;font-weight:600;font-size:0.82rem;cursor:pointer;">+ Adicionar</button>
+            <button onclick="addPlanejadorItem()" style="background:var(--green);color:var(--bg);border:none;border-radius:6px;padding:7px 14px;font-weight:600;font-size:0.82rem;cursor:pointer;">+ Adicionar</button>
           </div>
           <div style="margin-top:8px;display:flex;gap:6px;">
-            <button onclick="limparPlanejador()" style="background:#f38ba8;color:#1e1e2e;border:none;border-radius:6px;padding:5px 10px;font-size:0.75rem;cursor:pointer;">🗑 Limpar Tudo</button>
+            <button onclick="limparPlanejador()" style="background:var(--red);color:var(--bg);border:none;border-radius:6px;padding:5px 10px;font-size:0.75rem;cursor:pointer;">🗑 Limpar Tudo</button>
           </div>
         </div>
 
@@ -903,7 +903,7 @@
         <div id="planejador-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;"></div>
 
         <!-- Resumo -->
-        <div id="planejador-resumo" style="margin-top:12px;padding:10px;background:#1e1e2e;border-radius:8px;font-size:0.8rem;color:#9399b2;"></div>
+        <div id="planejador-resumo" style="margin-top:12px;padding:10px;background:var(--bg);border-radius:8px;font-size:0.8rem;color:var(--text-sub);"></div>
       </div>
     </div>
   </div>

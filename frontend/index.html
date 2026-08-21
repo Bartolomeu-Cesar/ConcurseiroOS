@@ -106,7 +106,7 @@
         <button class="iobtn" onclick="exportarEdital('csv')">⬇ CSV</button>
         <button class="iobtn" onclick="document.getElementById('import-edital-file').click()">⬆ Importar</button>
         <input id="import-edital-file" type="file" accept=".json,.csv" style="display:none" onchange="importarEditalFile(this)">
-        <span id="edital-stats" style="font-size:0.8rem;color:#9399b2;margin-left:auto;"></span>
+        <span id="edital-stats" style="font-size:0.8rem;color:var(--text-sub);margin-left:auto;"></span>
       </div>
       <div id="edital-accordion"></div>
     </div>
@@ -121,7 +121,7 @@
         <button onclick="addEdital()">Adicionar</button>
       </div>
       <div class="import-edital">
-        <input type="text" id="edital-pdf-nome" placeholder="Nome do concurso" style="background:#1e1e2e;border:1px solid #45475a;border-radius:6px;padding:6px 10px;color:#cdd6f4;font-size:0.85rem;width:180px;">
+        <input type="text" id="edital-pdf-nome" placeholder="Nome do concurso" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:0.85rem;width:180px;">
         <button class="iobtn" onclick="document.getElementById('edital-pdf-input').click()">📄 Importar PDF</button>
         <input id="edital-pdf-input" type="file" accept=".pdf" style="display:none" onchange="importEditalPdf(this)">
       </div>
@@ -132,7 +132,7 @@
   <div id="tab-ciclo" class="tab-content" role="tabpanel">
     <div class="panel">
       <h2>🔄 Ciclo de Estudos</h2>
-      <p style="font-size:0.85rem;color:#9399b2;margin-bottom:12px;">Estudo intercalado: o sistema indica a próxima matéria (menor progresso relativo). Inicie o timer e ao parar, as horas são registradas automaticamente.</p>
+      <p style="font-size:0.85rem;color:var(--text-sub);margin-bottom:12px;">Estudo intercalado: o sistema indica a próxima matéria (menor progresso relativo). Inicie o timer e ao parar, as horas são registradas automaticamente.</p>
 
       <!-- Grid: Próxima Matéria + Resumo de Ontem -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;" id="ciclo-cards-grid">
@@ -146,23 +146,23 @@
           <div class="ciclo-focus-right">
             <div class="ciclo-focus-timer" id="ciclo-timer-display">00:00:00</div>
             <div style="display:flex;gap:6px;">
-              <button class="edital-timer-btn" id="ciclo-btn-start" onclick="cicloTimerToggle()" style="background:#a6e3a1;color:#1e1e2e;">▶ Estudar</button>
-              <button class="edital-timer-btn" id="ciclo-btn-stop" onclick="cicloTimerStop()" style="background:#f38ba8;color:#1e1e2e;display:none;">⏹ Parar</button>
+              <button class="edital-timer-btn" id="ciclo-btn-start" onclick="cicloTimerToggle()" style="background:var(--green);color:var(--bg);">▶ Estudar</button>
+              <button class="edital-timer-btn" id="ciclo-btn-stop" onclick="cicloTimerStop()" style="background:var(--red);color:var(--bg);display:none;">⏹ Parar</button>
             </div>
           </div>
         </div>
 
         <!-- Card: Resumo de Ontem -->
-        <div class="ciclo-focus-card" id="ciclo-ontem-panel" style="display:none;border-left:4px solid #fab387;flex-direction:column;align-items:stretch;">
+        <div class="ciclo-focus-card" id="ciclo-ontem-panel" style="display:none;border-left:4px solid var(--peach);flex-direction:column;align-items:stretch;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
             <div class="ciclo-focus-label">📅 ONTEM — <span id="ciclo-ontem-dia"></span></div>
             <span id="ciclo-ontem-score" style="font-size:1.1rem;font-weight:700;"></span>
           </div>
           <p id="ciclo-ontem-msg" style="font-size:0.82rem;color:#a6adc8;margin-bottom:8px;"></p>
           <div style="display:flex;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
-            <span style="font-size:0.78rem;background:#1e1e2e;border-radius:6px;padding:4px 10px;">⏱ <strong id="ciclo-ontem-horas">0</strong>/<span id="ciclo-ontem-plan">0</span>h</span>
-            <span style="font-size:0.78rem;background:#1e1e2e;border-radius:6px;padding:4px 10px;">❓ <strong id="ciclo-ontem-quest">0</strong></span>
-            <span style="font-size:0.78rem;background:#1e1e2e;border-radius:6px;padding:4px 10px;">🧠 <strong id="ciclo-ontem-flash">0</strong></span>
+            <span style="font-size:0.78rem;background:var(--bg);border-radius:6px;padding:4px 10px;">⏱ <strong id="ciclo-ontem-horas">0</strong>/<span id="ciclo-ontem-plan">0</span>h</span>
+            <span style="font-size:0.78rem;background:var(--bg);border-radius:6px;padding:4px 10px;">❓ <strong id="ciclo-ontem-quest">0</strong></span>
+            <span style="font-size:0.78rem;background:var(--bg);border-radius:6px;padding:4px 10px;">🧠 <strong id="ciclo-ontem-flash">0</strong></span>
           </div>
           <div id="ciclo-ontem-materias" style="font-size:0.82rem;max-height:120px;overflow-y:auto;"></div>
         </div>
@@ -170,7 +170,7 @@
 
       <!-- Visões do Ciclo: Diário / Semanal / Mensal / Completo -->
       <div style="margin-top:16px;">
-        <div style="display:flex;gap:4px;margin-bottom:12px;background:#1e1e2e;border-radius:8px;padding:4px;flex-wrap:wrap;">
+        <div style="display:flex;gap:4px;margin-bottom:12px;background:var(--bg);border-radius:8px;padding:4px;flex-wrap:wrap;">
           <button class="iobtn ciclo-view-btn active" onclick="switchCicloView('diario', this)" style="flex:1;text-align:center;">📅 Diário</button>
           <button class="iobtn ciclo-view-btn" onclick="switchCicloView('semanal', this)" style="flex:1;text-align:center;">📆 Semanal</button>
           <button class="iobtn ciclo-view-btn" onclick="switchCicloView('mensal', this)" style="flex:1;text-align:center;">🗓️ Mensal</button>
@@ -185,7 +185,7 @@
       <!-- Ações -->
       <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
         <button class="iobtn" onclick="resetarCiclo()">🔁 Resetar Horas</button>
-        <button class="iobtn" onclick="limparCiclo()" style="color:#f38ba8;">🗑 Limpar Ciclo</button>
+        <button class="iobtn" onclick="limparCiclo()" style="color:var(--red);">🗑 Limpar Ciclo</button>
         <button class="iobtn" onclick="importarCicloDoEdital()">📋 Importar do Edital</button>
         <button class="iobtn" onclick="exportarCiclo('json')">⬇ JSON</button>
         <button class="iobtn" onclick="exportarCiclo('csv')">⬇ CSV</button>
@@ -210,11 +210,11 @@
       <h2>🧠 Revisão de Hoje</h2>
       <div id="flash-progress" style="margin-bottom:10px;display:none;">
         <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.82rem;margin-bottom:4px;">
-          <span id="flash-progress-text" style="color:#cdd6f4;font-weight:600;">0/0 revisados</span>
-          <span id="flash-progress-pct" style="color:#a6e3a1;font-weight:700;font-size:0.9rem;">0%</span>
+          <span id="flash-progress-text" style="color:var(--text);font-weight:600;">0/0 revisados</span>
+          <span id="flash-progress-pct" style="color:var(--green);font-weight:700;font-size:0.9rem;">0%</span>
         </div>
-        <div style="height:8px;background:#45475a;border-radius:4px;overflow:hidden;">
-          <div id="flash-progress-bar" style="height:100%;background:#a6e3a1;border-radius:4px;width:0%;transition:width 0.4s ease-out;"></div>
+        <div style="height:8px;background:var(--bg-elevated);border-radius:4px;overflow:hidden;">
+          <div id="flash-progress-bar" style="height:100%;background:var(--green);border-radius:4px;width:0%;transition:width 0.4s ease-out;"></div>
         </div>
       </div>
       <div id="flash-card-area">
@@ -229,16 +229,16 @@
       <h2>❓ Questões do Dia</h2>
       <div id="questoes-dia-progress" style="margin-bottom:10px;display:none;">
         <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.78rem;margin-bottom:4px;">
-          <span id="qdia-progress-text" style="color:#9399b2;">0/0 respondidas</span>
-          <span id="qdia-progress-pct" style="color:#a6e3a1;font-weight:600;">0%</span>
+          <span id="qdia-progress-text" style="color:var(--text-sub);">0/0 respondidas</span>
+          <span id="qdia-progress-pct" style="color:var(--green);font-weight:600;">0%</span>
         </div>
-        <div style="height:6px;background:#45475a;border-radius:3px;overflow:hidden;">
-          <div id="qdia-progress-bar" style="height:100%;background:#89b4fa;border-radius:3px;width:0%;transition:width 0.3s;"></div>
+        <div style="height:6px;background:var(--bg-elevated);border-radius:3px;overflow:hidden;">
+          <div id="qdia-progress-bar" style="height:100%;background:var(--blue);border-radius:3px;width:0%;transition:width 0.3s;"></div>
         </div>
       </div>
       <div id="questoes-dia-area">
-        <p style="font-size:0.82rem;color:#9399b2;margin-bottom:10px;">Questões aleatórias sorteadas para treinar hoje.</p>
-        <button onclick="carregarQuestoesDia()" style="background:#89b4fa;color:#1e1e2e;border:none;border-radius:8px;padding:10px 20px;font-weight:600;cursor:pointer;font-size:0.9rem;">❓ Iniciar Questões do Dia</button>
+        <p style="font-size:0.82rem;color:var(--text-sub);margin-bottom:10px;">Questões aleatórias sorteadas para treinar hoje.</p>
+        <button onclick="carregarQuestoesDia()" style="background:var(--blue);color:var(--bg);border:none;border-radius:8px;padding:10px 20px;font-weight:600;cursor:pointer;font-size:0.9rem;">❓ Iniciar Questões do Dia</button>
       </div>
       <div id="questao-dia-card" style="display:none;"></div>
     </div>
@@ -246,7 +246,7 @@
       <h2>➕ Adicionar Flashcard</h2>
       <textarea id="flash-pergunta" placeholder="Pergunta..." rows="2"></textarea>
       <textarea id="flash-resposta" placeholder="Resposta (inclua mnemônicos 🧠, macetes e dicas para fixação)" rows="2"></textarea>
-      <select id="flash-add-materia" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.9rem;margin-bottom:8px;">
+      <select id="flash-add-materia" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;margin-bottom:8px;">
         <option value="">📚 Disciplina (opcional)</option>
       </select>
       <button onclick="addFlashcard()">Adicionar</button>
@@ -254,17 +254,17 @@
     <div class="flash-panel">
       <h2>📦 Todos os Flashcards</h2>
       <!-- Modos de Estudo -->
-      <div style="margin-bottom:12px;padding:12px;background:#313244;border-radius:10px;">
-        <div style="font-size:0.85rem;font-weight:600;color:#cba6f7;margin-bottom:8px;">🎯 Modo de Estudo</div>
+      <div style="margin-bottom:12px;padding:12px;background:var(--bg-surface);border-radius:10px;">
+        <div style="font-size:0.85rem;font-weight:600;color:var(--accent);margin-bottom:8px;">🎯 Modo de Estudo</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;">
-          <button class="iobtn" onclick="iniciarSessaoFlash('revisao')" style="background:#a6e3a1;color:#1e1e2e;">📅 Revisão SRS (Hoje)</button>
-          <button class="iobtn" onclick="iniciarSessaoFlash('disciplina')" style="background:#89b4fa;color:#1e1e2e;">📚 Por Disciplina</button>
-          <button class="iobtn" onclick="iniciarSessaoFlash('aleatorio')" style="background:#f9e2af;color:#1e1e2e;">🎲 Aleatório (Todas)</button>
+          <button class="iobtn" onclick="iniciarSessaoFlash('revisao')" style="background:var(--green);color:var(--bg);">📅 Revisão SRS (Hoje)</button>
+          <button class="iobtn" onclick="iniciarSessaoFlash('disciplina')" style="background:var(--blue);color:var(--bg);">📚 Por Disciplina</button>
+          <button class="iobtn" onclick="iniciarSessaoFlash('aleatorio')" style="background:var(--yellow);color:var(--bg);">🎲 Aleatório (Todas)</button>
         </div>
       </div>
       <!-- Filtro por Disciplina -->
       <div style="margin-bottom:10px;">
-        <select id="flash-materia-filter" onchange="loadAllFlashcards()" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.9rem;">
+        <select id="flash-materia-filter" onchange="loadAllFlashcards()" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;">
           <option value="">Todas as Disciplinas</option>
         </select>
       </div>
@@ -286,56 +286,56 @@
       <h2>⚖️ Súmulas do Dia</h2>
       <div id="sumula-progress" style="margin-bottom:10px;display:none;">
         <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.78rem;margin-bottom:4px;">
-          <span id="sumula-progress-text" style="color:#9399b2;">0/0 revisadas</span>
-          <span id="sumula-progress-pct" style="color:#a6e3a1;font-weight:600;">0%</span>
+          <span id="sumula-progress-text" style="color:var(--text-sub);">0/0 revisadas</span>
+          <span id="sumula-progress-pct" style="color:var(--green);font-weight:600;">0%</span>
         </div>
-        <div style="height:6px;background:#45475a;border-radius:3px;overflow:hidden;">
-          <div id="sumula-progress-bar" style="height:100%;background:#cba6f7;border-radius:3px;width:0%;transition:width 0.3s;"></div>
+        <div style="height:6px;background:var(--bg-elevated);border-radius:3px;overflow:hidden;">
+          <div id="sumula-progress-bar" style="height:100%;background:var(--accent);border-radius:3px;width:0%;transition:width 0.3s;"></div>
         </div>
       </div>
       <div id="sumula-card-area">
-        <div id="sumula-front" style="font-size:0.95rem;color:#cdd6f4;padding:12px;background:#1e1e2e;border-radius:8px;min-height:60px;"></div>
-        <div id="sumula-back" style="display:none;font-size:0.88rem;color:#a6e3a1;padding:12px;background:#1e3a2e;border-radius:8px;margin-top:8px;"></div>
-        <button id="sumula-reveal-btn" style="display:none;margin-top:10px;background:#cba6f7;color:#1e1e2e;border:none;border-radius:8px;padding:10px 20px;font-weight:600;cursor:pointer;" onclick="revealSumula()">Revelar Enunciado</button>
+        <div id="sumula-front" style="font-size:0.95rem;color:var(--text);padding:12px;background:var(--bg);border-radius:8px;min-height:60px;"></div>
+        <div id="sumula-back" style="display:none;font-size:0.88rem;color:var(--green);padding:12px;background:#1e3a2e;border-radius:8px;margin-top:8px;"></div>
+        <button id="sumula-reveal-btn" style="display:none;margin-top:10px;background:var(--accent);color:var(--bg);border:none;border-radius:8px;padding:10px 20px;font-weight:600;cursor:pointer;" onclick="revealSumula()">Revelar Enunciado</button>
         <div id="sumula-review-btns" style="display:none;margin-top:10px;"></div>
       </div>
     </div>
     <div class="flash-panel">
       <h2>🎯 Modos de Estudo</h2>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
-        <button class="iobtn" onclick="iniciarSessaoSumulas('revisao')" style="background:#cba6f7;color:#1e1e2e;">📅 Revisão SRS (Hoje)</button>
-        <button class="iobtn" onclick="iniciarSessaoSumulas('tribunal')" style="background:#89b4fa;color:#1e1e2e;">🏛️ Por Tribunal</button>
-        <button class="iobtn" onclick="iniciarSessaoSumulas('tema')" style="background:#f9e2af;color:#1e1e2e;">📚 Por Tema</button>
-        <button class="iobtn" onclick="iniciarSessaoSumulas('aleatorio')" style="background:#a6e3a1;color:#1e1e2e;">🎲 Aleatório</button>
+        <button class="iobtn" onclick="iniciarSessaoSumulas('revisao')" style="background:var(--accent);color:var(--bg);">📅 Revisão SRS (Hoje)</button>
+        <button class="iobtn" onclick="iniciarSessaoSumulas('tribunal')" style="background:var(--blue);color:var(--bg);">🏛️ Por Tribunal</button>
+        <button class="iobtn" onclick="iniciarSessaoSumulas('tema')" style="background:var(--yellow);color:var(--bg);">📚 Por Tema</button>
+        <button class="iobtn" onclick="iniciarSessaoSumulas('aleatorio')" style="background:var(--green);color:var(--bg);">🎲 Aleatório</button>
       </div>
-      <div id="sumula-stats" style="font-size:0.8rem;color:#9399b2;"></div>
+      <div id="sumula-stats" style="font-size:0.8rem;color:var(--text-sub);"></div>
     </div>
     <div class="flash-panel flash-add-form">
       <h2>➕ Adicionar Súmula</h2>
       <div style="display:flex;gap:8px;margin-bottom:8px;">
-        <select id="sumula-add-tribunal" style="padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.9rem;">
+        <select id="sumula-add-tribunal" style="padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;">
           <option value="STF">STF</option>
           <option value="STJ">STJ</option>
           <option value="TST">TST</option>
           <option value="TSE">TSE</option>
           <option value="STF-V">STF Vinculante</option>
         </select>
-        <input id="sumula-add-numero" type="number" placeholder="Nº" style="width:80px;padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;">
+        <input id="sumula-add-numero" type="number" placeholder="Nº" style="width:80px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);">
       </div>
-      <textarea id="sumula-add-enunciado" placeholder="Enunciado da súmula..." rows="3" style="width:100%;padding:10px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.9rem;resize:vertical;margin-bottom:8px;"></textarea>
+      <textarea id="sumula-add-enunciado" placeholder="Enunciado da súmula..." rows="3" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;resize:vertical;margin-bottom:8px;"></textarea>
       <div style="display:flex;gap:8px;margin-bottom:8px;">
-        <input id="sumula-add-tema" placeholder="Tema (ex: Direito Penal)" style="flex:1;padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;">
-        <input id="sumula-add-obs" placeholder="Observação/Dica" style="flex:1;padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;">
+        <input id="sumula-add-tema" placeholder="Tema (ex: Direito Penal)" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);">
+        <input id="sumula-add-obs" placeholder="Observação/Dica" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);">
       </div>
       <button onclick="addSumula()">Adicionar</button>
     </div>
     <div class="flash-panel">
       <h2>📦 Todas as Súmulas</h2>
       <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
-        <select id="sumula-filter-tribunal" onchange="loadAllSumulas()" style="padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.85rem;">
+        <select id="sumula-filter-tribunal" onchange="loadAllSumulas()" style="padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85rem;">
           <option value="">Todos os Tribunais</option>
         </select>
-        <select id="sumula-filter-tema" onchange="loadAllSumulas()" style="padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.85rem;">
+        <select id="sumula-filter-tema" onchange="loadAllSumulas()" style="padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85rem;">
           <option value="">Todos os Temas</option>
         </select>
       </div>
@@ -348,7 +348,7 @@
   <div id="tab-metas" class="tab-content" role="tabpanel">
     <div class="panel">
       <h2>🎯 Configurar Metas Diárias</h2>
-      <p style="font-size:0.85rem;color:#9399b2;margin-bottom:12px;">Defina suas metas diárias. O progresso aparece no cabeçalho e no Dashboard.</p>
+      <p style="font-size:0.85rem;color:var(--text-sub);margin-bottom:12px;">Defina suas metas diárias. O progresso aparece no cabeçalho e no Dashboard.</p>
       <div class="metas-config">
         <label>⏱ Horas: <input type="number" id="meta-horas" min="0.5" step="0.5" value="3"></label>
         <label>❓ Questões: <input type="number" id="meta-questoes" min="1" step="1" value="30"></label>
@@ -359,7 +359,7 @@
     </div>
     <div class="panel">
       <h2>⚙️ Configurar Sessões de Estudo</h2>
-      <p style="font-size:0.85rem;color:#9399b2;margin-bottom:12px;">Defina quantas questões e flashcards por sessão diária.</p>
+      <p style="font-size:0.85rem;color:var(--text-sub);margin-bottom:12px;">Defina quantas questões e flashcards por sessão diária.</p>
       <div class="metas-config">
         <label>❓ Questões/Dia: <input type="number" id="cfg-questoes-dia" min="5" step="5" value="10" title="Quantas questões sortear por rodada"></label>
         <label>🧠 Flashcards/Sessão: <input type="number" id="cfg-flashcards-sessao" min="5" step="5" value="15" title="Máximo de flashcards por sessão aleatória"></label>
@@ -392,11 +392,11 @@
     </div>
   </div>
   <div id="overlay" role="dialog" aria-modal="true" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:999;align-items:center;justify-content:center;">
-    <div style="background:#313244;border-radius:16px;padding:40px 48px;text-align:center;max-width:360px;">
+    <div style="background:var(--bg-surface);border-radius:16px;padding:40px 48px;text-align:center;max-width:360px;">
       <div style="font-size:2.5rem;margin-bottom:12px;">☕</div>
-      <div style="font-size:1.2rem;font-weight:700;color:#cba6f7;margin-bottom:8px;">Hora de descansar!</div>
-      <div style="font-size:0.9rem;color:#cdd6f4;margin-bottom:24px;">Faça uma pausa e volte descansado para continuar seus estudos.</div>
-      <button onclick="document.getElementById('overlay').style.display='none'" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:8px;padding:8px 24px;font-size:0.95rem;font-weight:700;cursor:pointer;">OK, entendido!</button>
+      <div style="font-size:1.2rem;font-weight:700;color:var(--accent);margin-bottom:8px;">Hora de descansar!</div>
+      <div style="font-size:0.9rem;color:var(--text);margin-bottom:24px;">Faça uma pausa e volte descansado para continuar seus estudos.</div>
+      <button onclick="document.getElementById('overlay').style.display='none'" style="background:var(--green);color:var(--bg);border:none;border-radius:8px;padding:8px 24px;font-size:0.95rem;font-weight:700;cursor:pointer;">OK, entendido!</button>
     </div>
   </div>
 
@@ -407,7 +407,7 @@
       <textarea id="note-modal-input" placeholder="Escreva sua nota/resumo..."></textarea>
       <div class="modal-btns">
         <button class="iobtn" onclick="closeNoteModal()">Fechar</button>
-        <button class="iobtn" style="background:#cba6f7;color:#1e1e2e;" onclick="saveNote()">Salvar</button>
+        <button class="iobtn" style="background:var(--accent);color:var(--bg);" onclick="saveNote()">Salvar</button>
       </div>
     </div>
   </div>
@@ -428,22 +428,22 @@
       <h3>✏️ Editar Flashcard</h3>
       <input type="hidden" id="flash-edit-id">
       <div style="margin-bottom:10px;">
-        <label style="font-size:0.8rem;color:#9399b2;display:block;margin-bottom:4px;">Pergunta</label>
-        <textarea id="flash-edit-pergunta" rows="3" style="width:100%;padding:10px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.9rem;resize:vertical;"></textarea>
+        <label style="font-size:0.8rem;color:var(--text-sub);display:block;margin-bottom:4px;">Pergunta</label>
+        <textarea id="flash-edit-pergunta" rows="3" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;resize:vertical;"></textarea>
       </div>
       <div style="margin-bottom:10px;">
-        <label style="font-size:0.8rem;color:#9399b2;display:block;margin-bottom:4px;">Resposta</label>
-        <textarea id="flash-edit-resposta" rows="3" style="width:100%;padding:10px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.9rem;resize:vertical;"></textarea>
+        <label style="font-size:0.8rem;color:var(--text-sub);display:block;margin-bottom:4px;">Resposta</label>
+        <textarea id="flash-edit-resposta" rows="3" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;resize:vertical;"></textarea>
       </div>
       <div style="margin-bottom:14px;">
-        <label style="font-size:0.8rem;color:#9399b2;display:block;margin-bottom:4px;">📚 Disciplina (Edital)</label>
-        <select id="flash-edit-materia" style="width:100%;padding:10px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.9rem;">
+        <label style="font-size:0.8rem;color:var(--text-sub);display:block;margin-bottom:4px;">📚 Disciplina (Edital)</label>
+        <select id="flash-edit-materia" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;">
           <option value="">Sem disciplina</option>
         </select>
       </div>
       <div class="modal-btns">
         <button class="iobtn" onclick="closeFlashEditModal()">Cancelar</button>
-        <button class="iobtn" style="background:#a6e3a1;color:#1e1e2e;font-weight:600;" onclick="saveFlashEdit()">💾 Salvar</button>
+        <button class="iobtn" style="background:var(--green);color:var(--bg);font-weight:600;" onclick="saveFlashEdit()">💾 Salvar</button>
       </div>
     </div>
   </div>

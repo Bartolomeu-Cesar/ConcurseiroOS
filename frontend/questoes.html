@@ -157,10 +157,10 @@
     <h1>❓ Banco de Questões & Simulados</h1>
     <div class="header-links">
       <a href="/dashboard.html">📊 Dashboard</a>
-      <button onclick="toggleTheme()" title="Alternar tema" style="background:#45475a;color:#cdd6f4;border:none;border-radius:6px;padding:6px 10px;font-size:0.9rem;cursor:pointer;">🌓</button>
+      <button onclick="toggleTheme()" title="Alternar tema" style="background:var(--bg-elevated);color:var(--text);border:none;border-radius:6px;padding:6px 10px;font-size:0.9rem;cursor:pointer;">🌓</button>
       <div id="q-user-section" style="display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="window.location.href='/social.html'" title="Perfil">
-        <div id="q-user-avatar" style="width:30px;height:30px;border-radius:50%;background:#cba6f7;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.75rem;color:#1e1e2e;"></div>
-        <span id="q-user-name" style="font-size:0.78rem;color:#cdd6f4;font-weight:600;"></span>
+        <div id="q-user-avatar" style="width:30px;height:30px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.75rem;color:var(--bg);"></div>
+        <span id="q-user-name" style="font-size:0.78rem;color:var(--text);font-weight:600;"></span>
       </div>
     </div>
   </div>
@@ -177,9 +177,9 @@
   <div id="tab-resolver" class="qtab-content active">
     <div class="panel">
       <h2>🎯 Resolver Questões</h2>
-      <div style="background:#313244;border-radius:8px;padding:10px 16px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <div style="background:var(--bg-surface);border-radius:8px;padding:10px 16px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
         <span style="font-size:0.85rem;">⏱ Tempo médio: <strong id="tempo-medio-val">--</strong></span>
-        <span id="tempo-vs-prova" style="font-size:0.78rem;color:#9399b2;"></span>
+        <span id="tempo-vs-prova" style="font-size:0.78rem;color:var(--text-sub);"></span>
       </div>
       <div class="filter-bar">
         <select id="filtro-materia" onchange="loadQuestoesResolver()">
@@ -203,7 +203,7 @@
         <button class="btn btn-primary" onclick="loadQuestoesResolver()">🔄 Nova Questão</button>
       </div>
       <div id="resolver-area">
-        <p style="color:#9399b2;">Selecione uma matéria ou clique em "Nova Questão" para começar.</p>
+        <p style="color:var(--text-sub);">Selecione uma matéria ou clique em "Nova Questão" para começar.</p>
       </div>
     </div>
 
@@ -224,13 +224,13 @@
         <button class="btn btn-primary" onclick="criarSimulado()">Criar Simulado</button>
       </div>
       <div style="margin-top:10px;">
-        <label style="font-size:0.85rem;font-weight:600;color:#cba6f7;">📚 Disciplinas:</label>
+        <label style="font-size:0.85rem;font-weight:600;color:var(--accent);">📚 Disciplinas:</label>
         <div style="display:flex;gap:6px;margin:6px 0;flex-wrap:wrap;">
           <button class="btn btn-secondary" style="font-size:0.75rem;padding:4px 10px;" onclick="simToggleAll(true)">✓ Todas</button>
           <button class="btn btn-secondary" style="font-size:0.75rem;padding:4px 10px;" onclick="simToggleAll(false)">✗ Nenhuma</button>
         </div>
-        <div id="sim-materias-checkboxes" style="max-height:180px;overflow-y:auto;border:1px solid #45475a;border-radius:8px;padding:8px;background:#1e1e2e;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px;">
-          <span style="color:#9399b2;font-size:0.8rem;">Carregando disciplinas...</span>
+        <div id="sim-materias-checkboxes" style="max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--bg);display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px;">
+          <span style="color:var(--text-sub);font-size:0.8rem;">Carregando disciplinas...</span>
         </div>
       </div>
       <!-- Manter o select oculto para compatibilidade -->
@@ -261,7 +261,7 @@
   <div id="tab-erros" class="qtab-content">
     <div class="panel">
       <h2>❌ Caderno de Erros</h2>
-      <p style="font-size:0.85rem;color:#9399b2;margin-bottom:12px;">Questões que você errou, agrupadas para revisão focada.</p>
+      <p style="font-size:0.85rem;color:var(--text-sub);margin-bottom:12px;">Questões que você errou, agrupadas para revisão focada.</p>
       <div id="erros-list"></div>
     </div>
   </div>
@@ -270,7 +270,7 @@
   <div id="tab-cadastrar" class="qtab-content">
     <div class="panel">
       <h2>📄 Importar Questões de PDF (OCR)</h2>
-      <p style="font-size:0.82rem;color:#9399b2;margin-bottom:12px;">
+      <p style="font-size:0.82rem;color:var(--text-sub);margin-bottom:12px;">
         Envie um PDF com questões numeradas e gabarito. O sistema extrai o texto (digital ou via OCR para escaneados) e cadastra automaticamente.
       </p>
       <div class="form-row" style="align-items:flex-end;">
@@ -288,12 +288,12 @@
           📎 Selecionar PDF
         </label>
         <input id="pdf-import-file" type="file" accept=".pdf" style="display:none" onchange="importarQuestoesPDF(this)">
-        <span id="pdf-import-filename" style="font-size:0.8rem;color:#9399b2;margin-left:8px;"></span>
+        <span id="pdf-import-filename" style="font-size:0.8rem;color:var(--text-sub);margin-left:8px;"></span>
       </div>
       <div id="pdf-import-status" style="display:none;margin-top:10px;padding:12px;border-radius:8px;font-size:0.85rem;"></div>
       <details style="margin-top:12px;">
-        <summary style="font-size:0.8rem;color:#89b4fa;cursor:pointer;">ℹ️ Formato esperado do PDF</summary>
-        <div style="font-size:0.78rem;color:#9399b2;margin-top:8px;padding:8px;background:#1e1e2e;border-radius:6px;line-height:1.6;">
+        <summary style="font-size:0.8rem;color:var(--blue);cursor:pointer;">ℹ️ Formato esperado do PDF</summary>
+        <div style="font-size:0.78rem;color:var(--text-sub);margin-top:8px;padding:8px;background:var(--bg);border-radius:6px;line-height:1.6;">
           <strong>Questões numeradas:</strong><br>
           1) Texto do enunciado...<br>
           A) Alternativa A<br>
@@ -359,32 +359,32 @@
   <div id="tab-banco" class="qtab-content">
     <div class="panel">
       <h2>🔗 Vincular Disciplina em Lote</h2>
-      <p style="font-size:0.82rem;color:#9399b2;margin-bottom:10px;">Selecione um filtro (data de importação) e atribua disciplina/tópico a todas as questões de uma vez.</p>
+      <p style="font-size:0.82rem;color:var(--text-sub);margin-bottom:10px;">Selecione um filtro (data de importação) e atribua disciplina/tópico a todas as questões de uma vez.</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
         <div style="flex:1;min-width:150px;">
-          <label style="font-size:0.75rem;color:#9399b2;">📅 Data de Importação</label>
-          <select id="lote-data" onchange="previewLote()" style="width:100%;padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;margin-top:4px;">
+          <label style="font-size:0.75rem;color:var(--text-sub);">📅 Data de Importação</label>
+          <select id="lote-data" onchange="previewLote()" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);margin-top:4px;">
             <option value="">Selecione...</option>
           </select>
         </div>
         <div style="flex:1;min-width:150px;">
-          <label style="font-size:0.75rem;color:#9399b2;">🏛️ Filtrar por banca (opcional)</label>
-          <select id="lote-banca" onchange="previewLote()" style="width:100%;padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;margin-top:4px;">
+          <label style="font-size:0.75rem;color:var(--text-sub);">🏛️ Filtrar por banca (opcional)</label>
+          <select id="lote-banca" onchange="previewLote()" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);margin-top:4px;">
             <option value="">Todas</option>
           </select>
         </div>
       </div>
-      <div id="lote-preview" style="font-size:0.82rem;color:#9399b2;margin-bottom:10px;"></div>
+      <div id="lote-preview" style="font-size:0.82rem;color:var(--text-sub);margin-bottom:10px;"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
         <div style="flex:1;min-width:150px;">
-          <label style="font-size:0.75rem;color:#9399b2;">📚 Nova Disciplina</label>
-          <select id="lote-materia" style="width:100%;padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;margin-top:4px;">
+          <label style="font-size:0.75rem;color:var(--text-sub);">📚 Nova Disciplina</label>
+          <select id="lote-materia" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);margin-top:4px;">
             <option value="">Manter atual</option>
           </select>
         </div>
         <div style="flex:1;min-width:150px;">
-          <label style="font-size:0.75rem;color:#9399b2;">📝 Novo Tópico (opcional)</label>
-          <input id="lote-topico" placeholder="Ex: Controle de Constitucionalidade" style="width:100%;padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;margin-top:4px;">
+          <label style="font-size:0.75rem;color:var(--text-sub);">📝 Novo Tópico (opcional)</label>
+          <input id="lote-topico" placeholder="Ex: Controle de Constitucionalidade" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);margin-top:4px;">
         </div>
       </div>
       <button onclick="aplicarLote()" class="btn btn-success" style="width:100%;">🔗 Vincular em Lote</button>
@@ -396,7 +396,7 @@
         <select id="banco-filtro-materia" onchange="loadBanco()">
           <option value="">Todas</option>
         </select>
-        <span style="font-size:0.85rem;color:#9399b2;" id="banco-count"></span>
+        <span style="font-size:0.85rem;color:var(--text-sub);" id="banco-count"></span>
       </div>
       <div id="banco-list"></div>
     </div>
@@ -1195,28 +1195,28 @@
 
 <!-- CSV Import Modal -->
 <div id="csv-import-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:99999;align-items:center;justify-content:center;padding:16px;">
-  <div style="background:#313244;border-radius:16px;padding:28px;max-width:520px;width:100%;max-height:90vh;overflow-y:auto;">
+  <div style="background:var(--bg-surface);border-radius:16px;padding:28px;max-width:520px;width:100%;max-height:90vh;overflow-y:auto;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
-      <h3 style="color:#cba6f7;margin:0;">📥 Importar Questões via CSV</h3>
-      <button onclick="document.getElementById('csv-import-modal').style.display='none'" style="background:none;border:none;color:#9399b2;font-size:1.4rem;cursor:pointer;">&times;</button>
+      <h3 style="color:var(--accent);margin:0;">📥 Importar Questões via CSV</h3>
+      <button onclick="document.getElementById('csv-import-modal').style.display='none'" style="background:none;border:none;color:var(--text-sub);font-size:1.4rem;cursor:pointer;">&times;</button>
     </div>
 
-    <p style="font-size:0.82rem;color:#9399b2;margin-bottom:16px;">
+    <p style="font-size:0.82rem;color:var(--text-sub);margin-bottom:16px;">
       Envie um CSV exportado do <strong>QConcursos</strong> ou <strong>Gran Cursos</strong>. O formato é detectado automaticamente pelos cabeçalhos.
     </p>
 
     <div style="margin-bottom:14px;">
       <label style="font-size:0.8rem;color:#a6adc8;display:block;margin-bottom:6px;">Arquivo CSV</label>
-      <label for="csv-import-file" style="display:inline-flex;align-items:center;gap:6px;padding:10px 16px;background:#1e1e2e;border:1px dashed #45475a;border-radius:8px;cursor:pointer;color:#89b4fa;font-size:0.85rem;width:100%;justify-content:center;">
+      <label for="csv-import-file" style="display:inline-flex;align-items:center;gap:6px;padding:10px 16px;background:var(--bg);border:1px dashed var(--border);border-radius:8px;cursor:pointer;color:var(--blue);font-size:0.85rem;width:100%;justify-content:center;">
         📎 Selecionar arquivo CSV
       </label>
       <input id="csv-import-file" type="file" accept=".csv" style="display:none" onchange="csvFileSelected(this)">
-      <span id="csv-import-filename" style="font-size:0.78rem;color:#9399b2;display:block;margin-top:6px;"></span>
+      <span id="csv-import-filename" style="font-size:0.78rem;color:var(--text-sub);display:block;margin-top:6px;"></span>
     </div>
 
     <div style="margin-bottom:18px;">
       <label style="font-size:0.8rem;color:#a6adc8;display:block;margin-bottom:6px;">Formato</label>
-      <select id="csv-import-formato" style="width:100%;padding:10px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.88rem;">
+      <select id="csv-import-formato" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.88rem;">
         <option value="auto">🔍 Auto-detectar</option>
         <option value="qconcursos">QConcursos</option>
         <option value="gran">Gran Cursos</option>
@@ -1230,11 +1230,11 @@
     <div id="csv-import-results" style="display:none;margin-top:16px;padding:14px;border-radius:10px;font-size:0.85rem;line-height:1.6;"></div>
 
     <details style="margin-top:14px;">
-      <summary style="font-size:0.78rem;color:#89b4fa;cursor:pointer;">ℹ️ Formatos esperados</summary>
-      <div style="font-size:0.75rem;color:#9399b2;margin-top:8px;padding:10px;background:#1e1e2e;border-radius:6px;line-height:1.7;">
-        <strong style="color:#a6e3a1;">QConcursos:</strong><br>
+      <summary style="font-size:0.78rem;color:var(--blue);cursor:pointer;">ℹ️ Formatos esperados</summary>
+      <div style="font-size:0.75rem;color:var(--text-sub);margin-top:8px;padding:10px;background:var(--bg);border-radius:6px;line-height:1.7;">
+        <strong style="color:var(--green);">QConcursos:</strong><br>
         Disciplina, Assunto, Banca, Ano, Enunciado, A, B, C, D, E, Gabarito<br><br>
-        <strong style="color:#a6e3a1;">Gran Cursos:</strong><br>
+        <strong style="color:var(--green);">Gran Cursos:</strong><br>
         Matéria, Tópico, Questão, Alternativa A, Alternativa B, Alternativa C, Alternativa D, Alternativa E, Resposta, Banca, Ano<br><br>
         <em>Limite: 5.000 questões por importação. Duplicatas (mesmo enunciado + banca) são ignoradas.</em>
       </div>
