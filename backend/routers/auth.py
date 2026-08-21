@@ -17,7 +17,7 @@ from sanitize import sanitize_input
 from schemas import LoginRequest, RegisterRequest, VerifyCodeRequest, ProfileUpdateRequest, UpgradePlanRequest
 from settings import settings
 
-router = APIRouter(prefix="/api/auth", tags=["auth"])
+router = APIRouter(prefix="/api/auth", tags=["Autenticação"])
 
 _DEBUG = os.environ.get("DEBUG", "false").lower() == "true"
 
@@ -166,7 +166,9 @@ async def get_optional_user(authorization: str = Header(None), conn=Depends(get_
 
 # ==================== ENDPOINTS ====================
 
-@router.post("/register")
+@router.post("/register", summary="Registrar novo usuário",
+             description="Cria uma conta e envia código de verificação por email. Se SMTP não configurado, o código é exibido no terminal.",
+             responses={409: {"description": "Email já cadastrado"}})
 def register(body: RegisterRequest, conn=Depends(get_db_session)):
     """Registra um novo usuário e envia código de verificação."""
     email = body.email.strip().lower()
@@ -204,7 +206,9 @@ def register(body: RegisterRequest, conn=Depends(get_db_session)):
     }
 
 
-@router.post("/login")
+@router.post("/login", summary="Solicitar código de login",
+             description="Envia código de verificação de 6 dígitos para o email cadastrado. Códigos anteriores são invalidados.",
+             responses={404: {"description": "Email não cadastrado"}})
 def login(body: LoginRequest, conn=Depends(get_db_session)):
     """Envia código de verificação para login."""
     email = body.email.strip().lower()
@@ -237,7 +241,9 @@ def login(body: LoginRequest, conn=Depends(get_db_session)):
     }
 
 
-@router.post("/verify-code")
+@router.post("/verify-code", summary="Verificar código e obter token JWT",
+             description="Valida o código de 6 dígitos e retorna um JWT token para autenticação. Rate limit: 5 tentativas a cada 15 minutos.",
+             responses={401: {"description": "Código inválido ou expirado"}, 429: {"description": "Muitas tentativas"}})
 def verify_code(body: VerifyCodeRequest, request: Request = None, conn=Depends(get_db_session)):
     """Verifica o código e retorna JWT token."""
     email = body.email.strip().lower()
@@ -295,7 +301,8 @@ def verify_code(body: VerifyCodeRequest, request: Request = None, conn=Depends(g
     }
 
 
-@router.get("/me")
+@router.get("/me", summary="Dados do usuário autenticado",
+            description="Retorna perfil completo do usuário. Se não autenticado, retorna dados do usuário padrão (guest).")
 def get_me(user=Depends(get_optional_user), conn=Depends(get_db_session)):
     """Retorna dados do perfil do usuário autenticado (ou guest fallback)."""
     if not user:
@@ -330,7 +337,9 @@ def get_me(user=Depends(get_optional_user), conn=Depends(get_db_session)):
     }
 
 
-@router.put("/profile")
+@router.put("/profile", summary="Atualizar perfil",
+            description="Atualiza nome e/ou avatar do usuário autenticado.",
+            responses={401: {"description": "Não autenticado"}})
 def update_profile(body: ProfileUpdateRequest, user=Depends(get_current_user), conn=Depends(get_db_session)):
     """Atualiza dados do perfil."""
     if not user:
@@ -348,7 +357,8 @@ def update_profile(body: ProfileUpdateRequest, user=Depends(get_current_user), c
     return {"ok": True, "nome": nome, "avatar": avatar}
 
 
-@router.get("/status")
+@router.get("/status", summary="Status da autenticação",
+            description="Retorna se a autenticação está habilitada e se SMTP está configurado. Endpoint público.")
 def auth_status():
     """Retorna se a autenticação está habilitada."""
     return {

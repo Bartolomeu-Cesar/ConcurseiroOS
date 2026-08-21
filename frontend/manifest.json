@@ -1,13 +1,94 @@
 {
-  "name": "ConcurseiroOS - Plataforma de Estudos",
+  "name": "ConcurseiroOS - Plataforma de Estudos para Concursos",
   "short_name": "ConcurseiroOS",
-  "description": "Sistema completo para estudos de concursos públicos",
+  "description": "Sistema completo para estudos de concursos públicos: PDFs, flashcards, questões, ciclo de estudos, súmulas e controle de metas com revisão espaçada.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#1e1e2e",
-  "theme_color": "#cba6f7",
   "orientation": "any",
+  "theme_color": "#cba6f7",
+  "background_color": "#1e1e2e",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "scope": "/",
+  "id": "/",
+  "categories": ["education", "productivity"],
   "icons": [
-    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
-  ]
+    {
+      "src": "/icons/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/icons/screenshot-wide.svg",
+      "sizes": "1280x720",
+      "type": "image/svg+xml",
+      "form_factor": "wide",
+      "label": "Dashboard com métricas de estudo"
+    },
+    {
+      "src": "/icons/screenshot-narrow.svg",
+      "sizes": "390x844",
+      "type": "image/svg+xml",
+      "form_factor": "narrow",
+      "label": "Flashcards com revisão espaçada"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Dash",
+      "description": "Visualizar métricas e progresso de estudos",
+      "url": "/dashboard.html",
+      "icons": [{ "src": "/icons/icon-192.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "Questões",
+      "short_name": "Questões",
+      "description": "Resolver questões de concursos",
+      "url": "/questoes.html",
+      "icons": [{ "src": "/icons/icon-192.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "Flashcards",
+      "short_name": "Flash",
+      "description": "Revisão espaçada com flashcards",
+      "url": "/#tab-flashcards",
+      "icons": [{ "src": "/icons/icon-192.svg", "sizes": "192x192" }]
+    }
+  ],
+  "share_target": {
+    "action": "/share-target",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "pdf",
+          "accept": ["application/pdf", ".pdf"]
+        }
+      ]
+    }
+  },
+  "handle_links": "preferred",
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  }
 }

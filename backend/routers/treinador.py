@@ -789,7 +789,8 @@ def _distribute_time(conn, top_materias: list, tempo_restante: int, ordem: int,
 # ENDPOINTS
 # ============================================================
 
-@router.get("/api/treinador", summary="Treinador Inteligente")
+@router.get("/api/treinador", summary="Treinador Inteligente",
+            description="Retorna recomendações personalizadas de estudo usando 8 camadas de inteligência: análise de erros, ritmo adaptativo, curva de esquecimento (FSRS), distribuição por banca, detecção de platô, micro-metas, horário ótimo e sprint mode.")
 def treinador_inteligente(edital_nome: str = "", cargo: str = "", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Treinador com 8 camadas de inteligência: erros, ritmo, FSRS, banca, platô, micro-metas, horário, sprint."""
     desempenho = _get_performance_by_subject(conn, user_id)
@@ -894,7 +895,8 @@ def treinador_inteligente(edital_nome: str = "", cargo: str = "", conn=Depends(g
     }
 
 
-@router.get("/api/trilha-diaria", summary="Trilha de Estudo Diária")
+@router.get("/api/trilha-diaria", summary="Trilha de Estudo Diária",
+            description="Gera uma trilha personalizada de atividades para o dia baseada nas horas disponíveis. Prioriza revisões pendentes, depois matérias fracas e novos conteúdos.")
 def trilha_diaria(edital_nome: str = "", cargo: str = "", horas_disponiveis: float = Query(default=3.0), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     tempo_total_min = int(horas_disponiveis * 60)
     tempo_restante = tempo_total_min
@@ -1059,7 +1061,8 @@ def _gerar_planejador_interno(conn, user_id: int, horas_dia: float = 3.0):
     conn.commit()
 
 
-@router.get("/api/calendario-semanal", summary="Calendário Semanal")
+@router.get("/api/calendario-semanal", summary="Calendário Semanal",
+            description="Gera calendário semanal de estudos distribuindo matérias ao longo dos dias. Considera progresso no edital, desempenho e configuração de horas por dia.")
 def calendario_semanal(edital_nome: str = "", cargo: str = "", horas_dia: float = Query(default=3.0), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Gera calendário semanal de estudos."""
     tempo_dia_min = int(horas_dia * 60)
@@ -1185,7 +1188,8 @@ def calendario_semanal(edital_nome: str = "", cargo: str = "", horas_dia: float 
     }
 
 
-@router.get("/api/treinador/sugestao-rapida")
+@router.get("/api/treinador/sugestao-rapida", summary="Sugestão rápida de matéria",
+            description="Retorna a melhor matéria para estudar agora. Prioriza matéria com menor acerto e maior tempo sem estudar. Ideal para o CTA 'Iniciar Sessão'.")
 def sugestao_rapida(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Retorna a melhor matéria para estudar agora (para CTA 'Iniciar Sessão')."""
     # Priority: matéria com menor acerto + mais tempo sem estudar

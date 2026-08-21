@@ -104,14 +104,16 @@ def list_questoes(
     return paginate(items, page, limit)
 
 
-@router.get("/api/questoes/materias")
+@router.get("/api/questoes/materias", summary="Listar matérias disponíveis",
+            description="Retorna lista de matérias distintas presentes no banco de questões do usuário.")
 def list_questoes_materias(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     rows = conn.execute("SELECT DISTINCT materia FROM questoes WHERE user_id = ? ORDER BY materia", (user_id,)).fetchall()
     return [r[0] for r in rows]
 
 
 # Caderno de Erros (DEVE ficar antes de /api/questoes/{id})
-@router.get("/api/questoes/erros/caderno")
+@router.get("/api/questoes/erros/caderno", summary="Caderno de erros",
+            description="Retorna todas as questões que o usuário errou, ordenadas pela data mais recente.")
 def caderno_erros(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     rows = conn.execute("""
         SELECT q.id, q.materia, q.topico, q.enunciado, q.resposta_correta, qr.resposta_usuario, qr.data
@@ -124,7 +126,8 @@ def caderno_erros(conn=Depends(get_db_session), user_id: int = Depends(get_user_
 
 
 # Estatísticas de questões (DEVE ficar antes de /api/questoes/{id})
-@router.get("/api/questoes/stats/geral")
+@router.get("/api/questoes/stats/geral", summary="Estatísticas gerais de questões",
+            description="Retorna total de questões resolvidas, acertos, percentual e desempenho por matéria.")
 def questoes_stats(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     total = conn.execute("SELECT COUNT(*) FROM questoes_respostas WHERE user_id = ?", (user_id,)).fetchone()[0]
     acertos = conn.execute("SELECT COUNT(*) FROM questoes_respostas WHERE acertou = 1 AND user_id = ?", (user_id,)).fetchone()[0]
@@ -146,7 +149,8 @@ def questoes_stats(conn=Depends(get_db_session), user_id: int = Depends(get_user
     }
 
 
-@router.get("/api/questoes/stats/por-banca")
+@router.get("/api/questoes/stats/por-banca", summary="Estatísticas por banca examinadora",
+            description="Retorna taxa de acerto agrupada por banca (CESPE, FCC, FGV, etc).")
 def questoes_stats_por_banca(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Retorna estatísticas de acerto agrupadas por banca examinadora"""
     log.info("GET /api/questoes/stats/por-banca")
@@ -265,7 +269,9 @@ def list_datas_importacao(conn=Depends(get_db_session), user_id: int = Depends(g
     return [{"data": r[0], "total": r[1], "materias": r[2] or "", "bancas": r[3] or ""} for r in rows]
 
 
-@router.get("/api/questoes/{id}", response_model=QuestaoResponse)
+@router.get("/api/questoes/{id}", response_model=QuestaoResponse, summary="Obter questão por ID",
+            description="Retorna os dados completos de uma questão específica.",
+            responses={404: {"description": "Questão não encontrada"}})
 def get_questao(id: int, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     row = conn.execute("SELECT * FROM questoes WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
     if not row:
@@ -391,7 +397,9 @@ def vincular_questoes_lote(body: QuestionLinkBatch, conn=Depends(get_db_session)
     return {"ok": True, "atualizadas": count}
 
 
-@router.put("/api/questoes/{id}", summary="Editar questão")
+@router.put("/api/questoes/{id}", summary="Editar questão",
+            description="Atualiza campos de uma questão existente. Campos não enviados permanecem inalterados.",
+            responses={404: {"description": "Questão não encontrada"}, 400: {"description": "Nenhum campo para atualizar"}})
 def update_questao(id: int, body: QuestionUpdate, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Atualiza campos de uma questão (materia, topico, enunciado, alternativas, resposta, explicacao, dificuldade, banca)."""
     row = conn.execute("SELECT id FROM questoes WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
@@ -419,7 +427,8 @@ def update_questao(id: int, body: QuestionUpdate, conn=Depends(get_db_session), 
     return dict(updated)
 
 
-@router.delete("/api/questoes/{id}")
+@router.delete("/api/questoes/{id}", summary="Excluir questão",
+              description="Remove permanentemente uma questão e todas as respostas associadas.")
 def delete_questao(id: int, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     conn.execute("DELETE FROM questoes_respostas WHERE questao_id = ? AND user_id = ?", (id, user_id))
     conn.execute("DELETE FROM questoes WHERE id = ? AND user_id = ?", (id, user_id))

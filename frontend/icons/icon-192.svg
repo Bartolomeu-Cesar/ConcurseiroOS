@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <!-- Background -->
+  <rect width="192" height="192" rx="32" fill="#1e1e2e"/>
+  <!-- Graduation cap -->
+  <g transform="translate(96, 85)">
+    <!-- Cap base (diamond shape) -->
+    <polygon points="0,-35 65,0 0,15 -65,0" fill="#cba6f7"/>
+    <!-- Cap top highlight -->
+    <polygon points="0,-35 65,0 0,-5 -65,0" fill="#b4befe" opacity="0.6"/>
+    <!-- Tassel line -->
+    <line x1="0" y1="-35" x2="0" y2="-45" stroke="#f9e2af" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="0" cy="-47" r="4" fill="#f9e2af"/>
+    <!-- Tassel hanging -->
+    <path d="M0,-35 Q15,-25 18,5 Q18,15 15,25" stroke="#f9e2af" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <circle cx="15" cy="27" r="4" fill="#f9e2af"/>
+    <!-- Board bottom edges -->
+    <path d="M-35,7 L-35,30 Q0,45 35,30 L35,7" fill="none" stroke="#cba6f7" stroke-width="3" stroke-linecap="round"/>
+  </g>
+  <!-- Book icon below -->
+  <g transform="translate(96, 140)">
+    <rect x="-22" y="-8" width="44" height="16" rx="2" fill="#89b4fa"/>
+    <rect x="-20" y="-6" width="40" height="12" rx="1" fill="#313244"/>
+    <line x1="0" y1="-6" x2="0" y2="6" stroke="#89b4fa" stroke-width="1.5"/>
+  </g>
+  <!-- App name abbreviation -->
+  <text x="96" y="178" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="700" fill="#9399b2">ConcOS</text>
+</svg>

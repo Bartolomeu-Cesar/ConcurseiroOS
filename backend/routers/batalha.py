@@ -139,7 +139,9 @@ def _calculate_points(acertou: bool, tempo_seg: int, tempo_max: int, streak: int
 # ENDPOINTS
 # ============================================================
 
-@router.post("/criar", summary="Criar sala de batalha")
+@router.post("/criar", summary="Criar sala de batalha",
+             description="Cria uma nova sala de batalha multiplayer. O criador entra automaticamente. Configurações: matérias, rodadas (3-20), tempo por questão (10-120s) e max jogadores (2-5). Limites variam por plano.",
+             responses={403: {"description": "Batalha não disponível no plano do usuário"}})
 def criar_batalha(
     body: dict = Body(...),
     conn=Depends(get_db_session),
@@ -207,7 +209,9 @@ def criar_batalha(
     }
 
 
-@router.post("/entrar", summary="Entrar em sala de batalha")
+@router.post("/entrar", summary="Entrar em sala de batalha",
+             description="Entra em uma sala existente pelo código de 6 caracteres. Limite de jogadores definido na criação.",
+             responses={400: {"description": "Código inválido"}, 404: {"description": "Sala não encontrada"}, 409: {"description": "Sala cheia ou jogador já presente"}})
 def entrar_batalha(
     body: dict = Body(...),
     conn=Depends(get_db_session),
@@ -254,7 +258,9 @@ def entrar_batalha(
     return {"message": f"Bem-vindo à batalha!", "battle_id": battle["id"], "codigo": codigo}
 
 
-@router.get("/sala/{codigo}", summary="Status da sala")
+@router.get("/sala/{codigo}", summary="Status da sala",
+            description="Retorna estado completo da sala: jogadores, rodada atual, questão ativa e configurações.",
+            responses={404: {"description": "Sala não encontrada"}})
 def status_sala(
     codigo: str,
     conn=Depends(get_db_session),
@@ -340,7 +346,9 @@ def status_sala(
     }
 
 
-@router.post("/iniciar/{codigo}", summary="Iniciar batalha")
+@router.post("/iniciar/{codigo}", summary="Iniciar batalha",
+             description="Inicia a batalha (apenas o criador pode). Gera as questões das rodadas baseado nas matérias selecionadas.",
+             responses={403: {"description": "Apenas o criador pode iniciar"}, 404: {"description": "Sala não encontrada"}})
 def iniciar_batalha(
     codigo: str,
     conn=Depends(get_db_session),
@@ -444,7 +452,9 @@ def iniciar_batalha(
     return {"message": "Batalha iniciada!", "total_rodadas": total, "jogadores": player_count}
 
 
-@router.post("/responder/{codigo}", summary="Responder questão da rodada")
+@router.post("/responder/{codigo}", summary="Responder questão da rodada",
+             description="Registra a resposta do jogador para a rodada atual. Pontos calculados por: acerto + velocidade + streak. Avança automaticamente quando todos respondem.",
+             responses={400: {"description": "Já respondeu esta rodada"}, 404: {"description": "Sala não encontrada"}})
 def responder_rodada(
     codigo: str,
     body: dict = Body(...),
@@ -583,7 +593,9 @@ def responder_rodada(
     }
 
 
-@router.get("/ranking/{codigo}", summary="Ranking final da batalha")
+@router.get("/ranking/{codigo}", summary="Ranking final da batalha",
+            description="Retorna o ranking completo com posição, pontos, acertos e tempo de cada jogador.",
+            responses={404: {"description": "Sala não encontrada"}})
 def ranking_batalha(
     codigo: str,
     conn=Depends(get_db_session),
@@ -654,7 +666,8 @@ def ranking_batalha(
     }
 
 
-@router.get("/minhas", summary="Minhas batalhas")
+@router.get("/minhas", summary="Minhas batalhas",
+            description="Lista todas as batalhas que o usuário participou, ordenadas por data de criação.")
 def minhas_batalhas(
     conn=Depends(get_db_session),
     user_id: int = Depends(get_user_id)

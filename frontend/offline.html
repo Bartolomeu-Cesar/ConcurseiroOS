@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#1e1e2e">
+  <title>Offline - ConcurseiroOS</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1e1e2e;
+      color: #cdd6f4;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .offline-container {
+      max-width: 480px;
+      width: 100%;
+      text-align: center;
+    }
+    .offline-icon {
+      font-size: 4rem;
+      margin-bottom: 16px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.05); opacity: 0.8; }
+    }
+    h1 {
+      font-size: 1.5rem;
+      color: #cba6f7;
+      margin-bottom: 8px;
+    }
+    .subtitle {
+      font-size: 0.95rem;
+      color: #a6adc8;
+      margin-bottom: 24px;
+      line-height: 1.5;
+    }
+    .status-card {
+      background: #313244;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      text-align: left;
+    }
+    .status-card h2 {
+      font-size: 0.9rem;
+      color: #89b4fa;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .cache-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+    }
+    .stat-item {
+      background: #1e1e2e;
+      border-radius: 8px;
+      padding: 12px 8px;
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #a6e3a1;
+    }
+    .stat-label {
+      font-size: 0.72rem;
+      color: #9399b2;
+      margin-top: 4px;
+    }
+    .pending-section {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid #45475a;
+    }
+    .pending-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #f9e2af;
+      color: #1e1e2e;
+      border-radius: 20px;
+      padding: 4px 12px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .actions {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 14px 24px;
+      border: none;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.1s, opacity 0.2s;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary {
+      background: #cba6f7;
+      color: #1e1e2e;
+    }
+    .btn-secondary {
+      background: #45475a;
+      color: #cdd6f4;
+    }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .retry-status {
+      font-size: 0.82rem;
+      color: #a6e3a1;
+      margin-top: 12px;
+      display: none;
+      align-items: center;
+      gap: 6px;
+    }
+    .retry-status.visible { display: flex; justify-content: center; }
+    .spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid #45475a;
+      border-top-color: #a6e3a1;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .connection-indicator {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      background: #313244;
+      border-radius: 20px;
+      font-size: 0.78rem;
+    }
+    .connection-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #f38ba8;
+    }
+    .connection-dot.online {
+      background: #a6e3a1;
+      animation: blink 1s ease-in-out;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    .cached-pages {
+      margin-top: 16px;
+    }
+    .cached-pages h3 {
+      font-size: 0.82rem;
+      color: #9399b2;
+      margin-bottom: 8px;
+    }
+    .page-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .page-link {
+      display: inline-block;
+      padding: 6px 12px;
+      background: #1e1e2e;
+      border: 1px solid #45475a;
+      border-radius: 8px;
+      color: #89b4fa;
+      text-decoration: none;
+      font-size: 0.8rem;
+      transition: background 0.2s;
+    }
+    .page-link:hover { background: #45475a; }
+  </style>
+</head>
+<body>
+  <div class="connection-indicator">
+    <div class="connection-dot" id="connection-dot"></div>
+    <span id="connection-text">Sem conexão</span>
+  </div>
+
+  <div class="offline-container">
+    <div class="offline-icon">📡</div>
+    <h1>Você está offline</h1>
+    <p class="subtitle">
+      Sem conexão com a internet. Seus dados estão salvos localmente e serão sincronizados quando a conexão voltar.
+    </p>
+
+    <div class="status-card">
+      <h2>📦 Conteúdo em cache</h2>
+      <div class="cache-stats">
+        <div class="stat-item">
+          <div class="stat-value" id="stat-pages">—</div>
+          <div class="stat-label">Páginas</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="stat-assets">—</div>
+          <div class="stat-label">Assets</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="stat-api">—</div>
+          <div class="stat-label">Dados API</div>
+        </div>
+      </div>
+      <div class="pending-section" id="pending-section" style="display:none;">
+        <span class="pending-badge">
+          ⏳ <span id="pending-count">0</span> ações pendentes para sincronizar
+        </span>
+      </div>
+      <div class="cached-pages" id="cached-pages">
+        <h3>Páginas disponíveis offline:</h3>
+        <div class="page-links" id="page-links">
+          <a href="/" class="page-link">🏠 Início</a>
+          <a href="/dashboard.html" class="page-link">📊 Dashboard</a>
+          <a href="/questoes.html" class="page-link">❓ Questões</a>
+          <a href="/viewer.html" class="page-link">📖 Leitor PDF</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-primary" id="btn-retry" onclick="retryConnection()">
+        🔄 Tentar reconectar
+      </button>
+      <button class="btn btn-secondary" onclick="goHome()">
+        🏠 Ir para o início (cache)
+      </button>
+    </div>
+
+    <div class="retry-status" id="retry-status">
+      <div class="spinner"></div>
+      <span>Verificando conexão...</span>
+    </div>
+  </div>
+
+  <script>
+    // Load cache stats from service worker
+    function loadCacheStats() {
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: 'GET_CACHE_STATS' });
+        navigator.serviceWorker.controller.postMessage({ type: 'GET_PENDING_COUNT' });
+      }
+    }
+
+    // Listen for SW messages
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', (event) => {
+        const { type } = event.data;
+        if (type === 'CACHE_STATS') {
+          const { stats } = event.data;
+          document.getElementById('stat-pages').textContent = stats.pages;
+          document.getElementById('stat-assets').textContent = stats.assets;
+          document.getElementById('stat-api').textContent = stats.apiResponses;
+        } else if (type === 'PENDING_COUNT') {
+          const { count } = event.data;
+          if (count > 0) {
+            document.getElementById('pending-section').style.display = 'block';
+            document.getElementById('pending-count').textContent = count;
+          }
+        }
+      });
+    }
+
+    // Retry connection
+    async function retryConnection() {
+      const btn = document.getElementById('btn-retry');
+      const status = document.getElementById('retry-status');
+      btn.disabled = true;
+      status.classList.add('visible');
+
+      try {
+        const response = await fetch('/api/health', { cache: 'no-store' });
+        if (response.ok) {
+          // We're back online
+          setOnline();
+          status.innerHTML = '<span style="color:#a6e3a1;">✅ Conexão restaurada! Redirecionando...</span>';
+          setTimeout(() => {
+            window.location.href = document.referrer || '/';
+          }, 1000);
+          return;
+        }
+      } catch (e) {
+        // Still offline
+      }
+
+      status.innerHTML = '<span style="color:#f38ba8;">❌ Ainda sem conexão. Tentando novamente em 5s...</span>';
+      btn.disabled = false;
+      setTimeout(() => {
+        status.classList.remove('visible');
+      }, 5000);
+    }
+
+    // Go home (from cache)
+    function goHome() {
+      window.location.href = '/';
+    }
+
+    // Auto-retry when connection comes back
+    window.addEventListener('online', () => {
+      setOnline();
+      setTimeout(() => {
+        window.location.href = document.referrer || '/';
+      }, 1500);
+    });
+
+    window.addEventListener('offline', () => {
+      setOffline();
+    });
+
+    function setOnline() {
+      const dot = document.getElementById('connection-dot');
+      const text = document.getElementById('connection-text');
+      dot.classList.add('online');
+      text.textContent = 'Conectado!';
+      text.style.color = '#a6e3a1';
+    }
+
+    function setOffline() {
+      const dot = document.getElementById('connection-dot');
+      const text = document.getElementById('connection-text');
+      dot.classList.remove('online');
+      text.textContent = 'Sem conexão';
+      text.style.color = '#cdd6f4';
+    }
+
+    // Auto-check connection every 10 seconds
+    let autoRetryInterval = setInterval(async () => {
+      try {
+        const r = await fetch('/api/health', { cache: 'no-store', signal: AbortSignal.timeout(5000) });
+        if (r.ok) {
+          setOnline();
+          clearInterval(autoRetryInterval);
+          setTimeout(() => {
+            window.location.href = document.referrer || '/';
+          }, 1500);
+        }
+      } catch (e) {
+        // Still offline
+      }
+    }, 10000);
+
+    // Init
+    loadCacheStats();
+    if (navigator.onLine) {
+      // Might have just come back online
+      retryConnection();
+    }
+  </script>
+</body>
+</html>

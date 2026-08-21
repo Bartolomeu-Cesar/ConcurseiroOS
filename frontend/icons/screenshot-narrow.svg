@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844" width="390" height="844">
+  <rect width="390" height="844" fill="#1e1e2e"/>
+  <!-- Status bar -->
+  <rect x="0" y="0" width="390" height="44" fill="#181825"/>
+  <!-- Header -->
+  <rect x="0" y="44" width="390" height="56" fill="#313244"/>
+  <text x="20" y="78" font-family="sans-serif" font-size="14" fill="#cdd6f4">☰</text>
+  <text x="50" y="78" font-family="sans-serif" font-size="16" fill="#cba6f7" font-weight="700">ConcurseiroOS</text>
+  <text x="330" y="78" font-family="sans-serif" font-size="14" fill="#cdd6f4">15:30:00</text>
+  <!-- Flashcard area -->
+  <rect x="16" y="116" width="358" height="220" rx="16" fill="#313244"/>
+  <text x="36" y="148" font-family="sans-serif" font-size="14" fill="#89b4fa" font-weight="600">🧠 Revisão de Hoje</text>
+  <!-- Progress bar -->
+  <rect x="36" y="164" width="318" height="8" rx="4" fill="#45475a"/>
+  <rect x="36" y="164" width="200" height="8" rx="4" fill="#a6e3a1"/>
+  <text x="36" y="188" font-family="sans-serif" font-size="11" fill="#9399b2">8/12 revisados</text>
+  <text x="310" y="188" font-family="sans-serif" font-size="11" fill="#a6e3a1" font-weight="600">67%</text>
+  <!-- Flashcard content -->
+  <rect x="36" y="200" width="318" height="100" rx="10" fill="#1e1e2e"/>
+  <text x="56" y="235" font-family="sans-serif" font-size="13" fill="#cdd6f4">Qual o prazo prescricional para</text>
+  <text x="56" y="255" font-family="sans-serif" font-size="13" fill="#cdd6f4">ação de reparação civil segundo</text>
+  <text x="56" y="275" font-family="sans-serif" font-size="13" fill="#cdd6f4">o Código Civil?</text>
+  <!-- Reveal button -->
+  <rect x="110" y="310" width="170" height="38" rx="10" fill="#cba6f7"/>
+  <text x="195" y="334" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#1e1e2e" font-weight="600">Revelar Resposta</text>
+  <!-- Questões section -->
+  <rect x="16" y="356" width="358" height="160" rx="16" fill="#313244"/>
+  <text x="36" y="388" font-family="sans-serif" font-size="14" fill="#89b4fa" font-weight="600">❓ Questões do Dia</text>
+  <rect x="36" y="404" width="318" height="80" rx="10" fill="#1e1e2e"/>
+  <text x="56" y="430" font-family="sans-serif" font-size="12" fill="#cdd6f4">De acordo com a CF/88, art. 5º,</text>
+  <text x="56" y="448" font-family="sans-serif" font-size="12" fill="#cdd6f4">é correto afirmar que...</text>
+  <text x="56" y="472" font-family="sans-serif" font-size="11" fill="#a6e3a1">● a) Todos são iguais perante a lei</text>
+  <rect x="36" y="492" width="100" height="14" rx="7" fill="#a6e3a1" opacity="0.3"/>
+  <!-- Stats section -->
+  <rect x="16" y="536" width="358" height="100" rx="16" fill="#313244"/>
+  <text x="36" y="566" font-family="sans-serif" font-size="14" fill="#89b4fa" font-weight="600">📊 Hoje</text>
+  <text x="36" y="598" font-family="sans-serif" font-size="24" fill="#a6e3a1" font-weight="700">3.5h</text>
+  <text x="120" y="598" font-family="sans-serif" font-size="24" fill="#89b4fa" font-weight="700">28q</text>
+  <text x="200" y="598" font-family="sans-serif" font-size="24" fill="#cba6f7" font-weight="700">15f</text>
+  <text x="280" y="598" font-family="sans-serif" font-size="24" fill="#f9e2af" font-weight="700">🔥12</text>
+  <!-- Bottom nav -->
+  <rect x="0" y="780" width="390" height="64" fill="#313244"/>
+  <text x="48" y="818" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#cdd6f4">📖</text>
+  <text x="48" y="832" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#9399b2">PDFs</text>
+  <text x="130" y="818" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#cdd6f4">❓</text>
+  <text x="130" y="832" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#9399b2">Questões</text>
+  <text x="210" y="818" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#cba6f7">🧠</text>
+  <text x="210" y="832" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#cba6f7">Flash</text>
+  <text x="290" y="818" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#cdd6f4">📊</text>
+  <text x="290" y="832" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#9399b2">Dash</text>
+  <text x="350" y="818" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#cdd6f4">☰</text>
+  <text x="350" y="832" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#9399b2">Mais</text>
+</svg>

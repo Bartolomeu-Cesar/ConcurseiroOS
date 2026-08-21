@@ -20,6 +20,9 @@ def get_db():
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
     conn.execute("PRAGMA busy_timeout=5000")
+    conn.execute("PRAGMA cache_size=-8000")
+    conn.execute("PRAGMA temp_store=MEMORY")
+    conn.execute("PRAGMA mmap_size=268435456")
     try:
         yield conn
     finally:
@@ -33,7 +36,9 @@ def get_db_session() -> Generator[sqlite3.Connection, None, None]:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
     conn.execute("PRAGMA busy_timeout=5000")
-    conn.execute("PRAGMA cache_size=-4000")  # 4MB cache
+    conn.execute("PRAGMA cache_size=-8000")
+    conn.execute("PRAGMA temp_store=MEMORY")
+    conn.execute("PRAGMA mmap_size=268435456")
     try:
         yield conn
     finally:

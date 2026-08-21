@@ -2,11 +2,16 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <title>Leitor PDF - Concurseiro OS</title>
+  <title>ConcurseiroOS - Plataforma de Estudos</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#1e1e2e">
+  <meta name="theme-color" content="#cba6f7">
+  <meta name="description" content="Sistema completo para estudos de concursos públicos com flashcards, questões, ciclo de estudos e revisão espaçada.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ConcurseiroOS">
   <link rel="manifest" href="/manifest.json">
-  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="/icons/icon-192.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icons/icon-192.svg">
   <link rel="stylesheet" href="/css/styles.css">
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/layout.css">
@@ -669,5 +674,95 @@
   <script src="/sidebar.js"></script>
   <script type="module" src="/js/app.js"></script>
   <script src="/timer-global.js"></script>
+
+  <!-- Service Worker Registration -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', async () => {
+        try {
+          const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+          console.log('[App] SW registered, scope:', registration.scope);
+
+          // Check for updates periodically (every 60 minutes)
+          setInterval(() => registration.update(), 60 * 60 * 1000);
+
+          // Handle SW updates
+          registration.addEventListener('updatefound', () => {
+            const newWorker = registration.installing;
+            if (!newWorker) return;
+
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                // New SW installed, show update prompt
+                showUpdateBanner(newWorker);
+              }
+            });
+          });
+
+          // Listen for controller change (after skipWaiting)
+          navigator.serviceWorker.addEventListener('controllerchange', () => {
+            window.location.reload();
+          });
+
+          // Listen for sync completion messages
+          navigator.serviceWorker.addEventListener('message', (event) => {
+            const { type, replayed, pending } = event.data || {};
+            if (type === 'SYNC_COMPLETE') {
+              if (replayed > 0) {
+                if (window.toast) {
+                  window.toast(`✅ ${replayed} ação(ões) sincronizada(s)${pending > 0 ? ` (${pending} pendente(s))` : ''}`, 'success', 4000);
+                }
+              }
+            }
+          });
+
+          // Request persistent storage for offline data
+          if (navigator.storage && navigator.storage.persist) {
+            const persisted = await navigator.storage.persist();
+            console.log('[App] Persistent storage:', persisted ? 'granted' : 'denied');
+          }
+
+          // Register periodic background sync if supported
+          if ('periodicSync' in registration) {
+            try {
+              await registration.periodicSync.register('refresh-dashboard', {
+                minInterval: 12 * 60 * 60 * 1000 // 12 hours
+              });
+            } catch (e) {
+              // Periodic sync requires permission, not critical
+            }
+          }
+
+        } catch (error) {
+          console.error('[App] SW registration failed:', error);
+        }
+      });
+    }
+
+    function showUpdateBanner(worker) {
+      // Remove existing banner if any
+      const existing = document.getElementById('sw-update-banner');
+      if (existing) existing.remove();
+
+      const banner = document.createElement('div');
+      banner.id = 'sw-update-banner';
+      banner.setAttribute('role', 'alert');
+      banner.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#313244;color:#cdd6f4;padding:12px 20px;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.4);z-index:10000;display:flex;align-items:center;gap:12px;font-size:0.9rem;border:1px solid #cba6f7;max-width:90%;';
+      banner.innerHTML = `
+        <span>🆕 Nova versão disponível!</span>
+        <button onclick="applyUpdate()" style="background:#cba6f7;color:#1e1e2e;border:none;border-radius:8px;padding:8px 16px;font-weight:600;cursor:pointer;font-size:0.85rem;white-space:nowrap;">Atualizar</button>
+        <button onclick="this.parentElement.remove()" style="background:none;border:none;color:#9399b2;cursor:pointer;font-size:1.2rem;padding:4px;" aria-label="Fechar">✕</button>
+      `;
+      document.body.appendChild(banner);
+
+      window._pendingWorker = worker;
+    }
+
+    function applyUpdate() {
+      if (window._pendingWorker) {
+        window._pendingWorker.postMessage({ type: 'SKIP_WAITING' });
+      }
+    }
+  </script>
 </body>
 </html>

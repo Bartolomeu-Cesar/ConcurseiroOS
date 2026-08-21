@@ -12,7 +12,7 @@ router = APIRouter(prefix="", tags=["Dashboard"])
 
 
 @router.get("/api/dashboard", response_model=DashboardResponse, summary="Dashboard principal",
-            description="Retorna métricas consolidadas: horas, progresso, questões, flashcards")
+            description="Retorna métricas consolidadas do estudo: horas por dia (últimos 14 dias), progresso do edital, questões respondidas com percentual de acerto, evolução diária, distribuição por matéria e flashcards pendentes.")
 def get_dashboard(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     # Horas por dia (últimos 14 dias)
     horas_dia = conn.execute("""
