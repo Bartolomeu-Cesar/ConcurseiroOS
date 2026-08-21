@@ -2572,12 +2572,12 @@
           html += `<div style="margin-bottom:12px;">
             <div style="font-size:0.8rem;color:#9399b2;margin-bottom:6px;font-weight:600;">⚠️ Risco de Esquecimento (FSRS):</div>
             <div style="display:grid;gap:4px;">
-              ${intel.forgetting_risk.slice(0, 4).map(item => {
+              ${intel.forgetting_risk.slice(0, 5).map(item => {
                 const urgColor = item.urgencia === 'critica' ? '#f38ba8' : item.urgencia === 'alta' ? '#fab387' : '#f9e2af';
-                return `<div style="display:flex;align-items:center;gap:8px;font-size:0.78rem;padding:6px 10px;background:#1e1e2e;border-radius:6px;">
-                  <div style="width:40px;text-align:center;font-weight:700;color:${urgColor};">${item.recall_estimado}%</div>
-                  <div style="flex:1;color:#cdd6f4;">${item.descricao}</div>
-                  <div style="font-size:0.7rem;color:#9399b2;">${item.tipo}</div>
+                return `<div style="display:flex;align-items:flex-start;gap:8px;font-size:0.78rem;padding:8px 10px;background:#1e1e2e;border-radius:6px;">
+                  <div style="min-width:44px;text-align:center;font-weight:700;color:${urgColor};padding-top:1px;">${item.recall_estimado}%</div>
+                  <div style="flex:1;color:#cdd6f4;line-height:1.4;">${item.descricao}</div>
+                  <div style="font-size:0.68rem;color:#9399b2;min-width:55px;text-align:right;padding-top:1px;">${item.tipo}</div>
                 </div>`;
               }).join('')}
             </div>

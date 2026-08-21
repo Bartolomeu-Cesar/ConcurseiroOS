@@ -195,7 +195,7 @@ def _get_forgetting_risk(conn, user_id: int, limit: int = 10) -> list:
             at_risk.append({
                 "tipo": "flashcard",
                 "id": fc["id"],
-                "descricao": fc["pergunta"][:60],
+                "descricao": fc["pergunta"],
                 "materia": fc["materia"] or "",
                 "stability": round(stability, 2),
                 "dias_atraso": round(dias_atraso, 1),
@@ -223,7 +223,7 @@ def _get_forgetting_risk(conn, user_id: int, limit: int = 10) -> list:
             at_risk.append({
                 "tipo": "topico",
                 "id": t["id"],
-                "descricao": f"{t['materia']}: {t['topico'][:40]}",
+                "descricao": f"{t['materia']}: {t['topico']}",
                 "materia": t["materia"],
                 "stability": round(stability, 2),
                 "dias_atraso": round(dias_atraso, 1),
