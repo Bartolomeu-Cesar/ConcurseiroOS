@@ -683,6 +683,31 @@
           💡 Modo Híbrido: O sistema gerou uma sugestão. Clique no ❌ para remover atividades ou use o formulário acima para adicionar. As alterações são salvas automaticamente.
         </div>
 
+        <!-- Banner: O que estudar agora + Progresso semanal -->
+        <div id="cal-agora-banner" style="display:none;background:linear-gradient(135deg,#313244,#1e1e2e);border:1px solid #45475a;border-radius:10px;padding:14px 16px;margin-bottom:14px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+            <div>
+              <div style="font-size:0.72rem;color:#9399b2;text-transform:uppercase;font-weight:600;">📍 Agora</div>
+              <div style="font-size:1rem;font-weight:700;color:#cdd6f4;" id="cal-agora-materia">—</div>
+              <div style="font-size:0.78rem;color:#a6adc8;" id="cal-agora-motivo"></div>
+            </div>
+            <div style="text-align:center;">
+              <div style="font-size:0.68rem;color:#9399b2;">Dia</div>
+              <div style="font-size:1.3rem;font-weight:700;" id="cal-agora-pct" style="color:#a6e3a1;">—</div>
+            </div>
+            <button onclick="iniciarAtividadeAgora()" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:8px;padding:8px 16px;font-size:0.82rem;font-weight:700;cursor:pointer;">▶ Iniciar</button>
+          </div>
+        </div>
+
+        <!-- Progresso semanal visual -->
+        <div id="cal-week-progress" style="display:none;margin-bottom:14px;background:#313244;border-radius:8px;padding:10px 14px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <span style="font-size:0.78rem;font-weight:600;color:#cba6f7;">📊 Semana</span>
+            <span style="font-size:0.75rem;color:#9399b2;" id="cal-week-pct-text">0%</span>
+          </div>
+          <div style="display:flex;gap:4px;align-items:flex-end;" id="cal-week-bars"></div>
+        </div>
+
         <!-- Grid do calendário -->
         <div id="calendario-grid"></div>
         <div id="calendario-resumo" style="margin-top:16px;"></div>
@@ -2778,6 +2803,64 @@
       loadCalendario();
     }
 
+    async function loadCalendarExtras() {
+      // 1. Banner "O que estudar agora"
+      try {
+        const agora = await fetch('/api/calendario/agora').then(r => r.json());
+        const banner = document.getElementById('cal-agora-banner');
+        if (banner && agora.sugestao) {
+          banner.style.display = 'block';
+          document.getElementById('cal-agora-materia').textContent =
+            `${agora.turno_label} — ${agora.sugestao.materia}`;
+          document.getElementById('cal-agora-motivo').textContent = agora.sugestao.motivo;
+          const pctEl = document.getElementById('cal-agora-pct');
+          if (agora.progresso_dia) {
+            const p = agora.progresso_dia.pct;
+            pctEl.textContent = `${p}%`;
+            pctEl.style.color = p >= 100 ? '#a6e3a1' : p >= 50 ? '#f9e2af' : '#89b4fa';
+          }
+          // Store for iniciar button
+          window._calAgoraSugestao = agora.sugestao;
+        }
+      } catch(e) { console.warn('cal-agora error:', e); }
+
+      // 2. Progresso semanal visual
+      try {
+        const prog = await fetch('/api/calendario/progresso-semanal').then(r => r.json());
+        const container = document.getElementById('cal-week-progress');
+        const barsEl = document.getElementById('cal-week-bars');
+        if (container && prog.dias) {
+          container.style.display = 'block';
+          document.getElementById('cal-week-pct-text').textContent = `${prog.resumo.pct_semanal}% concluído`;
+          let bars = '';
+          for (const dia of prog.dias) {
+            const h = Math.max(4, dia.pct * 0.3); // max height 30px
+            let color = '#45475a'; // pendente/futuro
+            if (dia.status === 'completo') color = '#a6e3a1';
+            else if (dia.status === 'parcial') color = '#f9e2af';
+            else if (dia.status === 'perdido') color = '#f38ba822';
+            const border = dia.is_today ? 'border:1px solid #cba6f7;' : '';
+            bars += `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">
+              <div style="width:100%;height:${h}px;background:${color};border-radius:3px;${border}transition:height 0.3s;"></div>
+              <span style="font-size:0.6rem;color:${dia.is_today ? '#cba6f7' : '#9399b2'};font-weight:${dia.is_today ? '700' : '400'};">${dia.nome}</span>
+            </div>`;
+          }
+          barsEl.innerHTML = bars;
+        }
+      } catch(e) { console.warn('cal-progress error:', e); }
+    }
+
+    function iniciarAtividadeAgora() {
+      const s = window._calAgoraSugestao;
+      if (!s || s.tipo === 'pausa') return;
+      // Iniciar timer com a matéria sugerida
+      if (window.startTimerGlobal) {
+        window.startTimerGlobal(s.tempo_min || 25, s.materia || 'Estudo');
+      } else {
+        alert(`Inicie ${s.tempo_min}min de ${s.materia} (${s.tipo})`);
+      }
+    }
+
     async function regenerarCalendario() {
       if (!confirm('Deseja regerar o calendário? Isso vai apagar o calendário personalizado atual e gerar um novo baseado no seu desempenho.')) return;
 
@@ -2871,6 +2954,8 @@
     }
 
     function renderCalendario(data, editable) {
+      // Load extras (banner + progress) when calendar renders
+      loadCalendarExtras();
       const el = document.getElementById('calendario-grid');
       const _now = new Date();
       const hoje = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}-${String(_now.getDate()).padStart(2,'0')}`;

@@ -409,3 +409,228 @@ def get_spacing_indicator(conn=Depends(get_db_session), user_id: int = Depends(g
 
     resultado.sort(key=lambda x: 0 if x["status"] == "ideal" else (1 if x["status"] == "muito_junto" else 2))
     return {"materias": resultado, "total": len(resultado)}
+
+
+# ============================================================
+# O QUE ESTUDAR AGORA — Sugestão baseada no horário + calendário
+# ============================================================
+
+@router.get("/api/calendario/agora", summary="O que estudar agora",
+            description="Sugere atividade baseada no dia/hora atual + calendário planejado")
+def o_que_estudar_agora(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Retorna a atividade ideal para este momento baseado no calendário planejado."""
+    agora = datetime.now()
+    hora = agora.hour
+    dia_semana = agora.weekday()  # 0=Monday
+
+    # Determinar turno
+    if 5 <= hora < 12:
+        turno = "manha"
+        turno_label = "☀️ Manhã"
+    elif 12 <= hora < 18:
+        turno = "tarde"
+        turno_label = "🌤️ Tarde"
+    elif 18 <= hora < 23:
+        turno = "noite"
+        turno_label = "🌙 Noite"
+    else:
+        turno = "madrugada"
+        turno_label = "🦉 Madrugada"
+
+    # Buscar atividades planejadas para hoje
+    atividades_hoje = conn.execute("""
+        SELECT materia, topicos, tempo_min, tipo, ordem
+        FROM calendario_personalizado
+        WHERE dia_semana = ? AND user_id = ?
+        ORDER BY ordem
+    """, (dia_semana, user_id)).fetchall()
+
+    # Se não tem calendário personalizado, buscar do ciclo/edital
+    if not atividades_hoje:
+        # Fallback: matéria com menor acerto ou mais tempo sem estudar
+        fraca = conn.execute("""
+            SELECT q.materia, COUNT(*) as total,
+                   ROUND(CAST(SUM(qr.acertou) AS REAL) / COUNT(*) * 100, 1) as pct
+            FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id
+            WHERE qr.user_id = ? GROUP BY q.materia HAVING total >= 3
+            ORDER BY pct ASC LIMIT 1
+        """, (user_id,)).fetchone()
+
+        materia_sugerida = fraca["materia"] if fraca else "Revisão Geral"
+        motivo = f"Menor acerto ({fraca['pct']}%)" if fraca else "Comece com revisões pendentes"
+
+        return {
+            "turno": turno,
+            "turno_label": turno_label,
+            "hora_atual": f"{hora:02d}:{agora.minute:02d}",
+            "sugestao": {
+                "materia": materia_sugerida,
+                "tipo": "questoes" if fraca and fraca["pct"] < 60 else "estudo",
+                "tempo_min": 30,
+                "motivo": motivo,
+            },
+            "fonte": "inteligente",
+            "atividades_planejadas": [],
+        }
+
+    # Distribuir atividades em turnos (proporcional)
+    total_ativs = len(atividades_hoje)
+    por_turno = max(1, total_ativs // 3)
+    turnos_map = {"manha": [], "tarde": [], "noite": []}
+    for i, a in enumerate(atividades_hoje):
+        if i < por_turno:
+            turnos_map["manha"].append(dict(a))
+        elif i < por_turno * 2:
+            turnos_map["tarde"].append(dict(a))
+        else:
+            turnos_map["noite"].append(dict(a))
+
+    ativs_turno = turnos_map.get(turno, [])
+
+    # Verificar quais já foram concluídas hoje
+    concluidas = conn.execute("""
+        SELECT materia, tipo FROM calendario_atividades
+        WHERE data = ? AND concluida = 1 AND user_id = ?
+    """, (today_str(), user_id)).fetchall()
+    concluidas_set = set(f"{r['materia']}|{r['tipo']}" for r in concluidas)
+
+    # Encontrar próxima atividade não concluída
+    sugestao = None
+    for a in ativs_turno:
+        key = f"{a['materia']}|{a['tipo']}"
+        if key not in concluidas_set:
+            sugestao = {
+                "materia": a["materia"],
+                "tipo": a["tipo"],
+                "tempo_min": a["tempo_min"],
+                "topicos": a["topicos"],
+                "motivo": f"Planejado para {turno_label.split(' ')[1]} de hoje",
+            }
+            break
+
+    # Se todas do turno foram concluídas, buscar próximo turno
+    if not sugestao:
+        proximos_turnos = {"manha": "tarde", "tarde": "noite", "noite": "manha"}
+        proximo = proximos_turnos.get(turno, "manha")
+        for a in turnos_map.get(proximo, []):
+            key = f"{a['materia']}|{a['tipo']}"
+            if key not in concluidas_set:
+                sugestao = {
+                    "materia": a["materia"],
+                    "tipo": a["tipo"],
+                    "tempo_min": a["tempo_min"],
+                    "topicos": a["topicos"],
+                    "motivo": f"Adiantando atividade do próximo turno",
+                }
+                break
+
+    # Se tudo concluído hoje
+    if not sugestao:
+        # Revisões SRS pendentes?
+        pending_fc = conn.execute(
+            "SELECT COUNT(*) FROM flashcards WHERE proxima_revisao <= ? AND user_id = ?",
+            (today_str(), user_id)
+        ).fetchone()[0]
+        if pending_fc > 0:
+            sugestao = {
+                "materia": "Flashcards",
+                "tipo": "revisao",
+                "tempo_min": min(15, pending_fc * 2),
+                "topicos": "",
+                "motivo": f"🎉 Calendário completo! {pending_fc} flashcards pendentes.",
+            }
+        else:
+            sugestao = {
+                "materia": "Descanso merecido",
+                "tipo": "pausa",
+                "tempo_min": 0,
+                "motivo": "🏆 Todas as atividades do dia concluídas!",
+            }
+
+    # Progresso do dia
+    total_planejado = len(atividades_hoje)
+    total_concluido = len([a for a in atividades_hoje if f"{a['materia']}|{a['tipo']}" in concluidas_set])
+    pct_dia = round(total_concluido / total_planejado * 100) if total_planejado > 0 else 0
+
+    return {
+        "turno": turno,
+        "turno_label": turno_label,
+        "hora_atual": f"{hora:02d}:{agora.minute:02d}",
+        "sugestao": sugestao,
+        "fonte": "calendario",
+        "progresso_dia": {
+            "concluidas": total_concluido,
+            "total": total_planejado,
+            "pct": pct_dia,
+        },
+        "atividades_planejadas": [dict(a) for a in ativs_turno],
+    }
+
+
+# ============================================================
+# RESUMO SEMANAL DO CALENDÁRIO — progresso por dia
+# ============================================================
+
+@router.get("/api/calendario/progresso-semanal", summary="Progresso semanal do calendário")
+def progresso_semanal_calendario(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Retorna progresso de conclusão de atividades por dia da semana atual."""
+    hoje = date.today()
+    inicio_semana = (hoje - timedelta(days=hoje.weekday())).isoformat()
+    fim_semana = (hoje - timedelta(days=hoje.weekday()) + timedelta(days=6)).isoformat()
+
+    # Atividades planejadas por dia
+    planejado = conn.execute("""
+        SELECT dia_semana, COUNT(*) as total
+        FROM calendario_personalizado WHERE user_id = ?
+        GROUP BY dia_semana
+    """, (user_id,)).fetchall()
+    planejado_map = {r["dia_semana"]: r["total"] for r in planejado}
+
+    # Atividades concluídas nesta semana
+    concluidas = conn.execute("""
+        SELECT data, COUNT(*) as concluidas
+        FROM calendario_atividades
+        WHERE data >= ? AND data <= ? AND concluida = 1 AND user_id = ?
+        GROUP BY data
+    """, (inicio_semana, fim_semana, user_id)).fetchall()
+    concluidas_map = {r["data"]: r["concluidas"] for r in concluidas}
+
+    dias = []
+    total_planejado = 0
+    total_concluido = 0
+    nomes = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
+
+    for i in range(7):
+        data_dia = (hoje - timedelta(days=hoje.weekday()) + timedelta(days=i)).isoformat()
+        plan = planejado_map.get(i, 0)
+        done = concluidas_map.get(data_dia, 0)
+        pct = round(done / plan * 100) if plan > 0 else 0
+        total_planejado += plan
+        total_concluido += done
+
+        is_today = data_dia == hoje.isoformat()
+        is_past = data_dia < hoje.isoformat()
+
+        dias.append({
+            "dia_semana": i,
+            "nome": nomes[i],
+            "data": data_dia,
+            "planejado": plan,
+            "concluido": done,
+            "pct": min(100, pct),
+            "status": "completo" if pct >= 100 else "parcial" if done > 0 else ("pendente" if is_today or not is_past else "perdido"),
+            "is_today": is_today,
+        })
+
+    pct_semanal = round(total_concluido / total_planejado * 100) if total_planejado > 0 else 0
+
+    return {
+        "dias": dias,
+        "resumo": {
+            "total_planejado": total_planejado,
+            "total_concluido": total_concluido,
+            "pct_semanal": pct_semanal,
+        },
+        "semana_inicio": inicio_semana,
+        "semana_fim": fim_semana,
+    }
