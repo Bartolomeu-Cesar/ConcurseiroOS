@@ -3,6 +3,21 @@ import os
 import secrets
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+# Load .env file automatically (looks in backend/ dir first, then project root)
+_BACKEND_DIR_ENV = Path(__file__).parent
+_PROJECT_ROOT_ENV = _BACKEND_DIR_ENV.parent
+
+# Priority: backend/.env > project_root/.env
+for _env_path in [_BACKEND_DIR_ENV / ".env", _PROJECT_ROOT_ENV / ".env"]:
+    if _env_path.exists():
+        load_dotenv(_env_path)
+        break
+else:
+    # No .env found — try default dotenv behavior (searches cwd upwards)
+    load_dotenv()
+
 _BACKEND_DIR = Path(__file__).parent
 _JWT_SECRET_FILE = _BACKEND_DIR / ".jwt_secret"
 

@@ -4,52 +4,16 @@
   <meta charset="UTF-8">
   <title>⚙️ Admin - ConcurseiroOS</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="/css/styles.css">
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/layout.css">
   <style>
-    body { font-family: sans-serif; background: #1e1e2e; color: #cdd6f4; min-height: 100vh; padding: 24px; }
+    /* Page-specific: admin */
     .admin-container { max-width: 900px; margin: 0 auto; }
-    h1 { color: #cba6f7; font-size: 1.4rem; margin-bottom: 16px; }
-
-    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 20px; }
-    .stat-card { background: #313244; border-radius: 10px; padding: 14px; text-align: center; }
-    .stat-value { font-size: 1.5rem; font-weight: 700; color: #89b4fa; }
-    .stat-label { font-size: 0.72rem; color: #9399b2; margin-top: 2px; }
-
-    .toolbar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
-    .toolbar input, .toolbar select { background: #313244; border: 1px solid #45475a; border-radius: 8px; padding: 8px 12px; color: #cdd6f4; font-size: 0.85rem; }
-    .toolbar input { flex: 1; min-width: 200px; }
-    .btn { background: #a6e3a1; color: #1e1e2e; border: none; border-radius: 8px; padding: 8px 16px; font-weight: 600; cursor: pointer; font-size: 0.82rem; }
-    .btn:hover { opacity: 0.9; }
+    h1 { margin-bottom: 16px; }
+    .btn { background: #a6e3a1; color: #1e1e2e; font-size: 0.82rem; }
     .btn.secondary { background: #89b4fa; }
     .btn.danger { background: #f38ba8; }
-    .btn.small { padding: 4px 10px; font-size: 0.75rem; border-radius: 6px; }
-
-    .users-table { width: 100%; border-collapse: collapse; background: #313244; border-radius: 10px; overflow: hidden; }
-    .users-table th { background: #45475a; padding: 10px 12px; text-align: left; font-size: 0.75rem; color: #9399b2; text-transform: uppercase; }
-    .users-table td { padding: 10px 12px; border-bottom: 1px solid #45475a; font-size: 0.82rem; }
-    .users-table tr:hover td { background: #45475a44; }
-    .users-table tr:last-child td { border-bottom: none; }
-
-    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.7rem; font-weight: 600; }
-    .badge-guest { background: #585b70; color: #cdd6f4; }
-    .badge-free { background: #89b4fa33; color: #89b4fa; }
-    .badge-premium { background: #f9e2af33; color: #f9e2af; }
-    .badge-ilimitado { background: #a6e3a133; color: #a6e3a1; }
-
-    .pagination { display: flex; justify-content: center; gap: 8px; margin-top: 16px; }
-    .pagination button { background: #45475a; border: none; color: #cdd6f4; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.82rem; }
-    .pagination button.active { background: #cba6f7; color: #1e1e2e; }
-    .pagination button:disabled { opacity: 0.4; cursor: default; }
-
-    /* Modal */
-    .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; }
-    .modal-overlay.open { display: flex; }
-    .modal { background: #313244; border-radius: 12px; padding: 24px; max-width: 450px; width: 90%; max-height: 80vh; overflow-y: auto; }
-    .modal h3 { color: #cba6f7; margin-bottom: 12px; }
-    .modal label { font-size: 0.78rem; color: #9399b2; display: block; margin-top: 10px; margin-bottom: 4px; }
-    .modal input, .modal select { width: 100%; background: #1e1e2e; border: 1px solid #45475a; border-radius: 6px; padding: 8px 12px; color: #cdd6f4; font-size: 0.85rem; box-sizing: border-box; }
-    .modal-actions { display: flex; gap: 8px; margin-top: 16px; justify-content: flex-end; }
   </style>
 </head>
 <body>

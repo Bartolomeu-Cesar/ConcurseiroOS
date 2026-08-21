@@ -6,14 +6,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#1e1e2e">
   <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/css/styles.css">
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: sans-serif; background: #1e1e2e; color: #cdd6f4; min-height: 100vh; padding: 24px; }
-    a { color: #89b4fa; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    h1 { font-size: 1.4rem; color: #cba6f7; }
-    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-    .header-links { display: flex; gap: 12px; font-size: 0.9rem; }
+    /* Page-specific: questões */
 
     /* Tab navigation */
     .qtab-bar { display: flex; gap: 0; background: #313244; border-radius: 10px 10px 0 0; margin-bottom: 20px; overflow: hidden; }
@@ -26,32 +21,6 @@
     .qtab-btn.active { color: #cdd6f4; border-bottom-color: #cba6f7; background: #45475a; }
     .qtab-content { display: none; }
     .qtab-content.active { display: block; }
-
-    /* Panels */
-    .panel { background: #313244; border-radius: 12px; padding: 20px; margin-bottom: 16px; }
-    .panel h2 { font-size: 1.05rem; color: #cba6f7; margin-bottom: 12px; }
-    .panel h3 { font-size: 0.95rem; color: #89b4fa; margin-bottom: 8px; }
-
-    /* Forms */
-    .form-row { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
-    .form-row input, .form-row select, .form-row textarea {
-      background: #1e1e2e; border: 1px solid #45475a; border-radius: 6px;
-      padding: 8px 12px; color: #cdd6f4; font-size: 0.88rem; flex: 1; min-width: 120px;
-    }
-    .form-row textarea { min-height: 60px; resize: vertical; font-family: sans-serif; }
-    .form-row input::placeholder, .form-row textarea::placeholder { color: #9399b2; }
-    .btn {
-      border: none; border-radius: 6px; padding: 8px 16px;
-      font-size: 0.85rem; font-weight: 600; cursor: pointer;
-    }
-    .btn-primary { background: #cba6f7; color: #1e1e2e; }
-    .btn-primary:hover { background: #b4befe; }
-    .btn-success { background: #a6e3a1; color: #1e1e2e; }
-    .btn-success:hover { background: #94e2d5; }
-    .btn-danger { background: #f38ba8; color: #1e1e2e; }
-    .btn-danger:hover { background: #eba0ac; }
-    .btn-secondary { background: #45475a; color: #cdd6f4; }
-    .btn-secondary:hover { background: #585b70; }
 
     /* Resolver questão */
     .questao-card {
@@ -80,12 +49,6 @@
 
     .questao-meta { font-size: 0.8rem; color: #9399b2; margin-bottom: 8px; display: flex; gap: 12px; }
     .questao-meta span { background: #45475a; padding: 2px 8px; border-radius: 4px; }
-
-    /* Stats */
-    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 16px; }
-    .stat-card { background: #1e1e2e; border-radius: 8px; padding: 12px; text-align: center; }
-    .stat-card .stat-num { font-size: 1.4rem; font-weight: 700; }
-    .stat-card .stat-lbl { font-size: 0.75rem; color: #9399b2; }
 
     /* Simulado */
     .sim-card {
@@ -150,17 +113,7 @@
 
     .sim-progress { font-size: 0.85rem; color: #a6adc8; text-align: center; margin-bottom: 12px; }
 
-    /* Filtros */
-    .filter-bar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
-    .filter-bar select, .filter-bar input {
-      background: #1e1e2e; border: 1px solid #45475a; border-radius: 6px;
-      padding: 6px 10px; color: #cdd6f4; font-size: 0.85rem;
-    }
-
     /* Light Theme - Catppuccin Latte (WCAG AAA) */
-    body.light-theme { background: #eff1f5; color: #4c4f69; }
-    body.light-theme h1 { color: #8839ef; }
-    body.light-theme a { color: #1e66f5; }
     body.light-theme .panel { background: #e6e9ef; }
     body.light-theme .panel h2, body.light-theme .panel h3 { color: #8839ef; }
     body.light-theme .qtab-bar { background: #e6e9ef; }
@@ -194,10 +147,6 @@
     body.light-theme .q-list-text { color: #4c4f69; }
     body.light-theme .form-row input, body.light-theme .form-row select, body.light-theme .form-row textarea { background: #dce0e8; border-color: #bcc0cc; color: #4c4f69; }
     body.light-theme .form-row input::placeholder, body.light-theme .form-row textarea::placeholder { color: #8c8fa1; }
-    body.light-theme .btn-primary { background: #8839ef; color: #eff1f5; }
-    body.light-theme .btn-success { background: #40a02b; color: #eff1f5; }
-    body.light-theme .btn-danger { background: #d20f39; color: #eff1f5; }
-    body.light-theme .btn-secondary { background: #dce0e8; color: #4c4f69; border: 1px solid #bcc0cc; }
     body.light-theme .filter-bar select, body.light-theme .filter-bar input { background: #dce0e8; border-color: #bcc0cc; color: #4c4f69; }
   </style>
   <link rel="stylesheet" href="/layout.css">

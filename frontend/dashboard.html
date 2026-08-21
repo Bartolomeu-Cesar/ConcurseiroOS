@@ -7,28 +7,9 @@
   <meta name="theme-color" content="#1e1e2e">
   <link rel="manifest" href="/manifest.json">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="/css/styles.css">
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: sans-serif; background: #1e1e2e; color: #cdd6f4; min-height: 100vh; padding: 24px; }
-    a { color: #89b4fa; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    h1 { font-size: 1.4rem; color: #cba6f7; margin-bottom: 4px; }
-    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
-    .header-links { display: flex; gap: 12px; font-size: 0.9rem; }
-
-    /* Cards de resumo */
-    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px; }
-    .card {
-      background: #313244; border-radius: 12px; padding: 16px;
-      display: flex; flex-direction: column; gap: 4px;
-    }
-    .card-label { font-size: 0.78rem; color: #9399b2; text-transform: uppercase; font-weight: 600; }
-    .card-value { font-size: 1.6rem; font-weight: 700; color: #cdd6f4; }
-    .card-value.green { color: #a6e3a1; }
-    .card-value.blue { color: #89b4fa; }
-    .card-value.pink { color: #f38ba8; }
-    .card-value.peach { color: #fab387; }
-    .card-sub { font-size: 0.78rem; color: #a6adc8; }
+    /* Page-specific: dashboard */
 
     /* Gráficos */
     .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
@@ -112,22 +93,10 @@
 
     @media (max-width: 768px) {
       .charts { grid-template-columns: 1fr; }
-      .cards { grid-template-columns: repeat(2, 1fr); }
       .relatorio-grid { grid-template-columns: 1fr; }
     }
 
     /* Light Theme - Catppuccin Latte (WCAG AAA) */
-    body.light-theme { background: #eff1f5; color: #4c4f69; }
-    body.light-theme h1 { color: #8839ef; }
-    body.light-theme a { color: #1e66f5; }
-    body.light-theme .card { background: #e6e9ef; }
-    body.light-theme .card-value { color: #4c4f69; }
-    body.light-theme .card-value.green { color: #40a02b; }
-    body.light-theme .card-value.blue { color: #1e66f5; }
-    body.light-theme .card-value.pink { color: #d20f39; }
-    body.light-theme .card-value.peach { color: #fe640b; }
-    body.light-theme .card-label { color: #5c5f77; }
-    body.light-theme .card-sub { color: #5c5f77; }
     body.light-theme .chart-box { background: #e6e9ef; }
     body.light-theme .chart-box h3 { color: #8839ef; }
     body.light-theme .streak-bar { background: #e6e9ef; }

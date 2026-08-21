@@ -7,14 +7,10 @@
   <meta name="theme-color" content="#1e1e2e">
   <meta name="description" content="ConcurseiroOS - Liga, AI Tutor e Social">
   <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/css/styles.css">
   <link rel="stylesheet" href="/layout.css">
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: sans-serif; background: #1e1e2e; color: #cdd6f4; min-height: 100vh; padding: 24px; }
-    a { color: #89b4fa; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    h1 { font-size: 1.4rem; color: #cba6f7; margin-bottom: 4px; }
-    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+    /* Page-specific: social */
 
     /* Tabs */
     .tabs {
@@ -39,12 +35,9 @@
       to { opacity: 1; transform: translateY(0); }
     }
 
-    /* Cards */
-    .card {
-      background: #313244; border-radius: 12px; padding: 16px; margin-bottom: 12px;
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
+    /* Cards override for hover effect */
     .card:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+    .card { transition: transform 0.2s ease, box-shadow 0.2s ease; margin-bottom: 12px; }
     .card h3 { font-size: 1rem; color: #cba6f7; margin-bottom: 8px; }
 
     /* Loading skeleton */
@@ -193,16 +186,6 @@
     .friend-item .info, .group-item .info { flex: 1; }
     .friend-item .name, .group-item .name { font-weight: 600; font-size: 0.9rem; }
     .friend-item .sub, .group-item .sub { font-size: 0.75rem; color: #9399b2; }
-    .btn-sm {
-      padding: 6px 12px; border-radius: 6px; border: none; font-size: 0.78rem;
-      font-weight: 600; cursor: pointer; transition: all 0.2s;
-    }
-    .btn-primary { background: #89b4fa; color: #1e1e2e; }
-    .btn-primary:hover { background: #74c7ec; transform: translateY(-1px); }
-    .btn-danger { background: #f38ba8; color: #1e1e2e; }
-    .btn-danger:hover { background: #eba0ac; }
-    .btn-secondary { background: #45475a; color: #cdd6f4; }
-    .btn-secondary:hover { background: #585b70; }
 
     .feed-item {
       padding: 10px 12px; border-left: 3px solid #89b4fa; margin-bottom: 8px;
@@ -213,11 +196,6 @@
     .feed-item .feed-time { font-size: 0.7rem; color: #9399b2; }
     .feed-item .feed-text { font-size: 0.85rem; margin-top: 4px; }
 
-    .empty-state {
-      text-align: center; padding: 40px; color: #9399b2;
-      animation: fadeIn 0.5s ease;
-    }
-    .empty-state .emoji { font-size: 2.5rem; margin-bottom: 8px; }
     .empty-state p { font-size: 0.9rem; margin-bottom: 4px; }
     .empty-state .hint { font-size: 0.78rem; color: #6c7086; margin-top: 4px; }
 
@@ -225,29 +203,12 @@
     .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
     .section-header h3 { font-size: 1rem; color: #cba6f7; }
 
-    /* Modal */
-    .modal-overlay {
-      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6);
-      z-index: 1000; align-items: center; justify-content: center;
-      backdrop-filter: blur(4px);
-    }
-    .modal-overlay.open { display: flex; animation: fadeIn 0.2s ease; }
-    .modal {
-      background: #313244; border-radius: 16px; padding: 24px;
-      width: 90%; max-width: 420px;
-      transform: scale(0.95); animation: modalIn 0.25s ease forwards;
-    }
-    @keyframes modalIn {
-      to { transform: scale(1); }
-    }
-    .modal h3 { color: #cba6f7; margin-bottom: 16px; }
+    /* Modal override */
+    .modal { max-width: 420px; transform: scale(0.95); animation: modalIn 0.25s ease forwards; }
+    @keyframes modalIn { to { transform: scale(1); } }
     .modal input, .modal textarea {
-      width: 100%; padding: 10px 14px; border-radius: 8px; border: 1px solid #45475a;
-      background: #181825; color: #cdd6f4; font-size: 0.9rem; margin-bottom: 12px; outline: none;
-      transition: border-color 0.2s;
+      background: #181825; margin-bottom: 12px;
     }
-    .modal input:focus, .modal textarea:focus { border-color: #89b4fa; }
-    .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
 
     /* Toast notification */
     .toast {

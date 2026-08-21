@@ -7,36 +7,25 @@
   <meta name="theme-color" content="#1e1e2e">
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/styles.css">
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: sans-serif; background: #1e1e2e; color: #cdd6f4; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+    /* Page-specific: login */
+    body { display: flex; align-items: center; justify-content: center; }
     .login-container { width: 100%; max-width: 400px; }
     .login-card { background: #313244; border-radius: 16px; padding: 32px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); border: 1px solid #45475a; }
     .login-header { text-align: center; margin-bottom: 24px; }
     .login-header .logo { font-size: 2.5rem; margin-bottom: 8px; }
     .login-header h1 { font-size: 1.4rem; color: #cba6f7; margin-bottom: 4px; }
     .login-header p { font-size: 0.85rem; color: #9399b2; }
-    .form-group { margin-bottom: 16px; }
-    .form-group label { display: block; font-size: 0.82rem; color: #9399b2; margin-bottom: 4px; }
-    .form-group input { width: 100%; padding: 12px 16px; border-radius: 8px; border: 1px solid #45475a; background: #1e1e2e; color: #cdd6f4; font-size: 0.95rem; outline: none; transition: border-color 0.2s; }
-    .form-group input:focus { border-color: #cba6f7; }
-    .form-group input::placeholder { color: #585b70; }
-    .btn { width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 0.95rem; font-weight: 600; cursor: pointer; transition: opacity 0.2s, transform 0.1s; }
-    .btn:hover { opacity: 0.9; }
-    .btn:active { transform: scale(0.98); }
+    .btn { width: 100%; padding: 12px; font-size: 0.95rem; }
     .btn-primary { background: #cba6f7; color: #1e1e2e; }
     .btn-secondary { background: #45475a; color: #cdd6f4; margin-top: 8px; }
-    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .toggle-link { text-align: center; margin-top: 16px; font-size: 0.85rem; color: #9399b2; }
     .toggle-link a { color: #89b4fa; cursor: pointer; text-decoration: none; }
     .toggle-link a:hover { text-decoration: underline; }
     .code-input { display: flex; gap: 8px; justify-content: center; margin: 16px 0; }
     .code-input input { width: 45px; height: 52px; text-align: center; font-size: 1.5rem; font-weight: 700; border-radius: 8px; border: 2px solid #45475a; background: #1e1e2e; color: #a6e3a1; outline: none; }
     .code-input input:focus { border-color: #cba6f7; }
-    .message { padding: 10px; border-radius: 8px; font-size: 0.82rem; margin-bottom: 12px; text-align: center; display: none; }
-    .message.success { display: block; background: #1e3a2e; color: #a6e3a1; border: 1px solid #a6e3a1; }
-    .message.error { display: block; background: #3a1e1e; color: #f38ba8; border: 1px solid #f38ba8; }
-    .message.info { display: block; background: #1e2a3a; color: #89b4fa; border: 1px solid #89b4fa; }
     .step { display: none; }
     .step.active { display: block; }
     .resend { text-align: center; margin-top: 12px; font-size: 0.8rem; color: #9399b2; }
