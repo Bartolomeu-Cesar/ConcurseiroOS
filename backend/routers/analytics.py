@@ -338,13 +338,29 @@ def comparativo_cargos(edital1: str = "", cargo1: str = "", edital2: str = "", c
 
 
 @router.get("/api/comparador-progresso")
-def comparador_progresso(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
-    rows = conn.execute("""
+def comparador_progresso(apenas_ciclo: bool = True, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    # If apenas_ciclo, filter by subjects in the active ciclo
+    ciclo_filter = ""
+    if apenas_ciclo:
+        ciclo_materias = conn.execute(
+            "SELECT DISTINCT materia FROM ciclo_estudos WHERE ativo = 1 AND user_id = ?", (user_id,)
+        ).fetchall()
+        if ciclo_materias:
+            materias_list = [r[0] for r in ciclo_materias]
+            placeholders = ",".join("?" * len(materias_list))
+            ciclo_filter = f" AND materia IN ({placeholders})"
+        else:
+            ciclo_filter = ""
+            materias_list = []
+
+    query = f"""
         SELECT edital_nome, cargo, COUNT(*) as total,
                SUM(CASE WHEN status='Concluído' THEN 1 ELSE 0 END) as done,
                SUM(horas_estudadas) as horas
-        FROM edital WHERE user_id = ? GROUP BY edital_nome, cargo ORDER BY edital_nome, cargo
-    """, (user_id,)).fetchall()
+        FROM edital WHERE user_id = ?{ciclo_filter} GROUP BY edital_nome, cargo ORDER BY edital_nome, cargo
+    """
+    params = [user_id] + (materias_list if apenas_ciclo and ciclo_filter else [])
+    rows = conn.execute(query, params).fetchall()
     return [{"edital": r[0], "cargo": r[1], "total": r[2], "concluidos": r[3] or 0,
              "pct": round((r[3] or 0) / r[2] * 100, 1) if r[2] > 0 else 0,
              "horas": round(r[4] or 0, 1)} for r in rows]

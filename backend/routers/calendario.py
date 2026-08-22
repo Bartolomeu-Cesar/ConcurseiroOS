@@ -718,13 +718,15 @@ def reset_inteligente(body: dict = Body(default={}), conn=Depends(get_db_session
     except Exception:
         pass
 
-    # ===== 2. Collect all matérias from all sources =====
-    all_materias = set()
-    all_materias.update(ciclo_map.keys())
-    all_materias.update(desempenho.keys())
-    all_materias.update(topicos_pendentes_map.keys())
-    all_materias.update(banca_weights.keys())
-    all_materias.update(error_rate_map.keys())
+    # ===== 2. Filter to ONLY matérias from the active ciclo =====
+    # The ciclo is the source of truth for what should be studied
+    if ciclo_map:
+        all_materias = set(ciclo_map.keys())
+    else:
+        # Fallback: if no ciclo, use edital topics (but warn)
+        all_materias = set(topicos_pendentes_map.keys())
+        if not all_materias:
+            all_materias.update(desempenho.keys())
 
     if not all_materias:
         return {"ok": False, "message": "Nenhuma matéria encontrada. Importe um edital ou adicione matérias ao ciclo."}
