@@ -37,10 +37,11 @@ async function loadDashCountdown() {
   try {
     const provas = await fetch('/api/countdown').then(r => r.json());
     const el = document.getElementById('dash-countdown');
-    if (!provas.length || !el) return;
+    if (!el) return;
     const now = new Date();
     const favorito = localStorage.getItem('countdown_favorito');
     const futuras = provas.map(p => {
+      if (!p.data_objetiva) return null;
       const parts = p.data_objetiva.match(/(\d+)[-\/](\d+)[-\/](\d+)/);
       if (!parts) return null;
       let d;
@@ -49,17 +50,32 @@ async function loadDashCountdown() {
       const dias = Math.ceil((d - now) / 86400000);
       return dias > 0 ? {...p, dias} : null;
     }).filter(Boolean).sort((a,b) => a.dias - b.dias);
-    if (!futuras.length) { el.textContent = ''; return; }
+
     let prox = null;
     if (favorito) {
+      // Try to find in futuras (provas with dates)
       prox = futuras.find(p => `${p.edital}|${p.cargo}` === favorito);
+      // If not found (cargo without date), show it anyway
+      if (!prox) {
+        const [editalFav, cargoFav] = favorito.split('|');
+        if (cargoFav) {
+          prox = { edital: editalFav, cargo: cargoFav, dias: null };
+        }
+      }
     }
-    if (!prox) prox = futuras[0];
-    const cor = prox.dias <= 30 ? 'var(--red)' : prox.dias <= 60 ? 'var(--peach)' : 'var(--yellow)';
-    el.style.color = cor;
+    if (!prox && futuras.length) prox = futuras[0];
+    if (!prox) { el.textContent = ''; return; }
+
+    if (prox.dias) {
+      const cor = prox.dias <= 30 ? 'var(--red)' : prox.dias <= 60 ? 'var(--peach)' : 'var(--yellow)';
+      el.style.color = cor;
+      el.innerHTML = `⏳ <strong>${prox.cargo}</strong>: ${prox.dias} dias ⭐`;
+    } else {
+      el.style.color = 'var(--text-muted)';
+      el.innerHTML = `⏳ <strong>${prox.cargo}</strong>: aguardando data ⭐`;
+    }
     el.style.cursor = 'pointer';
-    el.innerHTML = `⏳ <strong>${prox.cargo}</strong>: ${prox.dias} dias ⭐`;
-    el.title = 'Clique para trocar a prova favorita\n' + futuras.map(p => `${p.cargo}: ${p.dias}d`).join('\n');
+    el.title = 'Clique para trocar a prova favorita';
     el.onclick = function() { showCountdownSelector(futuras); };
   } catch(e) {}
 }
