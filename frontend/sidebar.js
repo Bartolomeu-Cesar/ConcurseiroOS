@@ -14,6 +14,9 @@
 })();
 
 (function () {
+  // Guard: don't inject sidebar twice
+  if (document.getElementById('sidebar')) return;
+
   const currentPath = window.location.pathname;
 
   function isActive(path) {
