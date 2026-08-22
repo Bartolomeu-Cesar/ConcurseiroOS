@@ -55,6 +55,95 @@ def health_check(conn=Depends(get_db_session)):
     }
 
 
+@router.get("/api/status", summary="Deep System Status",
+            description="Comprehensive system status including DB size, backup status, users, and environment info. Useful for production monitoring dashboards.")
+def system_status(conn=Depends(get_db_session)):
+    """Status detalhado do sistema para monitoramento em produção."""
+    import os
+    import shutil
+
+    uptime = time.time() - APP_START_TIME if APP_START_TIME else 0
+
+    # Database info
+    db_size_mb = 0
+    try:
+        db_path = settings.DB_PATH
+        if os.path.exists(db_path):
+            db_size_mb = round(os.path.getsize(db_path) / (1024 * 1024), 2)
+    except Exception:
+        pass
+
+    # Table counts
+    users_count = 0
+    questoes_count = 0
+    flashcards_count = 0
+    try:
+        users_count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    except Exception:
+        pass
+    try:
+        questoes_count = conn.execute("SELECT COUNT(*) FROM questoes").fetchone()[0]
+    except Exception:
+        pass
+    try:
+        flashcards_count = conn.execute("SELECT COUNT(*) FROM flashcards").fetchone()[0]
+    except Exception:
+        pass
+
+    # Backup info
+    backups = []
+    try:
+        backups = list_backups()
+    except Exception:
+        pass
+    last_backup = backups[0]["filename"] if backups else None
+    last_backup_age_hours = None
+    if backups:
+        try:
+            # Parse backup datetime from filename pattern
+            ts = backups[0].get("created_at", "")
+            if ts:
+                backup_dt = datetime.fromisoformat(ts.replace("Z", "+00:00")) if "T" in ts else datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
+                last_backup_age_hours = round((datetime.now() - backup_dt).total_seconds() / 3600, 1)
+        except Exception:
+            pass
+
+    # Disk space
+    disk_free_gb = None
+    try:
+        usage = shutil.disk_usage(os.path.dirname(os.path.abspath(settings.DB_PATH)))
+        disk_free_gb = round(usage.free / (1024 ** 3), 2)
+    except Exception:
+        pass
+
+    return {
+        "status": "ok",
+        "version": settings.APP_VERSION,
+        "environment": settings.ENV,
+        "uptime_seconds": round(uptime, 1),
+        "uptime_human": f"{int(uptime // 3600)}h {int((uptime % 3600) // 60)}m",
+        "database": {
+            "status": "connected",
+            "size_mb": db_size_mb,
+            "path": settings.DB_PATH,
+        },
+        "counts": {
+            "users": users_count,
+            "questoes": questoes_count,
+            "flashcards": flashcards_count,
+        },
+        "backups": {
+            "total": len(backups),
+            "last_backup": last_backup,
+            "last_backup_age_hours": last_backup_age_hours,
+            "auto_backup_enabled": settings.BACKUP_AUTO,
+        },
+        "disk_free_gb": disk_free_gb,
+        "auth_enabled": settings.AUTH_ENABLED,
+        "timestamp": datetime.now().isoformat(),
+    }
+
+
 # ============================================================
 # BACKUP ENDPOINTS (admin only: user_id=1)
 # ============================================================

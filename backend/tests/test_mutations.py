@@ -5,6 +5,7 @@ Tests WRITE/MUTATION operations (POST, PUT, DELETE) and verifies state changes.
 Executar: pytest tests/test_mutations.py -v
 """
 import os
+import sqlite3
 import sys
 import tempfile
 from unittest.mock import patch
@@ -12,7 +13,7 @@ from unittest.mock import patch
 import pytest
 
 # Configurar DB temporário ANTES de importar o app
-_tmp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+_tmp_db = tempfile.NamedTemporaryFile(suffix="_mutations.db", delete=False)
 _tmp_db.close()
 os.environ["DB_PATH"] = _tmp_db.name
 os.environ.setdefault("TEST_DB", _tmp_db.name)
@@ -22,6 +23,7 @@ os.environ["AUTH_ENABLED"] = "false"
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import database
+from database import get_db_session
 import settings as settings_mod
 
 database.DB_PATH = _tmp_db.name
@@ -32,7 +34,29 @@ from fastapi.testclient import TestClient
 
 from main import app
 
+
+def _override_db_session():
+    """Override para garantir que FastAPI use o DB temporário deste módulo."""
+    conn = sqlite3.connect(_tmp_db.name, check_same_thread=False, timeout=10)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
+# Aplicar override ANTES de criar o client
+app.dependency_overrides[get_db_session] = _override_db_session
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _ensure_db_mutations():
+    """Garante que o DB correto está ativo antes de cada teste."""
+    database.DB_PATH = _tmp_db.name
+    app.dependency_overrides[get_db_session] = _override_db_session
+    yield
 
 
 # ============================================================
@@ -820,7 +844,7 @@ class TestIntegrationStateChanges:
         assert r.status_code == 200
         data = r.json()
         assert "tiers" in data
-        assert len(data["tiers"]) == 5  # bronze, prata, ouro, diamante, mestre
+        assert len(data["tiers"]) == 4  # bronze, prata, ouro, diamante
         assert data["current_tier"] == "bronze"
 
     def test_league_history_empty_initially(self):

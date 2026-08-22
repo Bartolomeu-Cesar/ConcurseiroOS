@@ -257,19 +257,40 @@ def _run_migrations(conn):
         try:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS notification_preferences (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL UNIQUE,
-                    streak_risk INTEGER DEFAULT 1,
-                    flashcards_overdue INTEGER DEFAULT 1,
-                    exam_approaching INTEGER DEFAULT 1,
-                    challenge_expiring INTEGER DEFAULT 1,
+                    user_id INTEGER PRIMARY KEY,
+                    streak_reminders INTEGER DEFAULT 1,
+                    flashcard_reminders INTEGER DEFAULT 1,
+                    exam_reminders INTEGER DEFAULT 1,
+                    challenge_reminders INTEGER DEFAULT 1,
                     quiet_hours_start INTEGER DEFAULT 22,
-                    quiet_hours_end INTEGER DEFAULT 7,
-                    updated_at TEXT DEFAULT ''
+                    quiet_hours_end INTEGER DEFAULT 7
                 )
             """)
             conn.execute("CREATE INDEX IF NOT EXISTS idx_notification_preferences_user_id ON notification_preferences(user_id)")
             log.info("Migration: created table notification_preferences")
+        except Exception:
+            pass
+
+    # Fix old notification_preferences schema (had streak_risk instead of streak_reminders)
+    try:
+        conn.execute("SELECT streak_reminders FROM notification_preferences LIMIT 1")
+    except Exception:
+        # Old schema detected — recreate table with correct columns
+        try:
+            conn.execute("DROP TABLE IF EXISTS notification_preferences")
+            conn.execute("""
+                CREATE TABLE notification_preferences (
+                    user_id INTEGER PRIMARY KEY,
+                    streak_reminders INTEGER DEFAULT 1,
+                    flashcard_reminders INTEGER DEFAULT 1,
+                    exam_reminders INTEGER DEFAULT 1,
+                    challenge_reminders INTEGER DEFAULT 1,
+                    quiet_hours_start INTEGER DEFAULT 22,
+                    quiet_hours_end INTEGER DEFAULT 7
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_notification_preferences_user_id ON notification_preferences(user_id)")
+            log.info("Migration: recreated notification_preferences with correct column names")
         except Exception:
             pass
 

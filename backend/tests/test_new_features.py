@@ -5,13 +5,14 @@ Cobre: FSRS, Mastery, Leagues, AI Tutor, Social, Notifications, Raio-X, Streak F
 Executar: pytest tests/test_new_features.py -v
 """
 import os
+import sqlite3
 import sys
 import tempfile
 
 import pytest
 
 # Configurar DB temporário ANTES de importar o app
-_tmp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+_tmp_db = tempfile.NamedTemporaryFile(suffix="_newfeatures.db", delete=False)
 _tmp_db.close()
 os.environ["DB_PATH"] = _tmp_db.name
 os.environ.setdefault("TEST_DB", _tmp_db.name)
@@ -21,6 +22,7 @@ os.environ["AUTH_ENABLED"] = "false"
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import database
+from database import get_db_session
 import settings as settings_mod
 
 database.DB_PATH = _tmp_db.name
@@ -31,7 +33,29 @@ from fastapi.testclient import TestClient
 
 from main import app
 
+
+def _override_db_session():
+    """Override para garantir que FastAPI use o DB temporário deste módulo."""
+    conn = sqlite3.connect(_tmp_db.name, check_same_thread=False, timeout=10)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
+# Aplicar override ANTES de criar o client
+app.dependency_overrides[get_db_session] = _override_db_session
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _ensure_db_new_features():
+    """Garante que o DB correto está ativo antes de cada teste."""
+    database.DB_PATH = _tmp_db.name
+    app.dependency_overrides[get_db_session] = _override_db_session
+    yield
 
 
 # ============================================================
@@ -479,13 +503,8 @@ class TestNotifications:
         assert "quiet_hours_start" in data
         assert "quiet_hours_end" in data
 
-    @pytest.mark.xfail(reason="Known schema mismatch: database.py creates notification_preferences with different column names than notifications router expects", strict=True)
     def test_push_preferences_update(self):
-        """Update preferences and verify persistence.
-        BUG: notification_preferences table created by database.py uses columns
-        (streak_risk, flashcards_overdue, exam_approaching, challenge_expiring)
-        but notifications router expects (streak_reminders, flashcard_reminders, exam_reminders, challenge_reminders).
-        """
+        """Update preferences and verify persistence."""
         r = client.put("/api/push/preferences", json={
             "streak_reminders": False,
             "flashcard_reminders": True,
@@ -713,11 +732,8 @@ class TestLeaguesIntegration:
 class TestNotificationsIntegration:
     """Integration tests for notification preferences."""
 
-    @pytest.mark.xfail(reason="Known schema mismatch: database.py notification_preferences columns differ from router expectations", strict=True)
     def test_preferences_persist_across_reads(self):
-        """Updated preferences should persist when read again.
-        BUG: Same schema mismatch as test_push_preferences_update.
-        """
+        """Updated preferences should persist when read again."""
         # Update
         r = client.put("/api/push/preferences", json={
             "streak_reminders": True,

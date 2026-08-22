@@ -24,13 +24,18 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # ============================================================
 FROM python:3.12-slim AS runtime
 
-LABEL org.opencontainers.image.title="Concurseiro OS" \
-      org.opencontainers.image.description="Leitor PDF + Plano de Estudos para Concursos" \
-      org.opencontainers.image.version="1.0.0" \
+ARG APP_VERSION=2.4.0
+ARG BUILD_DATE
+ARG VCS_REF
+
+LABEL org.opencontainers.image.title="ConcurseiroOS" \
+      org.opencontainers.image.description="Plataforma de estudos para concursos públicos" \
+      org.opencontainers.image.version="${APP_VERSION}" \
       org.opencontainers.image.authors="Bartholomew" \
-      org.opencontainers.image.source="https://github.com/Bartholomew/LeitorPDF" \
+      org.opencontainers.image.source="https://github.com/Bartolomeu-Cesar/ConcurseiroOS" \
       org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.created="2026-08-21"
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.revision="${VCS_REF}"
 
 # System deps for PDF OCR (tesseract + poppler) and curl for healthcheck
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -56,17 +61,18 @@ COPY --chown=appuser:appuser frontend/ ./frontend/
 # Create data directories with proper ownership
 RUN mkdir -p /data/backups /data/pdfs && chown -R appuser:appuser /data
 
-# Environment variables (same as docker-compose.yml)
+# Environment variables
 ENV DB_PATH=/data/progress.db \
     BACKUP_DIR=/data/backups \
     PDF_ROOT=/data/pdfs \
     PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    APP_VERSION=${APP_VERSION}
 
 EXPOSE 8000
 
-# Health check using the API endpoint from docker-compose
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+# Health check — liveness probe (basic connectivity)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD ["curl", "-f", "http://localhost:8000/api/health"]
 
 # Switch to non-root user
@@ -74,4 +80,4 @@ USER appuser
 
 WORKDIR /app/backend
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--access-log"]

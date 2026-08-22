@@ -1076,3 +1076,136 @@ def raio_x_bancas(conn=Depends(get_db_session), user_id: int = Depends(get_user_
     """, (user_id,)).fetchall()
 
     return [dict(r) for r in stats]
+
+
+# ============================================================
+# WEEKLY WRAP — Study insights with comparative analysis
+# ============================================================
+
+@router.get("/api/insights/weekly-wrap", summary="Weekly Study Wrap",
+            description="Comprehensive weekly summary with comparative insights, achievements, and recommendations.")
+def weekly_wrap(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Gera um resumo semanal inteligente com comparações e conquistas."""
+    hoje = date.today()
+    inicio_semana = (hoje - timedelta(days=hoje.weekday())).isoformat()
+    inicio_semana_ant = (hoje - timedelta(days=hoje.weekday() + 7)).isoformat()
+    fim_semana_ant = (hoje - timedelta(days=hoje.weekday() + 1)).isoformat()
+
+    # --- Current week metrics ---
+    horas_semana = conn.execute(
+        "SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE data >= ? AND user_id = ?",
+        (inicio_semana, user_id)
+    ).fetchone()[0]
+
+    questoes_semana = conn.execute(
+        "SELECT COUNT(*) as total, COALESCE(SUM(acertou), 0) as acertos FROM questoes_respostas WHERE data >= ? AND user_id = ?",
+        (inicio_semana, user_id)
+    ).fetchone()
+
+    try:
+        flashcards_semana = conn.execute(
+            "SELECT COUNT(*) FROM flashcards WHERE proxima_revisao > ? AND user_id = ?",
+            (inicio_semana, user_id)
+        ).fetchone()[0]
+    except Exception:
+        flashcards_semana = 0
+
+    dias_ativos = conn.execute(
+        "SELECT COUNT(DISTINCT data) FROM streaks WHERE data >= ? AND (horas_estudadas > 0 OR questoes_resolvidas > 0) AND user_id = ?",
+        (inicio_semana, user_id)
+    ).fetchone()[0]
+
+    # --- Previous week metrics (for comparison) ---
+    horas_ant = conn.execute(
+        "SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE data >= ? AND data <= ? AND user_id = ?",
+        (inicio_semana_ant, fim_semana_ant, user_id)
+    ).fetchone()[0]
+
+    questoes_ant = conn.execute(
+        "SELECT COUNT(*) FROM questoes_respostas WHERE data >= ? AND data <= ? AND user_id = ?",
+        (inicio_semana_ant, fim_semana_ant, user_id)
+    ).fetchone()[0]
+
+    # --- Streak info ---
+    streak_data = calculate_streak(conn, user_id)
+    streak = streak_data["streak_atual"]
+
+    # --- Best/worst subjects this week ---
+    materias_semana = conn.execute("""
+        SELECT q.materia, COUNT(*) as total, SUM(qr.acertou) as acertos,
+               ROUND(CAST(SUM(qr.acertou) AS REAL) / COUNT(*) * 100, 1) as pct
+        FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id
+        WHERE qr.data >= ? AND qr.user_id = ?
+        GROUP BY q.materia HAVING total >= 3
+        ORDER BY pct ASC
+    """, (inicio_semana, user_id)).fetchall()
+
+    melhor_materia = None
+    pior_materia = None
+    if materias_semana:
+        pior = materias_semana[0]
+        pior_materia = {"materia": pior["materia"], "pct": pior["pct"], "total": pior["total"]}
+        melhor = materias_semana[-1]
+        melhor_materia = {"materia": melhor["materia"], "pct": melhor["pct"], "total": melhor["total"]}
+
+    # --- Achievements (badges earned this week) ---
+    conquistas = []
+    if streak >= 7:
+        conquistas.append({"icon": "🔥", "label": f"Streak de {streak} dias"})
+    if questoes_semana[0] >= 100:
+        conquistas.append({"icon": "💯", "label": f"{questoes_semana[0]} questões resolvidas"})
+    elif questoes_semana[0] >= 50:
+        conquistas.append({"icon": "📝", "label": f"{questoes_semana[0]} questões resolvidas"})
+    if horas_semana >= 20:
+        conquistas.append({"icon": "🏆", "label": f"{round(horas_semana, 1)}h estudadas"})
+    elif horas_semana >= 10:
+        conquistas.append({"icon": "⏰", "label": f"{round(horas_semana, 1)}h estudadas"})
+    if dias_ativos >= 7:
+        conquistas.append({"icon": "✨", "label": "Semana perfeita!"})
+    if flashcards_semana >= 50:
+        conquistas.append({"icon": "🧠", "label": f"{flashcards_semana} flashcards revisados"})
+    if questoes_semana[0] > 0 and questoes_semana[1] / questoes_semana[0] >= 0.8:
+        conquistas.append({"icon": "🎯", "label": f"{round(questoes_semana[1] / questoes_semana[0] * 100)}% de acerto"})
+
+    # --- Comparative deltas ---
+    delta_horas = round(horas_semana - horas_ant, 1) if horas_ant else None
+    delta_questoes = (questoes_semana[0] - questoes_ant) if questoes_ant else None
+
+    # --- Pending reviews ---
+    pending_flashcards = conn.execute(
+        "SELECT COUNT(*) FROM flashcards WHERE proxima_revisao <= ? AND user_id = ?",
+        (today_str(), user_id)
+    ).fetchone()[0]
+
+    pending_topicos = conn.execute(
+        "SELECT COUNT(*) FROM edital WHERE proxima_revisao != '' AND proxima_revisao <= ? AND user_id = ?",
+        (today_str(), user_id)
+    ).fetchone()[0]
+
+    return {
+        "periodo": f"{inicio_semana} a {hoje.isoformat()}",
+        "resumo": {
+            "horas_estudadas": round(horas_semana, 1),
+            "questoes_resolvidas": questoes_semana[0],
+            "questoes_acertadas": questoes_semana[1],
+            "pct_acerto": round(questoes_semana[1] / questoes_semana[0] * 100, 1) if questoes_semana[0] else 0,
+            "flashcards_revisados": flashcards_semana,
+            "dias_ativos": dias_ativos,
+            "streak_atual": streak,
+        },
+        "comparativo": {
+            "delta_horas": delta_horas,
+            "delta_questoes": delta_questoes,
+            "tendencia_horas": "up" if delta_horas and delta_horas > 0 else "down" if delta_horas and delta_horas < 0 else "stable",
+            "tendencia_questoes": "up" if delta_questoes and delta_questoes > 0 else "down" if delta_questoes and delta_questoes < 0 else "stable",
+        },
+        "destaques": {
+            "melhor_materia": melhor_materia,
+            "pior_materia": pior_materia,
+        },
+        "conquistas": conquistas,
+        "pendencias": {
+            "flashcards_pendentes": pending_flashcards,
+            "topicos_revisao": pending_topicos,
+        },
+    }

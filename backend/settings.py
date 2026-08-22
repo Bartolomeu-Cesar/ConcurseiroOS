@@ -49,7 +49,7 @@ class Settings:
     """Configurações da aplicação. Valores podem ser overridden via env vars."""
     PDF_ROOT: str = os.environ.get("PDF_ROOT", "./pdfs")
     DB_PATH: str = os.environ.get("DB_PATH", "./progress.db")
-    APP_VERSION: str = "2.3.0"
+    APP_VERSION: str = "2.4.0"
     BACKUP_DIR: str = os.environ.get("BACKUP_DIR", "./backups")
     BACKUP_MAX_KEEP: int = int(os.environ.get("BACKUP_MAX_KEEP", "7"))
     BACKUP_AUTO: bool = os.environ.get("BACKUP_AUTO", "true").lower() == "true"

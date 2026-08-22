@@ -12,6 +12,28 @@
   <style>
     /* Page-specific: dashboard */
 
+    /* Heatmap level variables (dark theme defaults, light overridden below) */
+    :root {
+      --heatmap-l1: #1e4620;
+      --heatmap-l2: #2d6a30;
+      --heatmap-l3: #3da140;
+      --heatmap-l4: #a6e3a1;
+      --heatmap-l1-border: #1e4620;
+      --heatmap-l2-border: #2d6a30;
+      --heatmap-l3-border: #3da140;
+      --heatmap-l4-border: #a6e3a1;
+    }
+    body.light-theme {
+      --heatmap-l1: #b8e6b3;
+      --heatmap-l2: #7bc975;
+      --heatmap-l3: #40a02b;
+      --heatmap-l4: #1a7f12;
+      --heatmap-l1-border: #a0d99b;
+      --heatmap-l2-border: #5fb858;
+      --heatmap-l3-border: #339022;
+      --heatmap-l4-border: #146b0e;
+    }
+
     /* Gráficos */
     .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
     .chart-box {
@@ -28,7 +50,7 @@
     .streak-fire { font-size: 2rem; }
     .streak-info { flex: 1; }
     .streak-info .streak-num { font-size: 1.4rem; font-weight: 700; color: var(--peach); }
-    .streak-info .streak-label { font-size: 0.82rem; color: #a6adc8; }
+    .streak-info .streak-label { font-size: 0.82rem; color: var(--text-muted); }
     .streak-best { text-align: right; }
     .streak-best .num { font-size: 1.1rem; font-weight: 700; color: var(--green); }
     .streak-best .lbl { font-size: 0.75rem; color: var(--text-sub); }
@@ -80,8 +102,8 @@
     .pratica-badge {
       font-size: 0.72rem; font-weight: 700; padding: 3px 8px; border-radius: 4px;
     }
-    .pratica-badge.alta { background: #f38ba8; color: var(--bg); }
-    .pratica-badge.media { background: #fab387; color: var(--bg); }
+    .pratica-badge.alta { background: var(--red); color: var(--bg); }
+    .pratica-badge.media { background: var(--peach); color: var(--bg); }
     .pratica-materia { flex: 1; font-size: 0.9rem; }
     .pratica-pct { font-size: 0.85rem; font-weight: 700; }
 
@@ -90,50 +112,50 @@
       background: var(--bg-elevated); color: var(--text); border: none; border-radius: 8px;
       padding: 10px 20px; font-size: 0.9rem; font-weight: 600; cursor: pointer;
     }
-    .export-btn:hover { background: #585b70; }
+    .export-btn:hover { background: var(--ctp-surface2); }
 
     @media (max-width: 768px) {
       .charts { grid-template-columns: 1fr; }
       .relatorio-grid { grid-template-columns: 1fr; }
     }
 
-    /* Light Theme - Catppuccin Latte (WCAG AAA) */
-    body.light-theme .chart-box { background: #e6e9ef; }
-    body.light-theme .chart-box h3 { color: #8839ef; }
-    body.light-theme .streak-bar { background: #e6e9ef; }
-    body.light-theme .streak-info .streak-num { color: #fe640b; }
-    body.light-theme .streak-best .num { color: #40a02b; }
-    body.light-theme .meta-row { background: #e6e9ef; }
-    body.light-theme .meta-info .meta-progress-bar { background: #bcc0cc; }
-    body.light-theme .relatorio { background: #e6e9ef; }
-    body.light-theme .relatorio h2 { color: #8839ef; }
-    body.light-theme .relatorio-item .r-label { color: #5c5f77; }
-    body.light-theme .sugestao-box { background: #dce0e8; }
-    body.light-theme .sugestao-box h4 { color: #fe640b; }
-    body.light-theme .pratica-panel { background: #e6e9ef; }
-    body.light-theme .pratica-panel h2 { color: #8839ef; }
-    body.light-theme .pratica-item { border-bottom-color: #ccd0da; }
-    body.light-theme .export-btn { background: #dce0e8; color: #4c4f69; border: 1px solid #bcc0cc; }
-    body.light-theme .export-btn:hover { background: #ccd0da; }
-    body.light-theme .metas-section h2 { color: #8839ef; }
+    /* Light Theme - Catppuccin Latte (uses CSS variables that auto-switch) */
+    body.light-theme .chart-box { background: var(--bg-surface); }
+    body.light-theme .chart-box h3 { color: var(--accent); }
+    body.light-theme .streak-bar { background: var(--bg-surface); }
+    body.light-theme .streak-info .streak-num { color: var(--peach); }
+    body.light-theme .streak-best .num { color: var(--green); }
+    body.light-theme .meta-row { background: var(--bg-surface); }
+    body.light-theme .meta-info .meta-progress-bar { background: var(--border); }
+    body.light-theme .relatorio { background: var(--bg-surface); }
+    body.light-theme .relatorio h2 { color: var(--accent); }
+    body.light-theme .relatorio-item .r-label { color: var(--text-sub); }
+    body.light-theme .sugestao-box { background: var(--bg-elevated); }
+    body.light-theme .sugestao-box h4 { color: var(--peach); }
+    body.light-theme .pratica-panel { background: var(--bg-surface); }
+    body.light-theme .pratica-panel h2 { color: var(--accent); }
+    body.light-theme .pratica-item { border-bottom-color: var(--border); }
+    body.light-theme .export-btn { background: var(--bg-elevated); color: var(--text); border: 1px solid var(--border); }
+    body.light-theme .export-btn:hover { background: var(--border); }
+    body.light-theme .metas-section h2 { color: var(--accent); }
 
     .heatmap-grid { display: flex; gap: 2px; flex-wrap: wrap; }
-    .heatmap-cell { width: 12px; height: 12px; border-radius: 2px; background: var(--bg-elevated); border: 1px solid #585b70; }
-    .heatmap-cell.future { background: var(--bg-surface); border: 1px dashed #45475a; opacity: 0.5; }
-    .heatmap-cell.l1 { background: #1e4620; opacity: 1; }
-    .heatmap-cell.l2 { background: #2d6a30; opacity: 1; }
-    .heatmap-cell.l3 { background: #3da140; opacity: 1; }
-    .heatmap-cell.l4 { background: #a6e3a1; opacity: 1; }
+    .heatmap-cell { width: 12px; height: 12px; border-radius: 2px; background: var(--bg-elevated); border: 1px solid var(--ctp-surface2); }
+    .heatmap-cell.future { background: var(--bg-surface); border: 1px dashed var(--ctp-surface1); opacity: 0.5; }
+    .heatmap-cell.l1 { background: var(--heatmap-l1); opacity: 1; }
+    .heatmap-cell.l2 { background: var(--heatmap-l2); opacity: 1; }
+    .heatmap-cell.l3 { background: var(--heatmap-l3); opacity: 1; }
+    .heatmap-cell.l4 { background: var(--heatmap-l4); opacity: 1; }
     .heatmap-months { display: flex; gap: 2px; font-size: 0.6rem; color: var(--text-sub); margin-bottom: 2px; }
     /* Heatmap - tema claro */
-    body.light-theme .heatmap-cell { background: #ccd0da; border: 1px solid #bcc0cc; }
-    body.light-theme .heatmap-cell.future { background: #e6e9ef; border: 1px dashed #ccd0da; opacity: 0.5; }
-    body.light-theme .heatmap-cell.l1 { background: #b8e6b3; border-color: #a0d99b; }
-    body.light-theme .heatmap-cell.l2 { background: #7bc975; border-color: #5fb858; }
-    body.light-theme .heatmap-cell.l3 { background: #40a02b; border-color: #339022; }
-    body.light-theme .heatmap-cell.l4 { background: #1a7f12; border-color: #146b0e; }
-    body.light-theme .heatmap-months { color: #5c5f77; }
-    .share-card { background: linear-gradient(135deg, #1e1e2e, #313244); border: 1px solid var(--border); border-radius: 12px; padding: 16px; text-align: center; }
+    body.light-theme .heatmap-cell { background: var(--border); border: 1px solid var(--border); }
+    body.light-theme .heatmap-cell.future { background: var(--bg-surface); border: 1px dashed var(--border); opacity: 0.5; }
+    body.light-theme .heatmap-cell.l1 { background: var(--heatmap-l1); border-color: var(--heatmap-l1-border); }
+    body.light-theme .heatmap-cell.l2 { background: var(--heatmap-l2); border-color: var(--heatmap-l2-border); }
+    body.light-theme .heatmap-cell.l3 { background: var(--heatmap-l3); border-color: var(--heatmap-l3-border); }
+    body.light-theme .heatmap-cell.l4 { background: var(--heatmap-l4); border-color: var(--heatmap-l4-border); }
+    body.light-theme .heatmap-months { color: var(--text-sub); }
+    .share-card { background: linear-gradient(135deg, var(--bg), var(--bg-surface)); border: 1px solid var(--border); border-radius: 12px; padding: 16px; text-align: center; }
 
     /* Desafio Diário */
     .desafio-diario-card {
@@ -154,7 +176,7 @@
     .desafio-diario-status { font-size: 0.82rem; font-weight: 600; }
     .desafio-diario-btn {
       width: 100%;
-      background: linear-gradient(135deg, #cba6f7, #89b4fa);
+      background: linear-gradient(135deg, var(--accent), var(--blue));
       color: var(--bg);
       border: none;
       border-radius: 8px;
@@ -189,7 +211,7 @@
       height: 4px; background: var(--bg-elevated); border-radius: 2px; overflow: hidden; margin-bottom: 16px;
     }
     .desafio-timer-fill {
-      height: 100%; background: linear-gradient(90deg, #a6e3a1, #f9e2af, #f38ba8);
+      height: 100%; background: linear-gradient(90deg, var(--green), var(--yellow), var(--red));
       border-radius: 2px; transition: width 0.1s linear;
     }
     .desafio-question-num { font-size: 0.78rem; color: var(--text-sub); margin-bottom: 8px; }
@@ -225,14 +247,14 @@
     }
 
     /* Light theme */
-    body.light-theme .desafio-diario-card { background: linear-gradient(135deg, #e6e9ef, #dce0e8); border-color: #8839ef; }
-    body.light-theme .desafio-diario-title { color: #4c4f69; }
-    body.light-theme .desafio-diario-desc { color: #5c5f77; }
-    body.light-theme .desafio-diario-btn { background: linear-gradient(135deg, #8839ef, #1e66f5); color: #fff; }
+    body.light-theme .desafio-diario-card { background: linear-gradient(135deg, var(--bg-surface), var(--bg-elevated)); border-color: var(--accent); }
+    body.light-theme .desafio-diario-title { color: var(--text); }
+    body.light-theme .desafio-diario-desc { color: var(--text-sub); }
+    body.light-theme .desafio-diario-btn { background: linear-gradient(135deg, var(--accent), var(--blue)); color: #fff; }
     body.light-theme .desafio-modal-overlay { background: rgba(220,224,232,0.95); }
-    body.light-theme .desafio-modal { background: #e6e9ef; border-color: #bcc0cc; }
-    body.light-theme .desafio-alt-btn { background: #dce0e8; border-color: #bcc0cc; color: #4c4f69; }
-    body.light-theme .desafio-alt-btn:hover { border-color: #8839ef; background: #ccd0da; }
+    body.light-theme .desafio-modal { background: var(--bg-surface); border-color: var(--border); }
+    body.light-theme .desafio-alt-btn { background: var(--bg-elevated); border-color: var(--border); color: var(--text); }
+    body.light-theme .desafio-alt-btn:hover { border-color: var(--accent); background: var(--border); }
     .share-card .share-text { font-size: 0.85rem; color: var(--text); margin-bottom: 12px; line-height: 1.6; }
     .share-btns { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
     .share-btns button { border: none; border-radius: 6px; padding: 6px 14px; font-size: 0.78rem; cursor: pointer; font-weight: 600; }
@@ -240,9 +262,9 @@
     .gam-level { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
     .gam-level .level-num { font-size: 1.8rem; font-weight: 700; color: var(--accent); }
     .gam-level .level-info { flex: 1; }
-    .gam-level .level-title { font-size: 0.85rem; color: #a6adc8; }
+    .gam-level .level-title { font-size: 0.85rem; color: var(--text-muted); }
     .gam-xp-bar { height: 8px; background: var(--bg-elevated); border-radius: 4px; overflow: hidden; margin-bottom: 4px; }
-    .gam-xp-fill { height: 100%; background: linear-gradient(90deg, #cba6f7, #89b4fa); border-radius: 4px; transition: width 0.5s; }
+    .gam-xp-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--blue)); border-radius: 4px; transition: width 0.5s; }
     .gam-xp-text { font-size: 0.75rem; color: var(--text-sub); text-align: right; }
     .gam-badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
     .gam-badge { display: flex; align-items: center; gap: 4px; background: var(--bg-elevated); padding: 4px 10px; border-radius: 16px; font-size: 0.78rem; }
@@ -282,10 +304,10 @@
     .dash-tab.active { color: var(--text); border-bottom-color: var(--accent); background: var(--bg-elevated); }
     .dash-panel { display: none; }
     .dash-panel.active { display: block; }
-    body.light-theme .dash-tabs { background: #e6e9ef; }
-    body.light-theme .dash-tab { color: #5c5f77; }
-    body.light-theme .dash-tab:hover { color: #4c4f69; background: #dce0e8; }
-    body.light-theme .dash-tab.active { color: #4c4f69; border-bottom-color: #8839ef; background: #dce0e8; }
+    body.light-theme .dash-tabs { background: var(--bg-surface); }
+    body.light-theme .dash-tab { color: var(--text-sub); }
+    body.light-theme .dash-tab:hover { color: var(--text); background: var(--bg-elevated); }
+    body.light-theme .dash-tab.active { color: var(--text); border-bottom-color: var(--accent); background: var(--bg-elevated); }
 
     @media (max-width: 768px) {
       .dash-tab { padding: 10px 12px; font-size: 0.78rem; }
@@ -339,13 +361,13 @@
     .cal-detail-truncated:hover { color: var(--blue); }
     .cal-detail-truncated .cal-detail-short::after { content: ' ▸'; color: var(--blue); font-size: 0.6rem; }
     .cal-activity-time { font-size: 0.7rem; color: var(--blue); white-space: nowrap; }
-    .cal-day-footer { margin-top: 8px; padding-top: 6px; border-top: 1px solid #45475a; font-size: 0.72rem; color: var(--text-sub); }
-    body.light-theme .cal-day { background: #dce0e8; border-color: #bcc0cc; }
-    body.light-theme .cal-day:hover { border-color: #8839ef; }
-    body.light-theme .cal-day.today { border-color: #40a02b; }
-    body.light-theme .cal-day-header { color: #8839ef; border-bottom-color: #bcc0cc; }
-    body.light-theme .cal-activity { border-bottom-color: #e6e9ef; }
-    body.light-theme .cal-activity-materia { color: #4c4f69; }
+    .cal-day-footer { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--ctp-surface1); font-size: 0.72rem; color: var(--text-sub); }
+    body.light-theme .cal-day { background: var(--bg-elevated); border-color: var(--border); }
+    body.light-theme .cal-day:hover { border-color: var(--accent); }
+    body.light-theme .cal-day.today { border-color: var(--green); }
+    body.light-theme .cal-day-header { color: var(--accent); border-bottom-color: var(--border); }
+    body.light-theme .cal-activity { border-bottom-color: var(--bg-surface); }
+    body.light-theme .cal-activity-materia { color: var(--text); }
     /* Calendar mode buttons */
     .cal-mode-btn {
       padding: 6px 12px; border: none; background: transparent;
@@ -353,16 +375,16 @@
       transition: all 0.2s;
     }
     .cal-mode-btn:hover { color: var(--text); background: var(--bg-elevated); }
-    .cal-mode-btn.active { color: var(--bg); background: #cba6f7; }
-    body.light-theme .cal-mode-btn.active { background: #8839ef; color: #fff; }
+    .cal-mode-btn.active { color: var(--bg); background: var(--accent); }
+    body.light-theme .cal-mode-btn.active { background: var(--accent); color: #fff; }
     .plan-mode-btn {
       padding: 6px 12px; border: none; background: transparent;
       color: var(--text-sub); font-size: 0.78rem; font-weight: 600; cursor: pointer;
       transition: all 0.2s;
     }
     .plan-mode-btn:hover { color: var(--text); background: var(--bg-elevated); }
-    .plan-mode-btn.active { color: var(--bg); background: #89b4fa; }
-    body.light-theme .plan-mode-btn.active { background: #1e66f5; color: #fff; }
+    .plan-mode-btn.active { color: var(--bg); background: var(--blue); }
+    body.light-theme .plan-mode-btn.active { background: var(--blue); color: #fff; }
     .cal-delete-btn {
       background: none; border: none; color: var(--red); cursor: pointer;
       font-size: 0.75rem; opacity: 0.6; transition: opacity 0.2s;
@@ -384,13 +406,13 @@
       font-size: 0.7rem; border-radius: 4px; padding: 1px 5px;
       opacity: 0.7; transition: all 0.2s;
     }
-    .cal-pomo-btn:hover { opacity: 1; background: #a6e3a1; color: var(--bg); }
+    .cal-pomo-btn:hover { opacity: 1; background: var(--green); color: var(--bg); }
     /* Drag-and-drop */
     .cal-activity[draggable] { cursor: grab; transition: transform 0.15s, opacity 0.15s; }
     .cal-activity[draggable]:active { cursor: grabbing; }
     .cal-activity.dragging { opacity: 0.4; transform: scale(0.95); }
     /* Atividade adiada */
-    .cal-activity.adiada { border-left: 2px solid #f9e2af; padding-left: 4px; background: rgba(249,226,175,0.05); }
+    .cal-activity.adiada { border-left: 2px solid var(--yellow); padding-left: 4px; background: rgba(249,226,175,0.05); }
     /* Turno header */
     .cal-turno-header { transition: background 0.2s; }
   </style>
@@ -748,7 +770,7 @@
             </select>
             <button onclick="regenerarCalendario()" style="background:var(--yellow);color:var(--bg);border:none;border-radius:6px;padding:5px 12px;font-size:0.82rem;font-weight:600;cursor:pointer;" title="Regerar calendário (apaga personalizado e gera novo)">🔄 Regerar</button>
             <button onclick="regenerarInteligente()" style="background:var(--accent);color:var(--bg);border:none;border-radius:6px;padding:5px 12px;font-size:0.82rem;font-weight:600;cursor:pointer;" title="Regenera calendário usando IA com todas as fontes de inteligência (banca, erros, revisão, performance)">🧠 Regenerar Inteligente</button>
-            <button onclick="resetPlanejadorInteligente()" style="background:linear-gradient(135deg,#cba6f7,#89b4fa);color:#1e1e2e;border:none;border-radius:6px;padding:5px 12px;font-size:0.82rem;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(203,166,247,0.3);" title="Reset rápido: regenera calendário inteligente sem confirmação">🧠 Reset Inteligente</button>
+            <button onclick="resetPlanejadorInteligente()" style="background:linear-gradient(135deg,var(--accent),var(--blue));color:var(--bg);border:none;border-radius:6px;padding:5px 12px;font-size:0.82rem;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(203,166,247,0.3);" title="Reset rápido: regenera calendário inteligente sem confirmação">🧠 Reset Inteligente</button>
           </div>
         </div>
 
@@ -782,7 +804,7 @@
             <div>
               <div style="font-size:0.72rem;color:var(--text-sub);text-transform:uppercase;font-weight:600;">📍 Agora</div>
               <div style="font-size:1rem;font-weight:700;color:var(--text);" id="cal-agora-materia">—</div>
-              <div style="font-size:0.78rem;color:#a6adc8;" id="cal-agora-motivo"></div>
+              <div style="font-size:0.78rem;color:var(--text-muted);" id="cal-agora-motivo"></div>
             </div>
             <div style="text-align:center;">
               <div style="font-size:0.68rem;color:var(--text-sub);">Dia</div>

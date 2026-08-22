@@ -95,8 +95,10 @@ deploy() {
 
     # Build images
     log_info "Building Docker images..."
+    export BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    export VCS_REF=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
     $COMPOSE_CMD -f "$COMPOSE_FILE" -p "$PROJECT_NAME" build --no-cache
-    log_ok "Images built successfully"
+    log_ok "Images built successfully (ref: ${VCS_REF})"
 
     # Run database initialization
     log_info "Running database migrations (init_db)..."
