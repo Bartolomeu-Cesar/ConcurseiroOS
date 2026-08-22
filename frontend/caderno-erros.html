@@ -423,7 +423,13 @@
       try {
         const res = await fetch(`${API_BASE}/api/questoes/erros/caderno`);
         if (!res.ok) throw new Error('Erro ao carregar caderno');
-        dadosCaderno = await res.json();
+        const raw = await res.json();
+        // Handle both old format (array) and new format (object)
+        if (Array.isArray(raw)) {
+          dadosCaderno = { pendentes_hoje: raw, total_erros: raw.length, por_materia: {}, padroes_erro: [] };
+        } else {
+          dadosCaderno = raw;
+        }
         renderAll();
       } catch (err) {
         document.getElementById('lista-revisao').innerHTML = `
