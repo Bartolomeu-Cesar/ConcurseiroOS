@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>📕 Caderno de Erros — ConcurseiroOS</title>
+  <link rel="stylesheet" href="/css/styles.css">
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/layout.css">
   <style>
@@ -361,7 +362,8 @@
   <script src="/auth-interceptor.js"></script>
   <script src="/sidebar.js"></script>
 
-  <div class="caderno-container" id="main-content" role="main">
+  <div class="main-content" role="main">
+    <div class="caderno-container" id="main-content">
     <div class="caderno-header">
       <h1>📕 Caderno de Erros <span class="count-badge" id="total-badge">0</span></h1>
     </div>
@@ -411,7 +413,8 @@
       <div class="section-title">🔍 Padrões de Erro</div>
       <div id="lista-padroes"></div>
     </section>
-  </div>
+  </div><!-- /caderno-container -->
+  </div><!-- /main-content -->
 
   <script>
     const API_BASE = '';
