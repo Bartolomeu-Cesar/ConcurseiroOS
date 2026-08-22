@@ -432,3 +432,16 @@
   if (document.body) loadBattleNotify();
   else document.addEventListener('DOMContentLoaded', loadBattleNotify);
 })();
+
+// Load AI Tutor floating widget (global)
+(function() {
+  function loadAITutor() {
+    if (!document.body) return;
+    const s = document.createElement('script');
+    s.src = '/ai-tutor-widget.js';
+    s.defer = true;
+    document.body.appendChild(s);
+  }
+  if (document.body) loadAITutor();
+  else document.addEventListener('DOMContentLoaded', loadAITutor);
+})();
