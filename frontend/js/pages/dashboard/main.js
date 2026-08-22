@@ -1023,6 +1023,33 @@ function _distribuirEmTurnos(atividades, isToday, horaAtual) {
 // ========== CALENDAR EXTRAS: Banner "Agora" + Progresso Semanal ==========
 
 async function loadCalendarExtras() {
+  // Load streak and alertas
+  loadCalStreak();
+  loadAlertasNegligenciadas();
+
+  // Atualizar linha do tempo (agulha) a cada minuto
+  clearInterval(window._calTimelineInterval);
+  window._calTimelineInterval = setInterval(() => {
+    const tl = document.querySelector('.cal-timeline');
+    if (tl) {
+      const agora = new Date();
+      const h = agora.getHours();
+      const horaStr = `${String(h).padStart(2,'0')}:${String(agora.getMinutes()).padStart(2,'0')}`;
+      const turno = h >= 6 && h < 12 ? 'manha' : h >= 12 && h < 18 ? 'tarde' : 'noite';
+      const turnoInicio = turno === 'manha' ? 6 : turno === 'tarde' ? 12 : 18;
+      const turnoFim = turno === 'manha' ? 12 : turno === 'tarde' ? 18 : 23;
+      const minutosNoTurno = (h - turnoInicio) * 60 + agora.getMinutes();
+      const totalMinTurno = (turnoFim - turnoInicio) * 60;
+      const pctPos = Math.min(95, Math.max(5, (minutosNoTurno / totalMinTurno) * 100));
+      const needle = tl.querySelector('div:last-child');
+      const bar = tl.querySelectorAll('div')[1];
+      if (needle) needle.style.left = pctPos + '%';
+      if (bar) bar.style.width = pctPos + '%';
+      const label = tl.querySelector('span');
+      if (label) label.textContent = horaStr;
+    }
+  }, 60000);
+
   // 1. Banner "O que estudar agora"
   try {
     const agora = await fetch('/api/calendario/agora').then(r => r.json());
@@ -1068,4 +1095,98 @@ async function loadCalendarExtras() {
       if (barsEl) barsEl.innerHTML = bars;
     }
   } catch(e) {}
+}
+
+// ========== RECOVERED FUNCTIONS (lost during modularization) ==========
+
+// Iniciar atividade sugerida pelo banner "Agora"
+window.iniciarAtividadeAgora = function() {
+  const s = window._calAgoraSugestao;
+  if (!s || s.tipo === 'pausa') return;
+  if (window.startTimerGlobal) {
+    window.startTimerGlobal(s.tempo_min || 25, s.materia || 'Estudo');
+  } else if (window.startPomodoro) {
+    window.startPomodoro(s.materia || 'Estudo', s.tempo_min || 25, s.tipo || 'estudo');
+  }
+};
+
+// Calendar streak loader
+async function loadCalStreak() {
+  try {
+    const data = await fetch('/api/calendario/streak').then(r => r.json());
+    const streakEl = document.getElementById('cal-streak-num');
+    const fillEl = document.getElementById('cal-progress-fill');
+    const txtEl = document.getElementById('cal-progress-txt');
+    if (streakEl) streakEl.textContent = `${data.streak_calendario || 0} dias seguindo o plano`;
+    const pct = data.hoje?.pct_conclusao || 0;
+    if (fillEl) fillEl.style.width = `${pct}%`;
+    if (txtEl) txtEl.textContent = `${Math.round(pct)}% hoje`;
+    if (pct >= 100 && streakEl) streakEl.textContent += ' 🎉 +50 XP';
+  } catch(e) {}
+}
+
+// Alerta de matérias negligenciadas
+async function loadAlertasNegligenciadas() {
+  try {
+    const data = await fetch('/api/calendario/materias-negligenciadas?dias_limite=5').then(r => r.json());
+    const el = document.getElementById('cal-alertas');
+    if (!el || data.total === 0) { if(el) el.style.display = 'none'; return; }
+    el.style.display = 'block';
+    const top3 = data.negligenciadas.slice(0, 3);
+    el.innerHTML = `<div style="background:#3a2a1e;border:1px solid var(--yellow);border-radius:8px;padding:10px 12px;font-size:0.8rem;">
+      <div style="color:var(--yellow);font-weight:600;margin-bottom:6px;">⚠️ Matérias negligenciadas</div>
+      ${top3.map(m => `<div style="color:var(--text);padding:2px 0;">• <strong>${m.materia}</strong> — ${m.dias_sem_estudar} dias sem estudar${m.urgencia === 'alta' ? ' 🔴' : ' 🟡'}</div>`).join('')}
+    </div>`;
+  } catch(e) {}
+}
+
+// Toggle calendar day collapse (show more/less activities)
+window.toggleCalCollapse = function(dateKey) {
+  const container = document.getElementById('cal-more-' + dateKey);
+  const btn = document.getElementById('cal-expand-' + dateKey);
+  if (!container) return;
+  if (container.style.display === 'none') {
+    container.style.display = 'block';
+    if (btn) { btn.textContent = '··· recolher'; btn.style.color = 'var(--text-sub)'; }
+  } else {
+    container.style.display = 'none';
+    const extras = container.querySelectorAll('.cal-activity').length;
+    if (btn) { btn.textContent = `··· ver mais (${extras})`; btn.style.color = 'var(--blue)'; }
+  }
+};
+
+// Toggle detail text expand (truncated activity descriptions)
+window.toggleDetailExpand = function(el) {
+  const short = el.querySelector('.cal-detail-short');
+  const full = el.querySelector('.cal-detail-full');
+  if (!short || !full) return;
+  if (full.style.display === 'none') {
+    short.style.display = 'none';
+    full.style.display = 'inline';
+  } else {
+    short.style.display = 'inline';
+    full.style.display = 'none';
+  }
+};
+
+// Drag & drop for calendar items (manual mode)
+function initDragDrop() {
+  const items = document.querySelectorAll('.cal-activity[draggable]');
+  items.forEach(item => {
+    item.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('text/plain', item.dataset.key || '');
+      item.style.opacity = '0.5';
+    });
+    item.addEventListener('dragend', () => { item.style.opacity = '1'; });
+  });
+  const days = document.querySelectorAll('.cal-day');
+  days.forEach(day => {
+    day.addEventListener('dragover', (e) => { e.preventDefault(); day.style.background = 'var(--bg-elevated)'; });
+    day.addEventListener('dragleave', () => { day.style.background = ''; });
+    day.addEventListener('drop', (e) => {
+      e.preventDefault();
+      day.style.background = '';
+      // TODO: implement reorder API call
+    });
+  });
 }
