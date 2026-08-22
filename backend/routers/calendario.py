@@ -634,3 +634,344 @@ def progresso_semanal_calendario(conn=Depends(get_db_session), user_id: int = De
         "semana_inicio": inicio_semana,
         "semana_fim": fim_semana,
     }
+
+
+# ============================================================
+# RESET INTELIGENTE — Regenera calendário com todas as inteligências
+# ============================================================
+
+@router.post("/api/planejador/reset-inteligente", summary="Reset inteligente do calendário",
+             description="Apaga calendário personalizado e gera novo otimizado usando todas as fontes de inteligência")
+def reset_inteligente(body: dict = Body(default={}), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Gera calendário semanal otimizado usando TODAS as inteligências disponíveis."""
+    from routers.treinador.analise import (
+        _analyze_error_patterns,
+        _get_banca_weights,
+        _get_last_session_by_subject,
+        _get_pending_reviews,
+        _get_performance_by_subject,
+    )
+
+    edital_nome = body.get("edital_nome", "")
+    cargo = body.get("cargo", "")
+
+    # Get horas_dia from body > metas_config > default 4
+    horas_dia = body.get("horas_dia")
+    if not horas_dia:
+        cfg = conn.execute("SELECT meta_horas FROM metas_config WHERE user_id = ?", (user_id,)).fetchone()
+        horas_dia = cfg[0] if cfg and cfg[0] else 4.0
+    horas_dia = float(horas_dia)
+    tempo_dia_min = int(horas_dia * 60)
+
+    # ===== 1. Gather ALL intelligence sources =====
+
+    # Ciclo de estudos (matérias ativas com horas planejadas)
+    ciclo = conn.execute(
+        "SELECT materia, horas_alvo FROM ciclo_estudos WHERE ativo = 1 AND user_id = ? ORDER BY ordem", (user_id,)
+    ).fetchall()
+    ciclo_map = {r["materia"]: r["horas_alvo"] for r in ciclo}
+
+    # Performance by subject
+    desempenho = _get_performance_by_subject(conn, user_id)
+
+    # Banca weights
+    banca_weights = _get_banca_weights(conn, user_id, edital_nome, cargo)
+
+    # Error patterns (caderno de erros)
+    error_patterns = _analyze_error_patterns(conn, user_id, limit=20)
+    error_rate_map = {}
+    for ep in error_patterns:
+        mat = ep["materia"]
+        if mat not in error_rate_map:
+            error_rate_map[mat] = ep["pct_erro"]
+        else:
+            error_rate_map[mat] = max(error_rate_map[mat], ep["pct_erro"])
+
+    # Pending reviews (flashcards + tópicos)
+    pending = _get_pending_reviews(conn, user_id)
+
+    # Days since last study per subject
+    ultima_sessao = _get_last_session_by_subject(conn, user_id)
+    hoje = date.today()
+
+    # Edital topics pending per subject
+    query_edital = "SELECT materia, COUNT(*) as pendentes FROM edital WHERE status != 'Concluído' AND arquivado = 0 AND user_id = ?"
+    params_edital = [user_id]
+    if edital_nome:
+        query_edital += " AND edital_nome = ?"
+        params_edital.append(edital_nome)
+    if cargo:
+        query_edital += " AND cargo = ?"
+        params_edital.append(cargo)
+    query_edital += " GROUP BY materia"
+    topicos_pendentes_map = {r[0]: r[1] for r in conn.execute(query_edital, params_edital).fetchall()}
+
+    # Flashcards due per subject
+    review_due_map = {}
+    try:
+        fc_due = conn.execute("""
+            SELECT materia, COUNT(*) as due FROM flashcards
+            WHERE proxima_revisao <= ? AND user_id = ? AND materia != ''
+            GROUP BY materia
+        """, (today_str(), user_id)).fetchall()
+        review_due_map = {r[0]: r[1] for r in fc_due}
+    except Exception:
+        pass
+
+    # ===== 2. Collect all matérias from all sources =====
+    all_materias = set()
+    all_materias.update(ciclo_map.keys())
+    all_materias.update(desempenho.keys())
+    all_materias.update(topicos_pendentes_map.keys())
+    all_materias.update(banca_weights.keys())
+    all_materias.update(error_rate_map.keys())
+
+    if not all_materias:
+        return {"ok": False, "message": "Nenhuma matéria encontrada. Importe um edital ou adicione matérias ao ciclo."}
+
+    # ===== 3. Calculate weighted score per matéria =====
+    # peso = (banca_weight * 0.3) + (error_rate * 0.25) + (days_neglected * 0.2) + (topics_pending * 0.15) + (review_due * 0.1)
+
+    # Normalize helpers
+    max_banca = max((bw.get("peso_pct", 0) for bw in banca_weights.values()), default=1) or 1
+    max_topics = max(topicos_pendentes_map.values(), default=1) or 1
+    max_reviews = max(review_due_map.values(), default=1) or 1
+
+    scored_materias = []
+    for mat in all_materias:
+        # Banca weight (0-100 normalized)
+        bw = banca_weights.get(mat, {}).get("peso_pct", 0)
+        banca_norm = (bw / max_banca) * 100
+
+        # Error rate (already 0-100)
+        err_rate = error_rate_map.get(mat, 0)
+
+        # Days neglected (cap at 30 → normalized to 100)
+        ultima = ultima_sessao.get(mat)
+        if ultima:
+            try:
+                dias_sem = (hoje - date.fromisoformat(ultima)).days
+            except (ValueError, TypeError):
+                dias_sem = 30
+        else:
+            dias_sem = 30
+        days_norm = min(dias_sem, 30) / 30 * 100
+
+        # Topics pending (normalized)
+        topics_pend = topicos_pendentes_map.get(mat, 0)
+        topics_norm = (topics_pend / max_topics) * 100
+
+        # Reviews due (normalized)
+        rev_due = review_due_map.get(mat, 0)
+        review_norm = (rev_due / max_reviews) * 100
+
+        peso = (banca_norm * 0.3) + (err_rate * 0.25) + (days_norm * 0.2) + (topics_norm * 0.15) + (review_norm * 0.1)
+
+        # Boost: if performance is low, increase weight
+        perf = desempenho.get(mat, {})
+        if perf.get("total", 0) >= 5 and perf.get("pct", 100) < 50:
+            peso *= 1.3
+        elif perf.get("total", 0) >= 5 and perf.get("pct", 100) < 70:
+            peso *= 1.1
+
+        scored_materias.append({
+            "materia": mat,
+            "peso": round(peso, 2),
+            "banca_pct": bw,
+            "error_rate": err_rate,
+            "dias_sem": dias_sem,
+            "topics_pending": topics_pend,
+            "review_due": rev_due,
+            "pct_acerto": perf.get("pct", 0),
+        })
+
+    scored_materias.sort(key=lambda x: -x["peso"])
+
+    # ===== 4. Distribute across 7 days =====
+    total_peso = sum(m["peso"] for m in scored_materias) or 1
+
+    # Determine frequency per matéria: top 30% → 3 days, middle 35% → 2 days, bottom 35% → 1 day
+    total_mats = len(scored_materias)
+    for i, m in enumerate(scored_materias):
+        pos = i / max(total_mats, 1)
+        m["freq"] = 3 if pos < 0.3 else 2 if pos < 0.65 else 1
+
+    # Time allocation: 20% review/flashcards, 60% main study, 20% questions
+    tempo_revisao = int(tempo_dia_min * 0.20)
+    tempo_estudo = int(tempo_dia_min * 0.60)
+    tempo_questoes = int(tempo_dia_min * 0.20)
+
+    # Build pool of matérias for assignment
+    pool = []
+    for m in scored_materias:
+        pool.extend([m] * m["freq"])
+
+    dias_calendario = []
+    last_day_materias = set()
+    pool_idx = 0
+    slots_por_dia = [3, 3, 3, 3, 3, 2, 0]  # Mon-Sat active, Sun rest/reduced
+
+    for dia_idx in range(7):
+        dia_atividades = []
+        is_domingo = dia_idx == 6
+        target_slots = slots_por_dia[dia_idx]
+
+        # --- REVIEW BLOCK (20% of time) ---
+        if not is_domingo:
+            review_desc = ""
+            if pending["flashcards"] > 0:
+                review_desc = f"Revisar {pending['flashcards']} flashcards pendentes"
+            elif pending["topicos"] > 0:
+                review_desc = f"Revisar {pending['topicos']} tópicos com revisão espaçada"
+            else:
+                review_desc = "Revisão geral / Flashcards do dia"
+
+            dia_atividades.append({
+                "dia_semana": dia_idx,
+                "materia": "Revisão",
+                "topicos": review_desc,
+                "tempo_min": tempo_revisao,
+                "tipo": "revisao",
+                "ordem": 0,
+            })
+
+        # --- MAIN STUDY BLOCK (60% of time, distributed by weight) ---
+        if not is_domingo and target_slots > 0:
+            used_today = set()
+            assigned = []
+            attempts = 0
+            search_idx = pool_idx
+
+            while len(assigned) < target_slots and attempts < len(pool) * 3 and pool:
+                candidate = pool[search_idx % len(pool)]
+                mat_name = candidate["materia"]
+                if mat_name not in last_day_materias and mat_name not in used_today:
+                    assigned.append(candidate)
+                    used_today.add(mat_name)
+                    pool_idx = (search_idx + 1) % len(pool)
+                search_idx += 1
+                attempts += 1
+
+            # Fallback: if not enough assigned, allow repeats from top priorities
+            if len(assigned) < target_slots:
+                for m in scored_materias:
+                    if m["materia"] not in used_today:
+                        assigned.append(m)
+                        used_today.add(m["materia"])
+                        if len(assigned) >= target_slots:
+                            break
+
+            # Distribute study time proportionally by weight
+            total_assigned_peso = sum(a["peso"] for a in assigned) or 1
+            ordem = 1
+            for a in assigned:
+                proporcao = a["peso"] / total_assigned_peso
+                tempo_mat_estudo = max(15, int(tempo_estudo * proporcao))
+
+                # Get topics for this matéria
+                topicos_query = "SELECT topico FROM edital WHERE materia = ? AND status != 'Concluído' AND arquivado = 0 AND user_id = ?"
+                topicos_params = [a["materia"], user_id]
+                if edital_nome:
+                    topicos_query += " AND edital_nome = ?"
+                    topicos_params.append(edital_nome)
+                if cargo:
+                    topicos_query += " AND cargo = ?"
+                    topicos_params.append(cargo)
+                topicos_query += " LIMIT 3"
+                topicos_list = [r[0] for r in conn.execute(topicos_query, topicos_params).fetchall()]
+                topicos_str = "; ".join(topicos_list) if topicos_list else "Revisão geral"
+
+                dia_atividades.append({
+                    "dia_semana": dia_idx,
+                    "materia": a["materia"],
+                    "topicos": topicos_str,
+                    "tempo_min": tempo_mat_estudo,
+                    "tipo": "estudo",
+                    "ordem": ordem,
+                })
+                ordem += 1
+
+            # --- QUESTIONS BLOCK (20% of time, weakest subjects) ---
+            # Pick the weakest among assigned
+            weakest = sorted(assigned, key=lambda x: x.get("pct_acerto", 0))[:2]
+            if weakest:
+                tempo_q_per = max(10, tempo_questoes // len(weakest))
+                for w in weakest:
+                    dia_atividades.append({
+                        "dia_semana": dia_idx,
+                        "materia": w["materia"],
+                        "topicos": f"Questões de {w['materia']} (reforço)",
+                        "tempo_min": tempo_q_per,
+                        "tipo": "questoes",
+                        "ordem": ordem,
+                    })
+                    ordem += 1
+
+            last_day_materias = used_today
+        else:
+            # DOMINGO: reduced schedule - light review only
+            dia_atividades.append({
+                "dia_semana": dia_idx,
+                "materia": "Revisão",
+                "topicos": "Revisão leve / Descanso ativo (flashcards ou leitura)",
+                "tempo_min": min(30, tempo_dia_min // 4),
+                "tipo": "revisao",
+                "ordem": 0,
+            })
+            if scored_materias:
+                dia_atividades.append({
+                    "dia_semana": dia_idx,
+                    "materia": scored_materias[0]["materia"],
+                    "topicos": "Revisão rápida da matéria prioritária",
+                    "tempo_min": min(20, tempo_dia_min // 6),
+                    "tipo": "revisao",
+                    "ordem": 1,
+                })
+
+        dias_calendario.append(dia_atividades)
+
+    # ===== 5. Delete old and save new calendario_personalizado =====
+    conn.execute("DELETE FROM calendario_personalizado WHERE user_id = ?", (user_id,))
+
+    count = 0
+    for dia_atividades in dias_calendario:
+        for ativ in dia_atividades:
+            conn.execute(
+                "INSERT INTO calendario_personalizado (dia_semana, materia, topicos, tempo_min, tipo, ordem, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (ativ["dia_semana"], ativ["materia"], ativ["topicos"], ativ["tempo_min"], ativ["tipo"], ativ["ordem"], user_id)
+            )
+            count += 1
+    conn.commit()
+
+    # ===== 6. Build response =====
+    dias_response = []
+    for dia_idx, dia_atividades in enumerate(dias_calendario):
+        tempo_total = sum(a["tempo_min"] for a in dia_atividades)
+        materias_dia = list(set(a["materia"] for a in dia_atividades if a["materia"] != "Revisão"))
+        dias_response.append({
+            "dia_semana": dia_idx,
+            "nome": NOMES_DIAS[dia_idx],
+            "atividades": dia_atividades,
+            "tempo_total_min": tempo_total,
+            "materias": materias_dia,
+        })
+
+    horas_semana = round(sum(d["tempo_total_min"] for d in dias_response) / 60, 1)
+    total_materias_cal = len(set(m["materia"] for da in dias_calendario for m in da if m["materia"] != "Revisão"))
+
+    log.info(f"Reset inteligente: {total_materias_cal} matérias, {horas_semana}h/semana, {count} atividades salvas")
+
+    return {
+        "ok": True,
+        "message": f"Calendário regenerado com {total_materias_cal} matérias ({horas_semana}h/semana) usando análise inteligente.",
+        "dias": dias_response,
+        "stats": {
+            "total_materias": total_materias_cal,
+            "horas_semana": horas_semana,
+            "horas_dia": horas_dia,
+            "atividades_salvas": count,
+            "distribuicao": [{"materia": m["materia"], "peso": m["peso"], "freq_semanal": m["freq"],
+                              "banca_pct": m["banca_pct"], "pct_acerto": m["pct_acerto"],
+                              "dias_sem_estudar": m["dias_sem"]} for m in scored_materias[:15]],
+        },
+    }

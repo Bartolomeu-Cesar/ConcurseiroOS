@@ -614,6 +614,31 @@ async function regenerarCalendario() {
   } catch(e) { alert('Erro ao regerar calendário: ' + e.message); }
 }
 
+async function regenerarInteligente() {
+  if (!confirm('🧠 Regenerar calendário usando análise inteligente?\n\nIsso irá apagar o calendário atual e criar um novo otimizado com base em:\n• Peso da banca\n• Caderno de erros\n• Performance por matéria\n• Dias sem estudar\n• Revisão espaçada\n• Tópicos pendentes')) return;
+  try {
+    const horasSelect = document.getElementById('cal-horas-dia');
+    const horas_dia = horasSelect ? parseFloat(horasSelect.value) : null;
+    const res = await fetch('/api/planejador/reset-inteligente', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ horas_dia })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      calendarMode = 'personalizado';
+      document.querySelectorAll('.cal-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === 'personalizado'));
+      document.getElementById('cal-manual-form').style.display = 'none';
+      const actionsEl = document.getElementById('cal-actions');
+      if (actionsEl) actionsEl.style.display = 'none';
+      await loadCalendario();
+      alert(`✅ ${data.message}\n\n📊 ${data.stats.total_materias} matérias · ${data.stats.horas_semana}h/semana`);
+    } else {
+      alert('⚠️ ' + (data.message || 'Erro ao gerar calendário inteligente'));
+    }
+  } catch(e) { alert('Erro ao regenerar inteligente: ' + e.message); }
+}
+
 async function addCalendarioItem() {
   const dia = parseInt(document.getElementById('cal-add-dia').value);
   const tipo = document.getElementById('cal-add-tipo').value;
@@ -903,6 +928,30 @@ setTimeout(initPushPermissionBanner, 2000);
 window.exportStats = exportStats;
 window.setCalMode = setCalMode;
 window.regenerarCalendario = regenerarCalendario;
+window.regenerarInteligente = regenerarInteligente;
+window.resetPlanejadorInteligente = async function() {
+  try {
+    const horasSelect = document.getElementById('cal-horas-dia');
+    const horas_dia = horasSelect ? parseFloat(horasSelect.value) : 4;
+    const res = await fetch('/api/planejador/reset-inteligente', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ horas_dia })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      await loadCalendario();
+      if (typeof showToast === 'function') showToast('Planejador regenerado com inteligência!', 'success');
+      else alert('Planejador regenerado com inteligência!');
+    } else {
+      if (typeof showToast === 'function') showToast(data.message || 'Erro ao regenerar', 'error');
+      else alert('⚠️ ' + (data.message || 'Erro ao gerar calendário inteligente'));
+    }
+  } catch(e) {
+    if (typeof showToast === 'function') showToast('Erro: ' + e.message, 'error');
+    else alert('Erro ao regenerar inteligente: ' + e.message);
+  }
+};
 window.addCalendarioItem = addCalendarioItem;
 window.removeCalItem = removeCalItem;
 window.salvarCalendario = salvarCalendario;
