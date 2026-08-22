@@ -167,27 +167,29 @@
     if (el) el.textContent = data.freezes_available || 0;
   }).catch(() => {});
 
-  // Load badges (pending counts)
-  fetch('/api/flashcards/today').then(r => r.json()).then(data => {
-    const count = data.length || 0;
-    const el = document.getElementById('badge-flashcards');
-    const bnavEl = document.getElementById('bnav-badge-praticar');
-    if (el && count > 0) el.textContent = count;
-    if (bnavEl && count > 0) bnavEl.textContent = count;
-  }).catch(() => {});
+  // Load badges (pending counts) - slight delay to ensure sidebar DOM is ready
+  setTimeout(() => {
+    fetch('/api/flashcards/today').then(r => r.json()).then(data => {
+      const count = data.length || 0;
+      const el = document.getElementById('badge-flashcards');
+      const bnavEl = document.getElementById('bnav-badge-praticar');
+      if (el) el.textContent = count > 0 ? count : '';
+      if (bnavEl) bnavEl.textContent = count > 0 ? count : '';
+    }).catch(() => {});
 
-  fetch('/api/sumulas/today').then(r => r.json()).then(data => {
-    const count = Array.isArray(data) ? data.length : (data.pendentes || 0);
-    const el = document.getElementById('badge-sumulas');
-    if (el && count > 0) el.textContent = count;
-  }).catch(() => {});
+    fetch('/api/sumulas/today').then(r => r.json()).then(data => {
+      const count = Array.isArray(data) ? data.length : (data.pendentes || 0);
+      const el = document.getElementById('badge-sumulas');
+      if (el) el.textContent = count > 0 ? count : '';
+    }).catch(() => {});
 
-  // Badge: Caderno de Erros (pendentes hoje)
-  fetch('/api/questoes/erros/caderno').then(r => r.json()).then(data => {
-    const count = data.pendentes_hoje ? data.pendentes_hoje.length : 0;
-    const el = document.getElementById('badge-caderno-erros');
-    if (el && count > 0) el.textContent = count;
-  }).catch(() => {});
+    // Badge: Caderno de Erros (pendentes hoje)
+    fetch('/api/questoes/erros/caderno').then(r => r.json()).then(data => {
+      const count = data.pendentes_hoje ? data.pendentes_hoje.length : (Array.isArray(data) ? data.length : 0);
+      const el = document.getElementById('badge-caderno-erros');
+      if (el) el.textContent = count > 0 ? count : '';
+    }).catch(() => {});
+  }, 100);
 
   // CTA: load suggested materia for quick session
   fetch('/api/treinador/sugestao-rapida').then(r => r.json()).then(data => {
