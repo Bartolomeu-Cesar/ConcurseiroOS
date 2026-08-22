@@ -901,3 +901,19 @@ window.toggleDetailExpand = function(el) {
     full.style.display = 'none';
   }
 };
+
+// Profile menu toggle
+window.toggleDashProfileMenu = function() {
+  const menu = document.getElementById('dash-profile-menu');
+  if (!menu) return;
+  menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+};
+
+// Close profile menu on click outside
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('dash-profile-menu');
+  const section = document.getElementById('dash-user-section');
+  if (menu && section && !section.contains(e.target) && !menu.contains(e.target)) {
+    menu.style.display = 'none';
+  }
+});
