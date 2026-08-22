@@ -268,7 +268,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
             "img-src 'self' data: blob: https:; "
             "font-src 'self' https://cdn.jsdelivr.net; "
-            "connect-src 'self' http://localhost:* ws://localhost:*; "
+            "connect-src 'self' http://localhost:* ws://localhost:* https://cdn.jsdelivr.net; "
             "worker-src 'self' blob:; "
             "frame-src 'self' blob:"
         )
@@ -279,6 +279,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         path = request.url.path
         if path.startswith("/api/"):
             response.headers["Cache-Control"] = "no-store"
+        elif path == "/sw.js":
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         elif path.endswith((".css", ".js", ".svg", ".mjs", ".woff2", ".woff", ".ttf")):
             response.headers["Cache-Control"] = "public, max-age=604800"
         elif path.endswith(".html") or path == "/":
