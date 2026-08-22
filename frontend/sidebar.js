@@ -6,10 +6,20 @@
 // Apply saved theme immediately (before render to avoid flash)
 (function() {
   const theme = localStorage.getItem('theme');
-  if (theme === 'light') {
-    document.body.classList.add('light-theme', 'theme-forced');
+  function applyTheme() {
+    if (!document.body) return;
+    if (theme === 'light') {
+      document.body.classList.add('light-theme', 'theme-forced');
+    } else {
+      document.body.classList.add('theme-forced');
+    }
+  }
+  // Try immediately (works if script is after <body>)
+  if (document.body) {
+    applyTheme();
   } else {
-    document.body.classList.add('theme-forced');
+    // If body doesn't exist yet, wait for DOMContentLoaded
+    document.addEventListener('DOMContentLoaded', applyTheme);
   }
 })();
 
