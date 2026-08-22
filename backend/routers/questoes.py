@@ -112,17 +112,192 @@ def list_questoes_materias(conn=Depends(get_db_session), user_id: int = Depends(
 
 
 # Caderno de Erros (DEVE ficar antes de /api/questoes/{id})
-@router.get("/api/questoes/erros/caderno", summary="Caderno de erros",
-            description="Retorna todas as questões que o usuário errou, ordenadas pela data mais recente.")
+@router.get("/api/questoes/erros/caderno", summary="Caderno de erros inteligente",
+            description="Retorna questões erradas com repetição espaçada, agrupadas por padrão de erro.")
 def caderno_erros(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
-    rows = conn.execute("""
-        SELECT q.id, q.materia, q.topico, q.enunciado, q.resposta_correta, qr.resposta_usuario, qr.data
+    from datetime import datetime, timedelta
+
+    hoje = today_str()
+    INTERVALOS = [1, 3, 7, 14, 30]
+
+    # Garantir que a tabela existe
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS erros_revisao (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL DEFAULT 1,
+            questao_id INTEGER NOT NULL,
+            resposta_id INTEGER NOT NULL,
+            intervalo_atual INTEGER DEFAULT 1,
+            proxima_revisao TEXT NOT NULL,
+            revisoes_count INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT DEFAULT '',
+            FOREIGN KEY (questao_id) REFERENCES questoes(id)
+        )
+    """)
+
+    # Buscar todos os erros do usuário
+    erros = conn.execute("""
+        SELECT q.id, q.materia, q.topico, q.enunciado, q.resposta_correta,
+               q.alternativa_a, q.alternativa_b, q.alternativa_c, q.alternativa_d, q.alternativa_e,
+               qr.resposta_usuario, qr.data, qr.id as resposta_id
         FROM questoes_respostas qr
         JOIN questoes q ON q.id = qr.questao_id
         WHERE qr.acertou = 0 AND qr.user_id = ?
         ORDER BY qr.data DESC
     """, (user_id,)).fetchall()
-    return [dict(r) for r in rows]
+
+    # Auto-seed erros_revisao para erros que ainda não estão na tabela
+    existing_revisoes = conn.execute(
+        "SELECT questao_id, resposta_id FROM erros_revisao WHERE user_id = ?", (user_id,)
+    ).fetchall()
+    existing_set = {(r[0], r[1]) for r in existing_revisoes}
+
+    for erro in erros:
+        key = (erro["id"], erro["resposta_id"])
+        if key not in existing_set:
+            # Calcular proxima_revisao: 1 dia após o erro
+            try:
+                data_erro = datetime.strptime(erro["data"], "%Y-%m-%d")
+            except (ValueError, TypeError):
+                data_erro = datetime.now()
+            proxima = (data_erro + timedelta(days=1)).strftime("%Y-%m-%d")
+            conn.execute("""
+                INSERT INTO erros_revisao (user_id, questao_id, resposta_id, intervalo_atual, proxima_revisao, revisoes_count, created_at)
+                VALUES (?, ?, ?, 1, ?, 0, ?)
+            """, (user_id, erro["id"], erro["resposta_id"], proxima, hoje))
+            existing_set.add(key)
+    conn.commit()
+
+    # Buscar revisões com spaced repetition data
+    revisoes_map = {}
+    revisoes_rows = conn.execute(
+        "SELECT questao_id, resposta_id, intervalo_atual, proxima_revisao, revisoes_count FROM erros_revisao WHERE user_id = ?",
+        (user_id,)
+    ).fetchall()
+    for r in revisoes_rows:
+        revisoes_map[(r["questao_id"], r["resposta_id"])] = {
+            "intervalo_atual": r["intervalo_atual"],
+            "proxima_revisao": r["proxima_revisao"],
+            "revisoes_count": r["revisoes_count"],
+        }
+
+    # Montar resultado com pendentes de hoje
+    pendentes_hoje = []
+    todos_erros = []
+    por_materia = {}
+    padroes_raw = {}
+
+    for erro in erros:
+        item = dict(erro)
+        rev = revisoes_map.get((erro["id"], erro["resposta_id"]), {})
+        item["proxima_revisao"] = rev.get("proxima_revisao", hoje)
+        item["intervalo_atual"] = rev.get("intervalo_atual", 1)
+        item["revisoes_count"] = rev.get("revisoes_count", 0)
+        todos_erros.append(item)
+
+        # Contagem por matéria
+        mat = erro["materia"] or "Sem matéria"
+        por_materia[mat] = por_materia.get(mat, 0) + 1
+
+        # Padrões de erro: agrupar por materia + topico + resposta errada
+        padrao_key = f"{erro['materia']}|{erro['topico']}|{erro['resposta_usuario']}"
+        if padrao_key not in padroes_raw:
+            padroes_raw[padrao_key] = {
+                "padrao": f"{erro['materia']} - {erro['topico'] or 'Geral'}: sempre marca '{erro['resposta_usuario']}'",
+                "materia": erro["materia"],
+                "topico": erro["topico"] or "Geral",
+                "resposta_errada": erro["resposta_usuario"],
+                "count": 0,
+                "questoes": []
+            }
+        padroes_raw[padrao_key]["count"] += 1
+        if len(padroes_raw[padrao_key]["questoes"]) < 5:
+            padroes_raw[padrao_key]["questoes"].append(erro["id"])
+
+        # Pendentes hoje: proxima_revisao <= hoje
+        if item["proxima_revisao"] <= hoje:
+            pendentes_hoje.append(item)
+
+    # Padrões com mais de 1 ocorrência, ordenados por frequência
+    padroes_erro = sorted(
+        [p for p in padroes_raw.values() if p["count"] >= 2],
+        key=lambda x: x["count"],
+        reverse=True
+    )[:20]
+
+    return {
+        "pendentes_hoje": pendentes_hoje,
+        "total_erros": len(todos_erros),
+        "por_materia": por_materia,
+        "padroes_erro": padroes_erro,
+    }
+
+
+@router.post("/api/questoes/erros/revisar/{id}", summary="Revisar questão errada",
+             description="Marca uma questão do caderno de erros como revisada. Avança ou reseta o intervalo de repetição espaçada.")
+def revisar_erro(id: int, body: dict, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    from datetime import datetime, timedelta
+
+    INTERVALOS = [1, 3, 7, 14, 30]
+    acertou = body.get("acertou", False)
+    hoje = today_str()
+
+    # Buscar registro de revisão existente
+    revisao = conn.execute(
+        "SELECT id, intervalo_atual, revisoes_count FROM erros_revisao WHERE questao_id = ? AND user_id = ? ORDER BY id DESC LIMIT 1",
+        (id, user_id)
+    ).fetchone()
+
+    if not revisao:
+        # Se não existe, verificar se a questão realmente foi errada
+        erro = conn.execute(
+            "SELECT id FROM questoes_respostas WHERE questao_id = ? AND acertou = 0 AND user_id = ? LIMIT 1",
+            (id, user_id)
+        ).fetchone()
+        if not erro:
+            raise HTTPException(status_code=404, detail="Questão não encontrada no caderno de erros")
+        # Criar registro
+        conn.execute("""
+            INSERT INTO erros_revisao (user_id, questao_id, resposta_id, intervalo_atual, proxima_revisao, revisoes_count, created_at)
+            VALUES (?, ?, ?, 1, ?, 0, ?)
+        """, (user_id, id, erro["id"], hoje, hoje))
+        conn.commit()
+        revisao = conn.execute(
+            "SELECT id, intervalo_atual, revisoes_count FROM erros_revisao WHERE questao_id = ? AND user_id = ? ORDER BY id DESC LIMIT 1",
+            (id, user_id)
+        ).fetchone()
+
+    intervalo_atual = revisao["intervalo_atual"]
+    revisoes_count = revisao["revisoes_count"]
+
+    if acertou:
+        # Avançar para o próximo intervalo
+        try:
+            idx = INTERVALOS.index(intervalo_atual)
+            novo_intervalo = INTERVALOS[min(idx + 1, len(INTERVALOS) - 1)]
+        except ValueError:
+            novo_intervalo = INTERVALOS[0]
+    else:
+        # Resetar para 1 dia
+        novo_intervalo = INTERVALOS[0]
+
+    proxima = (datetime.strptime(hoje, "%Y-%m-%d") + timedelta(days=novo_intervalo)).strftime("%Y-%m-%d")
+
+    conn.execute("""
+        UPDATE erros_revisao
+        SET intervalo_atual = ?, proxima_revisao = ?, revisoes_count = ?, updated_at = ?
+        WHERE id = ? AND user_id = ?
+    """, (novo_intervalo, proxima, revisoes_count + 1, hoje, revisao["id"], user_id))
+    conn.commit()
+
+    return {
+        "ok": True,
+        "acertou": acertou,
+        "novo_intervalo": novo_intervalo,
+        "proxima_revisao": proxima,
+        "revisoes_count": revisoes_count + 1,
+    }
 
 
 # Estatísticas de questões (DEVE ficar antes de /api/questoes/{id})

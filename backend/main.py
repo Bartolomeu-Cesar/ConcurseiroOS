@@ -15,7 +15,7 @@ from routers import (
     analytics, auth, bookmarks, cadernos, calendario, ciclo, dashboard,
     desafios, edital, feynman, flashcards, misc, notas, notifications, pdf,
     planejador, questoes, simulados, streaks, sumulas, treinador,
-    leagues, ai_tutor, social, batalha, admin
+    leagues, ai_tutor, social, batalha, admin, studyroom
 )
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
@@ -127,6 +127,10 @@ tags_metadata = [
     {
         "name": "Admin",
         "description": "Painel administrativo: gestão de usuários, planos e sistema.",
+    },
+    {
+        "name": "Study Room",
+        "description": "Salas de estudo virtuais com timer compartilhado, técnica Pomodoro e chat.",
     },
     {
         "name": "PDF",
@@ -392,6 +396,7 @@ app.include_router(ai_tutor.router)
 app.include_router(social.router)
 app.include_router(batalha.router)
 app.include_router(admin.router)
+app.include_router(studyroom.router)
 app.include_router(misc.router)
 
 

@@ -133,6 +133,105 @@
     body.light-theme .heatmap-cell.l4 { background: #1a7f12; border-color: #146b0e; }
     body.light-theme .heatmap-months { color: #5c5f77; }
     .share-card { background: linear-gradient(135deg, #1e1e2e, #313244); border: 1px solid var(--border); border-radius: 12px; padding: 16px; text-align: center; }
+
+    /* Desafio Diário */
+    .desafio-diario-card {
+      background: linear-gradient(135deg, var(--bg-surface), var(--bg-elevated));
+      border: 2px solid var(--accent);
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 24px;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .desafio-diario-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(203,166,247,0.2); }
+    .desafio-diario-card.completed { border-color: var(--green); opacity: 0.85; }
+    .desafio-diario-header { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+    .desafio-diario-icon { font-size: 2rem; }
+    .desafio-diario-info { flex: 1; }
+    .desafio-diario-title { font-size: 1.05rem; font-weight: 700; color: var(--text); margin: 0; }
+    .desafio-diario-desc { font-size: 0.8rem; color: var(--text-sub); margin: 2px 0 0; }
+    .desafio-diario-status { font-size: 0.82rem; font-weight: 600; }
+    .desafio-diario-btn {
+      width: 100%;
+      background: linear-gradient(135deg, #cba6f7, #89b4fa);
+      color: var(--bg);
+      border: none;
+      border-radius: 8px;
+      padding: 12px 20px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    .desafio-diario-btn:hover { opacity: 0.9; transform: scale(1.01); }
+    .desafio-diario-btn:active { transform: scale(0.98); }
+    .desafio-diario-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    /* Desafio Diário Modal */
+    .desafio-modal-overlay {
+      position: fixed; inset: 0; background: rgba(17,17,27,0.95);
+      z-index: 99999; display: flex; align-items: center; justify-content: center;
+      padding: 16px; animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes desafioConfetti { 0% { transform: translateY(-100vh) rotate(0deg); opacity: 1; } 100% { transform: translateY(100vh) rotate(720deg); opacity: 0; } }
+    .desafio-modal {
+      background: var(--bg-surface); border-radius: 16px; padding: 28px;
+      max-width: 520px; width: 100%; max-height: 90vh; overflow-y: auto;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.6); border: 1px solid var(--border);
+    }
+    .desafio-modal-header {
+      display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;
+    }
+    .desafio-modal-header h2 { margin: 0; color: var(--accent); font-size: 1.2rem; }
+    .desafio-timer-bar {
+      height: 4px; background: var(--bg-elevated); border-radius: 2px; overflow: hidden; margin-bottom: 16px;
+    }
+    .desafio-timer-fill {
+      height: 100%; background: linear-gradient(90deg, #a6e3a1, #f9e2af, #f38ba8);
+      border-radius: 2px; transition: width 0.1s linear;
+    }
+    .desafio-question-num { font-size: 0.78rem; color: var(--text-sub); margin-bottom: 8px; }
+    .desafio-question-materia {
+      font-size: 0.75rem; color: var(--accent); background: var(--bg-elevated);
+      padding: 3px 10px; border-radius: 12px; display: inline-block; margin-bottom: 10px;
+    }
+    .desafio-question-text { font-size: 0.95rem; color: var(--text); line-height: 1.6; margin-bottom: 16px; }
+    .desafio-alternatives { display: flex; flex-direction: column; gap: 8px; }
+    .desafio-alt-btn {
+      background: var(--bg); border: 2px solid var(--border); color: var(--text);
+      padding: 12px 16px; border-radius: 8px; cursor: pointer; font-size: 0.88rem;
+      text-align: left; transition: all 0.15s; display: flex; align-items: center; gap: 10px;
+    }
+    .desafio-alt-btn:hover { border-color: var(--accent); background: var(--bg-elevated); }
+    .desafio-alt-btn.selected { border-color: var(--blue); background: rgba(137,180,250,0.1); }
+    .desafio-alt-btn.correct { border-color: var(--green); background: rgba(166,227,161,0.15); }
+    .desafio-alt-btn.wrong { border-color: var(--red); background: rgba(243,139,168,0.15); }
+    .desafio-alt-btn .alt-letra {
+      font-weight: 700; min-width: 24px; height: 24px; display: flex;
+      align-items: center; justify-content: center; border-radius: 50%;
+      background: var(--bg-elevated); font-size: 0.8rem;
+    }
+    .desafio-results {
+      text-align: center; padding: 20px 0;
+    }
+    .desafio-results-score { font-size: 2.5rem; font-weight: 700; margin-bottom: 8px; }
+    .desafio-results-xp { font-size: 1.1rem; color: var(--green); font-weight: 600; margin-bottom: 16px; }
+    .desafio-results-detail { font-size: 0.82rem; color: var(--text-sub); margin-bottom: 8px; }
+    .desafio-close-btn {
+      background: var(--accent); color: var(--bg); border: none; border-radius: 8px;
+      padding: 12px 32px; font-size: 1rem; font-weight: 700; cursor: pointer; margin-top: 16px;
+    }
+
+    /* Light theme */
+    body.light-theme .desafio-diario-card { background: linear-gradient(135deg, #e6e9ef, #dce0e8); border-color: #8839ef; }
+    body.light-theme .desafio-diario-title { color: #4c4f69; }
+    body.light-theme .desafio-diario-desc { color: #5c5f77; }
+    body.light-theme .desafio-diario-btn { background: linear-gradient(135deg, #8839ef, #1e66f5); color: #fff; }
+    body.light-theme .desafio-modal-overlay { background: rgba(220,224,232,0.95); }
+    body.light-theme .desafio-modal { background: #e6e9ef; border-color: #bcc0cc; }
+    body.light-theme .desafio-alt-btn { background: #dce0e8; border-color: #bcc0cc; color: #4c4f69; }
+    body.light-theme .desafio-alt-btn:hover { border-color: #8839ef; background: #ccd0da; }
     .share-card .share-text { font-size: 0.85rem; color: var(--text); margin-bottom: 12px; line-height: 1.6; }
     .share-btns { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
     .share-btns button { border: none; border-radius: 6px; padding: 6px 14px; font-size: 0.78rem; cursor: pointer; font-weight: 600; }
@@ -343,6 +442,21 @@
         <div class="num" id="streak-best">0</div>
         <div class="lbl">recorde</div>
       </div>
+    </div>
+
+    <!-- Desafio Diário -->
+    <div class="desafio-diario-card" id="desafio-diario-card">
+      <div class="desafio-diario-header">
+        <span class="desafio-diario-icon">🎯</span>
+        <div class="desafio-diario-info">
+          <h3 class="desafio-diario-title">Desafio Diário</h3>
+          <p class="desafio-diario-desc">5 questões rápidas baseadas nas suas fraquezas</p>
+        </div>
+        <div class="desafio-diario-status" id="desafio-diario-status"></div>
+      </div>
+      <button class="desafio-diario-btn" id="desafio-diario-btn" onclick="iniciarDesafioDiario()">
+        ⚡ Começar Desafio
+      </button>
     </div>
 
     <!-- Metas do dia -->
@@ -3643,6 +3757,231 @@
       } catch(e) { console.error('Ranking error:', e); }
     }
 
+    // ===== DESAFIO DIÁRIO =====
+    let desafioDiarioData = null;
+    let desafioQuestoes = [];
+    let desafioIdx = 0;
+    let desafioRespostas = [];
+    let desafioTimer = null;
+    let desafioTimerSeg = 15;
+
+    async function loadDesafioDiarioCard() {
+      try {
+        const data = await fetch('/api/desafio-diario').then(r => r.json());
+        desafioDiarioData = data;
+        const card = document.getElementById('desafio-diario-card');
+        const btn = document.getElementById('desafio-diario-btn');
+        const status = document.getElementById('desafio-diario-status');
+
+        if (!data.questoes || data.questoes.length === 0) {
+          status.innerHTML = '<span style="color:var(--text-sub);">Sem questões</span>';
+          btn.textContent = '📚 Adicionar Questões';
+          btn.onclick = () => window.location.href = '/questoes.html';
+          return;
+        }
+
+        if (data.completado) {
+          card.classList.add('completed');
+          status.innerHTML = `<span style="color:var(--green);">✅ ${data.acertos}/${data.questoes.length} · +${data.pontos}pts</span>`;
+          btn.textContent = '✅ Concluído Hoje';
+          btn.disabled = true;
+        } else {
+          status.innerHTML = `<span style="color:var(--yellow);">${data.questoes.length} questões</span>`;
+          btn.textContent = '⚡ Começar Desafio';
+          btn.disabled = false;
+          btn.onclick = iniciarDesafioDiario;
+        }
+      } catch(e) {
+        console.error('Desafio Diário error:', e);
+      }
+    }
+
+    function iniciarDesafioDiario() {
+      if (!desafioDiarioData || !desafioDiarioData.questoes || desafioDiarioData.questoes.length === 0) return;
+      if (desafioDiarioData.completado) return;
+
+      desafioQuestoes = desafioDiarioData.questoes;
+      desafioIdx = 0;
+      desafioRespostas = [];
+
+      showDesafioModal();
+      showDesafioQuestion();
+    }
+
+    function showDesafioModal() {
+      const overlay = document.createElement('div');
+      overlay.className = 'desafio-modal-overlay';
+      overlay.id = 'desafio-modal-overlay';
+      overlay.innerHTML = `
+        <div class="desafio-modal" id="desafio-modal-content">
+          <div class="desafio-modal-header">
+            <h2>🎯 Desafio Diário</h2>
+            <span style="font-size:0.82rem;color:var(--text-sub);" id="desafio-timer-label">⏱ 15s</span>
+          </div>
+          <div class="desafio-timer-bar">
+            <div class="desafio-timer-fill" id="desafio-timer-fill" style="width:100%"></div>
+          </div>
+          <div id="desafio-body"></div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+    }
+
+    function showDesafioQuestion() {
+      if (desafioIdx >= desafioQuestoes.length) {
+        submitDesafioRespostas();
+        return;
+      }
+
+      const q = desafioQuestoes[desafioIdx];
+      const body = document.getElementById('desafio-body');
+
+      body.innerHTML = `
+        <div class="desafio-question-num">Questão ${desafioIdx + 1} de ${desafioQuestoes.length}</div>
+        <div class="desafio-question-materia">${q.materia}</div>
+        <div class="desafio-question-text">${q.enunciado}</div>
+        <div class="desafio-alternatives" id="desafio-alts">
+          ${q.alternativas.map(a => `
+            <button class="desafio-alt-btn" onclick="selectDesafioAlternativa('${a.letra}', this)" data-letra="${a.letra}">
+              <span class="alt-letra">${a.letra}</span>
+              <span>${a.texto}</span>
+            </button>
+          `).join('')}
+        </div>
+      `;
+
+      // Start timer
+      desafioTimerSeg = 15;
+      const timerFill = document.getElementById('desafio-timer-fill');
+      const timerLabel = document.getElementById('desafio-timer-label');
+
+      clearInterval(desafioTimer);
+      timerFill.style.width = '100%';
+      timerLabel.textContent = '⏱ 15s';
+
+      desafioTimer = setInterval(() => {
+        desafioTimerSeg--;
+        const pct = (desafioTimerSeg / 15) * 100;
+        timerFill.style.width = pct + '%';
+        timerLabel.textContent = `⏱ ${desafioTimerSeg}s`;
+
+        if (desafioTimerSeg <= 5) {
+          timerLabel.style.color = 'var(--red)';
+        } else {
+          timerLabel.style.color = 'var(--text-sub)';
+        }
+
+        if (desafioTimerSeg <= 0) {
+          clearInterval(desafioTimer);
+          // Tempo esgotado: registrar sem resposta e avançar
+          desafioRespostas.push({ questao_id: desafioQuestoes[desafioIdx].id, resposta: '' });
+          desafioIdx++;
+          showDesafioQuestion();
+        }
+      }, 1000);
+    }
+
+    function selectDesafioAlternativa(letra, btn) {
+      clearInterval(desafioTimer);
+
+      // Highlight selection
+      document.querySelectorAll('.desafio-alt-btn').forEach(b => {
+        b.classList.remove('selected');
+        b.disabled = true;
+        b.style.pointerEvents = 'none';
+      });
+      btn.classList.add('selected');
+
+      // Save answer
+      desafioRespostas.push({ questao_id: desafioQuestoes[desafioIdx].id, resposta: letra });
+
+      // Brief pause then advance
+      setTimeout(() => {
+        desafioIdx++;
+        showDesafioQuestion();
+      }, 400);
+    }
+
+    async function submitDesafioRespostas() {
+      clearInterval(desafioTimer);
+
+      const body = document.getElementById('desafio-body');
+      body.innerHTML = '<div style="text-align:center;padding:30px;"><div style="font-size:2rem;margin-bottom:8px;">⏳</div><div style="color:var(--text-sub);">Calculando resultados...</div></div>';
+
+      try {
+        const result = await fetch('/api/desafio-diario/responder', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ respostas: desafioRespostas })
+        }).then(r => r.json());
+
+        showDesafioResults(result);
+      } catch(e) {
+        body.innerHTML = `<div style="text-align:center;color:var(--red);padding:20px;">Erro ao enviar respostas: ${e.message}</div>`;
+      }
+    }
+
+    function showDesafioResults(result) {
+      const body = document.getElementById('desafio-body');
+      const timerBar = document.querySelector('.desafio-timer-bar');
+      const timerLabel = document.getElementById('desafio-timer-label');
+      if (timerBar) timerBar.style.display = 'none';
+      if (timerLabel) timerLabel.style.display = 'none';
+
+      const header = document.querySelector('.desafio-modal-header h2');
+      if (header) header.textContent = '🏆 Resultado';
+
+      const scoreColor = result.acertos >= 4 ? 'var(--green)' : result.acertos >= 3 ? 'var(--yellow)' : 'var(--red)';
+      const emoji = result.acertos === result.total ? '🎉' : result.acertos >= 3 ? '👏' : '💪';
+
+      body.innerHTML = `
+        <div class="desafio-results">
+          <div style="font-size:3rem;margin-bottom:8px;">${emoji}</div>
+          <div class="desafio-results-score" style="color:${scoreColor};">${result.acertos}/${result.total}</div>
+          <div class="desafio-results-xp">+${result.pontos_ganhos} XP</div>
+          ${result.streak_bonus > 0 ? `<div class="desafio-results-detail">🔥 Streak bonus: +${result.streak_bonus} pts</div>` : ''}
+          <div style="margin-top:16px;text-align:left;">
+            ${result.resultados.map((r, i) => `
+              <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:0.82rem;">
+                <span style="font-size:1rem;">${r.acertou ? '✅' : '❌'}</span>
+                <span style="flex:1;color:var(--text);">Questão ${i + 1}</span>
+                ${!r.acertou ? `<span style="color:var(--text-sub);font-size:0.75rem;">Correta: ${r.correta}</span>` : ''}
+              </div>
+            `).join('')}
+          </div>
+          <button class="desafio-close-btn" onclick="closeDesafioModal()">Fechar</button>
+        </div>
+      `;
+
+      // Confetti for perfect score
+      if (result.acertos === result.total) {
+        spawnDesafioConfetti();
+      }
+
+      // Update card
+      loadDesafioDiarioCard();
+    }
+
+    function closeDesafioModal() {
+      clearInterval(desafioTimer);
+      const overlay = document.getElementById('desafio-modal-overlay');
+      if (overlay) overlay.remove();
+    }
+
+    function spawnDesafioConfetti() {
+      const overlay = document.getElementById('desafio-modal-overlay');
+      if (!overlay) return;
+      const confettiContainer = document.createElement('div');
+      confettiContainer.style.cssText = 'position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:0;';
+      overlay.insertBefore(confettiContainer, overlay.firstChild);
+      const colors = ['#f38ba8','#a6e3a1','#89b4fa','#f9e2af','#cba6f7','#fab387','#94e2d5'];
+      for (let i = 0; i < 50; i++) {
+        const piece = document.createElement('div');
+        piece.style.cssText = `position:absolute;width:${6+Math.random()*8}px;height:${6+Math.random()*8}px;background:${colors[Math.floor(Math.random()*colors.length)]};border-radius:${Math.random()>0.5?'50%':'2px'};left:${Math.random()*100}%;top:-10px;animation:desafioConfetti ${2+Math.random()*2}s ease-out ${Math.random()*1.5}s forwards;`;
+        confettiContainer.appendChild(piece);
+      }
+    }
+
     // Carregar dados da aba ativa
     function loadActivePanel() {
       const active = document.querySelector('.dash-panel.active')?.id;
@@ -3652,6 +3991,7 @@
           loadResumoDiario();
           loadHeatmap();
           loadDashCountdown();
+          loadDesafioDiarioCard();
           break;
         case 'panel-treinador':
           loadTreinador();

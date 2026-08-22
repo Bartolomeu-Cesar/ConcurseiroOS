@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>🏠 Sala de Estudos - ConcurseiroOS</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#1e1e2e">
+  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/layout.css">
+  <style>
+    /* Page-specific: Study Room */
+    .studyroom-container { max-width: 900px; margin: 0 auto; }
+
+    /* Lobby / Create */
+    .room-card { background: var(--bg-surface); border-radius: var(--radius-xl); padding: 24px; margin-bottom: 16px; }
+    .room-card h2 { color: var(--accent); font-size: 1.1rem; margin-bottom: 12px; }
+    .code-display { font-size: 2.4rem; font-weight: 800; color: var(--yellow); letter-spacing: 6px; text-align: center; padding: 16px; background: var(--bg); border-radius: var(--radius-lg); margin: 12px 0; font-family: monospace; }
+
+    .config-row { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; }
+    .config-row label { font-size: 0.82rem; color: var(--text-sub); min-width: 120px; }
+    .config-row select, .config-row input { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 8px 12px; color: var(--text); font-size: 0.85rem; flex: 1; }
+    .config-row input::placeholder { color: var(--text-muted); }
+
+    .input-room { background: var(--bg); border: 2px solid var(--border); border-radius: var(--radius-lg); padding: 12px 16px; font-size: 1rem; color: var(--text); width: 100%; box-sizing: border-box; text-align: center; letter-spacing: 3px; font-weight: 600; text-transform: uppercase; }
+    .input-room:focus { outline: none; border-color: var(--accent); }
+    .input-room::placeholder { letter-spacing: normal; font-weight: 400; color: var(--text-muted); text-transform: none; }
+
+    .btn-room { background: var(--green); color: var(--bg); border: none; border-radius: var(--radius-lg); padding: 12px 24px; font-size: 0.95rem; font-weight: 700; cursor: pointer; width: 100%; transition: transform 0.1s; }
+    .btn-room:hover { transform: scale(1.02); }
+    .btn-room:active { transform: scale(0.98); }
+    .btn-room.secondary { background: var(--blue); }
+    .btn-room.accent { background: var(--accent); }
+
+    /* Room View Layout */
+    .room-layout { display: grid; grid-template-columns: 1fr 300px; gap: 16px; }
+    @media (max-width: 768px) { .room-layout { grid-template-columns: 1fr; } }
+
+    .room-main { display: flex; flex-direction: column; gap: 16px; }
+
+    /* Participants */
+    .participants-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+    .participant-card { display: flex; align-items: center; gap: 10px; background: var(--bg); border-radius: var(--radius-lg); padding: 12px; border: 1px solid var(--border); }
+    .participant-card.me { border-color: var(--accent); }
+    .participant-status { font-size: 1.2rem; }
+    .participant-info { flex: 1; min-width: 0; }
+    .participant-name { font-size: 0.82rem; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .participant-time { font-size: 0.72rem; color: var(--text-sub); }
+
+    /* Timer */
+    .timer-section { background: var(--bg-surface); border-radius: var(--radius-xl); padding: 24px; text-align: center; }
+    .timer-display { font-size: 3rem; font-weight: 800; font-family: monospace; color: var(--text); margin: 12px 0; }
+    .timer-label { font-size: 0.82rem; color: var(--text-sub); margin-bottom: 8px; }
+    .timer-phase { display: inline-block; padding: 4px 12px; border-radius: var(--radius-pill); font-size: 0.75rem; font-weight: 700; margin-bottom: 12px; }
+    .timer-phase.focus { background: rgba(166,227,161,0.2); color: var(--green); }
+    .timer-phase.break { background: rgba(137,180,250,0.2); color: var(--blue); }
+
+    /* Status Controls */
+    .status-controls { display: flex; gap: 8px; justify-content: center; margin-top: 12px; }
+    .status-btn { border: 2px solid var(--border); background: var(--bg); color: var(--text); border-radius: var(--radius-pill); padding: 8px 16px; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+    .status-btn:hover { border-color: var(--accent); }
+    .status-btn.active-focando { border-color: var(--green); background: rgba(166,227,161,0.15); color: var(--green); }
+    .status-btn.active-pausando { border-color: var(--yellow); background: rgba(249,226,175,0.15); color: var(--yellow); }
+    .status-btn.active-ausente { border-color: var(--text-muted); background: rgba(88,91,112,0.15); color: var(--text-muted); }
+
+    /* Stats */
+    .stats-bar { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
+    .stat-item { text-align: center; }
+    .stat-value { font-size: 1.2rem; font-weight: 700; color: var(--accent); }
+    .stat-label { font-size: 0.7rem; color: var(--text-sub); }
+
+    /* Chat */
+    .chat-panel { background: var(--bg-surface); border-radius: var(--radius-xl); padding: 16px; display: flex; flex-direction: column; height: 500px; }
+    .chat-title { font-size: 0.88rem; font-weight: 700; color: var(--text); margin-bottom: 12px; }
+    .chat-messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 4px; }
+    .chat-msg { background: var(--bg); border-radius: var(--radius-md); padding: 8px 12px; }
+    .chat-msg-name { font-size: 0.7rem; font-weight: 700; color: var(--accent); }
+    .chat-msg-text { font-size: 0.8rem; color: var(--text); margin-top: 2px; word-break: break-word; }
+    .chat-msg-time { font-size: 0.65rem; color: var(--text-muted); margin-top: 2px; }
+    .chat-input-row { display: flex; gap: 8px; margin-top: 12px; }
+    .chat-input { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 8px 12px; color: var(--text); font-size: 0.82rem; }
+    .chat-input:focus { outline: none; border-color: var(--accent); }
+    .chat-send { background: var(--accent); color: var(--bg); border: none; border-radius: var(--radius-md); padding: 8px 14px; font-weight: 700; font-size: 0.82rem; cursor: pointer; }
+
+    /* My Rooms list */
+    .rooms-list { display: grid; gap: 10px; }
+    .room-item { display: flex; align-items: center; justify-content: space-between; background: var(--bg); border-radius: var(--radius-lg); padding: 14px 16px; border: 1px solid var(--border); cursor: pointer; transition: border-color 0.2s; }
+    .room-item:hover { border-color: var(--accent); }
+    .room-item-info { }
+    .room-item-title { font-size: 0.88rem; font-weight: 600; color: var(--text); }
+    .room-item-meta { font-size: 0.72rem; color: var(--text-sub); margin-top: 2px; }
+    .room-item-badge { font-size: 0.7rem; padding: 3px 10px; border-radius: var(--radius-pill); background: var(--bg-elevated); color: var(--text-sub); }
+
+    .hidden { display: none !important; }
+
+    .section-divider { display: flex; align-items: center; gap: 12px; margin: 16px 0 12px; }
+    .section-divider span { font-size: 0.78rem; color: var(--text-muted); white-space: nowrap; }
+    .section-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+  </style>
+</head>
+<body>
+  <script src="/sidebar.js"></script>
+
+  <main class="main-content">
+    <div class="studyroom-container" style="padding: 24px 16px;">
+
+      <!-- ====== VIEW: LOBBY (create/join) ====== -->
+      <div id="view-lobby">
+        <h1 style="font-size:1.4rem; margin-bottom:16px;">🏠 Sala de Estudos Virtual</h1>
+
+        <div class="room-card">
+          <h2>✨ Criar Sala</h2>
+          <div class="config-row">
+            <label>Título</label>
+            <input type="text" id="input-titulo" placeholder="Ex: Estudando Constitucional" maxlength="60">
+          </div>
+          <div class="config-row">
+            <label>Técnica</label>
+            <select id="select-tecnica">
+              <option value="pomodoro">🍅 Pomodoro (25min foco + 5min pausa)</option>
+              <option value="livre">⏱️ Livre (timer contínuo)</option>
+            </select>
+          </div>
+          <div class="config-row">
+            <label>Duração (min)</label>
+            <input type="number" id="input-duracao" value="50" min="5" max="240">
+          </div>
+          <div class="config-row">
+            <label>Máx. pessoas</label>
+            <input type="number" id="input-max" value="10" min="2" max="50">
+          </div>
+          <button class="btn-room" onclick="criarSala()" style="margin-top:12px;">Criar Sala</button>
+        </div>
+
+        <div class="section-divider"><span>ou entre em uma sala existente</span></div>
+
+        <div class="room-card">
+          <h2>🔑 Entrar em Sala</h2>
+          <input type="text" class="input-room" id="input-codigo" placeholder="Código da sala" maxlength="6">
+          <button class="btn-room secondary" onclick="entrarSala()" style="margin-top:12px;">Entrar</button>
+        </div>
+
+        <div class="section-divider"><span>suas salas recentes</span></div>
+
+        <div id="minhas-salas-list" class="rooms-list"></div>
+      </div>
+
+      <!-- ====== VIEW: ROOM (in-session) ====== -->
+      <div id="view-room" class="hidden">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; flex-wrap:wrap; gap:8px;">
+          <div>
+            <h1 style="font-size:1.2rem; margin:0;" id="room-title">Sala de Estudos</h1>
+            <div style="font-size:0.75rem; color:var(--text-sub); margin-top:2px;">
+              Código: <span id="room-code" style="font-weight:700; color:var(--yellow); letter-spacing:2px;"></span>
+              <button onclick="copiarCodigo()" style="background:none; border:none; cursor:pointer; font-size:0.75rem; color:var(--blue);">📋 copiar</button>
+            </div>
+          </div>
+          <button class="btn-room accent" onclick="sairSala()" style="width:auto; padding:8px 16px; font-size:0.78rem;">Sair da Sala</button>
+        </div>
+
+        <div class="room-layout">
+          <div class="room-main">
+            <!-- Timer -->
+            <div class="timer-section">
+              <div class="timer-label" id="timer-label">Tempo de Sessão</div>
+              <div class="timer-phase focus" id="timer-phase">🍅 FOCO</div>
+              <div class="timer-display" id="timer-display">00:00</div>
+              <div class="status-controls">
+                <button class="status-btn active-focando" id="btn-focando" onclick="setStatus('focando')">🟢 Focando</button>
+                <button class="status-btn" id="btn-pausando" onclick="setStatus('pausando')">🟡 Pausando</button>
+                <button class="status-btn" id="btn-ausente" onclick="setStatus('ausente')">⚫ Ausente</button>
+              </div>
+              <div class="stats-bar">
+                <div class="stat-item">
+                  <div class="stat-value" id="stat-participantes">0</div>
+                  <div class="stat-label">Participantes</div>
+                </div>
+                <div class="stat-item">
+                  <div class="stat-value" id="stat-focando">0</div>
+                  <div class="stat-label">Focando</div>
+                </div>
+                <div class="stat-item">
+                  <div class="stat-value" id="stat-total-tempo">0h 0m</div>
+                  <div class="stat-label">Tempo Total (todos)</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Participantes -->
+            <div class="room-card">
+              <h2>👥 Participantes</h2>
+              <div class="participants-grid" id="participants-grid"></div>
+            </div>
+          </div>
+
+          <!-- Chat Panel -->
+          <div class="chat-panel">
+            <div class="chat-title">💬 Chat</div>
+            <div class="chat-messages" id="chat-messages"></div>
+            <div class="chat-input-row">
+              <input type="text" class="chat-input" id="chat-input" placeholder="Mensagem..." maxlength="500" onkeydown="if(event.key==='Enter')enviarMsg()">
+              <button class="chat-send" onclick="enviarMsg()">Enviar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    const API = '/api/studyroom';
+    const token = localStorage.getItem('auth_token');
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    let currentRoom = null;
+    let pollInterval = null;
+    let pomodoroTimer = null;
+    let pomodoroSeconds = 0;
+    let pomodoroPhase = 'focus'; // 'focus' or 'break'
+    let pomodoroPaused = false;
+    let myStatus = 'focando';
+
+    // ============================================================
+    // API HELPERS
+    // ============================================================
+
+    async function apiPost(path, body) {
+      const res = await fetch(API + path, { method: 'POST', headers, body: JSON.stringify(body) });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: 'Erro desconhecido' }));
+        throw new Error(err.detail || 'Erro');
+      }
+      return res.json();
+    }
+
+    async function apiGet(path) {
+      const res = await fetch(API + path, { headers });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: 'Erro desconhecido' }));
+        throw new Error(err.detail || 'Erro');
+      }
+      return res.json();
+    }
+
+    // ============================================================
+    // CRIAR SALA
+    // ============================================================
+
+    async function criarSala() {
+      try {
+        const titulo = document.getElementById('input-titulo').value.trim() || 'Sala de Estudos';
+        const tecnica = document.getElementById('select-tecnica').value;
+        const duracao_min = parseInt(document.getElementById('input-duracao').value) || 50;
+        const max_participantes = parseInt(document.getElementById('input-max').value) || 10;
+
+        const data = await apiPost('/criar', { titulo, tecnica, duracao_min, max_participantes });
+        currentRoom = data.codigo;
+        enterRoomView(data.codigo);
+      } catch (e) {
+        alert('Erro ao criar sala: ' + e.message);
+      }
+    }
+
+    // ============================================================
+    // ENTRAR SALA
+    // ============================================================
+
+    async function entrarSala() {
+      try {
+        const codigo = document.getElementById('input-codigo').value.trim().toUpperCase();
+        if (!codigo) return alert('Digite o código da sala');
+        await apiPost('/entrar', { codigo });
+        currentRoom = codigo;
+        enterRoomView(codigo);
+      } catch (e) {
+        alert('Erro: ' + e.message);
+      }
+    }
+
+    // ============================================================
+    // ROOM VIEW
+    // ============================================================
+
+    function enterRoomView(codigo) {
+      document.getElementById('view-lobby').classList.add('hidden');
+      document.getElementById('view-room').classList.remove('hidden');
+      document.getElementById('room-code').textContent = codigo;
+      currentRoom = codigo;
+      myStatus = 'focando';
+      updateStatusButtons();
+      startPolling();
+      startPomodoro();
+    }
+
+    function sairSala() {
+      stopPolling();
+      stopPomodoro();
+      currentRoom = null;
+      document.getElementById('view-room').classList.add('hidden');
+      document.getElementById('view-lobby').classList.remove('hidden');
+      loadMinhasSalas();
+    }
+
+    function copiarCodigo() {
+      navigator.clipboard.writeText(currentRoom).then(() => {
+        const btn = event.target;
+        btn.textContent = '✅ copiado!';
+        setTimeout(() => btn.textContent = '📋 copiar', 1500);
+      });
+    }
+
+    // ============================================================
+    // POLLING
+    // ============================================================
+
+    function startPolling() {
+      pollRoom();
+      pollInterval = setInterval(pollRoom, 3000);
+    }
+
+    function stopPolling() {
+      if (pollInterval) clearInterval(pollInterval);
+      pollInterval = null;
+    }
+
+    async function pollRoom() {
+      if (!currentRoom) return;
+      try {
+        const data = await apiGet(`/sala/${currentRoom}`);
+        renderRoom(data);
+      } catch (e) {
+        console.error('Poll error:', e);
+      }
+    }
+
+    function renderRoom(data) {
+      document.getElementById('room-title').textContent = data.titulo;
+
+      // Participants
+      const grid = document.getElementById('participants-grid');
+      grid.innerHTML = data.participantes.map(p => {
+        const statusIcon = p.status === 'focando' ? '🟢' : p.status === 'pausando' ? '🟡' : '⚫';
+        const tempo = formatTime(p.tempo_estudado);
+        const meClass = p.is_me ? ' me' : '';
+        return `<div class="participant-card${meClass}">
+          <div class="participant-status">${statusIcon}</div>
+          <div class="participant-info">
+            <div class="participant-name">${escHtml(p.nome)}${p.is_me ? ' (eu)' : ''}</div>
+            <div class="participant-time">⏱️ ${tempo}</div>
+          </div>
+        </div>`;
+      }).join('');
+
+      // Stats
+      document.getElementById('stat-participantes').textContent = data.participantes.length;
+      document.getElementById('stat-focando').textContent = data.participantes.filter(p => p.status === 'focando').length;
+      const totalSeg = data.participantes.reduce((sum, p) => sum + (p.tempo_estudado || 0), 0);
+      document.getElementById('stat-total-tempo').textContent = formatTime(totalSeg);
+
+      // Chat
+      renderChat(data.chat_messages);
+
+      // Timer phase label (for pomodoro)
+      if (data.tecnica === 'livre') {
+        document.getElementById('timer-phase').textContent = '⏱️ LIVRE';
+        document.getElementById('timer-phase').className = 'timer-phase focus';
+      }
+    }
+
+    function renderChat(messages) {
+      const container = document.getElementById('chat-messages');
+      const wasAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 40;
+
+      container.innerHTML = messages.map(m => {
+        const time = m.created_at ? new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+        return `<div class="chat-msg">
+          <div class="chat-msg-name">${escHtml(m.nome)}</div>
+          <div class="chat-msg-text">${escHtml(m.mensagem)}</div>
+          <div class="chat-msg-time">${time}</div>
+        </div>`;
+      }).join('');
+
+      if (wasAtBottom) container.scrollTop = container.scrollHeight;
+    }
+
+    // ============================================================
+    // STATUS
+    // ============================================================
+
+    async function setStatus(status) {
+      if (!currentRoom) return;
+      myStatus = status;
+      updateStatusButtons();
+      try {
+        await apiPost(`/status/${currentRoom}`, { status });
+      } catch (e) {
+        console.error('Status error:', e);
+      }
+    }
+
+    function updateStatusButtons() {
+      document.getElementById('btn-focando').className = 'status-btn' + (myStatus === 'focando' ? ' active-focando' : '');
+      document.getElementById('btn-pausando').className = 'status-btn' + (myStatus === 'pausando' ? ' active-pausando' : '');
+      document.getElementById('btn-ausente').className = 'status-btn' + (myStatus === 'ausente' ? ' active-ausente' : '');
+    }
+
+    // ============================================================
+    // POMODORO TIMER
+    // ============================================================
+
+    function startPomodoro() {
+      pomodoroSeconds = 0;
+      pomodoroPhase = 'focus';
+      pomodoroPaused = false;
+      updateTimerDisplay();
+      pomodoroTimer = setInterval(tickPomodoro, 1000);
+    }
+
+    function stopPomodoro() {
+      if (pomodoroTimer) clearInterval(pomodoroTimer);
+      pomodoroTimer = null;
+    }
+
+    function tickPomodoro() {
+      if (myStatus === 'ausente') return; // don't tick when absent
+
+      pomodoroSeconds++;
+
+      // Pomodoro cycle: 25min focus, 5min break
+      const focusDuration = 25 * 60;
+      const breakDuration = 5 * 60;
+      const cycleDuration = focusDuration + breakDuration;
+      const posInCycle = pomodoroSeconds % cycleDuration;
+
+      if (posInCycle < focusDuration) {
+        if (pomodoroPhase !== 'focus') {
+          pomodoroPhase = 'focus';
+          document.getElementById('timer-phase').textContent = '🍅 FOCO';
+          document.getElementById('timer-phase').className = 'timer-phase focus';
+          // Auto-set status
+          if (myStatus === 'pausando') setStatus('focando');
+        }
+      } else {
+        if (pomodoroPhase !== 'break') {
+          pomodoroPhase = 'break';
+          document.getElementById('timer-phase').textContent = '☕ PAUSA';
+          document.getElementById('timer-phase').className = 'timer-phase break';
+          // Notify
+          if (Notification.permission === 'granted') {
+            new Notification('☕ Hora da pausa!', { body: '5 minutos de descanso.' });
+          }
+        }
+      }
+
+      updateTimerDisplay();
+    }
+
+    function updateTimerDisplay() {
+      const focusDuration = 25 * 60;
+      const breakDuration = 5 * 60;
+      const cycleDuration = focusDuration + breakDuration;
+      const posInCycle = pomodoroSeconds % cycleDuration;
+
+      let remaining;
+      if (pomodoroPhase === 'focus') {
+        remaining = focusDuration - posInCycle;
+      } else {
+        remaining = cycleDuration - posInCycle;
+      }
+
+      const min = Math.floor(remaining / 60);
+      const sec = remaining % 60;
+      document.getElementById('timer-display').textContent =
+        String(min).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+    }
+
+    // ============================================================
+    // CHAT
+    // ============================================================
+
+    async function enviarMsg() {
+      const input = document.getElementById('chat-input');
+      const mensagem = input.value.trim();
+      if (!mensagem || !currentRoom) return;
+      input.value = '';
+      try {
+        await apiPost(`/chat/${currentRoom}`, { mensagem });
+        pollRoom(); // refresh immediately
+      } catch (e) {
+        alert('Erro: ' + e.message);
+      }
+    }
+
+    // ============================================================
+    // MINHAS SALAS
+    // ============================================================
+
+    async function loadMinhasSalas() {
+      try {
+        const data = await apiGet('/minhas');
+        const container = document.getElementById('minhas-salas-list');
+        if (!data.salas || data.salas.length === 0) {
+          container.innerHTML = '<div style="text-align:center; color:var(--text-muted); font-size:0.82rem; padding:16px;">Nenhuma sala encontrada</div>';
+          return;
+        }
+        container.innerHTML = data.salas.map(s => {
+          const tecLabel = s.tecnica === 'pomodoro' ? '🍅 Pomodoro' : '⏱️ Livre';
+          return `<div class="room-item" onclick="rejoinRoom('${s.codigo}')">
+            <div class="room-item-info">
+              <div class="room-item-title">${escHtml(s.titulo)}</div>
+              <div class="room-item-meta">${tecLabel} • ${s.num_participantes}/${s.max_participantes} pessoas • ${s.codigo}</div>
+            </div>
+            <div class="room-item-badge">${s.status}</div>
+          </div>`;
+        }).join('');
+      } catch (e) {
+        console.error('Error loading rooms:', e);
+      }
+    }
+
+    function rejoinRoom(codigo) {
+      currentRoom = codigo;
+      enterRoomView(codigo);
+    }
+
+    // ============================================================
+    // UTILS
+    // ============================================================
+
+    function formatTime(seg) {
+      if (!seg || seg < 0) return '0m';
+      const h = Math.floor(seg / 3600);
+      const m = Math.floor((seg % 3600) / 60);
+      if (h > 0) return `${h}h ${m}m`;
+      return `${m}m`;
+    }
+
+    function escHtml(str) {
+      if (!str) return '';
+      return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // ============================================================
+    // INIT
+    // ============================================================
+
+    (function init() {
+      // Request notification permission
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+      loadMinhasSalas();
+
+      // Check if coming from a link with code
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('code') || params.get('codigo');
+      if (code) {
+        document.getElementById('input-codigo').value = code.toUpperCase();
+        entrarSala();
+      }
+    })();
+  </script>
+</body>
+</html>

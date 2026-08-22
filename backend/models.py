@@ -111,6 +111,31 @@ class SimuladoProvaReal(BaseModel):
     tempo_limite_min: int = 180
 
 
+class DificuldadeMix(BaseModel):
+    facil: int = 20
+    medio: int = 40
+    dificil: int = 20
+
+
+class SimuladoCronometradoCreate(BaseModel):
+    titulo: str = "Simulado Cronometrado"
+    tempo_total_min: int = 240
+    questoes_total: int = 80
+    materias: list[str] = []
+    dificuldade_mix: DificuldadeMix = DificuldadeMix()
+
+
+class RespostaCronometrada(BaseModel):
+    questao_id: int
+    resposta: str
+    tempo_seg: int = 0
+
+
+class SimuladoCronometradoFinalizar(BaseModel):
+    respostas: list[RespostaCronometrada]
+    tempo_total_seg: int = 0
+
+
 # ============================================================
 # Ciclo de Estudos
 # ============================================================

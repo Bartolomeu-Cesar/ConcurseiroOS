@@ -67,10 +67,12 @@
         <div class="sidebar-section-title">Praticar</div>
         <ul class="sidebar-nav">
           <li><a href="/questoes.html" class="${activeClass('/questoes')}"><span class="nav-icon">❓</span><span class="nav-label">Questões</span><span class="nav-badge" id="badge-questoes"></span></a></li>
+          <li><a href="/caderno-erros.html" class="${activeClass('/caderno-erros')}"><span class="nav-icon">📕</span><span class="nav-label">Caderno de Erros</span><span class="nav-badge" id="badge-caderno-erros"></span></a></li>
           <li><a href="/#flashcards" onclick="goSection('tab-flashcards')"><span class="nav-icon">🧠</span><span class="nav-label">Flashcards</span><span class="nav-badge" id="badge-flashcards"></span></a></li>
           <li><a href="/#sumulas" onclick="goSection('tab-sumulas')"><span class="nav-icon">⚖️</span><span class="nav-label">Súmulas</span><span class="nav-badge" id="badge-sumulas"></span></a></li>
           <li><a href="/social.html#ai" onclick="goSocialTab('ai')"><span class="nav-icon">🤖</span><span class="nav-label">AI Tutor</span></a></li>
           <li><a href="/batalha.html" class="${activeClass('/batalha')}"><span class="nav-icon">⚔️</span><span class="nav-label">Batalha</span></a></li>
+          <li><a href="/studyroom.html" class="${activeClass('/studyroom')}"><span class="nav-icon">🏠</span><span class="nav-label">Sala de Estudos</span></a></li>
         </ul>
       </div>
 
@@ -174,6 +176,13 @@
   fetch('/api/sumulas/today').then(r => r.json()).then(data => {
     const count = Array.isArray(data) ? data.length : (data.pendentes || 0);
     const el = document.getElementById('badge-sumulas');
+    if (el && count > 0) el.textContent = count;
+  }).catch(() => {});
+
+  // Badge: Caderno de Erros (pendentes hoje)
+  fetch('/api/questoes/erros/caderno').then(r => r.json()).then(data => {
+    const count = data.pendentes_hoje ? data.pendentes_hoje.length : 0;
+    const el = document.getElementById('badge-caderno-erros');
     if (el && count > 0) el.textContent = count;
   }).catch(() => {});
 

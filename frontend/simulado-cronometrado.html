@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Simulado Cronometrado - ConcurseiroOS</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#1e1e2e">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/css/styles.css">
+  <style>
+    :root {
+      --crono-bg: #1e1e2e;
+      --crono-surface: #313244;
+      --crono-elevated: #45475a;
+      --crono-text: #cdd6f4;
+      --crono-text-sub: #a6adc8;
+      --crono-accent: #cba6f7;
+      --crono-green: #a6e3a1;
+      --crono-red: #f38ba8;
+      --crono-yellow: #f9e2af;
+      --crono-blue: #89b4fa;
+      --crono-orange: #fab387;
+      --crono-border: #585b70;
+      --crono-timer-ok: #a6e3a1;
+      --crono-timer-warn: #fab387;
+      --crono-timer-danger: #f38ba8;
+    }
+
+    body.light-theme {
+      --crono-bg: #eff1f5;
+      --crono-surface: #e6e9ef;
+      --crono-elevated: #ccd0da;
+      --crono-text: #4c4f69;
+      --crono-text-sub: #6c6f85;
+      --crono-accent: #8839ef;
+      --crono-green: #40a02b;
+      --crono-red: #d20f39;
+      --crono-yellow: #df8e1d;
+      --crono-blue: #1e66f5;
+      --crono-orange: #fe640b;
+      --crono-border: #bcc0cc;
+      --crono-timer-ok: #40a02b;
+      --crono-timer-warn: #df8e1d;
+      --crono-timer-danger: #d20f39;
+    }
+
+    /* Layout */
+    .crono-app { min-height: 100vh; color: var(--crono-text); padding: 0; }
+
+    /* Config Panel */
+    .crono-config {
+      max-width: 700px; margin: 40px auto; padding: 28px;
+      background: var(--crono-surface); border-radius: 16px;
+    }
+    .crono-config h1 { color: var(--crono-accent); font-size: 1.6rem; margin-bottom: 20px; text-align: center; }
+    .crono-config h1 span { font-size: 2rem; }
+
+    .config-group { margin-bottom: 18px; }
+    .config-group label { display: block; font-weight: 600; font-size: 0.88rem; margin-bottom: 6px; color: var(--crono-text-sub); }
+    .config-group input, .config-group select {
+      width: 100%; padding: 10px 14px; border-radius: 8px;
+      border: 1px solid var(--crono-border); background: var(--crono-bg);
+      color: var(--crono-text); font-size: 0.95rem;
+    }
+
+    .config-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .config-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+
+    .materias-grid {
+      max-height: 200px; overflow-y: auto; border: 1px solid var(--crono-border);
+      border-radius: 8px; padding: 10px; background: var(--crono-bg);
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 4px;
+    }
+    .materias-grid label {
+      display: flex; align-items: center; gap: 6px; font-size: 0.82rem;
+      color: var(--crono-text); cursor: pointer; padding: 4px 6px; border-radius: 4px;
+    }
+    .materias-grid label:hover { background: var(--crono-elevated); }
+    .materias-grid input[type="checkbox"] { accent-color: var(--crono-accent); }
+
+    .config-actions { display: flex; gap: 10px; margin-top: 24px; }
+    .config-actions .btn { flex: 1; padding: 14px; font-size: 1rem; font-weight: 700; border-radius: 10px; border: none; cursor: pointer; }
+    .btn-start { background: var(--crono-accent); color: var(--crono-bg); }
+    .btn-start:hover { opacity: 0.9; }
+    .btn-back { background: var(--crono-elevated); color: var(--crono-text); }
+    .btn-back:hover { background: var(--crono-border); }
+
+    /* Exam Mode */
+    .crono-exam { display: none; }
+    .crono-exam.active { display: block; }
+
+    /* Timer bar */
+    .timer-bar {
+      position: sticky; top: 0; z-index: 100;
+      background: var(--crono-surface); padding: 12px 20px;
+      display: flex; align-items: center; justify-content: center; gap: 20px;
+      border-bottom: 1px solid var(--crono-border);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    .timer-display {
+      font-size: 2.2rem; font-weight: 800; font-family: 'Courier New', monospace;
+      color: var(--crono-timer-ok); letter-spacing: 2px;
+    }
+    .timer-display.warning { color: var(--crono-timer-warn); }
+    .timer-display.danger { color: var(--crono-timer-danger); animation: timer-pulse 1s infinite; }
+    @keyframes timer-pulse { 50% { opacity: 0.5; } }
+
+    .timer-meta { font-size: 0.82rem; color: var(--crono-text-sub); }
+    .timer-meta strong { color: var(--crono-accent); }
+
+    /* Navigator Grid */
+    .nav-panel {
+      position: fixed; right: 16px; top: 80px; z-index: 90;
+      background: var(--crono-surface); border-radius: 12px; padding: 12px;
+      border: 1px solid var(--crono-border); max-height: calc(100vh - 120px);
+      overflow-y: auto; width: 240px; box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    }
+    .nav-panel h4 { font-size: 0.78rem; color: var(--crono-text-sub); margin: 0 0 8px; text-align: center; }
+    .nav-grid {
+      display: grid; grid-template-columns: repeat(8, 1fr); gap: 3px;
+    }
+    .nav-cell {
+      width: 24px; height: 24px; border-radius: 4px; border: none;
+      font-size: 0.65rem; font-weight: 600; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--crono-elevated); color: var(--crono-text-sub);
+      transition: all 0.1s;
+    }
+    .nav-cell:hover { background: var(--crono-accent); color: var(--crono-bg); }
+    .nav-cell.current { background: var(--crono-blue); color: #fff; }
+    .nav-cell.answered { background: var(--crono-green); color: var(--crono-bg); }
+    .nav-cell.flagged { position: relative; }
+    .nav-cell.flagged::after {
+      content: '🚩'; position: absolute; top: -4px; right: -4px; font-size: 0.55rem;
+    }
+
+    .nav-legend { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; justify-content: center; }
+    .nav-legend span { font-size: 0.65rem; display: flex; align-items: center; gap: 3px; color: var(--crono-text-sub); }
+    .nav-legend .dot { width: 10px; height: 10px; border-radius: 2px; }
+
+    /* Question area */
+    .exam-content { max-width: 800px; margin: 20px auto; padding: 0 20px 100px; padding-right: 280px; }
+    .exam-question {
+      background: var(--crono-surface); border-radius: 12px; padding: 24px;
+    }
+    .exam-q-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .exam-q-num { font-size: 1.3rem; font-weight: 800; color: var(--crono-accent); }
+    .exam-q-materia { font-size: 0.8rem; color: var(--crono-text-sub); background: var(--crono-elevated); padding: 3px 10px; border-radius: 20px; }
+    .exam-q-flag {
+      margin-left: auto; background: none; border: 1px solid var(--crono-border);
+      padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 0.85rem;
+      color: var(--crono-text-sub); transition: all 0.15s;
+    }
+    .exam-q-flag:hover, .exam-q-flag.active { border-color: var(--crono-orange); color: var(--crono-orange); background: rgba(250,179,135,0.1); }
+
+    .exam-enunciado { font-size: 1rem; line-height: 1.7; margin-bottom: 20px; color: var(--crono-text); }
+
+    .exam-alternativas { display: flex; flex-direction: column; gap: 10px; }
+    .exam-alt {
+      display: flex; align-items: center; gap: 12px; padding: 14px 16px;
+      background: var(--crono-bg); border-radius: 10px; cursor: pointer;
+      border: 2px solid transparent; transition: all 0.15s;
+    }
+    .exam-alt:hover { border-color: var(--crono-blue); }
+    .exam-alt.selected { border-color: var(--crono-accent); background: var(--crono-elevated); }
+    .exam-alt-letter { font-weight: 700; color: var(--crono-accent); min-width: 24px; font-size: 1.05rem; }
+    .exam-alt-text { flex: 1; font-size: 0.92rem; line-height: 1.5; }
+
+    /* Navigation buttons */
+    .exam-nav { display: flex; gap: 10px; justify-content: center; margin-top: 24px; }
+    .exam-nav .btn {
+      padding: 12px 24px; border-radius: 8px; border: none; cursor: pointer;
+      font-weight: 600; font-size: 0.9rem;
+    }
+    .exam-nav .btn-prev { background: var(--crono-elevated); color: var(--crono-text); }
+    .exam-nav .btn-next { background: var(--crono-blue); color: #fff; }
+    .exam-nav .btn-submit { background: var(--crono-red); color: #fff; }
+    .exam-nav .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Results Panel */
+    .crono-results { display: none; max-width: 800px; margin: 40px auto; padding: 0 20px; }
+    .crono-results.active { display: block; }
+
+    .results-header { text-align: center; margin-bottom: 30px; }
+    .results-header h2 { color: var(--crono-accent); font-size: 1.8rem; margin-bottom: 8px; }
+    .results-header .subtitle { color: var(--crono-text-sub); font-size: 0.95rem; }
+
+    .results-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 30px; }
+    .result-card {
+      background: var(--crono-surface); border-radius: 12px; padding: 18px; text-align: center;
+    }
+    .result-card .result-val { font-size: 1.8rem; font-weight: 800; }
+    .result-card .result-lbl { font-size: 0.78rem; color: var(--crono-text-sub); margin-top: 4px; }
+
+    .results-materias { background: var(--crono-surface); border-radius: 12px; padding: 20px; margin-bottom: 24px; }
+    .results-materias h3 { color: var(--crono-accent); margin-bottom: 14px; font-size: 1.1rem; }
+
+    .materia-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .materia-bar .mat-name { flex: 0 0 150px; font-size: 0.82rem; color: var(--crono-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .materia-bar .mat-bar-bg { flex: 1; height: 20px; background: var(--crono-elevated); border-radius: 10px; overflow: hidden; }
+    .materia-bar .mat-bar-fill { height: 100%; border-radius: 10px; transition: width 0.5s ease; }
+    .materia-bar .mat-score { flex: 0 0 60px; font-size: 0.82rem; font-weight: 600; text-align: right; }
+
+    /* Radar chart */
+    .radar-container { margin: 24px auto; max-width: 400px; }
+    .radar-container canvas { width: 100% !important; height: auto !important; }
+
+    .results-verdict {
+      text-align: center; padding: 20px; border-radius: 12px; margin-bottom: 24px;
+    }
+    .results-verdict.aprovado { background: rgba(166,227,161,0.15); border: 2px solid var(--crono-green); }
+    .results-verdict.reprovado { background: rgba(243,139,168,0.15); border: 2px solid var(--crono-red); }
+    .results-verdict h3 { font-size: 1.3rem; margin-bottom: 4px; }
+    .results-verdict p { font-size: 0.88rem; color: var(--crono-text-sub); }
+
+    .results-actions { display: flex; gap: 12px; justify-content: center; margin-top: 24px; }
+    .results-actions .btn {
+      padding: 12px 24px; border-radius: 8px; border: none; cursor: pointer;
+      font-weight: 600; font-size: 0.9rem;
+    }
+
+    /* Submit confirmation modal */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+      z-index: 9999; align-items: center; justify-content: center; padding: 20px;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal-box {
+      background: var(--crono-surface); border-radius: 16px; padding: 28px;
+      max-width: 420px; width: 100%; text-align: center;
+    }
+    .modal-box h3 { color: var(--crono-accent); margin-bottom: 12px; }
+    .modal-box p { color: var(--crono-text-sub); font-size: 0.9rem; margin-bottom: 20px; line-height: 1.6; }
+    .modal-box .modal-btns { display: flex; gap: 10px; }
+    .modal-box .modal-btns .btn { flex: 1; padding: 12px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .nav-panel { display: none; }
+      .exam-content { padding-right: 20px; }
+    }
+    @media (max-width: 600px) {
+      .config-row { grid-template-columns: 1fr; }
+      .config-row-3 { grid-template-columns: 1fr; }
+      .timer-display { font-size: 1.6rem; }
+    }
+  </style>
+  <link rel="stylesheet" href="/layout.css">
+</head>
+<body>
+  <div class="main-content crono-app">
+
+    <!-- ====== CONFIGURATION PANEL ====== -->
+    <div id="crono-config" class="crono-config">
+      <h1><span>⏱️</span> Simulado Cronometrado</h1>
+      <p style="text-align:center;color:var(--crono-text-sub);font-size:0.88rem;margin-bottom:24px;">
+        Simule uma prova real com cronômetro, navegação livre e resultado detalhado.
+      </p>
+
+      <div class="config-group">
+        <label>📝 Título</label>
+        <input type="text" id="cfg-titulo" placeholder="Ex: Simulado PRF - 21/08/2026" value="">
+      </div>
+
+      <div class="config-row">
+        <div class="config-group">
+          <label>⏰ Tempo Total</label>
+          <select id="cfg-tempo">
+            <option value="60">1 hora</option>
+            <option value="120">2 horas</option>
+            <option value="180">3 horas</option>
+            <option value="240" selected>4 horas</option>
+            <option value="300">5 horas</option>
+          </select>
+        </div>
+        <div class="config-group">
+          <label>📊 Total de Questões</label>
+          <input type="number" id="cfg-questoes" value="80" min="10" max="200">
+        </div>
+      </div>
+
+      <div class="config-group">
+        <label>⚡ Mix de Dificuldade</label>
+        <div class="config-row-3">
+          <div>
+            <label style="font-size:0.75rem;color:var(--crono-green);">🟢 Fácil</label>
+            <input type="number" id="cfg-facil" value="20" min="0" max="200">
+          </div>
+          <div>
+            <label style="font-size:0.75rem;color:var(--crono-yellow);">🟡 Médio</label>
+            <input type="number" id="cfg-medio" value="40" min="0" max="200">
+          </div>
+          <div>
+            <label style="font-size:0.75rem;color:var(--crono-red);">🔴 Difícil</label>
+            <input type="number" id="cfg-dificil" value="20" min="0" max="200">
+          </div>
+        </div>
+      </div>
+
+      <div class="config-group">
+        <label>📚 Matérias (deixe em branco para todas)</label>
+        <div style="display:flex;gap:6px;margin-bottom:6px;">
+          <button onclick="toggleAllMaterias(true)" style="font-size:0.75rem;padding:4px 10px;background:var(--crono-elevated);color:var(--crono-text);border:none;border-radius:4px;cursor:pointer;">✓ Todas</button>
+          <button onclick="toggleAllMaterias(false)" style="font-size:0.75rem;padding:4px 10px;background:var(--crono-elevated);color:var(--crono-text);border:none;border-radius:4px;cursor:pointer;">✗ Nenhuma</button>
+        </div>
+        <div class="materias-grid" id="materias-grid">
+          <span style="color:var(--crono-text-sub);font-size:0.8rem;">Carregando...</span>
+        </div>
+      </div>
+
+      <div class="config-actions">
+        <a href="/questoes.html" class="btn btn-back" style="text-decoration:none;text-align:center;">← Voltar</a>
+        <button class="btn btn-start" onclick="iniciarSimulado()">🚀 Iniciar Prova</button>
+      </div>
+    </div>
+
+    <!-- ====== EXAM MODE ====== -->
+    <div id="crono-exam" class="crono-exam">
+      <!-- Timer bar -->
+      <div class="timer-bar">
+        <div>
+          <div class="timer-display" id="exam-timer">04:00:00</div>
+        </div>
+        <div class="timer-meta">
+          Questão <strong id="exam-current-num">1</strong> de <strong id="exam-total-num">80</strong>
+          &nbsp;|&nbsp; Respondidas: <strong id="exam-answered-count">0</strong>
+        </div>
+      </div>
+
+      <!-- Navigator panel -->
+      <div class="nav-panel" id="nav-panel">
+        <h4>Navegador de Questões</h4>
+        <div class="nav-grid" id="nav-grid"></div>
+        <div class="nav-legend">
+          <span><span class="dot" style="background:var(--crono-elevated);"></span> Pendente</span>
+          <span><span class="dot" style="background:var(--crono-green);"></span> Respondida</span>
+          <span><span class="dot" style="background:var(--crono-blue);"></span> Atual</span>
+          <span>🚩 Revisão</span>
+        </div>
+      </div>
+
+      <!-- Question area -->
+      <div class="exam-content">
+        <div class="exam-question" id="exam-question"></div>
+        <div class="exam-nav">
+          <button class="btn btn-prev" id="btn-exam-prev" onclick="examPrev()">← Anterior</button>
+          <button class="btn btn-next" id="btn-exam-next" onclick="examNext()">Próxima →</button>
+          <button class="btn btn-submit" onclick="showSubmitModal()">📤 Entregar Prova</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== RESULTS ====== -->
+    <div id="crono-results" class="crono-results"></div>
+
+    <!-- Submit confirmation modal -->
+    <div class="modal-overlay" id="submit-modal">
+      <div class="modal-box">
+        <h3>📤 Entregar Prova?</h3>
+        <p id="submit-modal-text">Você respondeu X de Y questões. Deseja finalizar o simulado?</p>
+        <div class="modal-btns">
+          <button class="btn" style="background:var(--crono-elevated);color:var(--crono-text);" onclick="hideSubmitModal()">Voltar</button>
+          <button class="btn" style="background:var(--crono-red);color:#fff;" onclick="finalizarProva()">Entregar</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // ==================== STATE ====================
+    let examState = {
+      id: null,
+      questoes: [],
+      respostas: {},     // questao_id -> letra
+      tempos: {},        // questao_id -> tempo_seg acumulado
+      flags: new Set(),  // questao_ids marcadas para revisão
+      currentIndex: 0,
+      startTime: null,
+      questionStartTime: null,
+      timerInterval: null,
+      tempoTotalMin: 240,
+    };
+
+    // ==================== CONFIG ====================
+    async function loadMaterias() {
+      try {
+        const materias = await fetch('/api/questoes/materias').then(r => r.json());
+        const grid = document.getElementById('materias-grid');
+        if (materias.length === 0) {
+          grid.innerHTML = '<span style="color:var(--crono-text-sub);font-size:0.8rem;">Nenhuma matéria disponível. Cadastre questões primeiro.</span>';
+          return;
+        }
+        grid.innerHTML = materias.map(m => `
+          <label>
+            <input type="checkbox" class="cfg-mat-cb" value="${m}" checked>
+            ${m}
+          </label>
+        `).join('');
+      } catch (e) {
+        console.error('Erro ao carregar matérias:', e);
+      }
+    }
+
+    function toggleAllMaterias(checked) {
+      document.querySelectorAll('.cfg-mat-cb').forEach(cb => cb.checked = checked);
+    }
+
+    function getSelectedMaterias() {
+      const all = document.querySelectorAll('.cfg-mat-cb');
+      const checked = [...document.querySelectorAll('.cfg-mat-cb:checked')];
+      // Se todas selecionadas, retornar vazio (= todas)
+      if (checked.length === all.length) return [];
+      return checked.map(cb => cb.value);
+    }
+
+    // ==================== START EXAM ====================
+    async function iniciarSimulado() {
+      const titulo = document.getElementById('cfg-titulo').value.trim() || `Simulado Cronometrado ${new Date().toLocaleDateString('pt-BR')}`;
+      const tempo = parseInt(document.getElementById('cfg-tempo').value);
+      const questoes = parseInt(document.getElementById('cfg-questoes').value);
+      const facil = parseInt(document.getElementById('cfg-facil').value) || 0;
+      const medio = parseInt(document.getElementById('cfg-medio').value) || 0;
+      const dificil = parseInt(document.getElementById('cfg-dificil').value) || 0;
+      const materias = getSelectedMaterias();
+
+      const body = {
+        titulo,
+        tempo_total_min: tempo,
+        questoes_total: questoes,
+        materias,
+        dificuldade_mix: { facil, medio, dificil },
+      };
+
+      try {
+        const res = await fetch('/api/simulados/cronometrado', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          alert('Erro: ' + (err.detail || 'Não foi possível criar o simulado'));
+          return;
+        }
+
+        const data = await res.json();
+        startExam(data);
+      } catch (e) {
+        alert('Erro de conexão: ' + e.message);
+      }
+    }
+
+    function startExam(data) {
+      examState.id = data.id;
+      examState.questoes = data.questoes;
+      examState.respostas = {};
+      examState.tempos = {};
+      examState.flags = new Set();
+      examState.currentIndex = 0;
+      examState.startTime = Date.now();
+      examState.questionStartTime = Date.now();
+      examState.tempoTotalMin = data.tempo_total_min;
+
+      // Hide config, show exam
+      document.getElementById('crono-config').style.display = 'none';
+      document.getElementById('crono-exam').classList.add('active');
+      document.getElementById('crono-results').classList.remove('active');
+
+      // Setup timer
+      document.getElementById('exam-total-num').textContent = data.total_questoes;
+      clearInterval(examState.timerInterval);
+      examState.timerInterval = setInterval(updateTimer, 1000);
+
+      // Build navigator grid
+      buildNavGrid();
+
+      // Show first question
+      showQuestion(0);
+    }
+
+    // ==================== TIMER ====================
+    function updateTimer() {
+      const elapsed = Math.floor((Date.now() - examState.startTime) / 1000);
+      const totalSec = examState.tempoTotalMin * 60;
+      const remaining = Math.max(0, totalSec - elapsed);
+
+      const h = String(Math.floor(remaining / 3600)).padStart(2, '0');
+      const m = String(Math.floor((remaining % 3600) / 60)).padStart(2, '0');
+      const s = String(remaining % 60).padStart(2, '0');
+
+      const el = document.getElementById('exam-timer');
+      el.textContent = `${h}:${m}:${s}`;
+
+      // Color based on time
+      el.className = 'timer-display';
+      if (remaining < 300) el.classList.add('danger');      // < 5min
+      else if (remaining < 600) el.classList.add('warning'); // < 10min
+
+      if (remaining <= 0) {
+        finalizarProva();
+      }
+    }
+
+    // ==================== NAVIGATOR ====================
+    function buildNavGrid() {
+      const grid = document.getElementById('nav-grid');
+      grid.innerHTML = examState.questoes.map((q, i) =>
+        `<button class="nav-cell" data-index="${i}" onclick="goToQuestion(${i})">${i + 1}</button>`
+      ).join('');
+      updateNavGrid();
+    }
+
+    function updateNavGrid() {
+      const cells = document.querySelectorAll('.nav-cell');
+      cells.forEach((cell, i) => {
+        const q = examState.questoes[i];
+        cell.className = 'nav-cell';
+        if (i === examState.currentIndex) cell.classList.add('current');
+        else if (examState.respostas[q.id]) cell.classList.add('answered');
+        if (examState.flags.has(q.id)) cell.classList.add('flagged');
+      });
+
+      // Update answered count
+      const answered = Object.keys(examState.respostas).length;
+      document.getElementById('exam-answered-count').textContent = answered;
+    }
+
+    // ==================== QUESTION DISPLAY ====================
+    function showQuestion(index) {
+      // Save time for previous question
+      saveQuestionTime();
+
+      examState.currentIndex = index;
+      examState.questionStartTime = Date.now();
+
+      const q = examState.questoes[index];
+      const selected = examState.respostas[q.id] || '';
+      const flagged = examState.flags.has(q.id);
+
+      document.getElementById('exam-current-num').textContent = index + 1;
+
+      const html = `
+        <div class="exam-q-header">
+          <span class="exam-q-num">#${q.num}</span>
+          <span class="exam-q-materia">${q.materia || 'Geral'}</span>
+          <button class="exam-q-flag ${flagged ? 'active' : ''}" onclick="toggleFlag(${q.id})" title="Marcar para revisão">
+            🚩 ${flagged ? 'Marcada' : 'Revisar'}
+          </button>
+        </div>
+        <div class="exam-enunciado">${q.enunciado}</div>
+        <div class="exam-alternativas">
+          ${q.alternativas.map(a => `
+            <div class="exam-alt ${selected === a.letra ? 'selected' : ''}" onclick="selectAnswer(${q.id}, '${a.letra}', this)">
+              <span class="exam-alt-letter">${a.letra})</span>
+              <span class="exam-alt-text">${a.texto}</span>
+            </div>
+          `).join('')}
+        </div>
+      `;
+      document.getElementById('exam-question').innerHTML = html;
+
+      // Update nav buttons
+      document.getElementById('btn-exam-prev').disabled = index === 0;
+      const nextBtn = document.getElementById('btn-exam-next');
+      nextBtn.textContent = index === examState.questoes.length - 1 ? 'Última ✓' : 'Próxima →';
+
+      updateNavGrid();
+    }
+
+    function saveQuestionTime() {
+      if (examState.questionStartTime && examState.questoes[examState.currentIndex]) {
+        const q = examState.questoes[examState.currentIndex];
+        const elapsed = Math.floor((Date.now() - examState.questionStartTime) / 1000);
+        examState.tempos[q.id] = (examState.tempos[q.id] || 0) + elapsed;
+      }
+    }
+
+    function selectAnswer(questaoId, letra, el) {
+      examState.respostas[questaoId] = letra;
+      // Update UI
+      document.querySelectorAll('.exam-alt').forEach(a => a.classList.remove('selected'));
+      el.classList.add('selected');
+      updateNavGrid();
+    }
+
+    function toggleFlag(questaoId) {
+      if (examState.flags.has(questaoId)) {
+        examState.flags.delete(questaoId);
+      } else {
+        examState.flags.add(questaoId);
+      }
+      // Re-render current question to update flag button
+      showQuestion(examState.currentIndex);
+    }
+
+    function goToQuestion(index) {
+      showQuestion(index);
+    }
+
+    function examNext() {
+      if (examState.currentIndex < examState.questoes.length - 1) {
+        showQuestion(examState.currentIndex + 1);
+      }
+    }
+
+    function examPrev() {
+      if (examState.currentIndex > 0) {
+        showQuestion(examState.currentIndex - 1);
+      }
+    }
+
+    // ==================== SUBMIT ====================
+    function showSubmitModal() {
+      const answered = Object.keys(examState.respostas).length;
+      const total = examState.questoes.length;
+      const flagged = examState.flags.size;
+
+      let text = `Você respondeu <strong>${answered}</strong> de <strong>${total}</strong> questões.`;
+      if (total - answered > 0) text += `<br><span style="color:var(--crono-yellow);">⚠️ ${total - answered} questão(ões) em branco.</span>`;
+      if (flagged > 0) text += `<br><span style="color:var(--crono-orange);">🚩 ${flagged} questão(ões) marcada(s) para revisão.</span>`;
+      text += '<br><br>Deseja entregar a prova?';
+
+      document.getElementById('submit-modal-text').innerHTML = text;
+      document.getElementById('submit-modal').classList.add('active');
+    }
+
+    function hideSubmitModal() {
+      document.getElementById('submit-modal').classList.remove('active');
+    }
+
+    async function finalizarProva() {
+      hideSubmitModal();
+      clearInterval(examState.timerInterval);
+
+      // Save time for current question
+      saveQuestionTime();
+
+      const tempoTotal = Math.floor((Date.now() - examState.startTime) / 1000);
+
+      // Build respostas array
+      const respostas = examState.questoes.map(q => ({
+        questao_id: q.id,
+        resposta: examState.respostas[q.id] || '',
+        tempo_seg: examState.tempos[q.id] || 0,
+      }));
+
+      try {
+        const res = await fetch(`/api/simulados/cronometrado/${examState.id}/finalizar`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ respostas, tempo_total_seg: tempoTotal }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          alert('Erro ao finalizar: ' + (err.detail || 'desconhecido'));
+          return;
+        }
+
+        const data = await res.json();
+        showResults(data);
+      } catch (e) {
+        alert('Erro de conexão: ' + e.message);
+      }
+    }
+
+    // ==================== RESULTS ====================
+    function showResults(data) {
+      document.getElementById('crono-exam').classList.remove('active');
+      const resultsDiv = document.getElementById('crono-results');
+      resultsDiv.classList.add('active');
+
+      const tempoFormatado = formatTempo(data.tempo_total_seg);
+      const tempoMedioFormatado = data.tempo_medio_por_questao > 0 ? `${Math.floor(data.tempo_medio_por_questao / 60)}m${Math.round(data.tempo_medio_por_questao % 60)}s` : '--';
+
+      // Verdict
+      let verdictHtml = '';
+      if (data.aprovado_estimado !== null && data.aprovado_estimado !== undefined) {
+        const cls = data.aprovado_estimado ? 'aprovado' : 'reprovado';
+        const icon = data.aprovado_estimado ? '🎉' : '📚';
+        const msg = data.aprovado_estimado
+          ? 'Parabéns! Sua nota supera a nota de corte histórica!'
+          : `Continue estudando! Nota de corte: ${data.nota_corte}%`;
+        verdictHtml = `
+          <div class="results-verdict ${cls}">
+            <h3>${icon} ${data.aprovado_estimado ? 'APROVADO (estimativa)' : 'ABAIXO DA NOTA DE CORTE'}</h3>
+            <p>${msg}</p>
+          </div>
+        `;
+      }
+
+      // Matérias bars
+      const materiasHtml = data.por_materia.map(m => {
+        const pct = m.total > 0 ? Math.round((m.acertos / m.total) * 100) : 0;
+        const color = pct >= 70 ? 'var(--crono-green)' : pct >= 50 ? 'var(--crono-yellow)' : 'var(--crono-red)';
+        return `
+          <div class="materia-bar">
+            <span class="mat-name" title="${m.materia}">${m.materia}</span>
+            <div class="mat-bar-bg">
+              <div class="mat-bar-fill" style="width:${pct}%;background:${color};"></div>
+            </div>
+            <span class="mat-score" style="color:${color};">${m.acertos}/${m.total}</span>
+          </div>
+        `;
+      }).join('');
+
+      resultsDiv.innerHTML = `
+        <div class="results-header">
+          <h2>📊 Resultado do Simulado</h2>
+          <p class="subtitle">Tempo total: ${tempoFormatado}</p>
+        </div>
+
+        ${verdictHtml}
+
+        <div class="results-grid">
+          <div class="result-card">
+            <div class="result-val" style="color:var(--crono-accent);">${data.nota_bruta}%</div>
+            <div class="result-lbl">Nota Bruta</div>
+          </div>
+          <div class="result-card">
+            <div class="result-val" style="color:var(--crono-blue);">${data.nota_tri}%</div>
+            <div class="result-lbl">Nota TRI (est.)</div>
+          </div>
+          <div class="result-card">
+            <div class="result-val" style="color:var(--crono-green);">${data.total_acertos}</div>
+            <div class="result-lbl">Acertos</div>
+          </div>
+          <div class="result-card">
+            <div class="result-val" style="color:var(--crono-red);">${data.total_erros}</div>
+            <div class="result-lbl">Erros</div>
+          </div>
+          <div class="result-card">
+            <div class="result-val" style="color:var(--crono-text-sub);">${data.total_em_branco}</div>
+            <div class="result-lbl">Em Branco</div>
+          </div>
+          <div class="result-card">
+            <div class="result-val" style="color:var(--crono-orange);">${tempoMedioFormatado}</div>
+            <div class="result-lbl">Tempo Médio/Questão</div>
+          </div>
+        </div>
+
+        <div class="results-materias">
+          <h3>📚 Desempenho por Matéria</h3>
+          ${materiasHtml || '<p style="color:var(--crono-text-sub);font-size:0.85rem;">Sem dados por matéria.</p>'}
+        </div>
+
+        <div class="radar-container">
+          <canvas id="radar-chart" width="400" height="400"></canvas>
+        </div>
+
+        <div class="results-actions">
+          <a href="/questoes.html" class="btn" style="background:var(--crono-elevated);color:var(--crono-text);text-decoration:none;">← Questões</a>
+          <button class="btn" style="background:var(--crono-accent);color:var(--crono-bg);" onclick="novoSimulado()">🔄 Novo Simulado</button>
+          <button class="btn" style="background:var(--crono-blue);color:#fff;" onclick="verGabarito()">📋 Ver Gabarito</button>
+        </div>
+      `;
+
+      // Draw radar chart
+      if (data.por_materia.length >= 3) {
+        drawRadarChart(data.por_materia);
+      }
+    }
+
+    function formatTempo(seg) {
+      const h = Math.floor(seg / 3600);
+      const m = Math.floor((seg % 3600) / 60);
+      const s = seg % 60;
+      if (h > 0) return `${h}h ${m}min`;
+      return `${m}min ${s}s`;
+    }
+
+    function novoSimulado() {
+      document.getElementById('crono-config').style.display = 'block';
+      document.getElementById('crono-results').classList.remove('active');
+    }
+
+    async function verGabarito() {
+      try {
+        const res = await fetch(`/api/simulados/cronometrado/${examState.id}`);
+        const data = await res.json();
+        showGabarito(data.questoes);
+      } catch (e) {
+        alert('Erro ao carregar gabarito: ' + e.message);
+      }
+    }
+
+    function showGabarito(questoes) {
+      const resultsDiv = document.getElementById('crono-results');
+      let html = `
+        <div class="results-header">
+          <h2>📋 Gabarito Completo</h2>
+          <button class="btn" style="background:var(--crono-elevated);color:var(--crono-text);padding:8px 16px;border:none;border-radius:8px;cursor:pointer;margin-top:10px;" onclick="history.back()">← Voltar ao Resultado</button>
+        </div>
+      `;
+
+      questoes.forEach((q, i) => {
+        const respondeu = q.resposta_usuario || '—';
+        const correta = q.resposta_correta;
+        const acertou = q.acertou === 1;
+        const icon = q.resposta_usuario ? (acertou ? '✅' : '❌') : '⬜';
+        const borderColor = q.resposta_usuario ? (acertou ? 'var(--crono-green)' : 'var(--crono-red)') : 'var(--crono-border)';
+
+        html += `
+          <div style="background:var(--crono-surface);border-radius:10px;padding:16px;margin-bottom:10px;border-left:4px solid ${borderColor};">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+              <span style="font-weight:700;color:var(--crono-accent);">#${q.num}</span>
+              <span style="font-size:0.78rem;background:var(--crono-elevated);padding:2px 8px;border-radius:10px;color:var(--crono-text-sub);">${q.materia}</span>
+              <span style="margin-left:auto;font-size:0.85rem;">${icon}</span>
+            </div>
+            <p style="font-size:0.88rem;line-height:1.5;margin-bottom:8px;color:var(--crono-text);">${q.enunciado.substring(0, 200)}${q.enunciado.length > 200 ? '...' : ''}</p>
+            <div style="font-size:0.82rem;display:flex;gap:14px;color:var(--crono-text-sub);">
+              <span>Sua: <strong style="color:${acertou ? 'var(--crono-green)' : 'var(--crono-red)'};">${respondeu}</strong></span>
+              <span>Correta: <strong style="color:var(--crono-green);">${correta}</strong></span>
+            </div>
+            ${q.explicacao ? `<p style="font-size:0.8rem;color:var(--crono-text-sub);margin-top:8px;padding-top:8px;border-top:1px solid var(--crono-border);"><em>💡 ${q.explicacao}</em></p>` : ''}
+          </div>
+        `;
+      });
+
+      html += `
+        <div class="results-actions" style="margin-top:20px;">
+          <button class="btn" style="background:var(--crono-accent);color:var(--crono-bg);padding:12px 24px;border:none;border-radius:8px;cursor:pointer;" onclick="novoSimulado()">🔄 Novo Simulado</button>
+        </div>
+      `;
+
+      resultsDiv.innerHTML = html;
+    }
+
+    // ==================== RADAR CHART (Canvas) ====================
+    function drawRadarChart(materias) {
+      const canvas = document.getElementById('radar-chart');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const W = canvas.width;
+      const H = canvas.height;
+      const cx = W / 2;
+      const cy = H / 2;
+      const radius = Math.min(cx, cy) - 60;
+      const n = materias.length;
+      const angleStep = (2 * Math.PI) / n;
+
+      ctx.clearRect(0, 0, W, H);
+
+      // Draw grid circles
+      ctx.strokeStyle = 'rgba(147,153,178,0.2)';
+      ctx.lineWidth = 1;
+      for (let level = 1; level <= 5; level++) {
+        const r = (radius / 5) * level;
+        ctx.beginPath();
+        for (let i = 0; i <= n; i++) {
+          const angle = -Math.PI / 2 + i * angleStep;
+          const x = cx + r * Math.cos(angle);
+          const y = cy + r * Math.sin(angle);
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+
+      // Draw axes
+      ctx.strokeStyle = 'rgba(147,153,178,0.3)';
+      for (let i = 0; i < n; i++) {
+        const angle = -Math.PI / 2 + i * angleStep;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(cx + radius * Math.cos(angle), cy + radius * Math.sin(angle));
+        ctx.stroke();
+      }
+
+      // Draw data polygon
+      const values = materias.map(m => m.total > 0 ? m.acertos / m.total : 0);
+      ctx.beginPath();
+      ctx.fillStyle = 'rgba(203,166,247,0.25)';
+      ctx.strokeStyle = 'rgba(203,166,247,0.8)';
+      ctx.lineWidth = 2;
+      values.forEach((val, i) => {
+        const angle = -Math.PI / 2 + i * angleStep;
+        const r = radius * val;
+        const x = cx + r * Math.cos(angle);
+        const y = cy + r * Math.sin(angle);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Draw dots and labels
+      ctx.fillStyle = 'rgba(203,166,247,1)';
+      values.forEach((val, i) => {
+        const angle = -Math.PI / 2 + i * angleStep;
+        const r = radius * val;
+        const x = cx + r * Math.cos(angle);
+        const y = cy + r * Math.sin(angle);
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, 2 * Math.PI);
+        ctx.fill();
+      });
+
+      // Labels
+      const isDark = !document.body.classList.contains('light-theme');
+      ctx.fillStyle = isDark ? '#cdd6f4' : '#4c4f69';
+      ctx.font = '11px sans-serif';
+      ctx.textAlign = 'center';
+      materias.forEach((m, i) => {
+        const angle = -Math.PI / 2 + i * angleStep;
+        const labelR = radius + 30;
+        const x = cx + labelR * Math.cos(angle);
+        const y = cy + labelR * Math.sin(angle);
+
+        // Truncate long names
+        const name = m.materia.length > 14 ? m.materia.substring(0, 12) + '…' : m.materia;
+        const pct = m.total > 0 ? Math.round((m.acertos / m.total) * 100) : 0;
+
+        ctx.fillText(name, x, y);
+        ctx.fillText(`${pct}%`, x, y + 13);
+      });
+    }
+
+    // ==================== INIT ====================
+    loadMaterias();
+
+    // Default title with today's date
+    document.getElementById('cfg-titulo').value = `Simulado Cronometrado ${new Date().toLocaleDateString('pt-BR')}`;
+  </script>
+  <script src="/timer-global.js"></script>
+  <script src="/auth-interceptor.js"></script>
+  <script src="/sidebar.js"></script>
+  <script type="module">
+    import { toggleTheme, initTheme } from './js/modules/theme.js';
+    window.toggleTheme = toggleTheme;
+    initTheme();
+  </script>
+</body>
+</html>

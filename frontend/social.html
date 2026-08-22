@@ -268,8 +268,32 @@
   <!-- TAB: Liga -->
   <div class="tab-content active" id="tab-liga">
     <div class="card">
-      <div class="tier-badge bronze" id="tier-badge">🥉 Bronze</div>
-      <p style="font-size:0.82rem; color:#9399b2; margin-bottom:12px;">Semana atual — Top 5 sobe, Bottom 5 desce</p>
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        <div class="tier-badge bronze" id="tier-badge">🥉 Bronze</div>
+        <div style="font-size:0.78rem;color:var(--text-sub);" id="liga-semana-info">Semana atual</div>
+      </div>
+      <p style="font-size:0.82rem; color:var(--text-sub); margin-bottom:12px;">
+        Top 3 sobe de liga · Bottom 3 desce
+        <span id="dias-restantes" style="margin-left:8px;color:var(--yellow);font-weight:600;"></span>
+      </p>
+
+      <!-- Progress bar para promoção -->
+      <div id="promo-progress-container" style="margin-bottom:16px;display:none;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <span style="font-size:0.78rem;color:var(--text-sub);">Sua posição: <strong id="user-pos-label" style="color:var(--text);">#—</strong></span>
+          <span style="font-size:0.78rem;color:var(--green);font-weight:600;" id="xp-para-promo-label"></span>
+        </div>
+        <div style="background:var(--bg);border-radius:8px;height:8px;overflow:hidden;">
+          <div id="promo-progress-bar" style="height:100%;border-radius:8px;background:linear-gradient(90deg, var(--blue), var(--green));transition:width 0.5s ease;width:0%;"></div>
+        </div>
+      </div>
+
+      <!-- XP Breakdown -->
+      <div id="xp-breakdown" style="display:none;margin-bottom:16px;background:var(--bg);border-radius:10px;padding:12px;">
+        <div style="font-size:0.78rem;color:var(--text-sub);margin-bottom:8px;font-weight:600;">📊 Fontes de XP desta semana</div>
+        <div id="xp-breakdown-items" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:6px;"></div>
+      </div>
+
       <table class="leaderboard" id="leaderboard">
         <thead><tr><th class="pos">#</th><th>Nome</th><th class="xp">XP</th><th></th></tr></thead>
         <tbody id="leaderboard-body">
@@ -282,7 +306,7 @@
       </table>
     </div>
     <div class="card">
-      <h3>📜 Histórico</h3>
+      <h3>📜 Histórico de Ligas</h3>
       <div id="league-history">
         <div class="loading-skeleton wide"></div>
         <div class="loading-skeleton medium"></div>
@@ -464,58 +488,134 @@
     }
 
     // ===== LEAGUE =====
-    const tierIcons = { bronze: '🥉', prata: '🥈', ouro: '🥇', diamante: '💎', mestre: '👑' };
-    const tierNames = { bronze: 'Bronze', prata: 'Prata', ouro: 'Ouro', diamante: 'Diamante', mestre: 'Mestre' };
+    const tierIcons = { bronze: '🥉', prata: '🥈', ouro: '🥇', diamante: '💎' };
+    const tierNames = { bronze: 'Bronze', prata: 'Prata', ouro: 'Ouro', diamante: 'Diamante' };
 
     async function loadLeague() {
       try {
-        const res = await fetch('/api/leagues/current');
+        const res = await fetch('/api/liga');
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Erro');
 
-        const tier = data.tier || 'bronze';
+        const tier = data.liga_atual || 'bronze';
         const badge = document.getElementById('tier-badge');
         badge.className = 'tier-badge ' + tier;
         badge.textContent = (tierIcons[tier] || '🏆') + ' ' + (tierNames[tier] || tier);
 
-        const tbody = document.getElementById('leaderboard-body');
-        const standings = data.standings || [];
-        const total = standings.length;
+        // Week info
+        const weekInfo = document.getElementById('liga-semana-info');
+        if (data.semana_inicio && data.semana_fim) {
+          const start = new Date(data.semana_inicio + 'T00:00:00').toLocaleDateString('pt-BR', {day:'2-digit',month:'short'});
+          const end = new Date(data.semana_fim + 'T00:00:00').toLocaleDateString('pt-BR', {day:'2-digit',month:'short'});
+          weekInfo.textContent = `${start} — ${end}`;
+        }
 
-        if (!standings.length) {
+        // Days remaining
+        const diasEl = document.getElementById('dias-restantes');
+        if (data.dias_restantes !== undefined) {
+          diasEl.textContent = data.dias_restantes === 0 ? '⏰ Último dia!' :
+                               data.dias_restantes === 1 ? '⏰ 1 dia restante' :
+                               `⏰ ${data.dias_restantes} dias restantes`;
+        }
+
+        // Progress bar for promotion
+        const promoContainer = document.getElementById('promo-progress-container');
+        const posLabel = document.getElementById('user-pos-label');
+        const promoLabel = document.getElementById('xp-para-promo-label');
+        const promoBar = document.getElementById('promo-progress-bar');
+
+        promoContainer.style.display = 'block';
+        posLabel.textContent = `#${data.posicao || '—'}`;
+
+        if (data.xp_para_promocao > 0) {
+          promoLabel.textContent = `${data.xp_para_promocao} XP para promoção`;
+          promoLabel.style.color = 'var(--green)';
+          // Calculate progress as percentage towards promotion zone
+          const totalNeeded = data.xp_semana + data.xp_para_promocao;
+          const pct = totalNeeded > 0 ? Math.min(100, (data.xp_semana / totalNeeded) * 100) : 0;
+          promoBar.style.width = pct + '%';
+        } else if (data.posicao <= data.zona_promocao) {
+          promoLabel.textContent = '🎉 Zona de promoção!';
+          promoLabel.style.color = 'var(--green)';
+          promoBar.style.width = '100%';
+          promoBar.style.background = 'linear-gradient(90deg, var(--green), var(--teal, #94e2d5))';
+        } else {
+          promoLabel.textContent = `${data.xp_semana} XP esta semana`;
+          promoLabel.style.color = 'var(--text-sub)';
+          promoBar.style.width = '60%';
+        }
+
+        // XP Breakdown
+        const breakdownContainer = document.getElementById('xp-breakdown');
+        const breakdownItems = document.getElementById('xp-breakdown-items');
+        if (data.xp_breakdown) {
+          const bd = data.xp_breakdown;
+          const totalXP = Object.values(bd).reduce((a,b) => a+b, 0);
+          if (totalXP > 0) {
+            breakdownContainer.style.display = 'block';
+            const sources = [
+              { label: '📝 Questões', value: bd.questoes || 0, color: 'var(--blue)' },
+              { label: '📖 Estudo', value: bd.horas_estudo || 0, color: 'var(--green)' },
+              { label: '🃏 Flashcards', value: bd.flashcards || 0, color: 'var(--mauve, #cba6f7)' },
+              { label: '🎯 Desafios', value: bd.desafios || 0, color: 'var(--yellow)' },
+              { label: '⚔️ Batalhas', value: bd.batalhas || 0, color: 'var(--red)' },
+              { label: '🔥 Streak', value: bd.streak || 0, color: 'var(--peach, #fab387)' },
+            ].filter(s => s.value > 0);
+
+            breakdownItems.innerHTML = sources.map(s => `
+              <div style="display:flex;align-items:center;gap:6px;font-size:0.78rem;">
+                <span>${s.label}</span>
+                <span style="color:${s.color};font-weight:600;">${s.value} XP</span>
+              </div>
+            `).join('');
+          } else {
+            breakdownContainer.style.display = 'none';
+          }
+        }
+
+        // Leaderboard
+        const tbody = document.getElementById('leaderboard-body');
+        const ranking = data.ranking || [];
+        const total = ranking.length;
+        const zonaPromo = data.zona_promocao || 3;
+        const zonaDemo = data.zona_rebaixamento || 3;
+
+        if (!ranking.length) {
           tbody.innerHTML = '<tr><td colspan="4" class="empty-state" style="padding:24px;"><div class="emoji">🏆</div><p>Liga será calculada no fim da semana</p></td></tr>';
           return;
         }
 
-        tbody.innerHTML = standings.map((s, i) => {
-          const pos = i + 1;
+        tbody.innerHTML = ranking.map((s) => {
+          const pos = s.posicao;
           let cls = '';
-          if (s.is_me) cls = 'me';
-          else if (pos <= 5) cls = 'promo';
-          else if (pos > total - 5) cls = 'demo';
+          if (s.is_current_user) cls = 'me';
+          else if (pos <= zonaPromo) cls = 'promo';
+          else if (pos > total - zonaDemo) cls = 'demo';
 
           let zone = '';
-          if (pos <= 5) zone = '<span class="zone-label zone-promo">↑</span>';
-          else if (pos > total - 5) zone = '<span class="zone-label zone-demo">↓</span>';
+          if (pos <= zonaPromo) zone = '<span class="zone-label zone-promo">↑</span>';
+          else if (pos > total - zonaDemo) zone = '<span class="zone-label zone-demo">↓</span>';
+
+          const nameDisplay = s.is_current_user ? `<strong>${escapeHtml(s.nome)}</strong> <span style="font-size:0.72rem;color:var(--blue);">(você)</span>` : escapeHtml(s.nome);
 
           return `<tr class="${cls}">
             <td class="pos">${pos}</td>
-            <td>${s.name || s.bot_name || 'Anônimo'}${s.is_me ? ' (você)' : ''}</td>
-            <td class="xp">${(s.xp || 0).toLocaleString()} XP</td>
+            <td>${nameDisplay}</td>
+            <td class="xp">${(s.xp_semana || 0).toLocaleString()} XP</td>
             <td>${zone}</td>
           </tr>`;
         }).join('');
       } catch (e) {
         document.getElementById('leaderboard-body').innerHTML =
-          `<tr><td colspan="4" style="text-align:center;padding:24px;color:#f38ba8;">${e.message}</td></tr>`;
+          `<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--red);">${e.message}</td></tr>`;
       }
     }
 
     async function loadLeagueHistory() {
       try {
-        const res = await fetch('/api/leagues/history');
+        const res = await fetch('/api/liga/historico');
         const data = await res.json();
-        const items = data.history || data || [];
+        const items = data.historico || [];
         const container = document.getElementById('league-history');
 
         if (!items.length) {
@@ -523,16 +623,25 @@
           return;
         }
 
-        container.innerHTML = items.slice(0, 8).map(h => `
-          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #45475a;font-size:0.85rem;">
-            <span>${tierIcons[h.tier] || ''} ${tierNames[h.tier] || h.tier} — #${h.position}</span>
-            <span style="color:${h.result === 'promoted' ? '#a6e3a1' : h.result === 'demoted' ? '#f38ba8' : '#9399b2'}">
-              ${h.result === 'promoted' ? '↑ Promovido' : h.result === 'demoted' ? '↓ Rebaixado' : '— Manteve'}
-            </span>
-          </div>
-        `).join('');
+        container.innerHTML = items.slice(0, 8).map(h => {
+          const icon = tierIcons[h.liga] || '🏆';
+          const label = tierNames[h.liga] || h.liga;
+          const resultColor = h.resultado === 'promoted' ? 'var(--green)' :
+                              h.resultado === 'demoted' ? 'var(--red)' : 'var(--text-sub)';
+          const resultText = h.resultado === 'promoted' ? '↑ Promovido' :
+                             h.resultado === 'demoted' ? '↓ Rebaixado' : '— Manteve';
+          return `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);font-size:0.85rem;">
+              <div>
+                <span>${icon} ${label}</span>
+                <span style="color:var(--text-sub);margin-left:8px;">#${h.posicao_final} · ${(h.xp_final || 0).toLocaleString()} XP</span>
+              </div>
+              <span style="color:${resultColor};font-weight:600;font-size:0.8rem;">${resultText}</span>
+            </div>
+          `;
+        }).join('');
       } catch (e) {
-        document.getElementById('league-history').innerHTML = '<p style="color:#f38ba8;font-size:0.85rem;">Erro ao carregar histórico</p>';
+        document.getElementById('league-history').innerHTML = '<p style="color:var(--red);font-size:0.85rem;">Erro ao carregar histórico</p>';
       }
     }
 

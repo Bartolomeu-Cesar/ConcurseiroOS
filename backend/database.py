@@ -913,6 +913,53 @@ def _run_migrations(conn):
         except Exception:
             pass
 
+    # Liga column in users table
+    try:
+        conn.execute("SELECT liga FROM users LIMIT 1")
+    except Exception:
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN liga TEXT DEFAULT 'bronze'")
+            log.info("Migration: added column liga to users")
+        except Exception:
+            pass
+
+
+    # ========== CADERNO DE ERROS: tabela erros_revisao (spaced repetition) ==========
+    try:
+        conn.execute("SELECT id FROM erros_revisao LIMIT 1")
+    except Exception:
+        try:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS erros_revisao (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL DEFAULT 1,
+                    questao_id INTEGER NOT NULL,
+                    resposta_id INTEGER NOT NULL,
+                    intervalo_atual INTEGER DEFAULT 1,
+                    proxima_revisao TEXT NOT NULL,
+                    revisoes_count INTEGER DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT DEFAULT '',
+                    FOREIGN KEY (questao_id) REFERENCES questoes(id)
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_erros_revisao_user_id ON erros_revisao(user_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_erros_revisao_proxima ON erros_revisao(user_id, proxima_revisao)")
+            log.info("Migration: created table erros_revisao")
+        except Exception:
+            pass
+
+
+    # ========== SIMULADO CRONOMETRADO: tipo column ==========
+    try:
+        conn.execute("SELECT tipo FROM simulados LIMIT 1")
+    except Exception:
+        try:
+            conn.execute("ALTER TABLE simulados ADD COLUMN tipo TEXT DEFAULT 'normal'")
+            log.info("Migration: added column tipo to simulados")
+        except Exception:
+            pass
+
 
 def _migrate_user_id(conn):
     """Adiciona coluna user_id em todas as tabelas que precisam de isolamento por usuário."""

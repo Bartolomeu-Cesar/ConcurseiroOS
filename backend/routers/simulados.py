@@ -6,7 +6,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from database import get_db_session
 from deps import get_user_id
 from logger import log
-from models import SimuladoCreate, SimuladoFinalizar, SimuladoProvaReal, SimuladoResponder
+from models import (
+    SimuladoCreate,
+    SimuladoCronometradoCreate,
+    SimuladoCronometradoFinalizar,
+    SimuladoFinalizar,
+    SimuladoProvaReal,
+    SimuladoResponder,
+)
 from utils import today_str, update_streak
 
 router = APIRouter(prefix="", tags=["Simulados"])
@@ -291,3 +298,305 @@ def simulado_adaptativo(materia: str = "", qtd: int = 10, conn=Depends(get_db_se
     ids = list(dict.fromkeys(ids))[:qtd]
     return {"questao_ids": ids, "total": len(ids), "nivel_detectado": round(taxa * 100),
             "dificuldade_alvo": dificuldades[0]}
+
+
+# ============================================================
+# SIMULADO CRONOMETRADO REALISTA
+# ============================================================
+
+
+@router.post("/api/simulados/cronometrado")
+def criar_simulado_cronometrado(
+    body: SimuladoCronometradoCreate,
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Cria simulado cronometrado realista com seleção automática de questões por dificuldade/matéria."""
+    log.info(f"POST /api/simulados/cronometrado titulo={body.titulo} tempo={body.tempo_total_min}min questoes={body.questoes_total}")
+
+    # Construir query base
+    base_query = "SELECT id, materia, enunciado, alternativa_a, alternativa_b, alternativa_c, alternativa_d, alternativa_e, dificuldade FROM questoes WHERE user_id = ?"
+    base_params = [user_id]
+
+    # Filtrar por matérias se especificadas
+    if body.materias:
+        placeholders = ",".join(["?" for _ in body.materias])
+        base_query += f" AND materia IN ({placeholders})"
+        base_params.extend(body.materias)
+
+    # Buscar questões por dificuldade segundo o mix
+    questoes_selecionadas = []
+    mix = body.dificuldade_mix
+
+    dificuldade_map = [
+        ("Fácil", mix.facil),
+        ("Médio", mix.medio),
+        ("Difícil", mix.dificil),
+    ]
+
+    for dif_nome, qtd_alvo in dificuldade_map:
+        if qtd_alvo <= 0:
+            continue
+        query = base_query + " AND dificuldade = ? ORDER BY RANDOM() LIMIT ?"
+        params = base_params + [dif_nome, qtd_alvo]
+        rows = conn.execute(query, params).fetchall()
+        questoes_selecionadas.extend([dict(r) for r in rows])
+
+    # Se não conseguiu o total, completar com qualquer dificuldade
+    ids_selecionados = {q["id"] for q in questoes_selecionadas}
+    faltando = body.questoes_total - len(questoes_selecionadas)
+    if faltando > 0:
+        excl_placeholders = ",".join(["?" for _ in ids_selecionados]) if ids_selecionados else "0"
+        query_extra = base_query + f" AND id NOT IN ({excl_placeholders}) ORDER BY RANDOM() LIMIT ?"
+        params_extra = base_params + list(ids_selecionados) + [faltando]
+        rows_extra = conn.execute(query_extra, params_extra).fetchall()
+        questoes_selecionadas.extend([dict(r) for r in rows_extra])
+
+    if not questoes_selecionadas:
+        raise HTTPException(status_code=400, detail="Nenhuma questão disponível no banco para os critérios selecionados.")
+
+    # Embaralhar
+    random.shuffle(questoes_selecionadas)
+
+    # Limitar ao total solicitado
+    questoes_selecionadas = questoes_selecionadas[: body.questoes_total]
+
+    # Criar registro do simulado
+    cur = conn.execute("""
+        INSERT INTO simulados (titulo, tempo_limite_min, total_questoes, created_at, user_id, tipo)
+        VALUES (?, ?, ?, ?, ?, 'cronometrado')
+    """, (body.titulo, body.tempo_total_min, len(questoes_selecionadas), datetime.now().isoformat(), user_id))
+    sim_id = cur.lastrowid
+
+    # Vincular questões
+    questoes_response = []
+    for i, q in enumerate(questoes_selecionadas):
+        conn.execute(
+            "INSERT INTO simulado_questoes (simulado_id, questao_id, ordem, user_id) VALUES (?, ?, ?, ?)",
+            (sim_id, q["id"], i, user_id),
+        )
+        alternativas = [
+            {"letra": "A", "texto": q["alternativa_a"]},
+            {"letra": "B", "texto": q["alternativa_b"]},
+            {"letra": "C", "texto": q["alternativa_c"]},
+            {"letra": "D", "texto": q["alternativa_d"]},
+        ]
+        if q.get("alternativa_e"):
+            alternativas.append({"letra": "E", "texto": q["alternativa_e"]})
+
+        questoes_response.append({
+            "id": q["id"],
+            "num": i + 1,
+            "materia": q["materia"],
+            "enunciado": q["enunciado"],
+            "alternativas": alternativas,
+        })
+
+    conn.commit()
+    log.info(f"Simulado cronometrado criado: id={sim_id} questoes={len(questoes_selecionadas)}")
+
+    return {
+        "id": sim_id,
+        "titulo": body.titulo,
+        "tempo_total_min": body.tempo_total_min,
+        "total_questoes": len(questoes_selecionadas),
+        "questoes": questoes_response,
+    }
+
+
+@router.post("/api/simulados/cronometrado/{id}/finalizar")
+def finalizar_simulado_cronometrado(
+    id: int,
+    body: SimuladoCronometradoFinalizar,
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Finaliza simulado cronometrado com cálculo de TRI, nota por matéria e comparação com nota de corte."""
+    log.info(f"POST /api/simulados/cronometrado/{id}/finalizar respostas={len(body.respostas)} tempo={body.tempo_total_seg}s")
+
+    # Verificar que o simulado existe
+    sim = conn.execute("SELECT * FROM simulados WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
+    if not sim:
+        raise HTTPException(status_code=404, detail="Simulado não encontrado")
+
+    # Processar cada resposta
+    total_acertos = 0
+    total_erros = 0
+    total_em_branco = 0
+    por_materia = {}  # materia -> {acertos, total}
+    tempos = []
+
+    for resp in body.respostas:
+        # Buscar questão para verificar resposta correta
+        questao = conn.execute(
+            "SELECT resposta_correta, materia FROM questoes WHERE id = ? AND user_id = ?",
+            (resp.questao_id, user_id),
+        ).fetchone()
+        if not questao:
+            continue
+
+        correta = questao[0].upper() if questao[0] else ""
+        materia = questao[1] or "Sem matéria"
+        respondeu = resp.resposta.strip().upper() if resp.resposta else ""
+
+        # Inicializar matéria
+        if materia not in por_materia:
+            por_materia[materia] = {"acertos": 0, "total": 0}
+        por_materia[materia]["total"] += 1
+
+        if not respondeu:
+            total_em_branco += 1
+        elif respondeu == correta:
+            total_acertos += 1
+            por_materia[materia]["acertos"] += 1
+        else:
+            total_erros += 1
+
+        # Registrar resposta no banco
+        acertou = 1 if respondeu == correta else 0
+        conn.execute("""
+            UPDATE simulado_questoes SET resposta_usuario = ?, acertou = ?
+            WHERE simulado_id = ? AND questao_id = ? AND user_id = ?
+        """, (respondeu if respondeu else None, acertou if respondeu else None, id, resp.questao_id, user_id))
+
+        if resp.tempo_seg > 0:
+            tempos.append(resp.tempo_seg)
+
+    total_respondidas = total_acertos + total_erros
+    total_questoes = total_acertos + total_erros + total_em_branco
+
+    # Nota bruta (percentual de acertos sobre total)
+    nota_bruta = round((total_acertos / total_questoes * 100) if total_questoes > 0 else 0, 2)
+
+    # TRI estimada simples: pontuação com penalidade de -0.25 por erro
+    pontos_tri = total_acertos - (total_erros * 0.25)
+    nota_tri = round(max(0, (pontos_tri / total_questoes * 100)) if total_questoes > 0 else 0, 2)
+
+    # Tempo médio por questão
+    tempo_medio = round(sum(tempos) / len(tempos), 1) if tempos else (
+        round(body.tempo_total_seg / total_respondidas, 1) if total_respondidas > 0 else 0
+    )
+
+    # Comparar com nota de corte histórica (buscar na tabela se existir)
+    aprovado_estimado = None
+    nota_corte = None
+    try:
+        corte_row = conn.execute(
+            "SELECT nota_corte FROM notas_corte WHERE user_id = ? ORDER BY id DESC LIMIT 1",
+            (user_id,),
+        ).fetchone()
+        if corte_row:
+            nota_corte = corte_row[0]
+            aprovado_estimado = nota_bruta >= nota_corte
+    except Exception:
+        # Tabela pode não existir
+        pass
+
+    # Atualizar simulado
+    conn.execute("""
+        UPDATE simulados SET status = 'finalizado', nota = ?, acertos = ?,
+               tempo_gasto_seg = ?, finalizado_at = ?
+        WHERE id = ? AND user_id = ?
+    """, (nota_bruta, total_acertos, body.tempo_total_seg, datetime.now().isoformat(), id, user_id))
+
+    # Registrar tempo como sessão de estudo
+    if body.tempo_total_seg > 0:
+        horas = body.tempo_total_seg / 3600
+        materias_list = list(por_materia.keys())
+        if materias_list:
+            horas_por_mat = horas / len(materias_list)
+            for mat in materias_list:
+                existing = conn.execute(
+                    "SELECT id FROM sessoes_estudo WHERE data = ? AND materia = ? AND tipo = 'simulado' AND user_id = ?",
+                    (today_str(), mat, user_id),
+                ).fetchone()
+                if existing:
+                    conn.execute(
+                        "UPDATE sessoes_estudo SET horas = horas + ? WHERE id = ? AND user_id = ?",
+                        (horas_por_mat, existing[0], user_id),
+                    )
+                else:
+                    conn.execute(
+                        "INSERT INTO sessoes_estudo (materia, horas, data, tipo, user_id) VALUES (?, ?, ?, 'simulado', ?)",
+                        (mat, horas_por_mat, today_str(), user_id),
+                    )
+        else:
+            conn.execute(
+                "INSERT INTO sessoes_estudo (materia, horas, data, tipo, user_id) VALUES (?, ?, ?, 'simulado', ?)",
+                ("Simulado", horas, today_str(), user_id),
+            )
+        update_streak(conn, "horas_estudadas", horas, user_id=user_id)
+
+    conn.commit()
+
+    # Montar resposta por matéria
+    por_materia_list = [
+        {"materia": mat, "acertos": dados["acertos"], "total": dados["total"]}
+        for mat, dados in sorted(por_materia.items())
+    ]
+
+    result = {
+        "nota_bruta": nota_bruta,
+        "nota_tri": nota_tri,
+        "total_acertos": total_acertos,
+        "total_erros": total_erros,
+        "total_em_branco": total_em_branco,
+        "total_questoes": total_questoes,
+        "por_materia": por_materia_list,
+        "tempo_medio_por_questao": tempo_medio,
+        "tempo_total_seg": body.tempo_total_seg,
+        "aprovado_estimado": aprovado_estimado,
+        "nota_corte": nota_corte,
+    }
+
+    log.info(f"Simulado cronometrado {id} finalizado: bruta={nota_bruta}% tri={nota_tri}% ({total_acertos}/{total_questoes})")
+    return result
+
+
+@router.get("/api/simulados/cronometrado/{id}")
+def get_simulado_cronometrado(id: int, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Retorna detalhes do simulado cronometrado com questões e resultados."""
+    sim = conn.execute("SELECT * FROM simulados WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
+    if not sim:
+        raise HTTPException(status_code=404, detail="Simulado não encontrado")
+
+    sim_dict = dict(sim)
+
+    questoes = conn.execute("""
+        SELECT sq.*, q.enunciado, q.alternativa_a, q.alternativa_b, q.alternativa_c,
+               q.alternativa_d, q.alternativa_e, q.resposta_correta, q.materia, q.explicacao, q.dificuldade
+        FROM simulado_questoes sq
+        JOIN questoes q ON q.id = sq.questao_id
+        WHERE sq.simulado_id = ? AND sq.user_id = ?
+        ORDER BY sq.ordem
+    """, (id, user_id)).fetchall()
+
+    questoes_list = []
+    for q in questoes:
+        qd = dict(q)
+        alternativas = [
+            {"letra": "A", "texto": qd["alternativa_a"]},
+            {"letra": "B", "texto": qd["alternativa_b"]},
+            {"letra": "C", "texto": qd["alternativa_c"]},
+            {"letra": "D", "texto": qd["alternativa_d"]},
+        ]
+        if qd.get("alternativa_e"):
+            alternativas.append({"letra": "E", "texto": qd["alternativa_e"]})
+
+        questoes_list.append({
+            "id": qd["questao_id"],
+            "num": qd["ordem"] + 1,
+            "materia": qd["materia"],
+            "enunciado": qd["enunciado"],
+            "alternativas": alternativas,
+            "resposta_usuario": qd.get("resposta_usuario"),
+            "acertou": qd.get("acertou"),
+            "resposta_correta": qd["resposta_correta"],
+            "explicacao": qd.get("explicacao", ""),
+            "dificuldade": qd.get("dificuldade", ""),
+        })
+
+    return {
+        "simulado": sim_dict,
+        "questoes": questoes_list,
+    }

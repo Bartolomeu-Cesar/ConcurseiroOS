@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>📕 Caderno de Erros — ConcurseiroOS</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/layout.css">
+  <style>
+    :root {
+      --ce-bg: #1e1e2e;
+      --ce-surface: #181825;
+      --ce-card: #313244;
+      --ce-card-hover: #45475a;
+      --ce-text: #cdd6f4;
+      --ce-subtext: #a6adc8;
+      --ce-accent: #f38ba8;
+      --ce-success: #a6e3a1;
+      --ce-warning: #f9e2af;
+      --ce-blue: #89b4fa;
+      --ce-mauve: #cba6f7;
+      --ce-border: #45475a;
+      --ce-wrong: #f38ba8;
+      --ce-correct: #a6e3a1;
+    }
+
+    .light-theme {
+      --ce-bg: #eff1f5;
+      --ce-surface: #e6e9ef;
+      --ce-card: #dce0e8;
+      --ce-card-hover: #ccd0da;
+      --ce-text: #4c4f69;
+      --ce-subtext: #6c6f85;
+      --ce-accent: #d20f39;
+      --ce-success: #40a02b;
+      --ce-warning: #df8e1d;
+      --ce-blue: #1e66f5;
+      --ce-mauve: #8839ef;
+      --ce-border: #bcc0cc;
+      --ce-wrong: #d20f39;
+      --ce-correct: #40a02b;
+    }
+
+    .caderno-container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 24px 16px;
+    }
+
+    .caderno-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+
+    .caderno-header h1 {
+      font-size: 1.6rem;
+      color: var(--ce-accent);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .count-badge {
+      background: var(--ce-accent);
+      color: #1e1e2e;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 12px;
+      min-width: 24px;
+      text-align: center;
+    }
+
+    /* Progress bar */
+    .progress-section {
+      background: var(--ce-card);
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 24px;
+    }
+
+    .progress-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      color: var(--ce-subtext);
+      margin-bottom: 8px;
+    }
+
+    .progress-bar-bg {
+      background: var(--ce-border);
+      border-radius: 8px;
+      height: 10px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      background: var(--ce-success);
+      height: 100%;
+      border-radius: 8px;
+      transition: width 0.4s ease;
+    }
+
+    /* Stats row */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: var(--ce-card);
+      border-radius: 10px;
+      padding: 14px 16px;
+      text-align: center;
+    }
+
+    .stat-card .stat-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--ce-text);
+    }
+
+    .stat-card .stat-label {
+      font-size: 0.75rem;
+      color: var(--ce-subtext);
+      margin-top: 4px;
+    }
+
+    /* Section */
+    .section-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--ce-mauve);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Question cards */
+    .question-card {
+      background: var(--ce-card);
+      border-radius: 12px;
+      padding: 18px 20px;
+      margin-bottom: 14px;
+      border-left: 4px solid var(--ce-accent);
+      transition: background 0.2s;
+    }
+
+    .question-card:hover {
+      background: var(--ce-card-hover);
+    }
+
+    .question-meta {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+
+    .question-meta .tag {
+      font-size: 0.7rem;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: var(--ce-border);
+      color: var(--ce-subtext);
+      font-weight: 600;
+    }
+
+    .question-meta .tag-materia {
+      background: rgba(137, 180, 250, 0.15);
+      color: var(--ce-blue);
+    }
+
+    .question-meta .tag-intervalo {
+      background: rgba(249, 226, 175, 0.15);
+      color: var(--ce-warning);
+    }
+
+    .question-enunciado {
+      font-size: 0.9rem;
+      color: var(--ce-text);
+      line-height: 1.5;
+      margin-bottom: 12px;
+    }
+
+    .answers-box {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .answer-pill {
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 600;
+    }
+
+    .answer-wrong {
+      background: rgba(243, 139, 168, 0.2);
+      color: var(--ce-wrong);
+      border: 1px solid var(--ce-wrong);
+      text-decoration: line-through;
+    }
+
+    .answer-correct {
+      background: rgba(166, 227, 161, 0.2);
+      color: var(--ce-correct);
+      border: 1px solid var(--ce-correct);
+    }
+
+    .question-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .btn-revisei {
+      padding: 8px 18px;
+      border-radius: 8px;
+      border: none;
+      font-size: 0.82rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-revisei-ok {
+      background: var(--ce-success);
+      color: #1e1e2e;
+    }
+
+    .btn-revisei-ok:hover {
+      opacity: 0.85;
+      transform: translateY(-1px);
+    }
+
+    .btn-revisei-errei {
+      background: var(--ce-border);
+      color: var(--ce-subtext);
+    }
+
+    .btn-revisei-errei:hover {
+      background: var(--ce-wrong);
+      color: #1e1e2e;
+    }
+
+    .btn-revisei:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* Padrões de erro */
+    .padrao-card {
+      background: var(--ce-card);
+      border-radius: 10px;
+      padding: 14px 18px;
+      margin-bottom: 10px;
+      border-left: 4px solid var(--ce-warning);
+    }
+
+    .padrao-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .padrao-text {
+      font-size: 0.85rem;
+      color: var(--ce-text);
+      font-weight: 600;
+    }
+
+    .padrao-count {
+      font-size: 0.75rem;
+      background: var(--ce-warning);
+      color: #1e1e2e;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 700;
+    }
+
+    .padrao-detail {
+      font-size: 0.75rem;
+      color: var(--ce-subtext);
+    }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 48px 24px;
+      color: var(--ce-subtext);
+    }
+
+    .empty-state .empty-icon {
+      font-size: 3rem;
+      margin-bottom: 12px;
+    }
+
+    .empty-state p {
+      font-size: 0.9rem;
+    }
+
+    /* Matérias filter */
+    .materias-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+
+    .materia-chip {
+      padding: 6px 12px;
+      border-radius: 16px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: var(--ce-border);
+      color: var(--ce-subtext);
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+    }
+
+    .materia-chip.active {
+      background: var(--ce-blue);
+      color: #1e1e2e;
+    }
+
+    .materia-chip:hover:not(.active) {
+      background: var(--ce-card-hover);
+    }
+
+    /* Loading */
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: var(--ce-subtext);
+    }
+
+    @media (max-width: 600px) {
+      .caderno-container {
+        padding: 16px 10px;
+      }
+      .stats-row {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+  </style>
+</head>
+<body>
+  <a href="#main-content" class="skip-link">Ir para conteúdo</a>
+  <script src="/auth-interceptor.js"></script>
+  <script src="/sidebar.js"></script>
+
+  <div class="caderno-container" id="main-content" role="main">
+    <div class="caderno-header">
+      <h1>📕 Caderno de Erros <span class="count-badge" id="total-badge">0</span></h1>
+    </div>
+
+    <!-- Progress bar -->
+    <div class="progress-section" id="progress-section" style="display:none;">
+      <div class="progress-label">
+        <span id="progress-text">0/0 revisadas hoje</span>
+        <span id="progress-pct">0%</span>
+      </div>
+      <div class="progress-bar-bg">
+        <div class="progress-bar-fill" id="progress-fill" style="width: 0%"></div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-row" id="stats-row">
+      <div class="stat-card">
+        <div class="stat-value" id="stat-total">-</div>
+        <div class="stat-label">Total de Erros</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-pendentes">-</div>
+        <div class="stat-label">Pendentes Hoje</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-materias">-</div>
+        <div class="stat-label">Matérias</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-padroes">-</div>
+        <div class="stat-label">Padrões</div>
+      </div>
+    </div>
+
+    <!-- Matérias filter -->
+    <div class="materias-chips" id="materias-chips"></div>
+
+    <!-- Revisão de Hoje -->
+    <section id="section-revisao">
+      <div class="section-title">📝 Revisão de Hoje</div>
+      <div id="lista-revisao" class="loading">Carregando...</div>
+    </section>
+
+    <!-- Padrões de Erro -->
+    <section id="section-padroes" style="margin-top: 32px;">
+      <div class="section-title">🔍 Padrões de Erro</div>
+      <div id="lista-padroes"></div>
+    </section>
+  </div>
+
+  <script>
+    const API_BASE = '';
+    let dadosCaderno = null;
+    let revisadasHoje = new Set();
+    let filtroMateria = '';
+
+    async function fetchCaderno() {
+      try {
+        const res = await fetch(`${API_BASE}/api/questoes/erros/caderno`);
+        if (!res.ok) throw new Error('Erro ao carregar caderno');
+        dadosCaderno = await res.json();
+        renderAll();
+      } catch (err) {
+        document.getElementById('lista-revisao').innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">⚠️</div>
+            <p>Erro ao carregar caderno de erros: ${err.message}</p>
+          </div>`;
+      }
+    }
+
+    function renderAll() {
+      if (!dadosCaderno) return;
+
+      const { pendentes_hoje, total_erros, por_materia, padroes_erro } = dadosCaderno;
+
+      // Badge & stats
+      document.getElementById('total-badge').textContent = pendentes_hoje.length;
+      document.getElementById('stat-total').textContent = total_erros;
+      document.getElementById('stat-pendentes').textContent = pendentes_hoje.length;
+      document.getElementById('stat-materias').textContent = Object.keys(por_materia).length;
+      document.getElementById('stat-padroes').textContent = padroes_erro.length;
+
+      // Progress
+      updateProgress();
+
+      // Matérias chips
+      renderMateriasChips(por_materia);
+
+      // Questões
+      renderRevisao(pendentes_hoje);
+
+      // Padrões
+      renderPadroes(padroes_erro);
+    }
+
+    function updateProgress() {
+      const total = dadosCaderno.pendentes_hoje.length;
+      const done = revisadasHoje.size;
+      const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+
+      const section = document.getElementById('progress-section');
+      section.style.display = total > 0 ? 'block' : 'none';
+      document.getElementById('progress-text').textContent = `${done}/${total} revisadas hoje`;
+      document.getElementById('progress-pct').textContent = `${pct}%`;
+      document.getElementById('progress-fill').style.width = `${pct}%`;
+    }
+
+    function renderMateriasChips(por_materia) {
+      const container = document.getElementById('materias-chips');
+      const sorted = Object.entries(por_materia).sort((a, b) => b[1] - a[1]);
+
+      let html = `<button class="materia-chip ${!filtroMateria ? 'active' : ''}" onclick="setFiltroMateria('')">Todas</button>`;
+      for (const [mat, count] of sorted) {
+        const active = filtroMateria === mat ? 'active' : '';
+        html += `<button class="materia-chip ${active}" onclick="setFiltroMateria('${mat.replace(/'/g, "\\'")}')">${mat} (${count})</button>`;
+      }
+      container.innerHTML = html;
+    }
+
+    function setFiltroMateria(mat) {
+      filtroMateria = mat;
+      renderAll();
+    }
+
+    function renderRevisao(pendentes) {
+      const container = document.getElementById('lista-revisao');
+      let filtered = pendentes;
+
+      if (filtroMateria) {
+        filtered = filtered.filter(q => q.materia === filtroMateria);
+      }
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">🎉</div>
+            <p>${filtroMateria ? 'Nenhuma revisão pendente nesta matéria!' : 'Nenhuma revisão pendente hoje! Volte amanhã.'}</p>
+          </div>`;
+        return;
+      }
+
+      let html = '';
+      for (const q of filtered) {
+        const revisada = revisadasHoje.has(q.id);
+        const intervalos = ['1d', '3d', '7d', '14d', '30d'];
+        const intervaloIdx = [1, 3, 7, 14, 30].indexOf(q.intervalo_atual);
+        const intervaloLabel = intervaloIdx >= 0 ? intervalos[intervaloIdx] : '1d';
+
+        html += `
+          <div class="question-card" id="card-${q.id}" style="${revisada ? 'opacity:0.5;' : ''}">
+            <div class="question-meta">
+              <span class="tag tag-materia">${q.materia || 'Sem matéria'}</span>
+              ${q.topico ? `<span class="tag">${q.topico}</span>` : ''}
+              <span class="tag tag-intervalo">⏱ ${intervaloLabel}</span>
+              <span class="tag">📅 ${q.data || ''}</span>
+            </div>
+            <div class="question-enunciado">${truncate(q.enunciado, 200)}</div>
+            <div class="answers-box">
+              <span class="answer-pill answer-wrong">❌ Sua: ${q.resposta_usuario}</span>
+              <span class="answer-pill answer-correct">✅ Correta: ${q.resposta_correta}</span>
+            </div>
+            <div class="question-actions">
+              <button class="btn-revisei btn-revisei-errei" onclick="revisar(${q.id}, false)" ${revisada ? 'disabled' : ''}>
+                Errei de novo
+              </button>
+              <button class="btn-revisei btn-revisei-ok" onclick="revisar(${q.id}, true)" ${revisada ? 'disabled' : ''}>
+                Revisei ✓
+              </button>
+            </div>
+          </div>`;
+      }
+      container.innerHTML = html;
+    }
+
+    function renderPadroes(padroes) {
+      const container = document.getElementById('lista-padroes');
+
+      let filtered = padroes;
+      if (filtroMateria) {
+        filtered = filtered.filter(p => p.materia === filtroMateria);
+      }
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">📊</div>
+            <p>Nenhum padrão de erro identificado ainda. Continue praticando!</p>
+          </div>`;
+        return;
+      }
+
+      let html = '';
+      for (const p of filtered) {
+        html += `
+          <div class="padrao-card">
+            <div class="padrao-header">
+              <span class="padrao-text">${p.padrao}</span>
+              <span class="padrao-count">${p.count}x</span>
+            </div>
+            <div class="padrao-detail">
+              ${p.materia} → ${p.topico} | Resposta errada frequente: "${p.resposta_errada}"
+            </div>
+          </div>`;
+      }
+      container.innerHTML = html;
+    }
+
+    async function revisar(questaoId, acertou) {
+      try {
+        const res = await fetch(`${API_BASE}/api/questoes/erros/revisar/${questaoId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ acertou })
+        });
+        if (!res.ok) throw new Error('Erro ao registrar revisão');
+        const data = await res.json();
+
+        revisadasHoje.add(questaoId);
+
+        // Visual feedback
+        const card = document.getElementById(`card-${questaoId}`);
+        if (card) {
+          card.style.opacity = '0.5';
+          card.querySelectorAll('button').forEach(b => b.disabled = true);
+          // Show result toast
+          const msg = acertou
+            ? `✅ Próxima revisão em ${data.novo_intervalo} dia${data.novo_intervalo > 1 ? 's' : ''}`
+            : `🔄 Voltará amanhã para revisão`;
+          showToast(msg);
+        }
+
+        updateProgress();
+      } catch (err) {
+        showToast('❌ Erro: ' + err.message);
+      }
+    }
+
+    function truncate(text, max) {
+      if (!text) return '';
+      return text.length > max ? text.substring(0, max) + '...' : text;
+    }
+
+    function showToast(msg) {
+      const toast = document.createElement('div');
+      toast.style.cssText = `
+        position: fixed; bottom: 24px; right: 24px;
+        padding: 12px 20px; border-radius: 10px;
+        background: var(--ce-card); color: var(--ce-text);
+        font-size: 0.85rem; font-weight: 600;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+        z-index: 9999; animation: fadeIn 0.3s ease;
+      `;
+      toast.textContent = msg;
+      document.body.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity 0.3s';
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+
+    // Init
+    fetchCaderno();
+  </script>
+</body>
+</html>
