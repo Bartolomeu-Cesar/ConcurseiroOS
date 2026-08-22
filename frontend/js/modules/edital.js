@@ -358,7 +358,6 @@ export async function editarEdital(editalNome) {
     <div style="background:#1e1e2e;border:1px solid #45475a;border-radius:8px;padding:12px;margin-bottom:12px;" data-info-id="${info.id || ''}">
       <div style="font-size:0.82rem;color:#cba6f7;font-weight:600;margin-bottom:8px;">${info.cargo || 'Novo Cargo'}</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:0.78rem;">
-        <label style="color:#9399b2;">Nome do Edital<input type="text" class="ei-field" data-idx="${idx}" data-field="edital_nome" value="${escapeHtml(info.edital_nome)}" style="width:100%;background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:4px;padding:4px 6px;margin-top:2px;font-size:0.78rem;"></label>
         <label style="color:#9399b2;">Cargo<input type="text" class="ei-field" data-idx="${idx}" data-field="cargo" value="${escapeHtml(info.cargo)}" style="width:100%;background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:4px;padding:4px 6px;margin-top:2px;font-size:0.78rem;"></label>
         <label style="color:#9399b2;">Órgão<input type="text" class="ei-field" data-idx="${idx}" data-field="orgao" value="${escapeHtml(info.orgao)}" style="width:100%;background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:4px;padding:4px 6px;margin-top:2px;font-size:0.78rem;"></label>
         <label style="color:#9399b2;">Banca<input type="text" class="ei-field" data-idx="${idx}" data-field="banca" value="${escapeHtml(info.banca)}" style="width:100%;background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:4px;padding:4px 6px;margin-top:2px;font-size:0.78rem;"></label>
@@ -381,6 +380,11 @@ export async function editarEdital(editalNome) {
       <h3 style="color:#cba6f7;margin:0;">✏️ Editar: ${escapeHtml(editalNome)}</h3>
       <button onclick="document.getElementById('editar-edital-modal').remove()" style="background:none;border:none;color:#f38ba8;font-size:1.2rem;cursor:pointer;">✕</button>
     </div>
+    <div style="background:#1e1e2e;border:1px solid #f9e2af;border-radius:8px;padding:12px;margin-bottom:16px;">
+      <label style="color:#f9e2af;font-size:0.85rem;font-weight:600;">📝 Nome do Edital (aplica para todos os cargos)
+        <input type="text" id="edital-nome-global" value="${escapeHtml(editalNome)}" style="width:100%;background:#313244;color:#cdd6f4;border:1px solid #45475a;border-radius:6px;padding:8px 10px;margin-top:6px;font-size:0.9rem;font-weight:600;">
+      </label>
+    </div>
     ${cardsHtml}
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
       <button onclick="document.getElementById('editar-edital-modal').remove()" style="background:#45475a;color:#cdd6f4;border:none;border-radius:8px;padding:10px 20px;cursor:pointer;">Cancelar</button>
@@ -392,23 +396,31 @@ export async function editarEdital(editalNome) {
 }
 
 export async function salvarEdicaoEdital(editalNomeOriginal, ids) {
+  // Get global name (single rename for all cargos)
+  const globalNameEl = document.getElementById('edital-nome-global');
+  const novoNome = globalNameEl ? globalNameEl.value.trim() : editalNomeOriginal;
+
+  // Rename edital first (cascades to all cargos)
+  if (novoNome && novoNome !== editalNomeOriginal) {
+    await fetch('/api/edital/renomear', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ antigo: editalNomeOriginal, novo: novoNome }) });
+  }
+
+  // Save per-cargo metadata
   const groups = {};
   document.querySelectorAll('.ei-field').forEach(el => {
     const idx = el.dataset.idx;
     const field = el.dataset.field;
+    if (field === 'edital_nome') return; // Skip per-card edital_nome (use global)
     if (!groups[idx]) groups[idx] = {};
     groups[idx][field] = el.value;
   });
   let saved = 0;
   for (const [idx, data] of Object.entries(groups)) {
+    data.edital_nome = novoNome; // Use the global name
     const id = ids[parseInt(idx)];
     if (id) { await fetch(`/api/edital/info/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) }); }
     else { await fetch('/api/edital/info', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) }); }
     saved++;
-  }
-  const novoNome = groups['0']?.edital_nome;
-  if (novoNome && novoNome !== editalNomeOriginal) {
-    await fetch('/api/edital/renomear', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ antigo: editalNomeOriginal, novo: novoNome }) });
   }
   document.getElementById('editar-edital-modal').remove();
   toast(`Metadados salvos (${saved} cargos)`, 'success');
