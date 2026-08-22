@@ -753,3 +753,7 @@ body.light-theme .input-battle { background: #eff1f5; border-color: #bcc0cc; col
 body.light-theme .timer-bar { background: #ccd0da; }
 body.light-theme .materia-badge { background: #dce0e8; color: #1e66f5; }
 body.light-theme .round-badge { background: #8839ef; color: #eff1f5; }
+
+/* Sidebar: hide scrollbar but keep scroll functionality */
+.sidebar { scrollbar-width: none; -ms-overflow-style: none; }
+.sidebar::-webkit-scrollbar { display: none; }
