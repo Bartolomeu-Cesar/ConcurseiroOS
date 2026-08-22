@@ -105,7 +105,7 @@ class Settings:
     AI_DAILY_TOKEN_LIMIT: int = int(os.environ.get("AI_DAILY_TOKEN_LIMIT", "50000"))
 
     # Rate Limiting (requests per minute)
-    RATE_LIMIT_GENERAL: int = int(os.environ.get("RATE_LIMIT_GENERAL", "200"))
+    RATE_LIMIT_GENERAL: int = int(os.environ.get("RATE_LIMIT_GENERAL", "500"))
     RATE_LIMIT_AUTH: int = int(os.environ.get("RATE_LIMIT_AUTH", "10"))
 
     # Push Notifications (VAPID)
