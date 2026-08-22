@@ -27,6 +27,11 @@
   // Guard: don't inject sidebar twice
   if (document.getElementById('sidebar')) return;
 
+  function initSidebar() {
+    // Double-check guard after DOMContentLoaded
+    if (document.getElementById('sidebar')) return;
+    if (!document.body) return;
+
   const currentPath = window.location.pathname;
 
   function isActive(path) {
@@ -294,6 +299,15 @@
       window.location.href = '/dashboard.html';
     }
   };
+
+  } // end initSidebar
+
+  // Run sidebar init when DOM is ready
+  if (document.body && document.readyState !== 'loading') {
+    initSidebar();
+  } else {
+    document.addEventListener('DOMContentLoaded', initSidebar);
+  }
 })();
 
 
@@ -408,8 +422,13 @@
 
 // Load battle notification system (global)
 (function() {
-  const s = document.createElement('script');
-  s.src = '/battle-notify.js';
-  s.defer = true;
-  document.body.appendChild(s);
+  function loadBattleNotify() {
+    if (!document.body) return;
+    const s = document.createElement('script');
+    s.src = '/battle-notify.js';
+    s.defer = true;
+    document.body.appendChild(s);
+  }
+  if (document.body) loadBattleNotify();
+  else document.addEventListener('DOMContentLoaded', loadBattleNotify);
 })();
