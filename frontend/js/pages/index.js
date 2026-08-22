@@ -35,10 +35,26 @@ window.closeSidebar = closeSidebar;
 
 // Restore last active tab
 document.addEventListener('DOMContentLoaded', () => {
-  const saved = localStorage.getItem('concurseiro_active_tab');
-  if (saved) {
-    const btn = document.querySelector(`[data-nav="${saved}"]`);
-    if (btn) navigateTo(saved, btn);
+  // Check URL hash first (e.g., /#ciclo, /#edital, /#flashcards)
+  const hash = window.location.hash.replace('#', '');
+  const hashTabMap = {
+    'ciclo': 'tab-ciclo',
+    'edital': 'tab-edital',
+    'flashcards': 'tab-flashcards',
+    'sumulas': 'tab-sumulas',
+    'pdfs': 'tab-pdfs',
+  };
+
+  if (hash && hashTabMap[hash]) {
+    const tabId = hashTabMap[hash];
+    const btn = document.querySelector(`[data-nav="${tabId}"]`);
+    if (btn) navigateTo(tabId, btn);
+  } else {
+    const saved = localStorage.getItem('concurseiro_active_tab');
+    if (saved) {
+      const btn = document.querySelector(`[data-nav="${saved}"]`);
+      if (btn) navigateTo(saved, btn);
+    }
   }
   // Load user info for avatar
   loadUserAvatar();

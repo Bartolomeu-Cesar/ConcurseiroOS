@@ -243,9 +243,9 @@
       closeSidebar();
       return false;
     }
-    // If on another page, redirect
-    localStorage.setItem('concurseiro_active_tab', tabId);
-    window.location.href = '/';
+    // If on another page, redirect with hash
+    const hashMap = {'tab-ciclo':'ciclo','tab-edital':'edital','tab-flashcards':'flashcards','tab-sumulas':'sumulas','tab-pdfs':'pdfs'};
+    window.location.href = '/#' + (hashMap[tabId] || '');
     return false;
   };
 
