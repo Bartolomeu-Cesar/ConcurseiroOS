@@ -1,6 +1,43 @@
 /**
  * <modal-dialog> — Accessible modal with slot-based content.
  * ConcurseiroOS Web Component
+ *
+ * @usage
+ * <!-- Basic modal with title and content -->
+ * <modal-dialog title="Confirmar Ação">
+ *   <p slot="body">Tem certeza que deseja continuar?</p>
+ *   <div slot="footer">
+ *     <button onclick="this.closest('modal-dialog').close()">Cancelar</button>
+ *     <button onclick="confirm()">Confirmar</button>
+ *   </div>
+ * </modal-dialog>
+ *
+ * <!-- Open programmatically -->
+ * <script>
+ *   document.querySelector('modal-dialog').open();
+ * </script>
+ *
+ * <!-- Non-closable modal (no X button, no ESC) -->
+ * <modal-dialog title="Processando..." closable="false">
+ *   <p>Aguarde...</p>
+ * </modal-dialog>
+ *
+ * @attributes
+ *   title    — Modal header title text
+ *   open     — If present, modal is visible
+ *   closable — "false" to disable close button/ESC. Default: true
+ *
+ * @methods
+ *   open()   — Show the modal
+ *   close()  — Hide the modal
+ *
+ * @events
+ *   modal-close — Fired when the modal is closed
+ *
+ * @slots
+ *   body   — Main content area
+ *   footer — Footer area (buttons, actions)
+ *   (default) — Also goes into body area
  */
 class ModalDialog extends HTMLElement {
   static get observedAttributes() {

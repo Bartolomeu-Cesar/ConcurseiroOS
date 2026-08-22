@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Web Components Demo — ConcurseiroOS</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <script type="module" src="/js/components/index.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1e1e2e;
+      color: #cdd6f4;
+      min-height: 100vh;
+      padding: 2rem;
+      line-height: 1.6;
+    }
+
+    h1 {
+      font-size: 2rem;
+      color: #cba6f7;
+      margin-bottom: 0.5rem;
+    }
+
+    .subtitle {
+      color: #9399b2;
+      margin-bottom: 2.5rem;
+      font-size: 0.95rem;
+    }
+
+    section {
+      margin-bottom: 3rem;
+      background: #181825;
+      border-radius: 12px;
+      padding: 1.5rem 2rem;
+      border: 1px solid #313244;
+    }
+
+    section h2 {
+      font-size: 1.3rem;
+      color: #89b4fa;
+      margin-bottom: 0.5rem;
+    }
+
+    section p.desc {
+      color: #9399b2;
+      margin-bottom: 1.25rem;
+      font-size: 0.9rem;
+    }
+
+    .demo-grid {
+      display: grid;
+      gap: 1.5rem;
+    }
+
+    .demo-grid.two-col {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    @media (max-width: 768px) {
+      .demo-grid.two-col { grid-template-columns: 1fr; }
+    }
+
+    .demo-label {
+      font-size: 0.8rem;
+      color: #a6adc8;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 0.5rem;
+      font-weight: 600;
+    }
+
+    .demo-box {
+      background: #1e1e2e;
+      border-radius: 8px;
+      padding: 1.25rem;
+      border: 1px solid #45475a;
+    }
+
+    /* Component styling overrides for dark theme */
+    question-card {
+      --card-bg: #313244;
+      --text-color: #cdd6f4;
+      --border-color: #45475a;
+      --badge-bg: #45475a;
+      --badge-color: #cdd6f4;
+      --badge-dificuldade-bg: #f9e2af33;
+      --badge-dificuldade-color: #f9e2af;
+      --alt-border: #45475a;
+      --alt-hover-bg: #45475a;
+      --alt-hover-border: #89b4fa;
+      --alt-selected-bg: #89b4fa22;
+      --alt-selected-border: #89b4fa;
+      --alt-correct-bg: #a6e3a122;
+      --alt-correct-border: #a6e3a1;
+      --alt-wrong-bg: #f38ba822;
+      --alt-wrong-border: #f38ba8;
+      --card-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+
+    timer-widget {
+      --card-bg: #313244;
+      --text-color: #cdd6f4;
+      --border-color: #45475a;
+      --timer-color: #cba6f7;
+      --timer-warning-color: #fab387;
+      --timer-danger-color: #f38ba8;
+      --timer-bar-color: #cba6f7;
+      --progress-track-bg: #45475a;
+      --text-muted: #9399b2;
+    }
+
+    progress-bar {
+      --text-color: #cdd6f4;
+      --text-muted: #9399b2;
+      --progress-track-bg: #45475a;
+      --progress-color-low: #f38ba8;
+      --progress-color-mid: #f9e2af;
+      --progress-color-high: #a6e3a1;
+    }
+
+    modal-dialog {
+      --modal-bg: #313244;
+      --text-color: #cdd6f4;
+      --border-color: #45475a;
+      --text-muted: #9399b2;
+      --modal-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      --close-btn-hover-bg: #45475a;
+    }
+
+    .btn {
+      padding: 0.6rem 1.2rem;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      font-weight: 600;
+      transition: opacity 0.2s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn-primary { background: #cba6f7; color: #1e1e2e; }
+    .btn-secondary { background: #45475a; color: #cdd6f4; }
+    .btn-danger { background: #f38ba8; color: #1e1e2e; }
+
+    .timer-controls {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .event-log {
+      margin-top: 0.75rem;
+      padding: 0.5rem 0.75rem;
+      background: #11111b;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      color: #a6e3a1;
+      font-family: monospace;
+      max-height: 80px;
+      overflow-y: auto;
+    }
+
+    code {
+      background: #11111b;
+      padding: 0.15em 0.4em;
+      border-radius: 4px;
+      font-size: 0.85em;
+      color: #f9e2af;
+    }
+  </style>
+</head>
+<body>
+  <h1>🧩 Web Components Demo</h1>
+  <p class="subtitle">ConcurseiroOS component library — live examples and usage reference</p>
+
+  <!-- ===================== QUESTION CARD ===================== -->
+  <section>
+    <h2>📋 &lt;question-card&gt;</h2>
+    <p class="desc">Renders a question with clickable alternatives. Supports <code>answer</code> and <code>review</code> modes.</p>
+
+    <div class="demo-grid two-col">
+      <div class="demo-box">
+        <div class="demo-label">Answer Mode (interactive)</div>
+        <question-card
+          enunciado="De acordo com a Constituição Federal de 1988, são direitos sociais, EXCETO:"
+          materia="Direito Constitucional"
+          dificuldade="Médio"
+          alternativas='{"a":"Educação e saúde","b":"Trabalho e moradia","c":"Propriedade privada","d":"Lazer e segurança","e":"Previdência social"}'
+          resposta-correta="c"
+          mode="answer">
+        </question-card>
+        <div class="event-log" id="qcard-log">Clique em uma alternativa...</div>
+      </div>
+
+      <div class="demo-box">
+        <div class="demo-label">Review Mode (read-only)</div>
+        <question-card
+          enunciado="Qual princípio administrativo impõe ao agente público o dever de atuar conforme a lei?"
+          materia="Direito Administrativo"
+          dificuldade="Fácil"
+          alternativas='{"a":"Moralidade","b":"Publicidade","c":"Legalidade","d":"Eficiência"}'
+          resposta-correta="c"
+          mode="review">
+        </question-card>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== TIMER WIDGET ===================== -->
+  <section>
+    <h2>⏱️ &lt;timer-widget&gt;</h2>
+    <p class="desc">Countdown or stopwatch timer with optional progress bar. Use methods <code>start()</code>, <code>pause()</code>, <code>reset()</code>.</p>
+
+    <div class="demo-grid two-col">
+      <div class="demo-box">
+        <div class="demo-label">Countdown (60s, with bar)</div>
+        <timer-widget id="timer-countdown" seconds="60" direction="down" show-bar></timer-widget>
+        <div class="timer-controls">
+          <button class="btn btn-primary" onclick="document.getElementById('timer-countdown').start()">▶ Start</button>
+          <button class="btn btn-secondary" onclick="document.getElementById('timer-countdown').pause()">⏸ Pause</button>
+          <button class="btn btn-danger" onclick="document.getElementById('timer-countdown').reset()">↺ Reset</button>
+        </div>
+      </div>
+
+      <div class="demo-box">
+        <div class="demo-label">Stopwatch (count up, auto-start)</div>
+        <timer-widget id="timer-stopwatch" seconds="300" direction="up" auto-start show-bar></timer-widget>
+        <div class="timer-controls">
+          <button class="btn btn-secondary" onclick="document.getElementById('timer-stopwatch').pause()">⏸ Pause</button>
+          <button class="btn btn-primary" onclick="document.getElementById('timer-stopwatch').start()">▶ Resume</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== PROGRESS BAR ===================== -->
+  <section>
+    <h2>📊 &lt;progress-bar&gt;</h2>
+    <p class="desc">Animated progress bar with auto-coloring based on value: red &lt;30%, yellow 30–70%, green &gt;70%.</p>
+
+    <div class="demo-grid">
+      <div class="demo-box">
+        <div class="demo-label">Auto-colored progress bars</div>
+        <div style="display: flex; flex-direction: column; gap: 1rem;">
+          <progress-bar value="85" label="Direito Constitucional" show-pct></progress-bar>
+          <progress-bar value="52" label="Direito Administrativo" show-pct></progress-bar>
+          <progress-bar value="18" label="Direito Penal" show-pct></progress-bar>
+          <progress-bar value="100" label="Português" show-pct></progress-bar>
+        </div>
+      </div>
+
+      <div class="demo-box">
+        <div class="demo-label">Custom colors & dynamic update</div>
+        <div style="display: flex; flex-direction: column; gap: 1rem;">
+          <progress-bar id="progress-dynamic" value="0" label="Progresso do Simulado" color="#cba6f7" show-pct></progress-bar>
+          <div class="timer-controls">
+            <button class="btn btn-primary" onclick="animateProgress()">Animar</button>
+            <button class="btn btn-secondary" onclick="document.getElementById('progress-dynamic').setAttribute('value', '0')">Reset</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== MODAL DIALOG ===================== -->
+  <section>
+    <h2>💬 &lt;modal-dialog&gt;</h2>
+    <p class="desc">Accessible modal dialog with slot-based content. Closes on ESC, backdrop click, or <code>.close()</code>.</p>
+
+    <div class="demo-grid two-col">
+      <div class="demo-box">
+        <div class="demo-label">Standard modal</div>
+        <button class="btn btn-primary" onclick="document.getElementById('modal-demo').open()">Abrir Modal</button>
+        <modal-dialog id="modal-demo" title="Confirmar Exclusão">
+          <p slot="body" style="color: #cdd6f4; line-height: 1.6;">Tem certeza que deseja excluir este caderno de erros? Esta ação não pode ser desfeita.</p>
+          <div slot="footer" style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+            <button class="btn btn-secondary" onclick="document.getElementById('modal-demo').close()">Cancelar</button>
+            <button class="btn btn-danger" onclick="document.getElementById('modal-demo').close(); logModal('Ação confirmada!')">Excluir</button>
+          </div>
+        </modal-dialog>
+      </div>
+
+      <div class="demo-box">
+        <div class="demo-label">Info modal (non-closable)</div>
+        <button class="btn btn-primary" onclick="document.getElementById('modal-info').open()">Abrir Info</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('modal-info').close()">Fechar via JS</button>
+        <modal-dialog id="modal-info" title="Processando..." closable="false">
+          <p style="color: #cdd6f4;">Este modal não pode ser fechado pelo usuário. Use <code>.close()</code> programaticamente.</p>
+          <div slot="footer" style="text-align: right;">
+            <button class="btn btn-primary" onclick="document.getElementById('modal-info').close()">Concluído</button>
+          </div>
+        </modal-dialog>
+        <div class="event-log" id="modal-log">Eventos aparecerão aqui...</div>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    // Question card event logging
+    document.querySelector('question-card[mode="answer"]').addEventListener('answer-selected', (e) => {
+      const log = document.getElementById('qcard-log');
+      const { letter, correct } = e.detail;
+      log.textContent = `Selecionou: ${letter.toUpperCase()} — ${correct ? '✓ Correta!' : '✗ Incorreta'}`;
+      log.style.color = correct ? '#a6e3a1' : '#f38ba8';
+    });
+
+    // Progress bar animation
+    function animateProgress() {
+      const bar = document.getElementById('progress-dynamic');
+      let value = 0;
+      bar.setAttribute('value', '0');
+      const interval = setInterval(() => {
+        value += 2;
+        bar.setAttribute('value', String(Math.min(value, 100)));
+        if (value >= 100) clearInterval(interval);
+      }, 50);
+    }
+
+    // Modal event logging
+    function logModal(msg) {
+      document.getElementById('modal-log').textContent = msg;
+    }
+
+    document.getElementById('modal-demo').addEventListener('modal-close', () => {
+      logModal('modal-close event fired');
+    });
+
+    document.getElementById('modal-info').addEventListener('modal-close', () => {
+      logModal('modal-info closed via JS');
+    });
+  </script>
+</body>
+</html>

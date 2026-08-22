@@ -1,6 +1,39 @@
 /**
  * <question-card> — Renders a question with clickable alternatives.
  * ConcurseiroOS Web Component
+ *
+ * @usage
+ * <!-- Answer mode (default): user can select alternatives -->
+ * <question-card
+ *   enunciado="Qual é a capital do Brasil?"
+ *   materia="Geografia"
+ *   dificuldade="Fácil"
+ *   alternativas='{"a":"São Paulo","b":"Brasília","c":"Rio de Janeiro","d":"Salvador"}'
+ *   resposta-correta="b"
+ *   mode="answer">
+ * </question-card>
+ *
+ * <!-- Review mode: shows correct/wrong answers -->
+ * <question-card
+ *   enunciado="Qual é a capital do Brasil?"
+ *   materia="Geografia"
+ *   dificuldade="Fácil"
+ *   alternativas='{"a":"São Paulo","b":"Brasília","c":"Rio de Janeiro","d":"Salvador"}'
+ *   resposta-correta="b"
+ *   mode="review">
+ * </question-card>
+ *
+ * @attributes
+ *   enunciado        — The question text
+ *   materia          — Subject badge (optional)
+ *   dificuldade      — Difficulty badge (optional)
+ *   alternativas     — JSON object of letter->text pairs
+ *   resposta-correta — Correct answer letter
+ *   mode             — "answer" (interactive) or "review" (shows results)
+ *
+ * @events
+ *   answer-selected  — Fired when user picks an alternative
+ *                      detail: { letter, correct }
  */
 class QuestionCard extends HTMLElement {
   static get observedAttributes() {

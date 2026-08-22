@@ -1,6 +1,32 @@
 /**
  * <progress-bar> — Animated progress bar with auto-coloring.
  * ConcurseiroOS Web Component
+ *
+ * @usage
+ * <!-- Basic with label and percentage -->
+ * <progress-bar value="72" label="Direito Constitucional" show-pct></progress-bar>
+ *
+ * <!-- Custom color (overrides auto-coloring) -->
+ * <progress-bar value="45" label="Administrativo" color="#89b4fa" show-pct></progress-bar>
+ *
+ * <!-- Auto-coloring: red <30%, yellow 30-70%, green >70% -->
+ * <progress-bar value="20" label="Penal" show-pct></progress-bar>
+ *
+ * <!-- Minimal (no label, no percentage) -->
+ * <progress-bar value="60"></progress-bar>
+ *
+ * @attributes
+ *   value    — Percentage value 0–100 (required)
+ *   label    — Text label shown above the bar (optional)
+ *   color    — Custom bar color, overrides auto-coloring (optional)
+ *   show-pct — If present, shows percentage number
+ *
+ * @css-custom-properties
+ *   --progress-height       — Bar height (default: 10px)
+ *   --progress-track-bg     — Track background color
+ *   --progress-color-low    — Color when <30% (default: red)
+ *   --progress-color-mid    — Color when 30-70% (default: yellow)
+ *   --progress-color-high   — Color when >70% (default: green)
  */
 class ProgressBar extends HTMLElement {
   static get observedAttributes() {

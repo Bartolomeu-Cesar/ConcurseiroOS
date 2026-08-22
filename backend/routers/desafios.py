@@ -190,17 +190,18 @@ def get_desafio_diario(conn=Depends(get_db_session), user_id: int = Depends(get_
         for qid in questao_ids:
             q = conn.execute("SELECT * FROM questoes WHERE id = ? AND user_id = ?", (qid, user_id)).fetchone()
             if q:
+                q_dict = dict(q)
                 alternativas = []
                 for letra in ['a', 'b', 'c', 'd', 'e']:
-                    alt = q[f"alternativa_{letra}"]
+                    alt = q_dict.get(f"alternativa_{letra}", "")
                     if alt:
                         alternativas.append({"letra": letra.upper(), "texto": alt})
                 questoes.append({
-                    "id": q["id"],
-                    "materia": q["materia"],
-                    "enunciado": q["enunciado"],
+                    "id": q_dict["id"],
+                    "materia": q_dict["materia"],
+                    "enunciado": q_dict["enunciado"],
                     "alternativas": alternativas,
-                    "dificuldade": q.get("dificuldade", "Médio"),
+                    "dificuldade": q_dict.get("dificuldade", "Médio"),
                 })
         return {
             "id": existing["id"],
@@ -325,10 +326,20 @@ def responder_desafio_diario(body: DesafioDiarioResposta, conn=Depends(get_db_se
         })
 
     # Calcular streak bonus
-    streak_row = conn.execute(
-        "SELECT streak_atual FROM streaks WHERE user_id = ?", (user_id,)
-    ).fetchone()
-    streak_atual = streak_row["streak_atual"] if streak_row else 0
+    streak_atual = 0
+    try:
+        streak_row = conn.execute(
+            "SELECT streak_atual FROM streaks WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        streak_atual = streak_row["streak_atual"] if streak_row else 0
+    except Exception:
+        # streak_atual column may not exist in older schemas; fall back to utils
+        try:
+            from utils import get_streak_info
+            streak_info = get_streak_info(conn, user_id=user_id)
+            streak_atual = streak_info.get("streak_atual", 0)
+        except Exception:
+            streak_atual = 0
 
     # Calcular pontos
     pontos_base = acertos * 20  # 20pts por acerto

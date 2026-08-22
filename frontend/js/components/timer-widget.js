@@ -1,6 +1,32 @@
 /**
  * <timer-widget> — Countdown / Stopwatch timer with progress bar.
  * ConcurseiroOS Web Component
+ *
+ * @usage
+ * <!-- Countdown from 5 minutes with auto-start and progress bar -->
+ * <timer-widget seconds="300" direction="down" auto-start show-bar></timer-widget>
+ *
+ * <!-- Stopwatch (count up), manual start -->
+ * <timer-widget seconds="3600" direction="up" show-bar></timer-widget>
+ *
+ * <!-- Minimal countdown, no bar -->
+ * <timer-widget seconds="60" direction="down"></timer-widget>
+ *
+ * @attributes
+ *   seconds    — Total seconds for the timer (required)
+ *   direction  — "down" (countdown) or "up" (stopwatch). Default: "down"
+ *   auto-start — If present, timer starts automatically on mount
+ *   show-bar   — If present, shows a progress bar below the time
+ *
+ * @methods
+ *   start()    — Start the timer
+ *   pause()    — Pause the timer
+ *   reset()    — Reset to initial state
+ *   getTime()  — Get current time in seconds
+ *
+ * @events
+ *   timer-tick     — Fired every second. detail: { time, elapsed }
+ *   timer-complete — Fired when countdown reaches zero. detail: { elapsed }
  */
 class TimerWidget extends HTMLElement {
   static get observedAttributes() {

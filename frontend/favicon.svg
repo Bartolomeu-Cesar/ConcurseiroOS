@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Background circle -->
+  <rect width="32" height="32" rx="6" fill="#1e1e2e"/>
+  <!-- Graduation cap -->
+  <polygon points="16,6 4,12 16,18 28,12" fill="#cba6f7"/>
+  <rect x="14.5" y="18" width="3" height="6" fill="#cba6f7" opacity="0.7"/>
+  <path d="M9,14 L9,20 Q16,24 23,20 L23,14 L16,18 Z" fill="#cba6f7" opacity="0.85"/>
+  <!-- Tassel -->
+  <line x1="26" y1="12" x2="26" y2="20" stroke="#cba6f7" stroke-width="1.2" stroke-linecap="round"/>
+  <circle cx="26" cy="20.5" r="1.2" fill="#cba6f7"/>
+</svg>
