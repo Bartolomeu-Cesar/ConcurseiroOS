@@ -51,6 +51,8 @@ class Settings:
     DB_PATH: str = os.environ.get("DB_PATH", "./progress.db")
     APP_VERSION: str = "2.3.0"
     BACKUP_DIR: str = os.environ.get("BACKUP_DIR", "./backups")
+    BACKUP_MAX_KEEP: int = int(os.environ.get("BACKUP_MAX_KEEP", "7"))
+    BACKUP_AUTO: bool = os.environ.get("BACKUP_AUTO", "true").lower() == "true"
     CORS_ORIGINS: list = [
         "http://localhost:8000",
         "http://127.0.0.1:8000",

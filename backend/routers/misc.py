@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from backup import create_backup, list_backups, restore_backup
+from backup import create_backup, delete_backup, list_backups, restore_from_backup
 from database import get_db_session, rebuild_search_index
 from deps import get_user_id, get_authenticated_user_id
 from logger import log
@@ -63,32 +63,58 @@ class RestoreRequest(BaseModel):
     filename: str
 
 
-@router.get("/api/backups", summary="Listar backups")
+@router.get("/api/backups", summary="Listar backups", tags=["Sistema"])
 def get_backups(user_id: int = Depends(get_user_id)):
+    """Lista todos os backups disponíveis com tamanho e data."""
     if user_id != 1:
         raise HTTPException(status_code=403, detail="Acesso restrito ao administrador")
     return list_backups()
 
 
-@router.post("/api/backups", summary="Criar backup")
+@router.post("/api/backups", summary="Criar backup", tags=["Sistema"])
 def create_backup_endpoint(user_id: int = Depends(get_user_id)):
+    """Cria um backup manual do banco de dados."""
     if user_id != 1:
         raise HTTPException(status_code=403, detail="Acesso restrito ao administrador")
-    # TODO: file size check (10MB max) placeholder
     path = create_backup(DB_PATH)
     log.info(f"Manual backup created: {path}")
     return {"ok": True, "path": path}
 
 
-@router.post("/api/backups/restore", summary="Restaurar backup")
-def restore_backup_endpoint(body: RestoreRequest, user_id: int = Depends(get_user_id)):
+@router.post("/api/backups/restore/{filename}", summary="Restaurar backup", tags=["Sistema"])
+def restore_backup_endpoint(filename: str, user_id: int = Depends(get_user_id)):
+    """Restaura um backup específico (admin only). Cria backup do estado atual antes."""
     if user_id != 1:
         raise HTTPException(status_code=403, detail="Acesso restrito ao administrador")
-    success = restore_backup(body.filename, DB_PATH)
+    success = restore_from_backup(filename, DB_PATH)
+    if not success:
+        raise HTTPException(status_code=404, detail="Backup não encontrado")
+    log.info(f"Backup restored: {filename}")
+    return {"ok": True, "restored": filename}
+
+
+@router.post("/api/backups/restore", summary="Restaurar backup (body)", tags=["Sistema"])
+def restore_backup_endpoint_body(body: RestoreRequest, user_id: int = Depends(get_user_id)):
+    """Restaura um backup específico (compatibilidade com body request)."""
+    if user_id != 1:
+        raise HTTPException(status_code=403, detail="Acesso restrito ao administrador")
+    success = restore_from_backup(body.filename, DB_PATH)
     if not success:
         raise HTTPException(status_code=404, detail="Backup não encontrado")
     log.info(f"Backup restored: {body.filename}")
     return {"ok": True, "restored": body.filename}
+
+
+@router.delete("/api/backups/{filename}", summary="Deletar backup", tags=["Sistema"])
+def delete_backup_endpoint(filename: str, user_id: int = Depends(get_user_id)):
+    """Remove um backup específico (admin only)."""
+    if user_id != 1:
+        raise HTTPException(status_code=403, detail="Acesso restrito ao administrador")
+    success = delete_backup(filename)
+    if not success:
+        raise HTTPException(status_code=404, detail="Backup não encontrado")
+    log.info(f"Backup deleted: {filename}")
+    return {"ok": True, "deleted": filename}
 
 
 # ============================================================

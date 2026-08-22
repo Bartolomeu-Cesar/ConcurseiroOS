@@ -353,9 +353,10 @@ log.info("ConcurseiroOS starting...")
 init_db()
 
 # Auto-backup diário
-from backup import auto_backup_if_needed
+from backup import auto_backup_if_needed, schedule_daily_backup
 
 auto_backup_if_needed(settings.DB_PATH)
+schedule_daily_backup(settings.DB_PATH)
 
 # Disponibilizar APP_START_TIME para o router misc
 misc.APP_START_TIME = APP_START_TIME

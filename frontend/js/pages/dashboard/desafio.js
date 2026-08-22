@@ -1,5 +1,6 @@
 // desafio.js — Desafio diário card and modal
 import { getCSSVar } from './helpers.js';
+import '/js/components/question-card.js';
 
 let desafioDiarioData = null;
 let desafioQuestoes = [];
@@ -70,6 +71,11 @@ function showDesafioModal() {
   document.body.appendChild(overlay);
 }
 
+function escapeAttrDesafio(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 function showDesafioQuestion() {
   if (desafioIdx >= desafioQuestoes.length) {
     submitDesafioRespostas();
@@ -79,19 +85,41 @@ function showDesafioQuestion() {
   const q = desafioQuestoes[desafioIdx];
   const body = document.getElementById('desafio-body');
 
+  // Build alternativas object for question-card
+  const alts = {};
+  if (q.alternativas && Array.isArray(q.alternativas)) {
+    for (const a of q.alternativas) {
+      alts[a.letra] = a.texto;
+    }
+  } else if (q.alternativas && typeof q.alternativas === 'object') {
+    Object.assign(alts, q.alternativas);
+  }
+
   body.innerHTML = `
     <div class="desafio-question-num">Questão ${desafioIdx + 1} de ${desafioQuestoes.length}</div>
-    <div class="desafio-question-materia">${q.materia}</div>
-    <div class="desafio-question-text">${q.enunciado}</div>
-    <div class="desafio-alternatives" id="desafio-alts">
-      ${q.alternativas.map(a => `
-        <button class="desafio-alt-btn" onclick="selectDesafioAlternativa('${a.letra}', this)" data-letra="${a.letra}">
-          <span class="alt-letra">${a.letra}</span>
-          <span>${a.texto}</span>
-        </button>
-      `).join('')}
-    </div>
+    <question-card
+      enunciado="${escapeAttrDesafio(q.enunciado)}"
+      materia="${escapeAttrDesafio(q.materia)}"
+      dificuldade="${escapeAttrDesafio(q.dificuldade || 'Médio')}"
+      alternativas='${JSON.stringify(alts).replace(/'/g, '&#39;')}'
+      resposta-correta="${escapeAttrDesafio(q.resposta_correta)}"
+      mode="answer"
+    ></question-card>
   `;
+
+  // Listen for the answer-selected event from the component
+  const questionCard = body.querySelector('question-card');
+  questionCard.addEventListener('answer-selected', (e) => {
+    clearInterval(desafioTimer);
+    const { letter } = e.detail;
+
+    desafioRespostas.push({ questao_id: desafioQuestoes[desafioIdx].id, resposta: letter });
+
+    setTimeout(() => {
+      desafioIdx++;
+      showDesafioQuestion();
+    }, 400);
+  }, { once: true });
 
   desafioTimerSeg = 15;
   const timerFill = document.getElementById('desafio-timer-fill');
@@ -122,23 +150,7 @@ function showDesafioQuestion() {
   }, 1000);
 }
 
-export function selectDesafioAlternativa(letra, btn) {
-  clearInterval(desafioTimer);
-
-  document.querySelectorAll('.desafio-alt-btn').forEach(b => {
-    b.classList.remove('selected');
-    b.disabled = true;
-    b.style.pointerEvents = 'none';
-  });
-  btn.classList.add('selected');
-
-  desafioRespostas.push({ questao_id: desafioQuestoes[desafioIdx].id, resposta: letra });
-
-  setTimeout(() => {
-    desafioIdx++;
-    showDesafioQuestion();
-  }, 400);
-}
+// selectDesafioAlternativa is no longer needed — question-card dispatches 'answer-selected' event
 
 async function submitDesafioRespostas() {
   clearInterval(desafioTimer);
@@ -220,5 +232,4 @@ function spawnDesafioConfetti() {
 
 // Window assignments for HTML onclick
 window.iniciarDesafioDiario = iniciarDesafioDiario;
-window.selectDesafioAlternativa = selectDesafioAlternativa;
 window.closeDesafioModal = closeDesafioModal;

@@ -58,9 +58,12 @@ function updateProgress() {
 
   const section = document.getElementById('progress-section');
   section.style.display = total > 0 ? 'block' : 'none';
-  document.getElementById('progress-text').textContent = `${done}/${total} revisadas hoje`;
-  document.getElementById('progress-pct').textContent = `${pct}%`;
-  document.getElementById('progress-fill').style.width = `${pct}%`;
+
+  const progressBar = document.getElementById('review-progress');
+  if (progressBar) {
+    progressBar.setAttribute('value', pct);
+    progressBar.setAttribute('label', `Revisão — ${done}/${total} revisadas hoje`);
+  }
 }
 
 function renderMateriasChips(por_materia) {
@@ -79,6 +82,11 @@ window.setFiltroMateria = function(mat) {
   filtroMateria = mat;
   renderAll();
 };
+
+function escapeAttr(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
 
 function renderRevisao(pendentes) {
   const container = document.getElementById('lista-revisao');
@@ -104,20 +112,27 @@ function renderRevisao(pendentes) {
     const intervaloIdx = [1, 3, 7, 14, 30].indexOf(q.intervalo_atual);
     const intervaloLabel = intervaloIdx >= 0 ? intervalos[intervaloIdx] : '1d';
 
+    // Build alternativas object for the component
+    const alts = {};
+    if (q.alternativas && Array.isArray(q.alternativas)) {
+      for (const a of q.alternativas) {
+        alts[a.letra] = a.texto;
+      }
+    } else if (q.alternativas && typeof q.alternativas === 'object') {
+      Object.assign(alts, q.alternativas);
+    }
+
     html += `
-      <div class="question-card" id="card-${q.id}" style="${revisada ? 'opacity:0.5;' : ''}">
-        <div class="question-meta">
-          <span class="tag tag-materia">${q.materia || 'Sem matéria'}</span>
-          ${q.topico ? `<span class="tag">${q.topico}</span>` : ''}
-          <span class="tag tag-intervalo">⏱ ${intervaloLabel}</span>
-          <span class="tag">📅 ${q.data || ''}</span>
-        </div>
-        <div class="question-enunciado">${truncate(q.enunciado, 200)}</div>
-        <div class="answers-box">
-          <span class="answer-pill answer-wrong">❌ Sua: ${q.resposta_usuario}</span>
-          <span class="answer-pill answer-correct">✅ Correta: ${q.resposta_correta}</span>
-        </div>
-        <div class="question-actions">
+      <div class="question-card-wrapper" id="card-${q.id}" style="${revisada ? 'opacity:0.5;' : ''}">
+        <question-card
+          enunciado="${escapeAttr(q.enunciado)}"
+          materia="${escapeAttr(q.materia)}"
+          dificuldade="${escapeAttr(q.dificuldade || 'Médio')}"
+          alternativas='${JSON.stringify(alts).replace(/'/g, '&#39;')}'
+          resposta-correta="${escapeAttr(q.resposta_correta)}"
+          mode="review"
+        ></question-card>
+        <div class="question-actions" style="margin-top:8px;">
           <button class="btn-revisei btn-revisei-errei" onclick="revisar(${q.id}, false)" ${revisada ? 'disabled' : ''}>
             Errei de novo
           </button>
