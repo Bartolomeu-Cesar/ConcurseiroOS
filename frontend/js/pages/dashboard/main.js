@@ -209,9 +209,9 @@ function renderCards(dash, streaks) {
   const cards = document.getElementById('cards');
   cards.innerHTML = `
     <div class="card">
-      <span class="card-label">Total de Horas</span>
+      <span class="card-label">Horas Estudadas (total)</span>
       <span class="card-value blue">${dash.total_horas}h</span>
-      <span class="card-sub">${dash.horas_estudo || 0}h estudo · ${dash.horas_questoes || 0}h questões</span>
+      <span class="card-sub">📚 ${dash.horas_estudo || 0}h leitura/teoria · ❓ ${dash.horas_questoes || 0}h questões</span>
     </div>
     <div class="card">
       <span class="card-label">Questões Resolvidas</span>
