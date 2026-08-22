@@ -68,33 +68,90 @@ function showCountdownSelector(futuras) {
   const existing = document.getElementById('countdown-selector-modal');
   if (existing) existing.remove();
 
+  // Fetch ALL cargos (including those without dates)
+  fetch('/api/countdown?include_all=true').then(r => r.json()).then(allProvas => {
+    const now = new Date();
+    const all = allProvas.map(p => {
+      if (!p.data_objetiva) return { ...p, dias: null };
+      const parts = p.data_objetiva.match(/(\d+)[-\/](\d+)[-\/](\d+)/);
+      if (!parts) return { ...p, dias: null };
+      let d;
+      if (parts[3].length === 4) d = new Date(parts[3], parts[2]-1, parts[1]);
+      else d = new Date(parts[1], parts[2]-1, parts[3]);
+      const dias = Math.ceil((d - now) / 86400000);
+      return { ...p, dias: dias > 0 ? dias : null };
+    });
+
+    _renderCountdownModal(all);
+  }).catch(() => {
+    // Fallback: use only futuras
+    _renderCountdownModal(futuras);
+  });
+}
+
+function _renderCountdownModal(allProvas) {
+  const existing = document.getElementById('countdown-selector-modal');
+  if (existing) existing.remove();
+
   const overlay = document.createElement('div');
   overlay.id = 'countdown-selector-modal';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
   overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
 
   const favorito = localStorage.getItem('countdown_favorito') || '';
-  let html = '<div style="background:var(--bg-surface);border-radius:12px;padding:20px;max-width:400px;width:90%;max-height:70vh;overflow-y:auto;">';
-  html += '<h3 style="color:var(--accent);margin:0 0 12px;">⏳ Escolher Prova para Acompanhar</h3>';
-  html += '<div style="display:grid;gap:8px;">';
-  futuras.forEach(p => {
-    const key = `${p.edital}|${p.cargo}`;
-    const isFav = key === favorito;
-    const cor = p.dias <= 30 ? 'var(--red)' : p.dias <= 60 ? 'var(--peach)' : 'var(--yellow)';
-    html += `<button onclick="selectCountdownFavorito('${key}')" style="display:flex;align-items:center;gap:10px;padding:12px;background:${isFav ? 'var(--bg-elevated)' : 'var(--bg)'};border:2px solid ${isFav ? 'var(--accent)' : 'var(--bg-elevated)'};border-radius:10px;cursor:pointer;text-align:left;width:100%;">
-      <span style="font-size:1.2rem;">${isFav ? '⭐' : '📅'}</span>
-      <div style="flex:1;">
-        <div style="font-size:0.85rem;font-weight:600;color:var(--text);">${p.edital} — ${p.cargo}</div>
-        <div style="font-size:0.75rem;color:var(--text-sub);">${p.data_objetiva || ''}</div>
-      </div>
-      <span style="font-size:0.9rem;font-weight:700;color:${cor};">${p.dias}d</span>
-    </button>`;
-  });
+
+  let html = '<div style="background:var(--bg-surface);border-radius:12px;padding:20px;max-width:440px;width:95%;max-height:80vh;display:flex;flex-direction:column;">';
+  html += `<h3 style="color:var(--accent);margin:0 0 12px;">⏳ Escolher Prova (${allProvas.length} cargos)</h3>`;
+  html += '<input type="text" id="countdown-filter-input" placeholder="Filtrar por nome, cargo ou edital..." style="width:100%;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.88rem;margin-bottom:12px;font-family:inherit;" autocomplete="off">';
+  html += '<div id="countdown-items-list" style="overflow-y:auto;flex:1;display:grid;gap:8px;">';
+  html += _buildCountdownItems(allProvas, favorito);
   html += '</div>';
   html += '<button onclick="selectCountdownFavorito(\'\')" style="display:block;width:100%;margin-top:10px;padding:10px;background:var(--bg-elevated);color:var(--text);border:none;border-radius:8px;cursor:pointer;font-size:0.82rem;">🔄 Automático (mais próxima)</button>';
   html += '</div>';
   overlay.innerHTML = html;
   document.body.appendChild(overlay);
+
+  // Focus search input
+  const input = document.getElementById('countdown-filter-input');
+  setTimeout(() => input.focus(), 100);
+
+  // Filter on input
+  input.oninput = function() {
+    const q = input.value.toLowerCase();
+    const filtered = allProvas.filter(p =>
+      p.edital.toLowerCase().includes(q) || p.cargo.toLowerCase().includes(q)
+    );
+    document.getElementById('countdown-items-list').innerHTML = _buildCountdownItems(filtered, favorito);
+  };
+}
+
+function _buildCountdownItems(provas, favorito) {
+  // Group by edital
+  const groups = {};
+  provas.forEach(p => {
+    if (!groups[p.edital]) groups[p.edital] = [];
+    groups[p.edital].push(p);
+  });
+
+  let html = '';
+  Object.keys(groups).sort().forEach(edital => {
+    html += `<div style="font-size:0.72rem;font-weight:700;color:var(--text-muted);padding:6px 4px 2px;text-transform:uppercase;letter-spacing:0.5px;">📋 ${edital} (${groups[edital].length})</div>`;
+    groups[edital].forEach(p => {
+      const key = `${p.edital}|${p.cargo}`;
+      const isFav = key === favorito;
+      const cor = p.dias ? (p.dias <= 30 ? 'var(--red)' : p.dias <= 60 ? 'var(--peach)' : 'var(--yellow)') : 'var(--text-muted)';
+      const diasText = p.dias ? `${p.dias}d` : '—';
+      html += `<button onclick="selectCountdownFavorito('${key}')" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:${isFav ? 'var(--bg-elevated)' : 'var(--bg)'};border:2px solid ${isFav ? 'var(--accent)' : 'var(--bg-elevated)'};border-radius:10px;cursor:pointer;text-align:left;width:100%;">
+        <span style="font-size:1.1rem;">${isFav ? '⭐' : (p.dias ? '📅' : '📌')}</span>
+        <div style="flex:1;">
+          <div style="font-size:0.85rem;font-weight:600;color:var(--text);">${p.cargo}</div>
+          <div style="font-size:0.72rem;color:var(--text-sub);">${p.data_objetiva || 'Data a definir'}</div>
+        </div>
+        <span style="font-size:0.88rem;font-weight:700;color:${cor};">${diasText}</span>
+      </button>`;
+    });
+  });
+  return html;
 }
 
 window.selectCountdownFavorito = function(key) {
