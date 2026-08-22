@@ -209,7 +209,7 @@ body.light-theme .modal-box .nota-item { background:#dce0e8; }
   padding: 10px 12px; color: #cdd6f4; font-size: 0.9rem; margin-bottom: 10px; font-family: sans-serif;
 }
 .select-search::placeholder { color: #9399b2; }
-.select-list { max-height: 320px; overflow-y: auto; }
+.select-list { max-height: 50vh; overflow-y: auto; }
 .select-item {
   display: flex; align-items: center; gap: 10px; padding: 10px 14px;
   border-bottom: 1px solid #45475a; cursor: pointer; border-radius: 6px;

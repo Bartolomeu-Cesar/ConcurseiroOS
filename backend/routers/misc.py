@@ -304,18 +304,27 @@ def get_notificacoes(conn=Depends(get_db_session), user_id: int = Depends(get_us
 # ============================================================
 
 @router.get("/api/countdown")
-def get_countdown(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+def get_countdown(include_all: bool = False, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Retorna provas para countdown. Com include_all=true retorna também cargos sem data definida."""
     try:
-        rows = conn.execute("""
-            SELECT edital_nome, cargo, data_prova_objetiva, data_prova_discursiva, local_prova
-            FROM edital_info
-            WHERE data_prova_objetiva != '' AND data_prova_objetiva != 'Consultar edital' AND user_id = ?
-            ORDER BY data_prova_objetiva
-        """, (user_id,)).fetchall()
+        if include_all:
+            rows = conn.execute("""
+                SELECT edital_nome, cargo, data_prova_objetiva, data_prova_discursiva, local_prova
+                FROM edital_info
+                WHERE user_id = ?
+                ORDER BY edital_nome, cargo
+            """, (user_id,)).fetchall()
+        else:
+            rows = conn.execute("""
+                SELECT edital_nome, cargo, data_prova_objetiva, data_prova_discursiva, local_prova
+                FROM edital_info
+                WHERE data_prova_objetiva != '' AND data_prova_objetiva != 'Consultar edital' AND user_id = ?
+                ORDER BY data_prova_objetiva
+            """, (user_id,)).fetchall()
     except Exception:
         rows = []
-    return [{"edital": r[0], "cargo": r[1], "data_objetiva": r[2],
-             "data_discursiva": r[3], "local": r[4]} for r in rows]
+    return [{"edital": r[0], "cargo": r[1], "data_objetiva": r[2] or "",
+             "data_discursiva": r[3] or "", "local": r[4] or ""} for r in rows]
 
 
 # ============================================================

@@ -18,6 +18,7 @@ export async function loadCountdown() {
     const now = new Date();
     const favorito = localStorage.getItem('countdown_favorito');
     const parsed = provas.map(p => {
+      if (!p.data_objetiva) return null;
       let parts = p.data_objetiva.match(/(\d+)[\/\-](\d+)[\/\-](\d+)/);
       if (!parts) return null;
       let d;
@@ -38,12 +39,49 @@ export async function loadCountdown() {
   } catch (e) {}
 }
 
-function showCountdownPicker(provas) {
-  openSelectModal('⏳ Escolher prova para countdown', provas.map((p, i) => ({
-    icon: '📅', label: `${p.edital} - ${p.cargo}`, sub: `${p.days} dias restantes`, value: i
-  })).concat([{ icon: '🔄', label: 'Automático (mais próxima)', sub: 'Seleciona sempre a prova mais próxima', value: -1 }]), (choice) => {
+async function showCountdownPicker(provasFuturas) {
+  // Fetch ALL cargos (including those without dates) for the picker
+  let allProvas = provasFuturas;
+  try {
+    const all = await fetch('/api/countdown?include_all=true').then(r => r.json());
+    if (all.length > provasFuturas.length) {
+      const now = new Date();
+      allProvas = all.map(p => {
+        if (!p.data_objetiva) return { ...p, days: null };
+        let parts = p.data_objetiva.match(/(\d+)[\/\-](\d+)[\/\-](\d+)/);
+        if (!parts) return { ...p, days: null };
+        let d;
+        if (parts[3].length === 4) d = new Date(parts[3], parts[2] - 1, parts[1]);
+        else d = new Date(parts[1], parts[2] - 1, parts[3]);
+        const diff = Math.ceil((d - now) / 86400000);
+        return { ...p, days: diff > 0 ? diff : null };
+      });
+    }
+  } catch (e) {}
+
+  // Group by edital for better organization
+  const groups = {};
+  allProvas.forEach((p, i) => {
+    if (!groups[p.edital]) groups[p.edital] = [];
+    groups[p.edital].push({ ...p, _idx: i });
+  });
+
+  const items = [];
+  Object.keys(groups).sort().forEach(edital => {
+    // Add separator/header for each edital
+    items.push({ icon: '📋', label: `── ${edital} ──`, sub: `${groups[edital].length} cargo(s)`, value: -2, disabled: true });
+    groups[edital].forEach(p => {
+      const daysText = p.days ? `${p.days} dias restantes` : 'Data a definir';
+      items.push({ icon: p.days ? '📅' : '📌', label: p.cargo, sub: `${p.edital} • ${daysText}`, value: p._idx });
+    });
+  });
+  // Add "automatic" option at the end
+  items.push({ icon: '🔄', label: 'Automático (mais próxima)', sub: 'Seleciona sempre a prova mais próxima', value: -1 });
+
+  openSelectModal(`⏳ Escolher prova (${allProvas.length} cargos)`, items, (choice) => {
+    if (choice.value === -2) return; // header item, ignore
     if (choice.value === -1) { localStorage.removeItem('countdown_favorito'); }
-    else { const p = provas[choice.value]; localStorage.setItem('countdown_favorito', `${p.edital}|${p.cargo}`); }
+    else { const p = allProvas[choice.value]; localStorage.setItem('countdown_favorito', `${p.edital}|${p.cargo}`); }
     loadCountdown();
   });
 }
