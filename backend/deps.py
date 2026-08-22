@@ -2,6 +2,7 @@
 import jwt
 from fastapi import Header, HTTPException
 
+from logger import set_user_id_context
 from settings import settings
 
 DEFAULT_USER_ID = 1
@@ -19,18 +20,23 @@ async def get_user_id(authorization: str = Header(None)) -> int:
     com o fluxo de guest. A proteção real é no frontend que redireciona para login.
     """
     if not settings.AUTH_ENABLED:
+        set_user_id_context(DEFAULT_USER_ID)
         return DEFAULT_USER_ID
 
     # Se não tem token, retorna default (guest mode)
     if not authorization or not authorization.startswith("Bearer "):
+        set_user_id_context(DEFAULT_USER_ID)
         return DEFAULT_USER_ID
 
     token = authorization.replace("Bearer ", "")
     try:
         payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
-        return int(payload["sub"])
+        user_id = int(payload["sub"])
+        set_user_id_context(user_id)
+        return user_id
     except (jwt.ExpiredSignatureError, jwt.InvalidTokenError, KeyError, ValueError):
         # Token inválido = guest
+        set_user_id_context(DEFAULT_USER_ID)
         return DEFAULT_USER_ID
 
 
@@ -40,6 +46,7 @@ async def get_authenticated_user_id(authorization: str = Header(None)) -> int:
     Usar em endpoints sensíveis (backup, upgrade, etc.)
     """
     if not settings.AUTH_ENABLED:
+        set_user_id_context(DEFAULT_USER_ID)
         return DEFAULT_USER_ID
 
     if not authorization or not authorization.startswith("Bearer "):
@@ -48,7 +55,9 @@ async def get_authenticated_user_id(authorization: str = Header(None)) -> int:
     token = authorization.replace("Bearer ", "")
     try:
         payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
-        return int(payload["sub"])
+        user_id = int(payload["sub"])
+        set_user_id_context(user_id)
+        return user_id
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expirado")
     except (jwt.InvalidTokenError, KeyError, ValueError):

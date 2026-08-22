@@ -8,9 +8,11 @@ mimetypes.add_type("text/javascript", ".mjs", strict=True)
 mimetypes.add_type("text/javascript", ".js", strict=True)
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from routers import (
     analytics, auth, bookmarks, cadernos, calendario, ciclo, dashboard,
     desafios, edital, feynman, flashcards, misc, notas, notifications, pdf,
@@ -25,6 +27,13 @@ from starlette.types import Scope
 
 from database import init_db
 from logger import log
+from middleware import (
+    AccessLogMiddleware,
+    RequestIdMiddleware,
+    generic_exception_handler,
+    http_exception_handler,
+    validation_exception_handler,
+)
 from settings import settings
 
 # ============================================================
@@ -180,7 +189,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         path = request.url.path
 
         # Exempt health check endpoint
-        if path == "/api/health" or path == "/api/status":
+        if path == "/api/health" or path == "/api/status" or path == "/api/v1/health" or path == "/api/v1/status":
             return await call_next(request)
 
         # Exempt static assets from rate limiting (CSS, JS, images, fonts, PDF.js, etc.)
@@ -244,6 +253,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: StarletteRequest, call_next):
         response = await call_next(request)
+        response.headers["X-API-Version"] = "1.0"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "SAMEORIGIN"
         response.headers["X-XSS-Protection"] = "1; mode=block"
@@ -323,6 +333,8 @@ Inclua o token no header: `Authorization: Bearer <token>`
 )
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RateLimitMiddleware)
+app.add_middleware(RequestIdMiddleware)
+app.add_middleware(AccessLogMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -333,16 +345,12 @@ app.add_middleware(GZipMiddleware, minimum_size=500)
 
 
 # ============================================================
-# GLOBAL EXCEPTION HANDLER
+# GLOBAL EXCEPTION HANDLERS (with request_id correlation)
 # ============================================================
 
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    log.error(f"Unhandled error on {request.method} {request.url.path}: {exc}")
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "Erro interno do servidor"}
-    )
+app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(Exception, generic_exception_handler)
 
 
 # ============================================================
@@ -400,6 +408,25 @@ app.include_router(admin.router)
 app.include_router(studyroom.router)
 app.include_router(misc.router)
 
+# ============================================================
+# API VERSIONING — /api/v1/* → /api/* (307 redirect)
+# ============================================================
+# Allows new consumers to use /api/v1/ while legacy frontend
+# continues using /api/ unchanged. 307 preserves HTTP method.
+
+from fastapi.responses import RedirectResponse
+
+
+@app.api_route("/api/v1/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+               include_in_schema=False)
+async def v1_proxy(path: str, request: Request):
+    """Proxy /api/v1/* requests to /api/* via 307 redirect (preserves method and body)."""
+    query = request.url.query
+    target = f"/api/{path}"
+    if query:
+        target = f"{target}?{query}"
+    return RedirectResponse(url=target, status_code=307)
+
 
 # ============================================================
 # API OVERVIEW ENDPOINT
@@ -412,6 +439,13 @@ def api_overview():
     return {
         "name": "ConcurseiroOS API",
         "version": settings.APP_VERSION,
+        "api_version": "1.0",
+        "versioning": {
+            "current": "v1",
+            "base_url": "/api/v1/",
+            "legacy_url": "/api/",
+            "note": "Both /api/ and /api/v1/ are supported. /api/v1/ redirects to /api/ via 307."
+        },
         "docs": "/docs",
         "redoc": "/redoc",
         "openapi": "/openapi.json",
