@@ -184,18 +184,40 @@
 
   // Load badges (pending counts) - slight delay to ensure sidebar DOM is ready
   setTimeout(() => {
+    // Restore cached badges immediately (prevents flicker between pages)
+    const cachedBadges = JSON.parse(localStorage.getItem('sidebar_badges') || '{}');
+    if (cachedBadges.flashcards) {
+      const el = document.getElementById('badge-flashcards');
+      if (el) el.textContent = cachedBadges.flashcards;
+    }
+    if (cachedBadges.sumulas) {
+      const el = document.getElementById('badge-sumulas');
+      if (el) el.textContent = cachedBadges.sumulas;
+    }
+    if (cachedBadges.caderno) {
+      const el = document.getElementById('badge-caderno-erros');
+      if (el) el.textContent = cachedBadges.caderno;
+    }
+
+    // Then fetch fresh data
+    const badges = {};
+
     fetch('/api/flashcards/today').then(r => r.json()).then(data => {
       const count = data.length || 0;
       const el = document.getElementById('badge-flashcards');
       const bnavEl = document.getElementById('bnav-badge-praticar');
       if (el) el.textContent = count > 0 ? count : '';
       if (bnavEl) bnavEl.textContent = count > 0 ? count : '';
+      badges.flashcards = count > 0 ? String(count) : '';
+      localStorage.setItem('sidebar_badges', JSON.stringify({...cachedBadges, ...badges}));
     }).catch(() => {});
 
     fetch('/api/sumulas/today').then(r => r.json()).then(data => {
       const count = Array.isArray(data) ? data.length : (data.pendentes || 0);
       const el = document.getElementById('badge-sumulas');
       if (el) el.textContent = count > 0 ? count : '';
+      badges.sumulas = count > 0 ? String(count) : '';
+      localStorage.setItem('sidebar_badges', JSON.stringify({...cachedBadges, ...badges}));
     }).catch(() => {});
 
     // Badge: Caderno de Erros (pendentes hoje)
@@ -203,6 +225,8 @@
       const count = data.pendentes_hoje ? data.pendentes_hoje.length : (Array.isArray(data) ? data.length : 0);
       const el = document.getElementById('badge-caderno-erros');
       if (el) el.textContent = count > 0 ? count : '';
+      badges.caderno = count > 0 ? String(count) : '';
+      localStorage.setItem('sidebar_badges', JSON.stringify({...cachedBadges, ...badges}));
     }).catch(() => {});
   }, 100);
 
