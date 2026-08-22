@@ -159,7 +159,7 @@
     if (header) {
       const toggle = document.createElement('button');
       toggle.className = 'sidebar-toggle';
-      toggle.onclick = toggleSidebar;
+      toggle.onclick = function() { document.getElementById('sidebar')?.classList.toggle('open'); document.getElementById('sidebar-overlay')?.classList.toggle('active'); };
       toggle.setAttribute('aria-label', 'Abrir menu');
       toggle.textContent = '☰';
       header.insertBefore(toggle, header.firstChild);

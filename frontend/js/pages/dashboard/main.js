@@ -444,6 +444,7 @@ async function loadCalendario() {
     const icons = {revisao:'🧠', estudo:'📚', questoes:'❓', pausa:'☕'};
     const _now = new Date();
     const hoje = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}-${String(_now.getDate()).padStart(2,'0')}`;
+    const horaAtual = _now.getHours();
 
     for (const dia of data.dias) {
       const isToday = dia.data === hoje;

@@ -76,7 +76,7 @@ BOT_NAMES = [
 # ─── Migration: Add 'liga' column to users table ─────────────────────────────
 
 def migrate_liga_column(db):
-    """Add 'liga' column to users table if it doesn't exist."""
+    """Add 'liga' column to users table and 'week_end' to leagues if they don't exist."""
     try:
         db.execute("SELECT liga FROM users LIMIT 1")
     except Exception:
@@ -86,6 +86,17 @@ def migrate_liga_column(db):
             log.info("Migration: added column 'liga' to users table")
         except Exception as e:
             log.warning(f"Migration liga column failed (may already exist): {e}")
+
+    # Ensure leagues table has week_end column
+    try:
+        db.execute("SELECT week_end FROM leagues LIMIT 1")
+    except Exception:
+        try:
+            db.execute("ALTER TABLE leagues ADD COLUMN week_end TEXT DEFAULT ''")
+            db.commit()
+            log.info("Migration: added column 'week_end' to leagues table")
+        except Exception as e:
+            log.warning(f"Migration week_end failed: {e}")
 
 
 # ─── Helper Functions ─────────────────────────────────────────────────────────
