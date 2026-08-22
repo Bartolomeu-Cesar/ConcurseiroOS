@@ -460,9 +460,53 @@ async function loadCalendario() {
       if (dia.atividades.length === 0) {
         html += `<div style="color:var(--text-sub);font-size:0.75rem;padding:8px 0;text-align:center;">Descanso</div>`;
       } else {
+        // Distribuir atividades em turnos (Manhã: 6-12, Tarde: 12-18, Noite: 18-23)
+        const turnos = _distribuirEmTurnos(dia.atividades, isToday, horaAtual);
         html += `<div class="cal-activities-list" data-date="${dia.data}" data-total="${dia.atividades.length}">`;
-        for (let i = 0; i < dia.atividades.length; i++) {
-          const ativ = dia.atividades[i];
+
+        // Linha do tempo com hora atual (só no dia de hoje)
+        let timelineInserida = false;
+        const turnoAtualNome = isToday ? _getTurnoAtual(horaAtual) : '';
+        const turnoIcons = {manha: '🌅', tarde: '☀️', noite: '🌙'};
+        const turnoNomes = {manha: 'Manhã', tarde: 'Tarde', noite: 'Noite'};
+        const turnoCores = {manha: 'var(--yellow)', tarde: 'var(--peach)', noite: 'var(--blue)'};
+
+        for (const turno of ['manha', 'tarde', 'noite']) {
+          const ativsTurno = turnos[turno];
+
+          // Inserir linha do tempo ANTES do turno ativo
+          if (isToday && !timelineInserida && turno === turnoAtualNome) {
+            const agora = new Date();
+            const horaStr = `${String(agora.getHours()).padStart(2,'0')}:${String(agora.getMinutes()).padStart(2,'0')}`;
+            const turnoInicio = turno === 'manha' ? 6 : turno === 'tarde' ? 12 : 18;
+            const turnoFim = turno === 'manha' ? 12 : turno === 'tarde' ? 18 : 23;
+            const minutosNoTurno = (horaAtual - turnoInicio) * 60 + agora.getMinutes();
+            const totalMinTurno = (turnoFim - turnoInicio) * 60;
+            const pctPos = Math.min(95, Math.max(5, (minutosNoTurno / totalMinTurno) * 100));
+
+            html += `<div class="cal-timeline" style="position:relative;margin:8px 0;height:14px;">
+              <div style="position:absolute;top:6px;left:0;right:0;height:2px;background:var(--bg-elevated);border-radius:1px;"></div>
+              <div style="position:absolute;top:6px;left:0;width:${pctPos}%;height:2px;background:var(--green);border-radius:1px;"></div>
+              <div style="position:absolute;top:0;left:${pctPos}%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;">
+                <span style="font-size:0.6rem;color:var(--green);font-weight:700;background:var(--bg-surface);padding:0 3px;border-radius:2px;white-space:nowrap;">${horaStr}</span>
+                <div style="width:2px;height:6px;background:var(--green);border-radius:1px;"></div>
+              </div>
+            </div>`;
+            timelineInserida = true;
+          }
+
+          if (ativsTurno.length === 0) continue;
+
+          // Header do turno
+          const turnoAtivo = isToday && _getTurnoAtual(horaAtual) === turno;
+          html += `<div class="cal-turno-header" style="display:flex;align-items:center;gap:4px;padding:3px 6px;margin:4px 0 2px;background:${turnoAtivo ? 'rgba(166,227,161,0.15)' : 'rgba(69,71,90,0.3)'};border-radius:4px;border-left:3px solid ${turnoCores[turno]};">
+            <span style="font-size:0.7rem;">${turnoIcons[turno]}</span>
+            <span style="font-size:0.68rem;font-weight:600;color:${turnoCores[turno]};">${turnoNomes[turno]}</span>
+            ${turnoAtivo ? '<span style="font-size:0.6rem;color:var(--green);margin-left:auto;">● agora</span>' : ''}
+          </div>`;
+
+          for (let i = 0; i < ativsTurno.length; i++) {
+            const ativ = ativsTurno[i];
           const icon = icons[ativ.tipo] || '📌';
           const materia = ativ.materia || '';
           let detail = '';
@@ -492,6 +536,7 @@ async function loadCalendario() {
           }
           html += `</div>`;
         }
+        } // end turno loop
         html += `</div>`;
       }
       html += `<div class="cal-day-footer">⏱ ${dia.tempo_total_min}min</div>`;
@@ -510,6 +555,8 @@ async function loadCalendario() {
 
     // Load concluidas
     loadConcluidasHoje();
+    // Load extras (banner "agora" + progresso semanal)
+    loadCalendarExtras();
   } catch(e) {
     el.innerHTML = '<div style="color:var(--red);text-align:center;padding:20px;">Erro ao gerar calendário.</div>';
     console.error('Calendario error:', e);
@@ -917,3 +964,107 @@ document.addEventListener('click', (e) => {
     menu.style.display = 'none';
   }
 });
+
+// ========== CALENDAR HELPERS: Turnos + Timeline ==========
+
+function _getTurnoAtual(hora) {
+  if (hora >= 6 && hora < 12) return 'manha';
+  if (hora >= 12 && hora < 18) return 'tarde';
+  return 'noite';
+}
+
+function _distribuirEmTurnos(atividades, isToday, horaAtual) {
+  const turnos = { manha: [], tarde: [], noite: [] };
+  if (!atividades || atividades.length === 0) return turnos;
+
+  const tempoTotal = atividades.reduce((a, at) => a + (at.tempo_min || 0), 0);
+  const proporcoes = { manha: 0.4, tarde: 0.35, noite: 0.25 };
+  let turnoAtual = 'manha';
+  let tempoAcumulado = 0;
+  const limiteManha = tempoTotal * proporcoes.manha;
+  const limiteTarde = tempoTotal * (proporcoes.manha + proporcoes.tarde);
+
+  for (const ativ of atividades) {
+    if (ativ.tipo === 'revisao' && turnoAtual === 'manha') {
+      turnos.manha.push(ativ);
+      tempoAcumulado += ativ.tempo_min || 0;
+      continue;
+    }
+    if (tempoAcumulado >= limiteTarde) {
+      turnoAtual = 'noite';
+    } else if (tempoAcumulado >= limiteManha) {
+      turnoAtual = 'tarde';
+    }
+    turnos[turnoAtual].push(ativ);
+    tempoAcumulado += ativ.tempo_min || 0;
+  }
+
+  // Se é HOJE: mover atividades de turnos passados para o turno atual
+  if (isToday) {
+    const turnoAgora = _getTurnoAtual(horaAtual);
+    const ordemTurnos = ['manha', 'tarde', 'noite'];
+    const idxTurnoAtual = ordemTurnos.indexOf(turnoAgora);
+
+    for (let i = 0; i < idxTurnoAtual; i++) {
+      const turnoPassado = ordemTurnos[i];
+      const naoFeitas = turnos[turnoPassado].filter(a => !a._concluida);
+      if (naoFeitas.length > 0) {
+        naoFeitas.forEach(a => { a._adiada = true; });
+        turnos[turnoAgora] = [...naoFeitas, ...turnos[turnoAgora]];
+        turnos[turnoPassado] = turnos[turnoPassado].filter(a => !a._adiada);
+      }
+    }
+  }
+
+  return turnos;
+}
+
+// ========== CALENDAR EXTRAS: Banner "Agora" + Progresso Semanal ==========
+
+async function loadCalendarExtras() {
+  // 1. Banner "O que estudar agora"
+  try {
+    const agora = await fetch('/api/calendario/agora').then(r => r.json());
+    const banner = document.getElementById('cal-agora-banner');
+    if (banner && agora.sugestao) {
+      banner.style.display = 'block';
+      const materiaEl = document.getElementById('cal-agora-materia');
+      const motivoEl = document.getElementById('cal-agora-motivo');
+      const pctEl = document.getElementById('cal-agora-pct');
+      if (materiaEl) materiaEl.textContent = `${agora.turno_label || ''} — ${agora.sugestao.materia}`;
+      if (motivoEl) motivoEl.textContent = agora.sugestao.motivo || '';
+      if (agora.progresso_dia && pctEl) {
+        const p = agora.progresso_dia.pct;
+        pctEl.textContent = `${p}%`;
+        pctEl.style.color = p >= 100 ? 'var(--green)' : p >= 50 ? 'var(--yellow)' : 'var(--blue)';
+      }
+      window._calAgoraSugestao = agora.sugestao;
+    }
+  } catch(e) {}
+
+  // 2. Progresso semanal visual
+  try {
+    const prog = await fetch('/api/calendario/progresso-semanal').then(r => r.json());
+    const container = document.getElementById('cal-week-progress');
+    const barsEl = document.getElementById('cal-week-bars');
+    if (container && prog.dias) {
+      container.style.display = 'block';
+      const pctTextEl = document.getElementById('cal-week-pct-text');
+      if (pctTextEl) pctTextEl.textContent = `${prog.resumo?.pct_semanal || 0}% concluído`;
+      let bars = '';
+      for (const dia of prog.dias) {
+        const h = Math.max(4, (dia.pct || 0) * 0.3);
+        let color = 'var(--bg-elevated)';
+        if (dia.status === 'completo') color = 'var(--green)';
+        else if (dia.status === 'parcial') color = 'var(--yellow)';
+        else if (dia.status === 'perdido') color = 'rgba(243,139,168,0.15)';
+        const border = dia.is_today ? 'border:1px solid var(--accent);' : '';
+        bars += `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">
+          <div style="width:100%;height:${h}px;background:${color};border-radius:3px;${border}transition:height 0.3s;"></div>
+          <span style="font-size:0.6rem;color:${dia.is_today ? 'var(--accent)' : 'var(--text-sub)'};font-weight:${dia.is_today ? '700' : '400'};">${dia.nome || ''}</span>
+        </div>`;
+      }
+      if (barsEl) barsEl.innerHTML = bars;
+    }
+  } catch(e) {}
+}
