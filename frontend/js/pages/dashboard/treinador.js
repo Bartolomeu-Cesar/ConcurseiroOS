@@ -630,3 +630,87 @@ window.gerarDissertativa = gerarDissertativa;
 window.salvarDissertativa = salvarDissertativa;
 window.autoConfianca = autoConfianca;
 window.autoRegistrar = autoRegistrar;
+
+// ============================================================
+// STUDY INTELLIGENCE PANEL
+// ============================================================
+
+export async function loadStudyIntelligence() {
+  const el = document.getElementById('study-intelligence-box');
+  if (!el) return;
+  try {
+    const data = await fetch('/api/study-intelligence?limit=10').then(r => r.json());
+    const resumo = data.resumo;
+    const topicos = data.topicos || [];
+
+    const nivelColors = {
+      dominando: 'var(--green)',
+      progredindo: 'var(--blue)',
+      consolidando: 'var(--yellow)',
+      precisa_reforco: 'var(--red)'
+    };
+    const nivelLabels = {
+      dominando: '🏆 Dominando',
+      progredindo: '📈 Progredindo',
+      consolidando: '🔄 Consolidando',
+      precisa_reforco: '⚠️ Precisa reforço'
+    };
+
+    let html = `
+      <div style="display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:100px;background:var(--bg);border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:1.4rem;font-weight:700;color:${nivelColors[resumo.nivel_geral] || 'var(--text)'};">${resumo.dificuldade_media}</div>
+          <div style="font-size:0.68rem;color:var(--text-sub);">Dificuldade média</div>
+        </div>
+        <div style="flex:1;min-width:100px;background:var(--bg);border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:1.4rem;font-weight:700;color:var(--blue);">${resumo.retrieval_medio}%</div>
+          <div style="font-size:0.68rem;color:var(--text-sub);">Força de memória</div>
+        </div>
+        <div style="flex:1;min-width:100px;background:var(--bg);border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:1.4rem;font-weight:700;color:${resumo.topicos_em_risco > 0 ? 'var(--red)' : 'var(--green)'};">${resumo.topicos_em_risco}</div>
+          <div style="font-size:0.68rem;color:var(--text-sub);">Em risco</div>
+        </div>
+        <div style="flex:1;min-width:100px;background:var(--bg);border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:0.9rem;font-weight:700;color:${nivelColors[resumo.nivel_geral] || 'var(--text)'};">${nivelLabels[resumo.nivel_geral] || resumo.nivel_geral}</div>
+          <div style="font-size:0.68rem;color:var(--text-sub);">Nível geral</div>
+        </div>
+      </div>`;
+
+    // Mapa de dificuldade por tópico (barras)
+    if (topicos.length > 0) {
+      html += `<div style="font-size:0.78rem;color:var(--text-sub);margin-bottom:8px;font-weight:600;">📊 Mapa de Dificuldade (seus pontos fracos primeiro):</div>`;
+      html += '<div style="display:grid;gap:6px;">';
+      topicos.slice(0, 8).forEach(t => {
+        const diffColor = t.difficulty_score >= 60 ? 'var(--red)' : t.difficulty_score >= 35 ? 'var(--peach)' : 'var(--green)';
+        const retColor = t.retrieval_strength >= 70 ? 'var(--green)' : t.retrieval_strength >= 40 ? 'var(--yellow)' : 'var(--red)';
+        const label = t.desirable_difficulty === 'reduzir' ? '📉 Simplificar' :
+                      t.desirable_difficulty === 'aumentar' ? '📈 +Desafio' :
+                      t.desirable_difficulty === 'reforçar' ? '🔄 Reforçar' : '✅ Ideal';
+        html += `<div style="background:var(--bg);border-radius:6px;padding:8px 10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+            <span style="font-size:0.78rem;font-weight:600;color:var(--text);">${t.materia}${t.topico !== '(geral)' ? ' · ' + t.topico : ''}</span>
+            <span style="font-size:0.65rem;padding:2px 6px;border-radius:4px;background:${diffColor};color:var(--bg);font-weight:600;">${label}</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <div style="flex:1;height:6px;background:var(--bg-elevated);border-radius:3px;overflow:hidden;" title="Dificuldade: ${t.difficulty_score}%">
+              <div style="width:${t.difficulty_score}%;height:100%;background:${diffColor};border-radius:3px;"></div>
+            </div>
+            <span style="font-size:0.65rem;color:${diffColor};min-width:25px;text-align:right;">${t.difficulty_score}</span>
+            <span style="font-size:0.65rem;color:var(--text-sub);">|</span>
+            <span style="font-size:0.65rem;color:${retColor};" title="Memória: ${t.retrieval_strength}%">🧠${t.retrieval_strength}%</span>
+          </div>
+        </div>`;
+      });
+      html += '</div>';
+    }
+
+    // Interleaving recommendation
+    if (data.interleaving && data.interleaving.length > 3) {
+      html += `<div style="margin-top:12px;font-size:0.75rem;color:var(--text-sub);"><strong>🔀 Ordem de estudo recomendada (interleaving):</strong> ${data.interleaving.slice(0, 5).map(i => i.materia).join(' → ')}...</div>`;
+    }
+
+    el.innerHTML = html;
+  } catch(e) {
+    el.innerHTML = '<p style="color:var(--text-sub);font-size:0.82rem;">Responda mais questões para gerar análise de inteligência.</p>';
+  }
+}

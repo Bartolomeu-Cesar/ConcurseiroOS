@@ -17,7 +17,7 @@ import {
   loadTreinador, loadTrilha, loadCurvaEsquecimento, loadRevisoesPendentes,
   loadDailyChallenge, loadIntercalacao, loadPraticaDelib, loadFeynmanMaterias,
   loadPontosFragcos, loadConexoes, loadTempoResultado, loadDissertMaterias,
-  loadSpacing
+  loadSpacing, loadStudyIntelligence
 } from './treinador.js';
 import { loadDesafioDiarioCard } from './desafio.js';
 
@@ -930,6 +930,7 @@ function loadActivePanel() {
     case 'panel-treinador':
       loadTreinador();
       loadTrilha();
+      loadStudyIntelligence();
       loadCurvaEsquecimento();
       loadRevisoesPendentes();
       loadDailyChallenge();
