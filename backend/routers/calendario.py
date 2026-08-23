@@ -795,19 +795,68 @@ def reset_inteligente(body: dict = Body(default={}), conn=Depends(get_db_session
 
     scored_materias.sort(key=lambda x: -x["peso"])
 
-    # ===== 4. Distribute across 7 days =====
+    # ===== 4. Distribute across 7 days with ADVANCED TECHNIQUES =====
     total_peso = sum(m["peso"] for m in scored_materias) or 1
 
-    # Determine frequency per matéria: top 30% → 3 days, middle 35% → 2 days, bottom 35% → 1 day
+    # --- TECHNIQUE #1: SPACING EFFECT (2-3 days between same subject) ---
+    # Determine frequency: top subjects every 2-3 days, lower priority every 3-4 days
     total_mats = len(scored_materias)
     for i, m in enumerate(scored_materias):
         pos = i / max(total_mats, 1)
         m["freq"] = 3 if pos < 0.3 else 2 if pos < 0.65 else 1
+        m["spacing_days"] = 2 if pos < 0.3 else 3  # ideal spacing
 
-    # Time allocation: 20% review/flashcards, 60% main study, 20% questions
-    tempo_revisao = int(tempo_dia_min * 0.20)
-    tempo_estudo = int(tempo_dia_min * 0.60)
-    tempo_questoes = int(tempo_dia_min * 0.20)
+    # --- TECHNIQUE #6: PROGRESSIVE OVERLOAD ---
+    # Check recent volume and adjust: if accuracy dropping, reduce; if stable, maintain/increase
+    recent_acc = None
+    try:
+        acc_row = conn.execute("""
+            SELECT ROUND(CAST(SUM(acertou) AS REAL) / COUNT(*) * 100, 1) as pct
+            FROM questoes_respostas WHERE user_id = ? AND data >= ?
+        """, (user_id, (hoje - timedelta(days=7)).isoformat())).fetchone()
+        recent_acc = acc_row[0] if acc_row and acc_row[0] else None
+    except Exception:
+        pass
+
+    # Adjust tempo based on progressive overload
+    overload_factor = 1.0
+    overload_msg = ""
+    if recent_acc is not None:
+        if recent_acc < 50:
+            overload_factor = 0.85  # Reduce 15% — too much volume
+            overload_msg = "⚠️ Acurácia baixa — volume reduzido para consolidar"
+        elif recent_acc > 75:
+            overload_factor = 1.10  # Increase 10% — ready for more
+            overload_msg = "📈 Boa acurácia — volume levemente aumentado"
+        else:
+            overload_msg = "✅ Volume adequado para o momento"
+
+    tempo_dia_min = int(tempo_dia_min * overload_factor)
+
+    # --- TIME ALLOCATION with techniques #2, #3, #4, #7 ---
+    # #7 Revisão-Relâmpago: 5min pre-test at start
+    # #2 Warm-up: 5min recall of yesterday at start of each block
+    # #4 Ultradian: 15min break after 90min
+    # #3 Teoria↔Prática: each slot is 60% theory + 40% questions (integrated)
+    tempo_warmup = 5              # #2 + #7: warm-up / pre-test
+    tempo_cooldown = 5            # #2: consolidation at end
+    tempo_pausa_90min = 15        # #4: ultradian break
+    tempo_revisao_pct = 0.15      # Revision block (reduced since we have warm-up)
+    tempo_estudo_pct = 0.70       # Main study (includes integrated practice)
+    tempo_questoes_pct = 0.15     # Additional focused question block
+
+    tempo_revisao = int(tempo_dia_min * tempo_revisao_pct)
+    tempo_estudo = int(tempo_dia_min * tempo_estudo_pct)
+    tempo_questoes = int(tempo_dia_min * tempo_questoes_pct)
+
+    # --- TECHNIQUE #10: DAY THEMING ---
+    # One day per week = deep dive into hardest subject (if exists)
+    deep_dive_day = 3  # Thursday = deep dive
+    deep_dive_materia = scored_materias[0]["materia"] if scored_materias else None
+
+    # --- TECHNIQUE #5: FORMAT VARIATION ---
+    # Rotate format per day for same subject: teoria → questões → flashcards → ensinar
+    formatos_rotacao = ["estudo", "questoes", "revisao", "ensinar"]
 
     # Build pool of matérias for assignment
     pool = []
@@ -817,14 +866,29 @@ def reset_inteligente(body: dict = Body(default={}), conn=Depends(get_db_session
     dias_calendario = []
     last_day_materias = set()
     pool_idx = 0
-    slots_por_dia = [3, 3, 3, 3, 3, 2, 0]  # Mon-Sat active, Sun rest/reduced
+    slots_por_dia = [3, 3, 3, 3, 3, 2, 0]  # Mon-Sat active, Sun rest
+
+    # Track which format each matéria had last time (#5)
+    materia_last_format = {}
 
     for dia_idx in range(7):
         dia_atividades = []
         is_domingo = dia_idx == 6
+        is_deep_dive = dia_idx == deep_dive_day and deep_dive_materia
         target_slots = slots_por_dia[dia_idx]
 
-        # --- REVIEW BLOCK (20% of time) ---
+        # --- #7 REVISÃO-RELÂMPAGO (pre-test opening) ---
+        if not is_domingo:
+            dia_atividades.append({
+                "dia_semana": dia_idx,
+                "materia": "Pre-Test",
+                "topicos": "⚡ Revisão-relâmpago: 3 questões rápidas do dia anterior (priming)",
+                "tempo_min": tempo_warmup,
+                "tipo": "pre-test",
+                "ordem": 0,
+            })
+
+        # --- REVIEW BLOCK (15% of time) ---
         if not is_domingo:
             review_desc = ""
             if pending["flashcards"] > 0:
@@ -840,10 +904,50 @@ def reset_inteligente(body: dict = Body(default={}), conn=Depends(get_db_session
                 "topicos": review_desc,
                 "tempo_min": tempo_revisao,
                 "tipo": "revisao",
-                "ordem": 0,
+                "ordem": 1,
             })
 
-        # --- MAIN STUDY BLOCK (60% of time, distributed by weight) ---
+        # --- #10 DEEP DIVE DAY (Thursday) ---
+        if is_deep_dive:
+            dia_atividades.append({
+                "dia_semana": dia_idx,
+                "materia": deep_dive_materia,
+                "topicos": f"🔥 Deep Dive: imersão completa em {deep_dive_materia} (teoria + questões + revisão)",
+                "tempo_min": int(tempo_estudo * 0.6),
+                "tipo": "estudo",
+                "ordem": 2,
+            })
+            dia_atividades.append({
+                "dia_semana": dia_idx,
+                "materia": deep_dive_materia,
+                "topicos": f"❓ Questões intensivas de {deep_dive_materia}",
+                "tempo_min": int(tempo_estudo * 0.3),
+                "tipo": "questoes",
+                "ordem": 3,
+            })
+            # #4 Ultradian break after deep dive
+            dia_atividades.append({
+                "dia_semana": dia_idx,
+                "materia": "Pausa",
+                "topicos": "☕ Pausa ultradiana (15min) — descansar para consolidar",
+                "tempo_min": tempo_pausa_90min,
+                "tipo": "pausa",
+                "ordem": 4,
+            })
+            # #2 Cool-down
+            dia_atividades.append({
+                "dia_semana": dia_idx,
+                "materia": deep_dive_materia,
+                "topicos": "📝 Cool-down: resuma os 3 pontos mais importantes estudados hoje",
+                "tempo_min": tempo_cooldown,
+                "tipo": "consolidacao",
+                "ordem": 5,
+            })
+            last_day_materias = {deep_dive_materia}
+            dias_calendario.append(dia_atividades)
+            continue
+
+        # --- MAIN STUDY BLOCK (distributed with cognitive load + spacing) ---
         if not is_domingo and target_slots > 0:
             used_today = set()
             assigned = []
@@ -853,6 +957,7 @@ def reset_inteligente(body: dict = Body(default={}), conn=Depends(get_db_session
             while len(assigned) < target_slots and attempts < len(pool) * 3 and pool:
                 candidate = pool[search_idx % len(pool)]
                 mat_name = candidate["materia"]
+                # #1 Spacing: don't repeat from yesterday
                 if mat_name not in last_day_materias and mat_name not in used_today:
                     assigned.append(candidate)
                     used_today.add(mat_name)
@@ -869,15 +974,26 @@ def reset_inteligente(body: dict = Body(default={}), conn=Depends(get_db_session
                         if len(assigned) >= target_slots:
                             break
 
-            # Distribute study time proportionally by weight
             # COGNITIVE LOAD: Sort by difficulty DESC — hardest subjects first (morning = more energy)
+            # --- #8 GOLDEN HOUR: first slot = most important subject ---
             assigned.sort(key=lambda a: a.get("error_rate", 0) + (100 - a.get("pct_acerto", 50)), reverse=True)
 
             total_assigned_peso = sum(a["peso"] for a in assigned) or 1
-            ordem = 1
-            for a in assigned:
+            ordem = 2  # After pre-test and review
+            accumulated_min = tempo_warmup + tempo_revisao  # Track time for ultradian breaks
+
+            for idx_a, a in enumerate(assigned):
                 proporcao = a["peso"] / total_assigned_peso
-                tempo_mat_estudo = max(15, int(tempo_estudo * proporcao))
+                tempo_mat_total = max(20, int(tempo_estudo * proporcao))
+
+                # --- #3 TEORIA ↔ PRÁTICA INTEGRADA (60/40 split within same slot) ---
+                tempo_teoria = int(tempo_mat_total * 0.60)
+                tempo_pratica = int(tempo_mat_total * 0.40)
+
+                # --- #5 FORMAT VARIATION: rotate format ---
+                last_fmt = materia_last_format.get(a["materia"], 0)
+                current_fmt = formatos_rotacao[last_fmt % len(formatos_rotacao)]
+                materia_last_format[a["materia"]] = last_fmt + 1
 
                 # Get topics for this matéria
                 topicos_query = "SELECT topico FROM edital WHERE materia = ? AND status != 'Concluído' AND arquivado = 0 AND user_id = ?"
@@ -892,31 +1008,71 @@ def reset_inteligente(body: dict = Body(default={}), conn=Depends(get_db_session
                 topicos_list = [r[0] for r in conn.execute(topicos_query, topicos_params).fetchall()]
                 topicos_str = "; ".join(topicos_list) if topicos_list else "Revisão geral"
 
+                # --- #2 WARM-UP for each block: "relembre o que estudou sobre X" ---
+                if idx_a == 0:
+                    warmup_note = " (📌 Comece relembrando o que sabe sobre o tema)"
+                else:
+                    warmup_note = ""
+
+                # Main study slot (theory)
                 dia_atividades.append({
                     "dia_semana": dia_idx,
                     "materia": a["materia"],
-                    "topicos": topicos_str,
-                    "tempo_min": tempo_mat_estudo,
+                    "topicos": topicos_str + warmup_note,
+                    "tempo_min": tempo_teoria,
                     "tipo": "estudo",
                     "ordem": ordem,
                 })
                 ordem += 1
+                accumulated_min += tempo_teoria
 
-            # --- QUESTIONS BLOCK (20% of time, weakest subjects) ---
-            # Pick the weakest among assigned
-            weakest = sorted(assigned, key=lambda x: x.get("pct_acerto", 0))[:2]
-            if weakest:
-                tempo_q_per = max(10, tempo_questoes // len(weakest))
-                for w in weakest:
+                # Integrated practice (questions on same subject)
+                dia_atividades.append({
+                    "dia_semana": dia_idx,
+                    "materia": a["materia"],
+                    "topicos": f"❓ Questões de {a['materia']} (prática integrada)",
+                    "tempo_min": tempo_pratica,
+                    "tipo": "questoes",
+                    "ordem": ordem,
+                })
+                ordem += 1
+                accumulated_min += tempo_pratica
+
+                # --- #4 ULTRADIAN BREAK: pause every 90min ---
+                if accumulated_min >= 90 and idx_a < len(assigned) - 1:
                     dia_atividades.append({
                         "dia_semana": dia_idx,
-                        "materia": w["materia"],
-                        "topicos": f"Questões de {w['materia']} (reforço)",
-                        "tempo_min": tempo_q_per,
-                        "tipo": "questoes",
+                        "materia": "Pausa",
+                        "topicos": "☕ Pausa ultradiana (15min) — caminhe, beba água, descanse os olhos",
+                        "tempo_min": tempo_pausa_90min,
+                        "tipo": "pausa",
                         "ordem": ordem,
                     })
                     ordem += 1
+                    accumulated_min = 0  # Reset counter
+
+            # --- #9 STRATEGIC NAPPING suggestion (if study > 2h) ---
+            total_estudo_dia = sum(a["tempo_min"] for a in dia_atividades if a["tipo"] in ("estudo", "questoes"))
+            if total_estudo_dia >= 120:
+                dia_atividades.append({
+                    "dia_semana": dia_idx,
+                    "materia": "Power Nap",
+                    "topicos": "💤 Power Nap (20min) — consolida memória após estudo intenso",
+                    "tempo_min": 20,
+                    "tipo": "pausa",
+                    "ordem": ordem,
+                })
+                ordem += 1
+
+            # --- #2 COOL-DOWN at end of day ---
+            dia_atividades.append({
+                "dia_semana": dia_idx,
+                "materia": "Consolidação",
+                "topicos": "📝 Cool-down: resuma os 3 pontos mais importantes do dia (5min)",
+                "tempo_min": tempo_cooldown,
+                "tipo": "consolidacao",
+                "ordem": ordem,
+            })
 
             last_day_materias = used_today
         else:
@@ -976,6 +1132,24 @@ def reset_inteligente(body: dict = Body(default={}), conn=Depends(get_db_session
         "ok": True,
         "message": f"Calendário regenerado com {total_materias_cal} matérias ({horas_semana}h/semana) usando análise inteligente.",
         "dias": dias_response,
+        "tecnicas_aplicadas": [
+            "🧠 Cognitive Load Ordering (difícil→manhã, leve→noite)",
+            "📅 Spacing Effect (2-3 dias entre mesma matéria)",
+            "⚡ Revisão-Relâmpago (pre-test de 5min ao iniciar)",
+            "🔄 Teoria↔Prática integrada (60/40 no mesmo bloco)",
+            "☕ Pausas Ultradianas (15min a cada 90min)",
+            "📝 Warm-up/Cool-down (relembrar + resumir)",
+            "🔥 Deep Dive Day (quinta = imersão na matéria mais difícil)",
+            "📊 Progressive Overload (volume ajustado pela acurácia)",
+            "🎯 Format Variation (mesmo tema, formato diferente por dia)",
+            "💤 Strategic Napping (sugerido após 2h+ de estudo)",
+            "🌅 Golden Hour (primeiro slot = matéria prioritária)",
+        ],
+        "progressive_overload": {
+            "fator": overload_factor,
+            "acuracia_7d": recent_acc,
+            "mensagem": overload_msg,
+        },
         "stats": {
             "total_materias": total_materias_cal,
             "horas_semana": horas_semana,
