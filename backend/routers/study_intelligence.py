@@ -737,3 +737,205 @@ def sleep_consolidation(
         "items_revisao": items_revisao[:5],
         "total_items": len(items_revisao),
     }
+
+
+# ============================================================
+# GET /api/study-intelligence/contextual-variation — Mesmo tópico, formatos diferentes
+# ============================================================
+
+@router.get("/api/study-intelligence/contextual-variation", summary="Variação contextual",
+            description="""Retorna o mesmo tópico em formatos diferentes para melhorar transferência.
+Estudar o mesmo conceito como flashcard, questão, dissertativa e explicação oral
+melhora a capacidade de aplicar o conhecimento em contextos novos.""")
+def contextual_variation(
+    materia: str,
+    topico: str = "",
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Gera variações de formato para um mesmo tópico."""
+    variations = []
+
+    # 1. Flashcard format (existe?)
+    flash_query = "SELECT id, pergunta, resposta FROM flashcards WHERE user_id = ? AND materia = ?"
+    flash_params = [user_id, materia]
+    if topico:
+        flash_query += " AND (pergunta LIKE ? OR resposta LIKE ?)"
+        flash_params.extend([f"%{topico}%", f"%{topico}%"])
+    flash_query += " ORDER BY RANDOM() LIMIT 2"
+    flashcards = conn.execute(flash_query, flash_params).fetchall()
+    for f in flashcards:
+        variations.append({
+            "formato": "flashcard",
+            "icone": "🧠",
+            "instrucao": "Tente responder mentalmente antes de revelar",
+            "conteudo": {"pergunta": f["pergunta"], "resposta": f["resposta"]},
+            "id": f["id"],
+        })
+
+    # 2. Questão format (existe?)
+    q_query = "SELECT id, enunciado, alternativa_a, alternativa_b, alternativa_c, alternativa_d, resposta_correta FROM questoes WHERE user_id = ? AND materia = ?"
+    q_params = [user_id, materia]
+    if topico:
+        q_query += " AND topico = ?"
+        q_params.append(topico)
+    q_query += " ORDER BY RANDOM() LIMIT 2"
+    questoes = conn.execute(q_query, q_params).fetchall()
+    for q in questoes:
+        variations.append({
+            "formato": "questao",
+            "icone": "❓",
+            "instrucao": "Responda a questão objetiva",
+            "conteudo": {
+                "enunciado": q["enunciado"],
+                "alternativas": {"A": q["alternativa_a"], "B": q["alternativa_b"], "C": q["alternativa_c"], "D": q["alternativa_d"]},
+                "resposta": q["resposta_correta"],
+            },
+            "id": q["id"],
+        })
+
+    # 3. Dissertativa format (gerado)
+    variations.append({
+        "formato": "dissertativa",
+        "icone": "✍️",
+        "instrucao": "Escreva um parágrafo explicando este conceito com suas palavras",
+        "conteudo": {
+            "prompt": f"Explique com suas palavras o conceito de '{topico or materia}'. Use exemplos práticos.",
+            "tempo_sugerido": "3-5 minutos",
+        },
+        "id": None,
+    })
+
+    # 4. Ensinar format (Feynman Technique)
+    variations.append({
+        "formato": "ensinar",
+        "icone": "🎓",
+        "instrucao": "Imagine que está ensinando isso a alguém que nunca estudou o tema. Explique em voz alta.",
+        "conteudo": {
+            "prompt": f"Ensine '{topico or materia}' como se estivesse explicando para um leigo. Se travar, identifique a lacuna.",
+            "dica": "Se não conseguir explicar de forma simples, é sinal de que precisa revisar o fundamento.",
+        },
+        "id": None,
+    })
+
+    # 5. Mapa mental (connections)
+    variations.append({
+        "formato": "conexoes",
+        "icone": "🔗",
+        "instrucao": "Liste 3 conexões entre este tópico e outros que você já estudou",
+        "conteudo": {
+            "prompt": f"Como '{topico or materia}' se conecta com outros temas? Liste pelo menos 3 relações.",
+            "exemplo": "Ex: 'Direito Penal > Princípio da Legalidade' se conecta com 'Direito Constitucional > Art. 5º' e com 'Direito Administrativo > Legalidade'",
+        },
+        "id": None,
+    })
+
+    return {
+        "materia": materia,
+        "topico": topico or "(geral)",
+        "total_variacoes": len(variations),
+        "instrucao_geral": "Estudar o mesmo conceito em formatos diferentes melhora a transferência de conhecimento. Complete pelo menos 3 variações.",
+        "variacoes": variations,
+    }
+
+
+# ============================================================
+# GET /api/study-intelligence/successive-relearning — Ciclos de re-aprendizagem
+# ============================================================
+
+@router.get("/api/study-intelligence/successive-relearning", summary="Successive Relearning",
+            description="""Identifica tópicos que precisam de ciclos de re-aprendizagem.
+Successive Relearning = retrieval practice + spaced repetition em ciclos:
+Estudar → Testar → Espaçar → Re-testar → Espaçar mais → Re-testar...
+Até atingir critério de domínio (3 acertos consecutivos).""")
+def successive_relearning(
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Retorna tópicos que estão presos em baixo domínio e precisam de ciclos de re-learning."""
+    hoje = date.today()
+    trinta_dias = (hoje - timedelta(days=30)).isoformat()
+
+    # Identificar tópicos com "stuck mastery": muitas tentativas mas acurácia não sobe
+    stuck_topics = conn.execute("""
+        SELECT q.materia, q.topico, COUNT(*) as total_tentativas,
+               SUM(qr.acertou) as acertos,
+               ROUND(CAST(SUM(qr.acertou) AS REAL) / COUNT(*) * 100, 1) as pct_acerto,
+               MAX(qr.data) as ultima_tentativa,
+               -- Calcular se os últimos 3 acertos foram consecutivos
+               (SELECT COUNT(*) FROM (
+                   SELECT acertou FROM questoes_respostas
+                   WHERE questao_id IN (SELECT id FROM questoes WHERE materia = q.materia AND topico = q.topico AND user_id = ?)
+                   AND user_id = ?
+                   ORDER BY data DESC, id DESC LIMIT 3
+               ) sub WHERE acertou = 1) as ultimos_3_acertos
+        FROM questoes_respostas qr
+        JOIN questoes q ON q.id = qr.questao_id
+        WHERE qr.user_id = ? AND qr.data >= ?
+        GROUP BY q.materia, q.topico
+        HAVING total_tentativas >= 4 AND pct_acerto < 70
+        ORDER BY pct_acerto ASC
+    """, (user_id, user_id, user_id, trinta_dias)).fetchall()
+
+    cycles = []
+    for t in stuck_topics:
+        # Determine cycle stage
+        acerto_pct = t["pct_acerto"]
+        ultimos_3 = t["ultimos_3_acertos"] or 0
+        total = t["total_tentativas"]
+
+        if ultimos_3 >= 3:
+            status = "dominado"
+            proxima_acao = "Manter revisão espaçada normal"
+            cor = "green"
+        elif acerto_pct < 40:
+            status = "re-estudar"
+            proxima_acao = "Voltar ao material base. Releia e faça anotações antes de testar novamente."
+            cor = "red"
+        elif acerto_pct < 60:
+            status = "praticar"
+            proxima_acao = "Resolver mais questões variadas deste tópico. Foque na self-explanation."
+            cor = "peach"
+        else:
+            status = "consolidar"
+            proxima_acao = "Quase lá! Faça um teste final em 2-3 dias para fixar."
+            cor = "yellow"
+
+        days_since = 0
+        try:
+            days_since = (hoje - date.fromisoformat(t["ultima_tentativa"])).days
+        except (ValueError, TypeError):
+            pass
+
+        cycles.append({
+            "materia": t["materia"],
+            "topico": t["topico"] or "(geral)",
+            "status": status,
+            "cor": cor,
+            "pct_acerto": acerto_pct,
+            "total_tentativas": total,
+            "ultimos_3_acertos": ultimos_3,
+            "dias_desde_ultima": days_since,
+            "proxima_acao": proxima_acao,
+            # Cycle info
+            "ciclo_atual": 1 if acerto_pct < 40 else 2 if acerto_pct < 60 else 3,
+            "ciclos_necessarios": 3,
+            "criterio_dominio": "3 acertos consecutivos",
+        })
+
+    # Summary
+    total_stuck = len(cycles)
+    em_reestudo = len([c for c in cycles if c["status"] == "re-estudar"])
+    em_pratica = len([c for c in cycles if c["status"] == "praticar"])
+    em_consolidacao = len([c for c in cycles if c["status"] == "consolidar"])
+
+    return {
+        "total_topicos_stuck": total_stuck,
+        "resumo": {
+            "re_estudar": em_reestudo,
+            "praticar": em_pratica,
+            "consolidar": em_consolidacao,
+        },
+        "instrucao": "Successive Relearning: Para cada tópico abaixo, siga o ciclo Estudar → Testar → Espaçar → Re-testar até atingir 3 acertos consecutivos.",
+        "ciclos": cycles[:15],
+    }
