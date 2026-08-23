@@ -474,10 +474,16 @@ def o_que_estudar_agora(conn=Depends(get_db_session), user_id: int = Depends(get
         }
 
     # Distribuir atividades em turnos (proporcional)
+    # COGNITIVE LOAD: matérias mais difíceis → manhã (mais energia), revisão → noite (menos esforço)
     total_ativs = len(atividades_hoje)
     por_turno = max(1, total_ativs // 3)
+
+    # Sort: tipo 'estudo' first (more demanding), then 'questoes', then 'revisao' (lighter)
+    tipo_peso = {"estudo": 0, "questoes": 1, "revisao": 2}
+    sorted_ativs = sorted(atividades_hoje, key=lambda a: tipo_peso.get(a["tipo"], 1))
+
     turnos_map = {"manha": [], "tarde": [], "noite": []}
-    for i, a in enumerate(atividades_hoje):
+    for i, a in enumerate(sorted_ativs):
         if i < por_turno:
             turnos_map["manha"].append(dict(a))
         elif i < por_turno * 2:
@@ -864,6 +870,9 @@ def reset_inteligente(body: dict = Body(default={}), conn=Depends(get_db_session
                             break
 
             # Distribute study time proportionally by weight
+            # COGNITIVE LOAD: Sort by difficulty DESC — hardest subjects first (morning = more energy)
+            assigned.sort(key=lambda a: a.get("error_rate", 0) + (100 - a.get("pct_acerto", 50)), reverse=True)
+
             total_assigned_peso = sum(a["peso"] for a in assigned) or 1
             ordem = 1
             for a in assigned:
