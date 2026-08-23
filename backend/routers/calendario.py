@@ -28,13 +28,19 @@ def get_calendario_personalizado(conn=Depends(get_db_session), user_id: int = De
         (user_id,)
     ).fetchall()
     items = [dict(r) for r in rows]
+
+    # Calculate actual dates for this week
+    hoje = date.today()
+    inicio_semana = hoje - timedelta(days=hoje.weekday())  # Monday
+
     dias = []
     for d in range(7):
         atividades = [i for i in items if i["dia_semana"] == d]
         tempo_total = sum(a["tempo_min"] for a in atividades)
         materias = list(set(a["materia"] for a in atividades if a["materia"]))
+        dia_data = (inicio_semana + timedelta(days=d)).isoformat()
         dias.append({
-            "dia_semana": d, "nome": NOMES_DIAS[d],
+            "dia_semana": d, "nome": NOMES_DIAS[d], "data": dia_data,
             "atividades": atividades, "tempo_total_min": tempo_total, "materias": materias
         })
     return {"dias": dias}

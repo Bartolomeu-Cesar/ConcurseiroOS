@@ -514,7 +514,7 @@ async function loadCalendario() {
     // Simplified calendar render
     let html = '<div class="cal-grid">';
     const diasNomes = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
-    const icons = {revisao:'🧠', estudo:'📚', questoes:'❓', pausa:'☕'};
+    const icons = {revisao:'🧠', estudo:'📚', questoes:'❓', pausa:'☕', 'pre-test':'⚡', consolidacao:'📝', ensinar:'🎓'};
     const _now = new Date();
     const hoje = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}-${String(_now.getDate()).padStart(2,'0')}`;
     const horaAtual = _now.getHours();
