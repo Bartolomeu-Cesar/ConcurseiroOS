@@ -256,4 +256,86 @@
 
     // Pedir permissão de notificação
     if (Notification.permission === 'default') Notification.requestPermission();
+
+    // ===== ADAPTIVE POMODORO — Fatigue Detection =====
+    // Monitors accuracy/speed during sessions and suggests breaks
+    window._adaptivePomo = {
+        sessionAnswers: [],  // {timestamp, correct, tempo_s}
+        lastCheckTimestamp: Date.now(),
+        breakSuggested: false,
+
+        // Called by flashcard/question review to feed accuracy data
+        recordAnswer(correct, tempoSeconds) {
+            this.sessionAnswers.push({
+                timestamp: Date.now(),
+                correct: !!correct,
+                tempo_s: tempoSeconds || 0
+            });
+            this._checkFatigue();
+        },
+
+        _checkFatigue() {
+            // Need at least 6 answers to detect pattern
+            if (this.sessionAnswers.length < 6) return;
+            if (this.breakSuggested) return; // Already suggested this cycle
+
+            const recent = this.sessionAnswers.slice(-6);
+            const older = this.sessionAnswers.slice(-12, -6);
+
+            // Check 1: Recent accuracy dropped significantly
+            const recentAcc = recent.filter(a => a.correct).length / recent.length;
+            const olderAcc = older.length >= 3
+                ? older.filter(a => a.correct).length / older.length
+                : 0.7; // assume 70% baseline
+
+            // Check 2: Response time increasing (fatigue sign)
+            const recentAvgTime = recent.reduce((s, a) => s + a.tempo_s, 0) / recent.length;
+            const olderAvgTime = older.length >= 3
+                ? older.reduce((s, a) => s + a.tempo_s, 0) / older.length
+                : recentAvgTime;
+
+            const accuracyDrop = olderAcc - recentAcc;
+            const timeIncrease = recentAvgTime / (olderAvgTime || 1);
+
+            // Fatigue detected: accuracy dropped >20% OR response time increased >50%
+            if (accuracyDrop > 0.20 || timeIncrease > 1.5) {
+                this.breakSuggested = true;
+                this._suggestBreak(recentAcc, accuracyDrop, timeIncrease);
+            }
+        },
+
+        _suggestBreak(currentAcc, drop, timeRatio) {
+            const pct = Math.round(currentAcc * 100);
+            const dropPct = Math.round(drop * 100);
+            let reason = '';
+            if (drop > 0.20) reason = `Acerto caiu ${dropPct}% (agora ${pct}%)`;
+            else reason = `Tempo de resposta aumentou ${Math.round((timeRatio - 1) * 100)}%`;
+
+            // Create a non-intrusive notification banner
+            const banner = document.createElement('div');
+            banner.id = 'fatigue-banner';
+            banner.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:99998;background:linear-gradient(135deg,var(--peach),var(--yellow));color:var(--bg);padding:12px 20px;border-radius:12px;font-size:0.85rem;font-weight:600;box-shadow:0 4px 20px rgba(0,0,0,0.3);display:flex;align-items:center;gap:12px;max-width:90vw;animation:slideDown 0.3s ease;';
+            banner.innerHTML = `
+                <span style="font-size:1.4rem;">😴</span>
+                <div>
+                    <div>Cansaço detectado — ${reason}</div>
+                    <div style="font-size:0.72rem;opacity:0.8;margin-top:2px;">Fazer uma pausa de 5-10min melhora a retenção em até 20%</div>
+                </div>
+                <button onclick="this.parentElement.remove();window._adaptivePomo.breakSuggested=false;" style="background:rgba(0,0,0,0.2);border:none;color:var(--bg);border-radius:6px;padding:6px 12px;cursor:pointer;font-weight:600;font-size:0.78rem;white-space:nowrap;">Entendi ✓</button>
+            `;
+            document.body.appendChild(banner);
+
+            // Auto-dismiss after 15 seconds
+            setTimeout(() => {
+                if (banner.parentNode) banner.remove();
+            }, 15000);
+        },
+
+        // Reset on new session
+        reset() {
+            this.sessionAnswers = [];
+            this.breakSuggested = false;
+            this.lastCheckTimestamp = Date.now();
+        }
+    };
 })();

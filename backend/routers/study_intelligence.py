@@ -423,3 +423,86 @@ def _review_message(total: int) -> str:
         return "💪 Bastante para revisar. Comece pelos urgentes."
     else:
         return "⚠️ Muitos itens acumulados. Priorize os 5 mais urgentes."
+
+
+# ============================================================
+# GET /api/study-intelligence/pre-test — Quiz antes de estudar
+# ============================================================
+
+@router.get("/api/study-intelligence/pre-test", summary="Pre-Testing quiz",
+            description="""Retorna questões rápidas sobre um tópico para o aluno responder ANTES de estudá-lo.
+Pre-testing melhora retenção em 10-20% mesmo quando o aluno erra todas as questões,
+pois ativa curiosidade e direciona a atenção durante o estudo subsequente.""")
+def pre_test(
+    materia: str,
+    topico: str = "",
+    quantidade: int = 3,
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Gera um pre-test quiz para priming antes do estudo de um tópico."""
+
+    # Buscar questões do banco sobre essa matéria/tópico que o usuário NÃO respondeu ainda
+    params = [user_id, materia]
+    query = """
+        SELECT q.id, q.enunciado, q.alternativa_a, q.alternativa_b, q.alternativa_c, q.alternativa_d,
+               q.resposta_correta, q.topico, q.materia
+        FROM questoes q
+        WHERE q.user_id = ? AND q.materia = ?
+        AND q.id NOT IN (SELECT questao_id FROM questoes_respostas WHERE user_id = ?)
+    """
+    params.append(user_id)
+
+    if topico:
+        query += " AND q.topico = ?"
+        params.append(topico)
+
+    query += " ORDER BY RANDOM() LIMIT ?"
+    params.append(quantidade)
+
+    questoes = conn.execute(query, params).fetchall()
+
+    # Se não tem questões não-respondidas, pegar aleatórias da matéria (inclusive já respondidas)
+    if len(questoes) < quantidade:
+        fallback_query = """
+            SELECT q.id, q.enunciado, q.alternativa_a, q.alternativa_b, q.alternativa_c, q.alternativa_d,
+                   q.resposta_correta, q.topico, q.materia
+            FROM questoes q
+            WHERE q.user_id = ? AND q.materia = ?
+        """
+        fallback_params = [user_id, materia]
+        if topico:
+            fallback_query += " AND q.topico = ?"
+            fallback_params.append(topico)
+        fallback_query += " ORDER BY RANDOM() LIMIT ?"
+        fallback_params.append(quantidade)
+        questoes = conn.execute(fallback_query, fallback_params).fetchall()
+
+    if not questoes:
+        return {
+            "disponivel": False,
+            "motivo": f"Sem questões de '{materia}' no banco. Adicione questões para ativar Pre-Testing.",
+            "questoes": []
+        }
+
+    return {
+        "disponivel": True,
+        "materia": materia,
+        "topico": topico or "(geral)",
+        "quantidade": len(questoes),
+        "instrucao": "Responda sem medo de errar! O objetivo é ativar curiosidade e direcionar sua atenção. Errar aqui MELHORA sua aprendizagem depois.",
+        "questoes": [
+            {
+                "id": q["id"],
+                "enunciado": q["enunciado"],
+                "alternativas": {
+                    "A": q["alternativa_a"],
+                    "B": q["alternativa_b"],
+                    "C": q["alternativa_c"],
+                    "D": q["alternativa_d"],
+                },
+                "resposta_correta": q["resposta_correta"],
+            }
+            for q in questoes
+        ],
+    }

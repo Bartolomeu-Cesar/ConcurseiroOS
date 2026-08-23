@@ -101,6 +101,11 @@ export async function responderQuestaoDia(letra) {
   if (window._qDiaTimerInterval) clearInterval(window._qDiaTimerInterval);
   const acertou = letra.toUpperCase() === q.resposta_correta.toUpperCase();
   if (acertou) qDiaAcertos++;
+
+  // Feed adaptive pomodoro fatigue detection
+  if (window._adaptivePomo) {
+    window._adaptivePomo.recordAnswer(acertou, tempoSegundos);
+  }
   document.querySelectorAll('.qdia-alt').forEach(btn => {
     btn.disabled = true; btn.style.cursor = 'default';
     const btnLetra = btn.textContent.trim().charAt(0);

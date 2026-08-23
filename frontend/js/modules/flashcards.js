@@ -27,6 +27,36 @@ function _autoStartTimerIfNeeded(materia) {
   } catch(e) {}
 }
 
+// Metacognition state
+let _currentConfidence = 0;
+let _metacogHistory = []; // {cardId, confidence, quality, gap}
+let _generationMode = localStorage.getItem('flash_generation_mode') === 'true';
+
+// Toggle generation mode
+export function toggleGenerationMode() {
+  _generationMode = !_generationMode;
+  localStorage.setItem('flash_generation_mode', _generationMode);
+  showCurrentFlashcard();
+}
+
+// Set confidence level (metacognition)
+export function setFlashConfidence(level) {
+  _currentConfidence = level;
+  // Visual feedback: highlight selected button
+  document.querySelectorAll('#flash-confidence-btns .conf-btn').forEach(btn => {
+    const btnLevel = parseInt(btn.dataset.level);
+    if (btnLevel === level) {
+      btn.style.borderColor = 'var(--accent)';
+      btn.style.background = 'var(--bg-elevated)';
+      btn.style.transform = 'scale(1.1)';
+    } else {
+      btn.style.borderColor = 'var(--border)';
+      btn.style.background = 'var(--bg)';
+      btn.style.transform = 'scale(1)';
+    }
+  });
+}
+
 export async function loadFlashcardsToday() {
   try {
     flashcardsToday = await fetch('/api/flashcards/today').then(r => r.json());
@@ -82,32 +112,93 @@ function showCurrentFlashcard() {
   q.innerHTML = badge + escapeHtml(card.pergunta);
   a.textContent = card.resposta;
   a.style.display = 'none';
-  rb.style.display = 'inline-block';
   rv.style.display = 'none';
+
+  // Add metacognition confidence slider + generation mode BEFORE reveal button
+  const genModeToggle = `<div style="display:flex;justify-content:flex-end;margin-bottom:6px;">
+    <label style="font-size:0.68rem;color:var(--text-sub);cursor:pointer;display:flex;align-items:center;gap:4px;">
+      <input type="checkbox" ${_generationMode ? 'checked' : ''} onchange="toggleGenerationMode()" style="width:14px;height:14px;"> ✍️ Escrever resposta
+    </label>
+  </div>`;
+
+  // Generation Effect: text input to type answer
+  let generationHtml = '';
+  if (_generationMode) {
+    generationHtml = `<div id="flash-generation-area" style="margin-bottom:10px;">
+      <textarea id="flash-generation-input" placeholder="Digite sua resposta antes de revelar..." 
+        style="width:100%;min-height:60px;background:var(--bg-surface);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text);font-size:0.85rem;font-family:inherit;resize:vertical;"
+        onkeydown="if(event.key==='Enter'&&event.ctrlKey)revealAnswer()"></textarea>
+      <div style="font-size:0.65rem;color:var(--text-sub);margin-top:2px;">Ctrl+Enter para revelar</div>
+    </div>`;
+  }
+
+  // Metacognition: confidence slider
+  const confidenceHtml = `<div id="flash-confidence-area" style="margin-bottom:10px;text-align:center;">
+    <div style="font-size:0.75rem;color:var(--text-sub);margin-bottom:6px;">🧠 Quão confiante você está na resposta?</div>
+    <div style="display:flex;justify-content:center;gap:6px;" id="flash-confidence-btns">
+      <button onclick="setFlashConfidence(1)" class="conf-btn" data-level="1" style="padding:6px 10px;border-radius:6px;border:2px solid var(--border);background:var(--bg);color:var(--red);font-size:0.8rem;font-weight:600;cursor:pointer;">1<br><span style="font-size:0.6rem;">Nenhuma</span></button>
+      <button onclick="setFlashConfidence(2)" class="conf-btn" data-level="2" style="padding:6px 10px;border-radius:6px;border:2px solid var(--border);background:var(--bg);color:var(--peach);font-size:0.8rem;font-weight:600;cursor:pointer;">2<br><span style="font-size:0.6rem;">Pouca</span></button>
+      <button onclick="setFlashConfidence(3)" class="conf-btn" data-level="3" style="padding:6px 10px;border-radius:6px;border:2px solid var(--border);background:var(--bg);color:var(--yellow);font-size:0.8rem;font-weight:600;cursor:pointer;">3<br><span style="font-size:0.6rem;">Média</span></button>
+      <button onclick="setFlashConfidence(4)" class="conf-btn" data-level="4" style="padding:6px 10px;border-radius:6px;border:2px solid var(--border);background:var(--bg);color:var(--blue);font-size:0.8rem;font-weight:600;cursor:pointer;">4<br><span style="font-size:0.6rem;">Alta</span></button>
+      <button onclick="setFlashConfidence(5)" class="conf-btn" data-level="5" style="padding:6px 10px;border-radius:6px;border:2px solid var(--border);background:var(--bg);color:var(--green);font-size:0.8rem;font-weight:600;cursor:pointer;">5<br><span style="font-size:0.6rem;">Total</span></button>
+    </div>
+  </div>`;
+
+  // Insert between question and reveal button
+  const revealContainer = document.getElementById('flash-reveal-btn').parentElement;
+  // Remove old confidence/generation areas
+  document.getElementById('flash-confidence-area')?.remove();
+  document.getElementById('flash-generation-area')?.remove();
+  document.getElementById('flash-genmode-toggle')?.remove();
+  
+  // Insert new areas
+  const insertDiv = document.createElement('div');
+  insertDiv.id = 'flash-genmode-toggle';
+  insertDiv.innerHTML = genModeToggle + generationHtml + confidenceHtml;
+  rb.parentElement.insertBefore(insertDiv, rb);
+
+  rb.style.display = 'inline-block';
   // Track time per card
   _flashCardStart = Date.now();
   if (!_flashSessionStart) _flashSessionStart = Date.now();
 }
 
 export function revealAnswer() {
+  // Record confidence level (metacognition)
+  const confidence = _currentConfidence;
+  _currentConfidence = 0; // Reset
+
   document.getElementById('flash-answer').style.display = 'block';
   document.getElementById('flash-reveal-btn').style.display = 'none';
+  document.getElementById('flash-confidence-area')?.remove();
+  document.getElementById('flash-generation-area')?.remove();
 
   // Auto-start global timer if not already running
   _autoStartTimerIfNeeded('Flashcards (Revisão)');
 
+  // Show metacognition feedback if confidence was recorded
+  const card = flashcardsToday[currentFlashIndex];
+  let metacogHtml = '';
+  if (confidence > 0 && card) {
+    _metacogHistory.push({ cardId: card.id, confidence, timestamp: Date.now() });
+    metacogHtml = `<div id="flash-metacog-feedback" style="font-size:0.72rem;color:var(--text-sub);margin-bottom:6px;text-align:center;">
+      Confiança: ${'⭐'.repeat(confidence)}${'☆'.repeat(5 - confidence)} — Avalie abaixo se acertou
+    </div>`;
+  }
+
   const rv = document.getElementById('flash-review-btns');
   rv.style.display = 'flex';
-  rv.innerHTML = `
+  rv.innerHTML = metacogHtml + `
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;width:100%;">
-      <button onclick="reviewFlashcard(0)" style="background:#f38ba8;color:#1e1e2e;border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">0•Esqueci</button>
-      <button onclick="reviewFlashcard(1)" style="background:#f38ba8;color:#1e1e2e;border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">1•Errei</button>
-      <button onclick="reviewFlashcard(2)" style="background:#fab387;color:#1e1e2e;border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">2•Quase</button>
-      <button onclick="reviewFlashcard(3)" style="background:#f9e2af;color:#1e1e2e;border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">3•Difícil</button>
-      <button onclick="reviewFlashcard(4)" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">4•Bom</button>
-      <button onclick="reviewFlashcard(5)" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">5•Fácil</button>
+      <button onclick="reviewFlashcard(0)" style="background:var(--red);color:var(--bg);border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">0•Esqueci</button>
+      <button onclick="reviewFlashcard(1)" style="background:var(--red);color:var(--bg);border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">1•Errei</button>
+      <button onclick="reviewFlashcard(2)" style="background:var(--peach);color:var(--bg);border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">2•Quase</button>
+      <button onclick="reviewFlashcard(3)" style="background:var(--yellow);color:var(--bg);border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">3•Difícil</button>
+      <button onclick="reviewFlashcard(4)" style="background:var(--green);color:var(--bg);border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">4•Bom</button>
+      <button onclick="reviewFlashcard(5)" style="background:var(--green);color:var(--bg);border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">5•Fácil</button>
     </div>
   `;
+}
 }
 
 export async function reviewFlashcard(quality) {
@@ -122,9 +213,42 @@ export async function reviewFlashcard(quality) {
       _flashCardStart = null;
     }
 
+    // Metacognition: track confidence vs actual result gap
+    const lastMetacog = _metacogHistory.find(m => m.cardId === card.id && !m.quality);
+    if (lastMetacog) {
+      lastMetacog.quality = quality;
+      // Gap: confidence alta + quality baixo = overconfidence
+      // Gap: confidence baixa + quality alto = underconfidence
+      const expectedQuality = lastMetacog.confidence; // 1-5 maps roughly to 0-5 quality
+      lastMetacog.gap = quality - expectedQuality;
+      lastMetacog.calibrated = Math.abs(lastMetacog.gap) <= 1;
+      // Save metacog history to localStorage
+      try {
+        const stored = JSON.parse(localStorage.getItem('metacog_history') || '[]');
+        stored.push(lastMetacog);
+        localStorage.setItem('metacog_history', JSON.stringify(stored.slice(-100)));
+      } catch(e) {}
+    }
+
     const data = await api(`/api/flashcards/${card.id}/review-sm2`, { method: 'POST', body: { quality } });
     const msgs = ['Esqueceu — recomeçar','Quase — recomeçar','Errou — recomeçar','Difícil — +1d','Bom — +' + data.intervalo_dias + 'd','Fácil — +' + data.intervalo_dias + 'd'];
-    toast(`${msgs[quality]} (EF: ${data.easiness_factor.toFixed(2)})`, quality >= 3 ? 'success' : 'warning', 3000);
+
+    // Metacognition feedback toast
+    let metacogMsg = '';
+    if (lastMetacog && lastMetacog.confidence > 0) {
+      if (lastMetacog.confidence >= 4 && quality <= 2) metacogMsg = ' ⚠️ Overconfidence!';
+      else if (lastMetacog.confidence <= 2 && quality >= 4) metacogMsg = ' 💡 Você sabia mais do que pensava!';
+      else if (lastMetacog.calibrated) metacogMsg = ' ✅ Boa calibração!';
+    }
+
+    toast(`${msgs[quality]} (EF: ${data.easiness_factor.toFixed(2)})${metacogMsg}`, quality >= 3 ? 'success' : 'warning', 3000);
+
+    // Feed adaptive pomodoro fatigue detection
+    if (window._adaptivePomo) {
+      const tempoCard = _flashCardStart ? Math.round((Date.now() - _flashCardStart) / 1000) : 0;
+      window._adaptivePomo.recordAnswer(quality >= 3, tempoCard);
+    }
+
     currentFlashIndex++;
     showCurrentFlashcard();
     loadAllFlashcards();
