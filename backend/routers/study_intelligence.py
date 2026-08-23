@@ -506,3 +506,234 @@ def pre_test(
             for q in questoes
         ],
     }
+
+
+# ============================================================
+# POST /api/study-intelligence/self-explanation
+# ============================================================
+
+@router.post("/api/study-intelligence/self-explanation", summary="Salvar self-explanation",
+             description="Salva a explicação do aluno sobre por que errou uma questão. Técnica de Elaboration.")
+def save_self_explanation(
+    body: dict,
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Salva auto-explicação para uma questão errada."""
+    questao_id = body.get("questao_id")
+    explicacao = body.get("explicacao", "").strip()
+
+    if not questao_id or not explicacao:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=422, detail="questao_id e explicacao são obrigatórios")
+
+    # Criar tabela se não existe
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS self_explanations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            questao_id INTEGER NOT NULL,
+            explicacao TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_self_explanations_user ON self_explanations(user_id)
+    """)
+
+    conn.execute(
+        "INSERT INTO self_explanations (user_id, questao_id, explicacao, created_at) VALUES (?, ?, ?, ?)",
+        (user_id, questao_id, explicacao, today_str())
+    )
+    conn.commit()
+
+    log.info(f"Self-explanation saved: user={user_id} questao={questao_id} len={len(explicacao)}")
+    return {"ok": True, "message": "Explicação salva com sucesso"}
+
+
+# ============================================================
+# GET /api/study-intelligence/calibration — Metacognition calibration data
+# ============================================================
+
+@router.get("/api/study-intelligence/calibration", summary="Dados de calibração metacognitiva",
+            description="Retorna dados de calibração: confiança vs acerto real ao longo do tempo.")
+def get_calibration(
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Retorna métricas de calibração metacognitiva.
+    
+    Calibração perfeita = quando diz 80% confiante, acerta 80% das vezes.
+    Overconfidence = confiança > acerto real.
+    Underconfidence = confiança < acerto real.
+    """
+    # Get flashcard review history with FSRS quality (as proxy for accuracy)
+    # We use streaks and question responses to build calibration data
+    hoje = date.today()
+    trinta_dias = (hoje - timedelta(days=30)).isoformat()
+
+    # Question accuracy by day (last 30 days)
+    daily_stats = conn.execute("""
+        SELECT data, COUNT(*) as total, SUM(acertou) as acertos,
+               ROUND(CAST(SUM(acertou) AS REAL) / COUNT(*) * 100, 1) as pct_acerto
+        FROM questoes_respostas
+        WHERE user_id = ? AND data >= ?
+        GROUP BY data ORDER BY data
+    """, (user_id, trinta_dias)).fetchall()
+
+    # Overall calibration metrics
+    total_respostas = sum(r["total"] for r in daily_stats) if daily_stats else 0
+    total_acertos = sum(r["acertos"] for r in daily_stats) if daily_stats else 0
+    accuracy_real = round(total_acertos / total_respostas * 100, 1) if total_respostas > 0 else 0
+
+    # Flashcard quality distribution (proxy for how well user knows material)
+    try:
+        flash_quality = conn.execute("""
+            SELECT easiness_factor, COUNT(*) as cnt
+            FROM flashcards
+            WHERE user_id = ? AND easiness_factor > 0
+            GROUP BY ROUND(easiness_factor, 1)
+            ORDER BY easiness_factor
+        """, (user_id,)).fetchall()
+    except Exception:
+        flash_quality = []
+
+    # Improvement trend (comparing first half vs second half of period)
+    mid_date = (hoje - timedelta(days=15)).isoformat()
+    first_half = [r for r in daily_stats if r["data"] < mid_date]
+    second_half = [r for r in daily_stats if r["data"] >= mid_date]
+
+    first_pct = round(sum(r["acertos"] for r in first_half) / max(1, sum(r["total"] for r in first_half)) * 100, 1) if first_half else 0
+    second_pct = round(sum(r["acertos"] for r in second_half) / max(1, sum(r["total"] for r in second_half)) * 100, 1) if second_half else 0
+    trend = round(second_pct - first_pct, 1)
+
+    return {
+        "periodo": f"{trinta_dias} a {hoje.isoformat()}",
+        "metricas": {
+            "total_respostas": total_respostas,
+            "acuracia_real": accuracy_real,
+            "tendencia_30d": trend,
+            "tendencia_label": "melhorando" if trend > 2 else "estável" if abs(trend) <= 2 else "piorando",
+        },
+        "diario": [dict(r) for r in daily_stats],
+        "flashcard_distribution": [{"ef": r["easiness_factor"], "count": r["cnt"]} for r in flash_quality],
+        "dicas": _calibration_tips(accuracy_real, trend),
+    }
+
+
+def _calibration_tips(accuracy: float, trend: float) -> list:
+    """Gera dicas personalizadas baseado na calibração."""
+    tips = []
+    if accuracy < 50:
+        tips.append("📉 Acurácia abaixo de 50% — foque em menos matérias por vez e revise os fundamentos")
+    elif accuracy < 70:
+        tips.append("📊 Acurácia moderada — use o caderno de erros para revisitar questões erradas")
+    else:
+        tips.append("✅ Boa acurácia! Continue com a revisão espaçada para manter")
+
+    if trend < -5:
+        tips.append("⚠️ Tendência de queda — possível sobrecarga. Considere reduzir volume e aumentar qualidade")
+    elif trend > 5:
+        tips.append("🚀 Tendência de melhora — seu estudo está funcionando! Mantenha o ritmo")
+
+    tips.append("🧠 Dica: use o slider de confiança nos flashcards para calibrar sua metacognição")
+    return tips
+
+
+# ============================================================
+# GET /api/study-intelligence/sleep-consolidation
+# ============================================================
+
+@router.get("/api/study-intelligence/sleep-consolidation", summary="Sleep consolidation check",
+            description="""Verifica se é hora de uma sessão noturna ou revisão matinal.
+Estudar antes de dormir + revisar ao acordar = +20% consolidação de memória.""")
+def sleep_consolidation(
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Retorna recomendações de estudo baseadas no horário (consolidação durante sono)."""
+    from datetime import datetime
+
+    now = datetime.now()
+    hora = now.hour
+
+    # Determinar período do dia
+    if 5 <= hora < 9:
+        periodo = "matinal"
+    elif 21 <= hora or hora < 1:
+        periodo = "noturno"
+    else:
+        periodo = "diurno"
+
+    # Buscar itens mais importantes para revisão rápida
+    hoje = today_str()
+    items_revisao = []
+
+    if periodo in ("noturno", "matinal"):
+        # Pegar flashcards mais difíceis revisados hoje (para consolidar)
+        try:
+            # Flashcards com EF baixo (difíceis) que foram revisados recentemente
+            dificeis = conn.execute("""
+                SELECT id, pergunta, resposta, materia
+                FROM flashcards
+                WHERE user_id = ? AND easiness_factor < 2.3 AND easiness_factor > 0
+                ORDER BY easiness_factor ASC
+                LIMIT 5
+            """, (user_id,)).fetchall()
+            for f in dificeis:
+                items_revisao.append({
+                    "tipo": "flashcard",
+                    "id": f["id"],
+                    "pergunta": f["pergunta"],
+                    "materia": f["materia"] or "Geral",
+                })
+        except Exception:
+            pass
+
+        # Pegar questões erradas recentes (últimos 3 dias)
+        try:
+            erros_recentes = conn.execute("""
+                SELECT q.id, q.enunciado, q.materia, q.resposta_correta
+                FROM questoes_respostas qr
+                JOIN questoes q ON q.id = qr.questao_id
+                WHERE qr.user_id = ? AND qr.acertou = 0 AND qr.data >= ?
+                ORDER BY qr.data DESC
+                LIMIT 5
+            """, (user_id, (date.today() - timedelta(days=3)).isoformat())).fetchall()
+            for e in erros_recentes:
+                items_revisao.append({
+                    "tipo": "erro_recente",
+                    "id": e["id"],
+                    "pergunta": e["enunciado"][:100],
+                    "materia": e["materia"] or "Geral",
+                    "resposta_correta": e["resposta_correta"],
+                })
+        except Exception:
+            pass
+
+    mensagens = {
+        "noturno": {
+            "titulo": "🌙 Revisão Noturna (Sleep Consolidation)",
+            "descricao": "Rever material difícil antes de dormir fortalece a consolidação durante o sono. Revise por 5-10 min sem pressão.",
+            "dica": "Não precisa memorizar agora — apenas releia. Seu cérebro fará o trabalho durante a noite.",
+        },
+        "matinal": {
+            "titulo": "☀️ Revisão Matinal (Morning Recall)",
+            "descricao": "Tentar lembrar o que estudou ontem à noite ativa retrieval practice após consolidação do sono.",
+            "dica": "Tente lembrar ANTES de olhar — o esforço de recuperação é o que fortalece a memória.",
+        },
+        "diurno": {
+            "titulo": "📚 Sessão de Estudo Regular",
+            "descricao": "Continue com sua rotina normal. Revisão noturna/matinal será sugerida nos horários ideais.",
+            "dica": "Use interleaving: misture matérias diferentes para melhor retenção.",
+        },
+    }
+
+    return {
+        "periodo": periodo,
+        "hora_atual": now.strftime("%H:%M"),
+        "ativo": periodo in ("noturno", "matinal"),
+        **mensagens[periodo],
+        "items_revisao": items_revisao[:5],
+        "total_items": len(items_revisao),
+    }

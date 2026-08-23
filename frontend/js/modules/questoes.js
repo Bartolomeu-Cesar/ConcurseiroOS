@@ -117,10 +117,25 @@ export async function responderQuestaoDia(letra) {
   fb.style.display = 'block';
   fb.style.background = acertou ? '#1e3a2e' : '#3a1e1e';
   fb.style.color = acertou ? '#a6e3a1' : '#f38ba8';
-  fb.innerHTML = `<strong>${acertou ? '✓ Correto!' : '✗ Errado! Resposta: ' + q.resposta_correta}</strong>
-    <span style="float:right;color:#9399b2;font-size:0.75rem;">⏱ ${tempoFmt}</span>
-    ${q.explicacao ? '<br><span style="color:#cdd6f4;font-size:0.78rem;">' + q.explicacao + '</span>' : ''}
-    <br><button onclick="advanceQuestao()" style="margin-top:8px;background:#89b4fa;color:#1e1e2e;border:none;border-radius:6px;padding:6px 14px;font-weight:600;cursor:pointer;">Próxima →</button>`;
+
+  if (acertou) {
+    fb.innerHTML = `<strong>✓ Correto!</strong>
+      <span style="float:right;color:#9399b2;font-size:0.75rem;">⏱ ${tempoFmt}</span>
+      ${q.explicacao ? '<br><span style="color:#cdd6f4;font-size:0.78rem;">' + q.explicacao + '</span>' : ''}
+      <br><button onclick="advanceQuestao()" style="margin-top:8px;background:#89b4fa;color:#1e1e2e;border:none;border-radius:6px;padding:6px 14px;font-weight:600;cursor:pointer;">Próxima →</button>`;
+  } else {
+    // Self-Explanation: obrigatório explicar POR QUÊ errou (+40% retenção)
+    fb.innerHTML = `<strong>✗ Errado! Resposta: ${q.resposta_correta}</strong>
+      <span style="float:right;color:#9399b2;font-size:0.75rem;">⏱ ${tempoFmt}</span>
+      ${q.explicacao ? '<br><span style="color:#cdd6f4;font-size:0.78rem;">💡 ' + q.explicacao + '</span>' : ''}
+      <div style="margin-top:10px;padding:10px;background:rgba(249,226,175,0.1);border:1px solid var(--yellow);border-radius:8px;">
+        <div style="font-size:0.75rem;color:var(--yellow);font-weight:600;margin-bottom:6px;">🧠 Self-Explanation — Explique por que a resposta correta é "${q.resposta_correta}":</div>
+        <textarea id="qdia-self-explain" placeholder="Escreva com suas palavras por que esta é a resposta correta... (Isso melhora sua retenção em 40%!)" 
+          style="width:100%;min-height:50px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-size:0.82rem;font-family:inherit;resize:vertical;"></textarea>
+        <button onclick="submitSelfExplanation(${q.id})" style="margin-top:6px;background:var(--yellow);color:var(--bg);border:none;border-radius:6px;padding:6px 14px;font-weight:600;cursor:pointer;font-size:0.82rem;">💾 Salvar e continuar</button>
+        <button onclick="advanceQuestao()" style="margin-top:6px;margin-left:6px;background:var(--bg-elevated);color:var(--text-sub);border:none;border-radius:6px;padding:6px 14px;font-size:0.78rem;cursor:pointer;">Pular →</button>
+      </div>`;
+  }
   try {
     await fetch(`/api/questoes/${q.id}/responder`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ resposta: letra, tempo_segundos: tempoSegundos }) });
     if (_loadMetas) _loadMetas();
@@ -130,6 +145,26 @@ export async function responderQuestaoDia(letra) {
 
 // Expor qDiaIdx para uso no onclick inline
 export function advanceQuestao() { qDiaIdx++; showQuestaoDia(); }
+
+// Self-Explanation: salvar explicação do aluno
+export async function submitSelfExplanation(questaoId) {
+  const textarea = document.getElementById('qdia-self-explain');
+  const explicacao = textarea?.value?.trim();
+  if (!explicacao) {
+    textarea.style.borderColor = 'var(--red)';
+    textarea.placeholder = 'Escreva pelo menos uma frase explicando...';
+    return;
+  }
+  try {
+    await fetch('/api/study-intelligence/self-explanation', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ questao_id: questaoId, explicacao })
+    });
+    toast('💡 Explicação salva! Isso fortalece sua memória.', 'success');
+  } catch (e) {}
+  advanceQuestao();
+}
 
 export function initQuestoes(deps) {
   _loadMetas = deps.loadMetas;
