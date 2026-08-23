@@ -11,6 +11,22 @@ let _flashSessionStart = null; // Timestamp início da sessão de revisão
 let _flashCardStart = null; // Timestamp início do card atual
 let _flashSessionSeconds = 0; // Segundos acumulados na sessão
 
+/**
+ * Inicia o timer global automaticamente se não estiver ativo.
+ * Usa um Pomodoro de 25 min para a matéria indicada.
+ */
+function _autoStartTimerIfNeeded(materia) {
+  try {
+    const timerState = localStorage.getItem('pomo_timer');
+    if (timerState) return; // Timer já está rodando
+    if (typeof window.startGlobalTimer === 'function') {
+      window.startGlobalTimer(materia, 25, 'flashcard');
+    } else if (typeof startGlobalTimer === 'function') {
+      startGlobalTimer(materia, 25, 'flashcard');
+    }
+  } catch(e) {}
+}
+
 export async function loadFlashcardsToday() {
   try {
     flashcardsToday = await fetch('/api/flashcards/today').then(r => r.json());
@@ -76,6 +92,10 @@ function showCurrentFlashcard() {
 export function revealAnswer() {
   document.getElementById('flash-answer').style.display = 'block';
   document.getElementById('flash-reveal-btn').style.display = 'none';
+
+  // Auto-start global timer if not already running
+  _autoStartTimerIfNeeded('Flashcards (Revisão)');
+
   const rv = document.getElementById('flash-review-btns');
   rv.style.display = 'flex';
   rv.innerHTML = `

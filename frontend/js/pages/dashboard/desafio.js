@@ -44,6 +44,14 @@ export function iniciarDesafioDiario() {
   if (!desafioDiarioData || !desafioDiarioData.questoes || desafioDiarioData.questoes.length === 0) return;
   if (desafioDiarioData.completado) return;
 
+  // Auto-start global timer if not already running
+  try {
+    const timerState = localStorage.getItem('pomo_timer');
+    if (!timerState && typeof window.startGlobalTimer === 'function') {
+      window.startGlobalTimer('Desafio Diário', 25, 'questoes');
+    }
+  } catch(e) {}
+
   desafioQuestoes = desafioDiarioData.questoes;
   desafioIdx = 0;
   desafioRespostas = [];

@@ -16,6 +16,15 @@ export async function carregarQuestoesDia() {
     questoesDia = pool.sort(() => Math.random() - 0.5).slice(0, qtd);
     qDiaIdx = 0;
     qDiaAcertos = 0;
+
+    // Auto-start global timer if not already running
+    try {
+      const timerState = localStorage.getItem('pomo_timer');
+      if (!timerState && typeof window.startGlobalTimer === 'function') {
+        window.startGlobalTimer('Questões do Dia', 25, 'questoes');
+      }
+    } catch(e) {}
+
     document.getElementById('questoes-dia-area').style.display = 'none';
     document.getElementById('questao-dia-card').style.display = 'block';
     document.getElementById('questoes-dia-progress').style.display = 'block';
