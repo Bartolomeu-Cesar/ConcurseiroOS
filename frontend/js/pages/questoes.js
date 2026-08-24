@@ -807,9 +807,9 @@ async function loadBanco() {
 
   const countEl = document.getElementById('banco-count');
   if (semGabarito) {
-    countEl.innerHTML = `<strong style="color:#f38ba8;">${questoes.length}</strong> questão(ões) sem gabarito`;
+    countEl.innerHTML = `⚠️ <strong style="color:#f38ba8;">${questoes.length}</strong> questão(ões) encontrada(s) sem gabarito`;
   } else {
-    countEl.textContent = `${questoes.length} questão(ões)`;
+    countEl.textContent = `Total: ${questoes.length} questão(ões)`;
   }
   const list = document.getElementById('banco-list');
 
