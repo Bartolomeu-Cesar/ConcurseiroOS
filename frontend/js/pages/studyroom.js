@@ -843,10 +843,10 @@ window.rateSrFlashcard = rateSrFlashcard;
 
 async function loadSrQuestoes() {
   try {
-    const res = await fetch('/api/questoes?page=1&limit=20', { headers });
+    const res = await fetch('/api/questoes?limit=20', { headers });
     if (!res.ok) return;
     const data = await res.json();
-    srQuestoes = Array.isArray(data) ? data : (data.questoes || []);
+    srQuestoes = Array.isArray(data) ? data : (data.items || []);
     // Shuffle for variety
     srQuestoes.sort(() => Math.random() - 0.5);
     srQIdx = 0;
@@ -1408,6 +1408,12 @@ if ('Notification' in window && Notification.permission === 'default') {
 loadMinhasSalas();
 loadGoalSuggestion();
 loadMindfulness();
+
+// Ensure study tab buttons work via event delegation (fallback for onclick)
+document.getElementById('study-tabs')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-tab]');
+  if (btn) switchStudyTab(btn.dataset.tab);
+});
 
 // ============================================================
 // BREAK CARDS: Micro-Retrieval during Pomodoro breaks
