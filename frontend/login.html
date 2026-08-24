@@ -166,11 +166,11 @@
         currentEmail = email;
         document.getElementById('code-email-label').textContent = email;
 
-        // Em dev sem SMTP, mostrar código na tela
-        if (data.code) {
+        // Em dev sem SMTP, código aparece no console do servidor
+        if (!data.email_sent) {
           const devEl = document.getElementById('dev-code');
           devEl.style.display = 'block';
-          devEl.textContent = '🔑 Código (dev): ' + data.code;
+          devEl.textContent = '🔑 Código no console do servidor (SMTP não configurado)';
         }
 
         showStep('code');
