@@ -212,17 +212,30 @@
     };
 
     window.globalTimerStop = function() {
-        if (typeof confirmModal === 'function') {
-            confirmModal('Parar Timer', 'Deseja parar o timer e voltar ao calendário?', { confirmText: 'Parar', type: 'warning', icon: '⏹' }).then(ok => {
-                if (ok) { clearTimerState(); removeWidget(); stopTimerLoop(); alarmPlayed = false; window.location.href = '/dashboard.html'; }
-            });
-        } else if (confirm('Parar o timer e voltar ao calendário?')) {
+        // Custom confirmation modal (works on all pages without dependencies)
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(30,30,46,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;animation:fadeIn 0.2s ease;';
+        overlay.innerHTML = `
+            <div style="background:#313244;border:1px solid #45475a;border-radius:16px;padding:24px;max-width:320px;width:90%;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+                <div style="font-size:2rem;margin-bottom:8px;">⏹</div>
+                <h3 style="color:#cdd6f4;margin:0 0 8px;">Parar Timer</h3>
+                <p style="color:#a6adc8;font-size:0.85rem;margin:0 0 16px;">Deseja parar o timer e registrar o tempo estudado?</p>
+                <div style="display:flex;gap:8px;">
+                    <button id="gtw-cancel" style="flex:1;padding:10px;background:#45475a;color:#cdd6f4;border:none;border-radius:8px;cursor:pointer;font-weight:600;">Cancelar</button>
+                    <button id="gtw-confirm" style="flex:1;padding:10px;background:#f38ba8;color:#1e1e2e;border:none;border-radius:8px;cursor:pointer;font-weight:600;">Parar</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+        overlay.querySelector('#gtw-cancel').onclick = () => overlay.remove();
+        overlay.querySelector('#gtw-confirm').onclick = () => {
+            overlay.remove();
             clearTimerState();
             removeWidget();
             stopTimerLoop();
             alarmPlayed = false;
-            window.location.href = '/dashboard.html';
-        }
+        };
+        overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
     };
 
     window.startGlobalTimer = function(materia, tempoMin, tipo) {
