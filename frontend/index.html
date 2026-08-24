@@ -75,8 +75,10 @@
     </div>
 
     <div id="io-box">
+      <button class="iobtn" onclick="document.getElementById('upload-pdf-input').click()">📄 Enviar PDF</button>
       <button class="iobtn" onclick="exportProgress()">⬇ Exportar progresso</button>
       <button class="iobtn" onclick="document.getElementById('import-input').click()">⬆ Importar progresso</button>
+      <input id="upload-pdf-input" type="file" accept=".pdf" style="display:none" onchange="uploadPdf(this)">
       <input id="import-input" type="file" accept=".json" style="display:none" onchange="importProgress(this)">
     </div>
     <div id="tree"></div>

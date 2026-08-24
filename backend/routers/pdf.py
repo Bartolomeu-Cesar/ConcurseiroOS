@@ -144,3 +144,67 @@ async def import_progress(file: UploadFile = File(...), conn=Depends(get_db_sess
         """, (item["path"], item["current_page"], item["total_pages"], user_id))
     conn.commit()
     return {"ok": True, "imported": len(data)}
+
+
+@router.post("/api/pdfs/upload", summary="Upload de PDF para estudo",
+             description="Faz upload de um arquivo PDF para a biblioteca de estudo.")
+async def upload_pdf(file: UploadFile = File(...), user_id: int = Depends(get_user_id)):
+    """Salva um PDF na pasta de PDFs para leitura no viewer."""
+    if not file.filename or not file.filename.lower().endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="Apenas arquivos PDF são aceitos.")
+
+    # Sanitize filename
+    import re
+    safe_name = re.sub(r'[^\w\s\-.]', '', file.filename).strip()
+    if not safe_name:
+        safe_name = "documento.pdf"
+    if not safe_name.lower().endswith('.pdf'):
+        safe_name += '.pdf'
+
+    # Ensure pdfs directory exists
+    pdf_dir = Path(PDF_ROOT)
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+
+    # Avoid overwriting existing files
+    target = pdf_dir / safe_name
+    if target.exists():
+        base = safe_name[:-4]
+        i = 1
+        while target.exists():
+            target = pdf_dir / f"{base}_{i}.pdf"
+            i += 1
+        safe_name = target.name
+
+    # Save file
+    content = await file.read()
+    target.write_bytes(content)
+
+    # Get page count
+    total_pages = get_pdf_pages(str(target))
+
+    return {
+        "ok": True,
+        "filename": safe_name,
+        "path": safe_name,
+        "total_pages": total_pages,
+        "size_mb": round(len(content) / (1024 * 1024), 2),
+    }
+
+
+@router.delete("/api/pdfs/{path:path}", summary="Excluir PDF")
+def delete_pdf(path: str, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Remove um PDF da biblioteca."""
+    if ".." in path or path.startswith("/"):
+        raise HTTPException(status_code=403, detail="Acesso negado")
+    target = Path(PDF_ROOT) / path
+    try:
+        target.relative_to(Path(PDF_ROOT))
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Acesso negado")
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="PDF não encontrado")
+    target.unlink()
+    # Remove progress record
+    conn.execute("DELETE FROM progress WHERE path = ? AND user_id = ?", (path, user_id))
+    conn.commit()
+    return {"ok": True, "deleted": path}

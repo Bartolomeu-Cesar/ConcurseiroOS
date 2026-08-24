@@ -272,6 +272,33 @@ export async function importProgress(input) {
   else { toast('Erro ao importar.', 'error'); }
 }
 
+export async function uploadPdf(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (!file.name.toLowerCase().endsWith('.pdf')) {
+    toast('Apenas arquivos PDF são aceitos.', 'error');
+    input.value = '';
+    return;
+  }
+  toast('Enviando PDF...', 'info');
+  const form = new FormData();
+  form.append('file', file);
+  try {
+    const res = await fetch('/api/pdfs/upload', { method: 'POST', body: form });
+    const data = await res.json();
+    input.value = '';
+    if (data.ok) {
+      toast(`PDF "${data.filename}" enviado! (${data.total_pages} páginas, ${data.size_mb}MB)`, 'success');
+      load(); // Reload tree
+    } else {
+      toast(data.detail || 'Erro ao enviar PDF.', 'error');
+    }
+  } catch (e) {
+    toast('Erro de conexão ao enviar PDF.', 'error');
+    input.value = '';
+  }
+}
+
 export function initPdfs(deps) {
   _linkPdfToDisc = deps.linkPdfToDisc;
   _unlinkPdf = deps.unlinkPdf;
