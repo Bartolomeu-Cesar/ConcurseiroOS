@@ -502,3 +502,11 @@ def _create_tables(conn):
             repetitions INTEGER DEFAULT 0
         )
     """)
+
+    # ========== SCHEMA VERSION (versionamento de migrations) ==========
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS schema_version (
+            version INTEGER PRIMARY KEY,
+            applied_at TEXT NOT NULL
+        )
+    """)

@@ -286,3 +286,156 @@ class AdminChangePlan(BaseModel):
     """POST /api/admin/users/{id}/plano body — change user plan."""
     plano: str
     plano_expira: str = ""
+
+
+# ============================================================
+# Batalha — Requests (P2-13)
+# ============================================================
+
+class CriarBatalhaRequest(BaseModel):
+    """POST /api/batalha/criar body."""
+    titulo: str = "Batalha de Questões"
+    materias: list[str] = Field(default_factory=list)
+    total_rodadas: int = 5
+    tempo_por_questao: int = 30
+    max_jogadores: int = 5
+
+
+class EntrarBatalhaRequest(BaseModel):
+    """POST /api/batalha/entrar body."""
+    codigo: str
+    nome: Optional[str] = None
+
+
+class ReconfigurarBatalhaRequest(BaseModel):
+    """POST /api/batalha/reconfigurar/{codigo} body."""
+    materias: Optional[list[str]] = None
+    total_rodadas: Optional[int] = None
+    tempo_por_questao: Optional[int] = None
+    max_jogadores: Optional[int] = None
+
+
+class IniciarBatalhaRequest(BaseModel):
+    """POST /api/batalha/iniciar/{codigo} body."""
+    questao_ids: list[int] = Field(default_factory=list)
+
+
+class ResponderRodadaRequest(BaseModel):
+    """POST /api/batalha/responder/{codigo} body."""
+    resposta: str = ""
+    tempo_seg: int = 0
+
+
+# ============================================================
+# Calendário — Requests (P2-13)
+# ============================================================
+
+class AtividadeConcluidaRequest(BaseModel):
+    """POST /api/calendario/atividade-concluida body."""
+    data: Optional[str] = None
+    dia_semana: int = 0
+    materia: str = ""
+    tipo: str = "estudo"
+    tempo_min: int = 0
+    total_atividades: int = 0
+
+
+class DesmarcarAtividadeRequest(BaseModel):
+    """DELETE /api/calendario/atividade-concluida body."""
+    data: Optional[str] = None
+    materia: str = ""
+    tipo: str = "estudo"
+    total_atividades: int = 0
+
+
+class SalvarQuestaoDissertativaRequest(BaseModel):
+    """POST /api/questao-dissertativa/salvar body."""
+    edital_id: Optional[int] = None
+    resposta: str = ""
+    confianca: int = 3
+    materia: str = ""
+
+
+class RegistrarAutoavaliacaoRequest(BaseModel):
+    """POST /api/autoavaliacao/registrar body."""
+    resultados: list[dict] = Field(default_factory=list)
+
+
+class ResetInteligenteRequest(BaseModel):
+    """POST /api/planejador/reset-inteligente body."""
+    edital_nome: str = ""
+    cargo: str = ""
+    horas_dia: Optional[float] = None
+
+
+# ============================================================
+# Edital — Requests (P2-13)
+# ============================================================
+
+class UpdateEditalInfoRequest(BaseModel):
+    """PUT /api/edital/info/{id} body."""
+    edital_nome: Optional[str] = None
+    cargo: Optional[str] = None
+    orgao: Optional[str] = None
+    banca: Optional[str] = None
+    vagas: Optional[str] = None
+    subsidio: Optional[str] = None
+    inscricoes: Optional[str] = None
+    data_prova_objetiva: Optional[str] = None
+    data_prova_discursiva: Optional[str] = None
+    horario: Optional[str] = None
+    local_prova: Optional[str] = None
+    taxa_inscricao: Optional[str] = None
+    link_edital: Optional[str] = None
+    observacoes: Optional[str] = None
+
+
+class CreateEditalInfoRequest(BaseModel):
+    """POST /api/edital/info body."""
+    edital_nome: str = ""
+    cargo: str = ""
+    orgao: str = ""
+    banca: str = ""
+    vagas: str = ""
+    subsidio: str = ""
+    inscricoes: str = ""
+    data_prova_objetiva: str = ""
+    data_prova_discursiva: str = ""
+    horario: str = ""
+    local_prova: str = ""
+    taxa_inscricao: str = ""
+    link_edital: str = ""
+    observacoes: str = ""
+
+
+class RenomearEditalRequest(BaseModel):
+    """PUT /api/edital/renomear body."""
+    antigo: str = ""
+    novo: str = ""
+    cargo_antigo: str = ""
+    cargo_novo: str = ""
+
+
+# ============================================================
+# Questões — Requests (P2-13)
+# ============================================================
+
+class RevisarErroRequest(BaseModel):
+    """POST /api/questoes/erros/revisar/{id} body."""
+    acertou: bool = False
+
+
+# ============================================================
+# Social — Requests (P2-13)
+# ============================================================
+
+class AddMemberRequest(BaseModel):
+    """POST /api/social/groups/{id}/add-member body."""
+    email: str = ""
+    user_id: Optional[int] = None
+    username: str = ""
+
+
+class ChangeMemberRoleRequest(BaseModel):
+    """PUT /api/social/groups/{id}/members/{member_id}/role body."""
+    role: str = "member"

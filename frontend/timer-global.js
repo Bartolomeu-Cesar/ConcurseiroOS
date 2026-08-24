@@ -98,6 +98,9 @@
         if (document.getElementById('global-timer-widget')) return;
         const div = document.createElement('div');
         div.id = 'global-timer-widget';
+        div.setAttribute('role', 'timer');
+        div.setAttribute('aria-live', 'polite');
+        div.setAttribute('aria-label', 'Timer de estudo');
         div.innerHTML = `
             <div style="display:flex;align-items:center;gap:8px;">
                 <span id="gtw-materia" style="font-size:0.75rem;color:#cba6f7;font-weight:600;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
@@ -211,11 +214,12 @@
     window.globalTimerStop = function() {
         if (typeof confirmModal === 'function') {
             confirmModal('Parar Timer', 'Deseja parar o timer e voltar ao calendário?', { confirmText: 'Parar', type: 'warning', icon: '⏹' }).then(ok => {
-                if (ok) { clearTimerState(); removeWidget(); alarmPlayed = false; window.location.href = '/dashboard.html'; }
+                if (ok) { clearTimerState(); removeWidget(); stopTimerLoop(); alarmPlayed = false; window.location.href = '/dashboard.html'; }
             });
         } else if (confirm('Parar o timer e voltar ao calendário?')) {
             clearTimerState();
             removeWidget();
+            stopTimerLoop();
             alarmPlayed = false;
             window.location.href = '/dashboard.html';
         }
@@ -234,24 +238,54 @@
         setTimerState(state);
         createWidget();
         updateWidget(state);
+        startTimerLoop();
     };
 
-    // Loop: verifica timer a cada segundo
-    setInterval(() => {
-        const state = getTimerState();
-        if (state) {
-            if (!document.getElementById('global-timer-widget')) createWidget();
-            updateWidget(state);
-        } else {
-            removeWidget();
-        }
-    }, 1000);
+    // Loop: otimizado — só roda setInterval quando há timer ativo
+    let timerIntervalId = null;
 
-    // Check inicial
+    function startTimerLoop() {
+        if (timerIntervalId) return; // já rodando
+        timerIntervalId = setInterval(() => {
+            const state = getTimerState();
+            if (state) {
+                if (!document.getElementById('global-timer-widget')) createWidget();
+                updateWidget(state);
+            } else {
+                removeWidget();
+                stopTimerLoop();
+            }
+        }, 1000);
+    }
+
+    function stopTimerLoop() {
+        if (timerIntervalId) {
+            clearInterval(timerIntervalId);
+            timerIntervalId = null;
+        }
+    }
+
+    // Pausar/retomar com visibilidade da aba
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            stopTimerLoop();
+        } else {
+            // Ao voltar, verificar se ainda há timer e reiniciar loop
+            const state = getTimerState();
+            if (state) {
+                if (!document.getElementById('global-timer-widget')) createWidget();
+                updateWidget(state);
+                startTimerLoop();
+            }
+        }
+    });
+
+    // Check inicial — só inicia loop se há timer
     const initialState = getTimerState();
     if (initialState) {
         createWidget();
         updateWidget(initialState);
+        startTimerLoop();
     }
 
     // Pedir permissão de notificação

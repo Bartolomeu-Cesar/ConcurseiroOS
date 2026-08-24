@@ -10,6 +10,8 @@ from database import get_db_session
 from deps import get_user_id
 from logger import log
 from models import EditalCreate, EditalHoras, EditalPdfLink, EditalReviewSM2, NotaTopicoCreate, OkResponse, ResumoCreate
+from sanitize import sanitize_input
+from schemas import CreateEditalInfoRequest, RenomearEditalRequest, UpdateEditalInfoRequest
 from utils import paginate, sql_paginate, today_str
 
 router = APIRouter(prefix="", tags=["Edital"])
@@ -45,17 +47,19 @@ def get_edital_info(edital_nome: str = "", conn=Depends(get_db_session), user_id
 
 
 @router.put("/api/edital/info/{id}")
-def update_edital_info(id: int, body: dict = Body(...), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+def update_edital_info(id: int, body: UpdateEditalInfoRequest, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Atualiza metadados de um edital/cargo"""
     campos = ["edital_nome", "cargo", "orgao", "banca", "vagas", "subsidio", "inscricoes",
               "data_prova_objetiva", "data_prova_discursiva", "horario", "local_prova",
               "taxa_inscricao", "link_edital", "observacoes"]
     sets = []
     params = []
+    body_dict = body.model_dump(exclude_unset=True)
     for campo in campos:
-        if campo in body:
+        if campo in body_dict:
             sets.append(f"{campo} = ?")
-            params.append(body[campo])
+            val = body_dict[campo]
+            params.append(sanitize_input(val) if isinstance(val, str) else val)
     if not sets:
         raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
     params.append(id)
@@ -66,28 +70,29 @@ def update_edital_info(id: int, body: dict = Body(...), conn=Depends(get_db_sess
 
 
 @router.post("/api/edital/info")
-def create_edital_info(body: dict = Body(...), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+def create_edital_info(body: CreateEditalInfoRequest, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Cria metadados para um edital/cargo"""
     cur = conn.execute("""
         INSERT INTO edital_info (edital_nome, cargo, orgao, banca, vagas, subsidio, inscricoes,
             data_prova_objetiva, data_prova_discursiva, horario, local_prova, taxa_inscricao, link_edital, observacoes, user_id)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (body.get("edital_nome",""), body.get("cargo",""), body.get("orgao",""), body.get("banca",""),
-          body.get("vagas",""), body.get("subsidio",""), body.get("inscricoes",""),
-          body.get("data_prova_objetiva",""), body.get("data_prova_discursiva",""),
-          body.get("horario",""), body.get("local_prova",""), body.get("taxa_inscricao",""),
-          body.get("link_edital",""), body.get("observacoes",""), user_id))
+    """, (sanitize_input(body.edital_nome), sanitize_input(body.cargo), sanitize_input(body.orgao),
+          sanitize_input(body.banca), sanitize_input(body.vagas), sanitize_input(body.subsidio),
+          sanitize_input(body.inscricoes), sanitize_input(body.data_prova_objetiva),
+          sanitize_input(body.data_prova_discursiva), sanitize_input(body.horario),
+          sanitize_input(body.local_prova), sanitize_input(body.taxa_inscricao),
+          sanitize_input(body.link_edital), sanitize_input(body.observacoes, max_length=2000), user_id))
     conn.commit()
     return {"ok": True, "id": cur.lastrowid}
 
 
 @router.put("/api/edital/renomear")
-def renomear_edital(body: dict = Body(...), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+def renomear_edital(body: RenomearEditalRequest, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Renomeia um edital (atualiza edital_nome em edital e edital_info)"""
-    antigo = body.get("antigo", "")
-    novo = body.get("novo", "")
-    cargo_antigo = body.get("cargo_antigo", "")
-    cargo_novo = body.get("cargo_novo", "")
+    antigo = sanitize_input(body.antigo)
+    novo = sanitize_input(body.novo)
+    cargo_antigo = sanitize_input(body.cargo_antigo)
+    cargo_novo = sanitize_input(body.cargo_novo)
 
     if not antigo or not novo:
         raise HTTPException(status_code=400, detail="Informe nome antigo e novo")

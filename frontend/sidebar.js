@@ -67,40 +67,40 @@
       <div class="sidebar-section">
         <div class="sidebar-section-title">Hoje</div>
         <ul class="sidebar-nav">
-          <li><a href="/dashboard.html" class="${activeClass('/dashboard')}"><span class="nav-icon">⚡</span><span class="nav-label">Meu Dia</span></a></li>
-          <li><a href="/dashboard.html#calendario" onclick="return goPanel('panel-calendario')"><span class="nav-icon">📅</span><span class="nav-label">Calendário</span></a></li>
+          <li><a href="/dashboard.html" class="${activeClass('/dashboard')}"><span class="nav-icon" aria-hidden="true">⚡</span><span class="nav-label">Meu Dia</span></a></li>
+          <li><a href="/dashboard.html#calendario" onclick="return goPanel('panel-calendario')"><span class="nav-icon" aria-hidden="true">📅</span><span class="nav-label">Calendário</span></a></li>
         </ul>
       </div>
 
       <div class="sidebar-section">
         <div class="sidebar-section-title">Estudar</div>
         <ul class="sidebar-nav">
-          <li><a href="/" class="${activeClass('/')}"><span class="nav-icon">📖</span><span class="nav-label">PDFs / Leitura</span></a></li>
-          <li><a href="/#edital" onclick="goSection('tab-edital')"><span class="nav-icon">📋</span><span class="nav-label">Edital</span></a></li>
-          <li><a href="/#ciclo" onclick="goSection('tab-ciclo')"><span class="nav-icon">🔄</span><span class="nav-label">Ciclo</span></a></li>
+          <li><a href="/" class="${activeClass('/')}"><span class="nav-icon" aria-hidden="true">📖</span><span class="nav-label">PDFs / Leitura</span></a></li>
+          <li><a href="/#edital" onclick="goSection('tab-edital')"><span class="nav-icon" aria-hidden="true">📋</span><span class="nav-label">Edital</span></a></li>
+          <li><a href="/#ciclo" onclick="goSection('tab-ciclo')"><span class="nav-icon" aria-hidden="true">🔄</span><span class="nav-label">Ciclo</span></a></li>
         </ul>
       </div>
 
       <div class="sidebar-section">
         <div class="sidebar-section-title">Praticar</div>
         <ul class="sidebar-nav">
-          <li><a href="/questoes.html" class="${activeClass('/questoes')}"><span class="nav-icon">❓</span><span class="nav-label">Questões</span><span class="nav-badge" id="badge-questoes"></span></a></li>
-          <li><a href="/caderno-erros.html" class="${activeClass('/caderno-erros')}"><span class="nav-icon">📕</span><span class="nav-label">Caderno de Erros</span><span class="nav-badge" id="badge-caderno-erros"></span></a></li>
-          <li><a href="/#flashcards" onclick="goSection('tab-flashcards')"><span class="nav-icon">🧠</span><span class="nav-label">Flashcards</span><span class="nav-badge" id="badge-flashcards"></span></a></li>
-          <li><a href="/#sumulas" onclick="goSection('tab-sumulas')"><span class="nav-icon">⚖️</span><span class="nav-label">Súmulas</span><span class="nav-badge" id="badge-sumulas"></span></a></li>
-          <li><a href="/social.html#ai" onclick="goSocialTab('ai')"><span class="nav-icon">🤖</span><span class="nav-label">AI Tutor</span></a></li>
-          <li><a href="/batalha.html" class="${activeClass('/batalha')}"><span class="nav-icon">⚔️</span><span class="nav-label">Batalha</span></a></li>
-          <li><a href="/studyroom.html" class="${activeClass('/studyroom')}"><span class="nav-icon">🏠</span><span class="nav-label">Sala de Estudos</span></a></li>
+          <li><a href="/questoes.html" class="${activeClass('/questoes')}"><span class="nav-icon" aria-hidden="true">❓</span><span class="nav-label">Questões</span><span class="nav-badge" id="badge-questoes"></span></a></li>
+          <li><a href="/caderno-erros.html" class="${activeClass('/caderno-erros')}"><span class="nav-icon" aria-hidden="true">📕</span><span class="nav-label">Caderno de Erros</span><span class="nav-badge" id="badge-caderno-erros"></span></a></li>
+          <li><a href="/#flashcards" onclick="goSection('tab-flashcards')"><span class="nav-icon" aria-hidden="true">🧠</span><span class="nav-label">Flashcards</span><span class="nav-badge" id="badge-flashcards"></span></a></li>
+          <li><a href="/#sumulas" onclick="goSection('tab-sumulas')"><span class="nav-icon" aria-hidden="true">⚖️</span><span class="nav-label">Súmulas</span><span class="nav-badge" id="badge-sumulas"></span></a></li>
+          <li><a href="/social.html#ai" onclick="goSocialTab('ai')"><span class="nav-icon" aria-hidden="true">🤖</span><span class="nav-label">AI Tutor</span></a></li>
+          <li><a href="/batalha.html" class="${activeClass('/batalha')}"><span class="nav-icon" aria-hidden="true">⚔️</span><span class="nav-label">Batalha</span></a></li>
+          <li><a href="/studyroom.html" class="${activeClass('/studyroom')}"><span class="nav-icon" aria-hidden="true">🏠</span><span class="nav-label">Sala de Estudos</span></a></li>
         </ul>
       </div>
 
       <div class="sidebar-section">
         <div class="sidebar-section-title">Progresso</div>
         <ul class="sidebar-nav">
-          <li><a href="/mastery.html" class="${activeClass('/mastery')}"><span class="nav-icon">📈</span><span class="nav-label">Domínio</span></a></li>
-          <li><a href="/dashboard.html#analytics" onclick="return goPanel('panel-analytics')"><span class="nav-icon">📊</span><span class="nav-label">Analytics</span></a></li>
-          <li><a href="/raio-x.html" class="${activeClass('/raio-x')}"><span class="nav-icon">🎯</span><span class="nav-label">Raio-X Bancas</span></a></li>
-          <li><a href="/social.html" class="${activeClass('/social')}"><span class="nav-icon">🏆</span><span class="nav-label">Liga & Social</span></a></li>
+          <li><a href="/mastery.html" class="${activeClass('/mastery')}"><span class="nav-icon" aria-hidden="true">📈</span><span class="nav-label">Domínio</span></a></li>
+          <li><a href="/dashboard.html#analytics" onclick="return goPanel('panel-analytics')"><span class="nav-icon" aria-hidden="true">📊</span><span class="nav-label">Analytics</span></a></li>
+          <li><a href="/raio-x.html" class="${activeClass('/raio-x')}"><span class="nav-icon" aria-hidden="true">🎯</span><span class="nav-label">Raio-X Bancas</span></a></li>
+          <li><a href="/social.html" class="${activeClass('/social')}"><span class="nav-icon" aria-hidden="true">🏆</span><span class="nav-label">Liga & Social</span></a></li>
         </ul>
       </div>
 
@@ -117,11 +117,11 @@
 
     <!-- Bottom Navigation Mobile -->
     <nav class="bottom-nav" id="bottom-nav" aria-label="Navegação principal">
-      <a href="/dashboard.html" class="${activeClass('/dashboard')}"><span class="bnav-icon">⚡</span><span class="bnav-label">Hoje</span></a>
-      <a href="/" class="${activeClass('/')}"><span class="bnav-icon">📖</span><span class="bnav-label">Estudar</span></a>
-      <a href="/questoes.html" class="${activeClass('/questoes')}"><span class="bnav-icon">❓</span><span class="bnav-label">Praticar</span><span class="bnav-badge" id="bnav-badge-praticar"></span></a>
-      <a href="/dashboard.html#analytics" onclick="return goPanel('panel-analytics')"><span class="bnav-icon">📊</span><span class="bnav-label">Progresso</span></a>
-      <a href="/social.html" class="${activeClass('/social')}"><span class="bnav-icon">👤</span><span class="bnav-label">Perfil</span></a>
+      <a href="/dashboard.html" class="${activeClass('/dashboard')}"><span class="bnav-icon" aria-hidden="true">⚡</span><span class="bnav-label">Hoje</span></a>
+      <a href="/" class="${activeClass('/')}"><span class="bnav-icon" aria-hidden="true">📖</span><span class="bnav-label">Estudar</span></a>
+      <a href="/questoes.html" class="${activeClass('/questoes')}"><span class="bnav-icon" aria-hidden="true">❓</span><span class="bnav-label">Praticar</span><span class="bnav-badge" id="bnav-badge-praticar"></span></a>
+      <a href="/dashboard.html#analytics" onclick="return goPanel('panel-analytics')"><span class="bnav-icon" aria-hidden="true">📊</span><span class="bnav-label">Progresso</span></a>
+      <a href="/social.html" class="${activeClass('/social')}"><span class="bnav-icon" aria-hidden="true">👤</span><span class="bnav-label">Perfil</span></a>
     </nav>
   `;
 

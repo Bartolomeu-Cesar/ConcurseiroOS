@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse
 from database import get_db_session
 from deps import get_user_id
 from logger import log
+from services import get_acertos_por_materia, get_horas_estudadas
 from utils import calculate_streak, paginate, sql_paginate, today_str
 
 router = APIRouter(prefix="", tags=["Analytics"])
@@ -83,13 +84,8 @@ def resumo_diario(conn=Depends(get_db_session), user_id: int = Depends(get_user_
 
 @router.get("/api/pratica-deliberada")
 def pratica_deliberada(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
-    materias = conn.execute("""
-        SELECT q.materia, COUNT(*) as total_questoes, SUM(qr.acertou) as acertos,
-               ROUND(CAST(SUM(qr.acertou) AS FLOAT) / COUNT(*) * 100, 1) as percentual
-        FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id
-        WHERE qr.user_id = ?
-        GROUP BY q.materia ORDER BY percentual ASC
-    """, (user_id,)).fetchall()
+    materias = get_acertos_por_materia(conn, user_id)
+    materias_sorted = sorted(materias, key=lambda x: x["pct"])
 
     nao_estudadas = conn.execute("""
         SELECT DISTINCT materia FROM questoes
@@ -101,11 +97,11 @@ def pratica_deliberada(conn=Depends(get_db_session), user_id: int = Depends(get_
     """, (user_id, user_id)).fetchall()
 
     sugestoes = []
-    for m in materias:
-        if m[3] < 70:
+    for m in materias_sorted:
+        if m["pct"] < 70:
             sugestoes.append({
-                "materia": m[0], "total_questoes": m[1], "percentual": m[3],
-                "prioridade": "ALTA" if m[3] < 50 else "MÉDIA"
+                "materia": m["materia"], "total_questoes": m["total"], "percentual": m["pct"],
+                "prioridade": "ALTA" if m["pct"] < 50 else "MÉDIA"
             })
 
     return {
@@ -133,13 +129,8 @@ def get_radar(edital_nome: str = "", cargo: str = "", conn=Depends(get_db_sessio
     query += " GROUP BY materia ORDER BY materia"
     materias_edital = conn.execute(query, params).fetchall()
 
-    questoes_por_mat = conn.execute("""
-        SELECT q.materia, COUNT(*) as total, SUM(qr.acertou) as acertos
-        FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id
-        WHERE qr.user_id = ?
-        GROUP BY q.materia
-    """, (user_id,)).fetchall()
-    q_map = {r[0]: {"total": r[1], "acertos": r[2]} for r in questoes_por_mat}
+    questoes_por_mat = get_acertos_por_materia(conn, user_id)
+    q_map = {r["materia"]: {"total": r["total"], "acertos": r["acertos"]} for r in questoes_por_mat}
 
     radar_data = []
     for m in materias_edital:
@@ -228,7 +219,7 @@ def previsao_aprovacao(edital_nome: str = "", cargo: str = "", conn=Depends(get_
     topicos_concluidos = conn.execute(query_done, params).fetchone()[0]
     q_total = conn.execute("SELECT COUNT(*) FROM questoes_respostas WHERE user_id = ?", (user_id,)).fetchone()[0]
     q_acertos = conn.execute("SELECT COUNT(*) FROM questoes_respostas WHERE acertou = 1 AND user_id = ?", (user_id,)).fetchone()[0]
-    horas_total = conn.execute("SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE user_id = ?", (user_id,)).fetchone()[0]
+    horas_total = get_horas_estudadas(conn, user_id)
 
     pct_edital = (topicos_concluidos / total_topicos * 100) if total_topicos > 0 else 0
     pct_questoes = (q_acertos / q_total * 100) if q_total > 0 else 0

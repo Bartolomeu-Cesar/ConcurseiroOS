@@ -9,6 +9,7 @@ from typing import Optional
 
 from constants import WEIGHT_ACCURACY, WEIGHT_CONSISTENCY, WEIGHT_PROGRESS
 from logger import log
+from services import get_acertos_por_materia
 from utils import today_str
 
 
@@ -17,13 +18,8 @@ from utils import today_str
 # ============================================================
 
 def _get_performance_by_subject(conn, user_id: int) -> dict:
-    rows = conn.execute("""
-        SELECT q.materia, COUNT(*) as total, SUM(qr.acertou) as acertos
-        FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id
-        WHERE qr.user_id = ?
-        GROUP BY q.materia
-    """, (user_id,)).fetchall()
-    return {r[0]: {"total": r[1], "acertos": r[2] or 0, "pct": round((r[2] or 0) / r[1] * 100, 1) if r[1] > 0 else 0} for r in rows}
+    rows = get_acertos_por_materia(conn, user_id)
+    return {r["materia"]: {"total": r["total"], "acertos": r["acertos"], "pct": r["pct"]} for r in rows}
 
 
 def _get_last_session_by_subject(conn, user_id: int) -> dict:

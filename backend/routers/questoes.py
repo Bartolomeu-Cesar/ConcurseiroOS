@@ -12,7 +12,8 @@ from database import get_db_session
 from deps import get_user_id
 from logger import log
 from models import QuestaoCreate, QuestaoResponse, QuestaoResposta, QuestaoRespostaResponse
-from schemas import QuestionLinkBatch, QuestionUpdate
+from sanitize import sanitize_input
+from schemas import QuestionLinkBatch, QuestionUpdate, RevisarErroRequest
 from utils import paginate, sql_paginate, today_str, update_streak
 
 router = APIRouter(prefix="", tags=["Questões"])
@@ -234,11 +235,11 @@ def caderno_erros(conn=Depends(get_db_session), user_id: int = Depends(get_user_
 
 @router.post("/api/questoes/erros/revisar/{id}", summary="Revisar questão errada",
              description="Marca uma questão do caderno de erros como revisada. Avança ou reseta o intervalo de repetição espaçada.")
-def revisar_erro(id: int, body: dict, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+def revisar_erro(id: int, body: RevisarErroRequest, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     from datetime import datetime, timedelta
 
     INTERVALOS = [1, 3, 7, 14, 30]
-    acertou = body.get("acertou", False)
+    acertou = body.acertou
     hoje = today_str()
 
     # Buscar registro de revisão existente
@@ -458,9 +459,16 @@ def create_questao(body: QuestaoCreate, conn=Depends(get_db_session), user_id: i
         INSERT INTO questoes (materia, topico, enunciado, alternativa_a, alternativa_b,
             alternativa_c, alternativa_d, alternativa_e, resposta_correta, explicacao, dificuldade, banca, created_at, user_id)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (body.materia, body.topico, body.enunciado, body.alternativa_a, body.alternativa_b,
-          body.alternativa_c, body.alternativa_d, body.alternativa_e, body.resposta_correta,
-          body.explicacao, body.dificuldade, body.banca, today_str(), user_id))
+    """, (sanitize_input(body.materia), sanitize_input(body.topico),
+          sanitize_input(body.enunciado, max_length=5000),
+          sanitize_input(body.alternativa_a, max_length=2000),
+          sanitize_input(body.alternativa_b, max_length=2000),
+          sanitize_input(body.alternativa_c, max_length=2000),
+          sanitize_input(body.alternativa_d, max_length=2000),
+          sanitize_input(body.alternativa_e, max_length=2000),
+          sanitize_input(body.resposta_correta),
+          sanitize_input(body.explicacao, max_length=5000),
+          sanitize_input(body.dificuldade), sanitize_input(body.banca), today_str(), user_id))
     conn.commit()
     new_id = cur.lastrowid
     log.info(f"Questão created: id={new_id} materia={body.materia}")
@@ -584,11 +592,19 @@ def update_questao(id: int, body: QuestionUpdate, conn=Depends(get_db_session), 
     if not data:
         raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
     
+    # Sanitize text fields
+    text_fields = {"materia", "topico", "enunciado", "alternativa_a", "alternativa_b",
+                   "alternativa_c", "alternativa_d", "alternativa_e", "resposta_correta",
+                   "explicacao", "dificuldade", "banca"}
     updates = []
     params = []
     for campo, valor in data.items():
         updates.append(f"{campo} = ?")
-        params.append(valor)
+        if campo in text_fields and isinstance(valor, str):
+            max_len = 5000 if campo in ("enunciado", "explicacao") else 2000
+            params.append(sanitize_input(valor, max_length=max_len))
+        else:
+            params.append(valor)
     
     params.append(id)
     params.append(user_id)

@@ -16,6 +16,9 @@ let toastContainer = document.getElementById('toast-container');
 if (!toastContainer) {
   toastContainer = document.createElement('div');
   toastContainer.id = 'toast-container';
+  toastContainer.setAttribute('role', 'alert');
+  toastContainer.setAttribute('aria-live', 'assertive');
+  toastContainer.setAttribute('aria-atomic', 'false');
   document.body.appendChild(toastContainer);
 }
 

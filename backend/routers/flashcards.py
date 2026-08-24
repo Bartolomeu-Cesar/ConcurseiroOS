@@ -15,6 +15,7 @@ from models import (
     FlashcardUpdate,
     OkResponse,
 )
+from sanitize import sanitize_input
 from utils import paginate, today_str, update_streak
 
 router = APIRouter(prefix="", tags=["Flashcards"])
@@ -69,14 +70,17 @@ def get_flashcards_aleatorio(materia: str = "", quantidade: int = 10, conn=Depen
 
 @router.post("/api/flashcards", summary="Criar flashcard", description="Cria um novo flashcard com revisão SRS")
 def create_flashcard(body: FlashcardCreate, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    pergunta = sanitize_input(body.pergunta, max_length=2000)
+    resposta = sanitize_input(body.resposta, max_length=5000)
+    materia = sanitize_input(getattr(body, 'materia', ''))
     cur = conn.execute(
         "INSERT INTO flashcards (pergunta, resposta, proxima_revisao, materia, user_id) VALUES (?, ?, ?, ?, ?)",
-        (body.pergunta, body.resposta, today_str(), getattr(body, 'materia', ''), user_id)
+        (pergunta, resposta, today_str(), materia, user_id)
     )
     conn.commit()
     new_id = cur.lastrowid
     log.info(f"Flashcard created: id={new_id}")
-    return {"id": new_id, "pergunta": body.pergunta, "resposta": body.resposta,
+    return {"id": new_id, "pergunta": pergunta, "resposta": resposta,
             "proxima_revisao": today_str(), "intervalo_dias": 1}
 
 
@@ -250,13 +254,13 @@ def update_flashcard(id: int, body: FlashcardUpdate, conn=Depends(get_db_session
     params = []
     if body.pergunta is not None:
         updates.append("pergunta = ?")
-        params.append(body.pergunta)
+        params.append(sanitize_input(body.pergunta, max_length=2000))
     if body.resposta is not None:
         updates.append("resposta = ?")
-        params.append(body.resposta)
+        params.append(sanitize_input(body.resposta, max_length=5000))
     if body.materia is not None:
         updates.append("materia = ?")
-        params.append(body.materia)
+        params.append(sanitize_input(body.materia))
     if not updates:
         raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
     params.append(id)

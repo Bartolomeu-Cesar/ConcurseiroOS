@@ -13,6 +13,8 @@ set -euo pipefail
 
 COMPOSE_FILE="docker-compose.prod.yml"
 PROJECT_NAME="concurseiro"
+HEALTH_TIMEOUT=30
+HEALTH_URL="http://localhost:80/api/health"
 
 # Colors
 RED='\033[0;31m'
@@ -25,6 +27,47 @@ log_info()  { echo -e "${BLUE}[INFO]${NC}  $1"; }
 log_ok()    { echo -e "${GREEN}[OK]${NC}    $1"; }
 log_warn()  { echo -e "${YELLOW}[WARN]${NC}  $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+
+# Health check with polling and timeout
+wait_for_health() {
+    local url="${1:-$HEALTH_URL}"
+    local timeout="${2:-$HEALTH_TIMEOUT}"
+    local elapsed=0
+
+    log_info "Waiting for health check (timeout: ${timeout}s)..."
+
+    set +e
+    while [ $elapsed -lt $timeout ]; do
+        if curl -sf "$url" >/dev/null 2>&1; then
+            set -e
+            log_ok "Health check passed after ${elapsed}s"
+            return 0
+        fi
+        sleep 2
+        elapsed=$((elapsed + 2))
+    done
+    set -e
+
+    log_error "Health check failed after ${timeout}s"
+    return 1
+}
+
+# Automatic rollback on failed deploy
+auto_rollback() {
+    log_error "Deploy failed — initiating automatic rollback..."
+
+    if [ -n "${PREVIOUS_COMMIT:-}" ]; then
+        git checkout "$PREVIOUS_COMMIT" -- .
+        $COMPOSE_CMD -f "$COMPOSE_FILE" -p "$PROJECT_NAME" up -d --build --remove-orphans
+        log_warn "Rolled back to ${PREVIOUS_COMMIT:0:8}"
+        log_info "Check logs: ./deploy.sh logs"
+    else
+        log_error "No previous commit available for rollback"
+        $COMPOSE_CMD -f "$COMPOSE_FILE" -p "$PROJECT_NAME" logs --tail=50
+    fi
+
+    exit 1
+}
 
 # Check prerequisites
 check_deps() {
@@ -93,11 +136,17 @@ deploy() {
         log_warn "Not a git repository — skipping pull"
     fi
 
-    # Build images
+    # Pre-deploy backup
+    log_info "Creating pre-deploy backup..."
+    docker exec app python -c 'from backup import create_backup; create_backup()' 2>/dev/null || {
+        log_warn "Backup skipped (container 'app' not running or backup module unavailable)"
+    }
+
+    # Build images (uses layer cache)
     log_info "Building Docker images..."
     export BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
     export VCS_REF=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-    $COMPOSE_CMD -f "$COMPOSE_FILE" -p "$PROJECT_NAME" build --no-cache
+    $COMPOSE_CMD -f "$COMPOSE_FILE" -p "$PROJECT_NAME" build
     log_ok "Images built successfully (ref: ${VCS_REF})"
 
     # Run database initialization
@@ -115,13 +164,9 @@ deploy() {
     $COMPOSE_CMD -f "$COMPOSE_FILE" -p "$PROJECT_NAME" up -d --build --remove-orphans
     log_ok "Services started"
 
-    # Wait for health check
-    log_info "Waiting for health checks..."
-    sleep 5
-    if $COMPOSE_CMD -f "$COMPOSE_FILE" -p "$PROJECT_NAME" ps | grep -q "healthy"; then
-        log_ok "All services healthy!"
-    else
-        log_warn "Services may still be starting. Check with: ./deploy.sh status"
+    # Wait for health check with polling
+    if ! wait_for_health "$HEALTH_URL" "$HEALTH_TIMEOUT"; then
+        auto_rollback
     fi
 
     echo ""

@@ -9,6 +9,14 @@ from database import get_db_session
 from deps import get_user_id
 from logger import log
 from models import CalendarioItem
+from sanitize import sanitize_input
+from schemas import (
+    AtividadeConcluidaRequest,
+    DesmarcarAtividadeRequest,
+    RegistrarAutoavaliacaoRequest,
+    ResetInteligenteRequest,
+    SalvarQuestaoDissertativaRequest,
+)
 from utils import today_str
 
 router = APIRouter(prefix="", tags=["Calendário"])
@@ -50,7 +58,8 @@ def get_calendario_personalizado(conn=Depends(get_db_session), user_id: int = De
 def add_calendario_item(body: CalendarioItem, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     cur = conn.execute(
         "INSERT INTO calendario_personalizado (dia_semana, materia, topicos, tempo_min, tipo, ordem, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (body.dia_semana, body.materia, body.topicos, body.tempo_min, body.tipo, body.ordem, user_id)
+        (body.dia_semana, sanitize_input(body.materia), sanitize_input(body.topicos, max_length=2000),
+         body.tempo_min, sanitize_input(body.tipo), body.ordem, user_id)
     )
     conn.commit()
     return {"ok": True, "id": cur.lastrowid}
@@ -78,8 +87,9 @@ def salvar_calendario_completo(dias: list = Body(...), conn=Depends(get_db_sessi
     for item in dias:
         conn.execute(
             "INSERT INTO calendario_personalizado (dia_semana, materia, topicos, tempo_min, tipo, ordem, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (item.get("dia_semana", 0), item.get("materia", ""), item.get("topicos", ""),
-             item.get("tempo_min", 60), item.get("tipo", "estudo"), item.get("ordem", count), user_id)
+            (item.get("dia_semana", 0), sanitize_input(item.get("materia", "")),
+             sanitize_input(item.get("topicos", ""), max_length=2000),
+             item.get("tempo_min", 60), sanitize_input(item.get("tipo", "estudo")), item.get("ordem", count), user_id)
         )
         count += 1
     conn.commit()
@@ -91,31 +101,31 @@ def salvar_calendario_completo(dias: list = Body(...), conn=Depends(get_db_sessi
 # ============================================================
 
 @router.post("/api/calendario/atividade-concluida")
-def marcar_atividade_concluida(body: dict = Body(...), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+def marcar_atividade_concluida(body: AtividadeConcluidaRequest, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Marca uma atividade do calendário como concluída."""
-    data_str = body.get("data", today_str())
-    dia_semana = body.get("dia_semana", 0)
-    materia = body.get("materia", "")
-    tipo = body.get("tipo", "estudo")
-    tempo_min = body.get("tempo_min", 0)
+    data_str = body.data or today_str()
+    dia_semana = body.dia_semana
+    materia = sanitize_input(body.materia)
+    tipo = sanitize_input(body.tipo)
+    tempo_min = body.tempo_min
 
     conn.execute("""
         INSERT INTO calendario_atividades (data, dia_semana, materia, tipo, tempo_min, concluida, concluida_at, user_id)
         VALUES (?, ?, ?, ?, ?, 1, ?, ?)
     """, (data_str, dia_semana, materia, tipo, tempo_min, datetime.now().isoformat(), user_id))
 
-    _update_calendario_streak(conn, data_str, body.get("total_atividades", 0), user_id)
+    _update_calendario_streak(conn, data_str, body.total_atividades, user_id)
     conn.commit()
     log.info(f"Atividade concluída: {materia} ({tipo}) em {data_str}")
     return {"ok": True}
 
 
 @router.delete("/api/calendario/atividade-concluida")
-def desmarcar_atividade_concluida(body: dict = Body(...), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+def desmarcar_atividade_concluida(body: DesmarcarAtividadeRequest, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Desmarca uma atividade (desfaz conclusão)."""
-    data_str = body.get("data", today_str())
-    materia = body.get("materia", "")
-    tipo = body.get("tipo", "estudo")
+    data_str = body.data or today_str()
+    materia = sanitize_input(body.materia)
+    tipo = sanitize_input(body.tipo)
 
     conn.execute("""
         DELETE FROM calendario_atividades
@@ -123,7 +133,7 @@ def desmarcar_atividade_concluida(body: dict = Body(...), conn=Depends(get_db_se
         ORDER BY id DESC LIMIT 1
     """, (data_str, materia, tipo, user_id))
 
-    _update_calendario_streak(conn, data_str, body.get("total_atividades", 0), user_id)
+    _update_calendario_streak(conn, data_str, body.total_atividades, user_id)
     conn.commit()
     return {"ok": True}
 
@@ -311,10 +321,10 @@ def get_questao_dissertativa(materia: str = "", conn=Depends(get_db_session), us
 
 
 @router.post("/api/questao-dissertativa/salvar")
-def salvar_questao_dissertativa(body: dict = Body(...), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
-    edital_id = body.get("edital_id")
-    resposta = body.get("resposta", "")
-    confianca = body.get("confianca", 3)
+def salvar_questao_dissertativa(body: SalvarQuestaoDissertativaRequest, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    edital_id = body.edital_id
+    resposta = sanitize_input(body.resposta, max_length=5000)
+    confianca = body.confianca
 
     if not resposta or not edital_id:
         from fastapi import HTTPException
@@ -325,7 +335,7 @@ def salvar_questao_dissertativa(body: dict = Body(...), conn=Depends(get_db_sess
     conn.execute("""
         INSERT INTO calendario_atividades (data, dia_semana, materia, tipo, tempo_min, concluida, concluida_at, user_id)
         VALUES (?, ?, ?, 'dissertativa', 5, 1, ?, ?)
-    """, (today_str(), date.today().weekday(), body.get("materia", ""), datetime.now().isoformat(), user_id))
+    """, (today_str(), date.today().weekday(), sanitize_input(body.materia), datetime.now().isoformat(), user_id))
     conn.commit()
     return {"ok": True, "confianca": confianca}
 
@@ -344,8 +354,8 @@ def get_autoavaliacao(quantidade: int = 5, conn=Depends(get_db_session), user_id
 
 
 @router.post("/api/autoavaliacao/registrar")
-def registrar_autoavaliacao(body: dict = Body(...), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
-    resultados = body.get("resultados", [])
+def registrar_autoavaliacao(body: RegistrarAutoavaliacaoRequest, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    resultados = body.resultados
     calibrados, superconfiante, subconfiante = 0, 0, 0
 
     for r in resultados:
@@ -654,7 +664,7 @@ def progresso_semanal_calendario(conn=Depends(get_db_session), user_id: int = De
 
 @router.post("/api/planejador/reset-inteligente", summary="Reset inteligente do calendário",
              description="Apaga calendário personalizado e gera novo otimizado usando todas as fontes de inteligência")
-def reset_inteligente(body: dict = Body(default={}), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+def reset_inteligente(body: ResetInteligenteRequest = None, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Gera calendário semanal otimizado usando TODAS as inteligências disponíveis."""
     from routers.treinador.analise import (
         _analyze_error_patterns,
@@ -664,11 +674,13 @@ def reset_inteligente(body: dict = Body(default={}), conn=Depends(get_db_session
         _get_performance_by_subject,
     )
 
-    edital_nome = body.get("edital_nome", "")
-    cargo = body.get("cargo", "")
+    if body is None:
+        body = ResetInteligenteRequest()
+    edital_nome = sanitize_input(body.edital_nome)
+    cargo = sanitize_input(body.cargo)
 
     # Get horas_dia from body > metas_config > default 4
-    horas_dia = body.get("horas_dia")
+    horas_dia = body.horas_dia
     if not horas_dia:
         cfg = conn.execute("SELECT meta_horas FROM metas_config WHERE user_id = ?", (user_id,)).fetchone()
         horas_dia = cfg[0] if cfg and cfg[0] else 4.0

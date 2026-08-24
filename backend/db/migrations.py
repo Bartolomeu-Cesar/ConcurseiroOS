@@ -1,402 +1,369 @@
-"""Migrações de schema (ALTER TABLE) para o banco de dados."""
+"""Migrações de schema (ALTER TABLE) para o banco de dados.
+
+Versionamento: cada migration tem um número sequencial. Apenas migrations
+com número > versão atual são executadas. A tabela schema_version registra
+quais já foram aplicadas.
+"""
+from datetime import datetime
+
 from logger import log
 
 
-def _run_migrations(conn):
-    """Executa migrações de schema (ALTER TABLE)."""
-    # Adicionar colunas no edital se não existirem
-    try:
-        conn.execute("SELECT edital_nome FROM edital LIMIT 1")
-    except Exception:
-        conn.execute("ALTER TABLE edital ADD COLUMN edital_nome TEXT DEFAULT 'Geral'")
-        log.info("Migration: added column edital_nome to edital")
+# ============================================================
+# REGISTRO DE MIGRATIONS — cada entrada é (número, função)
+# ============================================================
 
-    try:
-        conn.execute("SELECT cargo FROM edital LIMIT 1")
-    except Exception:
-        conn.execute("ALTER TABLE edital ADD COLUMN cargo TEXT DEFAULT ''")
-        log.info("Migration: added column cargo to edital")
+def _m01_edital_nome(conn):
+    conn.execute("ALTER TABLE edital ADD COLUMN edital_nome TEXT DEFAULT 'Geral'")
 
-    try:
-        conn.execute("SELECT pdf_link FROM edital LIMIT 1")
-    except Exception:
-        conn.execute("ALTER TABLE edital ADD COLUMN pdf_link TEXT DEFAULT ''")
-        log.info("Migration: added column pdf_link to edital")
+def _m02_edital_cargo(conn):
+    conn.execute("ALTER TABLE edital ADD COLUMN cargo TEXT DEFAULT ''")
 
-    try:
-        conn.execute("SELECT pdf_pagina FROM edital LIMIT 1")
-    except Exception:
-        conn.execute("ALTER TABLE edital ADD COLUMN pdf_pagina INTEGER DEFAULT 0")
-        log.info("Migration: added column pdf_pagina to edital")
+def _m03_edital_pdf_link(conn):
+    conn.execute("ALTER TABLE edital ADD COLUMN pdf_link TEXT DEFAULT ''")
 
-    try:
-        conn.execute("SELECT arquivado FROM edital LIMIT 1")
-    except Exception:
-        conn.execute("ALTER TABLE edital ADD COLUMN arquivado INTEGER DEFAULT 0")
-        log.info("Migration: added column arquivado to edital")
+def _m04_edital_pdf_pagina(conn):
+    conn.execute("ALTER TABLE edital ADD COLUMN pdf_pagina INTEGER DEFAULT 0")
 
-    try:
-        conn.execute("SELECT proxima_revisao FROM edital LIMIT 1")
-    except Exception:
-        conn.execute("ALTER TABLE edital ADD COLUMN proxima_revisao TEXT DEFAULT ''")
-        conn.execute("ALTER TABLE edital ADD COLUMN intervalo_revisao INTEGER DEFAULT 1")
-        log.info("Migration: added columns proxima_revisao, intervalo_revisao to edital")
+def _m05_edital_arquivado(conn):
+    conn.execute("ALTER TABLE edital ADD COLUMN arquivado INTEGER DEFAULT 0")
 
-    # Lote E: coluna banca nas questões
-    try:
-        conn.execute("SELECT banca FROM questoes LIMIT 1")
-    except Exception:
-        conn.execute("ALTER TABLE questoes ADD COLUMN banca TEXT DEFAULT ''")
-        log.info("Migration: added column banca to questoes")
+def _m06_edital_revisao(conn):
+    conn.execute("ALTER TABLE edital ADD COLUMN proxima_revisao TEXT DEFAULT ''")
+    conn.execute("ALTER TABLE edital ADD COLUMN intervalo_revisao INTEGER DEFAULT 1")
 
-    # Coluna ano nas questões (ano da prova, para CSV import)
-    try:
-        conn.execute("SELECT ano FROM questoes LIMIT 1")
-    except Exception:
-        try:
-            conn.execute("ALTER TABLE questoes ADD COLUMN ano TEXT DEFAULT ''")
-            log.info("Migration: added column ano to questoes")
-        except Exception:
-            pass
+def _m07_questoes_banca(conn):
+    conn.execute("ALTER TABLE questoes ADD COLUMN banca TEXT DEFAULT ''")
 
-    # Lote D: SM-2 para flashcards
-    try:
-        conn.execute("SELECT easiness_factor FROM flashcards LIMIT 1")
-    except Exception:
-        conn.execute("ALTER TABLE flashcards ADD COLUMN easiness_factor REAL DEFAULT 2.5")
-        conn.execute("ALTER TABLE flashcards ADD COLUMN repetitions INTEGER DEFAULT 0")
-        log.info("Migration: added SM-2 columns to flashcards")
+def _m08_questoes_ano(conn):
+    conn.execute("ALTER TABLE questoes ADD COLUMN ano TEXT DEFAULT ''")
 
-    # Flashcards: coluna materia
-    try:
-        conn.execute("SELECT materia FROM flashcards LIMIT 1")
-    except Exception:
-        conn.execute("ALTER TABLE flashcards ADD COLUMN materia TEXT DEFAULT ''")
-        log.info("Migration: added column materia to flashcards")
+def _m09_flashcards_sm2(conn):
+    conn.execute("ALTER TABLE flashcards ADD COLUMN easiness_factor REAL DEFAULT 2.5")
+    conn.execute("ALTER TABLE flashcards ADD COLUMN repetitions INTEGER DEFAULT 0")
 
-    # Lote D: SM-2 para edital (revisão de tópicos)
-    try:
-        conn.execute("SELECT easiness_factor_edital FROM edital LIMIT 1")
-    except Exception:
-        conn.execute("ALTER TABLE edital ADD COLUMN easiness_factor_edital REAL DEFAULT 2.5")
-        conn.execute("ALTER TABLE edital ADD COLUMN repetitions_edital INTEGER DEFAULT 0")
-        log.info("Migration: added SM-2 columns to edital")
+def _m10_flashcards_materia(conn):
+    conn.execute("ALTER TABLE flashcards ADD COLUMN materia TEXT DEFAULT ''")
 
-    # Auth: colunas de plano
-    try:
-        conn.execute("SELECT plano FROM users LIMIT 1")
-    except Exception:
-        try:
-            conn.execute("ALTER TABLE users ADD COLUMN plano TEXT DEFAULT 'free'")
-            conn.execute("ALTER TABLE users ADD COLUMN plano_expira TEXT DEFAULT ''")
-            log.info("Migration: added plano columns to users")
-        except Exception:
-            pass
+def _m11_edital_sm2(conn):
+    conn.execute("ALTER TABLE edital ADD COLUMN easiness_factor_edital REAL DEFAULT 2.5")
+    conn.execute("ALTER TABLE edital ADD COLUMN repetitions_edital INTEGER DEFAULT 0")
 
-    # Meta de súmulas diárias (concursos jurídicos)
-    try:
-        conn.execute("SELECT meta_sumulas FROM metas_config LIMIT 1")
-    except Exception:
-        try:
-            conn.execute("ALTER TABLE metas_config ADD COLUMN meta_sumulas INTEGER DEFAULT 0")
-            log.info("Migration: added column meta_sumulas to metas_config")
-        except Exception:
-            pass
+def _m12_users_plano(conn):
+    conn.execute("ALTER TABLE users ADD COLUMN plano TEXT DEFAULT 'free'")
+    conn.execute("ALTER TABLE users ADD COLUMN plano_expira TEXT DEFAULT ''")
 
-    # Contador de súmulas revisadas no streak diário
-    try:
-        conn.execute("SELECT sumulas_revisadas FROM streaks LIMIT 1")
-    except Exception:
-        try:
-            conn.execute("ALTER TABLE streaks ADD COLUMN sumulas_revisadas INTEGER DEFAULT 0")
-            log.info("Migration: added column sumulas_revisadas to streaks")
-        except Exception:
-            pass
+def _m13_metas_sumulas(conn):
+    conn.execute("ALTER TABLE metas_config ADD COLUMN meta_sumulas INTEGER DEFAULT 0")
 
-    # Streak Freeze: colunas para congelar streak
-    try:
-        conn.execute("SELECT streak_freezes_available FROM metas_config LIMIT 1")
-    except Exception:
-        try:
-            conn.execute("ALTER TABLE metas_config ADD COLUMN streak_freezes_available INTEGER DEFAULT 1")
-            conn.execute("ALTER TABLE metas_config ADD COLUMN streak_freezes_used INTEGER DEFAULT 0")
-            conn.execute("ALTER TABLE metas_config ADD COLUMN last_freeze_earned TEXT DEFAULT ''")
-            log.info("Migration: added streak_freeze columns to metas_config")
-        except Exception:
-            pass
+def _m14_streaks_sumulas(conn):
+    conn.execute("ALTER TABLE streaks ADD COLUMN sumulas_revisadas INTEGER DEFAULT 0")
 
-    # Sessões de estudo: timestamp para badges Night Owl / Early Bird
-    try:
-        conn.execute("SELECT created_at FROM sessoes_estudo LIMIT 1")
-    except Exception:
-        try:
-            conn.execute("ALTER TABLE sessoes_estudo ADD COLUMN created_at TEXT DEFAULT ''")
-            log.info("Migration: added column created_at to sessoes_estudo")
-        except Exception:
-            pass
+def _m15_streak_freeze(conn):
+    conn.execute("ALTER TABLE metas_config ADD COLUMN streak_freezes_available INTEGER DEFAULT 1")
+    conn.execute("ALTER TABLE metas_config ADD COLUMN streak_freezes_used INTEGER DEFAULT 0")
+    conn.execute("ALTER TABLE metas_config ADD COLUMN last_freeze_earned TEXT DEFAULT ''")
 
-    # ========== FSRS columns for flashcards ==========
-    try:
-        conn.execute("SELECT stability FROM flashcards LIMIT 1")
-    except Exception:
-        try:
-            conn.execute("ALTER TABLE flashcards ADD COLUMN stability REAL DEFAULT 0")
-            log.info("Migration: added column stability to flashcards")
-        except Exception:
-            pass
+def _m16_sessoes_created_at(conn):
+    conn.execute("ALTER TABLE sessoes_estudo ADD COLUMN created_at TEXT DEFAULT ''")
 
-    try:
-        conn.execute("SELECT difficulty FROM flashcards LIMIT 1")
-    except Exception:
-        try:
-            conn.execute("ALTER TABLE flashcards ADD COLUMN difficulty REAL DEFAULT 0")
-            log.info("Migration: added column difficulty to flashcards")
-        except Exception:
-            pass
+def _m17_flashcards_stability(conn):
+    conn.execute("ALTER TABLE flashcards ADD COLUMN stability REAL DEFAULT 0")
 
-    try:
-        conn.execute("SELECT fsrs_state FROM flashcards LIMIT 1")
-    except Exception:
-        try:
-            conn.execute("ALTER TABLE flashcards ADD COLUMN fsrs_state INTEGER DEFAULT 0")
-            log.info("Migration: added column fsrs_state to flashcards")
-        except Exception:
-            pass
+def _m18_flashcards_difficulty(conn):
+    conn.execute("ALTER TABLE flashcards ADD COLUMN difficulty REAL DEFAULT 0")
 
-    # ========== FSRS columns for edital ==========
-    try:
-        conn.execute("SELECT stability_edital FROM edital LIMIT 1")
-    except Exception:
-        try:
-            conn.execute("ALTER TABLE edital ADD COLUMN stability_edital REAL DEFAULT 0")
-            log.info("Migration: added column stability_edital to edital")
-        except Exception:
-            pass
+def _m19_flashcards_fsrs_state(conn):
+    conn.execute("ALTER TABLE flashcards ADD COLUMN fsrs_state INTEGER DEFAULT 0")
 
-    try:
-        conn.execute("SELECT difficulty_edital FROM edital LIMIT 1")
-    except Exception:
-        try:
-            conn.execute("ALTER TABLE edital ADD COLUMN difficulty_edital REAL DEFAULT 0")
-            log.info("Migration: added column difficulty_edital to edital")
-        except Exception:
-            pass
+def _m20_edital_stability(conn):
+    conn.execute("ALTER TABLE edital ADD COLUMN stability_edital REAL DEFAULT 0")
 
-    try:
-        conn.execute("SELECT fsrs_state_edital FROM edital LIMIT 1")
-    except Exception:
-        try:
-            conn.execute("ALTER TABLE edital ADD COLUMN fsrs_state_edital INTEGER DEFAULT 0")
-            log.info("Migration: added column fsrs_state_edital to edital")
-        except Exception:
-            pass
+def _m21_edital_difficulty(conn):
+    conn.execute("ALTER TABLE edital ADD COLUMN difficulty_edital REAL DEFAULT 0")
 
-    # ========== FSRS columns for sumulas ==========
-    try:
-        conn.execute("SELECT stability FROM sumulas LIMIT 1")
-    except Exception:
-        try:
-            conn.execute("ALTER TABLE sumulas ADD COLUMN stability REAL DEFAULT 0")
-            log.info("Migration: added column stability to sumulas")
-        except Exception:
-            pass
+def _m22_edital_fsrs_state(conn):
+    conn.execute("ALTER TABLE edital ADD COLUMN fsrs_state_edital INTEGER DEFAULT 0")
 
-    try:
-        conn.execute("SELECT difficulty_sumulas FROM sumulas LIMIT 1")
-    except Exception:
-        try:
-            conn.execute("ALTER TABLE sumulas ADD COLUMN difficulty_sumulas REAL DEFAULT 0")
-            log.info("Migration: added column difficulty_sumulas to sumulas")
-        except Exception:
-            pass
+def _m23_sumulas_stability(conn):
+    conn.execute("ALTER TABLE sumulas ADD COLUMN stability REAL DEFAULT 0")
 
-    try:
-        conn.execute("SELECT fsrs_state FROM sumulas LIMIT 1")
-    except Exception:
-        try:
-            conn.execute("ALTER TABLE sumulas ADD COLUMN fsrs_state INTEGER DEFAULT 0")
-            log.info("Migration: added column fsrs_state to sumulas")
-        except Exception:
-            pass
+def _m24_sumulas_difficulty(conn):
+    conn.execute("ALTER TABLE sumulas ADD COLUMN difficulty_sumulas REAL DEFAULT 0")
 
-    # ========== desired_retention in metas_config ==========
-    try:
-        conn.execute("SELECT desired_retention FROM metas_config LIMIT 1")
-    except Exception:
-        try:
-            conn.execute("ALTER TABLE metas_config ADD COLUMN desired_retention REAL DEFAULT 0.9")
-            log.info("Migration: added column desired_retention to metas_config")
-        except Exception:
-            pass
+def _m25_sumulas_fsrs_state(conn):
+    conn.execute("ALTER TABLE sumulas ADD COLUMN fsrs_state INTEGER DEFAULT 0")
 
-    # ========== Push Notification tables ==========
-    try:
-        conn.execute("SELECT id FROM push_subscriptions LIMIT 1")
-    except Exception:
-        try:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS push_subscriptions (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL,
-                    endpoint TEXT NOT NULL UNIQUE,
-                    p256dh TEXT NOT NULL,
-                    auth TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT DEFAULT ''
-                )
-            """)
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id ON push_subscriptions(user_id)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_push_subscriptions_endpoint ON push_subscriptions(endpoint)")
-            log.info("Migration: created table push_subscriptions")
-        except Exception:
-            pass
+def _m26_metas_desired_retention(conn):
+    conn.execute("ALTER TABLE metas_config ADD COLUMN desired_retention REAL DEFAULT 0.9")
 
-    try:
-        conn.execute("SELECT id FROM notification_preferences LIMIT 1")
-    except Exception:
-        try:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS notification_preferences (
-                    user_id INTEGER PRIMARY KEY,
-                    streak_reminders INTEGER DEFAULT 1,
-                    flashcard_reminders INTEGER DEFAULT 1,
-                    exam_reminders INTEGER DEFAULT 1,
-                    challenge_reminders INTEGER DEFAULT 1,
-                    quiet_hours_start INTEGER DEFAULT 22,
-                    quiet_hours_end INTEGER DEFAULT 7
-                )
-            """)
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_notification_preferences_user_id ON notification_preferences(user_id)")
-            log.info("Migration: created table notification_preferences")
-        except Exception:
-            pass
+def _m27_push_subscriptions(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS push_subscriptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            endpoint TEXT NOT NULL UNIQUE,
+            p256dh TEXT NOT NULL,
+            auth TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT DEFAULT ''
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id ON push_subscriptions(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_push_subscriptions_endpoint ON push_subscriptions(endpoint)")
 
-    # Fix old notification_preferences schema (had streak_risk instead of streak_reminders)
+def _m28_notification_preferences(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS notification_preferences (
+            user_id INTEGER PRIMARY KEY,
+            streak_reminders INTEGER DEFAULT 1,
+            flashcard_reminders INTEGER DEFAULT 1,
+            exam_reminders INTEGER DEFAULT 1,
+            challenge_reminders INTEGER DEFAULT 1,
+            quiet_hours_start INTEGER DEFAULT 22,
+            quiet_hours_end INTEGER DEFAULT 7
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_notification_preferences_user_id ON notification_preferences(user_id)")
+
+def _m29_fix_notification_preferences(conn):
+    # Fix old schema (had streak_risk instead of streak_reminders)
     try:
         conn.execute("SELECT streak_reminders FROM notification_preferences LIMIT 1")
     except Exception:
-        # Old schema detected — recreate table with correct columns
-        try:
-            conn.execute("DROP TABLE IF EXISTS notification_preferences")
-            conn.execute("""
-                CREATE TABLE notification_preferences (
-                    user_id INTEGER PRIMARY KEY,
-                    streak_reminders INTEGER DEFAULT 1,
-                    flashcard_reminders INTEGER DEFAULT 1,
-                    exam_reminders INTEGER DEFAULT 1,
-                    challenge_reminders INTEGER DEFAULT 1,
-                    quiet_hours_start INTEGER DEFAULT 22,
-                    quiet_hours_end INTEGER DEFAULT 7
-                )
-            """)
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_notification_preferences_user_id ON notification_preferences(user_id)")
-            log.info("Migration: recreated notification_preferences with correct column names")
-        except Exception:
-            pass
+        conn.execute("DROP TABLE IF EXISTS notification_preferences")
+        conn.execute("""
+            CREATE TABLE notification_preferences (
+                user_id INTEGER PRIMARY KEY,
+                streak_reminders INTEGER DEFAULT 1,
+                flashcard_reminders INTEGER DEFAULT 1,
+                exam_reminders INTEGER DEFAULT 1,
+                challenge_reminders INTEGER DEFAULT 1,
+                quiet_hours_start INTEGER DEFAULT 22,
+                quiet_hours_end INTEGER DEFAULT 7
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_notification_preferences_user_id ON notification_preferences(user_id)")
 
-    try:
-        conn.execute("SELECT id FROM notification_log LIMIT 1")
-    except Exception:
-        try:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS notification_log (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL,
-                    tag TEXT NOT NULL,
-                    title TEXT DEFAULT '',
-                    body TEXT DEFAULT '',
-                    sent_at TEXT NOT NULL,
-                    success INTEGER DEFAULT 1
-                )
-            """)
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_notification_log_user_id ON notification_log(user_id)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_notification_log_sent_at ON notification_log(sent_at)")
-            log.info("Migration: created table notification_log")
-        except Exception:
-            pass
+def _m30_notification_log(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS notification_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            tag TEXT NOT NULL,
+            title TEXT DEFAULT '',
+            body TEXT DEFAULT '',
+            sent_at TEXT NOT NULL,
+            success INTEGER DEFAULT 1
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_notification_log_user_id ON notification_log(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_notification_log_sent_at ON notification_log(sent_at)")
 
-    # Mastery System: nível de domínio por tópico
-    try:
-        conn.execute("SELECT mastery_level FROM edital LIMIT 1")
-    except Exception:
-        try:
-            conn.execute("ALTER TABLE edital ADD COLUMN mastery_level REAL DEFAULT 0")
-            conn.execute("ALTER TABLE edital ADD COLUMN mastery_updated_at TEXT DEFAULT ''")
-            log.info("Migration: added mastery columns to edital")
-        except Exception:
-            pass
+def _m31_edital_mastery(conn):
+    conn.execute("ALTER TABLE edital ADD COLUMN mastery_level REAL DEFAULT 0")
+    conn.execute("ALTER TABLE edital ADD COLUMN mastery_updated_at TEXT DEFAULT ''")
 
-    # ========== MULTI-USER ISOLATION: user_id em todas as tabelas ==========
+def _m32_multi_user_isolation(conn):
     _migrate_user_id(conn)
 
-    # ========== SOCIAL: username na tabela users ==========
+def _m33_users_username(conn):
+    conn.execute("ALTER TABLE users ADD COLUMN username TEXT DEFAULT ''")
+
+def _m34_users_role(conn):
+    conn.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'")
+    conn.execute("UPDATE users SET role = 'admin' WHERE id = 1")
+
+def _m35_users_liga(conn):
+    conn.execute("ALTER TABLE users ADD COLUMN liga TEXT DEFAULT 'bronze'")
+
+def _m36_erros_revisao(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS erros_revisao (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL DEFAULT 1,
+            questao_id INTEGER NOT NULL,
+            resposta_id INTEGER NOT NULL,
+            intervalo_atual INTEGER DEFAULT 1,
+            proxima_revisao TEXT NOT NULL,
+            revisoes_count INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT DEFAULT '',
+            FOREIGN KEY (questao_id) REFERENCES questoes(id)
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_erros_revisao_user_id ON erros_revisao(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_erros_revisao_proxima ON erros_revisao(user_id, proxima_revisao)")
+
+def _m37_simulados_tipo(conn):
+    conn.execute("ALTER TABLE simulados ADD COLUMN tipo TEXT DEFAULT 'normal'")
+
+
+# Lista ordenada de todas as migrations
+MIGRATIONS = [
+    (1, _m01_edital_nome),
+    (2, _m02_edital_cargo),
+    (3, _m03_edital_pdf_link),
+    (4, _m04_edital_pdf_pagina),
+    (5, _m05_edital_arquivado),
+    (6, _m06_edital_revisao),
+    (7, _m07_questoes_banca),
+    (8, _m08_questoes_ano),
+    (9, _m09_flashcards_sm2),
+    (10, _m10_flashcards_materia),
+    (11, _m11_edital_sm2),
+    (12, _m12_users_plano),
+    (13, _m13_metas_sumulas),
+    (14, _m14_streaks_sumulas),
+    (15, _m15_streak_freeze),
+    (16, _m16_sessoes_created_at),
+    (17, _m17_flashcards_stability),
+    (18, _m18_flashcards_difficulty),
+    (19, _m19_flashcards_fsrs_state),
+    (20, _m20_edital_stability),
+    (21, _m21_edital_difficulty),
+    (22, _m22_edital_fsrs_state),
+    (23, _m23_sumulas_stability),
+    (24, _m24_sumulas_difficulty),
+    (25, _m25_sumulas_fsrs_state),
+    (26, _m26_metas_desired_retention),
+    (27, _m27_push_subscriptions),
+    (28, _m28_notification_preferences),
+    (29, _m29_fix_notification_preferences),
+    (30, _m30_notification_log),
+    (31, _m31_edital_mastery),
+    (32, _m32_multi_user_isolation),
+    (33, _m33_users_username),
+    (34, _m34_users_role),
+    (35, _m35_users_liga),
+    (36, _m36_erros_revisao),
+    (37, _m37_simulados_tipo),
+]
+
+
+# ============================================================
+# EXECUTOR DE MIGRATIONS COM VERSIONAMENTO
+# ============================================================
+
+def _ensure_schema_version_table(conn) -> bool:
+    """Garante que a tabela schema_version existe. Retorna True se foi recém-criada."""
+    # Verifica se a tabela existe
+    exists = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_version'"
+    ).fetchone()
+    if exists:
+        return False
+    # Cria a tabela (primeiro startup após update ou banco novo)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS schema_version (
+            version INTEGER PRIMARY KEY,
+            applied_at TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+    return True
+
+
+def _is_fresh_database(conn) -> bool:
+    """Detecta se é um banco novo (tables.py já criou tudo corretamente).
+
+    Heurística: se schema_version foi recém-criada E as tabelas já têm
+    as colunas mais recentes, é banco novo — não precisa rodar migrations.
+    """
     try:
-        conn.execute("SELECT username FROM users LIMIT 1")
-    except Exception:
-        try:
-            conn.execute("ALTER TABLE users ADD COLUMN username TEXT DEFAULT ''")
-            log.info("Migration: added column username to users")
-        except Exception:
-            pass
-
-    # ========== ROLE: admin/user na tabela users ==========
-    try:
-        conn.execute("SELECT role FROM users LIMIT 1")
-    except Exception:
-        try:
-            conn.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'")
-            conn.execute("UPDATE users SET role = 'admin' WHERE id = 1")
-            log.info("Migration: added column role to users (id=1 → admin)")
-        except Exception:
-            pass
-
-    # Liga column in users table
-    try:
-        conn.execute("SELECT liga FROM users LIMIT 1")
-    except Exception:
-        try:
-            conn.execute("ALTER TABLE users ADD COLUMN liga TEXT DEFAULT 'bronze'")
-            log.info("Migration: added column liga to users")
-        except Exception:
-            pass
-
-
-    # ========== CADERNO DE ERROS: tabela erros_revisao (spaced repetition) ==========
-    try:
-        conn.execute("SELECT id FROM erros_revisao LIMIT 1")
-    except Exception:
-        try:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS erros_revisao (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL DEFAULT 1,
-                    questao_id INTEGER NOT NULL,
-                    resposta_id INTEGER NOT NULL,
-                    intervalo_atual INTEGER DEFAULT 1,
-                    proxima_revisao TEXT NOT NULL,
-                    revisoes_count INTEGER DEFAULT 0,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT DEFAULT '',
-                    FOREIGN KEY (questao_id) REFERENCES questoes(id)
-                )
-            """)
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_erros_revisao_user_id ON erros_revisao(user_id)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_erros_revisao_proxima ON erros_revisao(user_id, proxima_revisao)")
-            log.info("Migration: created table erros_revisao")
-        except Exception:
-            pass
-
-
-    # ========== SIMULADO CRONOMETRADO: tipo column ==========
-    try:
+        # Verifica coluna de uma migration tardia (tipo em simulados = migration 37)
         conn.execute("SELECT tipo FROM simulados LIMIT 1")
+        # Se chegou aqui, as tabelas já estão atualizadas
+        return True
     except Exception:
-        try:
-            conn.execute("ALTER TABLE simulados ADD COLUMN tipo TEXT DEFAULT 'normal'")
-            log.info("Migration: added column tipo to simulados")
-        except Exception:
-            pass
+        return False
 
+
+def _get_current_version(conn) -> int:
+    """Retorna a versão atual do schema (MAX(version) da schema_version)."""
+    row = conn.execute("SELECT MAX(version) FROM schema_version").fetchone()
+    return row[0] if row[0] is not None else 0
+
+
+def _run_migrations(conn):
+    """Executa migrações de schema com versionamento."""
+    table_just_created = _ensure_schema_version_table(conn)
+
+    if table_just_created:
+        # Caso 1: Banco NOVO (tables.py criou tudo) — marca todas como aplicadas
+        if _is_fresh_database(conn):
+            now = datetime.now().isoformat()
+            for version, _ in MIGRATIONS:
+                conn.execute(
+                    "INSERT OR IGNORE INTO schema_version (version, applied_at) VALUES (?, ?)",
+                    (version, now)
+                )
+            conn.commit()
+            log.info(f"Fresh database detected — marked {len(MIGRATIONS)} migrations as applied")
+            return
+        # Caso 2: Banco EXISTENTE sem schema_version (primeiro startup após update)
+        # → roda migrations normalmente (cada uma com try/except individual)
+        log.info("Existing database without schema_version — running migrations with compatibility mode")
+        _run_migrations_compat(conn)
+        return
+
+    # Caso 3: Banco com schema_version — executa apenas migrations pendentes
+    current_version = _get_current_version(conn)
+    pending = [(v, fn) for v, fn in MIGRATIONS if v > current_version]
+
+    if not pending:
+        return
+
+    log.info(f"Running {len(pending)} pending migration(s) (current version: {current_version})")
+    now = datetime.now().isoformat()
+    for version, migration_fn in pending:
+        try:
+            migration_fn(conn)
+            conn.execute(
+                "INSERT INTO schema_version (version, applied_at) VALUES (?, ?)",
+                (version, now)
+            )
+            conn.commit()
+            log.info(f"Migration {version} applied: {migration_fn.__name__}")
+        except Exception as e:
+            log.warning(f"Migration {version} ({migration_fn.__name__}) skipped: {e}")
+            # Registra mesmo assim para não tentar novamente (coluna já existe, etc.)
+            conn.execute(
+                "INSERT OR IGNORE INTO schema_version (version, applied_at) VALUES (?, ?)",
+                (version, now)
+            )
+            conn.commit()
+
+
+def _run_migrations_compat(conn):
+    """Modo retrocompatível: roda todas as migrations com try/except (banco existente sem versão).
+
+    Após rodar, registra todas na schema_version.
+    """
+    now = datetime.now().isoformat()
+    applied = 0
+    skipped = 0
+
+    for version, migration_fn in MIGRATIONS:
+        try:
+            migration_fn(conn)
+            applied += 1
+            log.info(f"Migration {version} applied: {migration_fn.__name__}")
+        except Exception:
+            skipped += 1
+        # Registra independentemente (se falhou, é porque já existia)
+        conn.execute(
+            "INSERT OR IGNORE INTO schema_version (version, applied_at) VALUES (?, ?)",
+            (version, now)
+        )
+
+    conn.commit()
+    log.info(f"Compat mode complete: {applied} applied, {skipped} skipped (already existed)")
+
+
+# ============================================================
+# HELPER: Multi-user isolation (migration 32)
+# ============================================================
 
 def _migrate_user_id(conn):
     """Adiciona coluna user_id em todas as tabelas que precisam de isolamento por usuário."""
@@ -435,11 +402,9 @@ def _migrate_user_id(conn):
     # Garantir que metas_config tem registro para user_id=1
     existing = conn.execute("SELECT id FROM metas_config WHERE user_id = 1 LIMIT 1").fetchone()
     if not existing:
-        # Atualizar registros existentes sem user_id
         conn.execute("UPDATE metas_config SET user_id = 1 WHERE user_id IS NULL OR user_id = 0")
 
     # ========== FIX: streaks UNIQUE constraint deve ser (user_id, data), não apenas (data) ==========
-    # Verifica se o constraint atual é o antigo (data UNIQUE)
     table_info = conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='streaks'").fetchone()
     if table_info and "UNIQUE(user_id, data)" not in (table_info[0] or ""):
         try:
@@ -467,5 +432,3 @@ def _migrate_user_id(conn):
             log.info("Migration: streaks UNIQUE constraint fixed to (user_id, data)")
         except Exception:
             pass
-
-    conn.commit()

@@ -16,6 +16,7 @@ from constants import (
 from database import get_db_session
 from deps import get_user_id
 from models import DesafioCreate, MetasUpdate, StreakResponse
+from services import get_horas_estudadas
 from utils import calculate_streak, today_str
 
 router = APIRouter(prefix="", tags=["Gamificação"])
@@ -106,7 +107,7 @@ def update_metas(body: MetasUpdate, conn=Depends(get_db_session), user_id: int =
 def get_gamification(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Retorna XP, nível, badges e progresso do usuário"""
     # Calcular XP baseado nas atividades
-    horas = conn.execute("SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE user_id = ?", (user_id,)).fetchone()[0]
+    horas = get_horas_estudadas(conn, user_id)
     questoes_total = conn.execute("SELECT COUNT(*) FROM questoes_respostas WHERE user_id = ?", (user_id,)).fetchone()[0]
     questoes_certas = conn.execute("SELECT COUNT(*) FROM questoes_respostas WHERE acertou = 1 AND user_id = ?", (user_id,)).fetchone()[0]
     flashcards_rev = conn.execute("SELECT COALESCE(SUM(flashcards_revisados), 0) FROM streaks WHERE user_id = ?", (user_id,)).fetchone()[0]

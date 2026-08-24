@@ -8,6 +8,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 from database import get_db_session
 from deps import get_user_id
 from logger import log
+from schemas import IniciarBatalhaRequest, ResponderRodadaRequest
 from utils import today_str
 
 from .helpers import _calculate_points, _ensure_battle_tables, _is_battle_admin
@@ -20,7 +21,7 @@ router = APIRouter(prefix="/api/batalha", tags=["Batalha de Questões"])
              responses={403: {"description": "Apenas o criador pode iniciar"}, 404: {"description": "Sala não encontrada"}})
 def iniciar_batalha(
     codigo: str,
-    body: dict = Body(default=None),
+    body: IniciarBatalhaRequest = None,
     conn=Depends(get_db_session),
     user_id: int = Depends(get_user_id)
 ):
@@ -47,7 +48,7 @@ def iniciar_batalha(
     total = battle["total_rodadas"]
 
     # Se o criador enviou IDs específicos, usar essas questões
-    questao_ids = (body or {}).get("questao_ids", [])
+    questao_ids = (body.questao_ids if body else []) or []
 
     if questao_ids:
         # Pool manual selecionado pelo criador
@@ -152,7 +153,7 @@ def iniciar_batalha(
              responses={400: {"description": "Já respondeu esta rodada"}, 404: {"description": "Sala não encontrada"}})
 def responder_rodada(
     codigo: str,
-    body: dict = Body(...),
+    body: ResponderRodadaRequest,
     conn=Depends(get_db_session),
     user_id: int = Depends(get_user_id)
 ):
@@ -173,8 +174,8 @@ def responder_rodada(
         raise HTTPException(status_code=403, detail="Você não está nesta batalha.")
 
     rodada_num = battle["rodada_atual"]
-    resposta_visual = body.get("resposta", "").strip().lower()
-    tempo_seg = max(0, min(battle["tempo_por_questao"] * 2, int(body.get("tempo_seg", 0))))
+    resposta_visual = body.resposta.strip().lower()
+    tempo_seg = max(0, min(battle["tempo_por_questao"] * 2, body.tempo_seg))
 
     # Verificar se já respondeu esta rodada
     existing = conn.execute(

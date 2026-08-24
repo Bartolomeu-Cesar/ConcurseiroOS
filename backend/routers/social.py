@@ -12,6 +12,8 @@ from pydantic import BaseModel
 from database import get_db_session
 from deps import get_user_id
 from logger import log
+from sanitize import sanitize_input
+from schemas import AddMemberRequest, ChangeMemberRoleRequest
 from utils import today_str
 
 
@@ -424,7 +426,8 @@ def create_group(
     db.execute(
         """INSERT INTO study_groups (nome, descricao, edital_nome, criador_id, max_membros, publico, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        (body.nome, body.descricao, body.edital_nome, user_id, body.max_membros, int(body.publico), today_str())
+        (sanitize_input(body.nome), sanitize_input(body.descricao, max_length=2000),
+         sanitize_input(body.edital_nome), user_id, body.max_membros, int(body.publico), today_str())
     )
     db.commit()
 
@@ -530,7 +533,7 @@ def leave_group(
              description="Adiciona um usuário ao grupo por email ou user_id. Apenas criador/admin pode adicionar.")
 def add_member_to_group(
     id: int,
-    body: dict = Body(...),
+    body: AddMemberRequest,
     db=Depends(get_db_session),
     user_id: int = Depends(get_user_id)
 ):
@@ -550,9 +553,9 @@ def add_member_to_group(
         raise HTTPException(status_code=403, detail="Apenas o criador ou admin pode adicionar membros.")
 
     # Identificar o usuário alvo
-    target_email = body.get("email", "").strip()
-    target_user_id = body.get("user_id")
-    target_username = body.get("username", "").strip()
+    target_email = sanitize_input(body.email)
+    target_user_id = body.user_id
+    target_username = sanitize_input(body.username)
 
     target = None
     if target_user_id:
@@ -637,12 +640,12 @@ def list_group_members(
 def change_member_role(
     id: int,
     member_id: int,
-    body: dict = Body(...),
+    body: ChangeMemberRoleRequest,
     db=Depends(get_db_session),
     user_id: int = Depends(get_user_id)
 ):
     """Altera a role de um membro (apenas criador pode promover/rebaixar)."""
-    new_role = body.get("role", "member")
+    new_role = body.role
     if new_role not in ("admin", "member"):
         raise HTTPException(status_code=400, detail="Role deve ser 'admin' ou 'member'.")
 

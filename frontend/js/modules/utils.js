@@ -38,42 +38,8 @@ export function confirmModal(title, message, { confirmText = 'Confirmar', cancel
   });
 }
 
-// ==================== TOAST NOTIFICATION SYSTEM ====================
-const toastContainer = document.createElement('div');
-toastContainer.id = 'toast-container';
-document.body.appendChild(toastContainer);
-
-export function toast(message, type = 'info', duration = 4000, action = null) {
-  const icons = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
-  const el = document.createElement('div');
-  el.className = `toast toast-${type}`;
-  el.innerHTML = `
-    <span class="toast-icon">${icons[type] || icons.info}</span>
-    <span class="toast-msg">${message}</span>
-    ${action ? `<button class="toast-action">${action.label}</button>` : ''}
-    <button class="toast-close">×</button>
-    <div class="toast-progress"><div class="toast-progress-bar"></div></div>
-  `;
-  toastContainer.appendChild(el);
-  requestAnimationFrame(() => el.classList.add('toast-show'));
-  if (action) {
-    el.querySelector('.toast-action').onclick = () => { action.onClick(); removeToast(el); };
-  }
-  el.querySelector('.toast-close').onclick = () => removeToast(el);
-  const bar = el.querySelector('.toast-progress-bar');
-  bar.style.transition = `width ${duration}ms linear`;
-  requestAnimationFrame(() => bar.style.width = '0%');
-  const timer = setTimeout(() => removeToast(el), duration);
-  el._timer = timer;
-  return el;
-}
-
-export function removeToast(el) {
-  if (!el || !el.parentNode) return;
-  clearTimeout(el._timer);
-  el.classList.add('toast-hide');
-  setTimeout(() => el.remove(), 300);
-}
+// ==================== TOAST (re-exported from toast.js) ====================
+export { toast, removeToast } from './toast.js';
 
 // ==================== LOADING STATES ====================
 export function showLoading(container) {

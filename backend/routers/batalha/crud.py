@@ -8,6 +8,8 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 from database import get_db_session
 from deps import get_user_id
 from logger import log
+from sanitize import sanitize_input
+from schemas import CriarBatalhaRequest, EntrarBatalhaRequest, ReconfigurarBatalhaRequest
 
 from .helpers import (
     _ensure_battle_tables,
@@ -23,7 +25,7 @@ router = APIRouter(prefix="/api/batalha", tags=["Batalha de Questões"])
              description="Cria uma nova sala de batalha multiplayer. O criador entra automaticamente. Configurações: matérias, rodadas (3-20), tempo por questão (10-120s) e max jogadores (2-5). Limites variam por plano.",
              responses={403: {"description": "Batalha não disponível no plano do usuário"}})
 def criar_batalha(
-    body: dict = Body(...),
+    body: CriarBatalhaRequest,
     conn=Depends(get_db_session),
     user_id: int = Depends(get_user_id)
 ):
@@ -47,11 +49,11 @@ def criar_batalha(
     plan_max_jogadores = limites.get("batalha_max_jogadores", 5)
     plan_max_rodadas = limites.get("batalha_max_rodadas", 20)
 
-    titulo = body.get("titulo", "Batalha de Questões")
-    materias = body.get("materias", [])
-    total_rodadas = max(3, min(plan_max_rodadas, int(body.get("total_rodadas", 5))))
-    tempo_por_questao = max(10, min(120, int(body.get("tempo_por_questao", 30))))
-    max_jogadores = max(2, min(plan_max_jogadores, int(body.get("max_jogadores", 5))))
+    titulo = sanitize_input(body.titulo)
+    materias = [sanitize_input(m) for m in body.materias]
+    total_rodadas = max(3, min(plan_max_rodadas, body.total_rodadas))
+    tempo_por_questao = max(10, min(120, body.tempo_por_questao))
+    max_jogadores = max(2, min(plan_max_jogadores, body.max_jogadores))
 
     codigo = _generate_code()
     # Garantir unicidade
@@ -115,13 +117,13 @@ def criar_batalha(
              description="Entra em uma sala existente pelo código de 6 caracteres. Limite de jogadores definido na criação.",
              responses={400: {"description": "Código inválido"}, 404: {"description": "Sala não encontrada"}, 409: {"description": "Sala cheia ou jogador já presente"}})
 def entrar_batalha(
-    body: dict = Body(...),
+    body: EntrarBatalhaRequest,
     conn=Depends(get_db_session),
     user_id: int = Depends(get_user_id)
 ):
     """Entra em uma sala pelo código."""
     _ensure_battle_tables(conn)
-    codigo = body.get("codigo", "").strip().upper()
+    codigo = body.codigo.strip().upper()
     if not codigo:
         raise HTTPException(status_code=400, detail="Código da sala é obrigatório.")
 
@@ -147,7 +149,7 @@ def entrar_batalha(
         raise HTTPException(status_code=400, detail=f"Sala cheia ({count}/{battle['max_jogadores']}).")
 
     user = conn.execute("SELECT nome, avatar FROM users WHERE id = ?", (user_id,)).fetchone()
-    nome = body.get("nome") or (user["nome"] if user else f"Jogador {count + 1}")
+    nome = (sanitize_input(body.nome) if body.nome else None) or (user["nome"] if user else f"Jogador {count + 1}")
     avatar = user["avatar"] if user else ""
 
     conn.execute(
@@ -252,7 +254,7 @@ def status_sala(
 @router.post("/reconfigurar/{codigo}", summary="Reconfigurar batalha")
 def reconfigurar_batalha(
     codigo: str,
-    body: dict = Body({}),
+    body: ReconfigurarBatalhaRequest = None,
     conn=Depends(get_db_session),
     user_id: int = Depends(get_user_id)
 ):
@@ -273,10 +275,12 @@ def reconfigurar_batalha(
         raise HTTPException(status_code=400, detail="Batalha finalizada não pode ser reconfigurada. Crie uma revanche.")
 
     # Atualizar configurações se fornecidas
-    materias = body.get("materias", json.loads(battle["materias"]))
-    total_rodadas = body.get("total_rodadas", battle["total_rodadas"])
-    tempo_por_questao = body.get("tempo_por_questao", battle["tempo_por_questao"])
-    max_jogadores = body.get("max_jogadores", battle["max_jogadores"])
+    if body is None:
+        body = ReconfigurarBatalhaRequest()
+    materias = [sanitize_input(m) for m in body.materias] if body.materias is not None else json.loads(battle["materias"])
+    total_rodadas = body.total_rodadas if body.total_rodadas is not None else battle["total_rodadas"]
+    tempo_por_questao = body.tempo_por_questao if body.tempo_por_questao is not None else battle["tempo_por_questao"]
+    max_jogadores = body.max_jogadores if body.max_jogadores is not None else battle["max_jogadores"]
 
     # Limpar rodadas geradas (reset)
     conn.execute("DELETE FROM battle_rounds WHERE battle_id = ?", (battle["id"],))
