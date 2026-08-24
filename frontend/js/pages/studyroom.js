@@ -101,6 +101,7 @@ function enterRoomView(codigo) {
   pomodoroCycle = 1;
   elaborationShownCycle = 0;
   breakCardsLoaded = false;
+  srSessionMetrics = { flashcards: 0, questoes: 0, sumulas: 0, acertos: 0 };
   updateStatusButtons();
   startPolling();
   startPomodoro();
@@ -108,6 +109,7 @@ function enterRoomView(codigo) {
   loadCommitments();
   loadFocusScore();
   loadDiscussions();
+  loadSrFlashcards(); // Load study activities
   updateFocusMode();
   // Refresh focus score every 60s
   setInterval(() => { if (currentRoom) loadFocusScore(); }, 60000);
@@ -742,6 +744,315 @@ function escHtml(str) {
   if (!str) return '';
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
+
+// ============================================================
+// STUDY ACTIVITIES: In-Room Study (Flashcards, Questões, Súmulas, PDF)
+// ============================================================
+
+let srFlashcards = [], srFcIdx = 0;
+let srQuestoes = [], srQIdx = 0;
+let srSumulas = [], srSmIdx = 0;
+let srSessionMetrics = { flashcards: 0, questoes: 0, sumulas: 0, acertos: 0 };
+
+function switchStudyTab(tab) {
+  document.querySelectorAll('.study-tab-content').forEach(el => el.classList.add('hidden'));
+  document.getElementById('study-tab-' + tab).classList.remove('hidden');
+  document.querySelectorAll('#study-tabs button').forEach(btn => btn.classList.remove('active'));
+  document.querySelector(`#study-tabs [data-tab="${tab}"]`).classList.add('active');
+
+  // Lazy load content
+  if (tab === 'flashcards' && srFlashcards.length === 0) loadSrFlashcards();
+  if (tab === 'questoes' && srQuestoes.length === 0) loadSrQuestoes();
+  if (tab === 'sumulas' && srSumulas.length === 0) loadSrSumulas();
+  if (tab === 'pdf') loadSrPdfs();
+}
+window.switchStudyTab = switchStudyTab;
+
+function updateSessionStats() {
+  const el = document.getElementById('study-session-stats');
+  if (el) {
+    el.textContent = `🃏${srSessionMetrics.flashcards} ❓${srSessionMetrics.questoes} ⚖️${srSessionMetrics.sumulas} ✓${srSessionMetrics.acertos}`;
+  }
+}
+
+// --- FLASHCARDS ---
+
+async function loadSrFlashcards() {
+  try {
+    const res = await fetch('/api/flashcards/today', { headers });
+    if (!res.ok) return;
+    srFlashcards = await res.json();
+    srFcIdx = 0;
+    showSrFlashcard();
+  } catch (e) {
+    document.getElementById('sr-fc-container').innerHTML = '<div style="color:var(--text-muted);font-size:0.82rem;text-align:center;padding:20px;">Erro ao carregar flashcards</div>';
+  }
+}
+
+function showSrFlashcard() {
+  const container = document.getElementById('sr-fc-container');
+  if (srFcIdx >= srFlashcards.length) {
+    container.innerHTML = srFlashcards.length > 0
+      ? `<div style="text-align:center;padding:20px;color:var(--green);font-weight:600;">🎉 ${srFlashcards.length} flashcards revisados nesta sessão!</div>`
+      : `<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:0.82rem;">Nenhum flashcard pendente para hoje.</div>`;
+    return;
+  }
+  const card = srFlashcards[srFcIdx];
+  container.innerHTML = `
+    <div class="sr-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-size:0.72rem;color:var(--accent);">${card.materia || 'Geral'}</span>
+        <span style="font-size:0.72rem;color:var(--text-muted);">${srFcIdx + 1}/${srFlashcards.length}</span>
+      </div>
+      <div class="sr-card-front">${escHtml(card.pergunta)}</div>
+      <div class="sr-card-back" id="sr-fc-back">${escHtml(card.resposta)}</div>
+      <button id="sr-fc-reveal-btn" onclick="revealSrFlashcard()" style="margin-top:10px;background:var(--accent);color:var(--bg);border:none;border-radius:var(--radius-md);padding:8px 16px;font-size:0.82rem;font-weight:600;cursor:pointer;width:100%;">👁 Revelar Resposta</button>
+      <div class="sr-rating-btns" id="sr-fc-rating" style="display:none;">
+        <button onclick="rateSrFlashcard(0)" style="background:#f38ba8;">Esqueci</button>
+        <button onclick="rateSrFlashcard(2)" style="background:#fab387;">Difícil</button>
+        <button onclick="rateSrFlashcard(3)" style="background:#f9e2af;color:#1e1e2e;">Ok</button>
+        <button onclick="rateSrFlashcard(4)" style="background:#a6e3a1;color:#1e1e2e;">Bom</button>
+        <button onclick="rateSrFlashcard(5)" style="background:#a6e3a1;color:#1e1e2e;">Fácil</button>
+      </div>
+    </div>`;
+}
+
+function revealSrFlashcard() {
+  document.getElementById('sr-fc-back').classList.add('visible');
+  document.getElementById('sr-fc-reveal-btn').style.display = 'none';
+  document.getElementById('sr-fc-rating').style.display = 'flex';
+}
+window.revealSrFlashcard = revealSrFlashcard;
+
+async function rateSrFlashcard(quality) {
+  const card = srFlashcards[srFcIdx];
+  try {
+    await fetch(`/api/flashcards/${card.id}/review-sm2`, {
+      method: 'POST', headers, body: JSON.stringify({ quality })
+    });
+    srSessionMetrics.flashcards++;
+    if (quality >= 3) srSessionMetrics.acertos++;
+    updateSessionStats();
+  } catch (e) { /* continue anyway */ }
+  srFcIdx++;
+  showSrFlashcard();
+}
+window.rateSrFlashcard = rateSrFlashcard;
+
+// --- QUESTÕES ---
+
+async function loadSrQuestoes() {
+  try {
+    const res = await fetch('/api/questoes?page=1&limit=20', { headers });
+    if (!res.ok) return;
+    const data = await res.json();
+    srQuestoes = Array.isArray(data) ? data : (data.questoes || []);
+    // Shuffle for variety
+    srQuestoes.sort(() => Math.random() - 0.5);
+    srQIdx = 0;
+    showSrQuestao();
+  } catch (e) {
+    document.getElementById('sr-q-container').innerHTML = '<div style="color:var(--text-muted);font-size:0.82rem;text-align:center;padding:20px;">Erro ao carregar questões</div>';
+  }
+}
+
+function showSrQuestao() {
+  const container = document.getElementById('sr-q-container');
+  if (srQIdx >= srQuestoes.length) {
+    container.innerHTML = srQuestoes.length > 0
+      ? `<div style="text-align:center;padding:20px;color:var(--green);font-weight:600;">🎉 ${srSessionMetrics.questoes} questões respondidas!</div>`
+      : `<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:0.82rem;">Nenhuma questão disponível. Importe questões primeiro.</div>`;
+    return;
+  }
+  const q = srQuestoes[srQIdx];
+  const letters = ['A', 'B', 'C', 'D', 'E'];
+  const alts = letters.filter(l => q['alternativa_' + l.toLowerCase()]);
+  container.innerHTML = `
+    <div class="sr-card">
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+        <span style="font-size:0.72rem;color:var(--blue);">${q.materia || ''} ${q.banca ? '• ' + q.banca : ''}</span>
+        <span style="font-size:0.72rem;color:var(--text-muted);">${srQIdx + 1}/${srQuestoes.length}</span>
+      </div>
+      <div style="font-size:0.85rem;color:var(--text);margin-bottom:10px;">${escHtml(q.enunciado)}</div>
+      <div id="sr-q-options">
+        ${alts.map(l => `<button class="sr-q-option" id="sr-q-opt-${l}" onclick="answerSrQuestao('${l}')">${l}) ${escHtml(q['alternativa_' + l.toLowerCase()])}</button>`).join('')}
+      </div>
+      <div id="sr-q-feedback" style="display:none;margin-top:10px;padding:10px;border-radius:var(--radius-md);font-size:0.82rem;"></div>
+      <button id="sr-q-next" onclick="nextSrQuestao()" style="display:none;margin-top:8px;background:var(--accent);color:var(--bg);border:none;border-radius:var(--radius-md);padding:8px 16px;font-size:0.82rem;font-weight:600;cursor:pointer;width:100%;">Próxima →</button>
+    </div>`;
+}
+
+async function answerSrQuestao(resposta) {
+  const q = srQuestoes[srQIdx];
+  // Disable all options
+  document.querySelectorAll('.sr-q-option').forEach(btn => { btn.disabled = true; btn.style.cursor = 'default'; });
+
+  try {
+    const res = await fetch(`/api/questoes/${q.id}/responder`, {
+      method: 'POST', headers, body: JSON.stringify({ resposta })
+    });
+    const data = await res.json();
+    const acertou = data.acertou;
+
+    // Highlight correct/wrong
+    document.getElementById('sr-q-opt-' + resposta).classList.add(acertou ? 'correct' : 'wrong');
+    if (!acertou && q.resposta_correta) {
+      const correctBtn = document.getElementById('sr-q-opt-' + q.resposta_correta);
+      if (correctBtn) correctBtn.classList.add('correct');
+    }
+
+    // Feedback
+    const fb = document.getElementById('sr-q-feedback');
+    fb.style.display = 'block';
+    fb.style.background = acertou ? 'rgba(166,227,161,0.1)' : 'rgba(243,139,168,0.1)';
+    fb.style.color = acertou ? 'var(--green)' : 'var(--red)';
+    fb.textContent = acertou ? '✓ Correto!' : `✗ Errou. Resposta: ${q.resposta_correta || data.resposta_correta || '?'}`;
+
+    srSessionMetrics.questoes++;
+    if (acertou) srSessionMetrics.acertos++;
+    updateSessionStats();
+  } catch (e) {
+    // Fallback: compare locally if API fails
+    const acertou = resposta === q.resposta_correta;
+    document.getElementById('sr-q-opt-' + resposta).classList.add(acertou ? 'correct' : 'wrong');
+    srSessionMetrics.questoes++;
+    if (acertou) srSessionMetrics.acertos++;
+    updateSessionStats();
+  }
+  document.getElementById('sr-q-next').style.display = 'block';
+}
+window.answerSrQuestao = answerSrQuestao;
+
+function nextSrQuestao() {
+  srQIdx++;
+  showSrQuestao();
+}
+window.nextSrQuestao = nextSrQuestao;
+
+// --- SÚMULAS ---
+
+async function loadSrSumulas() {
+  try {
+    const res = await fetch('/api/sumulas/today', { headers });
+    if (!res.ok) return;
+    srSumulas = await res.json();
+    srSmIdx = 0;
+    showSrSumula();
+  } catch (e) {
+    document.getElementById('sr-sm-container').innerHTML = '<div style="color:var(--text-muted);font-size:0.82rem;text-align:center;padding:20px;">Erro ao carregar súmulas</div>';
+  }
+}
+
+function showSrSumula() {
+  const container = document.getElementById('sr-sm-container');
+  if (srSmIdx >= srSumulas.length) {
+    container.innerHTML = srSumulas.length > 0
+      ? `<div style="text-align:center;padding:20px;color:var(--green);font-weight:600;">🎉 ${srSessionMetrics.sumulas} súmulas revisadas!</div>`
+      : `<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:0.82rem;">Nenhuma súmula pendente para hoje.</div>`;
+    return;
+  }
+  const s = srSumulas[srSmIdx];
+  const vinc = s.vinculante ? '<span style="background:#f38ba8;color:#1e1e2e;padding:1px 5px;border-radius:3px;font-size:0.6rem;font-weight:700;margin-left:6px;">VINCULANTE</span>' : '';
+  container.innerHTML = `
+    <div class="sr-card">
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+        <span style="font-size:0.72rem;color:var(--accent);">🏛️ ${s.tribunal} — nº ${s.numero}${vinc}</span>
+        <span style="font-size:0.72rem;color:var(--text-muted);">${srSmIdx + 1}/${srSumulas.length}</span>
+      </div>
+      <div class="sr-card-front" style="color:var(--yellow);">Qual é o enunciado da Súmula ${s.tribunal} nº ${s.numero}?</div>
+      <div class="sr-card-back" id="sr-sm-back">${escHtml(s.enunciado)}${s.observacao ? '<br><br><span style="color:var(--blue);font-size:0.78rem;">💡 ' + escHtml(s.observacao) + '</span>' : ''}</div>
+      <button id="sr-sm-reveal-btn" onclick="revealSrSumula()" style="margin-top:10px;background:var(--accent);color:var(--bg);border:none;border-radius:var(--radius-md);padding:8px 16px;font-size:0.82rem;font-weight:600;cursor:pointer;width:100%;">👁 Revelar Enunciado</button>
+      <div class="sr-rating-btns" id="sr-sm-rating" style="display:none;">
+        <button onclick="rateSrSumula(0)" style="background:#f38ba8;">Esqueci</button>
+        <button onclick="rateSrSumula(2)" style="background:#fab387;">Difícil</button>
+        <button onclick="rateSrSumula(3)" style="background:#f9e2af;color:#1e1e2e;">Ok</button>
+        <button onclick="rateSrSumula(4)" style="background:#a6e3a1;color:#1e1e2e;">Bom</button>
+        <button onclick="rateSrSumula(5)" style="background:#a6e3a1;color:#1e1e2e;">Fácil</button>
+      </div>
+    </div>`;
+}
+
+function revealSrSumula() {
+  document.getElementById('sr-sm-back').classList.add('visible');
+  document.getElementById('sr-sm-reveal-btn').style.display = 'none';
+  document.getElementById('sr-sm-rating').style.display = 'flex';
+}
+window.revealSrSumula = revealSrSumula;
+
+async function rateSrSumula(quality) {
+  const s = srSumulas[srSmIdx];
+  try {
+    await fetch(`/api/sumulas/${s.id}/review-sm2`, {
+      method: 'POST', headers, body: JSON.stringify({ quality })
+    });
+    srSessionMetrics.sumulas++;
+    if (quality >= 3) srSessionMetrics.acertos++;
+    updateSessionStats();
+  } catch (e) { /* continue */ }
+  srSmIdx++;
+  showSrSumula();
+}
+window.rateSrSumula = rateSrSumula;
+
+// --- PDF READER ---
+
+async function loadSrPdfs() {
+  const container = document.getElementById('sr-pdf-container');
+  try {
+    const res = await fetch('/api/tree', { headers });
+    if (!res.ok) { container.innerHTML = '<div style="color:var(--text-muted);font-size:0.82rem;text-align:center;padding:20px;">Nenhum PDF encontrado. Faça upload primeiro.</div>'; return; }
+    const tree = await res.json();
+    const pdfs = extractPdfs(tree);
+    if (pdfs.length === 0) {
+      container.innerHTML = '<div style="color:var(--text-muted);font-size:0.82rem;text-align:center;padding:20px;">Nenhum PDF encontrado.</div>';
+      return;
+    }
+    container.innerHTML = `
+      <div style="max-height:200px;overflow-y:auto;margin-bottom:8px;">
+        ${pdfs.slice(0, 20).map(p => `<div class="sr-pdf-item" onclick="openSrPdf('${escHtml(p)}')">
+          <span>📄</span>
+          <span style="font-size:0.82rem;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(p.split('/').pop())}</span>
+          <span style="font-size:0.68rem;color:var(--text-muted);">Abrir</span>
+        </div>`).join('')}
+      </div>
+      <div id="sr-pdf-viewer" style="display:none;">
+        <iframe id="sr-pdf-iframe" style="width:100%;height:500px;border:1px solid var(--border);border-radius:var(--radius-md);background:white;"></iframe>
+        <button onclick="closeSrPdf()" style="margin-top:6px;background:var(--red);color:var(--bg);border:none;border-radius:var(--radius-md);padding:6px 14px;font-size:0.78rem;cursor:pointer;">✕ Fechar PDF</button>
+      </div>`;
+  } catch (e) {
+    container.innerHTML = '<div style="color:var(--text-muted);font-size:0.82rem;text-align:center;padding:20px;">Erro ao carregar PDFs</div>';
+  }
+}
+
+function extractPdfs(tree, prefix = '') {
+  let pdfs = [];
+  if (Array.isArray(tree)) {
+    for (const node of tree) {
+      if (node.type === 'pdf' || (node.name && node.name.endsWith('.pdf'))) {
+        pdfs.push(prefix ? prefix + '/' + node.name : node.name);
+      } else if (node.children) {
+        pdfs = pdfs.concat(extractPdfs(node.children, prefix ? prefix + '/' + node.name : node.name));
+      }
+    }
+  } else if (tree && tree.children) {
+    pdfs = extractPdfs(tree.children, tree.name || '');
+  }
+  return pdfs;
+}
+
+function openSrPdf(path) {
+  const viewer = document.getElementById('sr-pdf-viewer');
+  const iframe = document.getElementById('sr-pdf-iframe');
+  iframe.src = `/viewer.html?file=${encodeURIComponent(path)}`;
+  viewer.style.display = 'block';
+}
+window.openSrPdf = openSrPdf;
+
+function closeSrPdf() {
+  document.getElementById('sr-pdf-viewer').style.display = 'none';
+  document.getElementById('sr-pdf-iframe').src = '';
+}
+window.closeSrPdf = closeSrPdf;
 
 // ============================================================
 // COMMITMENT CONTRACT

@@ -290,6 +290,34 @@
               </div>
             </div>
 
+            <!-- ====== STUDY ACTIVITIES PANEL ====== -->
+            <div class="room-card" id="study-activities-panel">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                <h2 style="margin:0;">📚 Estudar</h2>
+                <span id="study-session-stats" style="font-size:0.72rem;color:var(--text-sub);"></span>
+              </div>
+              <!-- Activity Tabs -->
+              <div style="display:flex;gap:4px;margin-bottom:12px;flex-wrap:wrap;" id="study-tabs">
+                <button class="ambient-btn active" data-tab="flashcards" onclick="switchStudyTab('flashcards')">🃏 Flashcards</button>
+                <button class="ambient-btn" data-tab="questoes" onclick="switchStudyTab('questoes')">❓ Questões</button>
+                <button class="ambient-btn" data-tab="sumulas" onclick="switchStudyTab('sumulas')">⚖️ Súmulas</button>
+                <button class="ambient-btn" data-tab="pdf" onclick="switchStudyTab('pdf')">📄 PDFs</button>
+              </div>
+              <!-- Tab Contents -->
+              <div id="study-tab-flashcards" class="study-tab-content">
+                <div id="sr-fc-container" style="min-height:120px;"></div>
+              </div>
+              <div id="study-tab-questoes" class="study-tab-content hidden">
+                <div id="sr-q-container" style="min-height:120px;"></div>
+              </div>
+              <div id="study-tab-sumulas" class="study-tab-content hidden">
+                <div id="sr-sm-container" style="min-height:120px;"></div>
+              </div>
+              <div id="study-tab-pdf" class="study-tab-content hidden">
+                <div id="sr-pdf-container" style="min-height:120px;"></div>
+              </div>
+            </div>
+
             <!-- Ambient Sounds -->
             <div class="ambient-section">
               <h2>🎧 Sons Ambiente</h2>
@@ -461,6 +489,19 @@
     .break-card-answer.revealed { display:block; }
     .break-card-reveal { background:var(--blue); color:var(--bg); border:none; border-radius:var(--radius-md); padding:5px 12px; font-size:0.75rem; font-weight:600; cursor:pointer; }
     .break-card-meta { font-size:0.68rem; color:var(--text-muted); margin-top:4px; }
+    .study-tab-content.hidden { display:none; }
+    .sr-card { background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-lg); padding:14px; margin-bottom:8px; }
+    .sr-card-front { font-size:0.9rem; color:var(--text); font-weight:600; }
+    .sr-card-back { font-size:0.85rem; color:var(--green); margin-top:8px; padding:10px; background:rgba(166,227,161,0.08); border-radius:var(--radius-md); display:none; }
+    .sr-card-back.visible { display:block; }
+    .sr-rating-btns { display:flex; gap:4px; margin-top:8px; flex-wrap:wrap; }
+    .sr-rating-btns button { flex:1; min-width:60px; padding:6px 4px; border:none; border-radius:var(--radius-md); font-size:0.72rem; font-weight:600; cursor:pointer; color:var(--bg); }
+    .sr-q-option { display:block; width:100%; text-align:left; background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--radius-md); padding:10px 14px; margin-bottom:6px; font-size:0.82rem; color:var(--text); cursor:pointer; transition:border-color 0.2s; }
+    .sr-q-option:hover { border-color:var(--accent); }
+    .sr-q-option.correct { border-color:var(--green); background:rgba(166,227,161,0.1); }
+    .sr-q-option.wrong { border-color:var(--red); background:rgba(243,139,168,0.1); }
+    .sr-pdf-item { display:flex; align-items:center; gap:10px; padding:10px; background:var(--bg); border-radius:var(--radius-md); margin-bottom:6px; cursor:pointer; border:1px solid var(--border); }
+    .sr-pdf-item:hover { border-color:var(--accent); }
     .goal-suggestion { background:rgba(203,166,247,0.08); border:1px solid var(--accent); border-radius:var(--radius-lg); padding:12px; margin-top:10px; }
     .goal-suggestion-text { font-size:0.82rem; color:var(--accent); font-weight:600; }
     .goal-suggestion-why { font-size:0.72rem; color:var(--text-sub); margin-top:4px; }
