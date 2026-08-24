@@ -540,42 +540,42 @@ async function aplicarGabaritoPDF() {
 
   // Buscar provas importadas para seleção
   const provasRes = await fetch('/api/questoes/provas').then(r => r.json());
-  const provasSemGab = provasRes.filter(p => p.sem_gabarito > 0);
 
-  let provaOrigem = '';
-  if (provasSemGab.length === 0) {
-    toast('Nenhuma prova sem gabarito encontrada. Importe a prova primeiro.', 'error');
+  if (provasRes.length === 0) {
+    toast('Nenhuma prova importada encontrada. Importe a prova primeiro.', 'error');
     return;
-  } else if (provasSemGab.length === 1) {
-    provaOrigem = provasSemGab[0].prova;
-  } else {
-    // Mostrar modal de seleção
-    const options = provasSemGab.map(p => `<option value="${p.prova}">${p.prova} (${p.sem_gabarito} sem gabarito)</option>`).join('');
-    const overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(30,30,46,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;';
-    overlay.innerHTML = `
-      <div style="background:#313244;border:1px solid #45475a;border-radius:16px;padding:24px;max-width:400px;width:90%;">
-        <h3 style="color:#cdd6f4;margin:0 0 12px;">Selecione a prova</h3>
-        <p style="color:#a6adc8;font-size:0.82rem;margin:0 0 12px;">Para qual prova este gabarito se aplica?</p>
-        <select id="gab-prova-select" style="width:100%;padding:10px;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:8px;font-size:0.9rem;margin-bottom:16px;">
-          ${options}
-        </select>
-        <div style="display:flex;gap:8px;">
-          <button id="gab-cancel" style="flex:1;padding:10px;background:#45475a;color:#cdd6f4;border:none;border-radius:8px;cursor:pointer;">Cancelar</button>
-          <button id="gab-confirm" style="flex:1;padding:10px;background:#a6e3a1;color:#1e1e2e;border:none;border-radius:8px;cursor:pointer;font-weight:700;">Aplicar</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(overlay);
-
-    provaOrigem = await new Promise(resolve => {
-      overlay.querySelector('#gab-cancel').onclick = () => { overlay.remove(); resolve(''); };
-      overlay.querySelector('#gab-confirm').onclick = () => { resolve(overlay.querySelector('#gab-prova-select').value); overlay.remove(); };
-      overlay.onclick = (e) => { if (e.target === overlay) { overlay.remove(); resolve(''); } };
-    });
-
-    if (!provaOrigem) return;
   }
+
+  // Sempre mostrar modal de seleção de prova
+  const options = provasRes.map(p => {
+    const status = p.gabarito_completo ? '✅' : `⚠️ ${p.sem_gabarito} sem gab`;
+    return `<option value="${p.prova}">${p.prova} (${p.total_questoes}q — ${status})</option>`;
+  }).join('');
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(30,30,46,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:#313244;border:1px solid #45475a;border-radius:16px;padding:24px;max-width:420px;width:90%;">
+      <h3 style="color:#cdd6f4;margin:0 0 12px;">📋 Aplicar Gabarito</h3>
+      <p style="color:#a6adc8;font-size:0.82rem;margin:0 0 12px;">Selecione a prova para associar este gabarito:</p>
+      <select id="gab-prova-select" style="width:100%;padding:10px;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:8px;font-size:0.85rem;margin-bottom:16px;">
+        ${options}
+      </select>
+      <div style="display:flex;gap:8px;">
+        <button id="gab-cancel" style="flex:1;padding:10px;background:#45475a;color:#cdd6f4;border:none;border-radius:8px;cursor:pointer;font-weight:600;">Cancelar</button>
+        <button id="gab-confirm" style="flex:1;padding:10px;background:#a6e3a1;color:#1e1e2e;border:none;border-radius:8px;cursor:pointer;font-weight:700;">Aplicar Gabarito</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const provaOrigem = await new Promise(resolve => {
+    overlay.querySelector('#gab-cancel').onclick = () => { overlay.remove(); resolve(''); };
+    overlay.querySelector('#gab-confirm').onclick = () => { resolve(overlay.querySelector('#gab-prova-select').value); overlay.remove(); };
+    overlay.onclick = (e) => { if (e.target === overlay) { overlay.remove(); resolve(''); } };
+  });
+
+  if (!provaOrigem) return;
 
   const statusEl = document.getElementById('pdf-import-status');
   statusEl.style.display = 'block';
