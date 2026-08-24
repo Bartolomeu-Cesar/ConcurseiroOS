@@ -210,11 +210,45 @@ async function confirmarResposta() {
 
   respondida = true;
 
-  // Marcar correta/errada
+  // Marcar correta/errada visualmente
+  const isCertoErrado = document.querySelector('.alternativa.ce-btn') !== null;
+
   document.querySelectorAll('.alternativa').forEach(a => {
-    if (a.dataset.letter === res.resposta_correta) a.classList.add('correct');
-    if (a.dataset.letter === letra && !res.acertou) a.classList.add('wrong');
+    a.style.cursor = 'default';
+    if (a.dataset.letter === res.resposta_correta) {
+      a.classList.add('correct');
+      if (isCertoErrado) {
+        a.style.border = '3px solid #a6e3a1';
+        a.style.background = '#a6e3a133';
+        a.style.boxShadow = '0 0 12px #a6e3a155';
+      }
+    }
+    if (a.dataset.letter === letra && !res.acertou) {
+      a.classList.add('wrong');
+      if (isCertoErrado) {
+        a.style.border = '3px solid #f38ba8';
+        a.style.background = '#f38ba833';
+      }
+    }
   });
+
+  // Banner de resultado
+  const respostaCorretaTexto = res.resposta_correta === 'A' ? 'CERTO' : res.resposta_correta === 'B' ? 'ERRADO' : res.resposta_correta;
+  const feedbackHtml = res.acertou
+    ? `<div style="margin-top:14px;padding:14px 18px;background:#1e3a2e;border:2px solid #a6e3a1;border-radius:10px;text-align:center;">
+        <span style="font-size:1.3rem;">✅</span>
+        <strong style="color:#a6e3a1;font-size:1.05rem;margin-left:8px;">Você acertou!</strong>
+        ${isCertoErrado ? `<span style="color:#a6e3a1;font-size:0.9rem;margin-left:8px;">Resposta: <strong>${respostaCorretaTexto}</strong></span>` : ''}
+      </div>`
+    : `<div style="margin-top:14px;padding:14px 18px;background:#3a1e1e;border:2px solid #f38ba8;border-radius:10px;text-align:center;">
+        <span style="font-size:1.3rem;">❌</span>
+        <strong style="color:#f38ba8;font-size:1.05rem;margin-left:8px;">Você errou!</strong>
+        <span style="color:#cdd6f4;font-size:0.9rem;margin-left:8px;">Resposta correta: <strong style="color:#a6e3a1;">${respostaCorretaTexto}</strong></span>
+      </div>`;
+
+  // Inserir feedback antes da explicação
+  const explicacaoBox = document.getElementById('explicacao-box');
+  explicacaoBox.insertAdjacentHTML('beforebegin', feedbackHtml);
 
   document.getElementById('explicacao-box').classList.add('show');
   document.getElementById('btn-confirmar').style.display = 'none';
