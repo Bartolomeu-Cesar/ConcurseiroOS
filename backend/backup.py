@@ -8,6 +8,7 @@ Features:
 - list_backups() — lista backups disponíveis com tamanho e data
 """
 import os
+import sqlite3
 import shutil
 import threading
 from datetime import datetime
@@ -44,7 +45,11 @@ def create_backup(db_path: str | None = None) -> str:
     timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     backup_name = f"backup_{timestamp}.db"
     backup_path = BACKUP_DIR / backup_name
-    shutil.copy2(db_path, backup_path)
+    source = sqlite3.connect(db_path)
+    dest = sqlite3.connect(str(backup_path))
+    source.backup(dest)
+    dest.close()
+    source.close()
     rotate_backups()
     return str(backup_path)
 

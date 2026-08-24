@@ -32,3 +32,8 @@ Thumbs.db
 *.db-wal
 backend/.vapid_private_key
 backend/.vapid_public_key
+
+# Rate limiting SQLite DB (generated at runtime)
+rate_limit.db
+rate_limit.db-wal
+rate_limit.db-shm

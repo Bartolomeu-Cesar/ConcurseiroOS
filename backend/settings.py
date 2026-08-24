@@ -65,7 +65,8 @@ class Settings:
     # JWT
     JWT_SECRET: str = _get_jwt_secret()
     JWT_ALGORITHM: str = "HS256"
-    JWT_EXPIRE_HOURS: int = int(os.environ.get("JWT_EXPIRE_HOURS", "72"))
+    JWT_EXPIRE_HOURS: int = int(os.environ.get("JWT_EXPIRE_HOURS", "1"))
+    JWT_REFRESH_EXPIRE_DAYS: int = int(os.environ.get("JWT_REFRESH_EXPIRE_DAYS", "7"))
 
     # Email SMTP
     SMTP_HOST: str = os.environ.get("SMTP_HOST", "smtp.gmail.com")
@@ -107,6 +108,7 @@ class Settings:
     # Rate Limiting (requests per minute)
     RATE_LIMIT_GENERAL: int = int(os.environ.get("RATE_LIMIT_GENERAL", "500"))
     RATE_LIMIT_AUTH: int = int(os.environ.get("RATE_LIMIT_AUTH", "10"))
+    RATE_LIMIT_AI: int = int(os.environ.get("RATE_LIMIT_AI", "20"))
 
     # Push Notifications (VAPID)
     VAPID_PRIVATE_KEY: str = os.environ.get("VAPID_PRIVATE_KEY", "")

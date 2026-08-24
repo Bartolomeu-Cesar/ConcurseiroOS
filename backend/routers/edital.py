@@ -10,7 +10,7 @@ from database import get_db_session
 from deps import get_user_id
 from logger import log
 from models import EditalCreate, EditalHoras, EditalPdfLink, EditalReviewSM2, NotaTopicoCreate, OkResponse, ResumoCreate
-from utils import paginate, today_str
+from utils import paginate, sql_paginate, today_str
 
 router = APIRouter(prefix="", tags=["Edital"])
 
@@ -137,10 +137,8 @@ def list_edital(edital_nome: str = "", cargo: str = "", incluir_arquivados: bool
         query += " AND cargo = ?"
         params.append(cargo)
     query += " ORDER BY edital_nome, cargo, materia, id"
-    rows = conn.execute(query, params).fetchall()
 
-    items = [dict(r) for r in rows]
-    return paginate(items, page, limit)
+    return sql_paginate(conn, query, tuple(params), page, limit)
 
 
 @router.post("/api/edital", summary="Criar tópico", description="Adiciona um novo tópico ao edital verticalizado")

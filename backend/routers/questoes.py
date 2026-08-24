@@ -13,7 +13,7 @@ from deps import get_user_id
 from logger import log
 from models import QuestaoCreate, QuestaoResponse, QuestaoResposta, QuestaoRespostaResponse
 from schemas import QuestionLinkBatch, QuestionUpdate
-from utils import paginate, today_str, update_streak
+from utils import paginate, sql_paginate, today_str, update_streak
 
 router = APIRouter(prefix="", tags=["Questões"])
 
@@ -98,10 +98,8 @@ def list_questoes(
             params.append(banca)
 
     query += " ORDER BY q.id DESC" if (needs_join or needs_not_in or respondidas == 1) else " ORDER BY id DESC"
-    rows = conn.execute(query, params).fetchall()
 
-    items = [dict(r) for r in rows]
-    return paginate(items, page, limit)
+    return sql_paginate(conn, query, tuple(params), page, limit)
 
 
 @router.get("/api/questoes/materias", summary="Listar matérias disponíveis",

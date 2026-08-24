@@ -68,7 +68,11 @@ def calculate_streak(conn, user_id: int = 1) -> dict:
 
 
 def paginate(items: list, page: int | None, limit: int = 50) -> Any:
-    """Aplica paginação a uma lista. Se page=None, retorna lista completa (retrocompatível)."""
+    """Aplica paginação a uma lista. Se page=None, retorna lista completa (retrocompatível).
+
+    TODO: Novos endpoints devem usar sql_paginate() em vez desta função.
+    paginate() carrega todos os resultados em memória antes de fatiar, o que não escala.
+    """
     if page is None:
         return items
     total = len(items)
@@ -76,6 +80,43 @@ def paginate(items: list, page: int | None, limit: int = 50) -> Any:
     start = (page - 1) * limit
     return {
         "items": items[start:start + limit],
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "pages": pages,
+    }
+
+
+def sql_paginate(conn, query: str, params: tuple = (), page: int | None = None, limit: int = 50) -> Any:
+    """Paginação SQL real com LIMIT/OFFSET. Retorna formato idêntico ao paginate().
+
+    Args:
+        conn: sqlite3 connection (com row_factory=Row)
+        query: SQL base SEM LIMIT/OFFSET (ex: "SELECT * FROM tabela WHERE x = ?")
+        params: tuple de parâmetros para a query
+        page: número da página (1-indexed). Se None, retorna todos os resultados.
+        limit: itens por página (default 50)
+
+    Returns:
+        Se page=None: lista completa de dicts
+        Se page>=1: {"items": [...], "total": N, "page": P, "limit": L, "pages": T}
+    """
+    if page is None:
+        rows = conn.execute(query, params).fetchall()
+        return [dict(r) for r in rows]
+
+    # COUNT total via subquery
+    count_query = f"SELECT COUNT(*) FROM ({query})"
+    total = conn.execute(count_query, params).fetchone()[0]
+
+    pages = math.ceil(total / limit) if limit > 0 else 1
+    offset = (page - 1) * limit
+
+    paginated_query = f"{query} LIMIT ? OFFSET ?"
+    rows = conn.execute(paginated_query, (*params, limit, offset)).fetchall()
+
+    return {
+        "items": [dict(r) for r in rows],
         "total": total,
         "page": page,
         "limit": limit,

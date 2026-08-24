@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Header, Request
 from database import get_db_session
 from logger import log
 from sanitize import sanitize_input
-from schemas import LoginRequest, RegisterRequest, VerifyCodeRequest, ProfileUpdateRequest, UpgradePlanRequest
+from schemas import LoginRequest, RegisterRequest, VerifyCodeRequest, ProfileUpdateRequest, UpgradePlanRequest, RefreshTokenRequest
 from settings import settings
 
 router = APIRouter(prefix="/api/auth", tags=["Autenticação"])
@@ -37,11 +37,24 @@ def _verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode(), hashed.encode())
 
 
-def _create_token(user_id: int, email: str) -> str:
+def _create_access_token(user_id: int, email: str) -> str:
+    """Cria access token JWT (curta duração)."""
     payload = {
         "sub": str(user_id),
         "email": email,
+        "type": "access",
         "exp": datetime.now(timezone.utc) + timedelta(hours=settings.JWT_EXPIRE_HOURS),
+        "iat": datetime.now(timezone.utc),
+    }
+    return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+
+
+def _create_refresh_token(user_id: int) -> str:
+    """Cria refresh token JWT (longa duração)."""
+    payload = {
+        "sub": str(user_id),
+        "type": "refresh",
+        "exp": datetime.now(timezone.utc) + timedelta(days=settings.JWT_REFRESH_EXPIRE_DAYS),
         "iat": datetime.now(timezone.utc),
     }
     return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
@@ -141,6 +154,11 @@ async def get_current_user(authorization: str = Header(None), conn=Depends(get_d
 
     token = authorization.replace("Bearer ", "")
     payload = _decode_token(token)
+
+    # Rejeitar refresh tokens — só aceita access ou tokens legados (sem type)
+    if payload.get("type") == "refresh":
+        raise HTTPException(status_code=401, detail="Refresh token não é aceito para autenticação")
+
     user_id = int(payload["sub"])
 
     user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
@@ -157,6 +175,9 @@ async def get_optional_user(authorization: str = Header(None), conn=Depends(get_
     try:
         token = authorization.replace("Bearer ", "")
         payload = _decode_token(token)
+        # Rejeitar refresh tokens
+        if payload.get("type") == "refresh":
+            return None
         user_id = int(payload["sub"])
         user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
         return dict(user) if user else None
@@ -282,12 +303,15 @@ def verify_code(body: VerifyCodeRequest, request: Request = None, conn=Depends(g
     # Buscar usuário
     user = conn.execute("SELECT id, email, nome, avatar, plano, plano_expira, role FROM users WHERE email = ?", (email,)).fetchone()
 
-    # Gerar token
-    token = _create_token(user["id"], user["email"])
+    # Gerar tokens
+    access_token = _create_access_token(user["id"], user["email"])
+    refresh_token = _create_refresh_token(user["id"])
 
     return {
         "ok": True,
-        "token": token,
+        "token": access_token,
+        "access_token": access_token,
+        "refresh_token": refresh_token,
         "user": {
             "id": user["id"],
             "email": user["email"],
@@ -296,6 +320,40 @@ def verify_code(body: VerifyCodeRequest, request: Request = None, conn=Depends(g
             "plano": user["plano"],
             "role": user["role"] if "role" in user.keys() else "user",
         }
+    }
+
+
+@router.post("/refresh", summary="Renovar tokens via refresh token",
+             description="Recebe um refresh_token válido e retorna novos access_token e refresh_token (rotation).",
+             responses={401: {"description": "Refresh token inválido ou expirado"}})
+def refresh_token(body: RefreshTokenRequest, conn=Depends(get_db_session)):
+    """Renova access_token usando refresh_token (token rotation)."""
+    try:
+        payload = jwt.decode(body.refresh_token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Refresh token expirado. Faça login novamente.")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Refresh token inválido")
+
+    # Validar que é um refresh token
+    if payload.get("type") != "refresh":
+        raise HTTPException(status_code=401, detail="Token fornecido não é um refresh token")
+
+    user_id = int(payload["sub"])
+
+    # Verificar se o usuário ainda existe
+    user = conn.execute("SELECT id, email FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not user:
+        raise HTTPException(status_code=401, detail="Usuário não encontrado")
+
+    # Gerar novos tokens (rotation)
+    new_access_token = _create_access_token(user["id"], user["email"])
+    new_refresh_token = _create_refresh_token(user["id"])
+
+    return {
+        "ok": True,
+        "access_token": new_access_token,
+        "refresh_token": new_refresh_token,
     }
 
 

@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 from database import get_db_session
 from deps import get_user_id
 from logger import log
-from utils import calculate_streak, paginate, today_str
+from utils import calculate_streak, paginate, sql_paginate, today_str
 
 router = APIRouter(prefix="", tags=["Analytics"])
 
@@ -452,11 +452,11 @@ def plano_automatico(edital_nome: str = "", cargo: str = "", horas_dia: float = 
 
 @router.get("/api/linha-tempo", summary="Linha do tempo")
 def linha_tempo(page: int | None = Query(None), limit: int = 50, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
-    rows = conn.execute("SELECT data, materia, horas, tipo FROM sessoes_estudo WHERE user_id = ? ORDER BY data DESC, id DESC", (user_id,)).fetchall()
-    items = [dict(r) for r in rows]
+    query = "SELECT data, materia, horas, tipo FROM sessoes_estudo WHERE user_id = ? ORDER BY data DESC, id DESC"
     if page is None:
-        return items[:50]
-    return paginate(items, page, limit)
+        rows = conn.execute(query, (user_id,)).fetchall()
+        return [dict(r) for r in rows][:50]
+    return sql_paginate(conn, query, (user_id,), page, limit)
 
 
 @router.get("/api/exportar-stats")

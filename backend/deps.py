@@ -26,6 +26,10 @@ async def get_user_id(authorization: str = Header(None)) -> int:
     token = authorization.replace("Bearer ", "")
     try:
         payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        # Rejeitar refresh tokens — só aceita access ou tokens legados (sem type)
+        token_type = payload.get("type")
+        if token_type == "refresh":
+            raise HTTPException(status_code=401, detail="Refresh token não é aceito para autenticação")
         user_id = int(payload["sub"])
         set_user_id_context(user_id)
         return user_id
@@ -51,6 +55,10 @@ async def get_optional_user_id(authorization: str = Header(None)) -> int:
     token = authorization.replace("Bearer ", "")
     try:
         payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        # Rejeitar refresh tokens
+        if payload.get("type") == "refresh":
+            set_user_id_context(DEFAULT_USER_ID)
+            return DEFAULT_USER_ID
         user_id = int(payload["sub"])
         set_user_id_context(user_id)
         return user_id

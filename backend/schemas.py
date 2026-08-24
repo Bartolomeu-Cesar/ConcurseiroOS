@@ -50,6 +50,11 @@ class UpgradePlanRequest(BaseModel):
     plano: str = Field(default="premium", pattern=r"^(free|premium|ilimitado)$")
 
 
+class RefreshTokenRequest(BaseModel):
+    """POST /api/auth/refresh body."""
+    refresh_token: str = Field(..., min_length=1)
+
+
 # ============================================================
 # Auth — Responses
 # ============================================================
