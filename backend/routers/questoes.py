@@ -1475,6 +1475,7 @@ async def importar_questoes_pdf(
     gabarito_file: UploadFile = File(None),
     materia: str = "",
     banca: str = "",
+    prova_nome: str = "",
     conn=Depends(get_db_session),
     user_id: int = Depends(get_user_id),
 ):
@@ -1557,17 +1558,20 @@ async def importar_questoes_pdf(
                 continue
             if not q["resposta_correta"]:
                 sem_gabarito += 1
+            # Gerar nome da prova a partir do filename se não fornecido
+            nome_prova = prova_nome or file.filename.replace('.pdf', '').replace('-', ' ').replace('_', ' ')
+
             conn.execute("""
                 INSERT INTO questoes (materia, topico, enunciado, alternativa_a, alternativa_b,
-                    alternativa_c, alternativa_d, alternativa_e, resposta_correta, explicacao, dificuldade, banca, created_at, user_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    alternativa_c, alternativa_d, alternativa_e, resposta_correta, explicacao, dificuldade, banca, prova_origem, created_at, user_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (q["materia"], q["topico"], q["enunciado"], q["alternativa_a"], q["alternativa_b"],
                   q["alternativa_c"], q["alternativa_d"], q["alternativa_e"], q["resposta_correta"],
-                  q["explicacao"], q["dificuldade"], q["banca"], today_str(), user_id))
+                  q["explicacao"], q["dificuldade"], q["banca"], nome_prova, today_str(), user_id))
             count += 1
 
         conn.commit()
-        log.info(f"PDF import: {count} questões importadas de {file.filename}")
+        log.info(f"PDF import: {count} questões importadas de {file.filename} (prova: {nome_prova})")
 
         return {
             "ok": True,
@@ -1597,16 +1601,17 @@ async def importar_questoes_pdf(
 
 
 @router.post("/api/questoes/aplicar-gabarito", summary="Aplicar gabarito PDF em questões já importadas",
-             description="Envia apenas o PDF do gabarito para associar respostas às questões que já foram importadas sem gabarito.")
+             description="Envia apenas o PDF do gabarito para associar respostas às questões de uma prova específica.")
 async def aplicar_gabarito_pdf(
     file: UploadFile = File(...),
+    prova_origem: str = "",
     banca: str = "",
     conn=Depends(get_db_session),
     user_id: int = Depends(get_user_id),
 ):
     """
-    Aplica gabarito de um PDF separado nas questões já existentes no banco que não têm resposta.
-    Busca questões sem resposta_correta (do mesmo user) e associa por número.
+    Aplica gabarito de um PDF separado nas questões de uma prova específica.
+    Se prova_origem não fornecido, aplica na última prova importada sem gabarito.
     """
     if not file.filename.endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Apenas arquivos PDF são aceitos.")
@@ -1622,12 +1627,11 @@ async def aplicar_gabarito_pdf(
         # Extrair gabarito
         gabarito = _parse_gabarito(texto)
         if not gabarito:
-            # Tentar padrão CESPE: grid de números e letras
             import re
             matches = re.findall(r'(\d{1,3})\s*[.\-–):]?\s*([A-Ea-eCcEeXx])', texto)
             for num, resp in matches:
                 r = resp.upper()
-                if r != 'X':  # X = anulada
+                if r != 'X':
                     gabarito[int(num)] = r
 
         if not gabarito:
@@ -1637,32 +1641,45 @@ async def aplicar_gabarito_pdf(
                 "texto_preview": texto[:1000],
             }
 
-        # Buscar questões sem resposta do usuário (ordenadas por ID para mapear por número)
-        questoes_sem_gab = conn.execute("""
-            SELECT id, enunciado FROM questoes
-            WHERE user_id = ? AND (resposta_correta = '' OR resposta_correta IS NULL)
-            ORDER BY id
-        """, (user_id,)).fetchall()
+        # Buscar questões da prova específica (ou última sem gabarito)
+        if prova_origem:
+            questoes_prova = conn.execute("""
+                SELECT id, enunciado FROM questoes
+                WHERE user_id = ? AND prova_origem = ?
+                ORDER BY id
+            """, (user_id, prova_origem)).fetchall()
+        else:
+            # Pegar a última prova importada que tem questões sem gabarito
+            ultima_prova = conn.execute("""
+                SELECT prova_origem FROM questoes
+                WHERE user_id = ? AND prova_origem != '' AND (resposta_correta = '' OR resposta_correta IS NULL)
+                GROUP BY prova_origem
+                ORDER BY MAX(id) DESC LIMIT 1
+            """, (user_id,)).fetchone()
+            if ultima_prova:
+                prova_origem = ultima_prova[0]
+                questoes_prova = conn.execute("""
+                    SELECT id, enunciado FROM questoes
+                    WHERE user_id = ? AND prova_origem = ?
+                    ORDER BY id
+                """, (user_id, prova_origem)).fetchall()
+            else:
+                return {"ok": False, "erro": "Nenhuma prova sem gabarito encontrada."}
 
-        if not questoes_sem_gab:
-            return {
-                "ok": False,
-                "erro": "Nenhuma questão sem gabarito encontrada. Importe a prova primeiro.",
-                "gabarito_encontrado": len(gabarito),
-            }
+        if not questoes_prova:
+            return {"ok": False, "erro": f"Nenhuma questão encontrada para a prova '{prova_origem}'."}
 
-        # Aplicar gabarito por número sequencial (questão 1 = primeira sem gabarito, etc.)
+        # Aplicar gabarito por número (posição 1-based na prova)
         aplicadas = 0
         anuladas = 0
-        for i, (qid, enunciado) in enumerate(questoes_sem_gab):
+        for i, (qid, enunciado) in enumerate(questoes_prova):
             num = i + 1
             if num in gabarito:
                 gab = gabarito[num]
                 if gab == 'X':
-                    conn.execute("UPDATE questoes SET explicacao = '⚠️ QUESTÃO ANULADA' WHERE id = ?", (qid,))
+                    conn.execute("UPDATE questoes SET explicacao = '⚠️ QUESTÃO ANULADA', resposta_correta = '' WHERE id = ?", (qid,))
                     anuladas += 1
                 elif gab in ('C', 'E'):
-                    # CESPE: C=CERTO(A), E=ERRADO(B)
                     resposta = 'A' if gab == 'C' else 'B'
                     conn.execute("UPDATE questoes SET resposta_correta = ? WHERE id = ?", (resposta, qid))
                     aplicadas += 1
@@ -1674,11 +1691,12 @@ async def aplicar_gabarito_pdf(
 
         return {
             "ok": True,
+            "prova": prova_origem,
             "aplicadas": aplicadas,
             "anuladas": anuladas,
             "total_gabarito": len(gabarito),
-            "total_sem_resposta": len(questoes_sem_gab),
-            "mensagem": f"Gabarito aplicado! {aplicadas} respostas associadas." + (f" {anuladas} anuladas." if anuladas else ""),
+            "total_questoes_prova": len(questoes_prova),
+            "mensagem": f"Gabarito aplicado em '{prova_origem}'! {aplicadas} respostas." + (f" {anuladas} anuladas." if anuladas else ""),
         }
 
     except Exception as e:
@@ -1689,3 +1707,29 @@ async def aplicar_gabarito_pdf(
             os.unlink(tmp_path)
         except OSError:
             pass
+
+
+@router.get("/api/questoes/provas", summary="Listar provas importadas")
+def listar_provas(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Retorna lista de provas importadas com contagem de questões e status do gabarito."""
+    rows = conn.execute("""
+        SELECT prova_origem,
+               COUNT(*) as total,
+               SUM(CASE WHEN resposta_correta != '' AND resposta_correta IS NOT NULL THEN 1 ELSE 0 END) as com_gabarito,
+               banca,
+               MIN(created_at) as importada_em
+        FROM questoes
+        WHERE user_id = ? AND prova_origem != ''
+        GROUP BY prova_origem
+        ORDER BY MAX(id) DESC
+    """, (user_id,)).fetchall()
+
+    return [{
+        "prova": r[0],
+        "total_questoes": r[1],
+        "com_gabarito": r[2],
+        "sem_gabarito": r[1] - r[2],
+        "banca": r[3],
+        "importada_em": r[4],
+        "gabarito_completo": r[2] == r[1],
+    } for r in rows]

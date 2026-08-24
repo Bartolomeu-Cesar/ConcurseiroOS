@@ -303,6 +303,15 @@ def _m43_sessao_adaptativa(conn):
 
 
 # Lista ordenada de todas as migrations
+
+def _m44_questoes_prova_origem(conn):
+    """Add prova_origem column to questoes."""
+    try:
+        conn.execute("SELECT prova_origem FROM questoes LIMIT 1")
+    except Exception:
+        conn.execute("ALTER TABLE questoes ADD COLUMN prova_origem TEXT DEFAULT ''")
+        log.info("Migration: added column prova_origem to questoes")
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -347,6 +356,7 @@ MIGRATIONS = [
     (41, _m41_session_metrics),
     (42, _m42_generation_responses),
     (43, _m43_sessao_adaptativa),
+    (44, _m44_questoes_prova_origem),
 ]
 
 

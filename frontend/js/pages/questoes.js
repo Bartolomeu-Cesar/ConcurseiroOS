@@ -538,18 +538,55 @@ async function aplicarGabaritoPDF() {
     return;
   }
 
+  // Buscar provas importadas para seleção
+  const provasRes = await fetch('/api/questoes/provas').then(r => r.json());
+  const provasSemGab = provasRes.filter(p => p.sem_gabarito > 0);
+
+  let provaOrigem = '';
+  if (provasSemGab.length === 0) {
+    toast('Nenhuma prova sem gabarito encontrada. Importe a prova primeiro.', 'error');
+    return;
+  } else if (provasSemGab.length === 1) {
+    provaOrigem = provasSemGab[0].prova;
+  } else {
+    // Mostrar modal de seleção
+    const options = provasSemGab.map(p => `<option value="${p.prova}">${p.prova} (${p.sem_gabarito} sem gabarito)</option>`).join('');
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(30,30,46,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;';
+    overlay.innerHTML = `
+      <div style="background:#313244;border:1px solid #45475a;border-radius:16px;padding:24px;max-width:400px;width:90%;">
+        <h3 style="color:#cdd6f4;margin:0 0 12px;">Selecione a prova</h3>
+        <p style="color:#a6adc8;font-size:0.82rem;margin:0 0 12px;">Para qual prova este gabarito se aplica?</p>
+        <select id="gab-prova-select" style="width:100%;padding:10px;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:8px;font-size:0.9rem;margin-bottom:16px;">
+          ${options}
+        </select>
+        <div style="display:flex;gap:8px;">
+          <button id="gab-cancel" style="flex:1;padding:10px;background:#45475a;color:#cdd6f4;border:none;border-radius:8px;cursor:pointer;">Cancelar</button>
+          <button id="gab-confirm" style="flex:1;padding:10px;background:#a6e3a1;color:#1e1e2e;border:none;border-radius:8px;cursor:pointer;font-weight:700;">Aplicar</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    provaOrigem = await new Promise(resolve => {
+      overlay.querySelector('#gab-cancel').onclick = () => { overlay.remove(); resolve(''); };
+      overlay.querySelector('#gab-confirm').onclick = () => { resolve(overlay.querySelector('#gab-prova-select').value); overlay.remove(); };
+      overlay.onclick = (e) => { if (e.target === overlay) { overlay.remove(); resolve(''); } };
+    });
+
+    if (!provaOrigem) return;
+  }
+
   const statusEl = document.getElementById('pdf-import-status');
   statusEl.style.display = 'block';
   statusEl.style.background = '#45475a';
   statusEl.style.color = '#cdd6f4';
-  statusEl.innerHTML = '⏳ Aplicando gabarito...';
+  statusEl.innerHTML = `⏳ Aplicando gabarito em "${provaOrigem}"...`;
 
-  const banca = document.getElementById('pdf-import-banca').value.trim();
   const formData = new FormData();
   formData.append('file', file);
 
-  let url = '/api/questoes/aplicar-gabarito';
-  if (banca) url += `?banca=${encodeURIComponent(banca)}`;
+  let url = `/api/questoes/aplicar-gabarito?prova_origem=${encodeURIComponent(provaOrigem)}`;
 
   try {
     const res = await fetch(url, { method: 'POST', body: formData });
@@ -558,7 +595,7 @@ async function aplicarGabaritoPDF() {
     if (data.ok) {
       statusEl.style.background = '#1e3a2e';
       statusEl.style.color = '#a6e3a1';
-      statusEl.innerHTML = `✅ ${data.mensagem}<br><small>Aplicadas: ${data.aplicadas} | Anuladas: ${data.anuladas || 0} | Total no gabarito: ${data.total_gabarito}</small>`;
+      statusEl.innerHTML = `✅ ${data.mensagem}<br><small>Prova: ${data.prova} | Aplicadas: ${data.aplicadas} | Anuladas: ${data.anuladas || 0}</small>`;
       if (typeof loadBanco === 'function') loadBanco();
     } else {
       statusEl.style.background = '#3a1e1e';
