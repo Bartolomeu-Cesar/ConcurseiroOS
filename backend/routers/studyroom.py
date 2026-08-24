@@ -984,3 +984,1177 @@ def get_goal_suggestion(
         "top_materias_roi": resultados[:3],
         "motivo": f"{top['materia']} tem maior ROI: peso {top['peso_banca']}% na banca com {top['gap']}% de gap",
     }
+
+
+# ============================================================
+# TABELAS ADICIONAIS
+# ============================================================
+
+def _ensure_commitment_tables(conn):
+    """Cria tabela de commitments se não existir."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS study_room_commitments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            room_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            nome TEXT DEFAULT '',
+            commitment TEXT NOT NULL,
+            xp_stake INTEGER DEFAULT 50,
+            cumprida INTEGER DEFAULT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (room_id) REFERENCES study_rooms(id)
+        )
+    """)
+    conn.commit()
+
+
+def _ensure_intention_tables(conn):
+    """Cria tabela de intentions se não existir."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS study_room_intentions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            room_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            intencao TEXT NOT NULL,
+            como_vou_estudar TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (room_id) REFERENCES study_rooms(id)
+        )
+    """)
+    conn.commit()
+
+
+def _ensure_reflection_tables(conn):
+    """Cria tabela de reflections se não existir."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS study_room_reflections (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            room_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            o_que_aprendi TEXT NOT NULL,
+            o_que_foi_dificil TEXT NOT NULL,
+            proximo_passo TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (room_id) REFERENCES study_rooms(id)
+        )
+    """)
+    conn.commit()
+
+
+def _ensure_challenge_tables(conn):
+    """Cria tabela de challenges se não existir."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS study_room_challenges (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            room_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            materia TEXT NOT NULL,
+            quantidade INTEGER NOT NULL,
+            tempo_limite_min INTEGER DEFAULT 15,
+            boss_hp_atual INTEGER NOT NULL,
+            status TEXT DEFAULT 'ativo',
+            questoes_json TEXT,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (room_id) REFERENCES study_rooms(id)
+        )
+    """)
+    conn.commit()
+
+
+def _ensure_discussion_tables(conn):
+    """Cria tabelas de discussions se não existirem."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS study_room_discussions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            room_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            questao_id INTEGER,
+            enunciado TEXT NOT NULL,
+            alternativas_json TEXT,
+            resposta_correta TEXT,
+            materia TEXT DEFAULT '',
+            status TEXT DEFAULT 'aberta',
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (room_id) REFERENCES study_rooms(id)
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS study_room_discussion_responses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            discussion_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            nome TEXT DEFAULT '',
+            resposta TEXT NOT NULL,
+            justificativa TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (discussion_id) REFERENCES study_room_discussions(id)
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS study_room_discussion_comments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            discussion_id INTEGER NOT NULL,
+            response_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            nome TEXT DEFAULT '',
+            comentario TEXT NOT NULL,
+            concordo INTEGER DEFAULT 1,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (discussion_id) REFERENCES study_room_discussions(id),
+            FOREIGN KEY (response_id) REFERENCES study_room_discussion_responses(id)
+        )
+    """)
+    conn.commit()
+
+
+# ============================================================
+# 1. COMMITMENT CONTRACT
+# ============================================================
+
+
+@router.post("/commitment/{codigo}")
+def criar_commitment(
+    codigo: str,
+    commitment: str = Body(..., embed=True),
+    xp_stake: int = Body(50, embed=True),
+    user_id: int = Depends(get_user_id),
+    conn=Depends(get_db_session),
+):
+    """Cria um commitment público para a sala."""
+    _ensure_commitment_tables(conn)
+
+    room = conn.execute("SELECT id FROM study_rooms WHERE codigo = ?", (codigo,)).fetchone()
+    if not room:
+        raise HTTPException(status_code=404, detail="Sala não encontrada")
+
+    if not commitment or not commitment.strip():
+        raise HTTPException(status_code=400, detail="Commitment não pode ser vazio")
+
+    if xp_stake < 0 or xp_stake > 500:
+        raise HTTPException(status_code=400, detail="XP stake deve ser entre 0 e 500")
+
+    nome = _get_user_name(conn, user_id)
+    now = datetime.now().isoformat()
+
+    conn.execute("""
+        INSERT INTO study_room_commitments (room_id, user_id, nome, commitment, xp_stake, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (room["id"], user_id, nome, commitment.strip(), xp_stake, now))
+    conn.commit()
+
+    log.info(f"Commitment created by user {user_id} in room {codigo}: {commitment.strip()}")
+    return {"ok": True, "commitment": commitment.strip(), "xp_stake": xp_stake}
+
+
+@router.get("/commitment/{codigo}")
+def listar_commitments(
+    codigo: str,
+    user_id: int = Depends(get_user_id),
+    conn=Depends(get_db_session),
+):
+    """Retorna todos os commitments da sala."""
+    _ensure_commitment_tables(conn)
+
+    room = conn.execute("SELECT id FROM study_rooms WHERE codigo = ?", (codigo,)).fetchone()
+    if not room:
+        raise HTTPException(status_code=404, detail="Sala não encontrada")
+
+    rows = conn.execute("""
+        SELECT id, user_id, nome, commitment, xp_stake, cumprida, created_at
+        FROM study_room_commitments
+        WHERE room_id = ?
+        ORDER BY created_at DESC
+    """, (room["id"],)).fetchall()
+
+    return {
+        "commitments": [
+            {
+                "id": r["id"],
+                "user_id": r["user_id"],
+                "nome": r["nome"],
+                "commitment": r["commitment"],
+                "xp_stake": r["xp_stake"],
+                "cumprida": r["cumprida"],
+                "created_at": r["created_at"],
+            }
+            for r in rows
+        ]
+    }
+
+
+@router.post("/commitment/{codigo}/resolve")
+def resolver_commitment(
+    codigo: str,
+    cumprida: bool = Body(..., embed=True),
+    user_id: int = Depends(get_user_id),
+    conn=Depends(get_db_session),
+):
+    """Resolve um commitment — se cumprido, ganha XP bônus; se não, perde XP."""
+    _ensure_commitment_tables(conn)
+
+    room = conn.execute("SELECT id FROM study_rooms WHERE codigo = ?", (codigo,)).fetchone()
+    if not room:
+        raise HTTPException(status_code=404, detail="Sala não encontrada")
+
+    # Buscar o commitment pendente mais recente do usuário nesta sala
+    commitment = conn.execute("""
+        SELECT id, xp_stake FROM study_room_commitments
+        WHERE room_id = ? AND user_id = ? AND cumprida IS NULL
+        ORDER BY created_at DESC LIMIT 1
+    """, (room["id"], user_id)).fetchone()
+
+    if not commitment:
+        raise HTTPException(status_code=404, detail="Nenhum commitment pendente encontrado")
+
+    xp_stake = commitment["xp_stake"]
+
+    if cumprida:
+        # Bonus XP (stake * 1.5)
+        xp_ganho = int(xp_stake * 1.5)
+        conn.execute(
+            "UPDATE study_room_commitments SET cumprida = 1 WHERE id = ?",
+            (commitment["id"],)
+        )
+    else:
+        # Deduct XP
+        xp_ganho = -xp_stake
+        conn.execute(
+            "UPDATE study_room_commitments SET cumprida = 0 WHERE id = ?",
+            (commitment["id"],)
+        )
+
+    conn.commit()
+    log.info(f"Commitment resolved by user {user_id}: cumprida={cumprida}, xp_change={xp_ganho}")
+
+    return {
+        "ok": True,
+        "cumprida": cumprida,
+        "xp_change": xp_ganho,
+        "mensagem": "Parabéns! Commitment cumprido! 🎉" if cumprida else "Commitment não cumprido. XP deduzido. Tente novamente! 💪",
+    }
+
+
+# ============================================================
+# 2. ELABORATIVE INTERROGATION PROMPTS
+# ============================================================
+
+ELABORATION_PROMPTS = [
+    {"prompt": "Por que esse conceito funciona dessa forma?", "tipo": "causal", "ciclo_sugerido": "foco"},
+    {"prompt": "Como isso se conecta com o que você já sabe?", "tipo": "conexão", "ciclo_sugerido": "pausa"},
+    {"prompt": "Qual seria um exemplo prático disso?", "tipo": "aplicação", "ciclo_sugerido": "foco"},
+    {"prompt": "Se tivesse que explicar para alguém, como faria?", "tipo": "ensino", "ciclo_sugerido": "pausa"},
+    {"prompt": "O que aconteceria se o contrário fosse verdade?", "tipo": "contra-factual", "ciclo_sugerido": "foco"},
+    {"prompt": "Quais são as exceções ou limitações desse conceito?", "tipo": "crítica", "ciclo_sugerido": "foco"},
+    {"prompt": "Como esse tema aparece em provas anteriores?", "tipo": "aplicação", "ciclo_sugerido": "pausa"},
+    {"prompt": "Qual a diferença entre esse conceito e outros semelhantes?", "tipo": "comparação", "ciclo_sugerido": "foco"},
+    {"prompt": "Que analogia você usaria para explicar isso?", "tipo": "analogia", "ciclo_sugerido": "pausa"},
+    {"prompt": "Quais são as consequências práticas de não entender isso?", "tipo": "consequência", "ciclo_sugerido": "foco"},
+    {"prompt": "Como você resumiria isso em uma frase?", "tipo": "síntese", "ciclo_sugerido": "pausa"},
+    {"prompt": "Que pergunta você faria a um professor sobre isso?", "tipo": "curiosidade", "ciclo_sugerido": "pausa"},
+    {"prompt": "Qual a relação entre esse conceito e a questão que errei antes?", "tipo": "conexão", "ciclo_sugerido": "foco"},
+    {"prompt": "Se fosse cair na prova, como seria a questão?", "tipo": "simulação", "ciclo_sugerido": "foco"},
+    {"prompt": "O que eu ainda não entendi completamente sobre isso?", "tipo": "metacognição", "ciclo_sugerido": "pausa"},
+    {"prompt": "Como eu poderia desenhar ou esquematizar esse conceito?", "tipo": "visual", "ciclo_sugerido": "pausa"},
+    {"prompt": "Qual a origem histórica ou lógica desse princípio?", "tipo": "fundamento", "ciclo_sugerido": "foco"},
+    {"prompt": "Quais palavras-chave são essenciais para lembrar?", "tipo": "memorização", "ciclo_sugerido": "foco"},
+    {"prompt": "Como esse assunto se relaciona com casos reais ou jurisprudência?", "tipo": "aplicação", "ciclo_sugerido": "foco"},
+    {"prompt": "Se eu esquecesse tudo amanhã, qual seria o ponto central a reter?", "tipo": "essência", "ciclo_sugerido": "pausa"},
+]
+
+
+@router.get("/elaboration-prompt")
+def get_elaboration_prompt(
+    user_id: int = Depends(get_user_id),
+):
+    """Retorna uma pergunta metacognitiva aleatória para interrogação elaborativa."""
+    prompt = random.choice(ELABORATION_PROMPTS)
+    return prompt
+
+
+# ============================================================
+# 3. FOCUS SCORE
+# ============================================================
+
+
+@router.get("/focus-score/{codigo}")
+def get_focus_score(
+    codigo: str,
+    user_id: int = Depends(get_user_id),
+    conn=Depends(get_db_session),
+):
+    """Calcula score de foco 0-100 baseado em múltiplos fatores."""
+    _ensure_studyroom_tables(conn)
+    _ensure_commitment_tables(conn)
+
+    room = conn.execute("SELECT * FROM study_rooms WHERE codigo = ?", (codigo,)).fetchone()
+    if not room:
+        raise HTTPException(status_code=404, detail="Sala não encontrada")
+
+    participant = conn.execute("""
+        SELECT * FROM study_room_participants
+        WHERE room_id = ? AND user_id = ?
+    """, (room["id"], user_id)).fetchone()
+
+    if not participant:
+        raise HTTPException(status_code=404, detail="Você não está nesta sala")
+
+    # 1. pct_tempo_focando (40%) — % do tempo na sala em status 'focando'
+    tempo_estudado = participant["tempo_estudado_seg"] or 0
+    room_created = datetime.fromisoformat(room["created_at"])
+    elapsed_total = (datetime.now() - room_created).total_seconds()
+    if elapsed_total > 0:
+        pct_foco = min(tempo_estudado / max(elapsed_total, 1), 1.0)
+    else:
+        pct_foco = 0.0
+    score_foco = pct_foco * 40
+
+    # 2. ciclos_completos (20%) — baseado no número esperado vs realizado
+    ciclo_foco_seg = room["ciclo_foco_min"] * 60
+    ciclos_esperados = max(elapsed_total / (ciclo_foco_seg + room["ciclo_pausa_min"] * 60), 1)
+    ciclos_realizados = tempo_estudado / ciclo_foco_seg if ciclo_foco_seg > 0 else 0
+    pct_ciclos = min(ciclos_realizados / ciclos_esperados, 1.0)
+    score_ciclos = pct_ciclos * 20
+
+    # 3. cards_revisados_pausa (20%) — check break cards viewed
+    try:
+        cards_count = conn.execute("""
+            SELECT COUNT(*) as cnt FROM study_room_chat
+            WHERE room_id = ? AND user_id = ? AND mensagem LIKE '%[break-card]%'
+        """, (room["id"], user_id)).fetchone()
+        cards_revisados = cards_count["cnt"] if cards_count else 0
+    except Exception:
+        cards_revisados = 0
+    pct_cards = min(cards_revisados / max(ciclos_realizados, 1), 1.0)
+    score_cards = pct_cards * 20
+
+    # 4. meta_definida (10%) — se tem meta/goal definida
+    meta = participant["meta"] if participant["meta"] else ""
+    score_meta = 10 if meta.strip() else 0
+
+    # 5. commitment_cumprido (10%) — se tem commitment resolvido positivamente
+    commitment_ok = conn.execute("""
+        SELECT COUNT(*) as cnt FROM study_room_commitments
+        WHERE room_id = ? AND user_id = ? AND cumprida = 1
+    """, (room["id"], user_id)).fetchone()
+    has_commitment_ok = (commitment_ok["cnt"] if commitment_ok else 0) > 0
+    score_commitment = 10 if has_commitment_ok else 0
+
+    # Score total
+    score = int(score_foco + score_ciclos + score_cards + score_meta + score_commitment)
+    score = max(0, min(100, score))
+
+    # Nível
+    if score >= 90:
+        nivel = "lendário"
+    elif score >= 70:
+        nivel = "mestre"
+    elif score >= 40:
+        nivel = "focado"
+    else:
+        nivel = "iniciante"
+
+    # Dicas
+    dicas = []
+    if pct_foco < 0.5:
+        dicas.append("Tente manter o foco por períodos mais longos sem interrupção.")
+    if not meta.strip():
+        dicas.append("Defina uma meta para a sessão — ajuda na direção do estudo.")
+    if cards_revisados == 0:
+        dicas.append("Aproveite as pausas para revisar flashcards e consolidar o aprendizado.")
+    if not has_commitment_ok:
+        dicas.append("Faça um commitment público para aumentar sua responsabilidade.")
+    if pct_ciclos < 0.5:
+        dicas.append("Complete ciclos inteiros de Pomodoro para maximizar retenção.")
+
+    return {
+        "score": score,
+        "breakdown": {
+            "pct_tempo_focando": round(score_foco, 1),
+            "ciclos_completos": round(score_ciclos, 1),
+            "cards_revisados_pausa": round(score_cards, 1),
+            "meta_definida": round(score_meta, 1),
+            "commitment_cumprido": round(score_commitment, 1),
+        },
+        "nivel": nivel,
+        "dicas": dicas,
+    }
+
+
+# ============================================================
+# 4. SESSION INTENTION + REFLECTION
+# ============================================================
+
+
+@router.post("/intention/{codigo}")
+def criar_intention(
+    codigo: str,
+    intencao: str = Body(..., embed=True),
+    como_vou_estudar: str = Body(..., embed=True),
+    user_id: int = Depends(get_user_id),
+    conn=Depends(get_db_session),
+):
+    """Salva intenção de início de sessão."""
+    _ensure_intention_tables(conn)
+
+    room = conn.execute("SELECT id FROM study_rooms WHERE codigo = ?", (codigo,)).fetchone()
+    if not room:
+        raise HTTPException(status_code=404, detail="Sala não encontrada")
+
+    if not intencao or not intencao.strip():
+        raise HTTPException(status_code=400, detail="Intenção não pode ser vazia")
+    if not como_vou_estudar or not como_vou_estudar.strip():
+        raise HTTPException(status_code=400, detail="'Como vou estudar' não pode ser vazio")
+
+    now = datetime.now().isoformat()
+
+    conn.execute("""
+        INSERT INTO study_room_intentions (room_id, user_id, intencao, como_vou_estudar, created_at)
+        VALUES (?, ?, ?, ?, ?)
+    """, (room["id"], user_id, intencao.strip(), como_vou_estudar.strip(), now))
+    conn.commit()
+
+    log.info(f"Intention saved by user {user_id} in room {codigo}")
+    return {"ok": True, "intencao": intencao.strip(), "como_vou_estudar": como_vou_estudar.strip()}
+
+
+@router.post("/reflection/{codigo}")
+def criar_reflection(
+    codigo: str,
+    o_que_aprendi: str = Body(..., embed=True),
+    o_que_foi_dificil: str = Body(..., embed=True),
+    proximo_passo: str = Body(..., embed=True),
+    user_id: int = Depends(get_user_id),
+    conn=Depends(get_db_session),
+):
+    """Salva reflexão de fim de sessão."""
+    _ensure_reflection_tables(conn)
+
+    room = conn.execute("SELECT id FROM study_rooms WHERE codigo = ?", (codigo,)).fetchone()
+    if not room:
+        raise HTTPException(status_code=404, detail="Sala não encontrada")
+
+    if not o_que_aprendi or not o_que_aprendi.strip():
+        raise HTTPException(status_code=400, detail="'O que aprendi' não pode ser vazio")
+    if not o_que_foi_dificil or not o_que_foi_dificil.strip():
+        raise HTTPException(status_code=400, detail="'O que foi difícil' não pode ser vazio")
+    if not proximo_passo or not proximo_passo.strip():
+        raise HTTPException(status_code=400, detail="'Próximo passo' não pode ser vazio")
+
+    now = datetime.now().isoformat()
+
+    conn.execute("""
+        INSERT INTO study_room_reflections (room_id, user_id, o_que_aprendi, o_que_foi_dificil, proximo_passo, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (room["id"], user_id, o_que_aprendi.strip(), o_que_foi_dificil.strip(), proximo_passo.strip(), now))
+    conn.commit()
+
+    log.info(f"Reflection saved by user {user_id} in room {codigo}")
+    return {
+        "ok": True,
+        "o_que_aprendi": o_que_aprendi.strip(),
+        "o_que_foi_dificil": o_que_foi_dificil.strip(),
+        "proximo_passo": proximo_passo.strip(),
+    }
+
+
+@router.get("/reflections")
+def listar_reflections(
+    user_id: int = Depends(get_user_id),
+    conn=Depends(get_db_session),
+):
+    """Retorna as últimas 10 reflexões do usuário."""
+    _ensure_reflection_tables(conn)
+
+    rows = conn.execute("""
+        SELECT r.id, r.o_que_aprendi, r.o_que_foi_dificil, r.proximo_passo, r.created_at,
+               s.codigo, s.titulo
+        FROM study_room_reflections r
+        JOIN study_rooms s ON s.id = r.room_id
+        WHERE r.user_id = ?
+        ORDER BY r.created_at DESC
+        LIMIT 10
+    """, (user_id,)).fetchall()
+
+    return {
+        "reflections": [
+            {
+                "id": r["id"],
+                "o_que_aprendi": r["o_que_aprendi"],
+                "o_que_foi_dificil": r["o_que_foi_dificil"],
+                "proximo_passo": r["proximo_passo"],
+                "sala_codigo": r["codigo"],
+                "sala_titulo": r["titulo"],
+                "created_at": r["created_at"],
+            }
+            for r in rows
+        ]
+    }
+
+
+# ============================================================
+# 5. STREAK & CONSISTENCY REWARDS
+# ============================================================
+
+
+@router.get("/streak")
+def get_streak(
+    user_id: int = Depends(get_user_id),
+    conn=Depends(get_db_session),
+):
+    """Retorna streak de dias consecutivos e multiplicador de XP."""
+    _ensure_studyroom_tables(conn)
+
+    # Buscar datas distintas de participação do usuário em study rooms
+    rows = conn.execute("""
+        SELECT DISTINCT DATE(joined_at) as dia
+        FROM study_room_participants
+        WHERE user_id = ?
+        ORDER BY dia DESC
+    """, (user_id,)).fetchall()
+
+    if not rows:
+        return {
+            "dias_consecutivos": 0,
+            "multiplicador_xp": 1.0,
+            "proximo_marco": 3,
+            "historico_7dias": [],
+        }
+
+    # Calcular streak
+    hoje = datetime.now().date()
+    dias_unicos = []
+    for r in rows:
+        try:
+            d = datetime.strptime(r["dia"], "%Y-%m-%d").date()
+            dias_unicos.append(d)
+        except (ValueError, TypeError):
+            continue
+
+    if not dias_unicos:
+        return {
+            "dias_consecutivos": 0,
+            "multiplicador_xp": 1.0,
+            "proximo_marco": 3,
+            "historico_7dias": [],
+        }
+
+    dias_unicos.sort(reverse=True)
+
+    # Verificar se hoje ou ontem está na lista (streak ainda ativo)
+    from datetime import timedelta
+    streak = 0
+    dia_esperado = hoje
+
+    for d in dias_unicos:
+        if d == dia_esperado:
+            streak += 1
+            dia_esperado = dia_esperado - timedelta(days=1)
+        elif d == dia_esperado - timedelta(days=1):
+            # Pulou um dia, mas conta o dia anterior
+            dia_esperado = d
+            streak += 1
+            dia_esperado = dia_esperado - timedelta(days=1)
+        elif d < dia_esperado:
+            break
+
+    # Se o último dia foi antes de ontem, streak = 0
+    if dias_unicos[0] < hoje - timedelta(days=1):
+        streak = 0
+
+    # Multiplicador
+    if streak >= 30:
+        multiplicador = 3.0
+    elif streak >= 14:
+        multiplicador = 2.5
+    elif streak >= 7:
+        multiplicador = 2.0
+    elif streak >= 3:
+        multiplicador = 1.5
+    else:
+        multiplicador = 1.0
+
+    # Próximo marco
+    marcos = [3, 7, 14, 30]
+    proximo_marco = None
+    for m in marcos:
+        if streak < m:
+            proximo_marco = m
+            break
+    if proximo_marco is None:
+        proximo_marco = streak + 30  # Próximo marco custom
+
+    # Histórico últimos 7 dias
+    historico_7dias = []
+    for i in range(7):
+        dia = hoje - timedelta(days=i)
+        ativo = dia in dias_unicos
+        historico_7dias.append({
+            "dia": dia.isoformat(),
+            "ativo": ativo,
+        })
+
+    return {
+        "dias_consecutivos": streak,
+        "multiplicador_xp": multiplicador,
+        "proximo_marco": proximo_marco,
+        "historico_7dias": historico_7dias,
+    }
+
+
+# ============================================================
+# 6. GUIDED MINDFULNESS BREAK
+# ============================================================
+
+
+@router.get("/mindfulness")
+def get_mindfulness_exercise(
+    user_id: int = Depends(get_user_id),
+):
+    """Retorna um exercício guiado de respiração para pausa mindfulness."""
+    mensagens_motivacionais = [
+        "Você está no caminho certo. Cada minuto de estudo te aproxima do objetivo. 🌟",
+        "A consistência vence o talento. Continue firme! 💪",
+        "Respire fundo. Você está investindo no seu futuro. 🎯",
+        "Sua dedicação já te diferencia. Orgulhe-se do esforço! 🏆",
+        "Lembre-se: descanso inteligente faz parte da alta performance. 🧠",
+        "Você já provou que consegue. Agora é só manter. 🚀",
+    ]
+
+    # 8 ciclos de respiração: Inspire 4s, Segure 4s, Expire 6s = 14s por ciclo
+    passos = []
+    for i in range(8):
+        passos.append({"instrucao": "Inspire profundamente pelo nariz... 🌬️", "duracao_seg": 4})
+        passos.append({"instrucao": "Segure o ar suavemente... ⏸️", "duracao_seg": 4})
+        passos.append({"instrucao": "Expire lentamente pela boca... 💨", "duracao_seg": 6})
+
+    # Adicionar mensagem final
+    passos.append({"instrucao": "Exercício completo. Você está pronto para voltar ao foco! ✅", "duracao_seg": 8})
+
+    return {
+        "duracao_seg": 120,
+        "passos": passos,
+        "mensagem_motivacional": random.choice(mensagens_motivacionais),
+    }
+
+
+# ============================================================
+# 7. CHALLENGE MODE (BOSS FIGHT)
+# ============================================================
+
+
+@router.post("/challenge/{codigo}/start")
+def start_challenge(
+    codigo: str,
+    materia: str = Body(..., embed=True),
+    quantidade: int = Body(10, embed=True),
+    tempo_limite_min: int = Body(15, embed=True),
+    user_id: int = Depends(get_user_id),
+    conn=Depends(get_db_session),
+):
+    """Inicia um desafio Boss Fight — busca questões e cria o desafio."""
+    _ensure_challenge_tables(conn)
+
+    room = conn.execute("SELECT id FROM study_rooms WHERE codigo = ?", (codigo,)).fetchone()
+    if not room:
+        raise HTTPException(status_code=404, detail="Sala não encontrada")
+
+    if quantidade < 1 or quantidade > 50:
+        raise HTTPException(status_code=400, detail="Quantidade deve ser entre 1 e 50")
+    if tempo_limite_min < 1 or tempo_limite_min > 120:
+        raise HTTPException(status_code=400, detail="Tempo limite deve ser entre 1 e 120 minutos")
+
+    # Buscar questões da tabela questoes
+    try:
+        questoes = conn.execute("""
+            SELECT id, enunciado, alternativas, resposta, materia
+            FROM questoes
+            WHERE materia LIKE ? AND user_id = ?
+            ORDER BY RANDOM()
+            LIMIT ?
+        """, (f"%{materia}%", user_id, quantidade)).fetchall()
+    except Exception:
+        questoes = []
+
+    if not questoes:
+        raise HTTPException(status_code=404, detail=f"Nenhuma questão encontrada para a matéria '{materia}'")
+
+    import json
+
+    questoes_list = []
+    for q in questoes:
+        alternativas = q["alternativas"]
+        if isinstance(alternativas, str):
+            try:
+                alternativas = json.loads(alternativas)
+            except (json.JSONDecodeError, TypeError):
+                alternativas = []
+        questoes_list.append({
+            "id": q["id"],
+            "enunciado": q["enunciado"],
+            "alternativas": alternativas,
+            "materia": q["materia"],
+        })
+
+    now = datetime.now().isoformat()
+    questoes_json = json.dumps(questoes_list, ensure_ascii=False)
+
+    cursor = conn.execute("""
+        INSERT INTO study_room_challenges (room_id, user_id, materia, quantidade, tempo_limite_min, boss_hp_atual, questoes_json, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (room["id"], user_id, materia, len(questoes_list), tempo_limite_min, len(questoes_list), questoes_json, now))
+    challenge_id = cursor.lastrowid
+    conn.commit()
+
+    log.info(f"Challenge started by user {user_id} in room {codigo}: {materia}, {len(questoes_list)} questões")
+
+    return {
+        "challenge_id": challenge_id,
+        "questoes": questoes_list,
+        "boss_hp": len(questoes_list),
+        "tempo_limite": tempo_limite_min,
+    }
+
+
+@router.post("/challenge/{codigo}/answer")
+def answer_challenge(
+    codigo: str,
+    challenge_id: int = Body(..., embed=True),
+    questao_id: int = Body(..., embed=True),
+    resposta: str = Body(..., embed=True),
+    user_id: int = Depends(get_user_id),
+    conn=Depends(get_db_session),
+):
+    """Responde uma questão do desafio Boss Fight."""
+    _ensure_challenge_tables(conn)
+
+    room = conn.execute("SELECT id FROM study_rooms WHERE codigo = ?", (codigo,)).fetchone()
+    if not room:
+        raise HTTPException(status_code=404, detail="Sala não encontrada")
+
+    challenge = conn.execute("""
+        SELECT * FROM study_room_challenges
+        WHERE id = ? AND room_id = ? AND status = 'ativo'
+    """, (challenge_id, room["id"])).fetchone()
+
+    if not challenge:
+        raise HTTPException(status_code=404, detail="Desafio não encontrado ou já finalizado")
+
+    # Verificar resposta correta
+    questao = conn.execute("""
+        SELECT id, resposta FROM questoes WHERE id = ?
+    """, (questao_id,)).fetchone()
+
+    if not questao:
+        raise HTTPException(status_code=404, detail="Questão não encontrada")
+
+    resposta_correta = questao["resposta"].strip().upper() if questao["resposta"] else ""
+    resposta_usuario = resposta.strip().upper()
+    acertou = resposta_usuario == resposta_correta
+
+    boss_hp_atual = challenge["boss_hp_atual"]
+    boss_hp_max = challenge["quantidade"]
+    xp_ganho = 0
+
+    if acertou:
+        boss_hp_atual = max(0, boss_hp_atual - 1)
+        xp_ganho = 10  # XP por acerto
+
+        conn.execute("""
+            UPDATE study_room_challenges SET boss_hp_atual = ? WHERE id = ?
+        """, (boss_hp_atual, challenge_id))
+
+    derrotado = boss_hp_atual <= 0
+    if derrotado:
+        conn.execute("""
+            UPDATE study_room_challenges SET status = 'derrotado' WHERE id = ?
+        """, (challenge_id,))
+        xp_ganho += 50  # Bônus por derrotar o boss
+        log.info(f"Boss defeated! User {user_id} completed challenge {challenge_id}")
+
+    conn.commit()
+
+    return {
+        "acertou": acertou,
+        "boss_hp_atual": boss_hp_atual,
+        "boss_hp_max": boss_hp_max,
+        "derrotado": derrotado,
+        "xp_ganho": xp_ganho,
+    }
+
+
+# ============================================================
+# 8. PEER ACCOUNTABILITY NUDGE
+# ============================================================
+
+
+@router.post("/nudge/{codigo}/{target_user_id}")
+def send_nudge(
+    codigo: str,
+    target_user_id: int,
+    user_id: int = Depends(get_user_id),
+    conn=Depends(get_db_session),
+):
+    """Envia um nudge de incentivo para outro participante (rate limited: 1 a cada 5 min)."""
+    _ensure_studyroom_tables(conn)
+
+    if user_id == target_user_id:
+        raise HTTPException(status_code=400, detail="Você não pode enviar nudge para si mesmo")
+
+    room = conn.execute("SELECT id FROM study_rooms WHERE codigo = ?", (codigo,)).fetchone()
+    if not room:
+        raise HTTPException(status_code=404, detail="Sala não encontrada")
+
+    # Verificar se ambos estão na sala
+    sender_in_room = conn.execute("""
+        SELECT id FROM study_room_participants WHERE room_id = ? AND user_id = ?
+    """, (room["id"], user_id)).fetchone()
+    target_in_room = conn.execute("""
+        SELECT id FROM study_room_participants WHERE room_id = ? AND user_id = ?
+    """, (room["id"], target_user_id)).fetchone()
+
+    if not sender_in_room:
+        raise HTTPException(status_code=403, detail="Você não está nesta sala")
+    if not target_in_room:
+        raise HTTPException(status_code=404, detail="Usuário alvo não está nesta sala")
+
+    # Rate limit: verificar último nudge enviado pelo usuário nos últimos 5 min
+    from datetime import timedelta
+    cinco_min_atras = (datetime.now() - timedelta(minutes=5)).isoformat()
+
+    last_nudge = conn.execute("""
+        SELECT id FROM study_room_chat
+        WHERE room_id = ? AND user_id = ? AND mensagem LIKE '%[nudge]%' AND created_at > ?
+    """, (room["id"], user_id, cinco_min_atras)).fetchone()
+
+    if last_nudge:
+        raise HTTPException(status_code=429, detail="Aguarde 5 minutos entre nudges")
+
+    # Enviar mensagem de nudge no chat
+    sender_name = _get_user_name(conn, user_id)
+    now = datetime.now().isoformat()
+    mensagem = f"🔔 [nudge] {sender_name} te mandou um incentivo: De volta ao foco! 💪"
+
+    conn.execute("""
+        INSERT INTO study_room_chat (room_id, user_id, nome, mensagem, created_at)
+        VALUES (?, ?, ?, ?, ?)
+    """, (room["id"], user_id, "Sistema", mensagem, now))
+    conn.commit()
+
+    log.info(f"Nudge sent from user {user_id} to user {target_user_id} in room {codigo}")
+    return {"ok": True, "mensagem": mensagem}
+
+
+# ============================================================
+# 9. COLLABORATIVE QUESTION DISCUSSION
+# ============================================================
+
+
+@router.post("/discussion/{codigo}/start")
+def start_discussion(
+    codigo: str,
+    questao_id: int = Body(None, embed=True),
+    enunciado: str = Body(None, embed=True),
+    alternativas: list = Body(None, embed=True),
+    resposta_correta: str = Body(None, embed=True),
+    materia: str = Body("", embed=True),
+    user_id: int = Depends(get_user_id),
+    conn=Depends(get_db_session),
+):
+    """Inicia uma discussão sobre uma questão. Pode buscar da base ou criar custom."""
+    _ensure_discussion_tables(conn)
+
+    room = conn.execute("SELECT id FROM study_rooms WHERE codigo = ?", (codigo,)).fetchone()
+    if not room:
+        raise HTTPException(status_code=404, detail="Sala não encontrada")
+
+    import json
+
+    final_enunciado = enunciado
+    final_alternativas = alternativas
+    final_resposta = resposta_correta
+    final_materia = materia
+    final_questao_id = questao_id
+
+    # Se questao_id fornecido, buscar da base
+    if questao_id:
+        questao = conn.execute("""
+            SELECT id, enunciado, alternativas, resposta, materia
+            FROM questoes WHERE id = ?
+        """, (questao_id,)).fetchone()
+        if not questao:
+            raise HTTPException(status_code=404, detail="Questão não encontrada")
+
+        final_enunciado = questao["enunciado"]
+        alt = questao["alternativas"]
+        if isinstance(alt, str):
+            try:
+                final_alternativas = json.loads(alt)
+            except (json.JSONDecodeError, TypeError):
+                final_alternativas = []
+        else:
+            final_alternativas = alt or []
+        final_resposta = questao["resposta"]
+        final_materia = questao["materia"] or ""
+        final_questao_id = questao["id"]
+    else:
+        if not final_enunciado or not final_enunciado.strip():
+            raise HTTPException(status_code=400, detail="Enunciado é obrigatório quando não há questao_id")
+
+    alternativas_json = json.dumps(final_alternativas or [], ensure_ascii=False)
+    now = datetime.now().isoformat()
+
+    cursor = conn.execute("""
+        INSERT INTO study_room_discussions
+        (room_id, user_id, questao_id, enunciado, alternativas_json, resposta_correta, materia, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (room["id"], user_id, final_questao_id, final_enunciado.strip(), alternativas_json, final_resposta or "", final_materia, now))
+    discussion_id = cursor.lastrowid
+    conn.commit()
+
+    log.info(f"Discussion started by user {user_id} in room {codigo}: discussion_id={discussion_id}")
+
+    return {
+        "ok": True,
+        "discussion_id": discussion_id,
+        "enunciado": final_enunciado.strip(),
+        "alternativas": final_alternativas or [],
+        "materia": final_materia,
+    }
+
+
+@router.post("/discussion/{codigo}/respond")
+def respond_discussion(
+    codigo: str,
+    discussion_id: int = Body(..., embed=True),
+    resposta: str = Body(..., embed=True),
+    justificativa: str = Body(..., embed=True),
+    user_id: int = Depends(get_user_id),
+    conn=Depends(get_db_session),
+):
+    """Submete resposta + justificativa para uma discussão."""
+    _ensure_discussion_tables(conn)
+
+    room = conn.execute("SELECT id FROM study_rooms WHERE codigo = ?", (codigo,)).fetchone()
+    if not room:
+        raise HTTPException(status_code=404, detail="Sala não encontrada")
+
+    discussion = conn.execute("""
+        SELECT id, status FROM study_room_discussions
+        WHERE id = ? AND room_id = ?
+    """, (discussion_id, room["id"])).fetchone()
+
+    if not discussion:
+        raise HTTPException(status_code=404, detail="Discussão não encontrada")
+    if discussion["status"] != "aberta":
+        raise HTTPException(status_code=400, detail="Discussão já encerrada")
+
+    if not resposta or not resposta.strip():
+        raise HTTPException(status_code=400, detail="Resposta não pode ser vazia")
+    if not justificativa or not justificativa.strip():
+        raise HTTPException(status_code=400, detail="Justificativa não pode ser vazia")
+
+    # Verificar se já respondeu
+    existing = conn.execute("""
+        SELECT id FROM study_room_discussion_responses
+        WHERE discussion_id = ? AND user_id = ?
+    """, (discussion_id, user_id)).fetchone()
+
+    if existing:
+        raise HTTPException(status_code=400, detail="Você já respondeu esta discussão")
+
+    nome = _get_user_name(conn, user_id)
+    now = datetime.now().isoformat()
+
+    conn.execute("""
+        INSERT INTO study_room_discussion_responses (discussion_id, user_id, nome, resposta, justificativa, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (discussion_id, user_id, nome, resposta.strip(), justificativa.strip(), now))
+    conn.commit()
+
+    log.info(f"Discussion response by user {user_id} for discussion {discussion_id}")
+    return {"ok": True, "resposta": resposta.strip(), "justificativa": justificativa.strip()}
+
+
+@router.post("/discussion/{codigo}/comment")
+def comment_discussion(
+    codigo: str,
+    discussion_id: int = Body(..., embed=True),
+    comentario: str = Body(..., embed=True),
+    concordo: bool = Body(True, embed=True),
+    user_id: int = Depends(get_user_id),
+    conn=Depends(get_db_session),
+):
+    """Comenta na discussão (concordar/discordar + argumentação)."""
+    _ensure_discussion_tables(conn)
+
+    room = conn.execute("SELECT id FROM study_rooms WHERE codigo = ?", (codigo,)).fetchone()
+    if not room:
+        raise HTTPException(status_code=404, detail="Sala não encontrada")
+
+    discussion = conn.execute("""
+        SELECT id, status FROM study_room_discussions
+        WHERE id = ? AND room_id = ?
+    """, (discussion_id, room["id"])).fetchone()
+
+    if not discussion:
+        raise HTTPException(status_code=404, detail="Discussão não encontrada")
+
+    if not comentario or not comentario.strip():
+        raise HTTPException(status_code=400, detail="Comentário não pode ser vazio")
+
+    # Buscar a última resposta da discussão para associar o comentário
+    last_response = conn.execute("""
+        SELECT id FROM study_room_discussion_responses
+        WHERE discussion_id = ?
+        ORDER BY created_at DESC LIMIT 1
+    """, (discussion_id,)).fetchone()
+
+    response_id = last_response["id"] if last_response else 0
+
+    nome = _get_user_name(conn, user_id)
+    now = datetime.now().isoformat()
+
+    conn.execute("""
+        INSERT INTO study_room_discussion_comments (discussion_id, response_id, user_id, nome, comentario, concordo, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (discussion_id, response_id, user_id, nome, comentario.strip(), int(concordo), now))
+    conn.commit()
+
+    log.info(f"Discussion comment by user {user_id} for discussion {discussion_id}")
+    return {"ok": True, "comentario": comentario.strip(), "concordo": concordo}
+
+
+@router.get("/discussion/{codigo}")
+def listar_discussions(
+    codigo: str,
+    user_id: int = Depends(get_user_id),
+    conn=Depends(get_db_session),
+):
+    """Retorna todas as discussões ativas da sala com respostas e comentários."""
+    _ensure_discussion_tables(conn)
+
+    import json
+
+    room = conn.execute("SELECT id FROM study_rooms WHERE codigo = ?", (codigo,)).fetchone()
+    if not room:
+        raise HTTPException(status_code=404, detail="Sala não encontrada")
+
+    discussions = conn.execute("""
+        SELECT id, user_id, questao_id, enunciado, alternativas_json, materia, status, created_at
+        FROM study_room_discussions
+        WHERE room_id = ?
+        ORDER BY created_at DESC
+    """, (room["id"],)).fetchall()
+
+    result = []
+    for d in discussions:
+        # Buscar respostas
+        responses = conn.execute("""
+            SELECT id, user_id, nome, resposta, justificativa, created_at
+            FROM study_room_discussion_responses
+            WHERE discussion_id = ?
+            ORDER BY created_at ASC
+        """, (d["id"],)).fetchall()
+
+        responses_list = []
+        for r in responses:
+            # Buscar comentários desta resposta
+            comments = conn.execute("""
+                SELECT id, user_id, nome, comentario, concordo, created_at
+                FROM study_room_discussion_comments
+                WHERE response_id = ?
+                ORDER BY created_at ASC
+            """, (r["id"],)).fetchall()
+
+            responses_list.append({
+                "id": r["id"],
+                "user_id": r["user_id"],
+                "nome": r["nome"],
+                "resposta": r["resposta"],
+                "justificativa": r["justificativa"],
+                "created_at": r["created_at"],
+                "comments": [
+                    {
+                        "id": c["id"],
+                        "user_id": c["user_id"],
+                        "nome": c["nome"],
+                        "comentario": c["comentario"],
+                        "concordo": bool(c["concordo"]),
+                        "created_at": c["created_at"],
+                    }
+                    for c in comments
+                ],
+            })
+
+        try:
+            alternativas = json.loads(d["alternativas_json"]) if d["alternativas_json"] else []
+        except (json.JSONDecodeError, TypeError):
+            alternativas = []
+
+        result.append({
+            "id": d["id"],
+            "user_id": d["user_id"],
+            "questao_id": d["questao_id"],
+            "enunciado": d["enunciado"],
+            "alternativas": alternativas,
+            "materia": d["materia"],
+            "status": d["status"],
+            "created_at": d["created_at"],
+            "responses": responses_list,
+        })
+
+    return {"discussions": result}
+
+
+@router.post("/discussion/{codigo}/reveal")
+def reveal_discussion(
+    codigo: str,
+    discussion_id: int = Body(..., embed=True),
+    user_id: int = Depends(get_user_id),
+    conn=Depends(get_db_session),
+):
+    """Revela a resposta correta da discussão (apenas criador da sala ou após todos responderem)."""
+    _ensure_discussion_tables(conn)
+
+    room = conn.execute("SELECT id, criador_id FROM study_rooms WHERE codigo = ?", (codigo,)).fetchone()
+    if not room:
+        raise HTTPException(status_code=404, detail="Sala não encontrada")
+
+    discussion = conn.execute("""
+        SELECT id, resposta_correta, status FROM study_room_discussions
+        WHERE id = ? AND room_id = ?
+    """, (discussion_id, room["id"])).fetchone()
+
+    if not discussion:
+        raise HTTPException(status_code=404, detail="Discussão não encontrada")
+
+    if discussion["status"] == "revelada":
+        return {"ok": True, "resposta_correta": discussion["resposta_correta"], "ja_revelada": True}
+
+    # Verificar permissão: criador da sala OU todos participantes já responderam
+    is_criador = user_id == room["criador_id"]
+
+    if not is_criador:
+        # Verificar se todos participantes responderam
+        total_participants = conn.execute("""
+            SELECT COUNT(*) as cnt FROM study_room_participants WHERE room_id = ?
+        """, (room["id"],)).fetchone()["cnt"]
+
+        total_responses = conn.execute("""
+            SELECT COUNT(*) as cnt FROM study_room_discussion_responses WHERE discussion_id = ?
+        """, (discussion_id,)).fetchone()["cnt"]
+
+        if total_responses < total_participants:
+            raise HTTPException(
+                status_code=403,
+                detail="Apenas o criador da sala pode revelar antes de todos responderem"
+            )
+
+    # Revelar
+    conn.execute("""
+        UPDATE study_room_discussions SET status = 'revelada' WHERE id = ?
+    """, (discussion_id,))
+    conn.commit()
+
+    log.info(f"Discussion {discussion_id} revealed by user {user_id} in room {codigo}")
+    return {"ok": True, "resposta_correta": discussion["resposta_correta"], "ja_revelada": False}

@@ -323,6 +323,109 @@
                 <ul class="todo-list" id="todo-list"></ul>
               </div>
             </div>
+
+            <!-- Commitment Contract -->
+            <div class="room-card" id="commitment-section">
+              <h2>🤝 Compromisso Público</h2>
+              <div id="commitment-display"></div>
+              <div id="commitment-form" style="margin-top:8px;">
+                <input type="text" class="todo-input" id="commitment-input" placeholder="Ex: Vou resolver 15 questões de Constitucional" maxlength="200" style="margin-bottom:6px;">
+                <div style="display:flex;gap:8px;align-items:center;">
+                  <span style="font-size:0.75rem;color:var(--text-sub);">XP em jogo:</span>
+                  <input type="number" id="commitment-xp" value="50" min="10" max="200" style="width:60px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-md);padding:4px 8px;color:var(--yellow);font-weight:700;font-size:0.82rem;">
+                  <button class="todo-add-btn" onclick="submitCommitment()">Firmar compromisso</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Focus Score -->
+            <div class="room-card" id="focus-score-section">
+              <h2>🎯 Focus Score</h2>
+              <div style="text-align:center;padding:8px 0;">
+                <div id="focus-score-value" style="font-size:2.2rem;font-weight:800;color:var(--accent);">--</div>
+                <div id="focus-score-nivel" style="font-size:0.78rem;color:var(--text-sub);margin-top:2px;"></div>
+              </div>
+              <div id="focus-score-breakdown" style="font-size:0.75rem;color:var(--text-sub);"></div>
+              <div id="focus-score-dicas" style="margin-top:8px;font-size:0.75rem;"></div>
+            </div>
+
+            <!-- Elaboration Prompt (shown every 2 cycles) -->
+            <div class="room-card hidden" id="elaboration-section" style="border:2px solid var(--accent);background:rgba(203,166,247,0.05);">
+              <h2 style="color:var(--accent);">🤔 Reflexão Metacognitiva</h2>
+              <p id="elaboration-prompt" style="font-size:0.9rem;color:var(--text);font-style:italic;margin:8px 0;"></p>
+              <p style="font-size:0.72rem;color:var(--text-sub);">Responda mentalmente ou anote abaixo:</p>
+              <textarea id="elaboration-response" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-md);padding:8px;color:var(--text);font-size:0.82rem;resize:none;" placeholder="Sua reflexão..."></textarea>
+              <button class="todo-add-btn" onclick="dismissElaboration()" style="margin-top:6px;">✓ Feito</button>
+            </div>
+
+            <!-- Mindfulness Break (shown on long break) -->
+            <div class="room-card hidden" id="mindfulness-section" style="border:2px solid var(--green);background:rgba(166,227,161,0.05);">
+              <h2 style="color:var(--green);">🧘 Pausa Mindfulness</h2>
+              <div id="mindfulness-content" style="text-align:center;padding:12px 0;">
+                <div id="mindfulness-instruction" style="font-size:1.1rem;font-weight:600;color:var(--text);"></div>
+                <div id="mindfulness-timer" style="font-size:2rem;font-weight:800;color:var(--green);margin:8px 0;"></div>
+                <button class="btn-room" onclick="startMindfulness()" style="width:auto;padding:8px 20px;font-size:0.82rem;">Iniciar Respiração</button>
+              </div>
+            </div>
+
+            <!-- Challenge Mode (Boss Fight) -->
+            <div class="room-card hidden" id="challenge-section" style="border:2px solid var(--red);background:rgba(243,139,168,0.05);">
+              <h2 style="color:var(--red);">⚔️ Desafio Boss Fight</h2>
+              <div id="challenge-setup">
+                <div style="display:flex;gap:8px;margin-bottom:8px;">
+                  <input type="text" class="todo-input" id="challenge-materia" placeholder="Matéria" style="flex:1;">
+                  <input type="number" id="challenge-qty" value="10" min="5" max="30" style="width:50px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-md);padding:4px;color:var(--text);font-size:0.82rem;">
+                  <button class="todo-add-btn" onclick="startChallenge()" style="background:var(--red);">⚔️ Lutar</button>
+                </div>
+              </div>
+              <div id="challenge-active" class="hidden">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                  <span style="font-size:1.2rem;">👹</span>
+                  <div style="flex:1;background:var(--bg);border-radius:var(--radius-pill);height:20px;overflow:hidden;">
+                    <div id="boss-hp-bar" style="height:100%;background:var(--red);transition:width 0.5s;width:100%;"></div>
+                  </div>
+                  <span id="boss-hp-text" style="font-size:0.75rem;font-weight:700;color:var(--red);"></span>
+                </div>
+                <div id="challenge-question"></div>
+              </div>
+            </div>
+
+            <!-- Collaborative Discussion -->
+            <div class="room-card" id="discussion-section">
+              <h2>💬 Discussão Colaborativa</h2>
+              <div id="discussion-list"></div>
+              <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px;">
+                <button class="todo-add-btn" onclick="showNewDiscussion()" style="width:100%;">+ Nova Questão para Debate</button>
+              </div>
+              <div id="new-discussion-form" class="hidden" style="margin-top:10px;background:var(--bg);border-radius:var(--radius-md);padding:12px;">
+                <textarea id="disc-enunciado" rows="3" style="width:100%;background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:8px;color:var(--text);font-size:0.82rem;resize:none;margin-bottom:6px;" placeholder="Enunciado da questão..."></textarea>
+                <input type="text" class="todo-input" id="disc-materia" placeholder="Matéria" style="margin-bottom:6px;">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:6px;">
+                  <input type="text" class="todo-input" id="disc-alt-a" placeholder="A)">
+                  <input type="text" class="todo-input" id="disc-alt-b" placeholder="B)">
+                  <input type="text" class="todo-input" id="disc-alt-c" placeholder="C)">
+                  <input type="text" class="todo-input" id="disc-alt-d" placeholder="D)">
+                </div>
+                <div style="display:flex;gap:8px;">
+                  <select id="disc-correta" style="background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:6px;color:var(--text);font-size:0.82rem;flex:1;">
+                    <option value="">Resposta correta</option>
+                    <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option>
+                  </select>
+                  <button class="todo-add-btn" onclick="submitDiscussion()">Iniciar Debate</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Session Intention/Reflection -->
+            <div class="room-card" id="intention-section">
+              <h2>🎯 Intenção & Reflexão</h2>
+              <div id="intention-display"></div>
+              <div id="intention-form">
+                <input type="text" class="todo-input" id="intention-input" placeholder="O que vou estudar agora?" maxlength="200" style="margin-bottom:6px;">
+                <input type="text" class="todo-input" id="intention-how" placeholder="Como vou estudar? (técnica/abordagem)" maxlength="200" style="margin-bottom:6px;">
+                <button class="todo-add-btn" onclick="submitIntention()">Definir Intenção</button>
+              </div>
+            </div>
           </div>
 
           <!-- Chat Panel -->

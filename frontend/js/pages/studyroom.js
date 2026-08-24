@@ -99,11 +99,18 @@ function enterRoomView(codigo) {
   currentRoom = codigo;
   myStatus = 'focando';
   pomodoroCycle = 1;
+  elaborationShownCycle = 0;
+  breakCardsLoaded = false;
   updateStatusButtons();
   startPolling();
   startPomodoro();
   loadTodos();
+  loadCommitments();
+  loadFocusScore();
+  loadDiscussions();
   updateFocusMode();
+  // Refresh focus score every 60s
+  setInterval(() => { if (currentRoom) loadFocusScore(); }, 60000);
 }
 
 function sairSala() {
@@ -166,12 +173,13 @@ function renderRoom(data) {
     const tempo = formatTime(p.tempo_estudado);
     const meClass = p.is_me ? ' me' : '';
     const goalHtml = p.meta ? `<div class="participant-goal">🎯 ${escHtml(p.meta)}</div>` : '';
+    const nudgeBtn = !p.is_me && p.status !== 'focando' ? `<button onclick="sendNudge(${p.user_id})" style="font-size:0.65rem;background:var(--yellow);color:var(--bg);border:none;border-radius:4px;padding:2px 6px;cursor:pointer;margin-top:2px;" title="Enviar incentivo">🔔</button>` : '';
     return `<div class="participant-card${meClass}">
       <div class="participant-status">${statusIcon}</div>
       <div class="participant-info">
         <div class="participant-name">${escHtml(p.nome)}${p.is_me ? ' (eu)' : ''}</div>
         ${goalHtml}
-        <div class="participant-time">⏱️ ${tempo}</div>
+        <div class="participant-time">⏱️ ${tempo} ${nudgeBtn}</div>
       </div>
     </div>`;
   }).join('');
@@ -385,6 +393,15 @@ function tickPomodoro() {
     playBeep();
     if (Notification.permission === 'granted') {
       new Notification('🍅 Novo ciclo!', { body: `Ciclo ${pomodoroCycle}/${TOTAL_CYCLES} - Hora de focar!` });
+    }
+    // Elaboration prompt every 2 cycles
+    if (pomodoroCycle - elaborationShownCycle >= 2) {
+      elaborationShownCycle = pomodoroCycle;
+      showElaborationPrompt();
+    }
+    // Show mindfulness on last cycle's break (long break)
+    if (pomodoroCycle >= TOTAL_CYCLES) {
+      showMindfulness();
     }
   }
 
@@ -727,6 +744,349 @@ function escHtml(str) {
 }
 
 // ============================================================
+// COMMITMENT CONTRACT
+// ============================================================
+
+async function submitCommitment() {
+  if (!currentRoom) return;
+  const commitment = document.getElementById('commitment-input').value.trim();
+  const xp_stake = parseInt(document.getElementById('commitment-xp').value) || 50;
+  if (!commitment) return alert('Digite seu compromisso');
+  try {
+    await apiPost(`/commitment/${currentRoom}`, { commitment, xp_stake });
+    document.getElementById('commitment-input').value = '';
+    loadCommitments();
+  } catch (e) { alert('Erro: ' + e.message); }
+}
+window.submitCommitment = submitCommitment;
+
+async function loadCommitments() {
+  if (!currentRoom) return;
+  try {
+    const data = await apiGet(`/commitment/${currentRoom}`);
+    const el = document.getElementById('commitment-display');
+    if (!data.commitments || data.commitments.length === 0) {
+      el.innerHTML = '<div style="font-size:0.78rem;color:var(--text-muted);">Nenhum compromisso ainda. Seja o primeiro!</div>';
+      return;
+    }
+    el.innerHTML = data.commitments.map(c => {
+      const status = c.cumprida === null ? '⏳' : c.cumprida ? '✅' : '❌';
+      return `<div style="display:flex;align-items:center;gap:8px;padding:6px;background:var(--bg);border-radius:var(--radius-md);margin-bottom:4px;">
+        <span>${status}</span>
+        <div style="flex:1;font-size:0.8rem;color:var(--text);">${escHtml(c.nome)}: ${escHtml(c.commitment)}</div>
+        <span style="font-size:0.7rem;color:var(--yellow);font-weight:700;">${c.xp_stake}XP</span>
+        ${c.is_mine && c.cumprida === null ? `<button onclick="resolveCommitment(true)" style="font-size:0.65rem;background:var(--green);color:var(--bg);border:none;border-radius:4px;padding:2px 6px;cursor:pointer;">✓</button><button onclick="resolveCommitment(false)" style="font-size:0.65rem;background:var(--red);color:var(--bg);border:none;border-radius:4px;padding:2px 6px;cursor:pointer;">✗</button>` : ''}
+      </div>`;
+    }).join('');
+  } catch (e) { /* ignore */ }
+}
+
+async function resolveCommitment(cumprida) {
+  if (!currentRoom) return;
+  try {
+    const data = await apiPost(`/commitment/${currentRoom}/resolve`, { cumprida });
+    if (data.xp_change > 0) alert(`🎉 +${data.xp_change} XP! Compromisso cumprido!`);
+    else alert(`😞 ${data.xp_change} XP. Tente cumprir na próxima!`);
+    loadCommitments();
+  } catch (e) { alert('Erro: ' + e.message); }
+}
+window.resolveCommitment = resolveCommitment;
+
+// ============================================================
+// FOCUS SCORE
+// ============================================================
+
+async function loadFocusScore() {
+  if (!currentRoom) return;
+  try {
+    const data = await apiGet(`/focus-score/${currentRoom}`);
+    document.getElementById('focus-score-value').textContent = data.score;
+    document.getElementById('focus-score-value').style.color =
+      data.score >= 80 ? 'var(--green)' : data.score >= 50 ? 'var(--yellow)' : 'var(--red)';
+    document.getElementById('focus-score-nivel').textContent = `Nível: ${data.nivel}`;
+    const bd = data.breakdown;
+    document.getElementById('focus-score-breakdown').innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
+        <span>⏱ Foco: ${bd.pct_tempo_focando}%</span>
+        <span>🍅 Ciclos: ${bd.ciclos_completos}</span>
+        <span>🃏 Cards: ${bd.cards_revisados}</span>
+        <span>🎯 Meta: ${bd.meta_definida ? '✓' : '✗'}</span>
+      </div>`;
+    if (data.dicas.length > 0) {
+      document.getElementById('focus-score-dicas').innerHTML = data.dicas.map(d =>
+        `<div style="color:var(--blue);margin-bottom:2px;">${d}</div>`
+      ).join('');
+    }
+  } catch (e) { /* ignore */ }
+}
+
+// ============================================================
+// ELABORATION PROMPTS
+// ============================================================
+
+let elaborationShownCycle = 0;
+
+async function showElaborationPrompt() {
+  try {
+    const data = await apiGet('/elaboration-prompt');
+    document.getElementById('elaboration-prompt').textContent = data.prompt;
+    document.getElementById('elaboration-section').classList.remove('hidden');
+    document.getElementById('elaboration-response').value = '';
+  } catch (e) { /* ignore */ }
+}
+
+function dismissElaboration() {
+  document.getElementById('elaboration-section').classList.add('hidden');
+}
+window.dismissElaboration = dismissElaboration;
+
+// ============================================================
+// MINDFULNESS BREAK
+// ============================================================
+
+let mindfulnessData = null;
+let mindfulnessInterval = null;
+
+async function loadMindfulness() {
+  try {
+    const res = await fetch('/api/studyroom/mindfulness', { headers });
+    if (res.ok) mindfulnessData = await res.json();
+  } catch (e) { /* ignore */ }
+}
+
+function showMindfulness() {
+  document.getElementById('mindfulness-section').classList.remove('hidden');
+  document.getElementById('mindfulness-instruction').textContent = '🧘 Pronto para relaxar?';
+  document.getElementById('mindfulness-timer').textContent = '';
+}
+
+function startMindfulness() {
+  if (!mindfulnessData) { loadMindfulness(); return; }
+  let stepIdx = 0;
+  let stepTime = 0;
+  const steps = mindfulnessData.passos;
+
+  function tick() {
+    if (stepIdx >= steps.length) {
+      document.getElementById('mindfulness-instruction').textContent = mindfulnessData.mensagem_motivacional;
+      document.getElementById('mindfulness-timer').textContent = '✨';
+      clearInterval(mindfulnessInterval);
+      setTimeout(() => document.getElementById('mindfulness-section').classList.add('hidden'), 5000);
+      return;
+    }
+    const step = steps[stepIdx];
+    document.getElementById('mindfulness-instruction').textContent = step.instrucao;
+    document.getElementById('mindfulness-timer').textContent = step.duracao_seg - stepTime + 's';
+    stepTime++;
+    if (stepTime > step.duracao_seg) { stepIdx++; stepTime = 0; }
+  }
+  tick();
+  mindfulnessInterval = setInterval(tick, 1000);
+}
+window.startMindfulness = startMindfulness;
+
+// ============================================================
+// CHALLENGE MODE (BOSS FIGHT)
+// ============================================================
+
+let challengeId = null;
+let challengeQuestoes = [];
+let challengeIdx = 0;
+let bossHpMax = 0;
+let bossHpAtual = 0;
+
+async function startChallenge() {
+  if (!currentRoom) return;
+  const materia = document.getElementById('challenge-materia').value.trim();
+  const quantidade = parseInt(document.getElementById('challenge-qty').value) || 10;
+  try {
+    const data = await apiPost(`/challenge/${currentRoom}/start`, { materia, quantidade, tempo_limite_min: 15 });
+    challengeId = data.challenge_id;
+    challengeQuestoes = data.questoes;
+    challengeIdx = 0;
+    bossHpMax = data.boss_hp;
+    bossHpAtual = data.boss_hp;
+    document.getElementById('challenge-setup').classList.add('hidden');
+    document.getElementById('challenge-active').classList.remove('hidden');
+    document.getElementById('challenge-section').classList.remove('hidden');
+    updateBossHP();
+    showChallengeQuestion();
+  } catch (e) { alert('Erro: ' + e.message); }
+}
+window.startChallenge = startChallenge;
+
+function updateBossHP() {
+  const pct = (bossHpAtual / bossHpMax) * 100;
+  document.getElementById('boss-hp-bar').style.width = pct + '%';
+  document.getElementById('boss-hp-text').textContent = `${bossHpAtual}/${bossHpMax} HP`;
+}
+
+function showChallengeQuestion() {
+  if (challengeIdx >= challengeQuestoes.length || bossHpAtual <= 0) {
+    const won = bossHpAtual <= 0;
+    document.getElementById('challenge-question').innerHTML = won
+      ? `<div style="text-align:center;font-size:1.2rem;color:var(--green);font-weight:700;">🎉 Boss derrotado! Parabéns!</div>`
+      : `<div style="text-align:center;font-size:1rem;color:var(--yellow);">⏱ Questões acabaram. Boss sobreviveu com ${bossHpAtual} HP.</div>`;
+    return;
+  }
+  const q = challengeQuestoes[challengeIdx];
+  const alts = ['A', 'B', 'C', 'D', 'E'].filter(l => q['alternativa_' + l.toLowerCase()]);
+  document.getElementById('challenge-question').innerHTML = `
+    <div style="font-size:0.82rem;color:var(--text);margin-bottom:8px;">${escHtml(q.enunciado)}</div>
+    <div style="display:grid;gap:4px;">
+      ${alts.map(l => `<button onclick="answerChallenge('${l}')" style="text-align:left;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-md);padding:8px 12px;color:var(--text);font-size:0.8rem;cursor:pointer;">${l}) ${escHtml(q['alternativa_' + l.toLowerCase()])}</button>`).join('')}
+    </div>
+  `;
+}
+
+async function answerChallenge(resposta) {
+  if (!currentRoom || !challengeId) return;
+  const q = challengeQuestoes[challengeIdx];
+  try {
+    const data = await apiPost(`/challenge/${currentRoom}/answer`, { challenge_id: challengeId, questao_id: q.id, resposta });
+    bossHpAtual = data.boss_hp_atual;
+    updateBossHP();
+    challengeIdx++;
+    if (data.derrotado) {
+      document.getElementById('challenge-question').innerHTML = `<div style="text-align:center;font-size:1.2rem;color:var(--green);font-weight:700;">🎉 Boss derrotado! +${data.xp_ganho} XP!</div>`;
+    } else {
+      // Flash feedback
+      const color = data.acertou ? 'var(--green)' : 'var(--red)';
+      const msg = data.acertou ? '✓ Acertou! -1 HP' : '✗ Errou!';
+      document.getElementById('challenge-question').innerHTML = `<div style="text-align:center;color:${color};font-weight:700;font-size:0.9rem;">${msg}</div>`;
+      setTimeout(showChallengeQuestion, 800);
+    }
+  } catch (e) { alert('Erro: ' + e.message); }
+}
+window.answerChallenge = answerChallenge;
+
+// ============================================================
+// PEER ACCOUNTABILITY NUDGE
+// ============================================================
+
+async function sendNudge(targetUserId) {
+  if (!currentRoom) return;
+  try {
+    await apiPost(`/nudge/${currentRoom}/${targetUserId}`, {});
+    pollRoom();
+  } catch (e) { alert(e.message); }
+}
+window.sendNudge = sendNudge;
+
+// ============================================================
+// COLLABORATIVE DISCUSSION
+// ============================================================
+
+function showNewDiscussion() {
+  document.getElementById('new-discussion-form').classList.toggle('hidden');
+}
+window.showNewDiscussion = showNewDiscussion;
+
+async function submitDiscussion() {
+  if (!currentRoom) return;
+  const enunciado = document.getElementById('disc-enunciado').value.trim();
+  const materia = document.getElementById('disc-materia').value.trim();
+  const alternativas = [
+    document.getElementById('disc-alt-a').value.trim(),
+    document.getElementById('disc-alt-b').value.trim(),
+    document.getElementById('disc-alt-c').value.trim(),
+    document.getElementById('disc-alt-d').value.trim(),
+  ].filter(a => a);
+  const resposta_correta = document.getElementById('disc-correta').value;
+  if (!enunciado) return alert('Digite o enunciado');
+  try {
+    await apiPost(`/discussion/${currentRoom}/start`, { enunciado, alternativas, resposta_correta, materia });
+    document.getElementById('new-discussion-form').classList.add('hidden');
+    document.getElementById('disc-enunciado').value = '';
+    document.getElementById('disc-materia').value = '';
+    document.getElementById('disc-alt-a').value = '';
+    document.getElementById('disc-alt-b').value = '';
+    document.getElementById('disc-alt-c').value = '';
+    document.getElementById('disc-alt-d').value = '';
+    loadDiscussions();
+  } catch (e) { alert('Erro: ' + e.message); }
+}
+window.submitDiscussion = submitDiscussion;
+
+async function loadDiscussions() {
+  if (!currentRoom) return;
+  try {
+    const data = await apiGet(`/discussion/${currentRoom}`);
+    const el = document.getElementById('discussion-list');
+    if (!data.discussions || data.discussions.length === 0) {
+      el.innerHTML = '<div style="font-size:0.78rem;color:var(--text-muted);text-align:center;padding:8px;">Nenhuma discussão ativa. Inicie um debate!</div>';
+      return;
+    }
+    el.innerHTML = data.discussions.map(d => {
+      const statusBadge = d.status === 'aberta' ? '🟢 Aberta' : '🔒 Revelada';
+      const altHtml = d.alternativas ? d.alternativas.map((a, i) =>
+        `<div style="font-size:0.78rem;color:var(--text-sub);">${String.fromCharCode(65+i)}) ${escHtml(a)}</div>`
+      ).join('') : '';
+      const responsesHtml = d.responses.map(r =>
+        `<div style="background:var(--bg-surface);border-radius:var(--radius-md);padding:6px 8px;margin-top:4px;">
+          <div style="font-size:0.72rem;color:var(--accent);font-weight:600;">${escHtml(r.nome)} → ${r.resposta}</div>
+          <div style="font-size:0.75rem;color:var(--text);">${escHtml(r.justificativa)}</div>
+          ${r.comments.map(c => `<div style="margin-left:12px;font-size:0.7rem;color:var(--text-sub);margin-top:2px;">${c.concordo ? '👍' : '👎'} ${escHtml(c.nome)}: ${escHtml(c.comentario)}</div>`).join('')}
+        </div>`
+      ).join('');
+      const correctHtml = d.status === 'revelada' && d.resposta_correta
+        ? `<div style="margin-top:6px;padding:6px;background:rgba(166,227,161,0.15);border-radius:var(--radius-md);font-size:0.8rem;color:var(--green);font-weight:600;">✓ Resposta: ${d.resposta_correta}</div>` : '';
+      return `<div style="background:var(--bg);border-radius:var(--radius-lg);padding:12px;margin-bottom:8px;border:1px solid var(--border);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <span style="font-size:0.72rem;color:var(--blue);">${d.materia || 'Geral'} • ${statusBadge}</span>
+          ${d.status === 'aberta' ? `<button onclick="respondDiscussion(${d.id})" style="font-size:0.68rem;background:var(--accent);color:var(--bg);border:none;border-radius:4px;padding:2px 8px;cursor:pointer;">Responder</button>` : ''}
+        </div>
+        <div style="font-size:0.85rem;color:var(--text);margin-bottom:6px;">${escHtml(d.enunciado)}</div>
+        ${altHtml}
+        ${responsesHtml}
+        ${correctHtml}
+        ${d.status === 'aberta' ? `<button onclick="revealDiscussion(${d.id})" style="margin-top:6px;font-size:0.68rem;background:var(--green);color:var(--bg);border:none;border-radius:4px;padding:2px 8px;cursor:pointer;">Revelar Resposta</button>` : ''}
+      </div>`;
+    }).join('');
+  } catch (e) { /* ignore */ }
+}
+
+async function respondDiscussion(discId) {
+  const resposta = prompt('Sua resposta (letra ou texto):');
+  if (!resposta) return;
+  const justificativa = prompt('Justifique sua resposta:') || '';
+  try {
+    await apiPost(`/discussion/${currentRoom}/respond`, { discussion_id: discId, resposta, justificativa });
+    loadDiscussions();
+  } catch (e) { alert('Erro: ' + e.message); }
+}
+window.respondDiscussion = respondDiscussion;
+
+async function revealDiscussion(discId) {
+  try {
+    await apiPost(`/discussion/${currentRoom}/reveal`, { discussion_id: discId });
+    loadDiscussions();
+  } catch (e) { alert('Erro: ' + e.message); }
+}
+window.revealDiscussion = revealDiscussion;
+
+// ============================================================
+// SESSION INTENTION
+// ============================================================
+
+async function submitIntention() {
+  if (!currentRoom) return;
+  const intencao = document.getElementById('intention-input').value.trim();
+  const como = document.getElementById('intention-how').value.trim();
+  if (!intencao) return alert('Defina sua intenção');
+  try {
+    await apiPost(`/intention/${currentRoom}`, { intencao, como_vou_estudar: como });
+    document.getElementById('intention-form').classList.add('hidden');
+    document.getElementById('intention-display').innerHTML = `
+      <div style="background:var(--bg);border-radius:var(--radius-md);padding:10px;">
+        <div style="font-size:0.82rem;color:var(--text);font-weight:600;">🎯 ${escHtml(intencao)}</div>
+        ${como ? `<div style="font-size:0.75rem;color:var(--text-sub);margin-top:4px;">📝 ${escHtml(como)}</div>` : ''}
+      </div>`;
+  } catch (e) { alert('Erro: ' + e.message); }
+}
+window.submitIntention = submitIntention;
+
+// ============================================================
 // INIT
 // ============================================================
 
@@ -736,6 +1096,7 @@ if ('Notification' in window && Notification.permission === 'default') {
 }
 loadMinhasSalas();
 loadGoalSuggestion();
+loadMindfulness();
 
 // ============================================================
 // BREAK CARDS: Micro-Retrieval during Pomodoro breaks
