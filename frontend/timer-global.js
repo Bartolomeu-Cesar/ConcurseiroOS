@@ -110,7 +110,7 @@
                 <a href="/dashboard.html" style="font-size:0.65rem;color:#89b4fa;text-decoration:none;" title="Voltar ao calendário">📅</a>
             </div>
         `;
-        div.style.cssText = 'position:fixed;bottom:16px;right:16px;background:#313244;border:2px solid #cba6f7;border-radius:12px;padding:10px 14px;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,0.4);';
+        div.style.cssText = 'position:fixed;bottom:16px;left:16px;background:#313244;border:2px solid #cba6f7;border-radius:12px;padding:10px 14px;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,0.4);';
         document.body.appendChild(div);
     }
 
