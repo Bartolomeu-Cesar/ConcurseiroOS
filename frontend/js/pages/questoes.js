@@ -190,8 +190,42 @@ function showQuestao(q) {
 
 function selecionarAlternativa(el, letter) {
   if (respondida) return;
-  document.querySelectorAll('.alternativa').forEach(a => a.classList.remove('selected'));
+  document.querySelectorAll('.alternativa').forEach(a => {
+    a.classList.remove('selected');
+    // Reset CE button styles to default
+    if (a.classList.contains('ce-btn')) {
+      if (a.dataset.letter === 'A') {
+        a.style.background = 'transparent';
+        a.style.color = '#a6e3a1';
+        a.style.border = '2px solid #a6e3a1';
+        a.style.transform = '';
+        a.style.boxShadow = '';
+      } else {
+        a.style.background = 'transparent';
+        a.style.color = '#f38ba8';
+        a.style.border = '2px solid #f38ba8';
+        a.style.transform = '';
+        a.style.boxShadow = '';
+      }
+    }
+  });
   el.classList.add('selected');
+  // Highlight selected CE button
+  if (el.classList.contains('ce-btn')) {
+    if (letter === 'A') {
+      el.style.background = '#a6e3a1';
+      el.style.color = '#1e1e2e';
+      el.style.border = '3px solid #a6e3a1';
+      el.style.transform = 'scale(1.05)';
+      el.style.boxShadow = '0 0 14px #a6e3a155';
+    } else {
+      el.style.background = '#f38ba8';
+      el.style.color = '#1e1e2e';
+      el.style.border = '3px solid #f38ba8';
+      el.style.transform = 'scale(1.05)';
+      el.style.boxShadow = '0 0 14px #f38ba855';
+    }
+  }
 }
 window.selecionarAlternativa = selecionarAlternativa;
 
