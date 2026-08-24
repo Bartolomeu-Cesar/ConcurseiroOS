@@ -73,22 +73,31 @@ export function showQuestaoDia() {
   }, 1000);
 
   const q = questoesDia[qDiaIdx];
-  const alts = [
-    {letra: 'A', texto: q.alternativa_a},
-    {letra: 'B', texto: q.alternativa_b},
-    {letra: 'C', texto: q.alternativa_c},
-    {letra: 'D', texto: q.alternativa_d},
-  ];
-  if (q.alternativa_e) alts.push({letra: 'E', texto: q.alternativa_e});
+  const isCertoErrado = !q.alternativa_c && !q.alternativa_d;
+  const alts = isCertoErrado
+    ? [{letra: 'A', texto: 'CERTO'}, {letra: 'B', texto: 'ERRADO'}]
+    : [
+        {letra: 'A', texto: q.alternativa_a},
+        {letra: 'B', texto: q.alternativa_b},
+        {letra: 'C', texto: q.alternativa_c},
+        {letra: 'D', texto: q.alternativa_d},
+        ...(q.alternativa_e ? [{letra: 'E', texto: q.alternativa_e}] : []),
+      ];
+  const altsHtml = isCertoErrado
+    ? `<div style="display:flex;gap:12px;justify-content:center;margin-top:12px;">
+        <button class="qdia-alt" onclick="responderQuestaoDia('A')" style="flex:1;padding:12px 20px;background:#313244;border:2px solid #a6e3a1;border-radius:8px;color:#a6e3a1;cursor:pointer;font-size:0.9rem;font-weight:700;text-align:center;">✓ CERTO</button>
+        <button class="qdia-alt" onclick="responderQuestaoDia('B')" style="flex:1;padding:12px 20px;background:#313244;border:2px solid #f38ba8;border-radius:8px;color:#f38ba8;cursor:pointer;font-size:0.9rem;font-weight:700;text-align:center;">✗ ERRADO</button>
+      </div>`
+    : alts.map(a => `<button class="qdia-alt" onclick="responderQuestaoDia('${a.letra}')" style="display:block;width:100%;text-align:left;padding:8px 12px;margin-bottom:6px;background:#313244;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;cursor:pointer;font-size:0.82rem;"><strong>${a.letra})</strong> ${escapeHtml(a.texto)}</button>`).join('');
   card.innerHTML = `<div style="padding:12px;background:#1e1e2e;border-radius:8px;">
     <div style="display:flex;justify-content:space-between;font-size:0.72rem;color:#9399b2;margin-bottom:6px;">
       <span>${qDiaIdx + 1}/${total}</span>
       <span id="qdia-timer" style="font-family:monospace;font-size:0.82rem;color:#89b4fa;font-weight:600;">⏱ 0:00</span>
       <span style="color:#cba6f7;">${q.materia || ''}</span>
     </div>
-    <div style="font-size:0.88rem;color:#cdd6f4;margin-bottom:12px;line-height:1.5;">${escapeHtml(q.enunciado)}</div>
+    <div style="font-size:0.88rem;color:#cdd6f4;margin-bottom:12px;line-height:1.5;">${isCertoErrado ? '🔵 Julgue o item: ' : ''}${escapeHtml(q.enunciado)}</div>
     <div id="qdia-alternativas">
-      ${alts.map(a => `<button class="qdia-alt" onclick="responderQuestaoDia('${a.letra}')" style="display:block;width:100%;text-align:left;padding:8px 12px;margin-bottom:6px;background:#313244;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;cursor:pointer;font-size:0.82rem;"><strong>${a.letra})</strong> ${escapeHtml(a.texto)}</button>`).join('')}
+      ${altsHtml}
     </div>
     <div id="qdia-feedback" style="display:none;margin-top:10px;padding:10px;border-radius:6px;font-size:0.82rem;"></div>
   </div>`;

@@ -141,13 +141,28 @@ function showQuestao(q) {
 
   const area = document.getElementById('resolver-area');
 
-  const alternativas = [
-    { letter: 'A', text: q.alternativa_a },
-    { letter: 'B', text: q.alternativa_b },
-    { letter: 'C', text: q.alternativa_c },
-    { letter: 'D', text: q.alternativa_d },
-  ];
-  if (q.alternativa_e) alternativas.push({ letter: 'E', text: q.alternativa_e });
+  const isCertoErrado = !q.alternativa_c && !q.alternativa_d;
+  const alternativas = isCertoErrado
+    ? [{ letter: 'A', text: 'CERTO' }, { letter: 'B', text: 'ERRADO' }]
+    : [
+        { letter: 'A', text: q.alternativa_a },
+        { letter: 'B', text: q.alternativa_b },
+        { letter: 'C', text: q.alternativa_c },
+        { letter: 'D', text: q.alternativa_d },
+        ...(q.alternativa_e ? [{ letter: 'E', text: q.alternativa_e }] : []),
+      ];
+
+  const altsHtml = isCertoErrado
+    ? `<div style="display:flex;gap:16px;justify-content:center;">
+        <div class="alternativa ce-btn" data-letter="A" onclick="selecionarAlternativa(this, 'A')" style="flex:1;text-align:center;padding:14px;border:2px solid #a6e3a1;border-radius:10px;cursor:pointer;font-weight:700;color:#a6e3a1;">✓ CERTO</div>
+        <div class="alternativa ce-btn" data-letter="B" onclick="selecionarAlternativa(this, 'B')" style="flex:1;text-align:center;padding:14px;border:2px solid #f38ba8;border-radius:10px;cursor:pointer;font-weight:700;color:#f38ba8;">✗ ERRADO</div>
+      </div>`
+    : alternativas.map(a => `
+        <div class="alternativa" data-letter="${a.letter}" onclick="selecionarAlternativa(this, '${a.letter}')">
+          <span class="alt-letter">${a.letter})</span>
+          <span class="alt-text">${a.text}</span>
+        </div>
+      `).join('');
 
   area.innerHTML = `
     <div class="questao-card">
@@ -157,14 +172,9 @@ function showQuestao(q) {
         <span>${q.dificuldade}</span>
         <span id="questao-timer" style="margin-left:auto;font-family:monospace;font-size:0.85rem;color:#89b4fa;font-weight:600;">⏱ 0:00</span>
       </div>
-      <div class="questao-enunciado">${q.enunciado}</div>
+      <div class="questao-enunciado">${isCertoErrado ? '<span style="color:#89b4fa;font-weight:600;">Julgue o item:</span> ' : ''}${q.enunciado}</div>
       <div class="questao-alternativas">
-        ${alternativas.map(a => `
-          <div class="alternativa" data-letter="${a.letter}" onclick="selecionarAlternativa(this, '${a.letter}')">
-            <span class="alt-letter">${a.letter})</span>
-            <span class="alt-text">${a.text}</span>
-          </div>
-        `).join('')}
+        ${altsHtml}
       </div>
       <div style="margin-top:12px;display:flex;gap:8px;">
         <button class="btn btn-success" id="btn-confirmar" onclick="confirmarResposta()">Confirmar Resposta</button>
@@ -301,26 +311,36 @@ function showSimQuestao() {
   const q = simQuestoes[simIndex];
   document.getElementById('sim-progress').textContent = `Questão ${simIndex + 1} de ${simQuestoes.length}`;
 
-  const alternativas = [
-    { letter: 'A', text: q.alternativa_a },
-    { letter: 'B', text: q.alternativa_b },
-    { letter: 'C', text: q.alternativa_c },
-    { letter: 'D', text: q.alternativa_d },
-  ];
-  if (q.alternativa_e) alternativas.push({ letter: 'E', text: q.alternativa_e });
+  const isCertoErrado = !q.alternativa_c && !q.alternativa_d;
+  const alternativas = isCertoErrado
+    ? [{ letter: 'A', text: 'CERTO' }, { letter: 'B', text: 'ERRADO' }]
+    : [
+        { letter: 'A', text: q.alternativa_a },
+        { letter: 'B', text: q.alternativa_b },
+        { letter: 'C', text: q.alternativa_c },
+        { letter: 'D', text: q.alternativa_d },
+        ...(q.alternativa_e ? [{ letter: 'E', text: q.alternativa_e }] : []),
+      ];
 
   const selected = q.resposta_usuario || '';
+  const altsHtml = isCertoErrado
+    ? `<div style="display:flex;gap:16px;justify-content:center;">
+        <div class="alternativa ce-btn ${selected === 'A' ? 'selected' : ''}" data-letter="A" onclick="simSelectAlt(this, 'A')" style="flex:1;text-align:center;padding:14px;border:2px solid #a6e3a1;border-radius:10px;cursor:pointer;font-weight:700;color:#a6e3a1;">✓ CERTO</div>
+        <div class="alternativa ce-btn ${selected === 'B' ? 'selected' : ''}" data-letter="B" onclick="simSelectAlt(this, 'B')" style="flex:1;text-align:center;padding:14px;border:2px solid #f38ba8;border-radius:10px;cursor:pointer;font-weight:700;color:#f38ba8;">✗ ERRADO</div>
+      </div>`
+    : alternativas.map(a => `
+        <div class="alternativa ${selected === a.letter ? 'selected' : ''}" data-letter="${a.letter}" onclick="simSelectAlt(this, '${a.letter}')">
+          <span class="alt-letter">${a.letter})</span>
+            <span class="alt-text">${a.text}</span>
+          </div>
+        `).join('');
+
   document.getElementById('sim-questao-area').innerHTML = `
     <div class="questao-card">
       <div class="questao-meta"><span>${q.materia}</span></div>
-      <div class="questao-enunciado">${q.enunciado}</div>
+      <div class="questao-enunciado">${isCertoErrado ? '<span style="color:#89b4fa;font-weight:600;">Julgue o item:</span> ' : ''}${q.enunciado}</div>
       <div class="questao-alternativas">
-        ${alternativas.map(a => `
-          <div class="alternativa ${selected === a.letter ? 'selected' : ''}" data-letter="${a.letter}" onclick="simSelectAlt(this, '${a.letter}')">
-            <span class="alt-letter">${a.letter})</span>
-            <span class="alt-text">${a.text}</span>
-          </div>
-        `).join('')}
+        ${altsHtml}
       </div>
     </div>
   `;
