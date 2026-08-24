@@ -107,11 +107,14 @@ function enterRoomView(codigo) {
 }
 
 function sairSala() {
+  // Show session summary before leaving
+  showSessionSummary();
   stopPolling();
   stopPomodoro();
   stopAmbient();
   currentRoom = null;
   todos = [];
+  breakCardsLoaded = false;
   document.getElementById('view-room').classList.add('hidden');
   document.getElementById('view-lobby').classList.remove('hidden');
   loadMinhasSalas();
@@ -357,6 +360,7 @@ function tickPomodoro() {
       document.getElementById('timer-phase').textContent = '🍅 FOCO';
       document.getElementById('timer-phase').className = 'timer-phase focus';
       updateFocusMode();
+      hideBreakCards();
       if (myStatus === 'pausando') setStatus('focando');
     }
   } else {
@@ -365,11 +369,12 @@ function tickPomodoro() {
       document.getElementById('timer-phase').textContent = '☕ PAUSA';
       document.getElementById('timer-phase').className = 'timer-phase break';
       updateFocusMode();
+      showBreakCards();
       // Play beep notification
       playBeep();
       // Notify
       if (Notification.permission === 'granted') {
-        new Notification('☕ Hora da pausa!', { body: '5 minutos de descanso.' });
+        new Notification('☕ Hora da pausa!', { body: '5 minutos de descanso. Revise seus cards!' });
       }
     }
   }
@@ -388,6 +393,8 @@ function tickPomodoro() {
 
   updateTimerDisplay();
   updateCycleDisplay();
+  // Check for cognitive fatigue every 30 seconds
+  if (pomodoroSeconds % 30 === 0) checkAdaptiveFatigue();
 }
 
 function updateTimerDisplay() {
@@ -728,6 +735,229 @@ if ('Notification' in window && Notification.permission === 'default') {
   Notification.requestPermission();
 }
 loadMinhasSalas();
+loadGoalSuggestion();
+
+// ============================================================
+// BREAK CARDS: Micro-Retrieval during Pomodoro breaks
+// ============================================================
+
+let breakCardsLoaded = false;
+
+async function loadBreakCards() {
+  if (breakCardsLoaded) return;
+  try {
+    const materia = document.getElementById('input-goal-criar')?.value?.trim() || '';
+    const url = `/api/studyroom/break-cards?quantidade=5${materia ? '&materia=' + encodeURIComponent(materia) : ''}`;
+    const res = await fetch(url, { headers });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.cards || data.cards.length === 0) return;
+
+    const container = document.getElementById('break-cards-container');
+    container.innerHTML = data.cards.map((card, i) => {
+      const question = card.tipo === 'sumula'
+        ? `🏛️ ${card.tribunal} — Súmula nº ${card.numero}: Qual é o enunciado?`
+        : `🃏 ${escHtml(card.pergunta)}`;
+      const answer = card.tipo === 'sumula'
+        ? escHtml(card.enunciado)
+        : escHtml(card.resposta);
+      const meta = card.tipo === 'sumula'
+        ? `${card.tribunal} • ${card.tema || 'Geral'}`
+        : `${card.materia || 'Geral'}`;
+      return `<div class="break-card">
+        <div class="break-card-question">${question}</div>
+        <button class="break-card-reveal" id="reveal-btn-${i}" onclick="revealBreakCard(${i})">👁 Revelar</button>
+        <div class="break-card-answer" id="break-answer-${i}">${answer}</div>
+        <div class="break-card-meta">${meta} • Intervalo: ${card.intervalo_dias || 1}d</div>
+      </div>`;
+    }).join('');
+
+    document.getElementById('break-cards-count').textContent =
+      `${data.cards.length} cards • ${data.total_pendentes} pendentes hoje`;
+    breakCardsLoaded = true;
+  } catch (e) {
+    console.error('Break cards error:', e);
+  }
+}
+
+function revealBreakCard(idx) {
+  const answer = document.getElementById('break-answer-' + idx);
+  const btn = document.getElementById('reveal-btn-' + idx);
+  if (answer) { answer.classList.add('revealed'); }
+  if (btn) { btn.style.display = 'none'; }
+}
+window.revealBreakCard = revealBreakCard;
+
+function showBreakCards() {
+  document.getElementById('break-cards-section')?.classList.remove('hidden');
+  loadBreakCards();
+}
+
+function hideBreakCards() {
+  document.getElementById('break-cards-section')?.classList.add('hidden');
+}
+
+// ============================================================
+// SESSION SUMMARY: Modal when leaving room
+// ============================================================
+
+async function showSessionSummary() {
+  if (!currentRoom) return;
+  try {
+    const res = await fetch(`/api/studyroom/session-summary/${currentRoom}`, { headers });
+    if (!res.ok) return;
+    const data = await res.json();
+
+    const s = data.sessao;
+    const p = data.progresso;
+    const pendentes = data.pendentes;
+
+    const medal = p.ranking_posicao === 1 ? '🥇' : p.ranking_posicao === 2 ? '🥈' : p.ranking_posicao === 3 ? '🥉' : `#${p.ranking_posicao}`;
+
+    let html = `
+      <div style="text-align:center;margin-bottom:16px;">
+        <div style="font-size:2rem;font-weight:800;color:var(--green);">${s.tempo_focado_min} min</div>
+        <div style="font-size:0.78rem;color:var(--text-sub);">de estudo focado</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
+        <div style="text-align:center;background:var(--bg);border-radius:var(--radius-md);padding:10px;">
+          <div style="font-size:1.2rem;font-weight:700;color:var(--yellow);">${s.ciclos_completados}/${s.ciclos_total}</div>
+          <div style="font-size:0.68rem;color:var(--text-sub);">Ciclos</div>
+        </div>
+        <div style="text-align:center;background:var(--bg);border-radius:var(--radius-md);padding:10px;">
+          <div style="font-size:1.2rem;font-weight:700;color:var(--accent);">${p.xp_ganho}</div>
+          <div style="font-size:0.68rem;color:var(--text-sub);">XP ganho</div>
+        </div>
+        <div style="text-align:center;background:var(--bg);border-radius:var(--radius-md);padding:10px;">
+          <div style="font-size:1.2rem;font-weight:700;color:var(--blue);">${medal}</div>
+          <div style="font-size:0.68rem;color:var(--text-sub);">Ranking</div>
+        </div>
+      </div>
+      <div style="background:var(--bg);border-radius:var(--radius-md);padding:12px;margin-bottom:12px;">
+        <div style="font-size:0.78rem;font-weight:600;color:var(--text);margin-bottom:6px;">📚 Revisões hoje</div>
+        <div style="display:flex;gap:12px;font-size:0.8rem;color:var(--text-sub);">
+          <span>🃏 ${p.flashcards_revisados} flashcards</span>
+          <span>⚖️ ${p.sumulas_revisadas} súmulas</span>
+          <span>❓ ${p.questoes_resolvidas} questões</span>
+        </div>
+      </div>`;
+
+    if (data.meta.texto) {
+      html += `<div style="background:var(--bg);border-radius:var(--radius-md);padding:12px;margin-bottom:12px;">
+        <div style="font-size:0.78rem;font-weight:600;color:var(--text);">🎯 Meta: ${escHtml(data.meta.texto)}</div>
+      </div>`;
+    }
+
+    if (pendentes.flashcards > 0 || pendentes.sumulas > 0) {
+      html += `<div style="background:rgba(249,226,175,0.1);border:1px solid var(--yellow);border-radius:var(--radius-md);padding:10px;margin-bottom:12px;font-size:0.78rem;color:var(--yellow);">
+        ⚠️ Ainda pendentes: ${pendentes.flashcards} flashcards + ${pendentes.sumulas} súmulas para hoje
+      </div>`;
+    }
+
+    if (data.sugestoes.length > 0) {
+      html += `<div style="margin-top:8px;"><div style="font-size:0.78rem;font-weight:600;color:var(--text);margin-bottom:6px;">💡 Sugestões</div>`;
+      html += data.sugestoes.map(s => `<div style="font-size:0.75rem;color:var(--text-sub);margin-bottom:4px;">${s}</div>`).join('');
+      html += '</div>';
+    }
+
+    document.getElementById('session-summary-content').innerHTML = html;
+    document.getElementById('session-summary-modal').classList.remove('hidden');
+    document.getElementById('session-summary-modal').style.display = 'flex';
+  } catch (e) {
+    console.error('Summary error:', e);
+  }
+}
+
+function closeSummaryModal() {
+  document.getElementById('session-summary-modal').classList.add('hidden');
+  document.getElementById('session-summary-modal').style.display = 'none';
+}
+window.closeSummaryModal = closeSummaryModal;
+
+// ============================================================
+// GOAL SUGGESTION: SMART goals from ROI (shown in lobby)
+// ============================================================
+
+async function loadGoalSuggestion() {
+  try {
+    const res = await fetch('/api/studyroom/goal-suggestion', { headers });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.sugestao) return;
+
+    const goalInput = document.getElementById('input-goal-criar');
+    if (!goalInput) return;
+
+    // Insert suggestion below input
+    const existing = document.getElementById('goal-suggestion-box');
+    if (existing) existing.remove();
+
+    const div = document.createElement('div');
+    div.id = 'goal-suggestion-box';
+    div.className = 'goal-suggestion';
+    div.innerHTML = `
+      <div class="goal-suggestion-text">💡 ${data.sugestao.meta}</div>
+      <div class="goal-suggestion-why">${data.motivo}</div>
+      <button class="goal-suggestion-btn" onclick="useGoalSuggestion('${escHtml(data.sugestao.meta)}')">Usar esta meta</button>
+    `;
+    goalInput.parentNode.insertBefore(div, goalInput.nextSibling);
+  } catch (e) {
+    // Goal suggestion is optional, don't show error
+  }
+}
+
+function useGoalSuggestion(meta) {
+  const input = document.getElementById('input-goal-criar');
+  if (input) input.value = meta;
+  const box = document.getElementById('goal-suggestion-box');
+  if (box) box.style.opacity = '0.5';
+}
+window.useGoalSuggestion = useGoalSuggestion;
+
+// ============================================================
+// ADAPTIVE POMODORO: Integrates fatigue detection
+// ============================================================
+
+let adaptiveBreakSuggested = false;
+
+function checkAdaptiveFatigue() {
+  // Uses the _adaptivePomo from timer-global.js if available
+  if (!window._adaptivePomo) return;
+
+  const answers = window._adaptivePomo.sessionAnswers;
+  if (answers.length < 5) return; // Need at least 5 answers to detect
+
+  // Check last 5 answers: if accuracy < 50% or avg tempo > 2x initial
+  const last5 = answers.slice(-5);
+  const accuracy = last5.filter(a => a.correct).length / last5.length;
+  const avgTempo = last5.reduce((s, a) => s + a.tempo_s, 0) / last5.length;
+
+  // Compare with first 5 answers if available
+  const first5 = answers.slice(0, 5);
+  const initialTempo = first5.reduce((s, a) => s + a.tempo_s, 0) / first5.length;
+
+  const fatigued = accuracy < 0.5 || (initialTempo > 0 && avgTempo > initialTempo * 1.8);
+
+  if (fatigued && !adaptiveBreakSuggested && pomodoroPhase === 'focus') {
+    adaptiveBreakSuggested = true;
+    // Show suggestion to take a break early
+    const timerSection = document.getElementById('timer-section');
+    const existingBanner = document.getElementById('fatigue-banner');
+    if (existingBanner) existingBanner.remove();
+
+    const banner = document.createElement('div');
+    banner.id = 'fatigue-banner';
+    banner.style.cssText = 'background:rgba(243,139,168,0.15);border:1px solid var(--red);border-radius:var(--radius-md);padding:10px;margin-top:10px;font-size:0.78rem;color:var(--red);text-align:center;';
+    banner.innerHTML = `⚠️ Fadiga detectada (acurácia caiu). Considere antecipar a pausa! <button onclick="this.parentNode.remove()" style="background:none;border:none;color:var(--red);cursor:pointer;font-weight:700;margin-left:8px;">✕</button>`;
+    timerSection.appendChild(banner);
+  }
+
+  // Reset flag when break starts
+  if (pomodoroPhase === 'break') {
+    adaptiveBreakSuggested = false;
+  }
+}
+
 
 // Check if coming from a link with code
 const params = new URLSearchParams(window.location.search);

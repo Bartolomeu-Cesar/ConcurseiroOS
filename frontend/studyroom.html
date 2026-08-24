@@ -280,6 +280,16 @@
               <div class="stats-longest" id="stats-longest">—</div>
             </div>
 
+            <!-- Break Cards: Micro-Retrieval (hidden during focus, shown during break) -->
+            <div class="room-card hidden" id="break-cards-section" style="border:2px solid var(--blue); background:rgba(137,180,250,0.05);">
+              <h2 style="color:var(--blue);">🧠 Micro-Revisão (Pausa)</h2>
+              <p style="font-size:0.75rem; color:var(--text-sub); margin-bottom:12px;">Aproveite a pausa para reforçar sua memória — responda mentalmente antes de revelar!</p>
+              <div id="break-cards-container"></div>
+              <div style="text-align:center; margin-top:8px;">
+                <span id="break-cards-count" style="font-size:0.72rem; color:var(--text-muted);"></span>
+              </div>
+            </div>
+
             <!-- Ambient Sounds -->
             <div class="ambient-section">
               <h2>🎧 Sons Ambiente</h2>
@@ -330,6 +340,30 @@
 
     </div>
   </main>
+
+  <!-- Session Summary Modal -->
+  <div id="session-summary-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;">
+    <div style="background:var(--bg-surface);border-radius:var(--radius-xl);padding:28px;max-width:480px;width:100%;max-height:85vh;overflow-y:auto;border:1px solid var(--border);">
+      <h2 style="color:var(--accent);font-size:1.1rem;margin-bottom:16px;text-align:center;">📊 Resumo da Sessão</h2>
+      <div id="session-summary-content"></div>
+      <button onclick="closeSummaryModal()" style="width:100%;margin-top:16px;background:var(--accent);color:var(--bg);border:none;border-radius:var(--radius-lg);padding:12px;font-size:0.9rem;font-weight:700;cursor:pointer;">Fechar</button>
+    </div>
+  </div>
+
+  <!-- Goal Suggestion (shown in lobby when creating room) -->
+  <style>
+    .break-card { background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-lg); padding:12px 14px; margin-bottom:8px; }
+    .break-card-question { font-size:0.85rem; font-weight:600; color:var(--yellow); margin-bottom:6px; }
+    .break-card-answer { font-size:0.82rem; color:var(--text); display:none; padding:8px; background:rgba(166,227,161,0.08); border-radius:var(--radius-md); margin-top:6px; }
+    .break-card-answer.revealed { display:block; }
+    .break-card-reveal { background:var(--blue); color:var(--bg); border:none; border-radius:var(--radius-md); padding:5px 12px; font-size:0.75rem; font-weight:600; cursor:pointer; }
+    .break-card-meta { font-size:0.68rem; color:var(--text-muted); margin-top:4px; }
+    .goal-suggestion { background:rgba(203,166,247,0.08); border:1px solid var(--accent); border-radius:var(--radius-lg); padding:12px; margin-top:10px; }
+    .goal-suggestion-text { font-size:0.82rem; color:var(--accent); font-weight:600; }
+    .goal-suggestion-why { font-size:0.72rem; color:var(--text-sub); margin-top:4px; }
+    .goal-suggestion-btn { background:none; border:1px solid var(--accent); color:var(--accent); border-radius:var(--radius-md); padding:4px 10px; font-size:0.72rem; cursor:pointer; margin-top:6px; }
+    .goal-suggestion-btn:hover { background:var(--accent); color:var(--bg); }
+  </style>
 
   <script type="module" src="/js/pages/studyroom.js"></script>
 </body>

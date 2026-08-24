@@ -641,3 +641,346 @@ def minhas_salas(
         })
 
     return {"salas": salas}
+
+
+# ============================================================
+# MICRO-RETRIEVAL: Break Cards (mostrar flashcards/súmulas na pausa)
+# ============================================================
+
+
+@router.get("/break-cards")
+def get_break_cards(
+    quantidade: int = 5,
+    materia: str = "",
+    user_id: int = Depends(get_user_id),
+    conn=Depends(get_db_session),
+):
+    """Retorna 3-5 cards para micro-retrieval durante pausas do Pomodoro.
+
+    Seleciona itens com base nas técnicas de estudo:
+    - Prioriza itens com recall baixo (quase esquecendo)
+    - Mistura flashcards + súmulas para variação (contextual interference)
+    - Prefere itens da matéria da sessão atual (se definida)
+    - Limita a 5 para não sobrecarregar a pausa (5min)
+    """
+    from study_ordering import order_items_intelligently
+    from utils import today_str
+
+    quantidade = min(quantidade, 5)  # Máx 5 na pausa
+    hoje = today_str()
+
+    # === Buscar flashcards pendentes ===
+    fc_query = """
+        SELECT id, pergunta, resposta, intervalo_dias, easiness_factor, repetitions, materia,
+               'flashcard' as tipo
+        FROM flashcards WHERE proxima_revisao <= ? AND user_id = ?
+    """
+    fc_params = [hoje, user_id]
+    if materia:
+        fc_query += " AND materia = ?"
+        fc_params.append(materia)
+    fc_query += " LIMIT 20"
+    flashcards = [dict(r) for r in conn.execute(fc_query, fc_params).fetchall()]
+
+    # === Buscar súmulas pendentes ===
+    sm_query = """
+        SELECT id, tribunal, numero, enunciado, tema, vinculante,
+               intervalo_dias, easiness_factor, repetitions,
+               'sumula' as tipo
+        FROM sumulas WHERE proxima_revisao <= ? AND user_id = ?
+    """
+    sm_params = [hoje, user_id]
+    if materia:
+        sm_query += " AND tema = ?"
+        sm_params.append(materia)
+    sm_query += " LIMIT 20"
+    sumulas = [dict(r) for r in conn.execute(sm_query, sm_params).fetchall()]
+
+    # === Combinar e ordenar com técnicas de estudo ===
+    all_items = flashcards + sumulas
+
+    if not all_items:
+        # Fallback: buscar flashcards/súmulas aleatórias (mesmo que não pendentes)
+        fallback_fc = conn.execute(
+            "SELECT id, pergunta, resposta, intervalo_dias, easiness_factor, repetitions, materia, 'flashcard' as tipo FROM flashcards WHERE user_id = ? ORDER BY RANDOM() LIMIT ?",
+            (user_id, quantidade)
+        ).fetchall()
+        all_items = [dict(r) for r in fallback_fc]
+
+    if not all_items:
+        return {"cards": [], "total_pendentes": 0}
+
+    # Usar ordering inteligente
+    ordered = order_items_intelligently(
+        all_items,
+        materia_key="materia",
+    )
+
+    # Limpar campos internos e pegar apenas a quantidade pedida
+    cards = []
+    for item in ordered[:quantidade]:
+        item.pop("_expanding_retrieval", None)
+        cards.append(item)
+
+    # Total pendentes (para mostrar "X restantes")
+    total_pendentes = len(flashcards) + len(sumulas)
+
+    return {
+        "cards": cards,
+        "total_pendentes": total_pendentes,
+        "tecnicas_ativas": ["micro-retrieval", "interleaving", "desirable-difficulty"],
+    }
+
+
+# ============================================================
+# SESSION SUMMARY: Métricas pós-sessão
+# ============================================================
+
+
+@router.get("/session-summary/{codigo}")
+def get_session_summary(
+    codigo: str,
+    user_id: int = Depends(get_user_id),
+    conn=Depends(get_db_session),
+):
+    """Retorna resumo completo da sessão de estudo ao sair da sala.
+
+    Métricas: tempo focado, ciclos completados, cards revisados,
+    comparação com meta, XP ganho, sugestões para próxima sessão.
+    """
+    _ensure_studyroom_tables(conn)
+    _run_studyroom_migrations(conn)
+    from utils import today_str
+
+    room = conn.execute("SELECT * FROM study_rooms WHERE codigo = ?", (codigo.upper(),)).fetchone()
+    if not room:
+        raise HTTPException(status_code=404, detail="Sala não encontrada")
+
+    participant = conn.execute(
+        "SELECT * FROM study_room_participants WHERE room_id = ? AND user_id = ?",
+        (room["id"], user_id)
+    ).fetchone()
+    if not participant:
+        raise HTTPException(status_code=404, detail="Participante não encontrado")
+
+    # Calcular tempo focado (inclui tempo desde último checkin se ainda focando)
+    tempo_total = participant["tempo_estudado_seg"] or 0
+    if participant["status"] == "focando" and participant["ultimo_checkin"]:
+        try:
+            last = datetime.fromisoformat(participant["ultimo_checkin"])
+            tempo_total += int((datetime.now() - last).total_seconds())
+        except (ValueError, TypeError):
+            pass
+
+    # Calcular ciclos completados
+    ciclo_foco = (room.get("ciclo_foco_min") or 25) * 60
+    ciclo_pausa = (room.get("ciclo_pausa_min") or 5) * 60
+    ciclo_completo = ciclo_foco + ciclo_pausa
+    ciclos_completados = tempo_total // ciclo_completo if ciclo_completo > 0 else 0
+
+    # Buscar cards revisados hoje
+    hoje = today_str()
+    flashcards_revisados = conn.execute(
+        "SELECT COALESCE(flashcards_revisados, 0) FROM streaks WHERE data = ? AND user_id = ?",
+        (hoje, user_id)
+    ).fetchone()
+    flashcards_revisados = flashcards_revisados[0] if flashcards_revisados else 0
+
+    sumulas_revisadas = conn.execute(
+        "SELECT COALESCE(sumulas_revisadas, 0) FROM streaks WHERE data = ? AND user_id = ?",
+        (hoje, user_id)
+    ).fetchone()
+    sumulas_revisadas = sumulas_revisadas[0] if sumulas_revisadas else 0
+
+    questoes_resolvidas = conn.execute(
+        "SELECT COALESCE(questoes_resolvidas, 0) FROM streaks WHERE data = ? AND user_id = ?",
+        (hoje, user_id)
+    ).fetchone()
+    questoes_resolvidas = questoes_resolvidas[0] if questoes_resolvidas else 0
+
+    # Meta da sessão
+    meta = participant["meta"] if participant.get("meta") else ""
+    meta_cumprida = bool(meta and tempo_total > 0)  # Simplificado; ideally check specific goal
+
+    # XP estimado
+    horas = tempo_total / 3600.0
+    xp_ganho = int(20 * horas)
+
+    # Ranking na sala
+    all_participants = conn.execute(
+        "SELECT user_id, nome, tempo_estudado_seg FROM study_room_participants WHERE room_id = ? ORDER BY tempo_estudado_seg DESC",
+        (room["id"],)
+    ).fetchall()
+    ranking_pos = 1
+    for i, p in enumerate(all_participants):
+        if p["user_id"] == user_id:
+            ranking_pos = i + 1
+            break
+
+    # Sugestões para próxima sessão
+    sugestoes = []
+    if tempo_total < 25 * 60:
+        sugestoes.append("💡 Tente completar ao menos 1 ciclo Pomodoro (25min) na próxima vez")
+    if flashcards_revisados == 0:
+        sugestoes.append("🃏 Aproveite as pausas para revisar flashcards pendentes")
+    if ciclos_completados >= 4:
+        sugestoes.append("🎯 Excelente! Experimente aumentar para 30min de foco no próximo ciclo")
+
+    # Pendentes restantes
+    pendentes_flashcards = conn.execute(
+        "SELECT COUNT(*) FROM flashcards WHERE proxima_revisao <= ? AND user_id = ?",
+        (hoje, user_id)
+    ).fetchone()[0]
+    pendentes_sumulas = conn.execute(
+        "SELECT COUNT(*) FROM sumulas WHERE proxima_revisao <= ? AND user_id = ?",
+        (hoje, user_id)
+    ).fetchone()[0]
+
+    return {
+        "sessao": {
+            "titulo": room["titulo"],
+            "tecnica": room["tecnica"],
+            "codigo": room["codigo"],
+            "tempo_focado_seg": tempo_total,
+            "tempo_focado_min": round(tempo_total / 60, 1),
+            "ciclos_completados": ciclos_completados,
+            "ciclos_total": room.get("ciclos_total") or 4,
+        },
+        "progresso": {
+            "flashcards_revisados": flashcards_revisados,
+            "sumulas_revisadas": sumulas_revisadas,
+            "questoes_resolvidas": questoes_resolvidas,
+            "xp_ganho": xp_ganho,
+            "ranking_posicao": ranking_pos,
+            "total_participantes": len(all_participants),
+        },
+        "meta": {
+            "texto": meta,
+            "cumprida": meta_cumprida,
+        },
+        "pendentes": {
+            "flashcards": pendentes_flashcards,
+            "sumulas": pendentes_sumulas,
+        },
+        "sugestoes": sugestoes,
+    }
+
+
+# ============================================================
+# GOAL SUGGESTION: Meta SMART vinculada ao edital + ROI
+# ============================================================
+
+
+@router.get("/goal-suggestion")
+def get_goal_suggestion(
+    user_id: int = Depends(get_user_id),
+    conn=Depends(get_db_session),
+):
+    """Sugere uma meta SMART para a sessão baseada no ROI das matérias do edital.
+
+    Analisa: peso da banca × gap de acertos / horas investidas
+    Retorna: matéria sugerida + quantidade específica + justificativa.
+    """
+    from utils import today_str
+
+    hoje = today_str()
+
+    # 1. Buscar matérias do edital ativo
+    materias_edital = conn.execute(
+        "SELECT DISTINCT materia FROM edital WHERE user_id = ? AND arquivado = 0",
+        (user_id,)
+    ).fetchall()
+    materias_edital = [r[0] for r in materias_edital]
+
+    # 2. Calcular ROI por matéria
+    total_questoes = conn.execute("SELECT COUNT(*) FROM questoes WHERE user_id = ?", (user_id,)).fetchone()[0] or 1
+
+    resultados = []
+    for materia in materias_edital:
+        # Peso na banca (% de questões)
+        qtd_mat = conn.execute(
+            "SELECT COUNT(*) FROM questoes WHERE materia = ? AND user_id = ?",
+            (materia, user_id)
+        ).fetchone()[0]
+        peso = round(qtd_mat / total_questoes * 100, 1) if total_questoes > 0 else 0
+
+        # Acertos
+        acertos = conn.execute("""
+            SELECT COUNT(*) as total, COALESCE(SUM(qr.acertou), 0) as acertos
+            FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id
+            WHERE q.materia = ? AND qr.user_id = ?
+        """, (materia, user_id)).fetchone()
+        pct_acerto = round((acertos["acertos"] / acertos["total"]) * 100, 1) if acertos["total"] > 0 else 0
+        gap = 100 - pct_acerto
+
+        # Horas investidas
+        horas = conn.execute(
+            "SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE materia = ? AND user_id = ?",
+            (materia, user_id)
+        ).fetchone()[0]
+
+        # Pendentes hoje (flashcards + súmulas)
+        fc_pendentes = conn.execute(
+            "SELECT COUNT(*) FROM flashcards WHERE materia = ? AND proxima_revisao <= ? AND user_id = ?",
+            (materia, hoje, user_id)
+        ).fetchone()[0]
+        sm_pendentes = conn.execute(
+            "SELECT COUNT(*) FROM sumulas WHERE tema = ? AND proxima_revisao <= ? AND user_id = ?",
+            (materia, hoje, user_id)
+        ).fetchone()[0]
+
+        roi = round((peso * gap) / (horas + 1), 2)
+
+        resultados.append({
+            "materia": materia,
+            "peso_banca": peso,
+            "pct_acerto": pct_acerto,
+            "gap": gap,
+            "horas_investidas": round(horas, 1),
+            "roi": roi,
+            "pendentes_flashcards": fc_pendentes,
+            "pendentes_sumulas": sm_pendentes,
+        })
+
+    if not resultados:
+        return {
+            "sugestao": None,
+            "motivo": "Nenhuma matéria no edital. Cadastre seu edital primeiro.",
+        }
+
+    # Ordenar por ROI descendente
+    resultados.sort(key=lambda x: x["roi"], reverse=True)
+    top = resultados[0]
+
+    # Gerar meta SMART
+    atividades = []
+    if top["pendentes_flashcards"] > 0:
+        fc_qty = min(top["pendentes_flashcards"], 15)
+        atividades.append(f"Revisar {fc_qty} flashcards de {top['materia']}")
+    if top["pendentes_sumulas"] > 0:
+        sm_qty = min(top["pendentes_sumulas"], 10)
+        atividades.append(f"Revisar {sm_qty} súmulas de {top['materia']}")
+    if top["gap"] > 30:
+        atividades.append(f"Resolver 10 questões de {top['materia']}")
+
+    if not atividades:
+        atividades.append(f"Estudar {top['materia']} por 25 minutos (1 Pomodoro)")
+
+    meta_texto = atividades[0]  # Principal sugestão
+
+    return {
+        "sugestao": {
+            "meta": meta_texto,
+            "materia": top["materia"],
+            "roi": top["roi"],
+            "peso_banca": top["peso_banca"],
+            "gap": top["gap"],
+            "atividades_sugeridas": atividades,
+        },
+        "alternativas": [
+            {"meta": a, "materia": top["materia"]}
+            for a in atividades[1:]
+        ],
+        "top_materias_roi": resultados[:3],
+        "motivo": f"{top['materia']} tem maior ROI: peso {top['peso_banca']}% na banca com {top['gap']}% de gap",
+    }
