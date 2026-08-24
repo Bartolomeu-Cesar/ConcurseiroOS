@@ -1612,12 +1612,32 @@ async def importar_questoes_pdf(
                 "dica": "O PDF deve conter questões numeradas (1, 2, 3...) com alternativas (A, B, C, D, E) e preferencialmente uma seção de GABARITO."
             }
 
-        # Inserir no banco
+        # Inserir no banco (com deduplicação)
+        # Carregar enunciados existentes do usuário para comparação rápida
+        existing_enunciados = set()
+        rows_existing = conn.execute(
+            "SELECT enunciado FROM questoes WHERE user_id = ?", (user_id,)
+        ).fetchall()
+        for row in rows_existing:
+            # Normalizar: remover espaços extras para comparação
+            normalized = ' '.join(row[0].split()).strip()[:200]
+            existing_enunciados.add(normalized)
+
         count = 0
         sem_gabarito = 0
+        duplicates = 0
         for q in questoes:
             if not q["enunciado"] or len(q["enunciado"]) < 10:
                 continue
+
+            # Verificar duplicata pelo enunciado normalizado (primeiros 200 chars)
+            normalized = ' '.join(q["enunciado"].split()).strip()[:200]
+            if normalized in existing_enunciados:
+                duplicates += 1
+                continue
+
+            existing_enunciados.add(normalized)
+
             if not q["resposta_correta"]:
                 sem_gabarito += 1
             # Gerar nome da prova a partir do filename se não fornecido
@@ -1633,14 +1653,17 @@ async def importar_questoes_pdf(
             count += 1
 
         conn.commit()
-        log.info(f"PDF import: {count} questões importadas de {file.filename} (prova: {nome_prova})")
+        log.info(f"PDF import: {count} questões importadas de {file.filename} (prova: {nome_prova}, duplicatas: {duplicates})")
 
         return {
             "ok": True,
             "importadas": count,
+            "duplicatas": duplicates,
             "sem_gabarito": sem_gabarito,
             "total_detectadas": len(questoes),
-            "mensagem": f"{count} questões importadas com sucesso!" + (f" ({sem_gabarito} sem gabarito identificado)" if sem_gabarito else "")
+            "mensagem": f"{count} questões importadas com sucesso!"
+                + (f" ({sem_gabarito} sem gabarito identificado)" if sem_gabarito else "")
+                + (f" ({duplicates} duplicata(s) ignorada(s))" if duplicates else "")
         }
 
     except HTTPException:
