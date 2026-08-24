@@ -11,8 +11,8 @@ backend/.jwt_secret
 # Node
 node_modules/
 
-# Database (backup local)
-backend/_progress.db
+# Database (versionado para sincronizar entre máquinas)
+# backend/progress.db
 
 # PDFs (muito grandes para o git)
 backend/pdfs/
