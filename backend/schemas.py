@@ -275,13 +275,16 @@ class ResumoCreate(BaseModel):
 # Response Models (Core)
 # ============================================================
 
+class HealthDbStatus(BaseModel):
+    status: str
+    size_mb: float
+
+
 class HealthResponse(BaseModel):
     status: str
-    uptime_seconds: float
-    database: str
     version: str
-    tables_count: int
-    edital_count: int
+    uptime_seconds: float
+    db: HealthDbStatus
     timestamp: str
 
 
