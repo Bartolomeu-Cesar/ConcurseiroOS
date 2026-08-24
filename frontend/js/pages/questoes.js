@@ -674,6 +674,52 @@ async function cadastrarQuestao() {
 }
 window.cadastrarQuestao = cadastrarQuestao;
 
+// ==================== PROVAS IMPORTADAS ====================
+async function loadProvas() {
+  const list = document.getElementById('provas-list');
+  if (!list) return;
+  try {
+    const provas = await fetch('/api/questoes/provas').then(r => r.json());
+    if (!provas.length) {
+      list.innerHTML = '<p style="color:var(--text-sub);font-size:0.82rem;">Nenhuma prova importada ainda.</p>';
+      return;
+    }
+    list.innerHTML = provas.map(p => {
+      const status = p.gabarito_completo
+        ? '<span style="color:#a6e3a1;">✅ Gabarito completo</span>'
+        : `<span style="color:#fab387;">⚠️ ${p.sem_gabarito} sem gabarito</span>`;
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;">
+        <div>
+          <strong style="color:var(--text);">${p.prova}</strong>
+          <span style="font-size:0.75rem;color:var(--text-sub);margin-left:8px;">${p.banca || ''} · ${p.total_questoes} questões · ${status}</span>
+        </div>
+        <button onclick="deleteProva('${p.prova.replace(/'/g, "\\'")}')" title="Excluir prova inteira" style="background:none;border:none;color:#f38ba8;cursor:pointer;font-size:1.1rem;">🗑️</button>
+      </div>`;
+    }).join('');
+  } catch {
+    list.innerHTML = '<p style="color:#f38ba8;">Erro ao carregar provas.</p>';
+  }
+}
+
+async function deleteProva(provaNome) {
+  if (!confirm(`Excluir a prova "${provaNome}" e TODAS as suas questões? Esta ação não pode ser desfeita.`)) return;
+  try {
+    const res = await fetch(`/api/questoes/provas/${encodeURIComponent(provaNome)}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.ok) {
+      toast(`✅ ${data.mensagem}`, 'success');
+      loadProvas();
+      loadBanco();
+      loadMaterias();
+    } else {
+      toast(data.detail || 'Erro ao excluir prova.', 'error');
+    }
+  } catch {
+    toast('Erro de conexão ao excluir prova.', 'error');
+  }
+}
+window.deleteProva = deleteProva;
+
 // ==================== BANCO COMPLETO ====================
 async function loadBanco() {
   const materia = document.getElementById('banco-filtro-materia').value;
@@ -904,6 +950,7 @@ loadStats();
 loadSimulados();
 loadErros();
 loadBanco();
+loadProvas();
 loadLoteOptions();
 loadQuestoesResolver();
 

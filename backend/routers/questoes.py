@@ -539,6 +539,50 @@ def listar_provas(conn=Depends(get_db_session), user_id: int = Depends(get_user_
     } for r in rows]
 
 
+@router.delete("/api/questoes/provas/{prova_nome}", summary="Excluir prova inteira",
+               description="Remove todas as questões e respostas associadas a uma prova importada.")
+def excluir_prova(prova_nome: str, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Exclui todas as questões de uma prova específica (por prova_origem)."""
+    from urllib.parse import unquote
+    prova_nome = unquote(prova_nome)
+
+    # Verificar se a prova existe
+    count = conn.execute(
+        "SELECT COUNT(*) FROM questoes WHERE user_id = ? AND prova_origem = ?",
+        (user_id, prova_nome)
+    ).fetchone()[0]
+
+    if count == 0:
+        raise HTTPException(status_code=404, detail=f"Prova '{prova_nome}' não encontrada.")
+
+    # Excluir respostas vinculadas às questões da prova
+    conn.execute("""
+        DELETE FROM questoes_respostas
+        WHERE user_id = ? AND questao_id IN (
+            SELECT id FROM questoes WHERE user_id = ? AND prova_origem = ?
+        )
+    """, (user_id, user_id, prova_nome))
+
+    # Excluir erros de revisão vinculados
+    conn.execute("""
+        DELETE FROM erros_revisao
+        WHERE user_id = ? AND questao_id IN (
+            SELECT id FROM questoes WHERE user_id = ? AND prova_origem = ?
+        )
+    """, (user_id, user_id, prova_nome))
+
+    # Excluir as questões
+    conn.execute(
+        "DELETE FROM questoes WHERE user_id = ? AND prova_origem = ?",
+        (user_id, prova_nome)
+    )
+
+    conn.commit()
+    log.info(f"Prova excluída: '{prova_nome}' ({count} questões) por user_id={user_id}")
+
+    return {"ok": True, "excluidas": count, "mensagem": f"Prova '{prova_nome}' excluída ({count} questões removidas)."}
+
+
 @router.get("/api/questoes/{id}", response_model=QuestaoResponse, summary="Obter questão por ID",
             description="Retorna os dados completos de uma questão específica.",
             responses={404: {"description": "Questão não encontrada"}})
