@@ -805,8 +805,12 @@ async function loadBanco() {
 
   const questoes = await fetch(url).then(r => r.json());
 
-  const label = semGabarito ? 'sem gabarito' : 'questão(ões)';
-  document.getElementById('banco-count').textContent = `${questoes.length} ${label}`;
+  const countEl = document.getElementById('banco-count');
+  if (semGabarito) {
+    countEl.innerHTML = `<strong style="color:#f38ba8;">${questoes.length}</strong> questão(ões) sem gabarito`;
+  } else {
+    countEl.textContent = `${questoes.length} questão(ões)`;
+  }
   const list = document.getElementById('banco-list');
 
   if (questoes.length === 0) {
