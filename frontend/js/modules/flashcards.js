@@ -199,7 +199,6 @@ export function revealAnswer() {
     </div>
   `;
 }
-}
 
 export async function reviewFlashcard(quality) {
   const card = flashcardsToday[currentFlashIndex];
