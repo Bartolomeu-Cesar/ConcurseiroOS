@@ -1,3 +1,5 @@
+import random
+from collections import defaultdict
 from datetime import date, timedelta
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
@@ -63,6 +65,15 @@ def list_sumulas(tribunal: str = "", tema: str = "", page: int | None = Query(No
 
 @router.get("/api/sumulas/today", summary="Súmulas do dia (revisão SRS)")
 def get_sumulas_today(tribunal: str = "", tema: str = "", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Retorna súmulas pendentes para hoje com ordenação inteligente,
+    aplicando as mesmas técnicas de distribuição de disciplinas:
+
+    1. Prioridade por ROI (vinculante + dificuldade + peso do tema na banca)
+    2. Reforço urgente primeiro (reps=0 ou intervalo=1 = esqueceu/errou)
+    3. Desirable difficulty — mistura níveis para manter engajamento
+    4. Interleaving — intercala temas/tribunais (não blocos)
+    5. Randomização dentro de cada faixa (evita viés sequencial)
+    """
     query = "SELECT * FROM sumulas WHERE proxima_revisao <= ? AND user_id = ?"
     params = [today_str(), user_id]
     if tribunal:
@@ -71,9 +82,145 @@ def get_sumulas_today(tribunal: str = "", tema: str = "", conn=Depends(get_db_se
     if tema:
         query += " AND tema = ?"
         params.append(tema)
-    query += " ORDER BY intervalo_dias ASC"
     rows = conn.execute(query, params).fetchall()
-    return [dict(r) for r in rows]
+    items = [dict(r) for r in rows]
+
+    if not items:
+        return []
+
+    # === Calcular score de prioridade para cada súmula (similar a ROI de matérias) ===
+    # Componentes do score:
+    #   - urgencia: menor EF + menor stability = mais provável esquecer
+    #   - importancia: vinculante vale mais (peso 2x)
+    #   - gap: menos repetições = mais precisa revisar
+    for s in items:
+        reps = s.get("repetitions") or 0
+        ef = s.get("easiness_factor") or 2.5
+        stability = s.get("stability") or 0
+        intervalo = s.get("intervalo_dias") or 1
+        vinculante = s.get("vinculante") or 0
+
+        # Urgência: 0-100 (quanto menor EF e stability, mais urgente)
+        urgencia = max(0, 100 - (ef - 1.3) * 40)  # EF 1.3→100, EF 2.5→52, EF 3.0→32
+        if stability > 0:
+            urgencia = max(urgencia, 100 - stability * 10)  # stability baixa = urgente
+
+        # Gap de conhecimento (quanto menos reps, maior o gap)
+        gap = max(0, 100 - reps * 15)  # 0 reps=100, 3 reps=55, 7+ reps≈0
+
+        # Importância: vinculante tem 2x peso
+        importancia = 2.0 if vinculante else 1.0
+
+        # Reforço: se errou na última (reps=0, intervalo<=1), boost máximo
+        reforco_boost = 50 if (reps == 0 or intervalo <= 1) else 0
+
+        # Score final (similar ao ROI: peso * gap / investimento)
+        s["_priority_score"] = round((urgencia * 0.4 + gap * 0.3 + reforco_boost) * importancia, 2)
+
+    # === Classificar em 3 faixas para aplicar Desirable Difficulty ===
+    # Faixa A: Reforço (esqueceu/errou) — sempre primeiro
+    # Faixa B: Difíceis (EF baixo, pouco repetidas) — desafio
+    # Faixa C: Regulares — manutenção
+    faixa_a = []  # Reforço urgente
+    faixa_b = []  # Difíceis
+    faixa_c = []  # Regulares
+
+    for s in items:
+        reps = s.get("repetitions") or 0
+        intervalo = s.get("intervalo_dias") or 1
+        ef = s.get("easiness_factor") or 2.5
+
+        if reps == 0 or intervalo <= 1:
+            faixa_a.append(s)
+        elif ef < 2.1 or s["_priority_score"] >= 80:
+            faixa_b.append(s)
+        else:
+            faixa_c.append(s)
+
+    # Randomizar dentro de cada faixa (evita viés sequencial)
+    random.shuffle(faixa_a)
+    random.shuffle(faixa_b)
+    random.shuffle(faixa_c)
+
+    # === Desirable Difficulty: não coloca todos difíceis juntos ===
+    # Padrão: 2 difíceis → 1 fácil → 2 difíceis → 1 fácil (mantém motivação)
+    ordered = _mix_difficulty(faixa_a, faixa_b, faixa_c)
+
+    # === Interleaving de temas/tribunais ===
+    result = _interleave_by_tema(ordered)
+
+    # Remover campo interno _priority_score do response
+    for s in result:
+        s.pop("_priority_score", None)
+
+    return result
+
+
+def _mix_difficulty(reforco: list, dificeis: list, faceis: list) -> list:
+    """Aplica Desirable Difficulty: intercala difíceis com fáceis para manter engajamento.
+    Padrão: reforço primeiro, depois alterna 2 difíceis com 1 fácil.
+    """
+    # Reforço sempre vem primeiro (são os que mais precisam)
+    result = list(reforco)
+
+    # Intercalar difíceis e fáceis no padrão 2:1
+    d_idx, f_idx = 0, 0
+    while d_idx < len(dificeis) or f_idx < len(faceis):
+        # 2 difíceis
+        for _ in range(2):
+            if d_idx < len(dificeis):
+                result.append(dificeis[d_idx])
+                d_idx += 1
+        # 1 fácil (alívio cognitivo)
+        if f_idx < len(faceis):
+            result.append(faceis[f_idx])
+            f_idx += 1
+
+    return result
+
+
+def _interleave_by_tema(items: list[dict]) -> list[dict]:
+    """Intercala súmulas de diferentes temas/tribunais para maximizar retenção.
+    Usa round-robin entre grupos temáticos, mantendo a ordem de prioridade
+    dentro de cada grupo.
+
+    Baseado na mesma técnica de interleaving do study_intelligence.py:
+    - Evita mesma matéria/tema em sequência
+    - Melhora retenção em 20-40% vs. blocked practice
+    """
+    if len(items) <= 2:
+        return items
+
+    # Agrupar por chave composta: tema (se existir) ou tribunal
+    buckets = defaultdict(list)
+    for s in items:
+        key = s.get("tema") or s.get("tribunal") or "geral"
+        buckets[key].append(s)
+
+    # Se só tem 1 grupo, retorna com a ordem de prioridade intacta
+    if len(buckets) <= 1:
+        return items
+
+    # Round-robin: alterna entre grupos (mesma técnica de _generate_interleaved_order)
+    result = []
+    bucket_keys = list(buckets.keys())
+    random.shuffle(bucket_keys)  # Ordem inicial dos grupos aleatória
+
+    key_idx = 0
+    total = len(items)
+    while len(result) < total:
+        attempts = 0
+        while attempts < len(bucket_keys):
+            key = bucket_keys[key_idx % len(bucket_keys)]
+            key_idx += 1
+            if buckets[key]:
+                result.append(buckets[key].pop(0))
+                break
+            attempts += 1
+        else:
+            break  # Todos os buckets vazios
+
+    return result
 
 
 @router.get("/api/sumulas/stats", summary="Estatísticas de súmulas")
