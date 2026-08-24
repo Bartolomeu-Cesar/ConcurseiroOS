@@ -222,6 +222,31 @@ def _m39_elaboration_log(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_elaboration_log_flashcard ON elaboration_log(flashcard_id)")
 
 
+def _m40_erros_revisao_fsrs(conn):
+    """Migration 40: Add FSRS fields to erros_revisao for spaced repetition (B1)."""
+    conn.execute("ALTER TABLE erros_revisao ADD COLUMN stability REAL DEFAULT NULL")
+    conn.execute("ALTER TABLE erros_revisao ADD COLUMN difficulty REAL DEFAULT NULL")
+    conn.execute("ALTER TABLE erros_revisao ADD COLUMN fsrs_state INTEGER DEFAULT 0")
+    conn.execute("ALTER TABLE erros_revisao ADD COLUMN reps INTEGER DEFAULT 0")
+    conn.execute("ALTER TABLE erros_revisao ADD COLUMN last_review TEXT DEFAULT NULL")
+
+
+def _m41_session_metrics(conn):
+    """Migration 41: Create session_metrics table for intra-session fatigue detection (B3)."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS session_metrics (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL DEFAULT 1,
+            session_id TEXT NOT NULL,
+            questao_num INTEGER NOT NULL,
+            tempo_ms INTEGER NOT NULL,
+            acertou INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_session_metrics_user_session ON session_metrics(user_id, session_id)")
+
+
 # Lista ordenada de todas as migrations
 MIGRATIONS = [
     (1, _m01_edital_nome),
@@ -263,6 +288,8 @@ MIGRATIONS = [
     (37, _m37_simulados_tipo),
     (38, _m38_questoes_respostas_confianca),
     (39, _m39_elaboration_log),
+    (40, _m40_erros_revisao_fsrs),
+    (41, _m41_session_metrics),
 ]
 
 

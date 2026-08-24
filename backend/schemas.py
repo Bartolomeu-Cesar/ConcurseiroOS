@@ -776,6 +776,7 @@ class RenomearEditalRequest(BaseModel):
 class RevisarErroRequest(BaseModel):
     """POST /api/questoes/erros/revisar/{id} body."""
     acertou: bool = False
+    facilidade: int | None = None  # 1-4 mapping para FSRS ratings (opcional)
 
 
 # ============================================================
@@ -792,3 +793,21 @@ class AddMemberRequest(BaseModel):
 class ChangeMemberRoleRequest(BaseModel):
     """PUT /api/social/groups/{id}/members/{member_id}/role body."""
     role: str = "member"
+
+
+# ============================================================
+# Fatigue Detection — Requests (B3)
+# ============================================================
+
+class HeartbeatRequest(BaseModel):
+    """POST /api/sessao/heartbeat body."""
+    session_id: str
+    questao_num: int
+    tempo_ms: int
+    acertou: bool
+
+
+class StartSessionRequest(BaseModel):
+    """POST /api/sessao/iniciar body."""
+    materia: Optional[str] = None
+    tipo: str = "questoes"

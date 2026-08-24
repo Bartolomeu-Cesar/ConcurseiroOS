@@ -112,14 +112,14 @@ def list_questoes_materias(conn=Depends(get_db_session), user_id: int = Depends(
 
 # Caderno de Erros (DEVE ficar antes de /api/questoes/{id})
 @router.get("/api/questoes/erros/caderno", summary="Caderno de erros inteligente",
-            description="Retorna questões erradas com repetição espaçada, agrupadas por padrão de erro.")
+            description="Retorna questões erradas com repetição espaçada FSRS, agrupadas por padrão de erro.")
 def caderno_erros(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     from datetime import datetime, timedelta
+    from fsrs import FSRSCard, _retrievability, STATE_NEW
 
     hoje = today_str()
-    INTERVALOS = [1, 3, 7, 14, 30]
 
-    # Garantir que a tabela existe
+    # Garantir que a tabela existe (com campos FSRS)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS erros_revisao (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -131,6 +131,11 @@ def caderno_erros(conn=Depends(get_db_session), user_id: int = Depends(get_user_
             revisoes_count INTEGER DEFAULT 0,
             created_at TEXT NOT NULL,
             updated_at TEXT DEFAULT '',
+            stability REAL DEFAULT NULL,
+            difficulty REAL DEFAULT NULL,
+            fsrs_state INTEGER DEFAULT 0,
+            reps INTEGER DEFAULT 0,
+            last_review TEXT DEFAULT NULL,
             FOREIGN KEY (questao_id) REFERENCES questoes(id)
         )
     """)
@@ -162,16 +167,19 @@ def caderno_erros(conn=Depends(get_db_session), user_id: int = Depends(get_user_
                 data_erro = datetime.now()
             proxima = (data_erro + timedelta(days=1)).strftime("%Y-%m-%d")
             conn.execute("""
-                INSERT INTO erros_revisao (user_id, questao_id, resposta_id, intervalo_atual, proxima_revisao, revisoes_count, created_at)
-                VALUES (?, ?, ?, 1, ?, 0, ?)
-            """, (user_id, erro["id"], erro["resposta_id"], proxima, hoje))
+                INSERT INTO erros_revisao (user_id, questao_id, resposta_id, intervalo_atual, proxima_revisao,
+                    revisoes_count, created_at, fsrs_state, stability, difficulty, reps, last_review)
+                VALUES (?, ?, ?, 1, ?, 0, ?, ?, 0, 0, 0, NULL)
+            """, (user_id, erro["id"], erro["resposta_id"], proxima, hoje, STATE_NEW))
             existing_set.add(key)
     conn.commit()
 
-    # Buscar revisões com spaced repetition data
+    # Buscar revisões com spaced repetition data (incluindo campos FSRS)
     revisoes_map = {}
     revisoes_rows = conn.execute(
-        "SELECT questao_id, resposta_id, intervalo_atual, proxima_revisao, revisoes_count FROM erros_revisao WHERE user_id = ?",
+        """SELECT questao_id, resposta_id, intervalo_atual, proxima_revisao, revisoes_count,
+                  stability, difficulty, fsrs_state, reps, last_review
+           FROM erros_revisao WHERE user_id = ?""",
         (user_id,)
     ).fetchall()
     for r in revisoes_rows:
@@ -179,6 +187,11 @@ def caderno_erros(conn=Depends(get_db_session), user_id: int = Depends(get_user_
             "intervalo_atual": r["intervalo_atual"],
             "proxima_revisao": r["proxima_revisao"],
             "revisoes_count": r["revisoes_count"],
+            "stability": r["stability"],
+            "difficulty": r["difficulty"],
+            "fsrs_state": r["fsrs_state"],
+            "reps": r["reps"],
+            "last_review": r["last_review"],
         }
 
     # Montar resultado com pendentes de hoje
@@ -187,12 +200,29 @@ def caderno_erros(conn=Depends(get_db_session), user_id: int = Depends(get_user_
     por_materia = {}
     padroes_raw = {}
 
+    hoje_date = datetime.strptime(hoje, "%Y-%m-%d")
+
     for erro in erros:
         item = dict(erro)
         rev = revisoes_map.get((erro["id"], erro["resposta_id"]), {})
         item["proxima_revisao"] = rev.get("proxima_revisao", hoje)
         item["intervalo_atual"] = rev.get("intervalo_atual", 1)
         item["revisoes_count"] = rev.get("revisoes_count", 0)
+
+        # Calcular recall_estimado via FSRS retrievability
+        stability = rev.get("stability")
+        last_review_str = rev.get("last_review")
+        if stability and stability > 0 and last_review_str:
+            try:
+                last_review_date = datetime.strptime(last_review_str, "%Y-%m-%d")
+                elapsed = max(0, (hoje_date - last_review_date).days)
+                item["recall_estimado"] = round(_retrievability(elapsed, stability), 4)
+            except (ValueError, TypeError):
+                item["recall_estimado"] = 0.0
+        else:
+            # Card novo ou sem dados FSRS: recall = 0 (prioridade máxima)
+            item["recall_estimado"] = 0.0
+
         todos_erros.append(item)
 
         # Contagem por matéria
@@ -218,6 +248,9 @@ def caderno_erros(conn=Depends(get_db_session), user_id: int = Depends(get_user_
         if item["proxima_revisao"] <= hoje:
             pendentes_hoje.append(item)
 
+    # Ordenar pendentes por recall_estimado ASC (mais urgente primeiro)
+    pendentes_hoje.sort(key=lambda x: x.get("recall_estimado", 0.0))
+
     # Padrões com mais de 1 ocorrência, ordenados por frequência
     padroes_erro = sorted(
         [p for p in padroes_raw.values() if p["count"] >= 2],
@@ -234,17 +267,32 @@ def caderno_erros(conn=Depends(get_db_session), user_id: int = Depends(get_user_
 
 
 @router.post("/api/questoes/erros/revisar/{id}", summary="Revisar questão errada",
-             description="Marca uma questão do caderno de erros como revisada. Avança ou reseta o intervalo de repetição espaçada.")
+             description="Marca uma questão do caderno de erros como revisada. Usa FSRS para calcular próximo intervalo.")
 def revisar_erro(id: int, body: RevisarErroRequest, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     from datetime import datetime, timedelta
+    from fsrs import (
+        FSRSCard, review_card, STATE_NEW,
+        RATING_AGAIN, RATING_HARD, RATING_GOOD, RATING_EASY,
+    )
 
-    INTERVALOS = [1, 3, 7, 14, 30]
+    DESIRED_RETENTION = 0.85  # Mais agressivo que flashcards normais (são ERROS)
     acertou = body.acertou
     hoje = today_str()
 
-    # Buscar registro de revisão existente
+    # Determinar rating FSRS
+    if not acertou:
+        rating = RATING_AGAIN
+    elif body.facilidade is not None:
+        # facilidade 1-4 mapeia diretamente para FSRS ratings
+        rating = max(1, min(4, body.facilidade))
+    else:
+        # Default: acertou sem facilidade = GOOD
+        rating = RATING_GOOD
+
+    # Buscar registro de revisão existente (com campos FSRS)
     revisao = conn.execute(
-        "SELECT id, intervalo_atual, revisoes_count FROM erros_revisao WHERE questao_id = ? AND user_id = ? ORDER BY id DESC LIMIT 1",
+        """SELECT id, intervalo_atual, revisoes_count, stability, difficulty, fsrs_state, reps, last_review
+           FROM erros_revisao WHERE questao_id = ? AND user_id = ? ORDER BY id DESC LIMIT 1""",
         (id, user_id)
     ).fetchone()
 
@@ -256,46 +304,68 @@ def revisar_erro(id: int, body: RevisarErroRequest, conn=Depends(get_db_session)
         ).fetchone()
         if not erro:
             raise HTTPException(status_code=404, detail="Questão não encontrada no caderno de erros")
-        # Criar registro
+        # Criar registro com FSRS state NEW
         conn.execute("""
-            INSERT INTO erros_revisao (user_id, questao_id, resposta_id, intervalo_atual, proxima_revisao, revisoes_count, created_at)
-            VALUES (?, ?, ?, 1, ?, 0, ?)
-        """, (user_id, id, erro["id"], hoje, hoje))
+            INSERT INTO erros_revisao (user_id, questao_id, resposta_id, intervalo_atual, proxima_revisao,
+                revisoes_count, created_at, fsrs_state, stability, difficulty, reps, last_review)
+            VALUES (?, ?, ?, 1, ?, 0, ?, ?, 0, 0, 0, NULL)
+        """, (user_id, id, erro["id"], hoje, hoje, STATE_NEW))
         conn.commit()
         revisao = conn.execute(
-            "SELECT id, intervalo_atual, revisoes_count FROM erros_revisao WHERE questao_id = ? AND user_id = ? ORDER BY id DESC LIMIT 1",
+            """SELECT id, intervalo_atual, revisoes_count, stability, difficulty, fsrs_state, reps, last_review
+               FROM erros_revisao WHERE questao_id = ? AND user_id = ? ORDER BY id DESC LIMIT 1""",
             (id, user_id)
         ).fetchone()
 
-    intervalo_atual = revisao["intervalo_atual"]
-    revisoes_count = revisao["revisoes_count"]
+    # Reconstruir FSRSCard a partir dos campos salvos
+    # Retrocompatibilidade: se campos FSRS são NULL, tratar como STATE_NEW
+    fsrs_state = revisao["fsrs_state"] if revisao["fsrs_state"] is not None else STATE_NEW
+    stability = revisao["stability"] if revisao["stability"] is not None else 0.0
+    difficulty = revisao["difficulty"] if revisao["difficulty"] is not None else 0.0
+    reps = revisao["reps"] if revisao["reps"] is not None else 0
+    last_review = revisao["last_review"] or ""
 
-    if acertou:
-        # Avançar para o próximo intervalo
-        try:
-            idx = INTERVALOS.index(intervalo_atual)
-            novo_intervalo = INTERVALOS[min(idx + 1, len(INTERVALOS) - 1)]
-        except ValueError:
-            novo_intervalo = INTERVALOS[0]
-    else:
-        # Resetar para 1 dia
-        novo_intervalo = INTERVALOS[0]
+    card = FSRSCard(
+        stability=stability,
+        difficulty=difficulty,
+        state=fsrs_state,
+        last_review=last_review,
+        reps=reps,
+    )
 
-    proxima = (datetime.strptime(hoje, "%Y-%m-%d") + timedelta(days=novo_intervalo)).strftime("%Y-%m-%d")
+    # Processar revisão via FSRS
+    output = review_card(card, rating, desired_retention=DESIRED_RETENTION, review_date=hoje)
 
+    # Salvar output FSRS
     conn.execute("""
         UPDATE erros_revisao
-        SET intervalo_atual = ?, proxima_revisao = ?, revisoes_count = ?, updated_at = ?
+        SET intervalo_atual = ?, proxima_revisao = ?, revisoes_count = ?, updated_at = ?,
+            stability = ?, difficulty = ?, fsrs_state = ?, reps = ?, last_review = ?
         WHERE id = ? AND user_id = ?
-    """, (novo_intervalo, proxima, revisoes_count + 1, hoje, revisao["id"], user_id))
+    """, (
+        output.interval,
+        output.next_review,
+        revisao["revisoes_count"] + 1,
+        hoje,
+        output.stability,
+        output.difficulty,
+        output.state,
+        reps + 1,
+        hoje,
+        revisao["id"],
+        user_id,
+    ))
     conn.commit()
 
     return {
         "ok": True,
         "acertou": acertou,
-        "novo_intervalo": novo_intervalo,
-        "proxima_revisao": proxima,
-        "revisoes_count": revisoes_count + 1,
+        "novo_intervalo": output.interval,
+        "proxima_revisao": output.next_review,
+        "revisoes_count": revisao["revisoes_count"] + 1,
+        "stability": round(output.stability, 4),
+        "difficulty": round(output.difficulty, 4),
+        "recall_estimado": round(output.retrievability, 4),
     }
 
 

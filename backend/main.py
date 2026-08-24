@@ -15,7 +15,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from routers import (
     analytics, auth, bookmarks, cadernos, calendario, ciclo, dashboard,
-    desafios, edital, feynman, flashcards, misc, notas, notifications, pdf,
+    desafios, edital, fatigue, feynman, flashcards, misc, notas, notifications, pdf,
     planejador, questoes, simulados, streaks, sumulas, treinador,
     leagues, ai_tutor, social, batalha, admin, studyroom, study_intelligence
 )
@@ -140,6 +140,10 @@ tags_metadata = [
     {
         "name": "Study Room",
         "description": "Salas de estudo virtuais com timer compartilhado, técnica Pomodoro e chat.",
+    },
+    {
+        "name": "Fatigue Detection",
+        "description": "Detecção de fadiga intra-sessão com análise de performance em tempo real.",
     },
     {
         "name": "PDF",
@@ -342,6 +346,7 @@ app.include_router(batalha.router)
 app.include_router(admin.router)
 app.include_router(studyroom.router)
 app.include_router(study_intelligence.router)
+app.include_router(fatigue.router)
 app.include_router(misc.router)
 
 # ============================================================

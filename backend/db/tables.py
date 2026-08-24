@@ -517,6 +517,20 @@ def _create_tables(conn):
         )
     """)
 
+    # ========== SESSION METRICS (Fatigue Detection B3) ==========
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS session_metrics (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL DEFAULT 1,
+            session_id TEXT NOT NULL,
+            questao_num INTEGER NOT NULL,
+            tempo_ms INTEGER NOT NULL,
+            acertou INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_session_metrics_user_session ON session_metrics(user_id, session_id)")
+
     # ========== SCHEMA VERSION (versionamento de migrations) ==========
     conn.execute("""
         CREATE TABLE IF NOT EXISTS schema_version (
