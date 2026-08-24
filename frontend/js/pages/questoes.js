@@ -233,7 +233,13 @@ async function confirmarResposta() {
   });
 
   // Banner de resultado
-  const respostaCorretaTexto = res.resposta_correta === 'A' ? 'CERTO' : res.resposta_correta === 'B' ? 'ERRADO' : res.resposta_correta;
+  let respostaCorretaTexto;
+  if (isCertoErrado) {
+    respostaCorretaTexto = res.resposta_correta === 'A' ? 'CERTO' : 'ERRADO';
+  } else {
+    // Múltipla escolha: mostrar a letra
+    respostaCorretaTexto = `Alternativa ${res.resposta_correta}`;
+  }
   const feedbackHtml = res.acertou
     ? `<div style="margin-top:14px;padding:14px 18px;background:#1e3a2e;border:2px solid #a6e3a1;border-radius:10px;text-align:center;">
         <span style="font-size:1.3rem;">✅</span>
