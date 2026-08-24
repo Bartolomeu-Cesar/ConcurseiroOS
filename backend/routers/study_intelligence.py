@@ -8,7 +8,6 @@ Implementa:
 4. Desirable Difficulty (nível de desafio ideal por matéria)
 5. Knowledge Decay Prediction (previsão de esquecimento)
 """
-import math
 from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, Query
@@ -153,7 +152,8 @@ def study_intelligence(
         # Modelo de esquecimento: R = e^(-t/S) onde S = stability
         # Estimamos stability baseado no histórico de acertos
         stability = max(1, (total - erros) * 2)  # Cada acerto contribui ~2 dias de stability
-        retrievability = math.exp(-days_since / stability) if stability > 0 else 0
+        # FSRS-5 power-law retrievability: R(t, S) = (1 + t/(9*S))^(-1)
+        retrievability = (1.0 + days_since / (9.0 * max(stability, 0.01))) ** (-1) if stability > 0 else 0
         retrieval_strength = round(retrievability * 100, 1)
 
         # ======= 3. KNOWLEDGE DECAY — em risco de esquecer? =======
@@ -1186,3 +1186,208 @@ def memory_palace(
         ],
         "ciencia": "O Method of Loci ativa o hipocampo (memória espacial + episódica). Campeões de memória usam esta técnica para memorizar 500+ dígitos em 5 minutos.",
     }
+
+
+# ============================================================
+# GET /api/study-intelligence/overconfidence — Confidence-Based Repetition (A2)
+# ============================================================
+
+@router.get("/api/study-intelligence/overconfidence", summary="Análise de overconfidence",
+            description="""Identifica matérias onde o aluno tem ilusão de saber:
+alta confiança mas baixo acerto. Overconfidence index > 20 = 'ilusão de saber'.""")
+def overconfidence_analysis(
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Calcula overconfidence por matéria: avg_confianca/3*100 - pct_acerto."""
+    rows = conn.execute("""
+        SELECT q.materia,
+               COUNT(qr.id) as total_respostas,
+               SUM(qr.acertou) as acertos,
+               AVG(qr.confianca) as avg_confianca
+        FROM questoes_respostas qr
+        JOIN questoes q ON q.id = qr.questao_id
+        WHERE qr.user_id = ? AND qr.confianca IS NOT NULL
+        GROUP BY q.materia
+        HAVING COUNT(qr.id) >= 5
+        ORDER BY AVG(qr.confianca) DESC
+    """, (user_id,)).fetchall()
+
+    materias = []
+    for r in rows:
+        total = r["total_respostas"]
+        acertos = r["acertos"] or 0
+        avg_conf = r["avg_confianca"] or 0
+        pct_acerto = round(acertos / total * 100, 1) if total > 0 else 0
+        confianca_pct = round(avg_conf / 3 * 100, 1)
+        overconfidence_idx = round(confianca_pct - pct_acerto, 1)
+
+        status = "ilusão de saber" if overconfidence_idx > 20 else (
+            "calibrado" if abs(overconfidence_idx) <= 10 else (
+                "subconfiante" if overconfidence_idx < -10 else "leve overconfidence"
+            )
+        )
+
+        sugestoes = []
+        if overconfidence_idx > 20:
+            sugestoes = [
+                f"⚠️ Você marca alta confiança em {r['materia']} mas acerta apenas {pct_acerto}%",
+                "📖 Revise os fundamentos desta matéria antes de avançar",
+                "🔄 Use flashcards com revisão espaçada para consolidar",
+                "❓ Resolva mais questões desta matéria com feedback detalhado",
+            ]
+        elif overconfidence_idx > 10:
+            sugestoes = [
+                f"📊 Confiança levemente acima do desempenho real em {r['materia']}",
+                "🧪 Faça um mini-simulado focado nesta matéria para calibrar",
+            ]
+        elif overconfidence_idx < -10:
+            sugestoes = [
+                f"💪 Você sabe mais do que pensa em {r['materia']}! Acurácia: {pct_acerto}%",
+                "🎯 Aumente a dificuldade — você está pronto para questões mais difíceis",
+            ]
+
+        materias.append({
+            "materia": r["materia"],
+            "total_respostas": total,
+            "pct_acerto": pct_acerto,
+            "avg_confianca": round(avg_conf, 2),
+            "confianca_pct": confianca_pct,
+            "overconfidence_idx": overconfidence_idx,
+            "status": status,
+            "sugestoes": sugestoes,
+        })
+
+    # Ordenar por maior overconfidence (top 5)
+    materias.sort(key=lambda x: x["overconfidence_idx"], reverse=True)
+    top5 = materias[:5]
+
+    ilusoes = [m for m in materias if m["status"] == "ilusão de saber"]
+
+    return {
+        "total_materias_analisadas": len(materias),
+        "ilusoes_de_saber": len(ilusoes),
+        "alerta_geral": (
+            f"🚨 Você tem {len(ilusoes)} matéria(s) com 'ilusão de saber' — priorize revisão!"
+            if ilusoes else "✅ Sua autoavaliação está bem calibrada."
+        ),
+        "top5_overconfidence": top5,
+        "todas_materias": materias,
+        "dica_metodologica": "Marque sua confiança (1-3) ao responder questões para melhorar a calibração metacognitiva.",
+    }
+
+
+# ============================================================
+# POST /api/study-intelligence/elaboration — Salvar elaboração (A3)
+# ============================================================
+
+@router.post("/api/study-intelligence/elaboration", summary="Salvar elaboration log",
+             description="Registra a resposta do aluno a um prompt elaborativo.")
+def save_elaboration(
+    body: dict,
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Grava na tabela elaboration_log.
+    body: {flashcard_id ou questao_id, prompt_tipo, resposta_usuario}
+    """
+    flashcard_id = body.get("flashcard_id")
+    questao_id = body.get("questao_id")
+    prompt_tipo = body.get("prompt_tipo", "")
+    resposta_usuario = body.get("resposta_usuario", "")
+
+    if not prompt_tipo:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="prompt_tipo é obrigatório")
+
+    conn.execute("""
+        INSERT INTO elaboration_log (user_id, flashcard_id, questao_id, prompt_tipo, resposta_usuario, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (user_id, flashcard_id, questao_id, prompt_tipo, resposta_usuario, today_str()))
+    conn.commit()
+
+    return {"ok": True, "message": "Elaboração registrada com sucesso"}
+
+
+# ============================================================
+# BURNOUT DETECTION — Detecção de risco de esgotamento
+# ============================================================
+
+def _detect_burnout(conn, user_id: int) -> dict:
+    """Detecta risco de burnout baseado em horas de estudo vs meta.
+
+    Critérios:
+    - horas > meta * 1.5 por 5+ dias consecutivos: risco moderado
+    - horas > meta * 2.0 por 3+ dias consecutivos: risco alto
+    """
+    # Obter meta de horas
+    metas = conn.execute("SELECT meta_horas FROM metas_config WHERE user_id = ?", (user_id,)).fetchone()
+    meta_horas = metas[0] if metas else 3.0
+
+    # Obter últimos 7 dias de streaks
+    sete_dias_atras = (date.today() - timedelta(days=6)).isoformat()
+    rows = conn.execute("""
+        SELECT data, horas_estudadas FROM streaks
+        WHERE data >= ? AND user_id = ?
+        ORDER BY data DESC
+    """, (sete_dias_atras, user_id)).fetchall()
+
+    if not rows:
+        return {
+            "risk": None,
+            "dias_overwork": 0,
+            "media_horas_7d": 0,
+            "meta_horas": meta_horas,
+            "sugestao": None,
+        }
+
+    # Calcular médias e dias de overwork
+    horas_list = [r["horas_estudadas"] or 0 for r in rows]
+    media_horas_7d = round(sum(horas_list) / len(horas_list), 1) if horas_list else 0
+
+    # Checar dias consecutivos de overwork (do mais recente para trás)
+    dias_overwork_150 = 0  # > meta * 1.5
+    dias_overwork_200 = 0  # > meta * 2.0
+
+    # Contar dias consecutivos acima de 1.5x
+    for h in horas_list:
+        if h > meta_horas * 1.5:
+            dias_overwork_150 += 1
+        else:
+            break
+
+    # Contar dias consecutivos acima de 2.0x
+    for h in horas_list:
+        if h > meta_horas * 2.0:
+            dias_overwork_200 += 1
+        else:
+            break
+
+    # Determinar nível de risco
+    risk = None
+    sugestao = None
+
+    if dias_overwork_200 >= 3:
+        risk = "alto"
+        sugestao = "⚠️ Risco alto de burnout! Você está estudando mais que o dobro da meta há vários dias. Considere um dia de descanso completo ou reduza significativamente a carga."
+    elif dias_overwork_150 >= 5:
+        risk = "moderado"
+        sugestao = "Considere um dia de descanso ativo ou redução de carga. Estudar demais pode prejudicar a retenção de longo prazo."
+    elif dias_overwork_150 >= 3:
+        risk = "moderado"
+        sugestao = "Sua carga de estudo está elevada. Intercale dias mais leves para otimizar a consolidação de memória."
+
+    return {
+        "risk": risk,
+        "dias_overwork": max(dias_overwork_150, dias_overwork_200),
+        "media_horas_7d": media_horas_7d,
+        "meta_horas": meta_horas,
+        "sugestao": sugestao,
+    }
+
+
+@router.get("/api/study-intelligence/burnout", summary="Burnout Detection",
+            description="Detecta risco de esgotamento baseado em padrão de horas de estudo vs meta configurada.")
+def burnout_detection(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Retorna análise de risco de burnout baseado nos últimos 7 dias."""
+    return _detect_burnout(conn, user_id)

@@ -93,6 +93,7 @@ class QuestaoCreate(BaseModel):
 class QuestaoResposta(BaseModel):
     resposta: str
     tempo_segundos: int = 0
+    confianca: int | None = None  # 1=chutei, 2=acho que sei, 3=certeza
 
 
 # ============================================================

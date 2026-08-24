@@ -95,7 +95,18 @@ def review_flashcard(id: int, body: FlashcardReview, conn=Depends(get_db_session
                  (new_intervalo, proxima, id, user_id))
     update_streak(conn, "flashcards_revisados", user_id=user_id)
     conn.commit()
-    return {"id": id, "intervalo_dias": new_intervalo, "proxima_revisao": proxima}
+
+    # A3: Suggest elaboration when user got it wrong
+    result = {"id": id, "intervalo_dias": new_intervalo, "proxima_revisao": proxima, "elaboration_suggested": not body.acertou}
+    if not body.acertou:
+        flash_row = conn.execute(
+            "SELECT pergunta, resposta, materia FROM flashcards WHERE id = ? AND user_id = ?", (id, user_id)
+        ).fetchone()
+        if flash_row:
+            result["elaboration_prompts"] = _build_elaboration_prompts(
+                flash_row["pergunta"], flash_row["resposta"], flash_row["materia"] or ""
+            )
+    return result
 
 
 @router.post("/api/flashcards/{id}/review-sm2", response_model=FlashcardReviewSM2Response)
@@ -141,14 +152,28 @@ def review_flashcard_sm2(id: int, body: FlashcardReviewSM2, conn=Depends(get_db_
     conn.commit()
 
     log.info(f"Flashcard SM-2 review: id={id} quality={quality} ef={ef:.4f} reps={reps} interval={intervalo}")
-    return {
+
+    # A3: Suggest elaboration when rating is low (quality < 3)
+    elaboration_suggested = quality < 3
+    result = {
         "id": id,
         "intervalo_dias": intervalo,
         "proxima_revisao": proxima,
         "easiness_factor": round(ef, 4),
         "repetitions": reps,
-        "quality": quality
+        "quality": quality,
+        "elaboration_suggested": elaboration_suggested,
     }
+    if elaboration_suggested:
+        # Generate inline elaboration prompts
+        flash_row = conn.execute(
+            "SELECT pergunta, resposta, materia FROM flashcards WHERE id = ? AND user_id = ?", (id, user_id)
+        ).fetchone()
+        if flash_row:
+            result["elaboration_prompts"] = _build_elaboration_prompts(
+                flash_row["pergunta"], flash_row["resposta"], flash_row["materia"] or ""
+            )
+    return result
 
 
 @router.post("/api/flashcards/{id}/review-fsrs", summary="Revisão FSRS")
@@ -232,7 +257,10 @@ def review_flashcard_fsrs(id: int, body: FlashcardReviewSM2, conn=Depends(get_db
     conn.commit()
 
     log.info(f"Flashcard FSRS review: id={id} rating={rating} S={output.stability:.4f} D={output.difficulty:.4f} I={output.interval}")
-    return {
+
+    # A3: Suggest elaboration when rating is low (FSRS rating 1 = Again, 2 = Hard)
+    elaboration_suggested = rating <= 2
+    result = {
         "id": id,
         "intervalo_dias": output.interval,
         "proxima_revisao": proxima,
@@ -241,8 +269,18 @@ def review_flashcard_fsrs(id: int, body: FlashcardReviewSM2, conn=Depends(get_db
         "fsrs_state": output.state,
         "repetitions": new_reps,
         "rating": rating,
-        "retrievability": round(output.retrievability, 4) if output.retrievability else None
+        "retrievability": round(output.retrievability, 4) if output.retrievability else None,
+        "elaboration_suggested": elaboration_suggested,
     }
+    if elaboration_suggested:
+        flash_row = conn.execute(
+            "SELECT pergunta, resposta, materia FROM flashcards WHERE id = ? AND user_id = ?", (id, user_id)
+        ).fetchone()
+        if flash_row:
+            result["elaboration_prompts"] = _build_elaboration_prompts(
+                flash_row["pergunta"], flash_row["resposta"], flash_row["materia"] or ""
+            )
+    return result
 
 
 @router.put("/api/flashcards/{id}", summary="Editar flashcard", description="Atualiza pergunta, resposta e/ou matéria de um flashcard")
@@ -418,3 +456,135 @@ def importar_flashcards(file: UploadFile = File(...), conn=Depends(get_db_sessio
     dias_distribuidos = (count // max_por_dia) + 1
     log.info(f"Flashcards imported: {count} items distributed over {dias_distribuidos} days")
     return {"ok": True, "importados": count, "distribuidos_em_dias": dias_distribuidos}
+
+
+# ============================================================
+# HELPER: Build elaboration prompts inline (used by review endpoints)
+# ============================================================
+
+def _build_elaboration_prompts(pergunta: str, resposta: str, materia: str) -> list:
+    """Generates 2-3 quick elaboration prompts for inline use in review responses."""
+    materia_lower = materia.lower()
+    prompts = [
+        {"tipo": "por_que", "prompt": f"Por que \"{resposta}\" é verdade/correto?"},
+        {"tipo": "exemplo_pratico", "prompt": f"Dê um exemplo prático onde isso se aplica."},
+    ]
+    # Add domain-specific prompt
+    if any(j in materia_lower for j in ["direito", "lei", "penal", "civil", "constitucional", "administrativo", "tributário"]):
+        prompts.append({"tipo": "fundamento_legal", "prompt": "Qual artigo/dispositivo legal fundamenta isso?"})
+    elif any(e in materia_lower for e in ["matemática", "lógic", "contab", "estatística"]):
+        prompts.append({"tipo": "metodo_alternativo", "prompt": "Resolva/explique usando outro método."})
+    else:
+        prompts.append({"tipo": "consequencia", "prompt": "Qual a consequência de violar/ignorar isso?"})
+    return prompts
+
+
+# ============================================================
+# GET /api/flashcards/{id}/elaboration-prompts — Elaboration Prompts (A3)
+# ============================================================
+
+# Matérias jurídicas conhecidas
+_MATERIAS_JURIDICAS = {
+    "direito constitucional", "direito administrativo", "direito penal",
+    "direito civil", "direito processual civil", "direito processual penal",
+    "direito do trabalho", "direito tributário", "direito empresarial",
+    "direito ambiental", "direito previdenciário", "legislação",
+    "direito eleitoral", "direito internacional", "direitos humanos",
+    "criminologia", "medicina legal", "ética profissional",
+}
+
+_MATERIAS_EXATAS = {
+    "matemática", "raciocínio lógico", "estatística", "contabilidade",
+    "matemática financeira", "informática", "tecnologia da informação",
+}
+
+
+@router.get("/api/flashcards/{id}/elaboration-prompts", summary="Prompts elaborativos",
+            description="Gera prompts elaborativos contextuais para um flashcard, baseado na matéria e conteúdo.")
+def get_elaboration_prompts(id: int, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Gera 3-4 prompts elaborativos contextuais para um flashcard."""
+    row = conn.execute(
+        "SELECT id, pergunta, resposta, materia FROM flashcards WHERE id = ? AND user_id = ?",
+        (id, user_id)
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Flashcard não encontrado")
+
+    pergunta = row["pergunta"]
+    resposta = row["resposta"]
+    materia = (row["materia"] or "").strip()
+    materia_lower = materia.lower()
+
+    prompts = []
+
+    # Tipo 1: Por que é verdade?
+    prompts.append({
+        "tipo": "por_que",
+        "icone": "🤔",
+        "prompt": f"Por que \"{resposta}\" é verdade/correto?",
+        "instrucao": "Explique o fundamento lógico ou legal por trás da resposta.",
+    })
+
+    # Tipo 2: Diferenciação
+    prompts.append({
+        "tipo": "diferenciacao",
+        "icone": "⚖️",
+        "prompt": f"Como isso se diferencia de conceitos semelhantes na mesma área?",
+        "instrucao": f"Compare com outro conceito de '{materia}' que poderia ser confundido.",
+    })
+
+    # Tipo 3: Exemplo prático
+    prompts.append({
+        "tipo": "exemplo_pratico",
+        "icone": "💡",
+        "prompt": f"Dê um exemplo prático onde \"{resposta}\" se aplica.",
+        "instrucao": "Pense em uma situação real (caso concreto, jurisprudência, notícia) onde isso acontece.",
+    })
+
+    # Tipo 4: Consequência
+    prompts.append({
+        "tipo": "consequencia",
+        "icone": "⚡",
+        "prompt": f"Qual a consequência de violar/ignorar isso?",
+        "instrucao": "O que acontece se essa regra/conceito for descumprido ou desconsiderado?",
+    })
+
+    # Prompts específicos para matérias jurídicas
+    if materia_lower in _MATERIAS_JURIDICAS or any(j in materia_lower for j in ["direito", "lei", "penal", "civil", "constitucional"]):
+        prompts.append({
+            "tipo": "fundamento_legal",
+            "icone": "📜",
+            "prompt": "Qual artigo/dispositivo legal fundamenta essa resposta?",
+            "instrucao": "Cite o artigo de lei, súmula ou jurisprudência que embasa o conceito.",
+        })
+        prompts.append({
+            "tipo": "excecao",
+            "icone": "🚫",
+            "prompt": "Existe exceção a essa regra? Quando NÃO se aplica?",
+            "instrucao": "Identifique situações em que a regra não vale ou é mitigada.",
+        })
+
+    # Prompts específicos para matérias exatas
+    elif materia_lower in _MATERIAS_EXATAS or any(e in materia_lower for e in ["matemática", "lógic", "contab", "estatística"]):
+        prompts.append({
+            "tipo": "metodo_alternativo",
+            "icone": "🔢",
+            "prompt": "Resolva/explique usando outro método ou abordagem.",
+            "instrucao": "Tente chegar ao mesmo resultado por um caminho diferente.",
+        })
+        prompts.append({
+            "tipo": "simplificacao",
+            "icone": "✂️",
+            "prompt": "Simplifique: explique em uma frase curta e direta.",
+            "instrucao": "Resuma o conceito core em no máximo 15 palavras.",
+        })
+
+    return {
+        "flashcard_id": id,
+        "pergunta": pergunta,
+        "resposta": resposta,
+        "materia": materia,
+        "total_prompts": len(prompts),
+        "prompts": prompts,
+        "instrucao_geral": "Responda mentalmente ou por escrito. A elaboração ativa melhora a retenção em até 50%.",
+    }

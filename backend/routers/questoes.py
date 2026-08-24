@@ -482,9 +482,9 @@ def responder_questao(id: int, body: QuestaoResposta, conn=Depends(get_db_sessio
         raise HTTPException(status_code=404, detail="Questão não encontrada")
     acertou = 1 if body.resposta.upper() == questao[0].upper() else 0
     conn.execute("""
-        INSERT INTO questoes_respostas (questao_id, resposta_usuario, acertou, tempo_segundos, data, user_id)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (id, body.resposta, acertou, body.tempo_segundos, today_str(), user_id))
+        INSERT INTO questoes_respostas (questao_id, resposta_usuario, acertou, tempo_segundos, confianca, data, user_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (id, body.resposta, acertou, body.tempo_segundos, body.confianca, today_str(), user_id))
     update_streak(conn, "questoes_resolvidas", user_id=user_id)
 
     # Registrar tempo como sessão de estudo (se > 10 segundos)

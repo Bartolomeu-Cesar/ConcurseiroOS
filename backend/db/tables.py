@@ -63,6 +63,7 @@ def _create_tables(conn):
             resposta_usuario TEXT NOT NULL,
             acertou INTEGER NOT NULL,
             tempo_segundos INTEGER DEFAULT 0,
+            confianca INTEGER DEFAULT NULL,
             data TEXT NOT NULL,
             FOREIGN KEY (questao_id) REFERENCES questoes(id)
         )
@@ -500,6 +501,19 @@ def _create_tables(conn):
             intervalo_dias INTEGER DEFAULT 1,
             easiness_factor REAL DEFAULT 2.5,
             repetitions INTEGER DEFAULT 0
+        )
+    """)
+
+    # ========== ELABORATION LOG (A3) ==========
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS elaboration_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL DEFAULT 1,
+            flashcard_id INTEGER,
+            questao_id INTEGER,
+            prompt_tipo TEXT NOT NULL,
+            resposta_usuario TEXT,
+            created_at TEXT NOT NULL
         )
     """)
 

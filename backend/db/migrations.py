@@ -198,6 +198,29 @@ def _m36_erros_revisao(conn):
 def _m37_simulados_tipo(conn):
     conn.execute("ALTER TABLE simulados ADD COLUMN tipo TEXT DEFAULT 'normal'")
 
+def _m38_questoes_respostas_confianca(conn):
+    """Migration 38: confidence field for confidence-based repetition (A2)."""
+    try:
+        conn.execute("SELECT confianca FROM questoes_respostas LIMIT 1")
+    except Exception:
+        conn.execute("ALTER TABLE questoes_respostas ADD COLUMN confianca INTEGER DEFAULT NULL")
+
+def _m39_elaboration_log(conn):
+    """Migration 39: elaboration log table for elaboration prompts (A3)."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS elaboration_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL DEFAULT 1,
+            flashcard_id INTEGER,
+            questao_id INTEGER,
+            prompt_tipo TEXT NOT NULL,
+            resposta_usuario TEXT,
+            created_at TEXT NOT NULL
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_elaboration_log_user_id ON elaboration_log(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_elaboration_log_flashcard ON elaboration_log(flashcard_id)")
+
 
 # Lista ordenada de todas as migrations
 MIGRATIONS = [
@@ -238,6 +261,8 @@ MIGRATIONS = [
     (35, _m35_users_liga),
     (36, _m36_erros_revisao),
     (37, _m37_simulados_tipo),
+    (38, _m38_questoes_respostas_confianca),
+    (39, _m39_elaboration_log),
 ]
 
 

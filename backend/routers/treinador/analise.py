@@ -2,7 +2,6 @@
 
 Contém as 8 camadas de inteligência e helpers compartilhados entre os endpoints.
 """
-import math
 import re
 from datetime import date, timedelta
 from typing import Optional
@@ -172,8 +171,8 @@ def _get_forgetting_risk(conn, user_id: int, limit: int = 10) -> list:
         for fc in flashcards:
             stability = fc["stability"] or 1.0
             dias_atraso = fc["dias_atraso"] or 0
-            # Recall probability: R = e^(-t/S) where t=elapsed days, S=stability
-            recall_prob = math.exp(-dias_atraso / max(stability, 0.1)) if dias_atraso > 0 else 0.9
+            # FSRS-5 power-law retrievability: R(t, S) = (1 + t/(9*S))^(-1)
+            recall_prob = (1.0 + dias_atraso / (9.0 * max(stability, 0.01))) ** (-1) if dias_atraso > 0 else 0.9
             at_risk.append({
                 "tipo": "flashcard",
                 "id": fc["id"],
@@ -201,7 +200,8 @@ def _get_forgetting_risk(conn, user_id: int, limit: int = 10) -> list:
         for t in topicos:
             stability = t["stability_edital"] or 1.0
             dias_atraso = t["dias_atraso"] or 0
-            recall_prob = math.exp(-dias_atraso / max(stability, 0.1)) if dias_atraso > 0 else 0.9
+            # FSRS-5 power-law retrievability: R(t, S) = (1 + t/(9*S))^(-1)
+            recall_prob = (1.0 + dias_atraso / (9.0 * max(stability, 0.01))) ** (-1) if dias_atraso > 0 else 0.9
             at_risk.append({
                 "tipo": "topico",
                 "id": t["id"],
@@ -765,3 +765,80 @@ def _distribute_time(conn, top_materias: list, tempo_restante: int, ordem: int,
         tempo_restante -= tempo_materia
 
     return atividades, ordem
+
+
+# ============================================================
+# INTELIGÊNCIA 9: BURNOUT DETECTION
+# ============================================================
+
+def _detect_burnout(conn, user_id: int) -> dict:
+    """Detecta risco de burnout baseado em horas de estudo vs meta.
+
+    Critérios:
+    - horas > meta * 1.5 por 5+ dias consecutivos: risco moderado
+    - horas > meta * 2.0 por 3+ dias consecutivos: risco alto
+    """
+    # Obter meta de horas
+    metas = conn.execute("SELECT meta_horas FROM metas_config WHERE user_id = ?", (user_id,)).fetchone()
+    meta_horas = metas[0] if metas else 3.0
+
+    # Obter últimos 7 dias de streaks (mais recente primeiro)
+    sete_dias_atras = (date.today() - timedelta(days=6)).isoformat()
+    rows = conn.execute("""
+        SELECT data, horas_estudadas FROM streaks
+        WHERE data >= ? AND user_id = ?
+        ORDER BY data DESC
+    """, (sete_dias_atras, user_id)).fetchall()
+
+    if not rows:
+        return {
+            "risk": None,
+            "dias_overwork": 0,
+            "media_horas_7d": 0,
+            "meta_horas": meta_horas,
+            "sugestao": None,
+        }
+
+    # Calcular médias e dias de overwork
+    horas_list = [r["horas_estudadas"] or 0 for r in rows]
+    media_horas_7d = round(sum(horas_list) / len(horas_list), 1) if horas_list else 0
+
+    # Checar dias consecutivos de overwork (do mais recente para trás)
+    dias_overwork_150 = 0  # > meta * 1.5
+    dias_overwork_200 = 0  # > meta * 2.0
+
+    # Contar dias consecutivos acima de 1.5x
+    for h in horas_list:
+        if h > meta_horas * 1.5:
+            dias_overwork_150 += 1
+        else:
+            break
+
+    # Contar dias consecutivos acima de 2.0x
+    for h in horas_list:
+        if h > meta_horas * 2.0:
+            dias_overwork_200 += 1
+        else:
+            break
+
+    # Determinar nível de risco
+    risk = None
+    sugestao = None
+
+    if dias_overwork_200 >= 3:
+        risk = "alto"
+        sugestao = "⚠️ Risco alto de burnout! Você está estudando mais que o dobro da meta há vários dias. Considere um dia de descanso completo ou reduza significativamente a carga."
+    elif dias_overwork_150 >= 5:
+        risk = "moderado"
+        sugestao = "Considere um dia de descanso ativo ou redução de carga. Estudar demais pode prejudicar a retenção de longo prazo."
+    elif dias_overwork_150 >= 3:
+        risk = "moderado"
+        sugestao = "Sua carga de estudo está elevada. Intercale dias mais leves para otimizar a consolidação de memória."
+
+    return {
+        "risk": risk,
+        "dias_overwork": max(dias_overwork_150, dias_overwork_200),
+        "media_horas_7d": media_horas_7d,
+        "meta_horas": meta_horas,
+        "sugestao": sugestao,
+    }

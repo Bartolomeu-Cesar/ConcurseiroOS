@@ -1,6 +1,5 @@
 """Router de Analytics e Relatórios Avançados."""
 import json
-import math
 import re
 import tempfile
 from datetime import date, datetime, timedelta
@@ -653,7 +652,8 @@ def curva_esquecimento(edital_nome: str = "", cargo: str = "", materia: str = ""
         S = intervalo * ef
         if S <= 0:
             S = 1
-        retencao = math.exp(-t / S)
+        # FSRS-5 power-law retrievability: R(t, S) = (1 + t/(9*S))^(-1)
+        retencao = (1.0 + t / (9.0 * S)) ** (-1)
         retencao_pct = round(retencao * 100, 1)
         resultado.append({
             "id": r[0], "materia": r[3], "topico": r[4], "retencao_pct": retencao_pct,
@@ -1199,4 +1199,99 @@ def weekly_wrap(conn=Depends(get_db_session), user_id: int = Depends(get_user_id
             "flashcards_pendentes": pending_flashcards,
             "topicos_revisao": pending_topicos,
         },
+    }
+
+
+# ============================================================
+# ROI POR MATÉRIA — Retorno sobre investimento de estudo
+# ============================================================
+
+@router.get("/api/analytics/roi-materias", summary="ROI por matéria",
+            description="Calcula o retorno sobre investimento de estudo por matéria: (peso_banca * gap) / (horas + 1). Ordena por ROI descendente.")
+def roi_materias(edital_nome: str = "", cargo: str = "", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """ROI = (peso_banca * gap) / (horas_investidas + 1). Maior ROI = maior ganho potencial por hora extra."""
+
+    # 1. Obter peso de cada matéria na banca (% de questões)
+    total_questoes = conn.execute("SELECT COUNT(*) FROM questoes WHERE user_id = ?", (user_id,)).fetchone()[0]
+    questoes_por_mat = conn.execute(
+        "SELECT materia, COUNT(*) as qtd FROM questoes WHERE user_id = ? GROUP BY materia",
+        (user_id,)
+    ).fetchall()
+    peso_map = {}
+    for r in questoes_por_mat:
+        peso_map[r["materia"]] = round(r["qtd"] / total_questoes * 100, 1) if total_questoes > 0 else 0
+
+    # 2. Obter % de acerto por matéria
+    acertos_por_mat = conn.execute("""
+        SELECT q.materia, COUNT(*) as total, SUM(qr.acertou) as acertos
+        FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id
+        WHERE qr.user_id = ?
+        GROUP BY q.materia
+    """, (user_id,)).fetchall()
+    acerto_map = {r["materia"]: round((r["acertos"] or 0) / r["total"] * 100, 1) if r["total"] > 0 else 0 for r in acertos_por_mat}
+
+    # 3. Obter horas estudadas por matéria
+    horas_por_mat = conn.execute(
+        "SELECT materia, COALESCE(SUM(horas), 0) as total FROM sessoes_estudo WHERE user_id = ? GROUP BY materia",
+        (user_id,)
+    ).fetchall()
+    horas_map = {r["materia"]: round(r["total"], 1) for r in horas_por_mat}
+
+    # 4. Obter todas as matérias do edital (se houver filtro)
+    edital_query = "SELECT DISTINCT materia FROM edital WHERE user_id = ? AND arquivado = 0"
+    edital_params = [user_id]
+    if edital_nome:
+        edital_query += " AND edital_nome = ?"
+        edital_params.append(edital_nome)
+    if cargo:
+        edital_query += " AND cargo = ?"
+        edital_params.append(cargo)
+    materias_edital = [r[0] for r in conn.execute(edital_query, edital_params).fetchall()]
+
+    # Unir matérias do edital + matérias com questões
+    todas_materias = set(materias_edital) | set(peso_map.keys())
+
+    # 5. Calcular ROI para cada matéria
+    resultados = []
+    for materia in todas_materias:
+        peso_banca = peso_map.get(materia, 0)
+        pct_atual = acerto_map.get(materia, 0)
+        gap = 100 - pct_atual
+        horas_investidas = horas_map.get(materia, 0)
+        roi = round((peso_banca * gap) / (horas_investidas + 1), 2)
+
+        resultados.append({
+            "materia": materia,
+            "peso_banca": peso_banca,
+            "pct_atual": pct_atual,
+            "gap": round(gap, 1),
+            "horas_investidas": horas_investidas,
+            "roi": roi,
+            "classificacao": "",  # preenchido abaixo
+        })
+
+    # 6. Ordenar por ROI desc
+    resultados.sort(key=lambda x: -x["roi"])
+
+    # 7. Classificar: top 30% = Alto ROI, 30-70% = Médio, bottom 30% = Baixo
+    n = len(resultados)
+    if n > 0:
+        top_30 = max(1, int(n * 0.3))
+        bottom_30_start = n - max(1, int(n * 0.3))
+        for i, r in enumerate(resultados):
+            if i < top_30:
+                r["classificacao"] = "Alto ROI"
+            elif i >= bottom_30_start:
+                r["classificacao"] = "Baixo"
+            else:
+                r["classificacao"] = "Médio"
+
+    return {
+        "materias": resultados,
+        "total_materias": n,
+        "resumo": {
+            "alto_roi": len([r for r in resultados if r["classificacao"] == "Alto ROI"]),
+            "medio": len([r for r in resultados if r["classificacao"] == "Médio"]),
+            "baixo": len([r for r in resultados if r["classificacao"] == "Baixo"]),
+        }
     }

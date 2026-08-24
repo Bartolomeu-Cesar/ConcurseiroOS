@@ -12,6 +12,7 @@ from .analise import (
     _analyze_error_patterns,
     _calculate_adaptive_pace,
     _calculate_readiness_score,
+    _detect_burnout,
     _detect_optimal_hours,
     _detect_plateaus,
     _dias_ate_prova,
@@ -99,6 +100,9 @@ def treinador_inteligente(edital_nome: str = "", cargo: str = "", conn=Depends(g
     # 8. Sprint mode
     sprint_mode = _get_sprint_mode(conn, user_id, dias_prova, edital_nome, cargo)
 
+    # 9. Burnout detection
+    burnout = _detect_burnout(conn, user_id)
+
     # Score enriquecido
     score, nivel = _calculate_readiness_score(pct_acerto_global, pct_edital, dias_semana, ritmo, plateaus)
 
@@ -131,5 +135,6 @@ def treinador_inteligente(edital_nome: str = "", cargo: str = "", conn=Depends(g
             "horario_otimo": horario_otimo,
             "sprint_mode": sprint_mode,
         },
+        "burnout": burnout,
         "dias_prova": dias_prova,
     }
