@@ -819,13 +819,18 @@ async function loadBanco() {
   // Agrupar por matéria (ou por prova quando sem_gabarito)
   const grouped = {};
   questoes.forEach(q => {
-    const key = semGabarito ? (q.prova_origem || 'Sem prova vinculada') : (q.materia || 'Sem matéria');
+    const key = semGabarito
+      ? (q.prova_origem && q.prova_origem.trim() ? q.prova_origem : 'Sem prova vinculada')
+      : (q.materia || 'Sem matéria');
     if (!grouped[key]) grouped[key] = [];
     grouped[key].push(q);
   });
 
   const keys = Object.keys(grouped).sort();
   let html = '';
+
+  // Store group data for delete actions
+  window._semGabGroups = grouped;
 
   // Ação em lote global para sem gabarito
   if (semGabarito && questoes.length > 0) {
@@ -837,12 +842,13 @@ async function loadBanco() {
 
   for (const key of keys) {
     const items = grouped[key];
+    const safeKey = key.replace(/'/g, "\\'");
     html += `<div class="acc-group">
       <div class="acc-header" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
         <span class="acc-chevron">▶</span>
         <span class="acc-name">${key}</span>
         <span class="acc-count">${items.length} questão(ões)</span>
-        ${semGabarito ? `<button onclick="event.stopPropagation();deleteGroupSemGabarito(${JSON.stringify(items.map(q=>q.id))})" title="Excluir este grupo" style="background:none;border:none;color:#f38ba8;cursor:pointer;font-size:0.9rem;margin-left:8px;">🗑️ Excluir grupo</button>` : ''}
+        ${semGabarito ? `<button onclick="event.stopPropagation();deleteGroupSemGabarito('${safeKey}')" title="Excluir este grupo" style="background:none;border:none;color:#f38ba8;cursor:pointer;font-size:0.9rem;margin-left:8px;">🗑️ Excluir grupo</button>` : ''}
       </div>
       <div class="acc-body">`;
     items.forEach(q => {
@@ -888,8 +894,11 @@ async function deleteAllSemGabarito() {
 }
 window.deleteAllSemGabarito = deleteAllSemGabarito;
 
-async function deleteGroupSemGabarito(ids) {
-  if (!confirm(`Excluir ${ids.length} questão(ões) deste grupo? Esta ação não pode ser desfeita.`)) return;
+async function deleteGroupSemGabarito(groupKey) {
+  const group = window._semGabGroups?.[groupKey];
+  if (!group || !group.length) { toast('Grupo não encontrado.', 'error'); return; }
+  const ids = group.map(q => q.id);
+  if (!confirm(`Excluir ${ids.length} questão(ões) de "${groupKey}"? Esta ação não pode ser desfeita.`)) return;
   let deleted = 0;
   for (const id of ids) {
     await fetch(`/api/questoes/${id}`, { method: 'DELETE' });
