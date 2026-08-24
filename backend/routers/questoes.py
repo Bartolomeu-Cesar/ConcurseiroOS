@@ -513,6 +513,32 @@ def list_datas_importacao(conn=Depends(get_db_session), user_id: int = Depends(g
     return [{"data": r[0], "total": r[1], "materias": r[2] or "", "bancas": r[3] or ""} for r in rows]
 
 
+@router.get("/api/questoes/provas", summary="Listar provas importadas")
+def listar_provas(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Retorna lista de provas importadas com contagem de questões e status do gabarito."""
+    rows = conn.execute("""
+        SELECT prova_origem,
+               COUNT(*) as total,
+               SUM(CASE WHEN resposta_correta != '' AND resposta_correta IS NOT NULL THEN 1 ELSE 0 END) as com_gabarito,
+               banca,
+               MIN(created_at) as importada_em
+        FROM questoes
+        WHERE user_id = ? AND prova_origem != ''
+        GROUP BY prova_origem
+        ORDER BY MAX(id) DESC
+    """, (user_id,)).fetchall()
+
+    return [{
+        "prova": r[0],
+        "total_questoes": r[1],
+        "com_gabarito": r[2],
+        "sem_gabarito": r[1] - r[2],
+        "banca": r[3],
+        "importada_em": r[4],
+        "gabarito_completo": r[2] == r[1],
+    } for r in rows]
+
+
 @router.get("/api/questoes/{id}", response_model=QuestaoResponse, summary="Obter questão por ID",
             description="Retorna os dados completos de uma questão específica.",
             responses={404: {"description": "Questão não encontrada"}})
@@ -1044,14 +1070,42 @@ def _extrair_texto_pdf(file_path: str) -> str:
 
 
 def _parse_gabarito(texto: str) -> dict:
-    """Extrai gabarito do texto. Busca padrões como '1-A', '1.A', '1) A', 'Q1: A', etc."""
+    """Extrai gabarito do texto. Busca padrões como '1-A', '1.A', '1) A', 'Q1: A', etc.
+    Também reconhece formatos CESPE/Cebraspe com grid de tabela (números em uma linha, respostas na seguinte)."""
     gabarito = {}
 
-    # Padrões comuns de gabarito
+    # ===== Formato CESPE/Cebraspe: grid de tabela =====
+    # Linha 1: "1 2 3 4 5 6 7 8 9 10 11 12 ..."
+    # Linha 2: "E E E C E E C C E E C E ..."
+    lines = [l.strip() for l in texto.split('\n') if l.strip()]
+
+    for i in range(len(lines) - 1):
+        # Verificar se a linha atual parece ser uma sequência de números
+        nums = lines[i].split()
+        answers = lines[i + 1].split()
+
+        # Validar: todos items na primeira linha são números, e segunda linha tem respostas válidas
+        if len(nums) >= 3 and len(nums) == len(answers):
+            all_nums = all(n.isdigit() for n in nums)
+            all_answers = all(a.upper() in ('A', 'B', 'C', 'D', 'E', 'X', '0') for a in answers)
+            if all_nums and all_answers:
+                for num_str, ans in zip(nums, answers):
+                    num = int(num_str)
+                    a = ans.upper()
+                    if num == 0 or a in ('0', 'X'):
+                        continue  # padding ou anulada
+                    gabarito[num] = a
+
+    if len(gabarito) >= 3:
+        return gabarito
+
+    # ===== Formatos tradicionais =====
+    # Padrões comuns de gabarito (ordem: mais específico → mais genérico)
     patterns = [
         r'(\d+)\s*[-–.):]\s*([A-Ea-e])',           # 1-A, 1.A, 1)A, 1: A
         r'[Qq](?:uestão)?\s*(\d+)\s*[-–.):]\s*([A-Ea-e])',  # Q1: A, Questão 1: A
         r'(\d+)\s*\|\s*([A-Ea-e])',                 # 1 | A
+        r'(\d+)\s+([A-Ea-e])\s',                    # 51 A (espaço-separado)
     ]
 
     for pattern in patterns:
@@ -1061,6 +1115,14 @@ def _parse_gabarito(texto: str) -> dict:
                 gabarito[int(num)] = letra.upper()
             if len(gabarito) >= 3:
                 break
+
+    # Fallback: linhas curtas com "num letra"
+    if len(gabarito) < 3:
+        short_lines = [l.strip() for l in texto.split('\n') if 3 <= len(l.strip()) <= 15]
+        for line in short_lines:
+            m = re.match(r'^(\d{1,3})\s+([A-EaCcEe])$', line)
+            if m:
+                gabarito[int(m.group(1))] = m.group(2).upper()
 
     return gabarito
 
@@ -1709,27 +1771,4 @@ async def aplicar_gabarito_pdf(
             pass
 
 
-@router.get("/api/questoes/provas", summary="Listar provas importadas")
-def listar_provas(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
-    """Retorna lista de provas importadas com contagem de questões e status do gabarito."""
-    rows = conn.execute("""
-        SELECT prova_origem,
-               COUNT(*) as total,
-               SUM(CASE WHEN resposta_correta != '' AND resposta_correta IS NOT NULL THEN 1 ELSE 0 END) as com_gabarito,
-               banca,
-               MIN(created_at) as importada_em
-        FROM questoes
-        WHERE user_id = ? AND prova_origem != ''
-        GROUP BY prova_origem
-        ORDER BY MAX(id) DESC
-    """, (user_id,)).fetchall()
 
-    return [{
-        "prova": r[0],
-        "total_questoes": r[1],
-        "com_gabarito": r[2],
-        "sem_gabarito": r[1] - r[2],
-        "banca": r[3],
-        "importada_em": r[4],
-        "gabarito_completo": r[2] == r[1],
-    } for r in rows]
