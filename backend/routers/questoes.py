@@ -1623,6 +1623,9 @@ async def importar_questoes_pdf(
             normalized = ' '.join(row[0].split()).strip()[:200]
             existing_enunciados.add(normalized)
 
+        # Gerar nome da prova a partir do filename se não fornecido
+        nome_prova = prova_nome or file.filename.replace('.pdf', '').replace('-', ' ').replace('_', ' ')
+
         count = 0
         sem_gabarito = 0
         duplicates = 0
@@ -1640,8 +1643,6 @@ async def importar_questoes_pdf(
 
             if not q["resposta_correta"]:
                 sem_gabarito += 1
-            # Gerar nome da prova a partir do filename se não fornecido
-            nome_prova = prova_nome or file.filename.replace('.pdf', '').replace('-', ' ').replace('_', ' ')
 
             conn.execute("""
                 INSERT INTO questoes (materia, topico, enunciado, alternativa_a, alternativa_b,
