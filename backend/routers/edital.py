@@ -180,7 +180,7 @@ def add_edital_horas(id: int, body: EditalHoras, conn=Depends(get_db_session), u
     # Atualizar streak do dia
     conn.execute("""
         INSERT INTO streaks (data, horas_estudadas, user_id) VALUES (?, ?, ?)
-        ON CONFLICT(data) DO UPDATE SET horas_estudadas = horas_estudadas + ?
+        ON CONFLICT(user_id, data) DO UPDATE SET horas_estudadas = horas_estudadas + ?
     """, (today_str(), body.horas, user_id, body.horas))
     conn.commit()
     return {"id": id, "horas_estudadas": new_horas}

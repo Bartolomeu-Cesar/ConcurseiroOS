@@ -255,7 +255,7 @@ def add_ciclo_horas(id: int, body: CicloHoras, conn=Depends(get_db_session), use
                  (row[0], body.horas, today_str(), user_id))
     conn.execute("""
         INSERT INTO streaks (data, horas_estudadas, user_id) VALUES (?, ?, ?)
-        ON CONFLICT(data) DO UPDATE SET horas_estudadas = horas_estudadas + ?
+        ON CONFLICT(user_id, data) DO UPDATE SET horas_estudadas = horas_estudadas + ?
     """, (today_str(), body.horas, user_id, body.horas))
     conn.commit()
     return {"id": id, "horas_cumpridas": new_horas}

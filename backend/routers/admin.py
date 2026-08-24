@@ -171,8 +171,8 @@ def create_user(
     # Hash da senha se fornecida
     password_hash = ""
     if password:
-        import hashlib
-        password_hash = hashlib.sha256(password.encode()).hexdigest()
+        import bcrypt
+        password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
     now = datetime.now().isoformat()
     conn.execute("""
@@ -245,9 +245,9 @@ def update_user(
         updates.append("role = ?")
         params.append(body.role)
     if "password" in sent_fields and body.password:
-        import hashlib
+        import bcrypt
         updates.append("password_hash = ?")
-        params.append(hashlib.sha256(body.password.encode()).hexdigest())
+        params.append(bcrypt.hashpw(body.password.encode(), bcrypt.gensalt()).decode())
 
     if not updates:
         raise HTTPException(status_code=400, detail="Nenhum campo para atualizar.")

@@ -200,9 +200,8 @@ def register(body: RegisterRequest, conn=Depends(get_db_session)):
 
     return {
         "ok": True,
-        "message": "Conta criada! Verifique seu email." if sent else "Conta criada! Verifique seu email.",
+        "message": "Conta criada! Verifique seu email." if sent else "Conta criada! Código no console do servidor.",
         "email_sent": sent,
-        "code": code if not sent else None,
     }
 
 
@@ -235,9 +234,8 @@ def login(body: LoginRequest, conn=Depends(get_db_session)):
 
     return {
         "ok": True,
-        "message": "Código enviado para seu email!" if sent else "Código enviado!",
+        "message": "Código enviado para seu email!" if sent else "Código no console do servidor.",
         "email_sent": sent,
-        "code": code if not sent else None,
     }
 
 

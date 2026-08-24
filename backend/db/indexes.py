@@ -24,13 +24,14 @@ def _create_indexes(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_ciclo_ativo ON ciclo_estudos(ativo)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_questoes_respostas_questao_acertou ON questoes_respostas(questao_id, acertou)")
 
-    # FTS5 Full-Text Search
+    # FTS5 Full-Text Search (with user_id for isolation)
     conn.execute("""
         CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
             source,
             source_id,
             title,
             content,
+            user_id UNINDEXED,
             tokenize='unicode61'
         )
     """)

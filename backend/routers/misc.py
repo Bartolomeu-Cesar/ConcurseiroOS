@@ -211,22 +211,22 @@ def delete_backup_endpoint(filename: str, user_id: int = Depends(get_user_id)):
 # ============================================================
 
 @router.get("/api/search", summary="Busca global")
-def global_search(q: str = Query(..., min_length=1), conn=Depends(get_db_session)):
+def global_search(q: str = Query(..., min_length=1), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     try:
         rows = conn.execute("""
             SELECT source, source_id, title,
                    snippet(search_index, 3, '<b>', '</b>', '...', 32) as snippet, rank
-            FROM search_index WHERE search_index MATCH ?
+            FROM search_index WHERE search_index MATCH ? AND user_id = ?
             ORDER BY rank LIMIT 50
-        """, (q,)).fetchall()
+        """, (q, user_id)).fetchall()
     except Exception:
         try:
             rows = conn.execute("""
                 SELECT source, source_id, title,
                        snippet(search_index, 3, '<b>', '</b>', '...', 32) as snippet, rank
-                FROM search_index WHERE search_index MATCH ?
+                FROM search_index WHERE search_index MATCH ? AND user_id = ?
                 ORDER BY rank LIMIT 50
-            """, (f'"{q}"',)).fetchall()
+            """, (f'"{q}"', user_id)).fetchall()
         except Exception:
             return []
 
@@ -379,7 +379,7 @@ def registrar_sessao_estudo(body: SessaoEstudoRegistrar, conn=Depends(get_db_ses
     )
     conn.execute("""
         INSERT INTO streaks (data, horas_estudadas, user_id) VALUES (?, ?, ?)
-        ON CONFLICT(data) DO UPDATE SET horas_estudadas = horas_estudadas + ?
+        ON CONFLICT(user_id, data) DO UPDATE SET horas_estudadas = horas_estudadas + ?
     """, (today_str(), body.horas, user_id, body.horas))
     conn.commit()
     log.info(f"Session registered: {body.horas:.2f}h ({body.materia})")

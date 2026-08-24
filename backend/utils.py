@@ -88,17 +88,17 @@ def update_streak(conn, field: str, value: int = 1, user_id: int = 1) -> None:
     if field == "horas_estudadas":
         conn.execute("""
             INSERT INTO streaks (data, horas_estudadas, user_id) VALUES (?, ?, ?)
-            ON CONFLICT(data) DO UPDATE SET horas_estudadas = horas_estudadas + ?
+            ON CONFLICT(user_id, data) DO UPDATE SET horas_estudadas = horas_estudadas + ?
         """, (today_str(), value, user_id, value))
     elif field == "questoes_resolvidas":
         conn.execute("""
             INSERT INTO streaks (data, questoes_resolvidas, user_id) VALUES (?, 1, ?)
-            ON CONFLICT(data) DO UPDATE SET questoes_resolvidas = questoes_resolvidas + 1
+            ON CONFLICT(user_id, data) DO UPDATE SET questoes_resolvidas = questoes_resolvidas + 1
         """, (today_str(), user_id))
     elif field == "flashcards_revisados":
         conn.execute("""
             INSERT INTO streaks (data, flashcards_revisados, user_id) VALUES (?, 1, ?)
-            ON CONFLICT(data) DO UPDATE SET flashcards_revisados = flashcards_revisados + 1
+            ON CONFLICT(user_id, data) DO UPDATE SET flashcards_revisados = flashcards_revisados + 1
         """, (today_str(), user_id))
 
 

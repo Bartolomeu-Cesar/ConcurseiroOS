@@ -200,7 +200,7 @@ def review_sumula_sm2(id: int, body: SumulaReviewSM2, conn=Depends(get_db_sessio
     update_streak(conn, "flashcards_revisados", user_id=user_id)
     conn.execute("""
         INSERT INTO streaks (data, sumulas_revisadas, user_id) VALUES (?, 1, ?)
-        ON CONFLICT(data) DO UPDATE SET sumulas_revisadas = COALESCE(sumulas_revisadas, 0) + 1
+        ON CONFLICT(user_id, data) DO UPDATE SET sumulas_revisadas = COALESCE(sumulas_revisadas, 0) + 1
     """, (today_str(), user_id))
     conn.commit()
 
@@ -296,7 +296,7 @@ def review_sumula_fsrs(id: int, body: SumulaReviewSM2, conn=Depends(get_db_sessi
     update_streak(conn, "flashcards_revisados", user_id=user_id)
     conn.execute("""
         INSERT INTO streaks (data, sumulas_revisadas, user_id) VALUES (?, 1, ?)
-        ON CONFLICT(data) DO UPDATE SET sumulas_revisadas = COALESCE(sumulas_revisadas, 0) + 1
+        ON CONFLICT(user_id, data) DO UPDATE SET sumulas_revisadas = COALESCE(sumulas_revisadas, 0) + 1
     """, (today_str(), user_id))
     conn.commit()
 

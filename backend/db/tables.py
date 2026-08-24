@@ -125,10 +125,12 @@ def _create_tables(conn):
     conn.execute("""
         CREATE TABLE IF NOT EXISTS streaks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            data TEXT UNIQUE NOT NULL,
+            data TEXT NOT NULL,
             horas_estudadas REAL DEFAULT 0.0,
             questoes_resolvidas INTEGER DEFAULT 0,
-            flashcards_revisados INTEGER DEFAULT 0
+            flashcards_revisados INTEGER DEFAULT 0,
+            user_id INTEGER NOT NULL DEFAULT 1,
+            UNIQUE(user_id, data)
         )
     """)
 

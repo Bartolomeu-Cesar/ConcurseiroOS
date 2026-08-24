@@ -14,36 +14,7 @@ async def get_user_id(authorization: str = Header(None)) -> int:
     Comportamento:
     - AUTH_ENABLED=false → sempre retorna DEFAULT_USER_ID (modo single-user)
     - AUTH_ENABLED=true + token válido → retorna user_id do token
-    - AUTH_ENABLED=true + sem token/inválido → retorna DEFAULT_USER_ID (guest mode)
-
-    Nota: Em modo AUTH_ENABLED=true, sem token = user_id=1 para manter compatibilidade
-    com o fluxo de guest. A proteção real é no frontend que redireciona para login.
-    """
-    if not settings.AUTH_ENABLED:
-        set_user_id_context(DEFAULT_USER_ID)
-        return DEFAULT_USER_ID
-
-    # Se não tem token, retorna default (guest mode)
-    if not authorization or not authorization.startswith("Bearer "):
-        set_user_id_context(DEFAULT_USER_ID)
-        return DEFAULT_USER_ID
-
-    token = authorization.replace("Bearer ", "")
-    try:
-        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
-        user_id = int(payload["sub"])
-        set_user_id_context(user_id)
-        return user_id
-    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError, KeyError, ValueError):
-        # Token inválido = guest
-        set_user_id_context(DEFAULT_USER_ID)
-        return DEFAULT_USER_ID
-
-
-async def get_authenticated_user_id(authorization: str = Header(None)) -> int:
-    """Versão estrita: EXIGE autenticação quando AUTH_ENABLED=true.
-
-    Usar em endpoints sensíveis (backup, upgrade, etc.)
+    - AUTH_ENABLED=true + sem token/inválido → retorna 401 (exige autenticação)
     """
     if not settings.AUTH_ENABLED:
         set_user_id_context(DEFAULT_USER_ID)
@@ -62,3 +33,31 @@ async def get_authenticated_user_id(authorization: str = Header(None)) -> int:
         raise HTTPException(status_code=401, detail="Token expirado")
     except (jwt.InvalidTokenError, KeyError, ValueError):
         raise HTTPException(status_code=401, detail="Token inválido")
+
+
+async def get_optional_user_id(authorization: str = Header(None)) -> int:
+    """Versão permissiva: retorna DEFAULT_USER_ID se sem token (para endpoints públicos).
+
+    Usar apenas em endpoints que devem funcionar sem login (ex: health, docs).
+    """
+    if not settings.AUTH_ENABLED:
+        set_user_id_context(DEFAULT_USER_ID)
+        return DEFAULT_USER_ID
+
+    if not authorization or not authorization.startswith("Bearer "):
+        set_user_id_context(DEFAULT_USER_ID)
+        return DEFAULT_USER_ID
+
+    token = authorization.replace("Bearer ", "")
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        user_id = int(payload["sub"])
+        set_user_id_context(user_id)
+        return user_id
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError, KeyError, ValueError):
+        set_user_id_context(DEFAULT_USER_ID)
+        return DEFAULT_USER_ID
+
+
+# Alias para compatibilidade — endpoints sensíveis usam o mesmo que get_user_id agora
+get_authenticated_user_id = get_user_id

@@ -438,4 +438,34 @@ def _migrate_user_id(conn):
         # Atualizar registros existentes sem user_id
         conn.execute("UPDATE metas_config SET user_id = 1 WHERE user_id IS NULL OR user_id = 0")
 
+    # ========== FIX: streaks UNIQUE constraint deve ser (user_id, data), não apenas (data) ==========
+    # Verifica se o constraint atual é o antigo (data UNIQUE)
+    table_info = conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='streaks'").fetchone()
+    if table_info and "UNIQUE(user_id, data)" not in (table_info[0] or ""):
+        try:
+            conn.execute("ALTER TABLE streaks RENAME TO _streaks_old")
+            conn.execute("""
+                CREATE TABLE streaks (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    data TEXT NOT NULL,
+                    horas_estudadas REAL DEFAULT 0.0,
+                    questoes_resolvidas INTEGER DEFAULT 0,
+                    flashcards_revisados INTEGER DEFAULT 0,
+                    sumulas_revisadas INTEGER DEFAULT 0,
+                    user_id INTEGER NOT NULL DEFAULT 1,
+                    UNIQUE(user_id, data)
+                )
+            """)
+            conn.execute("""
+                INSERT INTO streaks (id, data, horas_estudadas, questoes_resolvidas, flashcards_revisados, user_id)
+                SELECT id, data, horas_estudadas, questoes_resolvidas, flashcards_revisados,
+                       COALESCE(user_id, 1) FROM _streaks_old
+            """)
+            conn.execute("DROP TABLE _streaks_old")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_streaks_user_id ON streaks(user_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_streaks_data ON streaks(data)")
+            log.info("Migration: streaks UNIQUE constraint fixed to (user_id, data)")
+        except Exception:
+            pass
+
     conn.commit()
