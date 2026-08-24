@@ -158,6 +158,20 @@ tags_metadata = [
 APP_START_TIME = time.time()
 
 # ============================================================
+# SENTRY INTEGRATION (optional — only if SENTRY_DSN is configured)
+# ============================================================
+
+if settings.SENTRY_DSN:
+    try:
+        import sentry_sdk
+        sentry_sdk.init(dsn=settings.SENTRY_DSN, traces_sample_rate=0.1)
+        log.info("Sentry initialized successfully")
+    except ImportError:
+        log.warning("SENTRY_DSN configured but sentry-sdk not installed. Skipping Sentry.")
+    except Exception as e:
+        log.warning(f"Failed to initialize Sentry: {e}")
+
+# ============================================================
 # RATE LIMITING MIDDLEWARE (SQLite-based — multi-worker safe)
 # ============================================================
 

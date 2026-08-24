@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends
 from database import get_db_session
 from deps import get_user_id
 from logger import log
-from models import NotaCreate, OkResponse
+from schemas import NotaCreate, OkResponse
 
 router = APIRouter(prefix="", tags=["Notas"])
 

@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from database import get_db_session
 from deps import get_user_id
 from logger import log
-from models import DesafioCreate
+from schemas import DesafioCreate
 from utils import today_str, update_streak
 
 router = APIRouter(prefix="", tags=["Desafios"])

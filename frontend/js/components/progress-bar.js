@@ -39,10 +39,16 @@ class ProgressBar extends HTMLElement {
   }
 
   connectedCallback() {
+    this._destroyed = false;
     this.render();
   }
 
+  disconnectedCallback() {
+    this._destroyed = true;
+  }
+
   attributeChangedCallback() {
+    if (this._destroyed) return;
     this.render();
   }
 

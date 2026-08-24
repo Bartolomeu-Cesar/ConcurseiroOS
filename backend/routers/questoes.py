@@ -11,7 +11,7 @@ from constants import DEFAULT_EXAM_DURATION_MIN, DEFAULT_EXAM_QUESTIONS, DEFAULT
 from database import get_db_session
 from deps import get_user_id
 from logger import log
-from models import QuestaoCreate, QuestaoResponse, QuestaoResposta, QuestaoRespostaResponse
+from schemas import QuestaoCreate, QuestaoResponse, QuestaoResposta, QuestaoRespostaResponse
 from sanitize import sanitize_input
 from schemas import QuestionLinkBatch, QuestionUpdate, RevisarErroRequest
 from utils import paginate, sql_paginate, today_str, update_streak

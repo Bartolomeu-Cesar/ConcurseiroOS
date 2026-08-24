@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from database import get_db_session
 from deps import get_user_id
 from logger import log
-from models import CicloCreate, CicloHoras, CicloUpdate
+from schemas import CicloCreate, CicloHoras, CicloUpdate
 from utils import today_str
 
 router = APIRouter(prefix="", tags=["Ciclo de Estudos"])

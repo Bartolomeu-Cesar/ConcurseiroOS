@@ -15,7 +15,7 @@ from constants import (
 )
 from database import get_db_session
 from deps import get_user_id
-from models import DesafioCreate, MetasUpdate, StreakResponse
+from schemas import DesafioCreate, MetasUpdate, StreakResponse
 from services import get_horas_estudadas
 from utils import calculate_streak, today_str
 

@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 
 from database import get_db_session
 from deps import get_user_id
-from models import ProgressUpdate
+from schemas import ProgressUpdate
 from utils import build_tree, get_pdf_pages
 
 router = APIRouter(prefix="", tags=["PDFs"])

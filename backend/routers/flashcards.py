@@ -6,7 +6,7 @@ from constants import SM2_FIRST_INTERVAL, SM2_INITIAL_EF, SM2_MIN_EF, SM2_SECOND
 from database import get_db_session
 from deps import get_user_id
 from logger import log
-from models import (
+from schemas import (
     FlashcardCreate,
     FlashcardReview,
     FlashcardReviewResponse,

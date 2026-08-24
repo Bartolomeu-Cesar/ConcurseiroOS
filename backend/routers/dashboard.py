@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends
 
 from database import get_db_session
 from deps import get_user_id
-from models import DashboardResponse
+from schemas import DashboardResponse
 from utils import today_str
 
 router = APIRouter(prefix="", tags=["Dashboard"])

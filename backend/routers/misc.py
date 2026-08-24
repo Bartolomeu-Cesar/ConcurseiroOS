@@ -1,4 +1,5 @@
 """Router de utilidades gerais (health, backup, busca, notificações, etc.)."""
+import os
 import random
 import time
 from datetime import date, datetime, timedelta
@@ -10,7 +11,7 @@ from backup import create_backup, delete_backup, list_backups, restore_from_back
 from database import get_db_session, rebuild_search_index
 from deps import get_user_id, get_authenticated_user_id
 from logger import log
-from models import HealthResponse, OkResponse
+from schemas import HealthResponse, OkResponse
 from settings import settings
 from utils import today_str
 
@@ -28,16 +29,15 @@ DB_PATH = "./progress.db"
 @router.get("/api/health", response_model=HealthResponse, summary="Health Check")
 def health_check(conn=Depends(get_db_session)):
     """Retorna status do sistema, uptime, estado do banco de dados e métricas."""
-    db_status = "connected"
-    tables_count = 0
-    edital_count = 0
+    db_status = "ok"
+    db_size_mb = 0.0
 
     try:
         conn.execute("SELECT 1")
-        tables_count = conn.execute(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type='table'"
-        ).fetchone()[0]
-        edital_count = conn.execute("SELECT COUNT(*) FROM edital").fetchone()[0]
+        # Get DB file size
+        db_path = settings.DB_PATH
+        if os.path.exists(db_path):
+            db_size_mb = round(os.path.getsize(db_path) / (1024 * 1024), 2)
     except Exception as e:
         db_status = "error"
         log.error(f"Health check DB error: {e}")
@@ -45,13 +45,56 @@ def health_check(conn=Depends(get_db_session)):
     uptime = time.time() - APP_START_TIME if APP_START_TIME else 0
 
     return {
-        "status": "ok",
-        "uptime_seconds": round(uptime, 1),
-        "database": db_status,
+        "status": "healthy",
         "version": settings.APP_VERSION,
-        "tables_count": tables_count,
-        "edital_count": edital_count,
-        "timestamp": datetime.now().isoformat()
+        "uptime_seconds": round(uptime, 1),
+        "db": {"status": db_status, "size_mb": db_size_mb},
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
+
+
+# ============================================================
+# METRICS (for Prometheus/Grafana integration)
+# ============================================================
+
+@router.get("/api/metrics", summary="Métricas do sistema", tags=["Sistema"])
+def system_metrics(conn=Depends(get_db_session)):
+    """Métricas simples para integração futura com Prometheus/Grafana."""
+    total_users = 0
+    total_questoes = 0
+    total_sessions_today = 0
+    db_size_mb = 0.0
+
+    try:
+        total_users = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    except Exception:
+        pass
+
+    try:
+        total_questoes = conn.execute("SELECT COUNT(*) FROM questoes").fetchone()[0]
+    except Exception:
+        pass
+
+    try:
+        total_sessions_today = conn.execute(
+            "SELECT COUNT(*) FROM sessoes_estudo WHERE data = ?", (today_str(),)
+        ).fetchone()[0]
+    except Exception:
+        pass
+
+    try:
+        db_path = settings.DB_PATH
+        if os.path.exists(db_path):
+            db_size_mb = round(os.path.getsize(db_path) / (1024 * 1024), 2)
+    except Exception:
+        pass
+
+    return {
+        "total_users": total_users,
+        "total_questoes": total_questoes,
+        "total_sessions_today": total_sessions_today,
+        "db_size_mb": db_size_mb,
+        "timestamp": datetime.utcnow().isoformat() + "Z"
     }
 
 

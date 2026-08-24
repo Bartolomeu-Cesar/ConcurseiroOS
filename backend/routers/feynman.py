@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends
 from database import get_db_session
 from deps import get_user_id
 from logger import log
-from models import FeynmanCreate
+from schemas import FeynmanCreate
 
 router = APIRouter(prefix="", tags=["Feynman"])
 

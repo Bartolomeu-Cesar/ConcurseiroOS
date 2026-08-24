@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from database import get_db_session
 from deps import get_user_id
 from logger import log
-from models import CadernoAddItem, CadernoCreate
+from schemas import CadernoAddItem, CadernoCreate
 
 router = APIRouter(prefix="", tags=["Cadernos"])
 

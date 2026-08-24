@@ -8,7 +8,7 @@ from fastapi import APIRouter, Body, Depends, Query
 from database import get_db_session
 from deps import get_user_id
 from logger import log
-from models import CalendarioItem
+from schemas import CalendarioItem
 from sanitize import sanitize_input
 from schemas import (
     AtividadeConcluidaRequest,

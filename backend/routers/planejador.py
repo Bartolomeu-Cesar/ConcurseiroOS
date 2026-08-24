@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from database import get_db_session
 from deps import get_user_id
 from logger import log
-from models import OkResponse, PlanejadorItem
+from schemas import OkResponse, PlanejadorItem
 
 router = APIRouter(prefix="", tags=["Planejador"])
 

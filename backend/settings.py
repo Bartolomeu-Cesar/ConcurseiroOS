@@ -110,6 +110,14 @@ class Settings:
     RATE_LIMIT_AUTH: int = int(os.environ.get("RATE_LIMIT_AUTH", "10"))
     RATE_LIMIT_AI: int = int(os.environ.get("RATE_LIMIT_AI", "20"))
 
+    # Monitoring — Sentry (optional)
+    SENTRY_DSN: str = os.environ.get("SENTRY_DSN", "")
+
+    # Backup offsite — S3-compatible storage (optional)
+    S3_BUCKET: str = os.environ.get("S3_BUCKET", "")
+    S3_REGION: str = os.environ.get("S3_REGION", "us-east-1")
+    S3_PREFIX: str = os.environ.get("S3_PREFIX", "backups")
+
     # Push Notifications (VAPID)
     VAPID_PRIVATE_KEY: str = os.environ.get("VAPID_PRIVATE_KEY", "")
     VAPID_PUBLIC_KEY: str = os.environ.get("VAPID_PUBLIC_KEY", "")

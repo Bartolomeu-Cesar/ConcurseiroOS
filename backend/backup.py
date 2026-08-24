@@ -6,6 +6,7 @@ Features:
 - schedule_daily_backup() — agenda backup diário via threading.Timer
 - restore_from_backup(filename) — restaura um backup específico
 - list_backups() — lista backups disponíveis com tamanho e data
+- upload_to_s3(backup_path) — upload offsite para S3-compatible storage (opcional)
 """
 import os
 import sqlite3
@@ -26,6 +27,47 @@ _backup_timer: threading.Timer | None = None
 def ensure_backup_dir():
     """Garante que o diretório de backup existe."""
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def upload_to_s3(backup_path: str) -> bool:
+    """Upload backup para S3-compatible storage (opcional).
+
+    Requer:
+    - settings.S3_BUCKET configurado
+    - AWS_ACCESS_KEY_ID e AWS_SECRET_ACCESS_KEY como env vars (ou IAM role)
+    - boto3 instalado
+
+    Args:
+        backup_path: Caminho completo do arquivo de backup local.
+
+    Returns:
+        True se upload OK, False se não configurado ou falhou.
+    """
+    from logger import log
+
+    if not settings.S3_BUCKET:
+        return False
+
+    try:
+        import boto3
+    except ImportError:
+        log.warning("S3_BUCKET configured but boto3 not installed. Skipping S3 upload.")
+        return False
+
+    try:
+        filename = Path(backup_path).name
+        s3_key = f"{settings.S3_PREFIX}/{filename}"
+
+        s3_client = boto3.client(
+            "s3",
+            region_name=settings.S3_REGION,
+        )
+        s3_client.upload_file(backup_path, settings.S3_BUCKET, s3_key)
+        log.info(f"Backup uploaded to s3://{settings.S3_BUCKET}/{s3_key}")
+        return True
+    except Exception as e:
+        log.error(f"S3 upload failed: {e}")
+        return False
 
 
 def create_backup(db_path: str | None = None) -> str:
@@ -51,6 +93,10 @@ def create_backup(db_path: str | None = None) -> str:
     dest.close()
     source.close()
     rotate_backups()
+
+    # Upload to S3 if configured (non-blocking — failure doesn't break local backup)
+    upload_to_s3(str(backup_path))
+
     return str(backup_path)
 
 
