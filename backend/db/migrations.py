@@ -247,6 +247,61 @@ def _m41_session_metrics(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_session_metrics_user_session ON session_metrics(user_id, session_id)")
 
 
+def _m42_generation_responses(conn):
+    """Migration 42: Create generation_responses table for Generation Mode (C2)."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS generation_responses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL DEFAULT 1,
+            questao_id INTEGER NOT NULL,
+            resposta_digitada TEXT NOT NULL,
+            resposta_correta TEXT NOT NULL,
+            match_score REAL DEFAULT 0.0,
+            acertou INTEGER NOT NULL DEFAULT 0,
+            tempo_ms INTEGER DEFAULT 0,
+            modo TEXT DEFAULT 'geracao',
+            created_at TEXT NOT NULL
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_generation_responses_user ON generation_responses(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_generation_responses_questao ON generation_responses(questao_id)")
+
+
+def _m43_sessao_adaptativa(conn):
+    """Migration 43: Create sessao_adaptativa and sessao_adaptativa_respostas tables for CAT (C1)."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS sessao_adaptativa (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL DEFAULT 1,
+            session_id TEXT NOT NULL UNIQUE,
+            materia TEXT DEFAULT '',
+            theta REAL DEFAULT 0.0,
+            questoes_respondidas INTEGER DEFAULT 0,
+            acertos INTEGER DEFAULT 0,
+            dificuldade_atual TEXT DEFAULT 'Médio',
+            status TEXT DEFAULT 'ativa',
+            started_at TEXT NOT NULL,
+            finished_at TEXT DEFAULT NULL
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_sessao_adaptativa_user ON sessao_adaptativa(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_sessao_adaptativa_session ON sessao_adaptativa(session_id)")
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS sessao_adaptativa_respostas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT NOT NULL,
+            questao_id INTEGER NOT NULL,
+            acertou INTEGER NOT NULL DEFAULT 0,
+            tempo_ms INTEGER DEFAULT 0,
+            dificuldade_questao TEXT DEFAULT 'Médio',
+            theta_pos REAL DEFAULT 0.0,
+            created_at TEXT NOT NULL
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_sessao_adapt_resp_session ON sessao_adaptativa_respostas(session_id)")
+
+
 # Lista ordenada de todas as migrations
 MIGRATIONS = [
     (1, _m01_edital_nome),
@@ -290,6 +345,8 @@ MIGRATIONS = [
     (39, _m39_elaboration_log),
     (40, _m40_erros_revisao_fsrs),
     (41, _m41_session_metrics),
+    (42, _m42_generation_responses),
+    (43, _m43_sessao_adaptativa),
 ]
 
 

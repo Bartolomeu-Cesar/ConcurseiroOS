@@ -811,3 +811,30 @@ class StartSessionRequest(BaseModel):
     """POST /api/sessao/iniciar body."""
     materia: Optional[str] = None
     tipo: str = "questoes"
+
+
+# ============================================================
+# Generation Mode — Requests/Responses (C2)
+# ============================================================
+
+class ResponderGeracaoRequest(BaseModel):
+    """POST /api/questoes/{id}/responder-geracao body."""
+    resposta_digitada: str
+    tempo_ms: int = 0
+
+
+# ============================================================
+# Sessão Adaptativa / CAT — Requests (C1)
+# ============================================================
+
+class IniciarAdaptativaRequest(BaseModel):
+    """POST /api/sessao-adaptativa/iniciar body."""
+    materia: Optional[str] = None
+    total_questoes: int = 20
+
+
+class ResponderAdaptativaRequest(BaseModel):
+    """POST /api/sessao-adaptativa/{session_id}/responder body."""
+    questao_id: int
+    resposta: str
+    tempo_ms: int = 0

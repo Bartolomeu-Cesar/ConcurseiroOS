@@ -531,6 +531,57 @@ def _create_tables(conn):
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_session_metrics_user_session ON session_metrics(user_id, session_id)")
 
+    # Generation Mode (Active Recall sem alternativas)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS generation_responses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL DEFAULT 1,
+            questao_id INTEGER NOT NULL,
+            resposta_digitada TEXT NOT NULL,
+            resposta_correta TEXT NOT NULL,
+            match_score REAL DEFAULT 0.0,
+            acertou INTEGER NOT NULL DEFAULT 0,
+            tempo_ms INTEGER DEFAULT 0,
+            modo TEXT DEFAULT 'geracao',
+            created_at TEXT NOT NULL
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_generation_responses_user ON generation_responses(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_generation_responses_questao ON generation_responses(questao_id)")
+
+    # ========== SESSÃO ADAPTATIVA / CAT (C1) ==========
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS sessao_adaptativa (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL DEFAULT 1,
+            session_id TEXT NOT NULL UNIQUE,
+            materia TEXT DEFAULT '',
+            theta REAL DEFAULT 0.0,
+            questoes_respondidas INTEGER DEFAULT 0,
+            acertos INTEGER DEFAULT 0,
+            dificuldade_atual TEXT DEFAULT 'Médio',
+            status TEXT DEFAULT 'ativa',
+            started_at TEXT NOT NULL,
+            finished_at TEXT DEFAULT NULL
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_sessao_adaptativa_user ON sessao_adaptativa(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_sessao_adaptativa_session ON sessao_adaptativa(session_id)")
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS sessao_adaptativa_respostas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT NOT NULL,
+            questao_id INTEGER NOT NULL,
+            acertou INTEGER NOT NULL DEFAULT 0,
+            tempo_ms INTEGER DEFAULT 0,
+            dificuldade_questao TEXT DEFAULT 'Médio',
+            theta_pos REAL DEFAULT 0.0,
+            created_at TEXT NOT NULL
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_sessao_adapt_resp_session ON sessao_adaptativa_respostas(session_id)")
+
     # ========== SCHEMA VERSION (versionamento de migrations) ==========
     conn.execute("""
         CREATE TABLE IF NOT EXISTS schema_version (
