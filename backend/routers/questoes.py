@@ -1472,28 +1472,54 @@ def _parse_questoes_texto(texto: str, materia: str = "", banca: str = "") -> lis
              description="Extrai questões de um PDF (com texto ou escaneado via OCR) e cadastra no banco")
 async def importar_questoes_pdf(
     file: UploadFile = File(...),
+    gabarito_file: UploadFile = File(None),
     materia: str = "",
     banca: str = "",
     conn=Depends(get_db_session),
     user_id: int = Depends(get_user_id),
 ):
     """
-    Aceita PDF com questões de múltipla escolha e gabarito.
+    Aceita PDF com questões + opcionalmente PDF de gabarito separado.
     - Extrai texto via pypdf (PDF digital) ou pytesseract (PDF escaneado/OCR)
-    - Identifica questões numeradas com alternativas A-E
-    - Busca gabarito no mesmo PDF (seção 'GABARITO' ou padrão '1-A, 2-B...')
+    - Identifica questões numeradas com alternativas A-E ou itens C/E (CESPE)
+    - Busca gabarito no mesmo PDF ou no PDF de gabarito enviado separadamente
     """
     if not file.filename.endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Apenas arquivos PDF são aceitos.")
 
-    # Salvar arquivo temporário
+    # Salvar arquivo temporário da prova
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
         content = await file.read()
         tmp.write(content)
         tmp_path = tmp.name
 
+    # Se enviou gabarito separado, extrair respostas dele
+    gabarito_externo = {}
+    if gabarito_file and gabarito_file.filename:
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp_gab:
+            gab_content = await gabarito_file.read()
+            tmp_gab.write(gab_content)
+            tmp_gab_path = tmp_gab.name
+        try:
+            gab_texto = _extrair_texto_pdf(tmp_gab_path)
+            gabarito_externo = _parse_gabarito(gab_texto)
+            if not gabarito_externo:
+                # Tentar padrão CESPE: grid de números e letras C/E
+                import re
+                matches = re.findall(r'(\d{1,3})\s*[.\-–):]?\s*([A-Ea-eCcEeXx])', gab_texto)
+                for num, resp in matches:
+                    r = resp.upper()
+                    if r == 'X':
+                        continue  # anulada
+                    gabarito_externo[int(num)] = r
+        except Exception:
+            pass
+        finally:
+            import os
+            os.unlink(tmp_gab_path)
+
     try:
-        # Extrair texto
+        # Extrair texto da prova
         texto = _extrair_texto_pdf(tmp_path)
 
         if len(texto.strip()) < 50:
@@ -1501,6 +1527,17 @@ async def importar_questoes_pdf(
 
         # Parsear questões
         questoes = _parse_questoes_texto(texto, materia=materia, banca=banca)
+
+        # Aplicar gabarito externo se fornecido
+        if gabarito_externo and questoes:
+            for q in questoes:
+                num = q.get("numero", 0)
+                if num in gabarito_externo and not q.get("resposta_correta"):
+                    gab = gabarito_externo[num]
+                    if gab in ('C', 'E') and q.get("tipo") == "certo_errado":
+                        q["resposta_correta"] = "A" if gab == "C" else "B"
+                    elif gab in ('A', 'B', 'C', 'D', 'E'):
+                        q["resposta_correta"] = gab
 
         if not questoes:
             # Retornar o texto extraído para debug

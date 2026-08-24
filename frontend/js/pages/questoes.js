@@ -483,6 +483,12 @@ async function importarQuestoesPDF(input) {
   const formData = new FormData();
   formData.append('file', file);
 
+  // Adicionar gabarito separado se fornecido
+  const gabInput = document.getElementById('pdf-import-gabarito');
+  if (gabInput && gabInput.files[0]) {
+    formData.append('gabarito_file', gabInput.files[0]);
+  }
+
   let url = '/api/questoes/importar-pdf';
   const params = [];
   if (materia) params.push(`materia=${encodeURIComponent(materia)}`);

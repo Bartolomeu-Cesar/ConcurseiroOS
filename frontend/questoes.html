@@ -297,11 +297,23 @@
       </div>
       <div style="margin:12px 0;">
         <label for="pdf-import-file" class="btn btn-primary" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
-          📎 Selecionar PDF
+          📎 Selecionar PDF da Prova
         </label>
         <input id="pdf-import-file" type="file" accept=".pdf" style="display:none" onchange="importarQuestoesPDF(this)">
         <span id="pdf-import-filename" style="font-size:0.8rem;color:var(--text-sub);margin-left:8px;"></span>
       </div>
+      <div style="margin:8px 0;">
+        <label for="pdf-import-gabarito" class="btn" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;background:var(--bg-elevated);border:1px dashed var(--border);font-size:0.82rem;">
+          📋 Gabarito (opcional, PDF separado)
+        </label>
+        <input id="pdf-import-gabarito" type="file" accept=".pdf" style="display:none">
+        <span id="pdf-import-gab-filename" style="font-size:0.8rem;color:var(--text-sub);margin-left:8px;"></span>
+      </div>
+      <script>
+        document.getElementById('pdf-import-gabarito').addEventListener('change', function() {
+          document.getElementById('pdf-import-gab-filename').textContent = this.files[0]?.name || '';
+        });
+      </script>
       <div id="pdf-import-status" style="display:none;margin-top:10px;padding:12px;border-radius:8px;font-size:0.85rem;"></div>
       <details style="margin-top:12px;">
         <summary style="font-size:0.8rem;color:var(--blue);cursor:pointer;">ℹ️ Formato esperado do PDF</summary>
