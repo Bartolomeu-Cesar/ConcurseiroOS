@@ -153,9 +153,9 @@ function showQuestao(q) {
       ];
 
   const altsHtml = isCertoErrado
-    ? `<div style="display:flex;gap:16px;justify-content:center;">
-        <div class="alternativa ce-btn" data-letter="A" onclick="selecionarAlternativa(this, 'A')" style="flex:1;text-align:center;padding:14px;border:2px solid #a6e3a1;border-radius:10px;cursor:pointer;font-weight:700;color:#a6e3a1;">✓ CERTO</div>
-        <div class="alternativa ce-btn" data-letter="B" onclick="selecionarAlternativa(this, 'B')" style="flex:1;text-align:center;padding:14px;border:2px solid #f38ba8;border-radius:10px;cursor:pointer;font-weight:700;color:#f38ba8;">✗ ERRADO</div>
+    ? `<div style="display:flex;gap:16px;justify-content:center;max-width:280px;margin:0 auto;">
+        <div class="alternativa ce-btn ${selected === 'A' ? 'selected' : ''}" data-letter="A" onclick="selecionarAlternativa(this, 'A')" style="flex:1;text-align:center;padding:10px 16px;border:2px solid #a6e3a1;border-radius:8px;cursor:pointer;font-weight:700;font-size:0.85rem;color:#a6e3a1;">✓ CERTO</div>
+        <div class="alternativa ce-btn ${selected === 'B' ? 'selected' : ''}" data-letter="B" onclick="selecionarAlternativa(this, 'B')" style="flex:1;text-align:center;padding:10px 16px;border:2px solid #f38ba8;border-radius:8px;cursor:pointer;font-weight:700;font-size:0.85rem;color:#f38ba8;">✗ ERRADO</div>
       </div>`
     : alternativas.map(a => `
         <div class="alternativa" data-letter="${a.letter}" onclick="selecionarAlternativa(this, '${a.letter}')">
@@ -324,9 +324,9 @@ function showSimQuestao() {
 
   const selected = q.resposta_usuario || '';
   const altsHtml = isCertoErrado
-    ? `<div style="display:flex;gap:16px;justify-content:center;">
-        <div class="alternativa ce-btn ${selected === 'A' ? 'selected' : ''}" data-letter="A" onclick="simSelectAlt(this, 'A')" style="flex:1;text-align:center;padding:14px;border:2px solid #a6e3a1;border-radius:10px;cursor:pointer;font-weight:700;color:#a6e3a1;">✓ CERTO</div>
-        <div class="alternativa ce-btn ${selected === 'B' ? 'selected' : ''}" data-letter="B" onclick="simSelectAlt(this, 'B')" style="flex:1;text-align:center;padding:14px;border:2px solid #f38ba8;border-radius:10px;cursor:pointer;font-weight:700;color:#f38ba8;">✗ ERRADO</div>
+    ? `<div style="display:flex;gap:16px;justify-content:center;max-width:280px;margin:0 auto;">
+        <div class="alternativa ce-btn ${selected === 'A' ? 'selected' : ''}" data-letter="A" onclick="simSelectAlt(this, 'A')" style="flex:1;text-align:center;padding:10px 16px;border:2px solid #a6e3a1;border-radius:8px;cursor:pointer;font-weight:700;font-size:0.85rem;color:#a6e3a1;">✓ CERTO</div>
+        <div class="alternativa ce-btn ${selected === 'B' ? 'selected' : ''}" data-letter="B" onclick="simSelectAlt(this, 'B')" style="flex:1;text-align:center;padding:10px 16px;border:2px solid #f38ba8;border-radius:8px;cursor:pointer;font-weight:700;font-size:0.85rem;color:#f38ba8;">✗ ERRADO</div>
       </div>`
     : alternativas.map(a => `
         <div class="alternativa ${selected === a.letter ? 'selected' : ''}" data-letter="${a.letter}" onclick="simSelectAlt(this, '${a.letter}')">
