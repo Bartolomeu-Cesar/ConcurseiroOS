@@ -466,11 +466,14 @@ async function loadErros() {
 }
 
 // ==================== IMPORTAR PDF/OCR ====================
-async function importarQuestoesPDF(input) {
-  const file = input.files[0];
-  if (!file) return;
+async function importarQuestoesPDF() {
+  const fileInput = document.getElementById('pdf-import-file');
+  const file = fileInput.files[0];
+  if (!file) {
+    toast('Selecione o PDF da prova primeiro.', 'error');
+    return;
+  }
 
-  document.getElementById('pdf-import-filename').textContent = file.name;
   const statusEl = document.getElementById('pdf-import-status');
   statusEl.style.display = 'block';
   statusEl.style.background = '#45475a';

@@ -295,21 +295,27 @@
           <input type="text" id="pdf-import-banca" placeholder="Ex: CEBRASPE">
         </div>
       </div>
-      <div style="margin:12px 0;">
+      <div style="margin:12px 0;display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
         <label for="pdf-import-file" class="btn btn-primary" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
-          📎 Selecionar PDF da Prova
+          📎 PDF da Prova
         </label>
-        <input id="pdf-import-file" type="file" accept=".pdf" style="display:none" onchange="importarQuestoesPDF(this)">
-        <span id="pdf-import-filename" style="font-size:0.8rem;color:var(--text-sub);margin-left:8px;"></span>
+        <input id="pdf-import-file" type="file" accept=".pdf" style="display:none">
+        <span id="pdf-import-filename" style="font-size:0.8rem;color:var(--text-sub);"></span>
       </div>
-      <div style="margin:8px 0;">
+      <div style="margin:8px 0;display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
         <label for="pdf-import-gabarito" class="btn" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;background:var(--bg-elevated);border:1px dashed var(--border);font-size:0.82rem;">
-          📋 Gabarito (opcional, PDF separado)
+          📋 PDF do Gabarito (opcional)
         </label>
         <input id="pdf-import-gabarito" type="file" accept=".pdf" style="display:none">
-        <span id="pdf-import-gab-filename" style="font-size:0.8rem;color:var(--text-sub);margin-left:8px;"></span>
+        <span id="pdf-import-gab-filename" style="font-size:0.8rem;color:var(--text-sub);"></span>
+      </div>
+      <div style="margin:12px 0;">
+        <button class="btn btn-success" onclick="importarQuestoesPDF()" style="padding:10px 20px;font-size:0.9rem;">🚀 Importar Questões</button>
       </div>
       <script>
+        document.getElementById('pdf-import-file').addEventListener('change', function() {
+          document.getElementById('pdf-import-filename').textContent = this.files[0]?.name || '';
+        });
         document.getElementById('pdf-import-gabarito').addEventListener('change', function() {
           document.getElementById('pdf-import-gab-filename').textContent = this.files[0]?.name || '';
         });
