@@ -836,20 +836,22 @@ async function loadBanco() {
 
   for (const mat of materias) {
     const items = grouped[mat];
+    const openClass = semGabarito ? ' open' : '';
     html += `<div class="acc-group">
-      <div class="acc-header" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
+      <div class="acc-header${openClass}" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
         <span class="acc-chevron">▶</span>
         <span class="acc-name">${mat}</span>
         <span class="acc-count">${items.length} questão(ões)</span>
       </div>
-      <div class="acc-body">`;
+      <div class="acc-body${openClass}">`;
     items.forEach(q => {
       const gabBadge = (!q.resposta_correta)
         ? '<span style="font-size:0.7rem;color:#f38ba8;margin-left:4px;">⚠️ sem gab</span>'
         : '';
+      const provaInfo = q.prova_origem ? `<span style="font-size:0.68rem;color:#89b4fa;margin-left:4px;">[${q.prova_origem}]</span>` : '';
       html += `<div class="q-list-item">
         <span class="q-list-text">${q.enunciado.substring(0, 100)}${q.enunciado.length > 100 ? '...' : ''}</span>
-        <span class="q-list-meta" style="font-size:0.7rem;color:#9399b2;margin-left:4px;">${q.banca || ''} · ${q.dificuldade || ''}${gabBadge}</span>
+        <span class="q-list-meta" style="font-size:0.7rem;color:#9399b2;margin-left:4px;">${q.banca || ''}${provaInfo}${gabBadge}</span>
         <button class="q-list-edit" onclick="editQuestao(${q.id})" title="Editar gabarito" style="background:none;border:none;color:#89b4fa;cursor:pointer;font-size:1rem;margin-right:4px;">✏️</button>
         <button class="q-list-delete" onclick="deleteQuestao(${q.id})" title="Excluir">🗑</button>
       </div>`;
