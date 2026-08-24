@@ -1186,6 +1186,174 @@ def _parse_qconcursos(texto: str, materia_override: str = "") -> list:
     return questoes
 
 
+def _is_cespe_format(texto: str) -> bool:
+    """Detecta se o PDF é formato CESPE/Cebraspe (itens Certo/Errado)."""
+    indicators = [
+        r'(?i)cebraspe',
+        r'(?i)cespe',
+        r'(?i)julgue\s+o[s]?\s+(?:seguinte|próximo|item|iten)',
+        r'(?i)marque.*?campo.*?(?:C|CERTO).*?(?:E|ERRADO)',
+        r'(?i)item.*?CERTO.*?ERRADO',
+    ]
+    score = sum(1 for p in indicators if re.search(p, texto[:3000]))
+    # Also check: numbered items without A-E alternatives
+    items_numbered = len(re.findall(r'\n\s*\d{1,3}\s+[A-Z]', texto[:5000]))
+    alternatives = len(re.findall(r'\n\s*\(?[A-E]\)', texto[:5000]))
+    # CESPE: many numbered items, few/no A-E alternatives
+    if score >= 2 or (items_numbered > 5 and alternatives < 3):
+        return True
+    return False
+
+
+def _parse_cespe_cebraspe(texto: str, materia: str = "", banca: str = "CESPE") -> list:
+    """
+    Parser para provas CESPE/Cebraspe (formato Certo/Errado).
+    
+    Formato típico:
+    - Texto motivador (pode ser longo)
+    - "Julgue os itens a seguir..." ou "Com base no texto, julgue..."
+    - Itens numerados: "14 O termo 'sábio'..."
+    - Sem alternativas A-E (cada item é C ou E)
+    
+    Também suporta FCC/FGV com alternativas A-E detectadas por bloco.
+    """
+    questoes = []
+    
+    # Detectar matérias/tópicos pelos cabeçalhos do texto
+    # CESPE usa seções: "-- CONHECIMENTOS GERAIS --" e blocos "Julgue os itens... referentes a [MATÉRIA]"
+    section_headers = re.findall(r'--\s*(.+?)\s*--', texto)
+    
+    # Detectar temas por "Julgue/considere... referentes a / sobre / de acordo com"
+    tema_patterns = re.findall(
+        r'(?i)(?:julgue|considere|com\s+base|a\s+respeito|acerca).*?(?:referentes?\s+a[o]?|sobre|relativos?\s+a[o]?|de\s+acordo\s+com\s+o\s+disposto\s+n[ao]?)\s+(.+?)(?:\.|,\s*julgue)',
+        texto
+    )
+    # Also: "Com base nas Resoluções X, julgue..." or "Acerca de [tema], julgue"
+    tema_acerca = re.findall(
+        r'(?i)(?:acerca\s+d[eoa]s?|(?:no|com)\s+(?:que|base).*?(?:refere|concerne).*?a[o]?)\s+(.+?)(?:,\s*julgue|\.\s*\n)',
+        texto
+    )
+    materias_blocos = [(texto.find(t), t.strip()[:80]) for t in tema_patterns + tema_acerca if len(t.strip()) > 5]
+    materias_blocos.sort(key=lambda x: x[0])
+    
+    # Extrair gabarito se existir no PDF (CESPE geralmente tem gabarito separado)
+    gabarito = {}
+    gab_section = ""
+    for marker in ['GABARITO', 'Gabarito Oficial', 'GABARITO OFICIAL']:
+        pos = texto.rfind(marker)
+        if pos > 0:
+            gab_section = texto[pos:]
+            break
+    
+    if gab_section:
+        # Padrão: "1 C 2 E 3 C" ou "1-C 2-E" ou "1. C  2. E"
+        gab_matches = re.findall(r'(\d{1,3})\s*[.\-–):]?\s*([CEce])', gab_section)
+        for num, resp in gab_matches:
+            gabarito[int(num)] = resp.upper()
+    
+    # Encontrar itens numerados (padrão CESPE: número seguido de espaço e texto)
+    # Padrão: "14 O termo 'sábio'..." no início de linha
+    item_pattern = r'(?:^|\n)\s*(\d{1,3})\s+([A-ZÁÀÂÃÉÊÍÓÔÕÚÇ][^\n]{15,})'
+    
+    items = list(re.finditer(item_pattern, texto))
+    
+    if not items:
+        # Tentar padrão alternativo: número com ponto
+        item_pattern = r'(?:^|\n)\s*(\d{1,3})\.\s+([A-ZÁÀÂÃÉÊÍÓÔÕÚÇ][^\n]{15,})'
+        items = list(re.finditer(item_pattern, texto))
+    
+    # Para cada item, extrair o texto completo até o próximo item
+    for i, match in enumerate(items):
+        num = int(match.group(1))
+        
+        # Pegar texto até o próximo item
+        start = match.start() + len(match.group(0).split('\n')[0]) + 1 if '\n' in match.group(0) else match.end()
+        start = match.start()
+        end = items[i + 1].start() if i + 1 < len(items) else len(texto)
+        
+        bloco = texto[match.start():end].strip()
+        
+        # Remover número do início
+        enunciado = re.sub(r'^\d{1,3}\s+', '', bloco).strip()
+        
+        # Limpar quebras de linha internas (manter como texto contínuo)
+        enunciado = re.sub(r'\s*\n\s*', ' ', enunciado).strip()
+        
+        # Verificar se tem alternativas A-E (pode ser FCC misturado no mesmo PDF)
+        alt_match = re.findall(r'\(?([A-E])\)?\s*(.+?)(?=\(?[A-E]\)|$)', enunciado)
+        
+        if len(alt_match) >= 4:
+            # Formato múltipla escolha dentro do item
+            # Separar enunciado das alternativas
+            first_alt = re.search(r'\(?A\)?\s', enunciado)
+            if first_alt:
+                texto_enunciado = enunciado[:first_alt.start()].strip()
+                alts = {'A': '', 'B': '', 'C': '', 'D': '', 'E': ''}
+                for letra, txt in alt_match[:5]:
+                    alts[letra] = txt.strip()
+                
+                resposta = gabarito.get(num, "")
+                questoes.append({
+                    "numero": num,
+                    "enunciado": texto_enunciado,
+                    "alternativa_a": alts['A'],
+                    "alternativa_b": alts['B'],
+                    "alternativa_c": alts['C'],
+                    "alternativa_d": alts['D'],
+                    "alternativa_e": alts['E'],
+                    "resposta": resposta,
+                    "materia": materia,
+                    "banca": banca,
+                    "tipo": "multipla_escolha",
+                })
+        else:
+            # Formato CESPE Certo/Errado (sem alternativas)
+            # Limitar tamanho do enunciado (pode ter capturado texto demais)
+            if len(enunciado) > 800:
+                enunciado = enunciado[:800].strip()
+            
+            # Verificar se é um item válido (não é cabeçalho ou instrução)
+            if len(enunciado) < 30:
+                continue
+            if re.match(r'(?i)^(julgue|considere|com base|acerca|espaço livre|provas objetivas)', enunciado):
+                continue
+            
+            resposta = gabarito.get(num, "")
+            
+            # Tentar detectar matéria pelo contexto (bloco anterior mais próximo)
+            item_materia = materia
+            if not item_materia and materias_blocos:
+                # Usar a matéria do bloco mais recente antes deste item
+                for pos, tema in reversed(materias_blocos):
+                    if pos < match.start():
+                        item_materia = tema
+                        break
+            
+            questoes.append({
+                "numero": num,
+                "enunciado": enunciado,
+                "alternativa_a": "CERTO",
+                "alternativa_b": "ERRADO",
+                "alternativa_c": "",
+                "alternativa_d": "",
+                "alternativa_e": "",
+                "resposta": resposta if resposta in ('C', 'E') else "",
+                "materia": item_materia or "Conhecimentos Gerais",
+                "banca": banca,
+                "tipo": "certo_errado",
+            })
+    
+    # Mapear resposta C/E para A/B (compatibilidade com o banco)
+    for q in questoes:
+        if q["tipo"] == "certo_errado":
+            if q["resposta"] == "C":
+                q["resposta"] = "A"  # A = CERTO
+            elif q["resposta"] == "E":
+                q["resposta"] = "B"  # B = ERRADO
+    
+    return questoes
+
+
 def _parse_questoes_texto(texto: str, materia: str = "", banca: str = "") -> list:
     """Analisa texto extraído e separa em questões individuais."""
     questoes = []
@@ -1193,6 +1361,10 @@ def _parse_questoes_texto(texto: str, materia: str = "", banca: str = "") -> lis
     # Detectar formato QConcursos (Ano: XXXX Banca: XXX Órgão: XXX)
     if re.search(r'Ano:\s*\d{4}\s*Banca:', texto):
         return _parse_qconcursos(texto, materia_override=materia)
+
+    # Detectar formato CESPE/Cebraspe (itens Certo/Errado)
+    if _is_cespe_format(texto):
+        return _parse_cespe_cebraspe(texto, materia=materia, banca=banca or "CESPE")
 
     # Separar seção de questões da seção de gabarito
     # Identificar onde começa o gabarito

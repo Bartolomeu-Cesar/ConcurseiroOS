@@ -88,7 +88,7 @@ def _get_code_from_db(email: str) -> str:
 def _get_admin_token(client) -> str:
     """Obtém token JWT para o usuário admin (id=1).
 
-    O seed cria user id=1 com email 'guest@concurseiroos.local' e role='admin'.
+    O seed cria user id=1 com email 'admin@concurseiroos.app' e role='admin'.
     Como o email seed usa TLD .local (rejeitado pelo Pydantic EmailStr),
     geramos o token JWT diretamente — equivalente ao que verify-code faria.
     """
@@ -143,7 +143,7 @@ class TestListUsers:
         assert data["total"] >= 1
         # O admin (seed user) deve estar na lista
         emails = [u["email"] for u in data["users"]]
-        assert "guest@concurseiroos.local" in emails
+        assert "admin@concurseiroos.app" in emails
 
     def test_list_users_non_admin_403(self, client):
         """GET /api/admin/users — non-admin recebe 403."""
@@ -169,7 +169,7 @@ class TestListUsers:
     def test_list_users_search(self, client):
         """GET /api/admin/users — busca por nome/email."""
         token = _get_admin_token(client)
-        r = client.get("/api/admin/users?search=guest", headers=_auth_header(token))
+        r = client.get("/api/admin/users?search=Bartholomew", headers=_auth_header(token))
         assert r.status_code == 200
         data = r.json()
         assert data["total"] >= 1
