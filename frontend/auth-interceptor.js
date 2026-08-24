@@ -1,5 +1,7 @@
 /**
  * Auth Interceptor — Injeta token JWT em todas as chamadas fetch para /api/
+ * Também verifica se o usuário está autenticado quando AUTH_ENABLED=true.
+ * Intercepta respostas 401 e redireciona para login.
  * Incluir ANTES de qualquer outro script nas páginas.
  */
 (function() {
@@ -13,6 +15,26 @@
         options.headers['Authorization'] = 'Bearer ' + token;
       }
     }
-    return _originalFetch.call(this, url, options);
+    return _originalFetch.call(this, url, options).then(response => {
+      // Se receber 401, token expirou ou é inválido → redirecionar para login
+      if (response.status === 401 && window.location.pathname !== '/login.html') {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('auth_user');
+        window.location.href = '/login.html';
+      }
+      return response;
+    });
   };
+
+  // Auth guard: verificar se precisa estar logado (apenas no carregamento da página)
+  if (window.location.pathname !== '/login.html') {
+    _originalFetch('/api/auth/status')
+      .then(r => r.json())
+      .then(status => {
+        if (status.auth_enabled && !localStorage.getItem('auth_token')) {
+          window.location.href = '/login.html';
+        }
+      })
+      .catch(() => { /* offline — permitir acesso */ });
+  }
 })();
