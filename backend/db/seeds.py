@@ -14,7 +14,7 @@ def _seed_defaults(conn):
     if not user_exists:
         conn.execute("""
             INSERT OR IGNORE INTO users (id, email, nome, username, plano, created_at)
-            VALUES (1, 'guest@concurseiroos.local', 'Bartholomew Caesar', 'Bartholomew', 'ilimitado', datetime('now'))
+            VALUES (1, 'admin@concurseiroos.app', 'Bartholomew Caesar', 'Bartholomew', 'ilimitado', datetime('now'))
         """)
         log.info("Seed: created default user (id=1, Bartholomew Caesar)")
     # Seed metadados dos editais (se tabela vazia)
