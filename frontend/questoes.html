@@ -429,10 +429,13 @@
 
     <div class="panel">
       <h2>📦 Todas as Questões</h2>
-      <div class="filter-bar">
+      <div class="filter-bar" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
         <select id="banco-filtro-materia" onchange="loadBanco()">
           <option value="">Todas</option>
         </select>
+        <label style="font-size:0.82rem;color:var(--text-sub);display:flex;align-items:center;gap:4px;cursor:pointer;">
+          <input type="checkbox" id="banco-filtro-sem-gabarito" onchange="loadBanco()"> Sem gabarito
+        </label>
         <span style="font-size:0.85rem;color:var(--text-sub);" id="banco-count"></span>
       </div>
       <div id="banco-list"></div>

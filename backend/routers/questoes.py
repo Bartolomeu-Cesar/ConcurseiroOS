@@ -27,6 +27,7 @@ def list_questoes(
     banca: str = "",
     acertou: int | None = Query(None),
     respondidas: int | None = Query(None),
+    sem_gabarito: int | None = Query(None),
     data_inicio: str = "",
     data_fim: str = "",
     page: int | None = Query(None),
@@ -56,6 +57,8 @@ def list_questoes(
         if banca:
             query += " AND q.banca = ?"
             params.append(banca)
+        if sem_gabarito:
+            query += " AND (q.resposta_correta = '' OR q.resposta_correta IS NULL)"
     elif needs_join or respondidas == 1:
         # Questões com filtro por respostas (acertou/errou, datas)
         query = "SELECT DISTINCT q.* FROM questoes q JOIN questoes_respostas qr ON qr.questao_id = q.id WHERE q.user_id = ? AND qr.user_id = ?"
@@ -81,6 +84,8 @@ def list_questoes(
         if data_fim:
             query += " AND qr.data <= ?"
             params.append(data_fim)
+        if sem_gabarito:
+            query += " AND (q.resposta_correta = '' OR q.resposta_correta IS NULL)"
     else:
         # Query simples sem filtros de resposta
         query = "SELECT * FROM questoes WHERE user_id = ?"
@@ -97,6 +102,8 @@ def list_questoes(
         if banca:
             query += " AND banca = ?"
             params.append(banca)
+        if sem_gabarito:
+            query += " AND (resposta_correta = '' OR resposta_correta IS NULL)"
 
     query += " ORDER BY q.id DESC" if (needs_join or needs_not_in or respondidas == 1) else " ORDER BY id DESC"
 

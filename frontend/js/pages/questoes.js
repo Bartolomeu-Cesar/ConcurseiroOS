@@ -723,26 +723,43 @@ window.deleteProva = deleteProva;
 // ==================== BANCO COMPLETO ====================
 async function loadBanco() {
   const materia = document.getElementById('banco-filtro-materia').value;
-  const url = materia ? `/api/questoes?materia=${encodeURIComponent(materia)}` : '/api/questoes';
+  const semGabarito = document.getElementById('banco-filtro-sem-gabarito')?.checked;
+
+  let url = '/api/questoes?limit=500';
+  if (materia) url += `&materia=${encodeURIComponent(materia)}`;
+  if (semGabarito) url += '&sem_gabarito=1';
+
   const questoes = await fetch(url).then(r => r.json());
 
-  document.getElementById('banco-count').textContent = `${questoes.length} questão(ões)`;
+  const label = semGabarito ? 'sem gabarito' : 'questão(ões)';
+  document.getElementById('banco-count').textContent = `${questoes.length} ${label}`;
   const list = document.getElementById('banco-list');
 
   if (questoes.length === 0) {
-    list.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Nenhuma questão cadastrada.</p>';
+    list.innerHTML = semGabarito
+      ? '<p style="color:#a6e3a1;font-size:0.85rem;">✅ Todas as questões possuem gabarito!</p>'
+      : '<p style="color:#9399b2;font-size:0.85rem;">Nenhuma questão cadastrada.</p>';
     return;
   }
 
   // Agrupar por matéria
   const grouped = {};
   questoes.forEach(q => {
-    if (!grouped[q.materia]) grouped[q.materia] = [];
-    grouped[q.materia].push(q);
+    const mat = q.materia || 'Sem matéria';
+    if (!grouped[mat]) grouped[mat] = [];
+    grouped[mat].push(q);
   });
 
   const materias = Object.keys(grouped).sort();
   let html = '';
+
+  // Ação em lote para sem gabarito
+  if (semGabarito && questoes.length > 0) {
+    html += `<div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;">
+      <button onclick="deleteAllSemGabarito()" class="btn" style="background:#f38ba8;color:#1e1e2e;font-size:0.82rem;padding:6px 14px;">🗑️ Excluir todas sem gabarito</button>
+    </div>`;
+  }
+
   for (const mat of materias) {
     const items = grouped[mat];
     html += `<div class="acc-group">
@@ -753,10 +770,13 @@ async function loadBanco() {
       </div>
       <div class="acc-body">`;
     items.forEach(q => {
+      const gabBadge = (!q.resposta_correta)
+        ? '<span style="font-size:0.7rem;color:#f38ba8;margin-left:4px;">⚠️ sem gab</span>'
+        : '';
       html += `<div class="q-list-item">
         <span class="q-list-text">${q.enunciado.substring(0, 100)}${q.enunciado.length > 100 ? '...' : ''}</span>
-        <span class="q-list-meta" style="font-size:0.7rem;color:#9399b2;margin-left:4px;">${q.banca || ''} · ${q.dificuldade || ''}</span>
-        <button class="q-list-edit" onclick="editQuestao(${q.id})" title="Editar" style="background:none;border:none;color:#89b4fa;cursor:pointer;font-size:1rem;margin-right:4px;">✏️</button>
+        <span class="q-list-meta" style="font-size:0.7rem;color:#9399b2;margin-left:4px;">${q.banca || ''} · ${q.dificuldade || ''}${gabBadge}</span>
+        <button class="q-list-edit" onclick="editQuestao(${q.id})" title="Editar gabarito" style="background:none;border:none;color:#89b4fa;cursor:pointer;font-size:1rem;margin-right:4px;">✏️</button>
         <button class="q-list-delete" onclick="deleteQuestao(${q.id})" title="Excluir">🗑</button>
       </div>`;
     });
@@ -773,6 +793,23 @@ async function deleteQuestao(id) {
   loadMaterias();
 }
 window.deleteQuestao = deleteQuestao;
+
+async function deleteAllSemGabarito() {
+  const questoes = await fetch('/api/questoes?sem_gabarito=1&limit=9999').then(r => r.json());
+  if (!questoes.length) { toast('Nenhuma questão sem gabarito.', 'info'); return; }
+  if (!confirm(`Excluir ${questoes.length} questão(ões) sem gabarito? Esta ação não pode ser desfeita.`)) return;
+
+  let deleted = 0;
+  for (const q of questoes) {
+    await fetch(`/api/questoes/${q.id}`, { method: 'DELETE' });
+    deleted++;
+  }
+  toast(`✅ ${deleted} questão(ões) sem gabarito excluída(s).`, 'success');
+  loadBanco();
+  loadProvas();
+  loadMaterias();
+}
+window.deleteAllSemGabarito = deleteAllSemGabarito;
 
 async function editQuestao(id) {
   // Buscar dados da questão
