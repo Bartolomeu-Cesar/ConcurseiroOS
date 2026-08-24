@@ -1301,8 +1301,11 @@ def _parse_cespe_cebraspe(texto: str, materia: str = "", banca: str = "CESPE") -
                     "alternativa_c": alts['C'],
                     "alternativa_d": alts['D'],
                     "alternativa_e": alts['E'],
-                    "resposta": resposta,
+                    "resposta_correta": resposta,
                     "materia": materia,
+                    "topico": "",
+                    "explicacao": "",
+                    "dificuldade": "Médio",
                     "banca": banca,
                     "tipo": "multipla_escolha",
                 })
@@ -1337,8 +1340,11 @@ def _parse_cespe_cebraspe(texto: str, materia: str = "", banca: str = "CESPE") -
                 "alternativa_c": "",
                 "alternativa_d": "",
                 "alternativa_e": "",
-                "resposta": resposta if resposta in ('C', 'E') else "",
+                "resposta_correta": resposta if resposta in ('C', 'E') else "",
                 "materia": item_materia or "Conhecimentos Gerais",
+                "topico": "",
+                "explicacao": "",
+                "dificuldade": "Médio",
                 "banca": banca,
                 "tipo": "certo_errado",
             })
@@ -1346,10 +1352,10 @@ def _parse_cespe_cebraspe(texto: str, materia: str = "", banca: str = "CESPE") -
     # Mapear resposta C/E para A/B (compatibilidade com o banco)
     for q in questoes:
         if q["tipo"] == "certo_errado":
-            if q["resposta"] == "C":
-                q["resposta"] = "A"  # A = CERTO
-            elif q["resposta"] == "E":
-                q["resposta"] = "B"  # B = ERRADO
+            if q["resposta_correta"] == "C":
+                q["resposta_correta"] = "A"  # A = CERTO
+            elif q["resposta_correta"] == "E":
+                q["resposta_correta"] = "B"  # B = ERRADO
     
     return questoes
 
