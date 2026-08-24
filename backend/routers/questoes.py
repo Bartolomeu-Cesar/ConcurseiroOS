@@ -255,76 +255,21 @@ def caderno_erros(conn=Depends(get_db_session), user_id: int = Depends(get_user_
         if item["proxima_revisao"] <= hoje:
             pendentes_hoje.append(item)
 
-    # === Ordenação inteligente (mesmas técnicas de distribuição de disciplinas) ===
-    # 1. ROI: recall baixo + intervalo curto + padrão de erro = prioridade
-    # 2. Reforço: itens nunca revisados ou que falharam vêm primeiro
-    # 3. Desirable Difficulty: intercala 2 difíceis + 1 fácil
-    # 4. Interleaving: round-robin entre matérias
-    # 5. Randomização dentro de cada faixa
-    import random as _rng
-    from collections import defaultdict as _dd
+    # === Ordenação inteligente (6 técnicas de estudo com evidência científica) ===
+    from study_ordering import order_items_intelligently
 
-    faixa_a = []  # Reforço urgente (nunca revisou ou intervalo=1)
-    faixa_b = []  # Difíceis (recall < 0.3 ou revisoes_count baixo)
-    faixa_c = []  # Regulares
-
-    for item in pendentes_hoje:
-        reps = item.get("revisoes_count") or 0
-        intervalo = item.get("intervalo_atual") or 1
-        recall = item.get("recall_estimado", 0.0)
-
-        if reps == 0 or intervalo <= 1:
-            faixa_a.append(item)
-        elif recall < 0.3:
-            faixa_b.append(item)
-        else:
-            faixa_c.append(item)
-
-    _rng.shuffle(faixa_a)
-    _rng.shuffle(faixa_b)
-    _rng.shuffle(faixa_c)
-
-    # Desirable Difficulty: reforço primeiro, depois 2 difíceis + 1 fácil
-    ordered = list(faixa_a)
-    d_idx, f_idx = 0, 0
-    while d_idx < len(faixa_b) or f_idx < len(faixa_c):
-        for _ in range(2):
-            if d_idx < len(faixa_b):
-                ordered.append(faixa_b[d_idx])
-                d_idx += 1
-        if f_idx < len(faixa_c):
-            ordered.append(faixa_c[f_idx])
-            f_idx += 1
-
-    # Interleaving por matéria
-    if len(ordered) > 2:
-        buckets = _dd(list)
-        for item in ordered:
-            key = item.get("materia") or "geral"
-            buckets[key].append(item)
-
-        if len(buckets) > 1:
-            interleaved = []
-            bucket_keys = list(buckets.keys())
-            _rng.shuffle(bucket_keys)
-            key_idx = 0
-            total = len(ordered)
-            while len(interleaved) < total:
-                attempts = 0
-                while attempts < len(bucket_keys):
-                    key = bucket_keys[key_idx % len(bucket_keys)]
-                    key_idx += 1
-                    if buckets[key]:
-                        interleaved.append(buckets[key].pop(0))
-                        break
-                    attempts += 1
-                else:
-                    break
-            pendentes_hoje = interleaved
-        else:
-            pendentes_hoje = ordered
-    else:
-        pendentes_hoje = ordered
+    if pendentes_hoje:
+        pendentes_hoje = order_items_intelligently(
+            pendentes_hoje,
+            materia_key="materia",
+            reps_key="revisoes_count",
+            interval_key="intervalo_atual",
+            ef_key="recall_estimado",  # Usa recall como proxy de dificuldade (menor = mais difícil)
+            stability_key="recall_estimado",
+        )
+        # Limpar campos internos
+        for item in pendentes_hoje:
+            item.pop("_expanding_retrieval", None)
 
     # Padrões com mais de 1 ocorrência, ordenados por frequência
     padroes_erro = sorted(

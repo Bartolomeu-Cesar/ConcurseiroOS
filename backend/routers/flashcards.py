@@ -39,13 +39,12 @@ def list_flashcards_materias(conn=Depends(get_db_session), user_id: int = Depend
 
 @router.get("/api/flashcards/today")
 def get_flashcards_today(materia: str = "", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
-    """Retorna flashcards pendentes com ordenação inteligente:
-    1. ROI/Priorização — score baseado em urgência × gap
-    2. Reforço imediato — cards que errou (reps=0, intervalo≤1) primeiro
-    3. Desirable Difficulty — intercala 2 difíceis + 1 fácil
-    4. Interleaving — round-robin entre matérias
-    5. Randomização — aleatório dentro de cada faixa
+    """Retorna flashcards pendentes com ordenação inteligente baseada em 6 técnicas
+    de estudo com evidência científica (spaced practice, interleaving, desirable difficulty,
+    retrieval practice, successive relearning, pre-testing effect).
     """
+    from study_ordering import order_items_intelligently
+
     if materia:
         rows = conn.execute(
             "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia FROM flashcards WHERE proxima_revisao <= ? AND materia = ? AND user_id = ?",
@@ -61,70 +60,16 @@ def get_flashcards_today(materia: str = "", conn=Depends(get_db_session), user_i
     if not items:
         return []
 
-    # === Classificar em 3 faixas ===
-    import random
-    from collections import defaultdict
+    result = order_items_intelligently(
+        items,
+        materia_key="materia",
+    )
 
-    faixa_a = []  # Reforço urgente (esqueceu/errou)
-    faixa_b = []  # Difíceis (EF baixo)
-    faixa_c = []  # Regulares
+    # Limpar campos internos
+    for card in result:
+        card.pop("_expanding_retrieval", None)
 
-    for card in items:
-        reps = card.get("repetitions") or 0
-        intervalo = card.get("intervalo_dias") or 1
-        ef = card.get("easiness_factor") or 2.5
-
-        if reps == 0 or intervalo <= 1:
-            faixa_a.append(card)
-        elif ef < 2.1:
-            faixa_b.append(card)
-        else:
-            faixa_c.append(card)
-
-    # Randomizar dentro de cada faixa
-    random.shuffle(faixa_a)
-    random.shuffle(faixa_b)
-    random.shuffle(faixa_c)
-
-    # === Desirable Difficulty: 2 difíceis + 1 fácil ===
-    ordered = list(faixa_a)
-    d_idx, f_idx = 0, 0
-    while d_idx < len(faixa_b) or f_idx < len(faixa_c):
-        for _ in range(2):
-            if d_idx < len(faixa_b):
-                ordered.append(faixa_b[d_idx])
-                d_idx += 1
-        if f_idx < len(faixa_c):
-            ordered.append(faixa_c[f_idx])
-            f_idx += 1
-
-    # === Interleaving por matéria ===
-    if not materia and len(ordered) > 2:
-        buckets = defaultdict(list)
-        for card in ordered:
-            key = card.get("materia") or "geral"
-            buckets[key].append(card)
-
-        if len(buckets) > 1:
-            result = []
-            bucket_keys = list(buckets.keys())
-            random.shuffle(bucket_keys)
-            key_idx = 0
-            total = len(ordered)
-            while len(result) < total:
-                attempts = 0
-                while attempts < len(bucket_keys):
-                    key = bucket_keys[key_idx % len(bucket_keys)]
-                    key_idx += 1
-                    if buckets[key]:
-                        result.append(buckets[key].pop(0))
-                        break
-                    attempts += 1
-                else:
-                    break
-            return result
-
-    return ordered
+    return result
 
 
 @router.get("/api/flashcards/aleatorio", summary="Flashcards aleatórios para estudo")
