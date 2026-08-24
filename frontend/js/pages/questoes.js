@@ -530,6 +530,49 @@ async function importarQuestoesPDF() {
 }
 window.importarQuestoesPDF = importarQuestoesPDF;
 
+async function aplicarGabaritoPDF() {
+  const gabInput = document.getElementById('pdf-import-gabarito');
+  const file = gabInput?.files[0];
+  if (!file) {
+    toast('Selecione o PDF do gabarito primeiro.', 'error');
+    return;
+  }
+
+  const statusEl = document.getElementById('pdf-import-status');
+  statusEl.style.display = 'block';
+  statusEl.style.background = '#45475a';
+  statusEl.style.color = '#cdd6f4';
+  statusEl.innerHTML = '⏳ Aplicando gabarito...';
+
+  const banca = document.getElementById('pdf-import-banca').value.trim();
+  const formData = new FormData();
+  formData.append('file', file);
+
+  let url = '/api/questoes/aplicar-gabarito';
+  if (banca) url += `?banca=${encodeURIComponent(banca)}`;
+
+  try {
+    const res = await fetch(url, { method: 'POST', body: formData });
+    const data = await res.json();
+
+    if (data.ok) {
+      statusEl.style.background = '#1e3a2e';
+      statusEl.style.color = '#a6e3a1';
+      statusEl.innerHTML = `✅ ${data.mensagem}<br><small>Aplicadas: ${data.aplicadas} | Anuladas: ${data.anuladas || 0} | Total no gabarito: ${data.total_gabarito}</small>`;
+      if (typeof loadBanco === 'function') loadBanco();
+    } else {
+      statusEl.style.background = '#3a1e1e';
+      statusEl.style.color = '#f38ba8';
+      statusEl.innerHTML = `❌ ${data.erro || 'Erro ao aplicar gabarito.'}`;
+    }
+  } catch (e) {
+    statusEl.style.background = '#3a1e1e';
+    statusEl.style.color = '#f38ba8';
+    statusEl.innerHTML = '❌ Erro de conexão.';
+  }
+}
+window.aplicarGabaritoPDF = aplicarGabaritoPDF;
+
 // ==================== CADASTRAR ====================
 async function cadastrarQuestao() {
   const materia = document.getElementById('cad-materia').value.trim();

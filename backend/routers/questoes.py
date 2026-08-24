@@ -1593,3 +1593,99 @@ async def importar_questoes_pdf(
             os.unlink(tmp_path)
         except OSError:
             pass
+
+
+
+@router.post("/api/questoes/aplicar-gabarito", summary="Aplicar gabarito PDF em questões já importadas",
+             description="Envia apenas o PDF do gabarito para associar respostas às questões que já foram importadas sem gabarito.")
+async def aplicar_gabarito_pdf(
+    file: UploadFile = File(...),
+    banca: str = "",
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """
+    Aplica gabarito de um PDF separado nas questões já existentes no banco que não têm resposta.
+    Busca questões sem resposta_correta (do mesmo user) e associa por número.
+    """
+    if not file.filename.endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="Apenas arquivos PDF são aceitos.")
+
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    try:
+        texto = _extrair_texto_pdf(tmp_path)
+
+        # Extrair gabarito
+        gabarito = _parse_gabarito(texto)
+        if not gabarito:
+            # Tentar padrão CESPE: grid de números e letras
+            import re
+            matches = re.findall(r'(\d{1,3})\s*[.\-–):]?\s*([A-Ea-eCcEeXx])', texto)
+            for num, resp in matches:
+                r = resp.upper()
+                if r != 'X':  # X = anulada
+                    gabarito[int(num)] = r
+
+        if not gabarito:
+            return {
+                "ok": False,
+                "erro": "Não foi possível extrair gabarito do PDF.",
+                "texto_preview": texto[:1000],
+            }
+
+        # Buscar questões sem resposta do usuário (ordenadas por ID para mapear por número)
+        questoes_sem_gab = conn.execute("""
+            SELECT id, enunciado FROM questoes
+            WHERE user_id = ? AND (resposta_correta = '' OR resposta_correta IS NULL)
+            ORDER BY id
+        """, (user_id,)).fetchall()
+
+        if not questoes_sem_gab:
+            return {
+                "ok": False,
+                "erro": "Nenhuma questão sem gabarito encontrada. Importe a prova primeiro.",
+                "gabarito_encontrado": len(gabarito),
+            }
+
+        # Aplicar gabarito por número sequencial (questão 1 = primeira sem gabarito, etc.)
+        aplicadas = 0
+        anuladas = 0
+        for i, (qid, enunciado) in enumerate(questoes_sem_gab):
+            num = i + 1
+            if num in gabarito:
+                gab = gabarito[num]
+                if gab == 'X':
+                    conn.execute("UPDATE questoes SET explicacao = '⚠️ QUESTÃO ANULADA' WHERE id = ?", (qid,))
+                    anuladas += 1
+                elif gab in ('C', 'E'):
+                    # CESPE: C=CERTO(A), E=ERRADO(B)
+                    resposta = 'A' if gab == 'C' else 'B'
+                    conn.execute("UPDATE questoes SET resposta_correta = ? WHERE id = ?", (resposta, qid))
+                    aplicadas += 1
+                elif gab in ('A', 'B', 'C', 'D', 'E'):
+                    conn.execute("UPDATE questoes SET resposta_correta = ? WHERE id = ?", (gab, qid))
+                    aplicadas += 1
+
+        conn.commit()
+
+        return {
+            "ok": True,
+            "aplicadas": aplicadas,
+            "anuladas": anuladas,
+            "total_gabarito": len(gabarito),
+            "total_sem_resposta": len(questoes_sem_gab),
+            "mensagem": f"Gabarito aplicado! {aplicadas} respostas associadas." + (f" {anuladas} anuladas." if anuladas else ""),
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erro ao processar gabarito: {e}") from e
+    finally:
+        import os
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
