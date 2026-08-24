@@ -816,39 +816,40 @@ async function loadBanco() {
     return;
   }
 
-  // Agrupar por matéria
+  // Agrupar por matéria (ou por prova quando sem_gabarito)
   const grouped = {};
   questoes.forEach(q => {
-    const mat = q.materia || 'Sem matéria';
-    if (!grouped[mat]) grouped[mat] = [];
-    grouped[mat].push(q);
+    const key = semGabarito ? (q.prova_origem || 'Sem prova vinculada') : (q.materia || 'Sem matéria');
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(q);
   });
 
-  const materias = Object.keys(grouped).sort();
+  const keys = Object.keys(grouped).sort();
   let html = '';
 
-  // Ação em lote para sem gabarito
+  // Ação em lote global para sem gabarito
   if (semGabarito && questoes.length > 0) {
-    html += `<div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;">
-      <button onclick="deleteAllSemGabarito()" class="btn" style="background:#f38ba8;color:#1e1e2e;font-size:0.82rem;padding:6px 14px;">🗑️ Excluir todas sem gabarito</button>
+    html += `<div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+      <button onclick="deleteAllSemGabarito()" class="btn" style="background:#f38ba8;color:#1e1e2e;font-size:0.82rem;padding:6px 14px;">🗑️ Excluir TODAS (${questoes.length})</button>
+      <span style="font-size:0.8rem;color:var(--text-sub);">ou expanda cada grupo para editar/excluir individualmente</span>
     </div>`;
   }
 
-  for (const mat of materias) {
-    const items = grouped[mat];
-    const openClass = semGabarito ? ' open' : '';
+  for (const key of keys) {
+    const items = grouped[key];
     html += `<div class="acc-group">
-      <div class="acc-header${openClass}" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
+      <div class="acc-header" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
         <span class="acc-chevron">▶</span>
-        <span class="acc-name">${mat}</span>
+        <span class="acc-name">${key}</span>
         <span class="acc-count">${items.length} questão(ões)</span>
+        ${semGabarito ? `<button onclick="event.stopPropagation();deleteGroupSemGabarito(${JSON.stringify(items.map(q=>q.id))})" title="Excluir este grupo" style="background:none;border:none;color:#f38ba8;cursor:pointer;font-size:0.9rem;margin-left:8px;">🗑️ Excluir grupo</button>` : ''}
       </div>
-      <div class="acc-body${openClass}">`;
+      <div class="acc-body">`;
     items.forEach(q => {
       const gabBadge = (!q.resposta_correta)
         ? '<span style="font-size:0.7rem;color:#f38ba8;margin-left:4px;">⚠️ sem gab</span>'
         : '';
-      const provaInfo = q.prova_origem ? `<span style="font-size:0.68rem;color:#89b4fa;margin-left:4px;">[${q.prova_origem}]</span>` : '';
+      const provaInfo = (!semGabarito && q.prova_origem) ? `<span style="font-size:0.68rem;color:#89b4fa;margin-left:4px;">[${q.prova_origem}]</span>` : '';
       html += `<div class="q-list-item">
         <span class="q-list-text">${q.enunciado.substring(0, 100)}${q.enunciado.length > 100 ? '...' : ''}</span>
         <span class="q-list-meta" style="font-size:0.7rem;color:#9399b2;margin-left:4px;">${q.banca || ''}${provaInfo}${gabBadge}</span>
@@ -886,6 +887,20 @@ async function deleteAllSemGabarito() {
   loadMaterias();
 }
 window.deleteAllSemGabarito = deleteAllSemGabarito;
+
+async function deleteGroupSemGabarito(ids) {
+  if (!confirm(`Excluir ${ids.length} questão(ões) deste grupo? Esta ação não pode ser desfeita.`)) return;
+  let deleted = 0;
+  for (const id of ids) {
+    await fetch(`/api/questoes/${id}`, { method: 'DELETE' });
+    deleted++;
+  }
+  toast(`✅ ${deleted} questão(ões) excluída(s).`, 'success');
+  loadBanco();
+  loadProvas();
+  loadMaterias();
+}
+window.deleteGroupSemGabarito = deleteGroupSemGabarito;
 
 async function editQuestao(id) {
   // Buscar dados da questão
