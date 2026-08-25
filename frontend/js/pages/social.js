@@ -910,6 +910,7 @@ window.closeChatWindow = function() {
   document.getElementById('chat-conversations').style.display = 'block';
   loadChatConversations(); // Refresh unread counts
 };
+window.loadChatConversations = loadChatConversations;
 
 async function loadMessages() {
   if (!_chatFriendId) return;
