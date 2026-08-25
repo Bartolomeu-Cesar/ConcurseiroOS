@@ -982,10 +982,14 @@ def mastery_overview(edital_nome: str = "", cargo: str = "", conn=Depends(get_db
     # Auto-detectar edital do ciclo ativo se nenhum filtro explícito
     if not edital_nome and not cargo:
         try:
+            # Selecionar o edital com MAIS matérias em comum com o ciclo ativo
             ciclo_edital = conn.execute("""
-                SELECT DISTINCT e.edital_nome FROM edital e
+                SELECT e.edital_nome, COUNT(DISTINCT e.materia) as matches
+                FROM edital e
                 INNER JOIN ciclo_estudos c ON c.materia = e.materia AND c.user_id = e.user_id
                 WHERE c.ativo = 1 AND c.user_id = ? AND e.arquivado = 0
+                GROUP BY e.edital_nome
+                ORDER BY matches DESC
                 LIMIT 1
             """, (user_id,)).fetchone()
             if ciclo_edital and ciclo_edital[0]:
