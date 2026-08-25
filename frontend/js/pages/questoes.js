@@ -803,10 +803,41 @@ async function vincularProvaMateria(provaNome) {
   let materias = [];
   try { materias = await fetch('/api/edital/materias-disponiveis').then(r => r.json()); } catch {}
 
-  const materia = prompt(
-    `📚 Vincular toda a prova "${provaNome}" a qual matéria?\n\nMatérias do edital:\n${materias.map((m, i) => `${i+1}. ${m}`).join('\n')}\n\nDigite o nome da matéria:`
-  );
-  if (!materia || !materia.trim()) return;
+  const overlay = document.createElement('div');
+  overlay.id = 'vincular-prova-modal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  overlay.innerHTML = `
+    <div style="background:#313244;border-radius:16px;padding:24px;max-width:420px;width:100%;max-height:80vh;overflow-y:auto;">
+      <h3 style="color:#cba6f7;margin:0 0 12px;">📚 Vincular Prova a Matéria</h3>
+      <p style="font-size:0.82rem;color:#a6adc8;margin-bottom:12px;">Prova: <strong style="color:#cdd6f4;">${provaNome}</strong></p>
+      <div style="margin-bottom:12px;">
+        <label style="font-size:0.78rem;color:#9399b2;">Selecione a matéria:</label>
+        <select id="vpm-materia" style="width:100%;padding:10px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;margin-top:4px;font-size:0.88rem;">
+          <option value="">-- Selecione --</option>
+          ${materias.map(m => `<option value="${m}">${m}</option>`).join('')}
+        </select>
+      </div>
+      <div style="margin-bottom:12px;">
+        <label style="font-size:0.78rem;color:#9399b2;">Ou digite uma nova:</label>
+        <input id="vpm-materia-custom" placeholder="Ex: Direito Constitucional" style="width:100%;padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;margin-top:4px;font-size:0.85rem;">
+      </div>
+      <div style="display:flex;gap:8px;margin-top:16px;">
+        <button onclick="document.getElementById('vincular-prova-modal').remove()" style="flex:1;padding:10px;background:#45475a;color:#cdd6f4;border:none;border-radius:8px;cursor:pointer;">Cancelar</button>
+        <button onclick="confirmarVincularProva('${provaNome.replace(/'/g, "\\'")}')" style="flex:1;padding:10px;background:#a6e3a1;color:#1e1e2e;border:none;border-radius:8px;font-weight:600;cursor:pointer;">✅ Vincular</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+}
+window.vincularProvaMateria = vincularProvaMateria;
+
+async function confirmarVincularProva(provaNome) {
+  const select = document.getElementById('vpm-materia').value;
+  const custom = document.getElementById('vpm-materia-custom').value.trim();
+  const materia = custom || select;
+
+  if (!materia) { alert('Selecione ou digite uma matéria.'); return; }
 
   try {
     const res = await fetch('/api/questoes/vincular-lote', {
@@ -814,12 +845,13 @@ async function vincularProvaMateria(provaNome) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         filtro: { prova_origem: provaNome },
-        atualizar: { materia: materia.trim() }
+        atualizar: { materia: materia }
       })
     });
     const result = await res.json();
     if (result.ok) {
-      toast(`✅ ${result.atualizadas} questões da prova vinculadas a "${materia.trim()}"!`, 'success');
+      document.getElementById('vincular-prova-modal').remove();
+      toast(`✅ ${result.atualizadas} questões vinculadas a "${materia}"!`, 'success');
       loadProvas();
       loadBanco();
       loadMaterias();
@@ -830,7 +862,7 @@ async function vincularProvaMateria(provaNome) {
     toast('Erro de conexão.', 'error');
   }
 }
-window.vincularProvaMateria = vincularProvaMateria;
+window.confirmarVincularProva = confirmarVincularProva;
 
 // ==================== BANCO COMPLETO ====================
 async function loadBanco() {
