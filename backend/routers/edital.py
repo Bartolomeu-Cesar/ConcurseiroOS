@@ -992,12 +992,12 @@ def mastery_overview(edital_nome: str = "", cargo: str = "", conn=Depends(get_db
                 ORDER BY matches DESC
                 LIMIT 1
             """, (user_id,)).fetchone()
-            if ciclo_edital and ciclo_edital[0]:
-                edital_nome = ciclo_edital[0]
+            if ciclo_edital and ciclo_edital["edital_nome"]:
+                edital_nome = ciclo_edital["edital_nome"]
         except Exception:
             pass
 
-    query = "SELECT id, materia, topico, mastery_level, mastery_updated_at FROM edital WHERE user_id = ? AND arquivado = 0"
+    query = "SELECT DISTINCT id, materia, topico, mastery_level, mastery_updated_at FROM edital WHERE user_id = ? AND arquivado = 0"
     params = [user_id]
     if edital_nome:
         query += " AND edital_nome = ?"
@@ -1005,6 +1005,18 @@ def mastery_overview(edital_nome: str = "", cargo: str = "", conn=Depends(get_db
     if cargo:
         query += " AND cargo = ?"
         params.append(cargo)
+    else:
+        # Se não tem cargo explícito, filtrar por matérias do ciclo ativo (evita duplicatas entre cargos)
+        try:
+            ciclo_materias = conn.execute(
+                "SELECT DISTINCT materia FROM ciclo_estudos WHERE ativo = 1 AND user_id = ?", (user_id,)
+            ).fetchall()
+            if ciclo_materias:
+                placeholders = ",".join("?" * len(ciclo_materias))
+                query += f" AND materia IN ({placeholders})"
+                params.extend([m["materia"] for m in ciclo_materias])
+        except Exception:
+            pass
     query += " ORDER BY materia, topico"
 
     rows = conn.execute(query, params).fetchall()
