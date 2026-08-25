@@ -159,6 +159,40 @@ def list_friends(
     return {"friends": friends}
 
 
+@router.get("/api/social/friends/pending")
+def list_pending_requests(
+    db=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """List pending friend requests received by this user."""
+    log.info(f"[social] list_pending_requests user_id={user_id}")
+    try:
+        rows = db.execute(
+            """SELECT f.id, f.user_a as sender_id, f.created_at
+               FROM friendships f
+               WHERE f.user_b = ? AND f.status = 'pending'
+               ORDER BY f.created_at DESC""",
+            (user_id,)
+        ).fetchall()
+    except Exception:
+        return {"pending": []}
+
+    pending = []
+    for r in rows:
+        sender_info = db.execute(
+            "SELECT id, nome, username, email FROM users WHERE id = ?", (r["sender_id"],)
+        ).fetchone()
+        pending.append({
+            "friendship_id": r["id"],
+            "sender_id": r["sender_id"],
+            "nome": sender_info["nome"] if sender_info else "Desconhecido",
+            "username": sender_info["username"] if sender_info else "",
+            "email": sender_info["email"] if sender_info else "",
+            "created_at": r["created_at"],
+        })
+
+    return {"pending": pending}
+
 @router.post("/api/social/friends/add")
 def add_friend(
     body: AddFriendRequest,

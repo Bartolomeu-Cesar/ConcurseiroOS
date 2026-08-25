@@ -390,7 +390,77 @@ async function loadFriends() {
   } catch {
     document.getElementById('friends-list').innerHTML = '<div class="empty-state"><div class="emoji">⚠️</div><p>Erro ao carregar amigos</p></div>';
   }
+
+  // Load pending requests
+  loadPendingRequests();
 }
+
+let _lastPendingCount = 0;
+
+async function loadPendingRequests() {
+  try {
+    const res = await fetch('/api/social/friends/pending');
+    const data = await res.json();
+    const pending = data.pending || [];
+
+    // Toast notification if new pending requests appeared
+    if (pending.length > _lastPendingCount && _lastPendingCount >= 0) {
+      const diff = pending.length - _lastPendingCount;
+      if (_lastPendingCount > 0) {
+        showToast(`🔔 ${diff} novo${diff > 1 ? 's' : ''} convite${diff > 1 ? 's' : ''} de amizade!`);
+      }
+    }
+    _lastPendingCount = pending.length;
+
+    // Render pending section
+    const container = document.getElementById('friends-list');
+    if (!pending.length) return;
+
+    const pendingHtml = `
+      <div class="pending-section">
+        <div class="pending-title">📬 Convites pendentes (${pending.length})</div>
+        ${pending.map(p => `
+          <div class="pending-item">
+            <div class="avatar">👤</div>
+            <div class="info">
+              <div class="name">${escapeHtml(p.nome || p.username || p.email)}</div>
+              <div class="sub">Enviou convite em ${p.created_at || ''}</div>
+            </div>
+            <div class="pending-actions">
+              <button class="pending-btn pending-btn--accept" onclick="acceptFriend(${p.friendship_id})">✓ Aceitar</button>
+              <button class="pending-btn pending-btn--reject" onclick="rejectFriend(${p.friendship_id})">✗</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+
+    // Insert pending section before friends list content
+    container.insertAdjacentHTML('afterbegin', pendingHtml);
+  } catch (e) {
+    // Silently fail — pending requests are non-critical
+  }
+}
+
+window.acceptFriend = async function(friendshipId) {
+  try {
+    await fetch(`/api/social/friends/${friendshipId}/accept`, { method: 'POST' });
+    showToast('✅ Amizade aceita!');
+    loadFriends();
+  } catch (e) {
+    showToast('Erro ao aceitar convite', 'error');
+  }
+};
+
+window.rejectFriend = async function(friendshipId) {
+  try {
+    await fetch(`/api/social/friends/${friendshipId}/reject`, { method: 'POST' });
+    showToast('Convite recusado');
+    loadFriends();
+  } catch (e) {
+    showToast('Erro ao recusar convite', 'error');
+  }
+};
 
 async function loadGroups() {
   try {

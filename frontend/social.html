@@ -187,6 +187,48 @@
     .friend-item .name, .group-item .name { font-weight: 600; font-size: 0.9rem; }
     .friend-item .sub, .group-item .sub { font-size: 0.75rem; color: var(--text-sub); }
 
+    /* Pending requests */
+    .pending-section {
+      margin-bottom: 16px;
+      padding: 12px;
+      background: rgba(249, 226, 175, 0.08);
+      border: 1px solid rgba(249, 226, 175, 0.2);
+      border-radius: 12px;
+    }
+    .pending-title {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: var(--yellow, #f9e2af);
+      margin-bottom: 10px;
+    }
+    .pending-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px;
+      border-radius: 8px;
+      background: var(--bg-elevated);
+      margin-bottom: 6px;
+    }
+    .pending-item .avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--text-muted); display: flex; align-items: center; justify-content: center; font-size: 1.1rem; }
+    .pending-item .info { flex: 1; }
+    .pending-item .name { font-weight: 600; font-size: 0.85rem; }
+    .pending-item .sub { font-size: 0.72rem; color: var(--text-sub); }
+    .pending-actions { display: flex; gap: 6px; }
+    .pending-btn {
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: none;
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .pending-btn--accept { background: var(--green, #a6e3a1); color: #1e1e2e; }
+    .pending-btn--accept:hover { opacity: 0.85; transform: scale(1.05); }
+    .pending-btn--reject { background: var(--text-muted, #585b70); color: var(--text-sub); }
+    .pending-btn--reject:hover { background: var(--red, #f38ba8); color: #1e1e2e; }
+
     .feed-item {
       padding: 10px 12px; border-left: 3px solid var(--blue); margin-bottom: 8px;
       background: var(--bg-elevated); border-radius: 0 8px 8px 0;
