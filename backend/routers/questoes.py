@@ -5,7 +5,7 @@ import random
 import re
 import tempfile
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile
 
 from constants import DEFAULT_EXAM_DURATION_MIN, DEFAULT_EXAM_QUESTIONS, DEFAULT_TIME_PER_QUESTION_SEC
 from database import get_db_session
@@ -1945,11 +1945,11 @@ async def aplicar_gabarito_pdf(
              summary="Importar questões de prova via URL",
              description="Baixa PDF de prova + gabarito de URLs externas e importa as questões automaticamente.")
 async def importar_questoes_url(
-    prova_url: str = "",
-    gabarito_url: str = "",
-    materia: str = "",
-    banca: str = "CESPE",
-    prova_nome: str = "",
+    prova_url: str = Body("", embed=True),
+    gabarito_url: str = Body("", embed=True),
+    materia: str = Body("", embed=True),
+    banca: str = Body("CESPE", embed=True),
+    prova_nome: str = Body("", embed=True),
     conn=Depends(get_db_session),
     user_id: int = Depends(get_user_id),
 ):
