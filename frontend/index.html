@@ -63,6 +63,24 @@
       <!-- Page Content -->
       <main class="page-content" id="page-content">
 
+  <!-- Early tab activation: prevents flash of wrong tab -->
+  <script>
+    (function() {
+      var hash = window.location.hash.replace('#', '');
+      var map = {'ciclo':'tab-ciclo','edital':'tab-edital','flashcards':'tab-flashcards','sumulas':'tab-sumulas','pdfs':'tab-pdfs'};
+      var target = map[hash] || localStorage.getItem('concurseiro_active_tab');
+      if (target && target !== 'tab-pdfs') {
+        // Will be activated by index.js; remove default active from tab-pdfs
+        document.addEventListener('DOMContentLoaded', function() {
+          var tabs = document.querySelectorAll('.tab-content');
+          tabs.forEach(function(t) { t.classList.remove('active'); });
+          var el = document.getElementById(target);
+          if (el) el.classList.add('active');
+        });
+      }
+    })();
+  </script>
+
   <!-- Tab: PDFs -->
   <div id="tab-pdfs" class="tab-content active" role="tabpanel">
     <!-- Card: Últimas Leituras -->

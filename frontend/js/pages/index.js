@@ -34,8 +34,9 @@ function closeSidebar() {
 window.closeSidebar = closeSidebar;
 
 // Restore last active tab
-document.addEventListener('DOMContentLoaded', () => {
-  // Check URL hash first (e.g., /#ciclo, /#edital, /#flashcards)
+// Restore active tab from hash or localStorage
+// Modules are deferred, so DOM is ready when this runs
+(function initTabNavigation() {
   const hash = window.location.hash.replace('#', '');
   const hashTabMap = {
     'ciclo': 'tab-ciclo',
@@ -54,13 +55,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const saved = localStorage.getItem('concurseiro_active_tab');
     if (saved) {
       navigateTo(saved);
+      // Clear after use to avoid stale state
+      localStorage.removeItem('concurseiro_active_tab');
     }
   }
   // Load user info for avatar
   loadUserAvatar();
   // Load recent PDFs
   loadRecentPdfs();
-});
+})();
 
 function loadRecentPdfs() {
   fetch('/api/progress/recentes?limit=5')
