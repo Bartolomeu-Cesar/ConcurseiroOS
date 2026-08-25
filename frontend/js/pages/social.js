@@ -833,3 +833,198 @@ checkAIStatus();
 loadFriends();
 loadGroups();
 loadFeed();
+
+// ============================================================
+// CHAT DIRETO
+// ============================================================
+
+let _chatFriendId = null;
+let _chatPollInterval = null;
+let _lastMsgId = 0;
+
+async function loadChatConversations() {
+  try {
+    const res = await fetch('/api/social/chat/conversations');
+    const data = await res.json();
+    const conversations = data.conversations || [];
+    const totalUnread = data.total_unread || 0;
+
+    // Update badge
+    const badge = document.getElementById('chat-badge');
+    if (badge) {
+      if (totalUnread > 0) {
+        badge.textContent = totalUnread;
+        badge.style.display = 'inline';
+      } else {
+        badge.style.display = 'none';
+      }
+    }
+
+    const container = document.getElementById('chat-conversations');
+
+    if (!conversations.length) {
+      container.innerHTML = '<div class="empty-state"><div class="emoji">💬</div><p>Nenhuma conversa ainda</p><p class="hint">Adicione amigos para começar a conversar!</p></div>';
+      return;
+    }
+
+    container.innerHTML = conversations.map(c => {
+      const preview = c.ultima_mensagem
+        ? (c.ultima_mensagem_minha ? 'Você: ' : '') + c.ultima_mensagem
+        : 'Iniciar conversa...';
+      const time = c.created_at ? new Date(c.created_at).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '';
+      return `
+        <div class="chat-conv-item" onclick="openChat(${c.friend_id}, '${escapeHtml(c.nome)}')">
+          <div class="avatar">👤</div>
+          <div class="conv-info">
+            <div class="conv-name">${escapeHtml(c.nome)}</div>
+            <div class="conv-preview">${escapeHtml(preview)}</div>
+          </div>
+          ${c.nao_lidas > 0 ? `<span class="conv-badge">${c.nao_lidas}</span>` : `<span class="conv-time">${time}</span>`}
+        </div>
+      `;
+    }).join('');
+  } catch(e) {
+    document.getElementById('chat-conversations').innerHTML = '<div class="empty-state"><div class="emoji">⚠️</div><p>Erro ao carregar conversas</p></div>';
+  }
+}
+
+window.openChat = async function(friendId, nome) {
+  _chatFriendId = friendId;
+  _lastMsgId = 0;
+
+  document.getElementById('chat-conversations').style.display = 'none';
+  document.getElementById('chat-window').style.display = 'flex';
+  document.getElementById('chat-friend-name').textContent = nome;
+  document.getElementById('chat-messages').innerHTML = '';
+  document.getElementById('chat-input').value = '';
+  document.getElementById('chat-input').focus();
+
+  await loadMessages();
+  startChatPolling();
+};
+
+window.closeChatWindow = function() {
+  stopChatPolling();
+  _chatFriendId = null;
+  document.getElementById('chat-window').style.display = 'none';
+  document.getElementById('chat-conversations').style.display = 'block';
+  loadChatConversations(); // Refresh unread counts
+};
+
+async function loadMessages() {
+  if (!_chatFriendId) return;
+  try {
+    const res = await fetch(`/api/social/chat/${_chatFriendId}?limit=50`);
+    const data = await res.json();
+    const messages = data.messages || [];
+
+    const container = document.getElementById('chat-messages');
+    container.innerHTML = messages.map(m => {
+      const time = new Date(m.created_at).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+      return `
+        <div class="chat-msg ${m.is_mine ? 'chat-msg--mine' : 'chat-msg--theirs'}">
+          <div>${escapeHtml(m.mensagem)}</div>
+          <div class="chat-msg__time">${time}</div>
+        </div>
+      `;
+    }).join('');
+
+    // Scroll to bottom
+    container.scrollTop = container.scrollHeight;
+
+    // Track last message id for polling
+    if (messages.length) {
+      _lastMsgId = messages[messages.length - 1].id;
+    }
+  } catch(e) {
+    // Silent fail
+  }
+}
+
+window.sendChatMessage = async function() {
+  const input = document.getElementById('chat-input');
+  const msg = input.value.trim();
+  if (!msg || !_chatFriendId) return;
+
+  input.value = '';
+  input.disabled = true;
+
+  try {
+    await fetch('/api/social/chat/send', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ receiver_id: _chatFriendId, mensagem: msg })
+    });
+    await loadMessages();
+  } catch(e) {
+    showToast('Erro ao enviar mensagem', 'error');
+    input.value = msg; // Restore message
+  }
+
+  input.disabled = false;
+  input.focus();
+};
+
+function startChatPolling() {
+  stopChatPolling();
+  _chatPollInterval = setInterval(async () => {
+    if (_chatFriendId) await loadMessages();
+  }, 3000); // Poll every 3s
+}
+
+function stopChatPolling() {
+  if (_chatPollInterval) {
+    clearInterval(_chatPollInterval);
+    _chatPollInterval = null;
+  }
+}
+
+// Poll for unread messages badge (every 30s)
+let _unreadPollInterval = setInterval(async () => {
+  try {
+    const res = await fetch('/api/social/chat/unread/count');
+    const data = await res.json();
+    const badge = document.getElementById('chat-badge');
+    if (badge) {
+      if (data.unread > 0) {
+        badge.textContent = data.unread;
+        badge.style.display = 'inline';
+      } else {
+        badge.style.display = 'none';
+      }
+    }
+  } catch(e) {}
+}, 30000);
+
+// Load chat when tab is switched to chat
+const _origSwitchTab = window.switchTab;
+if (typeof _origSwitchTab === 'function') {
+  window.switchTab = function(tab) {
+    _origSwitchTab(tab);
+    if (tab === 'chat') loadChatConversations();
+  };
+} else {
+  // switchTab not yet defined — patch later
+  document.addEventListener('DOMContentLoaded', () => {
+    const orig = window.switchTab;
+    if (orig) {
+      window.switchTab = function(tab) {
+        orig(tab);
+        if (tab === 'chat') loadChatConversations();
+      };
+    }
+  });
+}
+
+// Initial load of chat badge
+(async () => {
+  try {
+    const res = await fetch('/api/social/chat/unread/count');
+    const data = await res.json();
+    const badge = document.getElementById('chat-badge');
+    if (badge && data.unread > 0) {
+      badge.textContent = data.unread;
+      badge.style.display = 'inline';
+    }
+  } catch(e) {}
+})();

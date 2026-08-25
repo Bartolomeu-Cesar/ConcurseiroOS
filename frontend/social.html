@@ -229,6 +229,40 @@
     .pending-btn--reject { background: var(--text-muted, #585b70); color: var(--text-sub); }
     .pending-btn--reject:hover { background: var(--red, #f38ba8); color: #1e1e2e; }
 
+    /* Chat */
+    .chat-container { padding: 0 !important; overflow: hidden; min-height: 400px; position: relative; }
+    .chat-conversations { padding: 12px; }
+    .chat-conv-item {
+      display: flex; align-items: center; gap: 10px; padding: 12px;
+      border-radius: 10px; cursor: pointer; transition: background 0.2s;
+      margin-bottom: 6px;
+    }
+    .chat-conv-item:hover { background: var(--bg-elevated); }
+    .chat-conv-item .avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--text-muted); display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0; }
+    .chat-conv-item .conv-info { flex: 1; overflow: hidden; }
+    .chat-conv-item .conv-name { font-weight: 600; font-size: 0.88rem; }
+    .chat-conv-item .conv-preview { font-size: 0.75rem; color: var(--text-sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .chat-conv-item .conv-badge { background: #f38ba8; color: #1e1e2e; font-size: 0.65rem; padding: 2px 6px; border-radius: 10px; font-weight: 700; }
+    .chat-conv-item .conv-time { font-size: 0.68rem; color: var(--text-sub); }
+
+    .chat-window { display: flex; flex-direction: column; height: 450px; }
+    .chat-window__header { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--bg-elevated); }
+    .chat-back-btn { background: none; border: none; color: var(--text); font-size: 1.2rem; cursor: pointer; padding: 4px 8px; border-radius: 6px; }
+    .chat-back-btn:hover { background: var(--bg-elevated); }
+    .chat-friend-name { font-weight: 700; font-size: 0.95rem; }
+
+    .chat-messages { flex: 1; overflow-y: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 6px; }
+    .chat-msg { max-width: 75%; padding: 8px 12px; border-radius: 12px; font-size: 0.85rem; line-height: 1.4; word-break: break-word; }
+    .chat-msg--mine { align-self: flex-end; background: var(--blue, #89b4fa); color: #1e1e2e; border-bottom-right-radius: 4px; }
+    .chat-msg--theirs { align-self: flex-start; background: var(--bg-elevated); color: var(--text); border-bottom-left-radius: 4px; }
+    .chat-msg__time { font-size: 0.65rem; opacity: 0.7; margin-top: 2px; }
+
+    .chat-input-area { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--bg-elevated); }
+    .chat-input-area input { flex: 1; padding: 10px 14px; border-radius: 20px; border: 1px solid var(--bg-elevated); background: var(--bg); color: var(--text); font-size: 0.85rem; outline: none; }
+    .chat-input-area input:focus { border-color: var(--blue); }
+    .chat-send-btn { background: var(--blue, #89b4fa); color: #1e1e2e; border: none; border-radius: 50%; width: 38px; height: 38px; font-size: 1.1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform 0.2s; }
+    .chat-send-btn:hover { transform: scale(1.1); }
+
     .feed-item {
       padding: 10px 12px; border-left: 3px solid var(--blue); margin-bottom: 8px;
       background: var(--bg-elevated); border-radius: 0 8px 8px 0;
@@ -305,6 +339,7 @@
     <button class="tab-btn active" onclick="switchTab('liga')">🏆 Liga</button>
     <button class="tab-btn" onclick="switchTab('ai')">🤖 AI Tutor</button>
     <button class="tab-btn" onclick="switchTab('social')">👥 Social</button>
+    <button class="tab-btn" onclick="switchTab('chat')">💬 Chat <span id="chat-badge" style="display:none;background:#f38ba8;color:#1e1e2e;font-size:0.65rem;padding:1px 5px;border-radius:8px;margin-left:4px;font-weight:700;"></span></button>
   </div>
 
   <!-- TAB: Liga -->
@@ -414,6 +449,29 @@
         <div class="loading-skeleton wide"></div>
         <div class="loading-skeleton medium"></div>
         <div class="loading-skeleton short"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: Chat -->
+  <div class="tab-content" id="tab-chat">
+    <div class="card chat-container">
+      <!-- Lista de conversas -->
+      <div id="chat-conversations" class="chat-conversations">
+        <div class="loading-skeleton wide"></div>
+      </div>
+
+      <!-- Janela de mensagens (aparece ao selecionar conversa) -->
+      <div id="chat-window" class="chat-window" style="display:none;">
+        <div class="chat-window__header" id="chat-header">
+          <button class="chat-back-btn" onclick="closeChatWindow()">←</button>
+          <span class="chat-friend-name" id="chat-friend-name"></span>
+        </div>
+        <div class="chat-messages" id="chat-messages"></div>
+        <div class="chat-input-area">
+          <input type="text" id="chat-input" placeholder="Digite sua mensagem..." maxlength="1000" onkeydown="if(event.key==='Enter')sendChatMessage()">
+          <button class="chat-send-btn" onclick="sendChatMessage()">➤</button>
+        </div>
       </div>
     </div>
   </div>
