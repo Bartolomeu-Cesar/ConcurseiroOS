@@ -868,12 +868,22 @@ window.confirmarVincularProva = confirmarVincularProva;
 async function loadBanco() {
   const materia = document.getElementById('banco-filtro-materia').value;
   const semGabarito = document.getElementById('banco-filtro-sem-gabarito')?.checked;
+  const busca = (document.getElementById('banco-busca')?.value || '').trim().toLowerCase();
 
   let url = '/api/questoes?limit=500';
   if (materia) url += `&materia=${encodeURIComponent(materia)}`;
   if (semGabarito) url += '&sem_gabarito=1';
 
-  const questoes = await fetch(url).then(r => r.json());
+  let questoes = await fetch(url).then(r => r.json());
+
+  // Filtrar por texto de busca (enunciado + alternativas)
+  if (busca && busca.length >= 2) {
+    questoes = questoes.filter(q => {
+      const texto = [q.enunciado, q.alternativa_a, q.alternativa_b, q.alternativa_c, q.alternativa_d, q.alternativa_e]
+        .filter(Boolean).join(' ').toLowerCase();
+      return texto.includes(busca);
+    });
+  }
 
   const countEl = document.getElementById('banco-count');
   if (semGabarito) {

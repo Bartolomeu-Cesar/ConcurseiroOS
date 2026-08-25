@@ -437,6 +437,7 @@
     <div class="panel">
       <h2>📦 Todas as Questões</h2>
       <div class="filter-bar" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
+        <input type="text" id="banco-busca" placeholder="🔍 Buscar no enunciado..." oninput="loadBanco()" style="flex:1;min-width:200px;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85rem;">
         <select id="banco-filtro-materia" onchange="loadBanco()">
           <option value="">Todas as matérias</option>
         </select>
