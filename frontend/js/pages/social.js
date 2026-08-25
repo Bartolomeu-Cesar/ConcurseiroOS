@@ -402,41 +402,64 @@ async function loadPendingRequests() {
     const res = await fetch('/api/social/friends/pending');
     const data = await res.json();
     const pending = data.pending || [];
+    const sent = data.sent || [];
 
     // Toast notification if new pending requests appeared
-    if (pending.length > _lastPendingCount && _lastPendingCount >= 0) {
+    if (pending.length > _lastPendingCount && _lastPendingCount > 0) {
       const diff = pending.length - _lastPendingCount;
-      if (_lastPendingCount > 0) {
-        showToast(`🔔 ${diff} novo${diff > 1 ? 's' : ''} convite${diff > 1 ? 's' : ''} de amizade!`);
-      }
+      showToast(`🔔 ${diff} novo${diff > 1 ? 's' : ''} convite${diff > 1 ? 's' : ''} de amizade!`);
     }
     _lastPendingCount = pending.length;
 
     // Render pending section
     const container = document.getElementById('friends-list');
-    if (!pending.length) return;
+    if (!pending.length && !sent.length) return;
 
-    const pendingHtml = `
-      <div class="pending-section">
-        <div class="pending-title">📬 Convites pendentes (${pending.length})</div>
-        ${pending.map(p => `
-          <div class="pending-item">
-            <div class="avatar">👤</div>
-            <div class="info">
-              <div class="name">${escapeHtml(p.nome || p.username || p.email)}</div>
-              <div class="sub">Enviou convite em ${p.created_at || ''}</div>
+    let html = '';
+
+    // Received pending requests
+    if (pending.length) {
+      html += `
+        <div class="pending-section">
+          <div class="pending-title">📬 Convites recebidos (${pending.length})</div>
+          ${pending.map(p => `
+            <div class="pending-item">
+              <div class="avatar">👤</div>
+              <div class="info">
+                <div class="name">${escapeHtml(p.nome || p.username || p.email)}</div>
+                <div class="sub">Quer ser seu amigo</div>
+              </div>
+              <div class="pending-actions">
+                <button class="pending-btn pending-btn--accept" onclick="acceptFriend(${p.friendship_id})">✓ Aceitar</button>
+                <button class="pending-btn pending-btn--reject" onclick="rejectFriend(${p.friendship_id})">✗</button>
+              </div>
             </div>
-            <div class="pending-actions">
-              <button class="pending-btn pending-btn--accept" onclick="acceptFriend(${p.friendship_id})">✓ Aceitar</button>
-              <button class="pending-btn pending-btn--reject" onclick="rejectFriend(${p.friendship_id})">✗</button>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    // Sent pending requests (awaiting response)
+    if (sent.length) {
+      html += `
+        <div class="pending-section" style="border-color: rgba(137, 180, 250, 0.2); background: rgba(137, 180, 250, 0.05);">
+          <div class="pending-title" style="color: var(--blue, #89b4fa);">📤 Convites enviados (${sent.length})</div>
+          ${sent.map(s => `
+            <div class="pending-item">
+              <div class="avatar">👤</div>
+              <div class="info">
+                <div class="name">${escapeHtml(s.nome || s.username || s.email)}</div>
+                <div class="sub">Aguardando resposta...</div>
+              </div>
+              <span style="font-size:0.75rem;color:var(--text-sub);">⏳</span>
             </div>
-          </div>
-        `).join('')}
-      </div>
-    `;
+          `).join('')}
+        </div>
+      `;
+    }
 
     // Insert pending section before friends list content
-    container.insertAdjacentHTML('afterbegin', pendingHtml);
+    container.insertAdjacentHTML('afterbegin', html);
   } catch (e) {
     // Silently fail — pending requests are non-critical
   }

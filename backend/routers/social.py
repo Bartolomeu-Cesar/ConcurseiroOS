@@ -164,34 +164,58 @@ def list_pending_requests(
     db=Depends(get_db_session),
     user_id: int = Depends(get_user_id)
 ):
-    """List pending friend requests received by this user."""
+    """List pending friend requests (both received and sent)."""
     log.info(f"[social] list_pending_requests user_id={user_id}")
     try:
-        rows = db.execute(
-            """SELECT f.id, f.user_a as sender_id, f.created_at
+        # Received requests (where I am user_b)
+        received = db.execute(
+            """SELECT f.id, f.user_a as other_id, f.created_at, 'received' as direction
                FROM friendships f
                WHERE f.user_b = ? AND f.status = 'pending'
                ORDER BY f.created_at DESC""",
             (user_id,)
         ).fetchall()
+
+        # Sent requests (where I am user_a)
+        sent = db.execute(
+            """SELECT f.id, f.user_b as other_id, f.created_at, 'sent' as direction
+               FROM friendships f
+               WHERE f.user_a = ? AND f.status = 'pending'
+               ORDER BY f.created_at DESC""",
+            (user_id,)
+        ).fetchall()
     except Exception:
-        return {"pending": []}
+        return {"pending": [], "sent": []}
 
     pending = []
-    for r in rows:
+    for r in received:
         sender_info = db.execute(
-            "SELECT id, nome, username, email FROM users WHERE id = ?", (r["sender_id"],)
+            "SELECT id, nome, username, email FROM users WHERE id = ?", (r["other_id"],)
         ).fetchone()
         pending.append({
             "friendship_id": r["id"],
-            "sender_id": r["sender_id"],
+            "sender_id": r["other_id"],
             "nome": sender_info["nome"] if sender_info else "Desconhecido",
             "username": sender_info["username"] if sender_info else "",
             "email": sender_info["email"] if sender_info else "",
             "created_at": r["created_at"],
         })
 
-    return {"pending": pending}
+    sent_list = []
+    for r in sent:
+        target_info = db.execute(
+            "SELECT id, nome, username, email FROM users WHERE id = ?", (r["other_id"],)
+        ).fetchone()
+        sent_list.append({
+            "friendship_id": r["id"],
+            "target_id": r["other_id"],
+            "nome": target_info["nome"] if target_info else "Desconhecido",
+            "username": target_info["username"] if target_info else "",
+            "email": target_info["email"] if target_info else "",
+            "created_at": r["created_at"],
+        })
+
+    return {"pending": pending, "sent": sent_list}
 
 @router.post("/api/social/friends/add")
 def add_friend(
