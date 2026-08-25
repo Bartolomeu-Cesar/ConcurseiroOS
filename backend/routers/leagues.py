@@ -177,7 +177,7 @@ def calculate_user_weekly_xp(db, user_id: int, week_start: str, week_end: str) -
         questions = db.execute(
             """SELECT COUNT(*) FROM questoes_respostas
             WHERE user_id = ?
-            AND date(respondida_em) >= ? AND date(respondida_em) <= ?
+            AND data >= ? AND data <= ?
             AND acertou = 1""",
             (user_id, week_start, week_end)
         ).fetchone()
@@ -189,13 +189,10 @@ def calculate_user_weekly_xp(db, user_id: int, week_start: str, week_end: str) -
     # 2. XP from study sessions: +20 XP per hour
     try:
         sessions = db.execute(
-            """SELECT COALESCE(SUM(
-                CAST((julianday(fim) - julianday(inicio)) * 24 AS REAL)
-            ), 0) as hours
+            """SELECT COALESCE(SUM(horas), 0) as hours
             FROM sessoes_estudo
             WHERE user_id = ?
-            AND date(inicio) >= ? AND date(inicio) <= ?
-            AND fim IS NOT NULL""",
+            AND data >= ? AND data <= ?""",
             (user_id, week_start, week_end)
         ).fetchone()
         if sessions and sessions[0]:
@@ -206,23 +203,23 @@ def calculate_user_weekly_xp(db, user_id: int, week_start: str, week_end: str) -
     # 3. XP from flashcard reviews: +5 XP each
     try:
         flashcards = db.execute(
-            """SELECT COUNT(*) FROM flashcard_reviews
+            """SELECT COALESCE(SUM(flashcards_revisados), 0) FROM streaks
             WHERE user_id = ?
-            AND date(reviewed_at) >= ? AND date(reviewed_at) <= ?""",
+            AND data >= ? AND data <= ?""",
             (user_id, week_start, week_end)
         ).fetchone()
         if flashcards and flashcards[0]:
-            breakdown["flashcards"] = flashcards[0] * XP_PER_FLASHCARD
+            breakdown["flashcards"] = int(flashcards[0]) * XP_PER_FLASHCARD
     except Exception as e:
         log.warning(f"Error calculating flashcard XP: {e}")
 
     # 4. XP from completed daily challenges: +50 XP each
     try:
         desafios = db.execute(
-            """SELECT COUNT(*) FROM desafios
+            """SELECT COUNT(*) FROM desafio_diario
             WHERE user_id = ?
-            AND finalizado = 1
-            AND date(created_at) >= ? AND date(created_at) <= ?""",
+            AND completado = 1
+            AND data >= ? AND data <= ?""",
             (user_id, week_start, week_end)
         ).fetchone()
         if desafios and desafios[0]:
@@ -288,8 +285,8 @@ def calculate_user_weekly_xp(db, user_id: int, week_start: str, week_end: str) -
     try:
         topicos = db.execute(
             """SELECT COUNT(*) FROM edital
-            WHERE user_id = ? AND concluido = 1
-            AND date(updated_at) >= ? AND date(updated_at) <= ?""",
+            WHERE user_id = ? AND status = 'concluido'
+            AND date(mastery_updated_at) >= ? AND date(mastery_updated_at) <= ?""",
             (user_id, week_start, week_end)
         ).fetchone()
         if topicos and topicos[0]:
@@ -340,8 +337,8 @@ def calculate_user_weekly_xp(db, user_id: int, week_start: str, week_end: str) -
     try:
         simulados = db.execute(
             """SELECT COUNT(*) FROM simulados
-            WHERE user_id = ? AND finalizado = 1
-            AND date(created_at) >= ? AND date(created_at) <= ?""",
+            WHERE user_id = ? AND status = 'finalizado'
+            AND date(finalizado_at) >= ? AND date(finalizado_at) <= ?""",
             (user_id, week_start, week_end)
         ).fetchone()
         if simulados and simulados[0]:
@@ -446,12 +443,17 @@ def ensure_user_league(db, user_id: int) -> dict:
         # Populate with bots
         populate_bots(db, league_id, tier)
 
-    # Add user to league
+    # Add user to league (or update XP if already member)
     xp_data = calculate_user_weekly_xp(db, user_id, week_start, week_end)
     db.execute(
         """INSERT OR IGNORE INTO league_members (league_id, user_id, weekly_xp, rank, promoted, demoted)
            VALUES (?, ?, ?, 0, 0, 0)""",
         (league_id, user_id, xp_data["total"])
+    )
+    # Always update XP to reflect current activity
+    db.execute(
+        "UPDATE league_members SET weekly_xp = ? WHERE league_id = ? AND user_id = ?",
+        (xp_data["total"], league_id, user_id)
     )
     db.commit()
 
