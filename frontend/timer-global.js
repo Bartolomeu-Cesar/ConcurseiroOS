@@ -230,6 +230,18 @@
         overlay.querySelector('#gtw-cancel').onclick = () => overlay.remove();
         overlay.querySelector('#gtw-confirm').onclick = () => {
             overlay.remove();
+            // Register elapsed time before clearing
+            const state = getTimerState();
+            if (state) {
+                const elapsedSec = state.totalSeconds - Math.max(0, Math.floor((state.endTime - Date.now()) / 1000));
+                if (elapsedSec >= 60) { // At least 1 minute
+                    const horas = elapsedSec / 3600;
+                    fetch('/api/sessoes-estudo/registrar', {
+                        method: 'POST', headers: {'Content-Type':'application/json'},
+                        body: JSON.stringify({ horas: Math.round(horas * 100) / 100, materia: state.materia, tipo: state.tipo || 'timer' })
+                    }).catch(() => {});
+                }
+            }
             clearTimerState();
             removeWidget();
             stopTimerLoop();

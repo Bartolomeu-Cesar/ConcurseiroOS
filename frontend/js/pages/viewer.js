@@ -174,6 +174,9 @@ let paused = false;
 let limitSeconds = 15 * 60;
 let startedAt = null;
 
+// --- Reading Session Time Tracking ---
+const _sessionOpenedAt = Date.now();
+
 const display = document.getElementById('timer-display');
 
 function fmt(s) {
@@ -277,6 +280,22 @@ document.getElementById('btn-overlay-ok').addEventListener('click', () => {
 function onLeave() {
   saveOnExit();
   finishTimer(false);
+  // Report reading time to streak (horas_estudadas)
+  const readingSeconds = Math.floor((Date.now() - _sessionOpenedAt) / 1000);
+  if (readingSeconds >= 60) { // Only report if read for at least 1 minute
+    const horas = readingSeconds / 3600;
+    const materia = path.split('/')[0] || 'Leitura PDF';
+    fetch('/api/sessoes-estudo/registrar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        materia: materia,
+        horas: Math.round(horas * 10000) / 10000,
+        tipo: 'leitura',
+      }),
+      keepalive: true
+    }).catch(() => {});
+  }
 }
 
 document.getElementById('btn-voltar').addEventListener('click', (e) => {
