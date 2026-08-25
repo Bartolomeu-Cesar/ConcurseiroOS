@@ -1323,6 +1323,14 @@ function initDragDrop() {
 
 
 // ===== AGENDA DO DIA (Micro-planning) =====
+function _toastDash(msg) {
+  const t = document.createElement('div');
+  t.style.cssText = 'position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:10px;background:var(--bg-surface,#313244);color:var(--text,#cdd6f4);font-size:0.85rem;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,0.3);z-index:9999;animation:fadeIn 0.3s ease;';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity 0.3s'; setTimeout(() => t.remove(), 300); }, 3000);
+}
+
 async function loadAgendaHoje() {
   const container = document.getElementById('agenda-blocos');
   if (!container) return;
@@ -1368,24 +1376,62 @@ async function loadAgendaHoje() {
 window.loadAgendaHoje = loadAgendaHoje;
 
 window.openStudyPrefs = function() {
-  // Simple prompt-based config (pode evoluir para modal)
-  const hora_inicio = prompt('Horário de início dos estudos (HH:MM):', '08:00');
-  if (!hora_inicio) return;
-  const hora_fim = prompt('Horário de fim dos estudos (HH:MM):', '12:00');
-  if (!hora_fim) return;
-  const bloco = prompt('Duração de cada bloco em minutos:', '25');
-  if (!bloco) return;
+  const overlay = document.createElement('div');
+  overlay.id = 'modal-study-prefs';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(30,30,46,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;animation:fadeIn 0.2s ease;';
+  overlay.innerHTML = `
+    <div style="background:var(--bg-surface, #313244);border:1px solid var(--border, #45475a);border-radius:16px;padding:24px;max-width:360px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+      <h3 style="color:var(--text, #cdd6f4);margin:0 0 16px;font-size:1rem;">⚙️ Configurar Horário de Estudo</h3>
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div style="display:flex;gap:8px;">
+          <div style="flex:1;">
+            <label style="font-size:0.72rem;color:var(--text-sub);">Início</label>
+            <input type="time" id="pref-hora-inicio" value="08:00" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85rem;">
+          </div>
+          <div style="flex:1;">
+            <label style="font-size:0.72rem;color:var(--text-sub);">Fim</label>
+            <input type="time" id="pref-hora-fim" value="12:00" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85rem;">
+          </div>
+        </div>
+        <div>
+          <label style="font-size:0.72rem;color:var(--text-sub);">Bloco de estudo (minutos)</label>
+          <input type="number" id="pref-bloco" value="25" min="15" max="60" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85rem;">
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <button onclick="document.getElementById('modal-study-prefs').remove()" style="flex:1;padding:10px;background:var(--border);color:var(--text);border:none;border-radius:8px;cursor:pointer;font-weight:600;">Cancelar</button>
+          <button onclick="saveStudyPrefsModal()" style="flex:1;padding:10px;background:var(--accent);color:#1e1e2e;border:none;border-radius:8px;cursor:pointer;font-weight:600;">Salvar</button>
+        </div>
+      </div>
+    </div>
+  `;
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  document.body.appendChild(overlay);
+
+  // Carregar valores atuais
+  fetch('/api/calendario/preferencias').then(r => r.json()).then(data => {
+    document.getElementById('pref-hora-inicio').value = data.hora_inicio || '08:00';
+    document.getElementById('pref-hora-fim').value = data.hora_fim || '12:00';
+    document.getElementById('pref-bloco').value = data.bloco_min || 25;
+  }).catch(() => {});
+};
+
+window.saveStudyPrefsModal = function() {
+  const hora_inicio = document.getElementById('pref-hora-inicio').value;
+  const hora_fim = document.getElementById('pref-hora-fim').value;
+  const bloco_min = parseInt(document.getElementById('pref-bloco').value) || 25;
 
   fetch('/api/calendario/preferencias', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({
-      hora_inicio, hora_fim,
-      bloco_min: parseInt(bloco) || 25,
+      hora_inicio, hora_fim, bloco_min,
       pausa_min: 5, pausa_longa_min: 15, blocos_antes_pausa_longa: 4,
       dias_estudo: [0,1,2,3,4,5]
     })
-  }).then(() => { loadAgendaHoje(); });
+  }).then(() => {
+    document.getElementById('modal-study-prefs').remove();
+    loadAgendaHoje();
+  });
 };
 
 // Auto-load agenda
@@ -1523,15 +1569,37 @@ window.gerarSimuladoAutomatico = async function() {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      alert('Erro: ' + (err.detail || 'Não foi possível gerar'));
+      _toastDash('Erro: ' + (err.detail || 'Não foi possível gerar'));
       return;
     }
     const data = await res.json();
-    alert(`✅ ${data.mensagem}\n\nDistribuição:\n${data.distribuicao.map(d => `• ${d.materia}: ${d.questoes}q (${d.peso_pct}%)`).join('\n')}`);
-    // Redirecionar para o simulado
-    window.location.href = `/questoes.html#simulado-${data.id}`;
+
+    // Modal de confirmação com distribuição
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(30,30,46,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;animation:fadeIn 0.2s ease;';
+    overlay.innerHTML = `
+      <div style="background:var(--bg-surface, #313244);border:1px solid var(--border, #45475a);border-radius:16px;padding:24px;max-width:400px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+        <div style="font-size:2rem;text-align:center;margin-bottom:8px;">✅</div>
+        <h3 style="color:var(--text);margin:0 0 8px;text-align:center;font-size:1rem;">Simulado Gerado!</h3>
+        <p style="color:var(--text-sub);font-size:0.82rem;text-align:center;margin:0 0 16px;">${data.total_questoes} questões · ${data.tempo_limite_min} minutos</p>
+        <div style="max-height:200px;overflow-y:auto;margin-bottom:16px;">
+          ${data.distribuicao.map(d => `
+            <div style="display:flex;justify-content:space-between;padding:6px 8px;font-size:0.78rem;border-bottom:1px solid var(--border);">
+              <span style="color:var(--text);">${d.materia}</span>
+              <span style="color:var(--text-sub);">${d.questoes}q (${d.peso_pct}%)</span>
+            </div>
+          `).join('')}
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button onclick="this.closest('div[style*=fixed]').remove()" style="flex:1;padding:10px;background:var(--border);color:var(--text);border:none;border-radius:8px;cursor:pointer;font-weight:600;">Depois</button>
+          <button onclick="this.closest('div[style*=fixed]').remove();window.location.href='/questoes.html#simulado-${data.id}'" style="flex:1;padding:10px;background:var(--accent);color:#1e1e2e;border:none;border-radius:8px;cursor:pointer;font-weight:600;">Iniciar Agora</button>
+        </div>
+      </div>
+    `;
+    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+    document.body.appendChild(overlay);
   } catch(e) {
-    alert('Erro ao gerar simulado: ' + e.message);
+    _toastDash('Erro ao gerar simulado: ' + e.message);
   }
 };
 
