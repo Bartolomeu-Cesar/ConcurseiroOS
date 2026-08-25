@@ -264,8 +264,7 @@
     // If we're on the main page, navigate to section directly
     if (currentPath === '/' || currentPath === '/index.html') {
       if (typeof navigateTo === 'function') {
-        const btn = document.querySelector(`[data-nav="${tabId}"]`);
-        navigateTo(tabId, btn);
+        navigateTo(tabId);
       }
       closeSidebar();
       return false;

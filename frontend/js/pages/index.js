@@ -47,13 +47,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (hash && hashTabMap[hash]) {
     const tabId = hashTabMap[hash];
-    const btn = document.querySelector(`[data-nav="${tabId}"]`);
-    if (btn) navigateTo(tabId, btn);
+    navigateTo(tabId);
+    // Clean hash from URL without reload
+    history.replaceState(null, '', '/');
   } else {
     const saved = localStorage.getItem('concurseiro_active_tab');
     if (saved) {
-      const btn = document.querySelector(`[data-nav="${saved}"]`);
-      if (btn) navigateTo(saved, btn);
+      navigateTo(saved);
     }
   }
   // Load user info for avatar
