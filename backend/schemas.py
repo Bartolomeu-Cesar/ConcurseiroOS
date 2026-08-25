@@ -487,6 +487,8 @@ class QuestionLinkBatchFiltro(BaseModel):
     created_at: str | None = None
     materia_atual: str | None = None
     banca: str | None = None
+    sem_materia: bool | None = None
+    prova_origem: str | None = None
 
 
 class QuestionLinkBatchAtualizar(BaseModel):

@@ -762,12 +762,16 @@ async function loadProvas() {
       const status = p.gabarito_completo
         ? '<span style="color:#a6e3a1;">✅ Gabarito completo</span>'
         : `<span style="color:#fab387;">⚠️ ${p.sem_gabarito} sem gabarito</span>`;
-      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;">
-        <div>
-          <strong style="color:var(--text);">${p.prova}</strong>
-          <span style="font-size:0.75rem;color:var(--text-sub);margin-left:8px;">${p.banca || ''} · ${p.total_questoes} questões · ${status}</span>
+      const materiaLabel = p.materia ? `<span style="font-size:0.7rem;color:#a6e3a1;background:rgba(166,227,161,0.1);padding:1px 6px;border-radius:4px;margin-left:6px;">📚 ${p.materia}</span>` : '<span style="font-size:0.7rem;color:#fab387;margin-left:6px;">⚠️ sem matéria</span>';
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;flex-wrap:wrap;gap:6px;">
+        <div style="flex:1;min-width:200px;">
+          <strong style="color:var(--text);">${p.prova}</strong>${materiaLabel}
+          <div style="font-size:0.75rem;color:var(--text-sub);margin-top:2px;">${p.banca || ''} · ${p.total_questoes} questões · ${status}</div>
         </div>
-        <button onclick="deleteProva('${p.prova.replace(/'/g, "\\'")}')" title="Excluir prova inteira" style="background:none;border:none;color:#f38ba8;cursor:pointer;font-size:1.1rem;">🗑️</button>
+        <div style="display:flex;gap:4px;">
+          <button onclick="vincularProvaMateria('${p.prova.replace(/'/g, "\\'")}')" title="Vincular matéria" style="background:none;border:1px solid #89b4fa;color:#89b4fa;cursor:pointer;font-size:0.75rem;border-radius:6px;padding:4px 8px;">📚 Vincular</button>
+          <button onclick="deleteProva('${p.prova.replace(/'/g, "\\'")}')" title="Excluir prova inteira" style="background:none;border:none;color:#f38ba8;cursor:pointer;font-size:1.1rem;">🗑️</button>
+        </div>
       </div>`;
     }).join('');
   } catch {
@@ -793,6 +797,40 @@ async function deleteProva(provaNome) {
   }
 }
 window.deleteProva = deleteProva;
+
+async function vincularProvaMateria(provaNome) {
+  // Buscar matérias disponíveis
+  let materias = [];
+  try { materias = await fetch('/api/edital/materias-disponiveis').then(r => r.json()); } catch {}
+
+  const materia = prompt(
+    `📚 Vincular toda a prova "${provaNome}" a qual matéria?\n\nMatérias do edital:\n${materias.map((m, i) => `${i+1}. ${m}`).join('\n')}\n\nDigite o nome da matéria:`
+  );
+  if (!materia || !materia.trim()) return;
+
+  try {
+    const res = await fetch('/api/questoes/vincular-lote', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        filtro: { prova_origem: provaNome },
+        atualizar: { materia: materia.trim() }
+      })
+    });
+    const result = await res.json();
+    if (result.ok) {
+      toast(`✅ ${result.atualizadas} questões da prova vinculadas a "${materia.trim()}"!`, 'success');
+      loadProvas();
+      loadBanco();
+      loadMaterias();
+    } else {
+      toast('Erro: ' + (result.detail || 'desconhecido'), 'error');
+    }
+  } catch {
+    toast('Erro de conexão.', 'error');
+  }
+}
+window.vincularProvaMateria = vincularProvaMateria;
 
 // ==================== BANCO COMPLETO ====================
 async function loadBanco() {
@@ -1041,16 +1079,37 @@ async function loadLoteOptions() {
     selMat.innerHTML = '<option value="">Manter atual</option>' +
       materias.map(m => `<option value="${m}">${m}</option>`).join('');
   } catch(e) {}
+  // Auto-preview "sem matéria" on load
+  previewLote();
 }
 
+function changeLoteFiltro() {
+  const tipo = document.getElementById('lote-filtro-tipo').value;
+  const dataWrapper = document.getElementById('lote-data-wrapper');
+  if (tipo === 'data') {
+    dataWrapper.style.display = 'block';
+  } else {
+    dataWrapper.style.display = 'none';
+  }
+  previewLote();
+}
+window.changeLoteFiltro = changeLoteFiltro;
+
 async function previewLote() {
-  const data = document.getElementById('lote-data').value;
+  const tipo = document.getElementById('lote-filtro-tipo')?.value || 'sem_materia';
   const el = document.getElementById('lote-preview');
   const selBanca = document.getElementById('lote-banca');
-  if (!data) { el.innerHTML = ''; selBanca.innerHTML = '<option value="">Todas</option>'; return; }
 
-  const questoes = await fetch(`/api/questoes?limit=9999`).then(r => r.json());
-  const filtered = questoes.filter(q => q.created_at === data);
+  const questoes = await fetch(`/api/questoes?limit=9999`).then(r => r.json()).catch(() => []);
+
+  let filtered;
+  if (tipo === 'sem_materia') {
+    filtered = questoes.filter(q => !q.materia || q.materia.trim() === '');
+  } else {
+    const data = document.getElementById('lote-data').value;
+    if (!data) { el.innerHTML = ''; selBanca.innerHTML = '<option value="">Todas</option>'; return; }
+    filtered = questoes.filter(q => q.created_at === data);
+  }
 
   // Popular bancas
   const bancas = [...new Set(filtered.map(q => q.banca).filter(b => b))];
@@ -1062,22 +1121,27 @@ async function previewLote() {
 
   const banca = selBanca.value;
   const final = banca ? filtered.filter(q => q.banca === banca) : filtered;
-  const semMateria = final.filter(q => !q.materia).length;
-  el.innerHTML = `📋 <strong>${final.length}</strong> questões selecionadas` +
-    (semMateria > 0 ? ` (${semMateria} sem disciplina)` : ' (todas já vinculadas)');
+  const label = tipo === 'sem_materia' ? '⚠️ Questões sem disciplina' : '📋 Questões selecionadas';
+  el.innerHTML = `${label}: <strong>${final.length}</strong>`;
 }
 window.previewLote = previewLote;
 
 async function aplicarLote() {
-  const data = document.getElementById('lote-data').value;
+  const tipo = document.getElementById('lote-filtro-tipo')?.value || 'sem_materia';
   const banca = document.getElementById('lote-banca').value;
   const materia = document.getElementById('lote-materia').value;
   const topico = document.getElementById('lote-topico').value.trim();
 
-  if (!data) { alert('Selecione uma data de importação.'); return; }
   if (!materia && !topico) { alert('Informe pelo menos a disciplina ou tópico.'); return; }
 
-  const filtro = { created_at: data };
+  const filtro = {};
+  if (tipo === 'sem_materia') {
+    filtro.sem_materia = true;
+  } else {
+    const data = document.getElementById('lote-data').value;
+    if (!data) { alert('Selecione uma data de importação.'); return; }
+    filtro.created_at = data;
+  }
   if (banca) filtro.banca = banca;
 
   const atualizar = {};

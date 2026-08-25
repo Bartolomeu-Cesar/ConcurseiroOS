@@ -390,9 +390,16 @@
   <div id="tab-banco" class="qtab-content">
     <div class="panel">
       <h2>🔗 Vincular Disciplina em Lote</h2>
-      <p style="font-size:0.82rem;color:var(--text-sub);margin-bottom:10px;">Selecione um filtro (data de importação) e atribua disciplina/tópico a todas as questões de uma vez.</p>
+      <p style="font-size:0.82rem;color:var(--text-sub);margin-bottom:10px;">Selecione um filtro e atribua disciplina/tópico a todas as questões de uma vez.</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
         <div style="flex:1;min-width:150px;">
+          <label style="font-size:0.75rem;color:var(--text-sub);">🎯 Filtro</label>
+          <select id="lote-filtro-tipo" onchange="changeLoteFiltro()" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);margin-top:4px;">
+            <option value="sem_materia">⚠️ Sem matéria atribuída</option>
+            <option value="data">📅 Por data de importação</option>
+          </select>
+        </div>
+        <div id="lote-data-wrapper" style="flex:1;min-width:150px;display:none;">
           <label style="font-size:0.75rem;color:var(--text-sub);">📅 Data de Importação</label>
           <select id="lote-data" onchange="previewLote()" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);margin-top:4px;">
             <option value="">Selecione...</option>

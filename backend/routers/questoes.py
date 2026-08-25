@@ -548,15 +548,28 @@ def listar_provas(conn=Depends(get_db_session), user_id: int = Depends(get_user_
         ORDER BY MAX(id) DESC
     """, (user_id,)).fetchall()
 
-    return [{
-        "prova": r[0],
-        "total_questoes": r[1],
-        "com_gabarito": r[2],
-        "sem_gabarito": r[1] - r[2],
-        "banca": r[3],
-        "importada_em": r[4],
-        "gabarito_completo": r[2] == r[1],
-    } for r in rows]
+    result = []
+    for r in rows:
+        # Buscar matéria predominante da prova
+        mat_row = conn.execute("""
+            SELECT materia, COUNT(*) as cnt FROM questoes
+            WHERE user_id = ? AND prova_origem = ? AND materia != '' AND materia IS NOT NULL
+            GROUP BY materia ORDER BY cnt DESC LIMIT 1
+        """, (user_id, r[0])).fetchone()
+        materia = mat_row[0] if mat_row else ""
+
+        result.append({
+            "prova": r[0],
+            "total_questoes": r[1],
+            "com_gabarito": r[2],
+            "sem_gabarito": r[1] - r[2],
+            "banca": r[3],
+            "importada_em": r[4],
+            "gabarito_completo": r[2] == r[1],
+            "materia": materia,
+        })
+
+    return result
 
 
 @router.delete("/api/questoes/provas/{prova_nome}", summary="Excluir prova inteira",
@@ -710,7 +723,9 @@ def vincular_questoes_lote(body: QuestionLinkBatch, conn=Depends(get_db_session)
     if filtro.created_at:
         where += " AND created_at = ?"
         params.append(filtro.created_at)
-    if filtro.materia_atual:
+    if filtro.sem_materia:
+        where += " AND (materia IS NULL OR materia = '')"
+    elif filtro.materia_atual:
         where += " AND materia = ?"
         params.append(filtro.materia_atual)
     elif filtro.materia_atual == "":
@@ -718,6 +733,9 @@ def vincular_questoes_lote(body: QuestionLinkBatch, conn=Depends(get_db_session)
     if filtro.banca:
         where += " AND banca = ?"
         params.append(filtro.banca)
+    if filtro.prova_origem:
+        where += " AND prova_origem = ?"
+        params.append(filtro.prova_origem)
 
     # Construir SET
     campos_permitidos = ["materia", "topico", "banca", "dificuldade"]
