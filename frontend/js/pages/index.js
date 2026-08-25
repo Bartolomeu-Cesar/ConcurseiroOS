@@ -51,12 +51,17 @@ window.closeSidebar = closeSidebar;
     navigateTo(tabId);
     // Clean hash from URL without reload
     history.replaceState(null, '', '/');
+    // Clean redirect markers
+    localStorage.removeItem('concurseiro_active_tab');
+    localStorage.removeItem('concurseiro_tab_redirect');
   } else {
     const saved = localStorage.getItem('concurseiro_active_tab');
-    if (saved) {
+    const marker = localStorage.getItem('concurseiro_tab_redirect');
+    if (saved && marker) {
       navigateTo(saved);
-      // Clear after use to avoid stale state
+      // Clear after use
       localStorage.removeItem('concurseiro_active_tab');
+      localStorage.removeItem('concurseiro_tab_redirect');
     }
   }
   // Load user info for avatar

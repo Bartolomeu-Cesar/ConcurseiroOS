@@ -272,6 +272,7 @@
     // If on another page, save target tab and redirect to index
     // Using localStorage ensures the tab activates after page load (no hash race condition)
     localStorage.setItem('concurseiro_active_tab', tabId);
+    localStorage.setItem('concurseiro_tab_redirect', '1');
     const hashMap = {'tab-ciclo':'ciclo','tab-edital':'edital','tab-flashcards':'flashcards','tab-sumulas':'sumulas','tab-pdfs':'pdfs'};
     window.location.href = '/#' + (hashMap[tabId] || '');
     return false;

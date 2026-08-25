@@ -68,9 +68,20 @@
     (function() {
       var hash = window.location.hash.replace('#', '');
       var map = {'ciclo':'tab-ciclo','edital':'tab-edital','flashcards':'tab-flashcards','sumulas':'tab-sumulas','pdfs':'tab-pdfs'};
-      var target = map[hash] || localStorage.getItem('concurseiro_active_tab');
+      // Only activate from hash (cross-page navigation) or fresh localStorage redirect
+      var target = null;
+      if (hash && map[hash]) {
+        target = map[hash];
+      } else {
+        var saved = localStorage.getItem('concurseiro_active_tab');
+        // Only use saved if it was set in this navigation (has a timestamp marker)
+        var marker = localStorage.getItem('concurseiro_tab_redirect');
+        if (saved && marker) {
+          target = saved;
+          localStorage.removeItem('concurseiro_tab_redirect');
+        }
+      }
       if (target && target !== 'tab-pdfs') {
-        // Will be activated by index.js; remove default active from tab-pdfs
         document.addEventListener('DOMContentLoaded', function() {
           var tabs = document.querySelectorAll('.tab-content');
           tabs.forEach(function(t) { t.classList.remove('active'); });
