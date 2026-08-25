@@ -76,8 +76,8 @@
         <div class="sidebar-section-title">Estudar</div>
         <ul class="sidebar-nav">
           <li><a href="/" class="${activeClass('/')}"><span class="nav-icon" aria-hidden="true">📖</span><span class="nav-label">PDFs / Leitura</span></a></li>
-          <li><a href="/#edital" onclick="goSection('tab-edital')"><span class="nav-icon" aria-hidden="true">📋</span><span class="nav-label">Edital</span></a></li>
-          <li><a href="/#ciclo" onclick="goSection('tab-ciclo')"><span class="nav-icon" aria-hidden="true">🔄</span><span class="nav-label">Ciclo</span></a></li>
+          <li><a href="/#edital" onclick="goSection('tab-edital', event)"><span class="nav-icon" aria-hidden="true">📋</span><span class="nav-label">Edital</span></a></li>
+          <li><a href="/#ciclo" onclick="goSection('tab-ciclo', event)"><span class="nav-icon" aria-hidden="true">🔄</span><span class="nav-label">Ciclo</span></a></li>
         </ul>
       </div>
 
@@ -86,8 +86,8 @@
         <ul class="sidebar-nav">
           <li><a href="/questoes.html" class="${activeClass('/questoes')}"><span class="nav-icon" aria-hidden="true">❓</span><span class="nav-label">Questões</span><span class="nav-badge" id="badge-questoes"></span></a></li>
           <li><a href="/caderno-erros.html" class="${activeClass('/caderno-erros')}"><span class="nav-icon" aria-hidden="true">📕</span><span class="nav-label">Caderno de Erros</span><span class="nav-badge" id="badge-caderno-erros"></span></a></li>
-          <li><a href="/#flashcards" onclick="goSection('tab-flashcards')"><span class="nav-icon" aria-hidden="true">🧠</span><span class="nav-label">Flashcards</span><span class="nav-badge" id="badge-flashcards"></span></a></li>
-          <li><a href="/#sumulas" onclick="goSection('tab-sumulas')"><span class="nav-icon" aria-hidden="true">⚖️</span><span class="nav-label">Súmulas</span><span class="nav-badge" id="badge-sumulas"></span></a></li>
+          <li><a href="/#flashcards" onclick="goSection('tab-flashcards', event)"><span class="nav-icon" aria-hidden="true">🧠</span><span class="nav-label">Flashcards</span><span class="nav-badge" id="badge-flashcards"></span></a></li>
+          <li><a href="/#sumulas" onclick="goSection('tab-sumulas', event)"><span class="nav-icon" aria-hidden="true">⚖️</span><span class="nav-label">Súmulas</span><span class="nav-badge" id="badge-sumulas"></span></a></li>
           <li><a href="/social.html#ai" onclick="goSocialTab('ai')"><span class="nav-icon" aria-hidden="true">🤖</span><span class="nav-label">AI Tutor</span></a></li>
           <li><a href="/batalha.html" class="${activeClass('/batalha')}"><span class="nav-icon" aria-hidden="true">⚔️</span><span class="nav-label">Batalha</span></a></li>
           <li><a href="/studyroom.html" class="${activeClass('/studyroom')}"><span class="nav-icon" aria-hidden="true">🏠</span><span class="nav-label">Sala de Estudos</span></a></li>
@@ -257,8 +257,11 @@
     localStorage.setItem('sidebar_collapsed', isCollapsed);
   };
 
-  window.goSection = function (tabId) {
-    // If we're on the main page, navigate to section
+  window.goSection = function (tabId, event) {
+    // Prevent default link navigation to avoid double-redirect
+    if (event) event.preventDefault();
+
+    // If we're on the main page, navigate to section directly
     if (currentPath === '/' || currentPath === '/index.html') {
       if (typeof navigateTo === 'function') {
         const btn = document.querySelector(`[data-nav="${tabId}"]`);
@@ -267,7 +270,9 @@
       closeSidebar();
       return false;
     }
-    // If on another page, redirect with hash
+    // If on another page, save target tab and redirect to index
+    // Using localStorage ensures the tab activates after page load (no hash race condition)
+    localStorage.setItem('concurseiro_active_tab', tabId);
     const hashMap = {'tab-ciclo':'ciclo','tab-edital':'edital','tab-flashcards':'flashcards','tab-sumulas':'sumulas','tab-pdfs':'pdfs'};
     window.location.href = '/#' + (hashMap[tabId] || '');
     return false;
