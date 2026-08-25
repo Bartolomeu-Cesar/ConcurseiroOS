@@ -460,8 +460,10 @@ def list_conversations(
             "nao_lidas": unread,
         })
 
-    # Ordenar: não lidas primeiro, depois por data da última msg
-    conversations.sort(key=lambda x: (-(x["nao_lidas"]), -(x["created_at"] or "")), reverse=False)
+    # Ordenar: não lidas primeiro, depois por data da última msg (mais recente primeiro)
+    conversations.sort(key=lambda x: (-x["nao_lidas"], x["created_at"] or ""), reverse=False)
+    conversations.sort(key=lambda x: x["created_at"] or "", reverse=True)
+    conversations.sort(key=lambda x: x["nao_lidas"], reverse=True)
 
     total_unread = sum(c["nao_lidas"] for c in conversations)
     return {"conversations": conversations, "total_unread": total_unread}
