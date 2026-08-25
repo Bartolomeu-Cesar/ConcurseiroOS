@@ -340,6 +340,54 @@
         </div>
       </details>
     </div>
+
+    <!-- Importar via URL -->
+    <div class="panel" style="border-left:4px solid var(--green);">
+      <h2>🌐 Importar Questões via URL</h2>
+      <p style="font-size:0.82rem;color:var(--text-sub);margin-bottom:12px;">
+        Cole o link direto do PDF da prova (de sites como Gabarite, PCI Concursos, Cebraspe). O sistema baixa e importa automaticamente.
+      </p>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div>
+          <label style="font-size:0.8rem;color:#a6adc8;">URL da Prova (PDF) *</label>
+          <input type="url" id="url-import-prova" placeholder="https://cdn.cebraspe.org.br/.../prova.pdf" style="width:100%;">
+        </div>
+        <div>
+          <label style="font-size:0.8rem;color:#a6adc8;">URL do Gabarito (opcional)</label>
+          <input type="url" id="url-import-gabarito" placeholder="https://cdn.cebraspe.org.br/.../gabarito.pdf" style="width:100%;">
+        </div>
+        <div class="form-row" style="align-items:flex-end;">
+          <div style="flex:1;">
+            <label style="font-size:0.8rem;color:#a6adc8;">Banca</label>
+            <input type="text" id="url-import-banca" placeholder="CESPE" value="CESPE">
+          </div>
+          <div style="flex:1;">
+            <label style="font-size:0.8rem;color:#a6adc8;">Nome da Prova</label>
+            <input type="text" id="url-import-nome" placeholder="Ex: PC-MA 2018 Perito">
+          </div>
+          <div style="flex:1;">
+            <label style="font-size:0.8rem;color:#a6adc8;">Matéria (se única)</label>
+            <input type="text" id="url-import-materia" placeholder="Deixe vazio para auto-detectar">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="btn btn-success" onclick="importarViaURL()" style="padding:10px 20px;font-size:0.9rem;">🌐 Importar da URL</button>
+          <span id="url-import-status" style="font-size:0.82rem;color:var(--text-sub);"></span>
+        </div>
+      </div>
+      <details style="margin-top:12px;">
+        <summary style="font-size:0.8rem;color:var(--blue);cursor:pointer;">ℹ️ Links recomendados para PC-MA / Perito CESPE</summary>
+        <div style="font-size:0.78rem;color:var(--text-sub);margin-top:8px;padding:8px;background:var(--bg);border-radius:6px;line-height:1.8;">
+          <strong>Sites com provas gratuitas:</strong><br>
+          • <a href="https://gabarite.com.br/provas-de-concursos/3093-perito-criminal-pc-ma-cespe-2018" target="_blank" style="color:var(--blue);">PC-MA 2018 — Perito Criminal (CESPE)</a><br>
+          • <a href="https://gabarite.com.br/provas-de-concursos/orgao/pc-ma" target="_blank" style="color:var(--blue);">Todas as provas PC-MA</a><br>
+          • <a href="https://www.pciconcursos.com.br/provas/perito-criminal-policia-civil/" target="_blank" style="color:var(--blue);">PCI: Provas Perito Criminal (várias PCs)</a><br>
+          • <a href="https://gabarite.com.br/provas/banca/cespe" target="_blank" style="color:var(--blue);">Todas as provas CESPE</a><br><br>
+          <em>Dica: Clique em "Baixar Prova" no site → copie a URL do PDF que abrir → cole acima.</em>
+        </div>
+      </details>
+    </div>
+
     <div class="panel">
       <h2>➕ Cadastrar Nova Questão</h2>
       <div class="form-row">

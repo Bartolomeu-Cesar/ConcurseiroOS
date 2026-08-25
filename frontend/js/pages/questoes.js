@@ -606,6 +606,59 @@ async function importarQuestoesPDF() {
 }
 window.importarQuestoesPDF = importarQuestoesPDF;
 
+async function importarViaURL() {
+  const provaUrl = document.getElementById('url-import-prova').value.trim();
+  const gabaritoUrl = document.getElementById('url-import-gabarito').value.trim();
+  const banca = document.getElementById('url-import-banca').value.trim() || 'CESPE';
+  const nomProva = document.getElementById('url-import-nome').value.trim();
+  const materia = document.getElementById('url-import-materia').value.trim();
+  const status = document.getElementById('url-import-status');
+
+  if (!provaUrl) {
+    toast('Cole a URL do PDF da prova.', 'error');
+    return;
+  }
+
+  status.textContent = '⏳ Baixando e importando... (pode demorar até 60s)';
+  status.style.color = 'var(--blue)';
+
+  try {
+    const res = await fetch('/api/questoes/importar-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prova_url: provaUrl,
+        gabarito_url: gabaritoUrl || '',
+        banca: banca,
+        prova_nome: nomProva,
+        materia: materia,
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      status.textContent = '❌ ' + (data.detail || 'Erro ao importar');
+      status.style.color = 'var(--red)';
+      return;
+    }
+
+    status.textContent = `✅ ${data.questoes_importadas} questões importadas! (${data.duplicatas_ignoradas} duplicatas ignoradas)`;
+    status.style.color = 'var(--green)';
+    toast(`✅ ${data.questoes_importadas} questões importadas de ${data.prova_nome}`);
+
+    // Limpar campos
+    document.getElementById('url-import-prova').value = '';
+    document.getElementById('url-import-gabarito').value = '';
+    document.getElementById('url-import-nome').value = '';
+
+  } catch (e) {
+    status.textContent = '❌ Erro: ' + e.message;
+    status.style.color = 'var(--red)';
+  }
+}
+window.importarViaURL = importarViaURL;
+
 async function aplicarGabaritoPDF() {
   const gabInput = document.getElementById('pdf-import-gabarito');
   const file = gabInput?.files[0];
