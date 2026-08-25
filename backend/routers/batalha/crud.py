@@ -16,6 +16,7 @@ from .helpers import (
     _generate_code,
     _is_battle_admin,
     _round_difficulty,
+    _calcular_tempo_questao_batalha,
 )
 
 router = APIRouter(prefix="/api/batalha", tags=["Batalha de Questões"])
@@ -222,6 +223,9 @@ def status_sala(
                 "alternativas": alternativas_shuffled,
                 "_mapping": mapping,  # Para o frontend traduzir ao responder
                 "dificuldade": _round_difficulty(round_data["rodada_num"], battle["total_rodadas"]),
+                "tempo_segundos": _calcular_tempo_questao_batalha(
+                    round_data["enunciado"], len(alt_items), battle["tempo_por_questao"]
+                ),
                 # Só revelar acertos depois que todos responderam
                 "responderam": [
                     {"user_id": a["user_id"], "respondeu": True,

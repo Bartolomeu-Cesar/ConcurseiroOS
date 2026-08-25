@@ -7,7 +7,9 @@ let desafioQuestoes = [];
 let desafioIdx = 0;
 let desafioRespostas = [];
 let desafioTimer = null;
-let desafioTimerSeg = 15;
+let desafioTimerSeg = 30; // Agora dinâmico por questão (fallback 30s)
+let desafioTimerMax = 30; // Tempo total da questão atual
+let desafioStartTime = null; // Timestamp de início do desafio
 
 export async function loadDesafioDiarioCard() {
   try {
@@ -44,11 +46,16 @@ export function iniciarDesafioDiario() {
   if (!desafioDiarioData || !desafioDiarioData.questoes || desafioDiarioData.questoes.length === 0) return;
   if (desafioDiarioData.completado) return;
 
-  // Auto-start global timer if not already running
+  // Registrar timestamp de início para cálculo de tempo real
+  desafioStartTime = Date.now();
+
+  // Iniciar timer global para tracking visual
   try {
-    const timerState = localStorage.getItem('pomo_timer');
-    if (!timerState && typeof window.startGlobalTimer === 'function') {
-      window.startGlobalTimer('Desafio Diário', 25, 'questoes');
+    if (typeof window.startGlobalTimer === 'function') {
+      // Estimar tempo total: soma dos tempos adaptativos de todas as questões
+      const tempoTotalEstimado = desafioDiarioData.questoes.reduce((acc, q) => acc + (q.tempo_segundos || 30), 0);
+      const tempoMin = Math.ceil(tempoTotalEstimado / 60);
+      window.startGlobalTimer('Desafio Diário', tempoMin, 'questoes');
     }
   } catch(e) {}
 
@@ -68,7 +75,7 @@ function showDesafioModal() {
     <div class="desafio-modal" id="desafio-modal-content">
       <div class="desafio-modal-header">
         <h2>🎯 Desafio Diário</h2>
-        <span style="font-size:0.82rem;color:var(--text-sub);" id="desafio-timer-label">⏱ 15s</span>
+        <span style="font-size:0.82rem;color:var(--text-sub);" id="desafio-timer-label">⏱ --s</span>
       </div>
       <div class="desafio-timer-bar">
         <div class="desafio-timer-fill" id="desafio-timer-fill" style="width:100%"></div>
@@ -121,7 +128,11 @@ function showDesafioQuestion() {
     clearInterval(desafioTimer);
     const { letter } = e.detail;
 
-    desafioRespostas.push({ questao_id: desafioQuestoes[desafioIdx].id, resposta: letter });
+    desafioRespostas.push({
+      questao_id: desafioQuestoes[desafioIdx].id,
+      resposta: letter,
+      tempo_segundos: desafioTimerMax - desafioTimerSeg, // tempo real gasto
+    });
 
     setTimeout(() => {
       desafioIdx++;
@@ -129,29 +140,38 @@ function showDesafioQuestion() {
     }, 400);
   }, { once: true });
 
-  desafioTimerSeg = 15;
+  // Tempo adaptativo: usar tempo_segundos da API (baseado na complexidade da questão)
+  desafioTimerMax = q.tempo_segundos || 30;
+  desafioTimerSeg = desafioTimerMax;
   const timerFill = document.getElementById('desafio-timer-fill');
   const timerLabel = document.getElementById('desafio-timer-label');
 
   clearInterval(desafioTimer);
   timerFill.style.width = '100%';
-  timerLabel.textContent = '⏱ 15s';
+  timerLabel.textContent = `⏱ ${desafioTimerSeg}s`;
+  timerLabel.style.color = 'var(--text-sub)';
 
   desafioTimer = setInterval(() => {
     desafioTimerSeg--;
-    const pct = (desafioTimerSeg / 15) * 100;
+    const pct = (desafioTimerSeg / desafioTimerMax) * 100;
     timerFill.style.width = pct + '%';
     timerLabel.textContent = `⏱ ${desafioTimerSeg}s`;
 
     if (desafioTimerSeg <= 5) {
       timerLabel.style.color = 'var(--red)';
+    } else if (desafioTimerSeg <= 10) {
+      timerLabel.style.color = 'var(--yellow)';
     } else {
       timerLabel.style.color = 'var(--text-sub)';
     }
 
     if (desafioTimerSeg <= 0) {
       clearInterval(desafioTimer);
-      desafioRespostas.push({ questao_id: desafioQuestoes[desafioIdx].id, resposta: '' });
+      desafioRespostas.push({
+        questao_id: desafioQuestoes[desafioIdx].id,
+        resposta: '',
+        tempo_segundos: desafioTimerMax, // usou todo o tempo
+      });
       desafioIdx++;
       showDesafioQuestion();
     }
@@ -163,6 +183,27 @@ function showDesafioQuestion() {
 async function submitDesafioRespostas() {
   clearInterval(desafioTimer);
 
+  // Calcular tempo real gasto no desafio
+  const tempoRealSeg = desafioStartTime ? Math.round((Date.now() - desafioStartTime) / 1000) : 0;
+
+  // Parar timer global e registrar sessão de estudo com tempo real
+  try {
+    // Limpar o timer global (sem modal de confirmação)
+    localStorage.removeItem('pomo_timer');
+    const widget = document.getElementById('global-timer-widget');
+    if (widget) widget.remove();
+
+    // Registrar sessão de estudo com tempo REAL gasto (mínimo 10s para evitar registro de clique acidental)
+    if (tempoRealSeg >= 10) {
+      const horas = Math.round((tempoRealSeg / 3600) * 100) / 100;
+      fetch('/api/sessoes-estudo/registrar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ horas, materia: 'Desafio Diário', tipo: 'desafio_diario' })
+      }).catch(() => {});
+    }
+  } catch(e) {}
+
   const body = document.getElementById('desafio-body');
   body.innerHTML = '<div style="text-align:center;padding:30px;"><div style="font-size:2rem;margin-bottom:8px;">⏳</div><div style="color:var(--text-sub);">Calculando resultados...</div></div>';
 
@@ -173,6 +214,8 @@ async function submitDesafioRespostas() {
       body: JSON.stringify({ respostas: desafioRespostas })
     }).then(r => r.json());
 
+    // Adicionar tempo real ao resultado para exibição
+    result.tempo_real_seg = tempoRealSeg;
     showDesafioResults(result);
   } catch(e) {
     body.innerHTML = `<div style="text-align:center;color:var(--red);padding:20px;">Erro ao enviar respostas: ${e.message}</div>`;
@@ -192,11 +235,18 @@ function showDesafioResults(result) {
   const scoreColor = result.acertos >= 4 ? 'var(--green)' : result.acertos >= 3 ? 'var(--yellow)' : 'var(--red)';
   const emoji = result.acertos === result.total ? '🎉' : result.acertos >= 3 ? '👏' : '💪';
 
+  // Formatar tempo real
+  const tempoReal = result.tempo_real_seg || 0;
+  const tempoFmt = tempoReal >= 60
+    ? `${Math.floor(tempoReal / 60)}min ${tempoReal % 60}s`
+    : `${tempoReal}s`;
+
   body.innerHTML = `
     <div class="desafio-results">
       <div style="font-size:3rem;margin-bottom:8px;">${emoji}</div>
       <div class="desafio-results-score" style="color:${scoreColor};">${result.acertos}/${result.total}</div>
       <div class="desafio-results-xp">+${result.pontos_ganhos} XP</div>
+      <div style="font-size:0.8rem;color:var(--text-sub);margin-top:4px;">⏱ Tempo: ${tempoFmt}</div>
       ${result.streak_bonus > 0 ? `<div class="desafio-results-detail">🔥 Streak bonus: +${result.streak_bonus} pts</div>` : ''}
       <div style="margin-top:16px;text-align:left;">
         ${result.resultados.map((r, i) => `
@@ -220,6 +270,18 @@ function showDesafioResults(result) {
 
 export function closeDesafioModal() {
   clearInterval(desafioTimer);
+  // Parar timer global se o desafio foi abandonado
+  try {
+    const timerState = localStorage.getItem('pomo_timer');
+    if (timerState) {
+      const state = JSON.parse(timerState);
+      if (state.materia === 'Desafio Diário') {
+        localStorage.removeItem('pomo_timer');
+        const widget = document.getElementById('global-timer-widget');
+        if (widget) widget.remove();
+      }
+    }
+  } catch(e) {}
   const overlay = document.getElementById('desafio-modal-overlay');
   if (overlay) overlay.remove();
 }

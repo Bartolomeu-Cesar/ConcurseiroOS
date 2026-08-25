@@ -166,6 +166,26 @@ def _select_challenge_questions(conn, user_id: int, quantidade: int = 5) -> list
     return questions[:quantidade]
 
 
+def calcular_tempo_questao(enunciado: str, num_alternativas: int) -> int:
+    """Calcula tempo em segundos baseado na complexidade da questão.
+
+    Fundamentação científica:
+    - Velocidade média de leitura: ~200 palavras/min (Brysbaert, 2019)
+    - Tempo de processamento por alternativa: ~3s (Kyllonen & Zu, 2016)
+    - Tempo de decisão: +5s (margem para deliberação)
+    - Faixa: 20s-90s (desirable difficulty sem ser punitivo)
+
+    Para questões C/E (2 alternativas): tempo tende a ser menor.
+    Para questões longas com 5 alternativas: tempo maior.
+    """
+    palavras = len(enunciado.split()) if enunciado else 10
+    tempo_leitura = (palavras / 200) * 60  # segundos para ler o enunciado
+    tempo_alternativas = num_alternativas * 3  # 3s por alternativa
+    tempo_decisao = 5  # margem de deliberação
+    tempo = int(tempo_leitura + tempo_alternativas + tempo_decisao)
+    return max(20, min(90, tempo))  # clamp entre 20s e 90s
+
+
 class DesafioDiarioResposta(BaseModel):
     respostas: list[dict]  # [{questao_id: int, resposta: str}]
 
@@ -202,6 +222,7 @@ def get_desafio_diario(conn=Depends(get_db_session), user_id: int = Depends(get_
                     "enunciado": q_dict["enunciado"],
                     "alternativas": alternativas,
                     "dificuldade": q_dict.get("dificuldade", "Médio"),
+                    "tempo_segundos": calcular_tempo_questao(q_dict["enunciado"], len(alternativas)),
                 })
         return {
             "id": existing["id"],
@@ -248,6 +269,7 @@ def get_desafio_diario(conn=Depends(get_db_session), user_id: int = Depends(get_
             "enunciado": q["enunciado"],
             "alternativas": alternativas,
             "dificuldade": q.get("dificuldade", "Médio"),
+            "tempo_segundos": calcular_tempo_questao(q["enunciado"], len(alternativas)),
         })
 
     log.info(f"Desafio Diário gerado: id={desafio_id} user={user_id} questoes={len(questoes_fmt)}")
@@ -289,35 +311,39 @@ def responder_desafio_diario(body: DesafioDiarioResposta, conn=Depends(get_db_se
     acertos = 0
     total = 0
     resultados = []
+    tempo_total_seg = 0
 
     for resp in body.respostas:
         questao_id = resp.get("questao_id")
         resposta = resp.get("resposta", "")
+        tempo_individual = resp.get("tempo_segundos", 30)  # fallback 30s se não enviado
 
         if not questao_id:
             continue
 
         # Buscar questão
         questao = conn.execute(
-            "SELECT id, resposta_correta, materia FROM questoes WHERE id = ? AND user_id = ?",
+            "SELECT id, resposta_correta, materia, enunciado FROM questoes WHERE id = ? AND user_id = ?",
             (questao_id, user_id)
         ).fetchone()
 
         if not questao:
             resultados.append({"questao_id": questao_id, "acertou": False, "correta": "?"})
             total += 1
+            tempo_total_seg += tempo_individual
             continue
 
         acertou = 1 if resposta.upper() == questao["resposta_correta"].upper() else 0
         if acertou:
             acertos += 1
         total += 1
+        tempo_total_seg += tempo_individual
 
         # Registrar em questoes_respostas
         conn.execute("""
             INSERT INTO questoes_respostas (questao_id, resposta_usuario, acertou, tempo_segundos, data, user_id)
             VALUES (?, ?, ?, ?, ?, ?)
-        """, (questao_id, resposta, acertou, 15, hoje, user_id))
+        """, (questao_id, resposta, acertou, tempo_individual, hoje, user_id))
 
         resultados.append({
             "questao_id": questao_id,
@@ -361,8 +387,7 @@ def responder_desafio_diario(body: DesafioDiarioResposta, conn=Depends(get_db_se
     for _ in range(total):
         update_streak(conn, "questoes_resolvidas", user_id=user_id)
 
-    # Registrar sessão de estudo (tempo = total * 15seg por questão)
-    tempo_total_seg = total * 15
+    # Registrar sessão de estudo (tempo real baseado na complexidade das questões)
     horas = tempo_total_seg / 3600
     existing_sessao = conn.execute(
         "SELECT id, horas FROM sessoes_estudo WHERE data = ? AND materia = ? AND tipo = 'desafio_diario' AND user_id = ?",
