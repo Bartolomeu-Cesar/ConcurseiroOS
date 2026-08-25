@@ -110,7 +110,7 @@ function renderRevisao(pendentes) {
     const q = filtered[idx];
     const revisada = revisadasHoje.has(q.id);
 
-    // Recall indicator (0-100% — quanto menor, mais urgente)
+    // Recall indicator
     const recall = Math.round((q.recall_estimado || 0) * 100);
     const recallColor = recall <= 30 ? 'var(--ce-red, #f38ba8)' : recall <= 60 ? 'var(--ce-yellow, #f9e2af)' : 'var(--ce-green, #a6e3a1)';
     const recallLabel = recall <= 30 ? '🔴 Esquecendo' : recall <= 60 ? '🟡 Frágil' : '🟢 Estável';
@@ -122,14 +122,23 @@ function renderRevisao(pendentes) {
     // Revisões count
     const revisoes = q.revisoes_count || 0;
 
-    // Truncar enunciado para preview (expandível)
+    // Enunciado (expandível)
     const enunciadoFull = q.enunciado || '';
-    const enunciadoShort = enunciadoFull.length > 120 ? enunciadoFull.substring(0, 120) + '…' : enunciadoFull;
-    const needsExpand = enunciadoFull.length > 120;
+    const enunciadoShort = enunciadoFull.length > 150 ? enunciadoFull.substring(0, 150) + '…' : enunciadoFull;
+    const needsExpand = enunciadoFull.length > 150;
 
-    // Resposta errada vs correta
-    const respostaErrada = q.resposta_usuario || '?';
-    const respostaCorreta = q.resposta_correta || '?';
+    // Montar alternativas
+    const alternativas = [];
+    for (const letra of ['a', 'b', 'c', 'd', 'e']) {
+      const texto = q[`alternativa_${letra}`];
+      if (texto) {
+        alternativas.push({ letra: letra.toUpperCase(), texto });
+      }
+    }
+
+    // Resposta errada e correta
+    const respostaErrada = (q.resposta_usuario || '').toUpperCase();
+    const respostaCorreta = (q.resposta_correta || '').toUpperCase();
 
     html += `
       <div class="revisao-card ${revisada ? 'revisao-card--done' : ''}" id="card-${q.id}">
@@ -147,28 +156,26 @@ function renderRevisao(pendentes) {
 
         <div class="revisao-card__body">
           <p class="revisao-card__enunciado" id="enunciado-${q.id}">${escapeAttr(enunciadoShort)}</p>
-          ${needsExpand ? `<button class="revisao-card__expand" onclick="toggleEnunciado(${q.id}, '${escapeAttr(enunciadoFull).replace(/'/g, "\\'")}')">Ver completo ▾</button>` : ''}
+          ${needsExpand ? `<button class="revisao-card__expand" onclick="toggleEnunciado(${q.id}, this)" data-full="${escapeAttr(enunciadoFull)}">Ver completo ▾</button>` : ''}
         </div>
 
-        <div class="revisao-card__answer-comparison">
-          <div class="revisao-card__answer revisao-card__answer--wrong">
-            <span class="revisao-card__answer-label">Você marcou:</span>
-            <span class="revisao-card__answer-value">${escapeAttr(respostaErrada.toUpperCase())}</span>
-          </div>
-          <div class="revisao-card__answer revisao-card__answer--correct">
-            <span class="revisao-card__answer-label">Correta:</span>
-            <span class="revisao-card__answer-value">${escapeAttr(respostaCorreta.toUpperCase())}</span>
-          </div>
+        <div class="revisao-card__hint">
+          <span>Da última vez você marcou <strong style="color:var(--ce-wrong);">${respostaErrada}</strong> — tente novamente:</span>
         </div>
 
-        <div class="revisao-card__actions">
-          <button class="revisao-btn revisao-btn--errei" onclick="revisar(${q.id}, false)" ${revisada ? 'disabled' : ''}>
-            ❌ Errei de novo
-          </button>
-          <button class="revisao-btn revisao-btn--ok" onclick="revisar(${q.id}, true)" ${revisada ? 'disabled' : ''}>
-            ✅ Acertei agora
-          </button>
+        <div class="revisao-card__alternativas" id="alts-${q.id}">
+          ${alternativas.map(a => `
+            <button class="revisao-alt-btn"
+                    onclick="selecionarAlternativa(${q.id}, '${a.letra}', '${respostaCorreta}', '${respostaErrada}')"
+                    id="alt-${q.id}-${a.letra}"
+                    ${revisada ? 'disabled' : ''}>
+              <span class="revisao-alt-letra">${a.letra})</span>
+              <span class="revisao-alt-texto">${escapeAttr(a.texto)}</span>
+            </button>
+          `).join('')}
         </div>
+
+        <div class="revisao-card__feedback" id="feedback-${q.id}" style="display:none;"></div>
 
         ${revisada ? '<div class="revisao-card__done-overlay">✓ Revisada</div>' : ''}
       </div>`;
@@ -176,17 +183,61 @@ function renderRevisao(pendentes) {
   container.innerHTML = html;
 }
 
-window.toggleEnunciado = function(id, fullText) {
+window.toggleEnunciado = function(id, btn) {
   const el = document.getElementById(`enunciado-${id}`);
-  const btn = el.nextElementSibling;
+  const fullText = btn.dataset.full;
   if (el.dataset.expanded === 'true') {
-    el.textContent = fullText.length > 120 ? fullText.substring(0, 120) + '…' : fullText;
+    el.textContent = fullText.length > 150 ? fullText.substring(0, 150) + '…' : fullText;
     el.dataset.expanded = 'false';
     btn.textContent = 'Ver completo ▾';
   } else {
     el.textContent = fullText;
     el.dataset.expanded = 'true';
     btn.textContent = 'Recolher ▴';
+  }
+};
+
+window.selecionarAlternativa = function(questaoId, letraSelecionada, correta, erradaAnterior) {
+  if (revisadasHoje.has(questaoId)) return;
+
+  const acertou = letraSelecionada === correta;
+
+  // Desabilitar todos os botões e marcar correta/errada
+  const container = document.getElementById(`alts-${questaoId}`);
+  container.querySelectorAll('.revisao-alt-btn').forEach(btn => {
+    btn.disabled = true;
+    const letra = btn.id.split('-').pop();
+
+    if (letra === correta) {
+      btn.classList.add('revisao-alt-btn--correct');
+    } else if (letra === letraSelecionada && !acertou) {
+      btn.classList.add('revisao-alt-btn--wrong');
+    }
+  });
+
+  // Mostrar feedback
+  const feedback = document.getElementById(`feedback-${questaoId}`);
+  feedback.style.display = 'block';
+
+  if (acertou) {
+    feedback.innerHTML = `
+      <div class="revisao-feedback revisao-feedback--ok">
+        <span class="revisao-feedback__msg">✅ Correto! Você corrigiu o erro anterior.</span>
+        <button class="revisao-btn revisao-btn--ok" onclick="revisar(${questaoId}, true)">Próxima revisão →</button>
+      </div>`;
+  } else {
+    const mesmoErro = letraSelecionada === erradaAnterior;
+    const msgExtra = mesmoErro
+      ? '⚠️ Mesmo erro de antes — atenção redobrada nesse conceito!'
+      : `Você marcou ${letraSelecionada}, antes marcou ${erradaAnterior}.`;
+    feedback.innerHTML = `
+      <div class="revisao-feedback revisao-feedback--errou">
+        <div class="revisao-feedback__info">
+          <span class="revisao-feedback__msg">❌ Errou novamente. Correta: <strong>${correta}</strong></span>
+          <span class="revisao-feedback__detalhe">${msgExtra}</span>
+        </div>
+        <button class="revisao-btn revisao-btn--errei" onclick="revisar(${questaoId}, false)">Entendi, avançar →</button>
+      </div>`;
   }
 };
 
@@ -235,10 +286,10 @@ window.revisar = async function(questaoId, acertou) {
 
     revisadasHoje.add(questaoId);
 
-    // Visual feedback
+    // Visual feedback no card
     const card = document.getElementById(`card-${questaoId}`);
     if (card) {
-      card.style.opacity = '0.5';
+      card.classList.add('revisao-card--done');
       card.querySelectorAll('button').forEach(b => b.disabled = true);
       // Show result toast
       const msg = acertou
