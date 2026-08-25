@@ -827,13 +827,17 @@ window.revealSrFlashcard = revealSrFlashcard;
 async function rateSrFlashcard(quality) {
   const card = srFlashcards[srFcIdx];
   try {
-    await fetch(`/api/flashcards/${card.id}/review-sm2`, {
+    const res = await fetch(`/api/flashcards/${card.id}/review-sm2`, {
       method: 'POST', headers, body: JSON.stringify({ quality })
     });
-    srSessionMetrics.flashcards++;
-    if (quality >= 3) srSessionMetrics.acertos++;
-    updateSessionStats();
-  } catch (e) { /* continue anyway */ }
+    if (res.ok) {
+      srSessionMetrics.flashcards++;
+      if (quality >= 3) srSessionMetrics.acertos++;
+      updateSessionStats();
+    } else {
+      console.error('Flashcard review failed:', res.status);
+    }
+  } catch (e) { console.error('Flashcard review error:', e); }
   srFcIdx++;
   showSrFlashcard();
 }
@@ -982,13 +986,17 @@ window.revealSrSumula = revealSrSumula;
 async function rateSrSumula(quality) {
   const s = srSumulas[srSmIdx];
   try {
-    await fetch(`/api/sumulas/${s.id}/review-sm2`, {
+    const res = await fetch(`/api/sumulas/${s.id}/review-sm2`, {
       method: 'POST', headers, body: JSON.stringify({ quality })
     });
-    srSessionMetrics.sumulas++;
-    if (quality >= 3) srSessionMetrics.acertos++;
-    updateSessionStats();
-  } catch (e) { /* continue */ }
+    if (res.ok) {
+      srSessionMetrics.sumulas++;
+      if (quality >= 3) srSessionMetrics.acertos++;
+      updateSessionStats();
+    } else {
+      console.error('Sumula review failed:', res.status);
+    }
+  } catch (e) { console.error('Sumula review error:', e); }
   srSmIdx++;
   showSrSumula();
 }
