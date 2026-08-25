@@ -466,10 +466,8 @@
 
   <!-- Tab 1: Visão Geral -->
   <div id="panel-overview" class="dash-panel active">
-    <!-- Cards resumo -->
-    <div class="cards" id="cards"></div>
 
-    <!-- Streak -->
+    <!-- 1. Streak (motivação) -->
     <div class="streak-bar">
       <span class="streak-fire">🔥</span>
       <div class="streak-info">
@@ -482,13 +480,22 @@
       </div>
     </div>
 
-    <!-- Meta Adaptativa Semanal (onde estou na semana) -->
+    <!-- 2. Cards resumo (contexto rápido) -->
+    <div class="cards" id="cards"></div>
+
+    <!-- 3. Metas de Hoje (progresso do dia) -->
+    <div class="metas-section">
+      <h2>🎯 Metas de Hoje</h2>
+      <div id="metas-container"></div>
+    </div>
+
+    <!-- 4. Meta Adaptativa Semanal (onde estou na semana) -->
     <div class="card" id="meta-adaptativa-card" style="margin-bottom:16px;display:none;">
       <span class="card-label">📈 Meta da Semana</span>
       <div id="meta-adaptativa-content"></div>
     </div>
 
-    <!-- Agenda do Dia (o que fazer AGORA) -->
+    <!-- 5. Agenda do Dia (o que fazer AGORA) -->
     <div class="card" id="agenda-hoje-card" style="margin-bottom:16px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
         <span class="card-label">📋 Agenda de Hoje</span>
@@ -499,7 +506,7 @@
       </div>
     </div>
 
-    <!-- Desafio Diário (ação rápida 5min) -->
+    <!-- 6. Desafio Diário (ação rápida 5min) -->
     <div class="desafio-diario-card" id="desafio-diario-card">
       <div class="desafio-diario-header">
         <span class="desafio-diario-icon">🎯</span>
@@ -514,19 +521,15 @@
       </button>
     </div>
 
-    <!-- Alertas de Platô (se houver) -->
+    <!-- 7. Alertas de Platô (se houver) -->
     <div class="card" id="plato-card" style="margin-bottom:16px;display:none;border-left:4px solid var(--yellow);">
       <span class="card-label">⚠️ Platô Detectado</span>
       <div id="plato-content"></div>
     </div>
 
-    <!-- Metas do dia (progresso) -->
-    <div class="metas-section">
-      <h2>🎯 Metas de Hoje</h2>
-      <div id="metas-container"></div>
-    </div>
+    <!-- 8. Simulado Pendente (inserido via JS quando necessário) -->
 
-    <!-- Domínio por Matéria -->
+    <!-- 9. Domínio por Matéria -->
     <div class="card" style="margin-bottom:24px;">
       <span class="card-label">🎯 Domínio</span>
       <div id="mastery-overview" style="margin-top:8px;"></div>
