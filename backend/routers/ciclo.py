@@ -376,34 +376,112 @@ def ciclo_visao(horas_dia: float = Query(default=3.0), conn=Depends(get_db_sessi
     hoje = date.today()
     dia_semana = hoje.weekday()
 
-    # ===== DIÁRIO: Top 2-3 matérias mais urgentes =====
+    # ===== DIÁRIO: Atividades concretas com técnicas baseadas em evidência =====
+    # Técnicas: Interleaving, Spaced Practice, Retrieval Practice, Elaboration
     tempo_dia_min = int(horas_dia * 60)
     diario = []
-    total_score_top = sum(m["score"] for m in materias_scored[:3]) or 1
-    for m in materias_scored[:3]:
+    total_score_top = sum(m["score"] for m in materias_scored[:4]) or 1
+
+    for m in materias_scored[:4]:
         proporcao = m["score"] / total_score_top
         tempo_min = max(20, int(tempo_dia_min * proporcao))
-        if m["pct_acerto"] < 50 and m["total_questoes"] >= 5:
-            acao, tipo = "Resolver questões (foco em erros)", "questoes"
+
+        # Determinar atividades concretas por matéria
+        atividades = []
+
+        # 1. Se há tópicos pendentes: estudar teoria (30% do tempo)
+        if m["pendentes"] > 0:
+            topico_proximo = conn.execute("""
+                SELECT topico FROM edital
+                WHERE materia = ? AND status != 'Concluído' AND arquivado = 0 AND user_id = ?
+                ORDER BY CASE WHEN proxima_revisao <= ? THEN 0 ELSE 1 END, id
+                LIMIT 1
+            """, (m["materia"], user_id, hoje.isoformat())).fetchone()
+            topico_nome = topico_proximo["topico"] if topico_proximo else "Próximo tópico"
+            atividades.append({
+                "tipo": "teoria",
+                "descricao": f"Estudar: {topico_nome}",
+                "tempo_min": max(10, int(tempo_min * 0.3)),
+                "tecnica": "Elaboração ativa (resuma com suas palavras)"
+            })
+
+        # 2. Se tem questões e acerto < 70%: resolver questões (40% do tempo)
+        if m["total_questoes"] >= 5 and m["pct_acerto"] < 70:
+            qtd_questoes = max(5, int(tempo_min * 0.4 / 2))  # ~2min por questão
+            atividades.append({
+                "tipo": "questoes",
+                "descricao": f"Resolver {qtd_questoes} questões (foco nos erros)",
+                "tempo_min": max(10, int(tempo_min * 0.4)),
+                "tecnica": "Retrieval Practice + análise de erros"
+            })
         elif m["total_questoes"] == 0:
-            acao, tipo = "Estudar teoria + primeiras questões", "teoria"
-        elif m.get("dias_sem_estudar") and m["dias_sem_estudar"] >= 7:
-            acao, tipo = "Revisão geral + flashcards", "revisao"
+            atividades.append({
+                "tipo": "questoes",
+                "descricao": "Resolver primeiras 10 questões da matéria",
+                "tempo_min": max(10, int(tempo_min * 0.35)),
+                "tecnica": "Pre-testing (testar antes de dominar)"
+            })
+
+        # 3. Revisão espaçada: flashcards/súmulas pendentes (20% do tempo)
+        fc_pendentes = conn.execute(
+            "SELECT COUNT(*) FROM flashcards WHERE materia = ? AND proxima_revisao <= ? AND user_id = ?",
+            (m["materia"], hoje.isoformat(), user_id)
+        ).fetchone()[0]
+        if fc_pendentes > 0:
+            atividades.append({
+                "tipo": "revisao",
+                "descricao": f"Revisar {min(fc_pendentes, 15)} flashcards pendentes",
+                "tempo_min": max(5, int(tempo_min * 0.2)),
+                "tecnica": "Spaced Repetition (FSRS)"
+            })
+
+        # 4. Se dias sem estudar >= 7: revisão de manutenção
+        if m.get("dias_sem_estudar") and m["dias_sem_estudar"] >= 7:
+            atividades.append({
+                "tipo": "revisao",
+                "descricao": "Revisão geral (última sessão há {}+ dias)".format(m["dias_sem_estudar"]),
+                "tempo_min": max(10, int(tempo_min * 0.25)),
+                "tecnica": "Successive Relearning"
+            })
+
+        # Determinar ação principal e prioridade
+        if m["pct_acerto"] < 50 and m["total_questoes"] >= 5:
+            acao = "Reforçar: foco em questões e erros"
+            prioridade = "alta"
+        elif m["total_questoes"] == 0 or (m.get("dias_sem_estudar") and m["dias_sem_estudar"] >= 14):
+            acao = "Iniciar/Retomar: teoria + prática"
+            prioridade = "alta"
+        elif m["pendentes"] > m["total_topicos"] * 0.5:
+            acao = "Avançar: muitos tópicos pendentes"
+            prioridade = "media"
         else:
-            acao, tipo = "Avançar nos tópicos pendentes", "estudo"
+            acao = "Manutenção: revisar + questões avançadas"
+            prioridade = "media"
+
         diario.append({
-            "materia": m["materia"], "tempo_min": tempo_min, "horas": round(tempo_min / 60, 1),
-            "prioridade": "alta" if m["score"] > 50 else "media",
-            "acao": acao, "tipo": tipo, "motivo": _motivo_prioridade(m),
-            "pct_acerto": m["pct_acerto"], "pendentes": m["pendentes"],
+            "materia": m["materia"],
+            "tempo_min": tempo_min,
+            "horas": round(tempo_min / 60, 1),
+            "prioridade": prioridade,
+            "acao": acao,
+            "tipo": atividades[0]["tipo"] if atividades else "estudo",
+            "motivo": _motivo_prioridade(m),
+            "pct_acerto": m["pct_acerto"],
+            "pendentes": m["pendentes"],
+            "atividades": atividades,
         })
 
-    # ===== SEMANAL: Distribuição com intercalação =====
+    # ===== SEMANAL: Distribuição com interleaving + atividades específicas =====
+    # Técnica: Interleaving (Rohrer 2012) — alternar matérias evita blocked practice
+    # Dias temáticos: intercalar matérias difíceis com mais fáceis
     nomes_dias = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
     total_mats = len(materias_scored)
     for i, m in enumerate(materias_scored):
         pos = i / max(total_mats, 1)
         m["freq"] = 3 if pos < 0.3 else 2 if pos < 0.65 else 1
+
+    # Tipos de atividade por dia da semana (progressão semanal)
+    tipo_dia = ["teoria+questoes", "questoes", "teoria+questoes", "revisao+questoes", "questoes+simulado", "revisao", "leve"]
 
     dias_semana_list = [[] for _ in range(7)]
     pool = []
@@ -419,10 +497,22 @@ def ciclo_visao(horas_dia: float = Query(default=3.0), conn=Depends(get_db_sessi
             cand = pool[search % len(pool)]
             if cand["materia"] not in last_day and cand["materia"] not in used:
                 horas_slot = round(horas_dia / target, 1) if target > 0 else 0.5
+                # Determinar atividade baseada no tipo do dia
+                td = tipo_dia[dia]
+                if "revisao" in td and cand["pct_acerto"] >= 60:
+                    atividade = "Revisão espaçada + flashcards"
+                elif "simulado" in td:
+                    atividade = "Questões cronometradas (simulado parcial)"
+                elif "teoria" in td and cand["pendentes"] > 0:
+                    atividade = "Estudar tópico novo + resolver questões"
+                else:
+                    atividade = "Resolver questões + analisar erros"
+
                 dias_semana_list[dia].append({
                     "materia": cand["materia"], "horas": min(2.0, max(0.5, horas_slot)),
                     "pct_acerto": cand["pct_acerto"],
                     "prioridade": "alta" if cand["score"] > 50 else "media" if cand["score"] > 25 else "baixa",
+                    "atividade": atividade,
                 })
                 used.add(cand["materia"])
                 pool_idx = (search + 1) % len(pool)
@@ -434,6 +524,7 @@ def ciclo_visao(horas_dia: float = Query(default=3.0), conn=Depends(get_db_sessi
     for i, slots in enumerate(dias_semana_list):
         semanal.append({
             "dia": nomes_dias[i], "dia_semana": i, "is_hoje": i == dia_semana,
+            "tipo_dia": tipo_dia[i],
             "materias": slots, "horas_total": round(sum(s["horas"] for s in slots), 1),
         })
 
