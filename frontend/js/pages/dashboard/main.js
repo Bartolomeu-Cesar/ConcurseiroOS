@@ -1320,3 +1320,73 @@ function initDragDrop() {
     });
   });
 }
+
+
+// ===== AGENDA DO DIA (Micro-planning) =====
+async function loadAgendaHoje() {
+  const container = document.getElementById('agenda-blocos');
+  if (!container) return;
+  try {
+    const res = await fetch('/api/calendario/hoje');
+    if (!res.ok) throw new Error('Erro ao carregar agenda');
+    const data = await res.json();
+    const blocos = data.blocos || [];
+
+    if (!blocos.length) {
+      container.innerHTML = '<p style="color:var(--text-sub);font-size:0.85rem;text-align:center;padding:16px;">Adicione matérias ao ciclo para gerar sua agenda.</p>';
+      return;
+    }
+
+    container.innerHTML = `
+      <div style="font-size:0.72rem;color:var(--text-sub);margin-bottom:8px;display:flex;gap:12px;flex-wrap:wrap;">
+        <span>⏱ ${data.resumo.tempo_estudo_min}min estudo</span>
+        <span>☕ ${data.resumo.tempo_pausas_min}min pausas</span>
+        <span>📚 ${data.resumo.materias.length} matérias</span>
+        ${data.resumo.revisoes_preditivas > 0 ? `<span style="color:var(--yellow);">🔮 ${data.resumo.revisoes_preditivas} revisões preditivas</span>` : ''}
+      </div>
+      <div class="agenda-timeline">
+        ${blocos.map(b => {
+          const isPausa = b.tipo === 'pausa' || b.tipo === 'pausa_longa';
+          return `
+            <div class="agenda-bloco ${isPausa ? 'agenda-bloco--pausa' : ''}" style="border-left:4px solid ${b.cor};">
+              <div class="agenda-bloco__hora">${b.hora_inicio}</div>
+              <div class="agenda-bloco__content">
+                <div class="agenda-bloco__desc">${b.descricao}</div>
+                ${!isPausa ? `<div class="agenda-bloco__meta">${b.materia || ''} · ${b.duracao_min}min${b.tecnica ? ' · ' + b.tecnica : ''}</div>` : ''}
+              </div>
+            </div>`;
+        }).join('')}
+      </div>
+      <div style="margin-top:8px;font-size:0.68rem;color:var(--text-sub);text-align:right;">
+        ${data.hora_inicio} – ${data.hora_fim} · ${data.tecnicas_aplicadas.length} técnicas ativas
+      </div>
+    `;
+  } catch(e) {
+    container.innerHTML = '<p style="color:var(--red);font-size:0.82rem;">Erro ao carregar agenda</p>';
+  }
+}
+window.loadAgendaHoje = loadAgendaHoje;
+
+window.openStudyPrefs = function() {
+  // Simple prompt-based config (pode evoluir para modal)
+  const hora_inicio = prompt('Horário de início dos estudos (HH:MM):', '08:00');
+  if (!hora_inicio) return;
+  const hora_fim = prompt('Horário de fim dos estudos (HH:MM):', '12:00');
+  if (!hora_fim) return;
+  const bloco = prompt('Duração de cada bloco em minutos:', '25');
+  if (!bloco) return;
+
+  fetch('/api/calendario/preferencias', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      hora_inicio, hora_fim,
+      bloco_min: parseInt(bloco) || 25,
+      pausa_min: 5, pausa_longa_min: 15, blocos_antes_pausa_longa: 4,
+      dias_estudo: [0,1,2,3,4,5]
+    })
+  }).then(() => { loadAgendaHoje(); });
+};
+
+// Auto-load agenda
+loadAgendaHoje();
