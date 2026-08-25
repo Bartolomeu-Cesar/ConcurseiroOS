@@ -916,6 +916,11 @@ async function loadMessages() {
   if (!_chatFriendId) return;
   try {
     const res = await fetch(`/api/social/chat/${_chatFriendId}?limit=50`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      console.error('loadMessages error:', err);
+      return;
+    }
     const data = await res.json();
     const messages = data.messages || [];
 
@@ -951,14 +956,18 @@ window.sendChatMessage = async function() {
   input.disabled = true;
 
   try {
-    await fetch('/api/social/chat/send', {
+    const res = await fetch('/api/social/chat/send', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ receiver_id: _chatFriendId, mensagem: msg })
+      body: JSON.stringify({ receiver_id: parseInt(_chatFriendId), mensagem: msg })
     });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Erro ${res.status}`);
+    }
     await loadMessages();
   } catch(e) {
-    showToast('Erro ao enviar mensagem', 'error');
+    showToast('Erro: ' + e.message, 'error');
     input.value = msg; // Restore message
   }
 
