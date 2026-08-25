@@ -391,7 +391,7 @@ async function loadPlanejadorSemanal() {
         for (const it of diaItems) {
           materiasSet.add(it.materia);
           html += `<div style="display:flex;align-items:center;gap:4px;padding:3px 0;border-bottom:1px solid var(--border);font-size:0.72rem;">
-            <span style="flex:1;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${it.materia}">${it.materia}</span>
+            <span style="flex:1;color:var(--text);cursor:pointer;" onclick="this.style.whiteSpace = this.style.whiteSpace === 'normal' ? 'nowrap' : 'normal'; this.style.overflow = this.style.whiteSpace === 'nowrap' ? 'hidden' : 'visible'; this.style.textOverflow = this.style.whiteSpace === 'nowrap' ? 'ellipsis' : 'unset';" title="${it.materia}${it.topicos ? ' — ' + it.topicos : ''}" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${it.materia}${it.topicos ? ' <span style=&quot;color:var(--text-sub);font-size:0.65rem;&quot;>(' + it.topicos + ')</span>' : ''}</span>
             <span style="color:var(--blue);font-size:0.68rem;white-space:nowrap;">${it.horas}h</span>
             ${planMode === 'manual' && it.id ? `<button onclick="removePlanejadorItem(${it.id})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:0.7rem;padding:0 2px;" title="Remover">&#10005;</button>` : ''}
           </div>`;
@@ -598,7 +598,14 @@ async function loadCalendario() {
           html += `<span class="cal-activity-icon">${icon}</span>`;
           html += `<div class="cal-activity-info">`;
           if (materia) html += `<div class="cal-activity-materia">${materia}</div>`;
-          if (detail) html += `<div class="cal-activity-detail">${detail.length > 60 ? detail.slice(0,55)+'...' : detail}</div>`;
+          if (detail) {
+            if (detail.length > 60) {
+              const truncated = detail.slice(0,55) + '...';
+              html += `<div class="cal-activity-detail cal-expandable" onclick="this.textContent = this.dataset.expanded === '1' ? '${truncated.replace(/'/g,"\\'")}' : this.dataset.full; this.dataset.expanded = this.dataset.expanded === '1' ? '0' : '1';" data-full="${detail.replace(/"/g,'&quot;')}" data-expanded="0" title="Clique para expandir" style="cursor:pointer;">${truncated}</div>`;
+            } else {
+              html += `<div class="cal-activity-detail">${detail}</div>`;
+            }
+          }
           html += `</div>`;
           html += `<span class="cal-activity-time">${ativ.tempo_min}min</span>`;
           if (ativ.tempo_min > 0) {

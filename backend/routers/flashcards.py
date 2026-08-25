@@ -38,10 +38,13 @@ def list_flashcards_materias(conn=Depends(get_db_session), user_id: int = Depend
 
 
 @router.get("/api/flashcards/today")
-def get_flashcards_today(materia: str = "", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+def get_flashcards_today(materia: str = "", max_novos: int = Query(20, description="Máximo de flashcards novos por dia (padrão 20, como Anki)"), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Retorna flashcards pendentes com ordenação inteligente baseada em 6 técnicas
     de estudo com evidência científica (spaced practice, interleaving, desirable difficulty,
     retrieval practice, successive relearning, pre-testing effect).
+
+    Limita novos cards (repetitions=0) a max_novos por dia (padrão 20).
+    Reviews (cards já revisados antes) não têm limite.
     """
     from study_ordering import order_items_intelligently
 
@@ -60,8 +63,18 @@ def get_flashcards_today(materia: str = "", conn=Depends(get_db_session), user_i
     if not items:
         return []
 
+    # Separar: reviews (já revisados antes) vs novos (nunca revisados)
+    reviews = [c for c in items if (c.get("repetitions") or 0) > 0]
+    novos = [c for c in items if (c.get("repetitions") or 0) == 0]
+
+    # Limitar novos cards por dia (como Anki: padrão 20)
+    novos_limitados = novos[:max_novos]
+
+    # Combinar reviews (sem limite) + novos (limitados)
+    combined = reviews + novos_limitados
+
     result = order_items_intelligently(
-        items,
+        combined,
         materia_key="materia",
     )
 

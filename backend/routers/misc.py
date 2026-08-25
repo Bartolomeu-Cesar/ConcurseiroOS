@@ -293,10 +293,14 @@ def get_notificacoes(conn=Depends(get_db_session), user_id: int = Depends(get_us
     """Retorna lembretes/notificações pendentes"""
     notifs = []
 
-    # Flashcards pendentes
-    flash_pendentes = conn.execute(
-        "SELECT COUNT(*) FROM flashcards WHERE proxima_revisao <= ? AND user_id = ?", (today_str(), user_id)
+    # Flashcards pendentes (reviews + max 20 novos/dia)
+    flash_reviews = conn.execute(
+        "SELECT COUNT(*) FROM flashcards WHERE proxima_revisao <= ? AND user_id = ? AND repetitions > 0", (today_str(), user_id)
     ).fetchone()[0]
+    flash_novos = conn.execute(
+        "SELECT COUNT(*) FROM flashcards WHERE proxima_revisao <= ? AND user_id = ? AND repetitions = 0", (today_str(), user_id)
+    ).fetchone()[0]
+    flash_pendentes = flash_reviews + min(flash_novos, 20)
     if flash_pendentes > 0:
         notifs.append({
             "tipo": "flashcard", "icon": "🧠",

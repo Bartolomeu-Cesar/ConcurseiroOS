@@ -108,10 +108,14 @@ def get_dashboard(conn=Depends(get_db_session), user_id: int = Depends(get_user_
         GROUP BY materia ORDER BY total DESC
     """, (user_id,)).fetchall()
 
-    # Flashcards pendentes
-    flashcards_pendentes = conn.execute(
-        "SELECT COUNT(*) FROM flashcards WHERE proxima_revisao <= ? AND user_id = ?", (today_str(), user_id)
+    # Flashcards pendentes (reviews sem limite + novos limitados a 20/dia)
+    flashcards_reviews = conn.execute(
+        "SELECT COUNT(*) FROM flashcards WHERE proxima_revisao <= ? AND user_id = ? AND repetitions > 0", (today_str(), user_id)
     ).fetchone()[0]
+    flashcards_novos = conn.execute(
+        "SELECT COUNT(*) FROM flashcards WHERE proxima_revisao <= ? AND user_id = ? AND repetitions = 0", (today_str(), user_id)
+    ).fetchone()[0]
+    flashcards_pendentes = flashcards_reviews + min(flashcards_novos, 20)
 
     # Total flashcards
     flashcards_total = conn.execute("SELECT COUNT(*) FROM flashcards WHERE user_id = ?", (user_id,)).fetchone()[0]
