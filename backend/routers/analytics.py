@@ -358,7 +358,22 @@ def comparador_progresso(apenas_ciclo: bool = True, conn=Depends(get_db_session)
 
 @router.get("/api/planejador-aprovacao")
 def planejador_aprovacao(edital_nome: str = "", cargo: str = "", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
-    query = "SELECT materia, COUNT(*) as total, SUM(CASE WHEN status='Concluído' THEN 1 ELSE 0 END) as done, SUM(horas_estudadas) as horas FROM edital WHERE user_id = ?"
+    # Auto-detectar edital do ciclo ativo
+    if not edital_nome and not cargo:
+        try:
+            ciclo_edital = conn.execute("""
+                SELECT e.edital_nome, COUNT(DISTINCT e.materia) as matches
+                FROM edital e
+                INNER JOIN ciclo_estudos c ON c.materia = e.materia AND c.user_id = e.user_id
+                WHERE c.ativo = 1 AND c.user_id = ? AND e.arquivado = 0
+                GROUP BY e.edital_nome ORDER BY matches DESC LIMIT 1
+            """, (user_id,)).fetchone()
+            if ciclo_edital and ciclo_edital["edital_nome"]:
+                edital_nome = ciclo_edital["edital_nome"]
+        except Exception:
+            pass
+
+    query = "SELECT materia, COUNT(*) as total, SUM(CASE WHEN status='Concluído' THEN 1 ELSE 0 END) as done, SUM(horas_estudadas) as horas FROM edital WHERE user_id = ? AND arquivado = 0"
     params = [user_id]
     if edital_nome:
         query += " AND edital_nome = ?"
@@ -366,6 +381,17 @@ def planejador_aprovacao(edital_nome: str = "", cargo: str = "", conn=Depends(ge
     if cargo:
         query += " AND cargo = ?"
         params.append(cargo)
+
+    # Filtrar por matérias do ciclo ativo
+    ciclo_materias = conn.execute(
+        "SELECT DISTINCT materia FROM ciclo_estudos WHERE ativo = 1 AND user_id = ?", (user_id,)
+    ).fetchall()
+    if ciclo_materias and not cargo:
+        ciclo_mats = [m["materia"] for m in ciclo_materias]
+        placeholders = ",".join("?" * len(ciclo_mats))
+        query += f" AND materia IN ({placeholders})"
+        params.extend(ciclo_mats)
+
     query += " GROUP BY materia ORDER BY materia"
     materias = conn.execute(query, params).fetchall()
 
@@ -668,6 +694,22 @@ def curva_esquecimento(edital_nome: str = "", cargo: str = "", materia: str = ""
 def raio_x_edital(edital_nome: str = "", cargo: str = "", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Matérias por peso. Fonte primária: edital (tópicos por matéria). Fallback: contagem de questões."""
 
+    # Auto-detectar edital do ciclo ativo se nenhum filtro explícito
+    if not edital_nome and not cargo:
+        try:
+            ciclo_edital = conn.execute("""
+                SELECT e.edital_nome, COUNT(DISTINCT e.materia) as matches
+                FROM edital e
+                INNER JOIN ciclo_estudos c ON c.materia = e.materia AND c.user_id = e.user_id
+                WHERE c.ativo = 1 AND c.user_id = ? AND e.arquivado = 0
+                GROUP BY e.edital_nome
+                ORDER BY matches DESC LIMIT 1
+            """, (user_id,)).fetchone()
+            if ciclo_edital and ciclo_edital["edital_nome"]:
+                edital_nome = ciclo_edital["edital_nome"]
+        except Exception:
+            pass
+
     # === 1. Tentar calcular peso pelo edital (fonte oficial) ===
     edital_filter = "AND arquivado = 0"
     edital_params = [user_id]
@@ -678,8 +720,18 @@ def raio_x_edital(edital_nome: str = "", cargo: str = "", conn=Depends(get_db_se
         edital_filter += " AND cargo = ?"
         edital_params.append(cargo)
 
+    # Filtrar apenas matérias do ciclo ativo (se existir)
+    ciclo_materias = conn.execute(
+        "SELECT DISTINCT materia FROM ciclo_estudos WHERE ativo = 1 AND user_id = ?", (user_id,)
+    ).fetchall()
+    if ciclo_materias and not cargo:
+        ciclo_mats = [m["materia"] for m in ciclo_materias]
+        placeholders = ",".join("?" * len(ciclo_mats))
+        edital_filter += f" AND materia IN ({placeholders})"
+        edital_params.extend(ciclo_mats)
+
     edital_materias = conn.execute(
-        f"SELECT materia, COUNT(*) as topicos FROM edital WHERE user_id = ? {edital_filter} GROUP BY materia ORDER BY topicos DESC",
+        f"SELECT materia, COUNT(DISTINCT topico) as topicos FROM edital WHERE user_id = ? {edital_filter} GROUP BY materia ORDER BY topicos DESC",
         edital_params
     ).fetchall()
 
