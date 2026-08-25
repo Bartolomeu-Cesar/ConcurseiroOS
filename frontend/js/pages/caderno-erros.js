@@ -106,44 +106,89 @@ function renderRevisao(pendentes) {
   }
 
   let html = '';
-  for (const q of filtered) {
+  for (let idx = 0; idx < filtered.length; idx++) {
+    const q = filtered[idx];
     const revisada = revisadasHoje.has(q.id);
-    const intervalos = ['1d', '3d', '7d', '14d', '30d'];
-    const intervaloIdx = [1, 3, 7, 14, 30].indexOf(q.intervalo_atual);
-    const intervaloLabel = intervaloIdx >= 0 ? intervalos[intervaloIdx] : '1d';
 
-    // Build alternativas object for the component
-    const alts = {};
-    if (q.alternativas && Array.isArray(q.alternativas)) {
-      for (const a of q.alternativas) {
-        alts[a.letra] = a.texto;
-      }
-    } else if (q.alternativas && typeof q.alternativas === 'object') {
-      Object.assign(alts, q.alternativas);
-    }
+    // Recall indicator (0-100% — quanto menor, mais urgente)
+    const recall = Math.round((q.recall_estimado || 0) * 100);
+    const recallColor = recall <= 30 ? 'var(--ce-red, #f38ba8)' : recall <= 60 ? 'var(--ce-yellow, #f9e2af)' : 'var(--ce-green, #a6e3a1)';
+    const recallLabel = recall <= 30 ? '🔴 Esquecendo' : recall <= 60 ? '🟡 Frágil' : '🟢 Estável';
+
+    // Intervalo label
+    const intervalo = q.intervalo_atual || 1;
+    const intervaloLabel = intervalo >= 30 ? `${Math.round(intervalo/30)}m` : `${intervalo}d`;
+
+    // Revisões count
+    const revisoes = q.revisoes_count || 0;
+
+    // Truncar enunciado para preview (expandível)
+    const enunciadoFull = q.enunciado || '';
+    const enunciadoShort = enunciadoFull.length > 120 ? enunciadoFull.substring(0, 120) + '…' : enunciadoFull;
+    const needsExpand = enunciadoFull.length > 120;
+
+    // Resposta errada vs correta
+    const respostaErrada = q.resposta_usuario || '?';
+    const respostaCorreta = q.resposta_correta || '?';
 
     html += `
-      <div class="question-card-wrapper" id="card-${q.id}" style="${revisada ? 'opacity:0.5;' : ''}">
-        <question-card
-          enunciado="${escapeAttr(q.enunciado)}"
-          materia="${escapeAttr(q.materia)}"
-          dificuldade="${escapeAttr(q.dificuldade || 'Médio')}"
-          alternativas='${JSON.stringify(alts).replace(/'/g, '&#39;')}'
-          resposta-correta="${escapeAttr(q.resposta_correta)}"
-          mode="review"
-        ></question-card>
-        <div class="question-actions" style="margin-top:8px;">
-          <button class="btn-revisei btn-revisei-errei" onclick="revisar(${q.id}, false)" ${revisada ? 'disabled' : ''}>
-            Errei de novo
+      <div class="revisao-card ${revisada ? 'revisao-card--done' : ''}" id="card-${q.id}">
+        <div class="revisao-card__header">
+          <div class="revisao-card__meta">
+            <span class="revisao-card__materia">${escapeAttr(q.materia)}</span>
+            <span class="revisao-card__badge" style="background:${recallColor}22;color:${recallColor};border:1px solid ${recallColor}44;">${recallLabel} ${recall}%</span>
+          </div>
+          <div class="revisao-card__stats">
+            <span title="Intervalo atual">📅 ${intervaloLabel}</span>
+            <span title="Revisões feitas">🔁 ${revisoes}x</span>
+            <span class="revisao-card__num">${idx + 1}/${filtered.length}</span>
+          </div>
+        </div>
+
+        <div class="revisao-card__body">
+          <p class="revisao-card__enunciado" id="enunciado-${q.id}">${escapeAttr(enunciadoShort)}</p>
+          ${needsExpand ? `<button class="revisao-card__expand" onclick="toggleEnunciado(${q.id}, '${escapeAttr(enunciadoFull).replace(/'/g, "\\'")}')">Ver completo ▾</button>` : ''}
+        </div>
+
+        <div class="revisao-card__answer-comparison">
+          <div class="revisao-card__answer revisao-card__answer--wrong">
+            <span class="revisao-card__answer-label">Você marcou:</span>
+            <span class="revisao-card__answer-value">${escapeAttr(respostaErrada.toUpperCase())}</span>
+          </div>
+          <div class="revisao-card__answer revisao-card__answer--correct">
+            <span class="revisao-card__answer-label">Correta:</span>
+            <span class="revisao-card__answer-value">${escapeAttr(respostaCorreta.toUpperCase())}</span>
+          </div>
+        </div>
+
+        <div class="revisao-card__actions">
+          <button class="revisao-btn revisao-btn--errei" onclick="revisar(${q.id}, false)" ${revisada ? 'disabled' : ''}>
+            ❌ Errei de novo
           </button>
-          <button class="btn-revisei btn-revisei-ok" onclick="revisar(${q.id}, true)" ${revisada ? 'disabled' : ''}>
-            Revisei ✓
+          <button class="revisao-btn revisao-btn--ok" onclick="revisar(${q.id}, true)" ${revisada ? 'disabled' : ''}>
+            ✅ Acertei agora
           </button>
         </div>
+
+        ${revisada ? '<div class="revisao-card__done-overlay">✓ Revisada</div>' : ''}
       </div>`;
   }
   container.innerHTML = html;
 }
+
+window.toggleEnunciado = function(id, fullText) {
+  const el = document.getElementById(`enunciado-${id}`);
+  const btn = el.nextElementSibling;
+  if (el.dataset.expanded === 'true') {
+    el.textContent = fullText.length > 120 ? fullText.substring(0, 120) + '…' : fullText;
+    el.dataset.expanded = 'false';
+    btn.textContent = 'Ver completo ▾';
+  } else {
+    el.textContent = fullText;
+    el.dataset.expanded = 'true';
+    btn.textContent = 'Recolher ▴';
+  }
+};
 
 function renderPadroes(padroes) {
   const container = document.getElementById('lista-padroes');

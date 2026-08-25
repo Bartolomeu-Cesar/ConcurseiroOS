@@ -356,6 +356,210 @@
         grid-template-columns: repeat(2, 1fr);
       }
     }
+
+    /* ===== Revisão Cards (novo design) ===== */
+    .revisao-card {
+      background: var(--ce-card);
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 14px;
+      border-left: 4px solid var(--ce-accent);
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .revisao-card:hover {
+      background: var(--ce-card-hover);
+    }
+
+    .revisao-card--done {
+      opacity: 0.5;
+      border-left-color: var(--ce-success);
+    }
+
+    .revisao-card__header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 10px;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .revisao-card__meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .revisao-card__materia {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--ce-blue);
+      background: rgba(137, 180, 250, 0.12);
+      padding: 3px 10px;
+      border-radius: 10px;
+    }
+
+    .revisao-card__badge {
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+
+    .revisao-card__stats {
+      display: flex;
+      gap: 10px;
+      font-size: 0.72rem;
+      color: var(--ce-subtext);
+    }
+
+    .revisao-card__num {
+      font-weight: 700;
+      color: var(--ce-mauve);
+    }
+
+    .revisao-card__body {
+      margin-bottom: 12px;
+    }
+
+    .revisao-card__enunciado {
+      font-size: 0.88rem;
+      color: var(--ce-text);
+      line-height: 1.55;
+      margin: 0;
+    }
+
+    .revisao-card__expand {
+      background: none;
+      border: none;
+      color: var(--ce-blue);
+      font-size: 0.75rem;
+      cursor: pointer;
+      padding: 4px 0;
+      margin-top: 4px;
+      font-weight: 600;
+    }
+
+    .revisao-card__expand:hover {
+      text-decoration: underline;
+    }
+
+    .revisao-card__answer-comparison {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+
+    .revisao-card__answer {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 0.8rem;
+    }
+
+    .revisao-card__answer--wrong {
+      background: rgba(243, 139, 168, 0.12);
+      border: 1px solid rgba(243, 139, 168, 0.3);
+    }
+
+    .revisao-card__answer--wrong .revisao-card__answer-label {
+      color: var(--ce-subtext);
+      font-size: 0.72rem;
+    }
+
+    .revisao-card__answer--wrong .revisao-card__answer-value {
+      color: var(--ce-wrong);
+      font-weight: 700;
+      text-decoration: line-through;
+    }
+
+    .revisao-card__answer--correct {
+      background: rgba(166, 227, 161, 0.12);
+      border: 1px solid rgba(166, 227, 161, 0.3);
+    }
+
+    .revisao-card__answer--correct .revisao-card__answer-label {
+      color: var(--ce-subtext);
+      font-size: 0.72rem;
+    }
+
+    .revisao-card__answer--correct .revisao-card__answer-value {
+      color: var(--ce-correct);
+      font-weight: 700;
+    }
+
+    .revisao-card__actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .revisao-btn {
+      padding: 9px 18px;
+      border-radius: 8px;
+      border: none;
+      font-size: 0.82rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .revisao-btn--ok {
+      background: var(--ce-success);
+      color: #1e1e2e;
+    }
+
+    .revisao-btn--ok:hover {
+      opacity: 0.85;
+      transform: translateY(-1px);
+    }
+
+    .revisao-btn--errei {
+      background: var(--ce-border);
+      color: var(--ce-subtext);
+    }
+
+    .revisao-btn--errei:hover {
+      background: var(--ce-wrong);
+      color: #1e1e2e;
+    }
+
+    .revisao-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    .revisao-card__done-overlay {
+      position: absolute;
+      top: 50%;
+      right: 20px;
+      transform: translateY(-50%);
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--ce-success);
+      opacity: 0.8;
+    }
+
+    @media (max-width: 600px) {
+      .revisao-card__header {
+        flex-direction: column;
+      }
+      .revisao-card__actions {
+        flex-direction: column;
+      }
+      .revisao-btn {
+        width: 100%;
+        text-align: center;
+      }
+    }
   </style>
 </head>
 <body>
