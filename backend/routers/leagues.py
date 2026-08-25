@@ -413,7 +413,20 @@ def ensure_user_league(db, user_id: int) -> dict:
     ).fetchone()
 
     if membership:
-        return {"league_id": membership[0], "tier": membership[1]}
+        league_id = membership[0]
+        tier = membership[1]
+        # Always recalculate and update XP on access
+        xp_data = calculate_user_weekly_xp(db, user_id, week_start, week_end)
+        db.execute(
+            "UPDATE league_members SET weekly_xp = ? WHERE league_id = ? AND user_id = ?",
+            (xp_data["total"], league_id, user_id)
+        )
+        db.commit()
+        # Recalculate rankings after XP update
+        recalculate_rankings(db, league_id)
+        # Progress bots slightly each time
+        _progress_bots(db, league_id)
+        return {"league_id": league_id, "tier": tier}
 
     # Determine user's tier
     tier = get_user_tier(db, user_id)
