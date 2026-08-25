@@ -176,6 +176,8 @@ let startedAt = null;
 
 // --- Reading Session Time Tracking ---
 const _sessionOpenedAt = Date.now();
+const _lastReportedKey = 'leitor_last_reported_' + (path || '').replace(/\//g, '_');
+const _lastReportedAt = parseInt(localStorage.getItem(_lastReportedKey) || '0');
 
 const display = document.getElementById('timer-display');
 
@@ -279,7 +281,8 @@ document.getElementById('btn-overlay-ok').addEventListener('click', () => {
 
 function onLeave() {
   saveOnExit();
-  finishTimer(false);
+  // Save timer state (persists for when user returns to viewer)
+  saveTimerState();
   // Report reading time to streak (horas_estudadas)
   const readingSeconds = Math.floor((Date.now() - _sessionOpenedAt) / 1000);
   if (readingSeconds >= 60) { // Only report if read for at least 1 minute
@@ -295,6 +298,8 @@ function onLeave() {
       }),
       keepalive: true
     }).catch(() => {});
+    // Mark as reported to avoid double-counting on next visit
+    localStorage.setItem(_lastReportedKey, Date.now().toString());
   }
 }
 
