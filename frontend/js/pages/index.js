@@ -161,7 +161,18 @@ function switchCicloView(view, btn) {
   cicloViewAtual = view;
   document.querySelectorAll('.ciclo-view-btn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
-  if (cicloVisaoData) renderCicloView(view); else loadCicloVisao();
+  if (cicloVisaoData) {
+    renderCicloView(view);
+  } else {
+    // Dados ainda não carregaram — buscar e renderizar
+    fetch('/api/ciclo/visao')
+      .then(r => r.json())
+      .then(data => { cicloVisaoData = data; renderCicloView(cicloViewAtual); })
+      .catch(() => {
+        const el = document.getElementById('ciclo-view-content');
+        if (el) el.innerHTML = '<p style="color:#9399b2;">Erro ao carregar dados do ciclo.</p>';
+      });
+  }
 }
 window.switchCicloView = switchCicloView;
 
@@ -290,7 +301,15 @@ function loadCicloOntem() {
 // Load ontem when ciclo tab is shown
 const _origNav = navigateTo;
 window.navigateTo = function(tabId, btn) { _origNav(tabId, btn); if (tabId === 'tab-ciclo') { loadCicloOntem(); loadCicloVisao(); } };
-if (localStorage.getItem('concurseiro_active_tab') === 'tab-ciclo') setTimeout(() => { loadCicloOntem(); loadCicloVisao(); }, 500);
+
+// Auto-load ciclo data if tab-ciclo is currently visible
+setTimeout(() => {
+  const cicloTab = document.getElementById('tab-ciclo');
+  if (cicloTab && cicloTab.classList.contains('active')) {
+    loadCicloOntem();
+    loadCicloVisao();
+  }
+}, 300);
 
 // ===== SERVICE WORKER REGISTRATION =====
 if ('serviceWorker' in navigator) {
