@@ -1103,16 +1103,34 @@ async def importar_csv(
 # ==================== IMPORTAÇÃO VIA PDF (OCR) ====================
 
 def _extrair_texto_pdf(file_path: str) -> str:
-    """Extrai texto do PDF: primeiro tenta pypdf (texto digital), depois OCR se necessário."""
-    from pypdf import PdfReader
+    """Extrai texto do PDF: tenta pdfplumber (melhor para PDFs do Estratégia/QConcursos),
+    depois pypdf, depois OCR se necessário."""
 
+    texto = ""
+
+    # 1. Tentar pdfplumber (melhor para PDFs com layout complexo)
+    try:
+        import pdfplumber
+        with pdfplumber.open(file_path) as pdf:
+            for page in pdf.pages:
+                page_text = page.extract_text() or ""
+                texto += page_text + "\n"
+        if len(texto.strip()) > 100:
+            return texto
+    except ImportError:
+        pass
+    except Exception:
+        pass
+
+    # 2. Fallback: pypdf (rápido, funciona para PDFs simples)
+    from pypdf import PdfReader
     reader = PdfReader(file_path)
     texto = ""
     for page in reader.pages:
         page_text = page.extract_text() or ""
         texto += page_text + "\n"
 
-    # Se o texto extraído é muito curto, provavelmente é PDF escaneado — usar OCR
+    # 3. Se o texto extraído é muito curto, provavelmente é PDF escaneado — usar OCR
     if len(texto.strip()) < 100:
         try:
             from pdf2image import convert_from_path
@@ -1204,15 +1222,30 @@ def _parse_qconcursos(texto: str, materia_override: str = "") -> list:
     """
     questoes = []
 
-    # 1. Extrair gabarito do final (formato "1:B 2:D 3:B" ou "1:B\n2:D\n3:B")
+    # 1. Extrair gabarito do final (múltiplos formatos suportados)
     gabarito = {}
-    gab_match = re.search(r'(?:Respostas|Gabarito|GABARITO)\s*\n(.+?)(?:www\.|$)', texto, re.DOTALL | re.IGNORECASE)
+    gab_match = re.search(r'(?:Respostas|Gabarito|GABARITO)\s*[:\n](.+?)(?:www\.|$)', texto, re.DOTALL | re.IGNORECASE)
     if gab_match:
         gab_text = gab_match.group(1)
-        # Padrão "1:B" ou "1: B"
+        # Formato "1:B" ou "1: B"
         gab_entries = re.findall(r'(\d+)\s*:\s*([A-Ea-e])', gab_text)
-        for num, letra in gab_entries:
-            gabarito[int(num)] = letra.upper()
+        if gab_entries:
+            for num, letra in gab_entries:
+                gabarito[int(num)] = letra.upper()
+        else:
+            # Formato Estratégia: "1 B 2 D 3 A" (número espaço letra, sem delimitador)
+            gab_entries = re.findall(r'(\d+)\s+([A-Ea-e])', gab_text)
+            for num, letra in gab_entries:
+                gabarito[int(num)] = letra.upper()
+
+    # Se não encontrou com "Respostas/Gabarito", tentar padrão genérico no final do texto
+    if len(gabarito) < 3:
+        # Buscar blocos de "num letra" nas últimas linhas do texto
+        last_chunk = texto[-3000:]  # últimos ~3000 chars
+        gab_entries = re.findall(r'(\d+)\s+([A-Ea-e])(?:\s|$)', last_chunk)
+        if len(gab_entries) >= 10:  # Mínimo 10 entradas para considerar gabarito
+            for num, letra in gab_entries:
+                gabarito[int(num)] = letra.upper()
     
     # Remover seção de gabarito e metadados finais do texto de questões
     texto_limpo = texto

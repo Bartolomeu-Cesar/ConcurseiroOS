@@ -27,7 +27,10 @@ def _get_last_session_by_subject(conn, user_id: int) -> dict:
 
 
 def _get_pending_reviews(conn, user_id: int) -> dict:
-    flashcards = conn.execute("SELECT COUNT(*) FROM flashcards WHERE proxima_revisao <= ? AND user_id = ?", (today_str(), user_id)).fetchone()[0]
+    # Flashcards pendentes: reviews (sem limite) + novos (max 20/dia como Anki)
+    fc_reviews = conn.execute("SELECT COUNT(*) FROM flashcards WHERE proxima_revisao <= ? AND user_id = ? AND repetitions > 0", (today_str(), user_id)).fetchone()[0]
+    fc_novos = conn.execute("SELECT COUNT(*) FROM flashcards WHERE proxima_revisao <= ? AND user_id = ? AND repetitions = 0", (today_str(), user_id)).fetchone()[0]
+    flashcards = fc_reviews + min(fc_novos, 20)
     topicos = conn.execute("""
         SELECT COUNT(*) FROM edital WHERE proxima_revisao != '' AND proxima_revisao <= ? AND user_id = ?
     """, (today_str(), user_id)).fetchone()[0]
