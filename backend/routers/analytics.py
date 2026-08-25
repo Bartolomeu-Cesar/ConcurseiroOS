@@ -666,10 +666,40 @@ def curva_esquecimento(edital_nome: str = "", cargo: str = "", materia: str = ""
 
 @router.get("/api/raio-x")
 def raio_x_edital(edital_nome: str = "", cargo: str = "", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Matérias por peso. Fonte primária: edital (tópicos por matéria). Fallback: contagem de questões."""
+
+    # === 1. Tentar calcular peso pelo edital (fonte oficial) ===
+    edital_filter = "AND arquivado = 0"
+    edital_params = [user_id]
+    if edital_nome:
+        edital_filter += " AND edital_nome = ?"
+        edital_params.append(edital_nome)
+    if cargo:
+        edital_filter += " AND cargo = ?"
+        edital_params.append(cargo)
+
+    edital_materias = conn.execute(
+        f"SELECT materia, COUNT(*) as topicos FROM edital WHERE user_id = ? {edital_filter} GROUP BY materia ORDER BY topicos DESC",
+        edital_params
+    ).fetchall()
+
+    total_topicos_edital = sum(r["topicos"] for r in edital_materias) if edital_materias else 0
+    usar_edital = total_topicos_edital > 0
+
+    # Mapa de peso pelo edital: materia → % de tópicos
+    peso_edital_map = {}
+    if usar_edital:
+        for r in edital_materias:
+            peso_edital_map[r["materia"]] = round(r["topicos"] / total_topicos_edital * 100, 1)
+
+    # === 2. Dados de questões (sempre necessário para acertos e horas) ===
     total_questoes = conn.execute("SELECT COUNT(*) FROM questoes WHERE user_id = ?", (user_id,)).fetchone()[0]
     questoes_por_mat = conn.execute("SELECT materia, COUNT(*) as qtd FROM questoes WHERE user_id = ? GROUP BY materia ORDER BY qtd DESC", (user_id,)).fetchall()
+    questoes_map = {r[0]: r[1] for r in questoes_por_mat}
+
     horas_por_mat = conn.execute("SELECT materia, SUM(horas) as total FROM sessoes_estudo WHERE user_id = ? GROUP BY materia", (user_id,)).fetchall()
     horas_map = {r[0]: r[1] for r in horas_por_mat}
+
     acertos_por_mat = conn.execute("""
         SELECT q.materia, COUNT(*) as total, SUM(qr.acertou) as acertos
         FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id WHERE qr.user_id = ? GROUP BY q.materia
@@ -677,13 +707,29 @@ def raio_x_edital(edital_nome: str = "", cargo: str = "", conn=Depends(get_db_se
     acerto_map = {r[0]: round((r[2] or 0) / r[1] * 100, 1) if r[1] > 0 else 0 for r in acertos_por_mat}
     total_horas = sum(horas_map.values()) if horas_map else 0
 
+    # === 3. Montar resultado: usar edital como base se disponível ===
     materias = []
-    for r in questoes_por_mat:
-        mat, qtd = r[0], r[1]
-        peso_pct = round(qtd / total_questoes * 100, 1) if total_questoes > 0 else 0
+    todas_materias = set(peso_edital_map.keys()) | set(questoes_map.keys())
+
+    for mat in todas_materias:
+        qtd = questoes_map.get(mat, 0)
+
+        # Peso: edital se disponível, senão contagem de questões
+        if usar_edital and mat in peso_edital_map:
+            peso_pct = peso_edital_map[mat]
+            fonte_peso = "edital"
+        elif total_questoes > 0 and qtd > 0:
+            peso_pct = round(qtd / total_questoes * 100, 1)
+            fonte_peso = "questoes"
+        else:
+            peso_pct = 0
+            fonte_peso = "sem_dados"
+
         horas_est = round(horas_map.get(mat, 0), 1)
         pct_horas = round(horas_est / total_horas * 100, 1) if total_horas > 0 else 0
         pct_acerto = acerto_map.get(mat, 0)
+
+        # Balanceamento: compara tempo investido vs peso da matéria
         if total_horas == 0 or peso_pct == 0:
             balanceamento = "sem_dados"
         elif pct_horas >= peso_pct * 1.5:
@@ -692,9 +738,27 @@ def raio_x_edital(edital_nome: str = "", cargo: str = "", conn=Depends(get_db_se
             balanceamento = "subestudado"
         else:
             balanceamento = "equilibrado"
-        materias.append({"materia": mat, "questoes": qtd, "peso_pct": peso_pct,
-                         "horas_estudadas": horas_est, "pct_acerto": pct_acerto, "balanceamento": balanceamento})
-    return {"total_questoes": total_questoes, "materias": materias}
+
+        materias.append({
+            "materia": mat,
+            "questoes": qtd,
+            "peso_pct": peso_pct,
+            "fonte_peso": fonte_peso,
+            "horas_estudadas": horas_est,
+            "pct_acerto": pct_acerto,
+            "balanceamento": balanceamento,
+        })
+
+    # Ordenar por peso descendente
+    materias.sort(key=lambda x: x["peso_pct"], reverse=True)
+
+    return {
+        "total_questoes": total_questoes,
+        "fonte_peso": "edital" if usar_edital else "questoes",
+        "edital_nome": edital_nome or (edital_materias[0]["materia"] if False else ""),
+        "total_topicos_edital": total_topicos_edital,
+        "materias": materias,
+    }
 
 
 @router.get("/api/heatmap-erros")
