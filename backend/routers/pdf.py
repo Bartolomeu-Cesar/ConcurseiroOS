@@ -27,6 +27,30 @@ def get_tree():
     return build_tree(PDF_ROOT)
 
 
+@router.get("/api/progress/recentes", summary="PDFs lidos recentemente")
+def get_recentes(limit: int = 5, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Retorna os últimos PDFs lidos com progresso de leitura."""
+    # Ensure last_read_at column exists
+    try:
+        conn.execute("SELECT last_read_at FROM progress LIMIT 1")
+    except Exception:
+        conn.execute("ALTER TABLE progress ADD COLUMN last_read_at TEXT DEFAULT ''")
+        conn.commit()
+    rows = conn.execute("""
+        SELECT path, current_page, total_pages, last_read_at
+        FROM progress WHERE user_id = ? AND last_read_at != ''
+        ORDER BY last_read_at DESC LIMIT ?
+    """, (user_id, limit)).fetchall()
+    return [{
+        "path": r[0],
+        "nome": r[0].split("/")[-1].replace(".pdf", "").replace("-completo", ""),
+        "current_page": r[1],
+        "total_pages": r[2],
+        "progresso_pct": round(r[1] / r[2] * 100) if r[2] > 0 else 0,
+        "last_read_at": r[3],
+    } for r in rows]
+
+
 @router.get("/api/progress/{path:path}")
 def get_progress(path: str, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     # Validate path doesn't contain traversal sequences
@@ -61,30 +85,6 @@ def save_progress(path: str, body: ProgressUpdate, conn=Depends(get_db_session),
     """, (path, body.current_page, body.total_pages, user_id, now))
     conn.commit()
     return {"ok": True}
-
-
-@router.get("/api/progress/recentes", summary="PDFs lidos recentemente")
-def get_recentes(limit: int = 5, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
-    """Retorna os últimos PDFs lidos com progresso de leitura."""
-    # Ensure last_read_at column exists
-    try:
-        conn.execute("SELECT last_read_at FROM progress LIMIT 1")
-    except Exception:
-        conn.execute("ALTER TABLE progress ADD COLUMN last_read_at TEXT DEFAULT ''")
-        conn.commit()
-    rows = conn.execute("""
-        SELECT path, current_page, total_pages, last_read_at
-        FROM progress WHERE user_id = ? AND last_read_at != ''
-        ORDER BY last_read_at DESC LIMIT ?
-    """, (user_id, limit)).fetchall()
-    return [{
-        "path": r[0],
-        "nome": r[0].split("/")[-1].replace(".pdf", "").replace("-completo", ""),
-        "current_page": r[1],
-        "total_pages": r[2],
-        "progresso_pct": round(r[1] / r[2] * 100) if r[2] > 0 else 0,
-        "last_read_at": r[3],
-    } for r in rows]
 
 
 @router.get("/api/progress-bulk")
