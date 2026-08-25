@@ -929,8 +929,22 @@ async function editQuestao(id) {
   overlay.id = 'edit-questao-modal';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto;';
   overlay.innerHTML = `
-    <div style="background:#313244;border-radius:16px;padding:24px;max-width:550px;width:100%;max-height:90vh;overflow-y:auto;">
+    <div style="background:#313244;border-radius:16px;padding:24px;max-width:600px;width:100%;max-height:90vh;overflow-y:auto;">
       <h3 style="color:#cba6f7;margin:0 0 16px;">✏️ Editar Questão #${id}</h3>
+      <div style="margin-bottom:10px;">
+        <label style="font-size:0.8rem;color:#9399b2;">📄 Enunciado</label>
+        <textarea id="eq-enunciado" rows="4" style="width:100%;padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;margin-top:4px;resize:vertical;font-size:0.85rem;">${(q.enunciado || '').replace(/</g,'&lt;').replace(/"/g,'&quot;')}</textarea>
+      </div>
+      <div style="margin-bottom:10px;">
+        <label style="font-size:0.8rem;color:#9399b2;">🔤 Alternativas</label>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px;">
+          <div style="display:flex;gap:6px;align-items:center;"><span style="font-weight:700;color:#cba6f7;min-width:18px;">A</span><input id="eq-alt-a" value="${(q.alternativa_a || '').replace(/"/g,'&quot;')}" style="flex:1;padding:6px 8px;border-radius:6px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.82rem;"></div>
+          <div style="display:flex;gap:6px;align-items:center;"><span style="font-weight:700;color:#cba6f7;min-width:18px;">B</span><input id="eq-alt-b" value="${(q.alternativa_b || '').replace(/"/g,'&quot;')}" style="flex:1;padding:6px 8px;border-radius:6px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.82rem;"></div>
+          <div style="display:flex;gap:6px;align-items:center;"><span style="font-weight:700;color:#cba6f7;min-width:18px;">C</span><input id="eq-alt-c" value="${(q.alternativa_c || '').replace(/"/g,'&quot;')}" style="flex:1;padding:6px 8px;border-radius:6px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.82rem;"></div>
+          <div style="display:flex;gap:6px;align-items:center;"><span style="font-weight:700;color:#cba6f7;min-width:18px;">D</span><input id="eq-alt-d" value="${(q.alternativa_d || '').replace(/"/g,'&quot;')}" style="flex:1;padding:6px 8px;border-radius:6px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.82rem;"></div>
+          <div style="display:flex;gap:6px;align-items:center;"><span style="font-weight:700;color:#cba6f7;min-width:18px;">E</span><input id="eq-alt-e" value="${(q.alternativa_e || '').replace(/"/g,'&quot;')}" style="flex:1;padding:6px 8px;border-radius:6px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.82rem;"></div>
+        </div>
+      </div>
       <div style="margin-bottom:10px;">
         <label style="font-size:0.8rem;color:#9399b2;">📚 Disciplina</label>
         <select id="eq-materia" style="width:100%;padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;margin-top:4px;">
@@ -982,6 +996,12 @@ window.editQuestao = editQuestao;
 
 async function saveQuestaoEdit(id) {
   const body = {
+    enunciado: document.getElementById('eq-enunciado').value.trim(),
+    alternativa_a: document.getElementById('eq-alt-a').value.trim(),
+    alternativa_b: document.getElementById('eq-alt-b').value.trim(),
+    alternativa_c: document.getElementById('eq-alt-c').value.trim(),
+    alternativa_d: document.getElementById('eq-alt-d').value.trim(),
+    alternativa_e: document.getElementById('eq-alt-e').value.trim(),
     materia: document.getElementById('eq-materia').value,
     topico: document.getElementById('eq-topico').value.trim(),
     banca: document.getElementById('eq-banca').value.trim(),
