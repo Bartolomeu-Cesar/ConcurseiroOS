@@ -1390,3 +1390,90 @@ window.openStudyPrefs = function() {
 
 // Auto-load agenda
 loadAgendaHoje();
+
+
+// ===== META ADAPTATIVA SEMANAL =====
+async function loadMetaAdaptativa() {
+  try {
+    const res = await fetch('/api/metas/adaptativa');
+    if (!res.ok) return;
+    const data = await res.json();
+    const card = document.getElementById('meta-adaptativa-card');
+    const content = document.getElementById('meta-adaptativa-content');
+    if (!card || !content) return;
+
+    card.style.display = 'block';
+
+    const m = data.meta_semana;
+    const p = data.progresso_semana;
+    const proj = data.projecao;
+
+    content.innerHTML = `
+      <div style="margin-bottom:10px;font-size:0.85rem;color:var(--text);font-weight:600;">${data.mensagem}</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;">
+        <div style="text-align:center;padding:8px;background:var(--bg);border-radius:8px;">
+          <div style="font-size:1.1rem;font-weight:700;color:${p.pct_horas >= 100 ? 'var(--green)' : p.pct_horas >= 70 ? 'var(--blue)' : 'var(--text)'};">${p.horas}/${m.horas}h</div>
+          <div style="font-size:0.68rem;color:var(--text-sub);">Horas</div>
+          <div style="height:3px;background:var(--border);border-radius:2px;margin-top:4px;"><div style="height:100%;width:${p.pct_horas}%;background:var(--blue);border-radius:2px;"></div></div>
+        </div>
+        <div style="text-align:center;padding:8px;background:var(--bg);border-radius:8px;">
+          <div style="font-size:1.1rem;font-weight:700;color:${p.pct_questoes >= 100 ? 'var(--green)' : p.pct_questoes >= 70 ? 'var(--blue)' : 'var(--text)'};">${p.questoes}/${m.questoes}</div>
+          <div style="font-size:0.68rem;color:var(--text-sub);">Questões</div>
+          <div style="height:3px;background:var(--border);border-radius:2px;margin-top:4px;"><div style="height:100%;width:${p.pct_questoes}%;background:var(--accent);border-radius:2px;"></div></div>
+        </div>
+        <div style="text-align:center;padding:8px;background:var(--bg);border-radius:8px;">
+          <div style="font-size:1.1rem;font-weight:700;color:${p.pct_flashcards >= 100 ? 'var(--green)' : p.pct_flashcards >= 70 ? 'var(--blue)' : 'var(--text)'};">${p.flashcards}/${m.flashcards}</div>
+          <div style="font-size:0.68rem;color:var(--text-sub);">Flashcards</div>
+          <div style="height:3px;background:var(--border);border-radius:2px;margin-top:4px;"><div style="height:100%;width:${p.pct_flashcards}%;background:var(--green);border-radius:2px;"></div></div>
+        </div>
+      </div>
+      ${proj.dias_prova !== null ? `
+        <div style="font-size:0.75rem;color:var(--text-sub);display:flex;gap:12px;flex-wrap:wrap;">
+          <span>📅 ${proj.dias_prova} dias até a prova</span>
+          <span>📊 ${proj.pct_cobertura_atual}% do edital coberto</span>
+          ${proj.cobertura_projetada !== null ? `<span>🔮 Projeção: ${proj.cobertura_projetada}% até a prova</span>` : ''}
+          ${proj.horas_semana_para_100 ? `<span style="color:var(--yellow);">⚡ Para 100%: ${proj.horas_semana_para_100}h/semana</span>` : ''}
+        </div>
+      ` : ''}
+    `;
+  } catch(e) {}
+}
+
+// ===== DETECÇÃO DE PLATÔ =====
+async function loadPlatoDetection() {
+  try {
+    const res = await fetch('/api/inteligencia/plato');
+    if (!res.ok) return;
+    const data = await res.json();
+    const card = document.getElementById('plato-card');
+    const content = document.getElementById('plato-content');
+    if (!card || !content || !data.platos_detectados) return;
+
+    card.style.display = 'block';
+
+    content.innerHTML = `
+      <div style="margin-bottom:10px;font-size:0.85rem;color:var(--yellow);font-weight:600;">${data.mensagem}</div>
+      ${data.platos.map(p => `
+        <div style="background:var(--bg);border-radius:8px;padding:12px;margin-bottom:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <strong style="font-size:0.88rem;">${p.materia}</strong>
+            <span style="font-size:0.72rem;color:var(--text-sub);">${p.media_pct}% · estagnado há ${p.semanas_estagnado} semanas</span>
+          </div>
+          ${p.topicos_fracos.length ? `<div style="font-size:0.72rem;color:var(--red);margin-bottom:8px;">Erros concentrados em: ${p.topicos_fracos.join(', ')}</div>` : ''}
+          <div style="display:flex;flex-direction:column;gap:4px;">
+            ${p.sugestoes.slice(0, 2).map(s => `
+              <div style="display:flex;align-items:flex-start;gap:6px;padding:6px 8px;background:var(--bg-elevated);border-radius:6px;">
+                <span style="font-size:0.82rem;">${s.titulo}</span>
+              </div>
+              <div style="font-size:0.7rem;color:var(--text-sub);padding:0 8px 4px;">${s.descricao}</div>
+            `).join('')}
+          </div>
+        </div>
+      `).join('')}
+    `;
+  } catch(e) {}
+}
+
+// Auto-load
+loadMetaAdaptativa();
+loadPlatoDetection();
