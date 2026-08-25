@@ -130,7 +130,10 @@ class TestLigaSemanal:
         """XP breakdown tem as categorias esperadas."""
         r = client.get("/api/liga")
         breakdown = r.json()["xp_breakdown"]
-        categorias_esperadas = {"questoes", "horas_estudo", "flashcards", "desafios", "batalhas", "streak"}
+        categorias_esperadas = {
+            "questoes", "horas_estudo", "flashcards", "desafios", "batalhas", "streak",
+            "sumulas", "topicos", "metas", "erros_corrigidos", "simulados"
+        }
         assert set(breakdown.keys()) == categorias_esperadas
 
 

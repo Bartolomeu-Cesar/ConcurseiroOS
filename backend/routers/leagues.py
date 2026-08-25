@@ -61,6 +61,11 @@ XP_PER_FLASHCARD = 5        # Flashcards revisados
 XP_DESAFIO_DIARIO = 50      # Desafio diário completo
 XP_BATALHA_VENCIDA = 100    # Batalha vencida
 XP_STREAK_DAY = 15          # Cada dia de streak
+XP_PER_SUMULA = 5           # Súmula revisada
+XP_PER_TOPIC_COMPLETED = 25 # Tópico do edital concluído
+XP_META_DIARIA = 30         # Meta diária 100% cumprida
+XP_PER_ERRO_CORRIGIDO = 8   # Caderno de erros: acertou na revisão
+XP_SIMULADO_COMPLETO = 50   # Simulado completado
 
 # ─── Bot Names (realistic Brazilian names) ────────────────────────────────────
 
@@ -160,6 +165,11 @@ def calculate_user_weekly_xp(db, user_id: int, week_start: str, week_end: str) -
         "desafios": 0,
         "batalhas": 0,
         "streak": 0,
+        "sumulas": 0,
+        "topicos": 0,
+        "metas": 0,
+        "erros_corrigidos": 0,
+        "simulados": 0,
     }
 
     # 1. XP from questions answered correctly: +10 XP each
@@ -260,6 +270,84 @@ def calculate_user_weekly_xp(db, user_id: int, week_start: str, week_end: str) -
                 breakdown["streak"] = streak_days[0] * XP_STREAK_DAY
         except Exception as e2:
             log.warning(f"Error calculating streak XP: {e2}")
+
+    # 7. XP from súmulas reviewed: +5 XP each
+    try:
+        sumulas_count = db.execute(
+            """SELECT COALESCE(SUM(sumulas_revisadas), 0) FROM streaks
+            WHERE user_id = ?
+            AND date(data) >= ? AND date(data) <= ?""",
+            (user_id, week_start, week_end)
+        ).fetchone()
+        if sumulas_count and sumulas_count[0]:
+            breakdown["sumulas"] = int(sumulas_count[0]) * XP_PER_SUMULA
+    except Exception as e:
+        log.warning(f"Error calculating sumula XP: {e}")
+
+    # 8. XP from edital topics completed: +25 XP each
+    try:
+        topicos = db.execute(
+            """SELECT COUNT(*) FROM edital
+            WHERE user_id = ? AND concluido = 1
+            AND date(updated_at) >= ? AND date(updated_at) <= ?""",
+            (user_id, week_start, week_end)
+        ).fetchone()
+        if topicos and topicos[0]:
+            breakdown["topicos"] = topicos[0] * XP_PER_TOPIC_COMPLETED
+    except Exception as e:
+        log.warning(f"Error calculating topic XP: {e}")
+
+    # 9. XP from daily meta achieved (100%): +30 XP per day
+    try:
+        # Dias onde todas as metas foram cumpridas
+        meta_config = db.execute(
+            "SELECT meta_horas, meta_questoes, meta_flashcards FROM metas_config WHERE user_id = ?",
+            (user_id,)
+        ).fetchone()
+        if meta_config:
+            mh = meta_config[0] or 3.0
+            mq = meta_config[1] or 30
+            mf = meta_config[2] or 10
+            meta_days = db.execute(
+                """SELECT COUNT(*) FROM streaks
+                WHERE user_id = ?
+                AND date(data) >= ? AND date(data) <= ?
+                AND horas_estudadas >= ?
+                AND questoes_resolvidas >= ?
+                AND flashcards_revisados >= ?""",
+                (user_id, week_start, week_end, mh, mq, mf)
+            ).fetchone()
+            if meta_days and meta_days[0]:
+                breakdown["metas"] = meta_days[0] * XP_META_DIARIA
+    except Exception as e:
+        log.warning(f"Error calculating meta XP: {e}")
+
+    # 10. XP from caderno de erros: correct on review: +8 XP each
+    try:
+        erros_corrigidos = db.execute(
+            """SELECT COUNT(*) FROM erros_revisao
+            WHERE user_id = ?
+            AND date(updated_at) >= ? AND date(updated_at) <= ?
+            AND fsrs_state > 0 AND reps > 0""",
+            (user_id, week_start, week_end)
+        ).fetchone()
+        if erros_corrigidos and erros_corrigidos[0]:
+            breakdown["erros_corrigidos"] = erros_corrigidos[0] * XP_PER_ERRO_CORRIGIDO
+    except Exception as e:
+        log.warning(f"Error calculating erro XP: {e}")
+
+    # 11. XP from simulados completed: +50 XP each
+    try:
+        simulados = db.execute(
+            """SELECT COUNT(*) FROM simulados
+            WHERE user_id = ? AND finalizado = 1
+            AND date(created_at) >= ? AND date(created_at) <= ?""",
+            (user_id, week_start, week_end)
+        ).fetchone()
+        if simulados and simulados[0]:
+            breakdown["simulados"] = simulados[0] * XP_SIMULADO_COMPLETO
+    except Exception as e:
+        log.warning(f"Error calculating simulado XP: {e}")
 
     total = sum(breakdown.values())
     return {"total": total, "breakdown": breakdown}
