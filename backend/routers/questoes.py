@@ -1935,3 +1935,184 @@ async def aplicar_gabarito_pdf(
 
 
 
+
+# ============================================================
+# IMPORTAÇÃO POR URL (baixa PDF de link externo e importa)
+# ============================================================
+
+
+@router.post("/api/questoes/importar-url",
+             summary="Importar questões de prova via URL",
+             description="Baixa PDF de prova + gabarito de URLs externas e importa as questões automaticamente.")
+async def importar_questoes_url(
+    prova_url: str = "",
+    gabarito_url: str = "",
+    materia: str = "",
+    banca: str = "CESPE",
+    prova_nome: str = "",
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Baixa PDF(s) de URLs e importa questões.
+
+    Aceita:
+    - prova_url: URL do PDF da prova
+    - gabarito_url: URL do PDF do gabarito (opcional, tenta extrair do próprio PDF da prova)
+    - materia: matéria padrão para questões sem matéria detectada
+    - banca: nome da banca (default: CESPE)
+    - prova_nome: identificador da prova
+    """
+    import httpx
+
+    if not prova_url:
+        raise HTTPException(status_code=400, detail="Informe a URL da prova (prova_url).")
+
+    # Validar que é URL de PDF ou site conhecido
+    allowed_domains = ["gabarite.com.br", "pciconcursos.com.br", "cebraspe.org.br", "cdn.cebraspe.org.br",
+                       "qconcursos.com", "estrategiaconcursos.com.br", "grancursos.com.br"]
+    from urllib.parse import urlparse
+    parsed = urlparse(prova_url)
+    domain = parsed.netloc.replace("www.", "")
+
+    # Permitir qualquer URL de PDF direto ou de domínios conhecidos
+    is_pdf_direct = prova_url.lower().endswith('.pdf')
+    is_allowed_domain = any(d in domain for d in allowed_domains)
+
+    if not is_pdf_direct and not is_allowed_domain:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Domínio não permitido: {domain}. Use URLs de sites de concursos conhecidos ou links diretos para PDF."
+        )
+
+    try:
+        # Baixar PDF da prova
+        async with httpx.AsyncClient(follow_redirects=True, timeout=60.0) as client:
+            log.info(f"Downloading prova from: {prova_url}")
+            resp = await client.get(prova_url, headers={"User-Agent": "Mozilla/5.0"})
+            if resp.status_code != 200:
+                raise HTTPException(status_code=400, detail=f"Erro ao baixar prova: HTTP {resp.status_code}")
+            prova_content = resp.content
+
+            # Verificar se é PDF
+            if not prova_content[:5] == b'%PDF-':
+                # Pode ser uma página HTML com link para download
+                raise HTTPException(
+                    status_code=400,
+                    detail="O link não retornou um PDF direto. Use o link direto de download (geralmente termina em .pdf)."
+                )
+
+            # Baixar gabarito se fornecido
+            gabarito_content = None
+            if gabarito_url:
+                log.info(f"Downloading gabarito from: {gabarito_url}")
+                resp_gab = await client.get(gabarito_url, headers={"User-Agent": "Mozilla/5.0"})
+                if resp_gab.status_code == 200 and resp_gab.content[:5] == b'%PDF-':
+                    gabarito_content = resp_gab.content
+
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=408, detail="Timeout ao baixar. Tente novamente ou use um link mais rápido.")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao baixar: {str(e)}")
+
+    # Salvar em arquivos temporários e reutilizar o parser existente
+    import os
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        tmp.write(prova_content)
+        tmp_path = tmp.name
+
+    gabarito_externo = {}
+    tmp_gab_path = None
+    if gabarito_content:
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp_gab:
+            tmp_gab.write(gabarito_content)
+            tmp_gab_path = tmp_gab.name
+        try:
+            gab_texto = _extrair_texto_pdf(tmp_gab_path)
+            gabarito_externo = _parse_gabarito(gab_texto)
+        except Exception:
+            pass
+
+    # Extrair questões usando o mesmo parser do importar-pdf
+    try:
+        texto = _extrair_texto_pdf(tmp_path)
+        if not texto or len(texto) < 100:
+            raise HTTPException(status_code=400, detail="Não foi possível extrair texto do PDF. Pode ser escaneado (sem OCR).")
+
+        # Detectar formato (CESPE C/E ou múltipla escolha)
+        questoes_raw = _parse_questoes_texto(texto, materia=materia, banca=banca)
+
+        # Aplicar gabarito externo se fornecido
+        if gabarito_externo and questoes_raw:
+            for q in questoes_raw:
+                num = q.get("numero", 0)
+                if num in gabarito_externo and not q.get("resposta_correta"):
+                    gab = gabarito_externo[num]
+                    if gab in ('C', 'E') and q.get("tipo") == "certo_errado":
+                        q["resposta_correta"] = "A" if gab == "C" else "B"
+                    elif gab in ('A', 'B', 'C', 'D', 'E'):
+                        q["resposta_correta"] = gab
+
+        if not questoes_raw:
+            raise HTTPException(status_code=400, detail="Nenhuma questão encontrada no PDF. Verifique se o formato é suportado.")
+
+        # Inserir no banco
+        count = 0
+        duplicates = 0
+        nome_prova = prova_nome or f"{banca} - {domain}"
+
+        for q in questoes_raw:
+            enunciado = q.get("enunciado", "").strip()
+            if not enunciado or len(enunciado) < 20:
+                continue
+
+            # Verificar duplicata
+            existing = conn.execute(
+                "SELECT id FROM questoes WHERE enunciado = ? AND user_id = ?",
+                (enunciado[:200], user_id)
+            ).fetchone()
+            if existing:
+                duplicates += 1
+                continue
+
+            mat = q.get("materia") or materia or "Geral"
+            resp_correta = q.get("resposta_correta", "")
+
+            conn.execute("""
+                INSERT INTO questoes (enunciado, alternativa_a, alternativa_b, alternativa_c, alternativa_d, alternativa_e,
+                                     resposta_correta, materia, banca, dificuldade, prova_origem, user_id, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                enunciado,
+                q.get("alternativa_a", ""), q.get("alternativa_b", ""),
+                q.get("alternativa_c", ""), q.get("alternativa_d", ""), q.get("alternativa_e", ""),
+                resp_correta, mat, banca, q.get("dificuldade", "Médio"),
+                nome_prova, user_id, today_str()
+            ))
+            count += 1
+
+        conn.commit()
+        log.info(f"URL import: {count} questões de {prova_url} (duplicatas: {duplicates})")
+
+    finally:
+        # Cleanup
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        if tmp_gab_path:
+            try:
+                os.unlink(tmp_gab_path)
+            except OSError:
+                pass
+
+    return {
+        "ok": True,
+        "questoes_importadas": count,
+        "duplicatas_ignoradas": duplicates,
+        "total_encontradas": len(questoes_raw),
+        "prova_nome": nome_prova,
+        "url": prova_url,
+        "mensagem": f"✅ {count} questões importadas de {nome_prova}. {duplicates} duplicatas ignoradas.",
+    }
