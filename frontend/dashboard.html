@@ -482,7 +482,24 @@
       </div>
     </div>
 
-    <!-- Desafio Diário -->
+    <!-- Meta Adaptativa Semanal (onde estou na semana) -->
+    <div class="card" id="meta-adaptativa-card" style="margin-bottom:16px;display:none;">
+      <span class="card-label">📈 Meta da Semana</span>
+      <div id="meta-adaptativa-content"></div>
+    </div>
+
+    <!-- Agenda do Dia (o que fazer AGORA) -->
+    <div class="card" id="agenda-hoje-card" style="margin-bottom:16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <span class="card-label">📋 Agenda de Hoje</span>
+        <button class="iobtn" onclick="openStudyPrefs()" style="font-size:0.72rem;padding:4px 8px;">⚙️ Configurar</button>
+      </div>
+      <div id="agenda-blocos" style="min-height:60px;">
+        <div class="loading-skeleton wide"></div>
+      </div>
+    </div>
+
+    <!-- Desafio Diário (ação rápida 5min) -->
     <div class="desafio-diario-card" id="desafio-diario-card">
       <div class="desafio-diario-header">
         <span class="desafio-diario-icon">🎯</span>
@@ -497,33 +514,16 @@
       </button>
     </div>
 
-    <!-- Agenda do Dia (Micro-planning) -->
-    <div class="card" id="agenda-hoje-card" style="margin-bottom:24px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-        <span class="card-label">📋 Agenda de Hoje</span>
-        <button class="iobtn" onclick="openStudyPrefs()" style="font-size:0.72rem;padding:4px 8px;">⚙️ Configurar</button>
-      </div>
-      <div id="agenda-blocos" style="min-height:60px;">
-        <div class="loading-skeleton wide"></div>
-      </div>
-    </div>
-
-    <!-- Metas do dia -->
-    <div class="metas-section">
-      <h2>🎯 Metas de Hoje</h2>
-      <div id="metas-container"></div>
-    </div>
-
-    <!-- Meta Adaptativa Semanal -->
-    <div class="card" id="meta-adaptativa-card" style="margin-bottom:16px;display:none;">
-      <span class="card-label">📈 Meta Adaptativa</span>
-      <div id="meta-adaptativa-content"></div>
-    </div>
-
-    <!-- Alertas de Platô -->
+    <!-- Alertas de Platô (se houver) -->
     <div class="card" id="plato-card" style="margin-bottom:16px;display:none;border-left:4px solid var(--yellow);">
       <span class="card-label">⚠️ Platô Detectado</span>
       <div id="plato-content"></div>
+    </div>
+
+    <!-- Metas do dia (progresso) -->
+    <div class="metas-section">
+      <h2>🎯 Metas de Hoje</h2>
+      <div id="metas-container"></div>
     </div>
 
     <!-- Domínio por Matéria -->
