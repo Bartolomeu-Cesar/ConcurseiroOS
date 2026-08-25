@@ -1,7 +1,7 @@
 import random
-from datetime import datetime
+from datetime import date, datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 
 from database import get_db_session
 from deps import get_user_id
@@ -599,4 +599,199 @@ def get_simulado_cronometrado(id: int, conn=Depends(get_db_session), user_id: in
     return {
         "simulado": sim_dict,
         "questoes": questoes_list,
+    }
+
+
+# ============================================================
+# SIMULADO PERIÓDICO AUTOMÁTICO (#5)
+# ============================================================
+
+
+@router.get("/api/simulado/pendente", summary="Verificar se há simulado periódico pendente",
+            description="Retorna se já passou 2 semanas desde o último simulado e sugere realizar um novo.")
+def simulado_pendente(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Verifica se está na hora de fazer um simulado (a cada 14 dias)."""
+
+    INTERVALO_DIAS = 14  # A cada 2 semanas
+
+    # Último simulado finalizado
+    ultimo = conn.execute("""
+        SELECT finalizado_at, nota, acertos, total_questoes
+        FROM simulados WHERE user_id = ? AND status = 'finalizado'
+        ORDER BY finalizado_at DESC LIMIT 1
+    """, (user_id,)).fetchone()
+
+    hoje = date.today()
+
+    if ultimo and ultimo["finalizado_at"]:
+        try:
+            ultima_data = date.fromisoformat(ultimo["finalizado_at"][:10])
+            dias_desde = (hoje - ultima_data).days
+        except (ValueError, TypeError):
+            dias_desde = 999
+    else:
+        dias_desde = 999  # Nunca fez simulado
+
+    pendente = dias_desde >= INTERVALO_DIAS
+    proximo_em = max(0, INTERVALO_DIAS - dias_desde)
+
+    return {
+        "pendente": pendente,
+        "dias_desde_ultimo": dias_desde,
+        "proximo_em_dias": proximo_em,
+        "intervalo_dias": INTERVALO_DIAS,
+        "ultimo_simulado": {
+            "nota": ultimo["nota"] if ultimo else None,
+            "acertos": ultimo["acertos"] if ultimo else None,
+            "total": ultimo["total_questoes"] if ultimo else None,
+            "data": ultimo["finalizado_at"][:10] if ultimo and ultimo["finalizado_at"] else None,
+        },
+        "mensagem": "📝 Hora do simulado! Faça um para calibrar seu progresso." if pendente
+                    else f"✅ Próximo simulado em {proximo_em} dias.",
+    }
+
+
+@router.post("/api/simulado/auto-gerar", summary="Gerar simulado automático proporcional ao edital",
+             description="Gera simulado com distribuição de questões proporcional ao peso de cada matéria no edital. Tempo real de prova.")
+def auto_gerar_simulado(
+    total_questoes: int = Body(40, embed=True),
+    tempo_limite_min: int = Body(120, embed=True),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Gera simulado automático com proporção do edital.
+
+    Lógica:
+    1. Calcula peso de cada matéria (tópicos no edital do ciclo ativo)
+    2. Distribui questões proporcionalmente
+    3. Mínimo 2 questões por matéria presente
+    4. Mistura dificuldades: 30% fácil, 50% médio, 20% difícil
+    5. Tempo proporcional à prova real
+    """
+    import json
+
+    # Matérias do ciclo ativo com peso pelo edital
+    ciclo_materias = conn.execute(
+        "SELECT DISTINCT materia FROM ciclo_estudos WHERE ativo = 1 AND user_id = ?", (user_id,)
+    ).fetchall()
+    if not ciclo_materias:
+        raise HTTPException(status_code=400, detail="Adicione matérias ao ciclo primeiro.")
+
+    ciclo_mats = [m["materia"] for m in ciclo_materias]
+
+    # Calcular peso por matéria (tópicos no edital)
+    pesos = {}
+    for mat in ciclo_mats:
+        count = conn.execute(
+            "SELECT COUNT(*) FROM edital WHERE materia = ? AND user_id = ? AND arquivado = 0",
+            (mat, user_id)
+        ).fetchone()[0]
+        pesos[mat] = count
+    total_topicos = sum(pesos.values()) or 1
+
+    # Distribuir questões proporcionalmente (mínimo 2 por matéria)
+    distribuicao = {}
+    questoes_alocadas = 0
+    for mat in ciclo_mats:
+        proporcao = pesos[mat] / total_topicos
+        qtd = max(2, round(total_questoes * proporcao))
+        distribuicao[mat] = qtd
+        questoes_alocadas += qtd
+
+    # Ajustar para não exceder total
+    while questoes_alocadas > total_questoes:
+        # Reduzir da matéria com mais questões
+        mat_max = max(distribuicao, key=distribuicao.get)
+        if distribuicao[mat_max] > 2:
+            distribuicao[mat_max] -= 1
+            questoes_alocadas -= 1
+
+    # Buscar questões por matéria com mix de dificuldade
+    questao_ids = []
+    distribuicao_real = {}
+
+    for mat, qtd_alvo in distribuicao.items():
+        # Buscar com prioridade: 30% fácil, 50% médio, 20% difícil
+        faceis = int(qtd_alvo * 0.3)
+        medias = int(qtd_alvo * 0.5)
+        dificeis = qtd_alvo - faceis - medias
+
+        ids_mat = []
+
+        # Fáceis
+        rows = conn.execute("""
+            SELECT id FROM questoes WHERE materia = ? AND user_id = ?
+            AND dificuldade = 'Fácil' AND resposta_correta IS NOT NULL AND resposta_correta != ''
+            ORDER BY RANDOM() LIMIT ?
+        """, (mat, user_id, faceis)).fetchall()
+        ids_mat.extend([r["id"] for r in rows])
+
+        # Médias
+        rows = conn.execute("""
+            SELECT id FROM questoes WHERE materia = ? AND user_id = ?
+            AND (dificuldade = 'Médio' OR dificuldade IS NULL OR dificuldade = '')
+            AND resposta_correta IS NOT NULL AND resposta_correta != ''
+            AND id NOT IN ({})
+            ORDER BY RANDOM() LIMIT ?
+        """.format(','.join(str(i) for i in ids_mat) or '0'), (mat, user_id, medias)).fetchall()
+        ids_mat.extend([r["id"] for r in rows])
+
+        # Difíceis
+        rows = conn.execute("""
+            SELECT id FROM questoes WHERE materia = ? AND user_id = ?
+            AND dificuldade = 'Difícil'
+            AND resposta_correta IS NOT NULL AND resposta_correta != ''
+            AND id NOT IN ({})
+            ORDER BY RANDOM() LIMIT ?
+        """.format(','.join(str(i) for i in ids_mat) or '0'), (mat, user_id, dificeis)).fetchall()
+        ids_mat.extend([r["id"] for r in rows])
+
+        # Completar se não atingiu o alvo (com qualquer dificuldade)
+        if len(ids_mat) < qtd_alvo:
+            falta = qtd_alvo - len(ids_mat)
+            rows = conn.execute("""
+                SELECT id FROM questoes WHERE materia = ? AND user_id = ?
+                AND resposta_correta IS NOT NULL AND resposta_correta != ''
+                AND id NOT IN ({})
+                ORDER BY RANDOM() LIMIT ?
+            """.format(','.join(str(i) for i in ids_mat) or '0'), (mat, user_id, falta)).fetchall()
+            ids_mat.extend([r["id"] for r in rows])
+
+        questao_ids.extend(ids_mat)
+        distribuicao_real[mat] = len(ids_mat)
+
+    if not questao_ids:
+        raise HTTPException(status_code=400, detail="Sem questões suficientes. Adicione mais questões ao banco.")
+
+    # Embaralhar ordem (simula prova real)
+    import random
+    random.shuffle(questao_ids)
+
+    # Criar o simulado
+    titulo = f"Simulado Automático — {hoje.strftime('%d/%m/%Y')} ({len(questao_ids)}q)"
+    cur = conn.execute("""
+        INSERT INTO simulados (titulo, tempo_limite_min, total_questoes, status, created_at, user_id, tipo)
+        VALUES (?, ?, ?, 'pendente', ?, ?, 'automatico')
+    """, (titulo, tempo_limite_min, len(questao_ids), datetime.now().isoformat(), user_id))
+    sim_id = cur.lastrowid
+
+    for i, qid in enumerate(questao_ids):
+        conn.execute(
+            "INSERT INTO simulado_questoes (simulado_id, questao_id, ordem, user_id) VALUES (?, ?, ?, ?)",
+            (sim_id, qid, i, user_id)
+        )
+    conn.commit()
+
+    log.info(f"Simulado automático gerado: id={sim_id}, {len(questao_ids)} questões, {tempo_limite_min}min")
+
+    return {
+        "id": sim_id,
+        "titulo": titulo,
+        "total_questoes": len(questao_ids),
+        "tempo_limite_min": tempo_limite_min,
+        "distribuicao": [
+            {"materia": mat, "questoes": qtd, "peso_pct": round(pesos.get(mat, 0) / total_topicos * 100, 1)}
+            for mat, qtd in distribuicao_real.items() if qtd > 0
+        ],
+        "mensagem": f"Simulado gerado com {len(questao_ids)} questões distribuídas por {len(distribuicao_real)} matérias. Tempo: {tempo_limite_min}min.",
     }

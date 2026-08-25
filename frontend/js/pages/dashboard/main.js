@@ -1477,3 +1477,62 @@ async function loadPlatoDetection() {
 // Auto-load
 loadMetaAdaptativa();
 loadPlatoDetection();
+
+
+// ===== SIMULADO PERIÓDICO AUTOMÁTICO =====
+async function loadSimuladoPendente() {
+  try {
+    const res = await fetch('/api/simulado/pendente');
+    if (!res.ok) return;
+    const data = await res.json();
+
+    if (!data.pendente) return;
+
+    // Inserir alerta antes das metas
+    const metas = document.querySelector('.metas-section');
+    if (!metas) return;
+
+    const alertDiv = document.createElement('div');
+    alertDiv.className = 'card';
+    alertDiv.style.cssText = 'margin-bottom:16px;border-left:4px solid var(--accent);animation:fadeIn 0.3s ease;';
+    alertDiv.innerHTML = `
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span style="font-size:2rem;">📝</span>
+        <div style="flex:1;">
+          <div style="font-weight:700;font-size:0.95rem;color:var(--text);">Hora do Simulado!</div>
+          <div style="font-size:0.78rem;color:var(--text-sub);margin-top:2px;">
+            ${data.dias_desde_ultimo >= 999 ? 'Você nunca fez um simulado completo.' : `Último há ${data.dias_desde_ultimo} dias${data.ultimo_simulado.nota !== null ? ` (nota: ${data.ultimo_simulado.nota}%)` : ''}.`}
+            Faça um para calibrar seu progresso real.
+          </div>
+        </div>
+        <button onclick="gerarSimuladoAutomatico()" style="background:var(--accent);color:#1e1e2e;border:none;border-radius:8px;padding:10px 16px;font-weight:700;font-size:0.82rem;cursor:pointer;white-space:nowrap;">
+          ⚡ Gerar Simulado
+        </button>
+      </div>
+    `;
+    metas.parentElement.insertBefore(alertDiv, metas);
+  } catch(e) {}
+}
+
+window.gerarSimuladoAutomatico = async function() {
+  try {
+    const res = await fetch('/api/simulado/auto-gerar', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ total_questoes: 40, tempo_limite_min: 120 })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert('Erro: ' + (err.detail || 'Não foi possível gerar'));
+      return;
+    }
+    const data = await res.json();
+    alert(`✅ ${data.mensagem}\n\nDistribuição:\n${data.distribuicao.map(d => `• ${d.materia}: ${d.questoes}q (${d.peso_pct}%)`).join('\n')}`);
+    // Redirecionar para o simulado
+    window.location.href = `/questoes.html#simulado-${data.id}`;
+  } catch(e) {
+    alert('Erro ao gerar simulado: ' + e.message);
+  }
+};
+
+loadSimuladoPendente();
