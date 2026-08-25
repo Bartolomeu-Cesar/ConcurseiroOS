@@ -1579,9 +1579,14 @@ def _parse_questoes_texto(texto: str, materia: str = "", banca: str = "") -> lis
         alternativas_matches = re.findall(alt_pattern, bloco, re.DOTALL)
 
         if len(alternativas_matches) < 4:
-            # Tentar outro padrão
+            # Tentar padrão com separador: "A) texto" ou "A. texto"
             alt_pattern2 = r'(?:^|\n)\s*([A-Ea-e])\s*[).\-–]\s*(.+?)(?=(?:^|\n)\s*[A-Ea-e]\s*[).\-–]|\Z)'
             alternativas_matches = re.findall(alt_pattern2, bloco, re.DOTALL)
+
+        if len(alternativas_matches) < 4:
+            # Formato Estratégia/QConcursos: "A texto" (letra + espaço, sem separador)
+            alt_pattern3 = r'\n([A-E]) (.+?)(?=\n[A-E] |\nEssa quest|\Z)'
+            alternativas_matches = re.findall(alt_pattern3, bloco, re.DOTALL)
 
         if len(alternativas_matches) < 4:
             continue
@@ -1597,11 +1602,30 @@ def _parse_questoes_texto(texto: str, materia: str = "", banca: str = "") -> lis
 
         # Limpar enunciado
         enunciado = re.sub(r'^\d+\s*[.):\-–]\s*', '', enunciado).strip()
+        # Remover metadata do Estratégia (ano, banca, cargo, tema no início)
+        # Formato: "2024 Nível Superior... FCC Tribunal...\nTécnico...\nTema código\n"
+        # ou: "2024 FCC Tribunal...\nTécnico...\nTema\n"
+        enunciado = re.sub(
+            r'^(\d{4}\s+.*?(?:FCC|CESPE|CEBRASPE|VUNESP|FGV|FUNDATEC|IADES|IBFC|QUADRIX).*?\n(?:.*?\n){0,3})',
+            '', enunciado, count=1, flags=re.DOTALL | re.IGNORECASE
+        ).strip()
+        # Remover linhas de metadata curtas (tema + código numérico) no início
+        while enunciado and re.match(r'^[^\n]{3,80}\s+\d{5,}\s*$', enunciado.split('\n')[0]):
+            enunciado = '\n'.join(enunciado.split('\n')[1:]).strip()
+        # Remover "Questões oficiais..." line
+        enunciado = re.sub(r'^Quest.es oficiais.*?\n', '', enunciado).strip()
+        # Remover "Essa questão possui comentário do professor no site XXXXXX"
+        enunciado = re.sub(r'Essa quest.o possui coment.rio.*$', '', enunciado, flags=re.MULTILINE).strip()
+        # Limpar quebras de linha internas
+        enunciado = re.sub(r'\s*\n\s*', ' ', enunciado).strip()
 
         # Montar alternativas
         alts = {'A': '', 'B': '', 'C': '', 'D': '', 'E': ''}
         for letra, texto_alt in alternativas_matches[:5]:
-            alts[letra.upper()] = texto_alt.strip()
+            clean = re.sub(r'\s*\n\s*', ' ', texto_alt).strip()
+            # Remover "Essa questão possui comentário..." que pode ficar colado na última alternativa
+            clean = re.sub(r'Essa quest.o possui coment.rio.*$', '', clean).strip()
+            alts[letra.upper()] = clean
 
         # Buscar resposta no gabarito
         resposta = gabarito.get(num, '')
