@@ -375,23 +375,22 @@ async function loadFriends() {
 
     if (!friends.length) {
       container.innerHTML = '<div class="empty-state"><div class="emoji">👋</div><p>Nenhum amigo ainda</p><p class="hint">Convide alguém para estudar junto!</p></div>';
-      return;
-    }
-
-    container.innerHTML = friends.map(f => `
-      <div class="friend-item">
-        <div class="avatar">👤</div>
-        <div class="info">
-          <div class="name">${escapeHtml(f.nome || f.username || f.email || 'Amigo')}</div>
-          <div class="sub">${f.status || 'online'}</div>
+    } else {
+      container.innerHTML = friends.map(f => `
+        <div class="friend-item">
+          <div class="avatar">👤</div>
+          <div class="info">
+            <div class="name">${escapeHtml(f.nome || f.username || f.email || 'Amigo')}</div>
+            <div class="sub">${f.status || 'online'}</div>
+          </div>
         </div>
-      </div>
-    `).join('');
+      `).join('');
+    }
   } catch {
     document.getElementById('friends-list').innerHTML = '<div class="empty-state"><div class="emoji">⚠️</div><p>Erro ao carregar amigos</p></div>';
   }
 
-  // Load pending requests
+  // Always load pending requests (even if no friends yet)
   loadPendingRequests();
 }
 
