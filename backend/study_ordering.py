@@ -20,9 +20,11 @@ Uso:
     ordered = order_items_intelligently(items, key_config)
 """
 
+from __future__ import annotations
+
 import random
 from collections import defaultdict
-from typing import Any
+from typing import Any, Callable, Optional
 
 
 def order_items_intelligently(
@@ -33,7 +35,7 @@ def order_items_intelligently(
     interval_key: str = "intervalo_dias",
     ef_key: str = "easiness_factor",
     stability_key: str = "stability",
-    importance_fn: callable | None = None,
+    importance_fn: Optional[Callable] = None,
 ) -> list[dict]:
     """Ordena itens de estudo aplicando todas as técnicas baseadas em evidência.
 
