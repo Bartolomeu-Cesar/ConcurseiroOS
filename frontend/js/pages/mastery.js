@@ -110,12 +110,12 @@ window.showToast = showToast;
 
     // Only populate on first load if empty
     if (filterEdital.options.length <= 1) {
-      fetch('/api/editais')
+      fetch('/api/edital/nomes')
         .then(function(r) { return r.json(); })
         .then(function(data) {
-          var list = Array.isArray(data) ? data : (data.editais || []);
+          var list = Array.isArray(data) ? data : [];
           list.forEach(function(e) {
-            var nome = e.nome || e.edital_nome || e;
+            var nome = e.concurso || e.nome || e.edital_nome || e;
             if (typeof nome === 'string' && nome) {
               var opt = document.createElement('option');
               opt.value = nome;
@@ -127,17 +127,24 @@ window.showToast = showToast;
         })
         .catch(function() {});
 
-      fetch('/api/editais/cargos')
+      fetch('/api/edital/nomes')
         .then(function(r) { return r.json(); })
         .then(function(data) {
-          var list = Array.isArray(data) ? data : (data.cargos || []);
-          list.forEach(function(c) {
-            var nome = c.cargo || c.nome || c;
-            if (typeof nome === 'string' && nome) {
-              var opt = document.createElement('option');
-              opt.value = nome;
-              opt.textContent = nome;
-              if (nome === favCargo) opt.selected = true;
+          var list = Array.isArray(data) ? data : [];
+          var cargosSet = {};
+          list.forEach(function(e) {
+            (e.cargos || []).forEach(function(c) {
+              var nome = c.cargo || c.nome || c;
+              if (typeof nome === 'string' && nome && !cargosSet[nome]) {
+                cargosSet[nome] = true;
+                var opt = document.createElement('option');
+                opt.value = nome;
+                opt.textContent = nome;
+                if (nome === favCargo) opt.selected = true;
+                filterCargo.appendChild(opt);
+              }
+            });
+          });
               filterCargo.appendChild(opt);
             }
           });

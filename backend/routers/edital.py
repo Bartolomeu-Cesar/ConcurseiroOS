@@ -19,11 +19,11 @@ router = APIRouter(prefix="", tags=["Edital"])
 
 @router.get("/api/edital/nomes", summary="Hierarquia de editais", description="Lista todos os concursos e cargos com contagens de tópicos")
 def list_edital_nomes(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
-    """Lista hierarquia: concursos > cargos com contagens"""
+    """Lista hierarquia: concursos > cargos com contagens (apenas não-arquivados)"""
     rows = conn.execute("""
         SELECT edital_nome, cargo, COUNT(*) as total,
                SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) as concluidos
-        FROM edital WHERE user_id = ? GROUP BY edital_nome, cargo ORDER BY edital_nome, cargo
+        FROM edital WHERE user_id = ? AND arquivado = 0 GROUP BY edital_nome, cargo ORDER BY edital_nome, cargo
     """, (user_id,)).fetchall()
     tree = {}
     for r in rows:
@@ -976,7 +976,23 @@ def _update_single_mastery(conn, edital_id: int, user_id: int):
 @router.get("/api/edital/mastery-overview", summary="Visão geral de mastery",
             description="Retorna níveis de domínio de todos os tópicos, agrupados por matéria")
 def mastery_overview(edital_nome: str = "", cargo: str = "", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
-    """Retorna mastery levels para todos os tópicos, agrupados por matéria."""
+    """Retorna mastery levels para todos os tópicos, agrupados por matéria.
+    Se nenhum filtro é passado, usa o edital vinculado ao ciclo ativo."""
+
+    # Auto-detectar edital do ciclo ativo se nenhum filtro explícito
+    if not edital_nome and not cargo:
+        try:
+            ciclo_edital = conn.execute("""
+                SELECT DISTINCT e.edital_nome FROM edital e
+                INNER JOIN ciclo_estudos c ON c.materia = e.materia AND c.user_id = e.user_id
+                WHERE c.ativo = 1 AND c.user_id = ? AND e.arquivado = 0
+                LIMIT 1
+            """, (user_id,)).fetchone()
+            if ciclo_edital and ciclo_edital[0]:
+                edital_nome = ciclo_edital[0]
+        except Exception:
+            pass
+
     query = "SELECT id, materia, topico, mastery_level, mastery_updated_at FROM edital WHERE user_id = ? AND arquivado = 0"
     params = [user_id]
     if edital_nome:
