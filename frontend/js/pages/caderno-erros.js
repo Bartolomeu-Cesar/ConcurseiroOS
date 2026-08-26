@@ -139,6 +139,8 @@ function renderRevisao(pendentes) {
     // Resposta errada e correta
     const respostaErrada = (q.resposta_usuario || '').toUpperCase();
     const respostaCorreta = (q.resposta_correta || '').toUpperCase();
+    const isCertoErrado = !q.alternativa_c && !q.alternativa_d;
+    const respostaErradaDisplay = !respostaErrada ? '' : isCertoErrado ? (respostaErrada === 'A' ? 'CERTO' : 'ERRADO') : respostaErrada;
 
     html += `
       <div class="revisao-card ${revisada ? 'revisao-card--done' : ''}" id="card-${q.id}">
@@ -160,7 +162,7 @@ function renderRevisao(pendentes) {
         </div>
 
         <div class="revisao-card__hint">
-          <span>Da última vez você marcou <strong style="color:var(--ce-wrong);">${respostaErrada}</strong> — tente novamente:</span>
+          ${respostaErradaDisplay ? `<span>Da última vez você marcou <strong style="color:var(--ce-wrong);">${respostaErradaDisplay}</strong> — tente novamente:</span>` : `<span>Tente novamente:</span>`}
         </div>
 
         <div class="revisao-card__alternativas" id="alts-${q.id}">
@@ -226,14 +228,18 @@ window.selecionarAlternativa = function(questaoId, letraSelecionada, correta, er
         <button class="revisao-btn revisao-btn--ok" onclick="revisar(${questaoId}, true)">Próxima revisão →</button>
       </div>`;
   } else {
+    const isCE = container.querySelectorAll('.revisao-alt-btn').length === 2;
+    const letraDisplay = isCE ? (letraSelecionada === 'A' ? 'CERTO' : 'ERRADO') : letraSelecionada;
+    const erradaDisplay = !erradaAnterior ? '' : isCE ? (erradaAnterior === 'A' ? 'CERTO' : 'ERRADO') : erradaAnterior;
     const mesmoErro = letraSelecionada === erradaAnterior;
     const msgExtra = mesmoErro
       ? '⚠️ Mesmo erro de antes — atenção redobrada nesse conceito!'
-      : `Você marcou ${letraSelecionada}, antes marcou ${erradaAnterior}.`;
+      : erradaDisplay ? `Você marcou ${letraDisplay}, antes marcou ${erradaDisplay}.` : `Você marcou ${letraDisplay}.`;
+    const corretaDisplay = isCE ? (correta === 'A' ? 'CERTO' : 'ERRADO') : correta;
     feedback.innerHTML = `
       <div class="revisao-feedback revisao-feedback--errou">
         <div class="revisao-feedback__info">
-          <span class="revisao-feedback__msg">❌ Errou novamente. Correta: <strong>${correta}</strong></span>
+          <span class="revisao-feedback__msg">❌ Errou novamente. Correta: <strong>${corretaDisplay}</strong></span>
           <span class="revisao-feedback__detalhe">${msgExtra}</span>
         </div>
         <button class="revisao-btn revisao-btn--errei" onclick="revisar(${questaoId}, false)">Entendi, avançar →</button>
