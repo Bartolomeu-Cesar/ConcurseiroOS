@@ -475,3 +475,53 @@
   if (document.body) loadAITutor();
   else document.addEventListener('DOMContentLoaded', loadAITutor);
 })();
+
+// ==================== NOTIFICAÇÃO "HORA DE ESTUDAR" ====================
+(function() {
+  if (!('Notification' in window)) return;
+  if (!localStorage.getItem('auth_token')) return;
+
+  // Só checar uma vez por sessão
+  const key = 'study_notif_' + new Date().toISOString().slice(0, 13); // por hora
+  if (sessionStorage.getItem(key)) return;
+
+  setTimeout(async () => {
+    try {
+      // Pedir permissão se necessário
+      if (Notification.permission === 'default') {
+        await Notification.requestPermission();
+      }
+      if (Notification.permission !== 'granted') return;
+
+      const hora = new Date().getHours();
+      const streaks = await fetch('/api/streaks').then(r => r.json());
+      const metas = await fetch('/api/metas').then(r => r.json());
+
+      const horasHoje = metas.progresso?.horas || 0;
+      const questoesHoje = metas.progresso?.questoes || 0;
+      const flashcardsPendentes = parseInt(document.getElementById('badge-flashcards')?.textContent || '0');
+
+      let msg = null;
+
+      // Streak em risco (após 20h e sem atividade)
+      if (hora >= 20 && horasHoje === 0 && questoesHoje === 0) {
+        msg = '🔥 Seu streak vai quebrar! Estude pelo menos 5 minutos para manter.';
+      }
+      // Flashcards acumulando (> 10 pendentes)
+      else if (flashcardsPendentes > 10) {
+        msg = `🧠 ${flashcardsPendentes} flashcards pendentes — revisão espaçada perde efeito se acumular!`;
+      }
+      // Horário ótimo (entre 6-9h ou 19-22h — picos de estudo típicos)
+      else if ((hora >= 6 && hora <= 8) || (hora >= 19 && hora <= 21)) {
+        if (horasHoje < 1 && questoesHoje < 5) {
+          msg = '📚 Bom horário para estudar! Seu cérebro está pronto.';
+        }
+      }
+
+      if (msg) {
+        new Notification('ConcurseiroOS', { body: msg, icon: '/icon.svg', tag: 'study-reminder' });
+        sessionStorage.setItem(key, '1');
+      }
+    } catch (e) {}
+  }, 5000); // Delay 5s para não atrapalhar carregamento
+})();
