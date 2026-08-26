@@ -341,14 +341,14 @@
   </header>
 
   <div class="tabs">
-    <button class="tab-btn active" onclick="switchTab('liga')">🏆 Liga</button>
+    <button class="tab-btn" onclick="switchTab('liga')">🏆 Liga</button>
     <button class="tab-btn" onclick="switchTab('ai')">🤖 AI Tutor</button>
-    <button class="tab-btn" onclick="switchTab('social')">👥 Social</button>
+    <button class="tab-btn active" onclick="switchTab('social')">👥 Social</button>
     <button class="tab-btn" onclick="switchTab('chat');loadChatConversations()">💬 Chat <span id="chat-badge" style="display:none;background:#f38ba8;color:#1e1e2e;font-size:0.65rem;padding:1px 5px;border-radius:8px;margin-left:4px;font-weight:700;"></span></button>
   </div>
 
   <!-- TAB: Liga -->
-  <div class="tab-content active" id="tab-liga">
+  <div class="tab-content" id="tab-liga">
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
         <div class="tier-badge bronze" id="tier-badge">🥉 Bronze</div>
@@ -422,7 +422,7 @@
   </div>
 
   <!-- TAB: Social -->
-  <div class="tab-content" id="tab-social">
+  <div class="tab-content active" id="tab-social">
     <!-- Friends -->
     <div class="card">
       <div class="section-header">

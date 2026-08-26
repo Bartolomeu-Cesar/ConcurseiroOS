@@ -3,7 +3,7 @@ import os
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from database import get_db_session
@@ -165,7 +165,7 @@ def get_messages(
 
 @router.post("/api/social/chat/send-audio")
 async def send_audio_message(
-    receiver_id: int = Body(...),
+    receiver_id: int = Form(...),
     audio: UploadFile = File(...),
     db=Depends(get_db_session),
     user_id: int = Depends(get_user_id)
