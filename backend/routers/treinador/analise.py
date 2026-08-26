@@ -508,11 +508,16 @@ def _get_sprint_mode(conn, user_id: int, dias_prova: Optional[int],
 # FUNÇÕES AUXILIARES — SÍNTESE
 # ============================================================
 
-def _get_study_gaps(conn, desempenho: dict, ultima_sessao: dict) -> list:
+def _get_study_gaps(conn, desempenho: dict, ultima_sessao: dict, materias_ciclo: list = None) -> list:
     materias_foco = []
     hoje_date = date.today()
 
+    # Se há ciclo ativo, filtrar apenas matérias do ciclo
+    materias_validas = set(materias_ciclo) if materias_ciclo else None
+
     for mat, stats in desempenho.items():
+        if materias_validas and mat not in materias_validas:
+            continue
         if stats["total"] >= 5 and stats["pct"] < 70:
             dias_sem = _days_since_last_session(mat, ultima_sessao, hoje_date)
             prioridade = "ALTA" if stats["pct"] < 50 else "MÉDIA"
@@ -520,6 +525,8 @@ def _get_study_gaps(conn, desempenho: dict, ultima_sessao: dict) -> list:
                                   "dias_sem_estudar": dias_sem, "prioridade": prioridade})
 
     for mat, _ultima in ultima_sessao.items():
+        if materias_validas and mat not in materias_validas:
+            continue
         if mat not in [m["materia"] for m in materias_foco]:
             dias_sem = _days_since_last_session(mat, ultima_sessao, hoje_date)
             if dias_sem >= 7:

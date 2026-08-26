@@ -91,7 +91,11 @@ def treinador_inteligente(edital_nome: str = "", cargo: str = "", conn=Depends(g
     plateaus = _detect_plateaus(conn, user_id)
 
     # 6. Micro-metas dinâmicas
-    materias_foco = _get_study_gaps(conn, desempenho, ultima_sessao)
+    # Filtrar por matérias do ciclo ativo (se houver)
+    materias_ciclo = [r[0] for r in conn.execute(
+        "SELECT materia FROM ciclo_estudos WHERE ativo = 1 AND user_id = ?", (user_id,)
+    ).fetchall()] or None
+    materias_foco = _get_study_gaps(conn, desempenho, ultima_sessao, materias_ciclo)
     micro_metas = _generate_micro_goals(conn, user_id, materias_foco)
 
     # 7. Horário ótimo

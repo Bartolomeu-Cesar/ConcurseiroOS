@@ -201,11 +201,24 @@ def get_gamification(conn=Depends(get_db_session), user_id: int = Depends(get_us
 @router.get("/api/conquistas-diarias")
 def conquistas_diarias(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Gera missões diárias baseadas no progresso"""
-    # Buscar matérias menos estudadas
-    mat_fraca = conn.execute("""
-        SELECT materia FROM edital WHERE status != 'Concluído' AND user_id = ?
-        GROUP BY materia ORDER BY SUM(horas_estudadas) ASC LIMIT 5
-    """, (user_id,)).fetchall()
+    # Buscar matérias do ciclo ativo (se houver)
+    materias_ciclo = [r[0] for r in conn.execute(
+        "SELECT materia FROM ciclo_estudos WHERE ativo = 1 AND user_id = ?", (user_id,)
+    ).fetchall()]
+
+    # Buscar matérias menos estudadas (filtrar pelo ciclo se ativo)
+    if materias_ciclo:
+        placeholders = ','.join('?' * len(materias_ciclo))
+        mat_fraca = conn.execute(f"""
+            SELECT materia FROM edital WHERE status != 'Concluído' AND arquivado = 0 AND user_id = ?
+            AND materia IN ({placeholders})
+            GROUP BY materia ORDER BY SUM(horas_estudadas) ASC LIMIT 5
+        """, (user_id, *materias_ciclo)).fetchall()
+    else:
+        mat_fraca = conn.execute("""
+            SELECT materia FROM edital WHERE status != 'Concluído' AND arquivado = 0 AND user_id = ?
+            GROUP BY materia ORDER BY SUM(horas_estudadas) ASC LIMIT 5
+        """, (user_id,)).fetchall()
 
     # Dados de hoje
     hoje = conn.execute("SELECT * FROM streaks WHERE data = ? AND user_id = ?", (today_str(), user_id)).fetchone()
