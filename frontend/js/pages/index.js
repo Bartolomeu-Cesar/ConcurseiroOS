@@ -161,16 +161,25 @@ function switchCicloView(view, btn) {
   cicloViewAtual = view;
   document.querySelectorAll('.ciclo-view-btn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
-  if (cicloVisaoData) {
+
+  const el = document.getElementById('ciclo-view-content');
+  if (!el) return;
+
+  if (cicloVisaoData && !cicloVisaoData.sem_dados) {
     renderCicloView(view);
   } else {
-    // Dados ainda não carregaram — buscar e renderizar
+    el.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Carregando...</p>';
     fetch('/api/ciclo/visao')
-      .then(r => r.json())
-      .then(data => { cicloVisaoData = data; renderCicloView(cicloViewAtual); })
-      .catch(() => {
-        const el = document.getElementById('ciclo-view-content');
-        if (el) el.innerHTML = '<p style="color:#9399b2;">Erro ao carregar dados do ciclo.</p>';
+      .then(r => {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(data => {
+        cicloVisaoData = data;
+        renderCicloView(cicloViewAtual);
+      })
+      .catch(e => {
+        el.innerHTML = '<p style="color:#f38ba8;">Erro ao carregar: ' + e.message + '</p>';
       });
   }
 }
