@@ -206,12 +206,12 @@ PROVIDERS = {
 
 def _get_ai_config() -> dict:
     """Detect the best available AI provider and return configuration.
-    Checks: 1) env var AI_PROVIDER override, 2) user DB config (via ai_config table), 3) auto-detect from env keys.
+    Priority: 1) env var AI_PROVIDER override, 2) user DB config (ai_config table), 3) auto-detect from env keys.
     """
     provider_override = os.environ.get("AI_PROVIDER", "auto")
     model_override = os.environ.get("AI_MODEL", "")
 
-    # If user specified a provider, use it directly
+    # If user specified a provider via env, use it directly
     if provider_override != "auto" and provider_override in PROVIDERS:
         prov = PROVIDERS[provider_override]
         api_key = os.environ.get(prov["env_key"], "") if prov["env_key"] else ""
@@ -223,7 +223,34 @@ def _get_ai_config() -> dict:
             "format": prov["format"],
         }
 
-    # Auto-detect: try providers in priority order
+    # Check user DB config (ai_config table)
+    try:
+        import sqlite3
+        from settings import settings
+        conn = sqlite3.connect(settings.DB_PATH, check_same_thread=False, timeout=5)
+        conn.row_factory = sqlite3.Row
+        row = conn.execute("SELECT provider, api_key, model FROM ai_config WHERE user_id = 1").fetchone()
+        conn.close()
+        if row and row["provider"] and row["provider"] != "auto" and row["api_key"]:
+            db_provider = row["provider"]
+            db_key = row["api_key"]
+            db_model = row["model"]
+            if db_provider in PROVIDERS:
+                prov = PROVIDERS[db_provider]
+                url = prov["url"]
+                if db_provider == "ollama":
+                    url = db_key if db_key.startswith("http") else os.environ.get("OLLAMA_URL", "http://localhost:11434") + "/api/chat"
+                return {
+                    "provider": db_provider,
+                    "api_key": db_key,
+                    "url": url,
+                    "model": model_override or db_model or prov["default_model"],
+                    "format": prov["format"],
+                }
+    except Exception:
+        pass
+
+    # Auto-detect: try providers in priority order (from env keys)
     priority = ["openai", "claude", "gemini", "grok", "deepseek", "mistral", "groq", "together", "cohere", "perplexity", "kimi", "glm", "bedrock", "ollama"]
     for name in priority:
         prov = PROVIDERS[name]
