@@ -439,7 +439,134 @@ def sugestoes_desafios(conn=Depends(get_db_session), user_id: int = Depends(get_
             "icon": "❓"
         })
 
-    return sugestoes[:4]  # Max 4 sugestões
+    # 6. Maratona de horas (estudar 10h na semana)
+    horas_semana = conn.execute(
+        "SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE data >= ? AND user_id = ?",
+        ((date.today() - timedelta(days=6)).isoformat(), user_id)
+    ).fetchone()[0]
+    if horas_semana < 10:
+        sugestoes.append({
+            "titulo": "Maratona: 10 horas esta semana",
+            "descricao": f"Você estudou {round(horas_semana, 1)}h na última semana. Aumente a consistência!",
+            "meta_tipo": "horas",
+            "meta_valor": 10,
+            "materia": "",
+            "dias": 7,
+            "icon": "⏱"
+        })
+
+    # 7. Intercalar matérias (estudar pelo menos 4 matérias diferentes)
+    materias_semana = conn.execute(
+        "SELECT COUNT(DISTINCT materia) FROM sessoes_estudo WHERE data >= ? AND user_id = ?",
+        ((date.today() - timedelta(days=6)).isoformat(), user_id)
+    ).fetchone()[0]
+    if materias_semana < 4:
+        sugestoes.append({
+            "titulo": "Interleaving: estudar 4+ matérias",
+            "descricao": "Alternar matérias melhora retenção em 40% (Bjork, 2011). Diversifique!",
+            "meta_tipo": "horas",
+            "meta_valor": 4,
+            "materia": "",
+            "dias": 7,
+            "icon": "🔀"
+        })
+
+    # 8. Caderno de erros — revisar erros antigos
+    erros_pendentes = 0
+    try:
+        erros_pendentes = conn.execute(
+            "SELECT COUNT(*) FROM erros_revisao WHERE user_id = ? AND proxima_revisao <= ?",
+            (user_id, today_str())
+        ).fetchone()[0]
+    except Exception:
+        pass
+    if erros_pendentes >= 5:
+        sugestoes.append({
+            "titulo": f"Revisar {min(erros_pendentes, 20)} erros do caderno",
+            "descricao": "Erros não revisados se consolidam. Retrieval practice dos erros é a chave!",
+            "meta_tipo": "questoes",
+            "meta_valor": min(erros_pendentes, 20),
+            "materia": "",
+            "dias": 5,
+            "icon": "📕"
+        })
+
+    # 9. Simulado completo
+    simulados_mes = conn.execute(
+        "SELECT COUNT(*) FROM simulados WHERE status = 'finalizado' AND user_id = ? AND created_at >= ?",
+        (user_id, (date.today() - timedelta(days=30)).isoformat())
+    ).fetchone()[0]
+    if simulados_mes < 2:
+        sugestoes.append({
+            "titulo": "Completar 1 simulado cronometrado",
+            "descricao": "Simular a prova real treina gestão de tempo e controle emocional.",
+            "meta_tipo": "questoes",
+            "meta_valor": 40,
+            "materia": "",
+            "dias": 7,
+            "icon": "📝"
+        })
+
+    # 10. Accuracy challenge — acertar 80%+ em uma matéria
+    mat_perto = conn.execute("""
+        SELECT q.materia, COUNT(*) as total, SUM(qr.acertou) as acertos
+        FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id
+        WHERE qr.user_id = ? AND qr.data >= ?
+        GROUP BY q.materia HAVING total >= 5
+        ORDER BY (CAST(acertos AS REAL) / total) DESC LIMIT 1
+    """, (user_id, (date.today() - timedelta(days=14)).isoformat())).fetchone()
+    if mat_perto:
+        pct_atual = round(mat_perto["acertos"] / mat_perto["total"] * 100)
+        if 60 <= pct_atual < 80:
+            sugestoes.append({
+                "titulo": f"Precisão 80% em {mat_perto['materia']}",
+                "descricao": f"Você está com {pct_atual}%. Foque na qualidade, não só volume!",
+                "meta_tipo": "questoes",
+                "meta_valor": 20,
+                "materia": mat_perto["materia"],
+                "dias": 7,
+                "icon": "🎯"
+            })
+
+    # 11. Streak challenge (manter por 5 dias)
+    from utils import calculate_streak
+    streak_info = calculate_streak(conn, user_id)
+    if streak_info["streak_atual"] < 5:
+        sugestoes.append({
+            "titulo": "Manter streak por 5 dias",
+            "descricao": f"Streak atual: {streak_info['streak_atual']}. Hábito vence motivação!",
+            "meta_tipo": "horas",
+            "meta_valor": 3,
+            "materia": "",
+            "dias": 5,
+            "icon": "🔥"
+        })
+
+    # 12. Speed challenge — resolver questões rápido
+    tempo_medio = conn.execute(
+        "SELECT AVG(tempo_segundos) FROM questoes_respostas WHERE tempo_segundos > 0 AND user_id = ? AND data >= ?",
+        (user_id, (date.today() - timedelta(days=7)).isoformat())
+    ).fetchone()[0]
+    if tempo_medio and tempo_medio > 120:
+        sugestoes.append({
+            "titulo": "Speed Run: 10 questões em 15 min",
+            "descricao": f"Tempo médio atual: {int(tempo_medio)}s. Treinar velocidade sem perder precisão.",
+            "meta_tipo": "questoes",
+            "meta_valor": 10,
+            "materia": "",
+            "dias": 3,
+            "icon": "⚡"
+        })
+
+    # Shuffle para variedade e retornar até 6 sugestões
+    if len(sugestoes) > 6:
+        # Manter os primeiros 2 (mais relevantes) + shuffle do resto
+        fixos = sugestoes[:2]
+        resto = sugestoes[2:]
+        random.shuffle(resto)
+        sugestoes = fixos + resto[:4]
+
+    return sugestoes[:6]
 
 
 # ============================================================
