@@ -1,6 +1,8 @@
 // questoes.js — extracted from questoes.html inline scripts
 // ES module (strict mode by default)
 import { toast } from '../modules/toast.js';
+import { handleAuthNav } from '../modules/auth.js';
+window.handleAuthNav = handleAuthNav;
 
 // Tab navigation
 document.querySelectorAll('.qtab-btn').forEach(btn => {

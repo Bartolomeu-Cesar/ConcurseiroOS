@@ -20,6 +20,7 @@ import {
   loadSpacing, loadStudyIntelligence
 } from './treinador.js';
 import { loadDesafioDiarioCard } from './desafio.js';
+import { handleAuthNav } from '../../modules/auth.js';
 
 // ===== Dashboard Tab Navigation =====
 document.querySelectorAll('.dash-tab').forEach(tab => {
@@ -1124,21 +1125,10 @@ window.toggleDetailExpand = function(el) {
   }
 };
 
-// Profile menu toggle
+// Profile menu toggle — usa menu padronizado do auth.js
 window.toggleDashProfileMenu = function() {
-  const menu = document.getElementById('dash-profile-menu');
-  if (!menu) return;
-  menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+  handleAuthNav();
 };
-
-// Close profile menu on click outside
-document.addEventListener('click', (e) => {
-  const menu = document.getElementById('dash-profile-menu');
-  const section = document.getElementById('dash-user-section');
-  if (menu && section && !section.contains(e.target) && !menu.contains(e.target)) {
-    menu.style.display = 'none';
-  }
-});
 
 // ========== CALENDAR HELPERS: Turnos + Timeline ==========
 
