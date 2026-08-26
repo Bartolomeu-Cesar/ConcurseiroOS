@@ -216,7 +216,7 @@ function renderCards(dash, streaks) {
     <div class="card">
       <span class="card-label">Questões Resolvidas</span>
       <span class="card-value green">${dash.questoes.total}</span>
-      <span class="card-sub">${dash.questoes.percentual}% de acerto</span>
+      <span class="card-sub">${dash.questoes.percentual}% acerto · Hoje: ${dash.questoes.hoje || 0}q (${dash.questoes.percentual_hoje || 0}%)</span>
     </div>
     <div class="card">
       <span class="card-label">Edital Concluído</span>

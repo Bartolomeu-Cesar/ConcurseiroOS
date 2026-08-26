@@ -92,6 +92,14 @@ def get_dashboard(conn=Depends(get_db_session), user_id: int = Depends(get_user_
     questoes_total = conn.execute("SELECT COUNT(*) FROM questoes_respostas WHERE user_id = ?", (user_id,)).fetchone()[0]
     questoes_acertos = conn.execute("SELECT COUNT(*) FROM questoes_respostas WHERE acertou = 1 AND user_id = ?", (user_id,)).fetchone()[0]
 
+    # Questões hoje
+    questoes_hoje = conn.execute(
+        "SELECT COUNT(*) FROM questoes_respostas WHERE data = ? AND user_id = ?", (today_str(), user_id)
+    ).fetchone()[0]
+    questoes_acertos_hoje = conn.execute(
+        "SELECT COUNT(*) FROM questoes_respostas WHERE data = ? AND acertou = 1 AND user_id = ?", (today_str(), user_id)
+    ).fetchone()[0]
+
     # Evolução de acertos por dia (últimos 14 dias)
     acertos_dia = conn.execute("""
         SELECT data, COUNT(*) as total, SUM(acertou) as acertos
@@ -134,7 +142,10 @@ def get_dashboard(conn=Depends(get_db_session), user_id: int = Depends(get_user_
         "questoes": {
             "total": questoes_total,
             "acertos": questoes_acertos,
-            "percentual": round((questoes_acertos / questoes_total * 100) if questoes_total > 0 else 0, 1)
+            "percentual": round((questoes_acertos / questoes_total * 100) if questoes_total > 0 else 0, 1),
+            "hoje": questoes_hoje,
+            "acertos_hoje": questoes_acertos_hoje,
+            "percentual_hoje": round((questoes_acertos_hoje / questoes_hoje * 100) if questoes_hoje > 0 else 0, 1)
         },
         "acertos_por_dia": [dict(r) for r in acertos_dia],
         "horas_por_materia": [dict(r) for r in horas_materia],
