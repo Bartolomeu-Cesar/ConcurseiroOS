@@ -48,12 +48,23 @@ def _ensure_messages_table(db):
             sender_id INTEGER NOT NULL,
             receiver_id INTEGER NOT NULL,
             mensagem TEXT NOT NULL,
+            tipo TEXT DEFAULT 'text',
+            audio_path TEXT DEFAULT '',
             lida INTEGER DEFAULT 0,
             created_at TEXT NOT NULL,
             FOREIGN KEY (sender_id) REFERENCES users(id),
             FOREIGN KEY (receiver_id) REFERENCES users(id)
         )
     """)
+    # Migration: add tipo and audio_path columns if missing
+    try:
+        db.execute("ALTER TABLE direct_messages ADD COLUMN tipo TEXT DEFAULT 'text'")
+    except Exception:
+        pass
+    try:
+        db.execute("ALTER TABLE direct_messages ADD COLUMN audio_path TEXT DEFAULT ''")
+    except Exception:
+        pass
     db.execute("CREATE INDEX IF NOT EXISTS idx_dm_sender ON direct_messages(sender_id)")
     db.execute("CREATE INDEX IF NOT EXISTS idx_dm_receiver ON direct_messages(receiver_id)")
     db.execute("CREATE INDEX IF NOT EXISTS idx_dm_pair ON direct_messages(sender_id, receiver_id)")

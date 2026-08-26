@@ -932,9 +932,12 @@ async function loadMessages() {
     const container = document.getElementById('dm-messages');
     container.innerHTML = messages.map(m => {
       const time = new Date(m.created_at).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+      const content = m.tipo === 'audio' && m.audio_url
+        ? `<audio controls preload="none" src="${m.audio_url}"></audio>`
+        : escapeHtml(m.mensagem);
       return `
         <div class="chat-msg ${m.is_mine ? 'chat-msg--mine' : 'chat-msg--theirs'}">
-          <div>${escapeHtml(m.mensagem)}</div>
+          <div>${content}</div>
           <div class="chat-msg__time">${time}</div>
         </div>
       `;
@@ -979,6 +982,87 @@ window.sendChatMessage = async function() {
   input.disabled = false;
   input.focus();
 };
+
+// ===== AUDIO RECORDING =====
+let _mediaRecorder = null;
+let _audioChunks = [];
+let _isRecording = false;
+
+window.toggleAudioRecording = async function() {
+  if (_isRecording) {
+    stopRecording();
+  } else {
+    await startRecording();
+  }
+};
+
+async function startRecording() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    _mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+    _audioChunks = [];
+
+    _mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) _audioChunks.push(e.data);
+    };
+
+    _mediaRecorder.onstop = async () => {
+      // Parar tracks do microfone
+      stream.getTracks().forEach(t => t.stop());
+
+      const blob = new Blob(_audioChunks, { type: 'audio/webm' });
+      if (blob.size < 1000) {
+        showToast('Áudio muito curto, tente novamente', 'error');
+        return;
+      }
+      await sendAudioMessage(blob);
+    };
+
+    _mediaRecorder.start();
+    _isRecording = true;
+
+    const btn = document.getElementById('dm-record-btn');
+    btn.classList.add('recording');
+    btn.textContent = '⏹';
+    btn.title = 'Parar gravação';
+  } catch(e) {
+    showToast('Não foi possível acessar o microfone', 'error');
+  }
+}
+
+function stopRecording() {
+  if (_mediaRecorder && _mediaRecorder.state !== 'inactive') {
+    _mediaRecorder.stop();
+  }
+  _isRecording = false;
+
+  const btn = document.getElementById('dm-record-btn');
+  btn.classList.remove('recording');
+  btn.textContent = '🎤';
+  btn.title = 'Gravar áudio';
+}
+
+async function sendAudioMessage(blob) {
+  if (!_chatFriendId) return;
+
+  const formData = new FormData();
+  formData.append('receiver_id', _chatFriendId);
+  formData.append('audio', blob, 'audio.webm');
+
+  try {
+    const res = await fetch('/api/social/chat/send-audio', {
+      method: 'POST',
+      body: formData
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Erro ao enviar áudio');
+    }
+    await loadMessages();
+  } catch(e) {
+    showToast('Erro: ' + e.message, 'error');
+  }
+}
 
 function startChatPolling() {
   stopChatPolling();

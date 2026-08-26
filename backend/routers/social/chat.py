@@ -1,7 +1,10 @@
-"""Chat direto entre amigos: enviar, listar conversas, ler mensagens."""
+"""Chat direto entre amigos: enviar, listar conversas, ler mensagens, áudio."""
+import os
+import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 
 from database import get_db_session
 from deps import get_user_id
@@ -10,6 +13,10 @@ from logger import log
 from .helpers import _ensure_messages_table, _are_friends, _get_friend_ids
 
 router = APIRouter(prefix="", tags=["Social"])
+
+# Diretório para áudios do chat
+AUDIO_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "chat_audio")
+os.makedirs(AUDIO_DIR, exist_ok=True)
 
 @router.post("/api/social/chat/send")
 def send_message(
@@ -123,7 +130,7 @@ def get_messages(
     limit = min(limit, 100)
 
     rows = db.execute(
-        """SELECT id, sender_id, receiver_id, mensagem, lida, created_at
+        """SELECT id, sender_id, receiver_id, mensagem, tipo, audio_path, lida, created_at
            FROM direct_messages
            WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)
            ORDER BY id DESC LIMIT ?""",
@@ -142,6 +149,8 @@ def get_messages(
             "id": r["id"],
             "sender_id": r["sender_id"],
             "mensagem": r["mensagem"],
+            "tipo": r["tipo"] if "tipo" in r.keys() else "text",
+            "audio_url": f"/api/social/chat/audio/{r['audio_path']}" if "audio_path" in r.keys() and r["audio_path"] else None,
             "is_mine": r["sender_id"] == user_id,
             "lida": bool(r["lida"]),
             "created_at": r["created_at"],
@@ -152,3 +161,72 @@ def get_messages(
     return {"messages": messages, "friend_id": friend_id}
 
 
+
+
+@router.post("/api/social/chat/send-audio")
+async def send_audio_message(
+    receiver_id: int = Body(...),
+    audio: UploadFile = File(...),
+    db=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Enviar mensagem de áudio para um amigo."""
+    _ensure_messages_table(db)
+
+    if receiver_id == user_id:
+        raise HTTPException(status_code=400, detail="Não é possível enviar mensagem para si mesmo.")
+    if not _are_friends(db, user_id, receiver_id):
+        raise HTTPException(status_code=403, detail="Vocês não são amigos.")
+
+    # Validar tipo de arquivo
+    content_type = audio.content_type or ""
+    if not content_type.startswith("audio/"):
+        raise HTTPException(status_code=400, detail="Arquivo deve ser um áudio.")
+
+    # Limitar tamanho (5MB)
+    content = await audio.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Áudio muito grande (máx. 5MB).")
+
+    # Salvar arquivo
+    ext = "webm" if "webm" in content_type else "ogg" if "ogg" in content_type else "mp3"
+    filename = f"{user_id}_{receiver_id}_{uuid.uuid4().hex[:12]}.{ext}"
+    filepath = os.path.join(AUDIO_DIR, filename)
+
+    with open(filepath, "wb") as f:
+        f.write(content)
+
+    # Inserir mensagem do tipo audio
+    now = datetime.now().isoformat()
+    db.execute(
+        "INSERT INTO direct_messages (sender_id, receiver_id, mensagem, tipo, audio_path, lida, created_at) VALUES (?, ?, ?, 'audio', ?, 0, ?)",
+        (user_id, receiver_id, "🎤 Áudio", filename, now)
+    )
+    db.commit()
+
+    log.info(f"[chat] Audio sent from {user_id} to {receiver_id} ({len(content)} bytes)")
+    return {"ok": True, "created_at": now, "audio_url": f"/api/social/chat/audio/{filename}"}
+
+
+@router.get("/api/social/chat/audio/{filename}")
+def get_audio(filename: str, db=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Servir arquivo de áudio do chat."""
+    # Segurança: impedir path traversal
+    if "/" in filename or "\\" in filename or ".." in filename:
+        raise HTTPException(status_code=400, detail="Nome de arquivo inválido.")
+
+    filepath = os.path.join(AUDIO_DIR, filename)
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail="Áudio não encontrado.")
+
+    # Verificar que o user é participante da conversa (sender ou receiver)
+    msg = db.execute(
+        "SELECT sender_id, receiver_id FROM direct_messages WHERE audio_path = ? LIMIT 1",
+        (filename,)
+    ).fetchone()
+    if not msg or (msg["sender_id"] != user_id and msg["receiver_id"] != user_id):
+        raise HTTPException(status_code=403, detail="Acesso negado.")
+
+    ext = filename.rsplit(".", 1)[-1] if "." in filename else "webm"
+    media_type = f"audio/{ext}" if ext in ("webm", "ogg", "mp3", "wav") else "audio/webm"
+    return FileResponse(filepath, media_type=media_type)

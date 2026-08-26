@@ -261,6 +261,11 @@
     .chat-input-area input { flex: 1; padding: 10px 14px; border-radius: 20px; border: 1px solid var(--bg-elevated); background: var(--bg); color: var(--text); font-size: 0.85rem; outline: none; }
     .chat-input-area input:focus { border-color: var(--blue); }
     .chat-send-btn { background: var(--blue, #89b4fa); color: #1e1e2e; border: none; border-radius: 50%; width: 38px; height: 38px; font-size: 1.1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform 0.2s; }
+    .chat-audio-btn { background: none; border: none; font-size: 1.2rem; cursor: pointer; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+    .chat-audio-btn:hover { background: var(--bg-elevated); }
+    .chat-audio-btn.recording { background: #f38ba8; animation: pulse-rec 1s infinite; border-radius: 50%; }
+    @keyframes pulse-rec { 0%,100% { box-shadow: 0 0 0 0 rgba(243,139,168,0.4); } 50% { box-shadow: 0 0 0 8px rgba(243,139,168,0); } }
+    .chat-msg audio { width: 100%; max-width: 220px; height: 32px; border-radius: 16px; }
     .chat-send-btn:hover { transform: scale(1.1); }
 
     .feed-item {
@@ -470,6 +475,7 @@
         <div class="chat-messages" id="dm-messages"></div>
         <div class="chat-input-area">
           <input type="text" id="dm-input" placeholder="Digite sua mensagem..." maxlength="1000" onkeydown="if(event.key==='Enter')sendChatMessage()">
+          <button class="chat-audio-btn" id="dm-record-btn" onclick="toggleAudioRecording()" title="Gravar áudio">🎤</button>
           <button class="chat-send-btn" onclick="sendChatMessage()">➤</button>
         </div>
       </div>
