@@ -251,12 +251,15 @@ async function confirmarResposta() {
 
   document.querySelectorAll('.alternativa').forEach(a => {
     a.style.cursor = 'default';
+    a.onclick = null;
     if (a.dataset.letter === res.resposta_correta) {
       a.classList.add('correct');
       if (isCertoErrado) {
         a.style.border = '3px solid #a6e3a1';
-        a.style.background = '#a6e3a133';
+        a.style.background = '#a6e3a1';
+        a.style.color = '#1e1e2e';
         a.style.boxShadow = '0 0 12px #a6e3a155';
+        a.innerHTML = `✅ ${res.resposta_correta === 'A' ? 'CERTO' : 'ERRADO'}`;
       }
     }
     if (a.dataset.letter === letra && !res.acertou) {
@@ -264,7 +267,15 @@ async function confirmarResposta() {
       if (isCertoErrado) {
         a.style.border = '3px solid #f38ba8';
         a.style.background = '#f38ba833';
+        a.style.color = '#f38ba8';
+        a.style.boxShadow = 'none';
+        a.style.transform = 'none';
+        a.innerHTML = `❌ ${letra === 'A' ? 'CERTO' : 'ERRADO'}`;
       }
+    }
+    // Dim the other button if not selected and not correct
+    if (a.dataset.letter !== res.resposta_correta && a.dataset.letter !== letra) {
+      a.style.opacity = '0.4';
     }
   });
 
@@ -286,6 +297,7 @@ async function confirmarResposta() {
         <span style="font-size:1.3rem;">❌</span>
         <strong style="color:#f38ba8;font-size:1.05rem;margin-left:8px;">Você errou!</strong>
         <span style="color:#cdd6f4;font-size:0.9rem;margin-left:8px;">Resposta correta: <strong style="color:#a6e3a1;">${respostaCorretaTexto}</strong></span>
+        ${isCertoErrado ? `<div style="font-size:0.78rem;color:#9399b2;margin-top:6px;">A afirmação é <strong>${res.resposta_correta === 'A' ? 'VERDADEIRA' : 'FALSA'}</strong>.</div>` : ''}
       </div>`;
 
   // Inserir feedback antes da explicação
