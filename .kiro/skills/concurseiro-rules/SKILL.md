@@ -52,6 +52,9 @@
 - Offline: SW garante app funciona sem rede. Mutations ficam em queue (Background Sync).
 - Tema: suportar escuro (padrão Catppuccin Mocha) e claro. Usar variáveis CSS (`var(--text)`, `var(--bg)`, etc.).
 - Acessibilidade: botões com `title`, inputs com `placeholder`, contraste mínimo 4.5:1.
+- **Truncamento de texto**: Nunca usar `white-space:nowrap` + `text-overflow:ellipsis` em elementos que têm expansão via JS (onclick). O truncamento deve ser controlado pelo JS (slice + data-full), não pelo CSS. CSS ellipsis só para labels fixos (ex: nome de matéria).
+- **Grids com muitas colunas**: Sempre adicionar `min-width:0` + `overflow:hidden` em items de CSS Grid/Flex para impedir que conteúdo longo quebre o layout. O container pai também precisa de `overflow:hidden`.
+- **Componentes reutilizáveis**: Menus, modais e dropdowns devem ter implementação única (ex: `showProfileMenu()` em `auth.js`). Nunca duplicar lógica de UI entre páginas — importar do módulo compartilhado.
 
 ## Decisões Técnicas (por que assim)
 
