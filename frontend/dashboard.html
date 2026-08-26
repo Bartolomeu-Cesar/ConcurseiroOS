@@ -37,7 +37,7 @@
     /* Gráficos */
     .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
     .chart-box {
-      background: var(--bg-surface); border-radius: 12px; padding: 20px;
+      background: var(--bg-surface); border-radius: 12px; padding: 20px; overflow: hidden;
     }
     .chart-box h3 { font-size: 0.95rem; color: var(--accent); margin-bottom: 12px; }
     .chart-box canvas { max-height: 220px; }
@@ -318,6 +318,8 @@
       display: grid;
       grid-template-columns: repeat(7, 1fr);
       gap: 8px;
+      min-width: 0;
+      overflow: hidden;
     }
     @media (max-width: 768px) {
       .cal-grid { grid-template-columns: repeat(2, 1fr); }
@@ -330,6 +332,8 @@
       border-radius: 10px;
       padding: 12px;
       min-height: 200px;
+      min-width: 0;
+      overflow: hidden;
       border: 1px solid var(--border);
       transition: border-color 0.2s;
     }
@@ -354,9 +358,9 @@
     }
     .cal-activity:last-child { border-bottom: none; }
     .cal-activity-icon { font-size: 0.85rem; min-width: 18px; }
-    .cal-activity-info { flex: 1; }
-    .cal-activity-materia { font-weight: 600; color: var(--text); }
-    .cal-activity-detail { color: var(--text-sub); font-size: 0.7rem; margin-top: 2px; }
+    .cal-activity-info { flex: 1; min-width: 0; overflow: hidden; }
+    .cal-activity-materia { font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cal-activity-detail { color: var(--text-sub); font-size: 0.7rem; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .cal-detail-truncated { cursor: pointer; }
     .cal-detail-truncated:hover { color: var(--blue); }
     .cal-detail-truncated .cal-detail-short::after { content: ' ▸'; color: var(--blue); font-size: 0.6rem; }
