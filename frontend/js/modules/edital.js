@@ -487,18 +487,64 @@ export function initEdital(deps) {
 // ==================== VÍDEO YOUTUBE ====================
 
 window.linkVideoToTopic = function(editalId, topico) {
-  const link = prompt(`🎬 Cole o link do YouTube para "${topico}":`);
-  if (!link || !link.trim()) return;
+  // Modal para colar link do YouTube
+  const existing = document.getElementById('modal-video-link');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'modal-video-link';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(30,30,46,0.9);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+  modal.innerHTML = `
+    <div style="background:var(--bg-surface);border-radius:16px;padding:24px;max-width:480px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+      <h3 style="margin:0 0 8px;font-size:1rem;color:var(--accent);">🎬 Vincular Vídeo YouTube</h3>
+      <p style="font-size:0.82rem;color:var(--text-sub);margin:0 0 16px;">Tópico: <strong style="color:var(--text);">${escapeHtml(topico)}</strong></p>
+      <input id="video-link-input" type="url" placeholder="Cole o link do YouTube aqui..." 
+        style="width:100%;padding:12px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.9rem;outline:none;box-sizing:border-box;"
+        autofocus>
+      <p id="video-link-preview" style="font-size:0.75rem;color:var(--text-sub);margin:8px 0 0;min-height:18px;"></p>
+      <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;">
+        <button onclick="document.getElementById('modal-video-link').remove()" style="background:var(--bg-elevated);color:var(--text);border:none;border-radius:8px;padding:8px 16px;cursor:pointer;font-size:0.85rem;">Cancelar</button>
+        <button onclick="confirmVideoLink(${editalId})" style="background:var(--green);color:var(--bg);border:none;border-radius:8px;padding:8px 16px;cursor:pointer;font-size:0.85rem;font-weight:600;">✓ Vincular</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  // Preview de thumbnail ao colar
+  const input = document.getElementById('video-link-input');
+  input.addEventListener('input', () => {
+    const val = input.value.trim();
+    const id = extractYouTubeId(val);
+    const preview = document.getElementById('video-link-preview');
+    if (id) {
+      preview.innerHTML = `<img src="https://img.youtube.com/vi/${id}/mqdefault.jpg" style="width:120px;border-radius:6px;margin-top:4px;">`;
+    } else if (val) {
+      preview.textContent = '⚠️ Link inválido — use um link do YouTube';
+      preview.style.color = 'var(--red)';
+    } else {
+      preview.textContent = '';
+    }
+  });
+  input.focus();
+};
+
+window.confirmVideoLink = function(editalId) {
+  const input = document.getElementById('video-link-input');
+  const link = input?.value?.trim();
+  if (!link) { input.style.borderColor = 'var(--red)'; return; }
   if (!link.includes('youtu')) {
     toast('Link deve ser do YouTube', 'error');
+    input.style.borderColor = 'var(--red)';
     return;
   }
   fetch(`/api/edital/${editalId}/video`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ video_link: link.trim() })
+    body: JSON.stringify({ video_link: link })
   }).then(r => r.json()).then(res => {
     if (res.ok) {
+      document.getElementById('modal-video-link')?.remove();
       toast('🎬 Vídeo vinculado!', 'success');
       loadEdital();
     } else {
