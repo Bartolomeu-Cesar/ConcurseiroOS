@@ -215,6 +215,19 @@ def _get_ai_config() -> dict:
     if provider_override != "auto" and provider_override in PROVIDERS:
         prov = PROVIDERS[provider_override]
         api_key = os.environ.get(prov["env_key"], "") if prov["env_key"] else ""
+        # Fallback: if env key is empty, try DB config for same provider
+        if not api_key:
+            try:
+                import sqlite3 as _sql
+                from settings import settings as _settings
+                _conn = _sql.connect(_settings.DB_PATH, check_same_thread=False, timeout=5)
+                _conn.row_factory = _sql.Row
+                _row = _conn.execute("SELECT api_key FROM ai_config WHERE user_id = 1 AND provider = ?", (provider_override,)).fetchone()
+                _conn.close()
+                if _row and _row["api_key"]:
+                    api_key = _row["api_key"]
+            except Exception:
+                pass
         return {
             "provider": provider_override,
             "api_key": api_key,
