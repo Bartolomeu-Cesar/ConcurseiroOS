@@ -525,3 +525,66 @@
     } catch (e) {}
   }, 5000); // Delay 5s para não atrapalhar carregamento
 })();
+
+// ==================== WEEKLY WRAP (Resumo Semanal) ====================
+(function() {
+  if (!localStorage.getItem('auth_token')) return;
+  const today = new Date();
+  const dayOfWeek = today.getDay(); // 0 = domingo
+  const lastShown = localStorage.getItem('weekly_wrap_shown');
+  const weekId = today.toISOString().slice(0, 10); // YYYY-MM-DD
+
+  // Mostrar no domingo, ou se nunca mostrou esta semana
+  if (dayOfWeek !== 0 && lastShown && lastShown >= new Date(today - 7*24*60*60*1000).toISOString().slice(0,10)) return;
+  if (lastShown === weekId) return; // Já mostrou hoje
+
+  setTimeout(async () => {
+    try {
+      const data = await fetch('/api/insights/weekly-wrap').then(r => { if (!r.ok) throw new Error(); return r.json(); });
+      if (!data.resumo || data.resumo.horas_estudadas === 0 && data.resumo.questoes_resolvidas === 0) return;
+
+      localStorage.setItem('weekly_wrap_shown', weekId);
+      const r = data.resumo;
+      const c = data.comparativo;
+      const arrow = (trend) => trend === 'up' ? '↑' : trend === 'down' ? '↓' : '→';
+      const color = (trend) => trend === 'up' ? '#a6e3a1' : trend === 'down' ? '#f38ba8' : '#9399b2';
+
+      const modal = document.createElement('div');
+      modal.id = 'weekly-wrap-modal';
+      modal.style.cssText = 'position:fixed;inset:0;background:rgba(30,30,46,0.92);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn 0.3s ease;';
+      modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+      modal.innerHTML = `
+        <div style="background:var(--bg-surface,#313244);border-radius:16px;padding:28px;max-width:420px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,0.5);border:1px solid var(--border,#45475a);">
+          <div style="text-align:center;margin-bottom:16px;">
+            <div style="font-size:2rem;margin-bottom:4px;">📊</div>
+            <h3 style="margin:0;color:var(--accent,#cba6f7);font-size:1.1rem;">Resumo da Semana</h3>
+            <p style="font-size:0.72rem;color:var(--text-sub,#9399b2);margin:4px 0 0;">${data.periodo}</p>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+            <div style="background:var(--bg,#1e1e2e);border-radius:10px;padding:12px;text-align:center;">
+              <div style="font-size:1.4rem;font-weight:700;color:var(--blue,#89b4fa);">${r.horas_estudadas}h</div>
+              <div style="font-size:0.7rem;color:var(--text-sub);">Horas ${c.delta_horas !== null ? `<span style="color:${color(c.tendencia_horas)}">${arrow(c.tendencia_horas)}${Math.abs(c.delta_horas)}h</span>` : ''}</div>
+            </div>
+            <div style="background:var(--bg,#1e1e2e);border-radius:10px;padding:12px;text-align:center;">
+              <div style="font-size:1.4rem;font-weight:700;color:var(--green,#a6e3a1);">${r.questoes_resolvidas}</div>
+              <div style="font-size:0.7rem;color:var(--text-sub);">Questões ${c.delta_questoes !== null ? `<span style="color:${color(c.tendencia_questoes)}">${arrow(c.tendencia_questoes)}${Math.abs(c.delta_questoes)}</span>` : ''}</div>
+            </div>
+            <div style="background:var(--bg,#1e1e2e);border-radius:10px;padding:12px;text-align:center;">
+              <div style="font-size:1.4rem;font-weight:700;color:var(--peach,#fab387);">${r.pct_acerto}%</div>
+              <div style="font-size:0.7rem;color:var(--text-sub);">Acerto</div>
+            </div>
+            <div style="background:var(--bg,#1e1e2e);border-radius:10px;padding:12px;text-align:center;">
+              <div style="font-size:1.4rem;font-weight:700;color:var(--red,#f38ba8);">🔥${r.streak_atual}</div>
+              <div style="font-size:0.7rem;color:var(--text-sub);">${r.dias_ativos}/7 dias ativos</div>
+            </div>
+          </div>
+          ${data.conquistas.length ? `<div style="margin-bottom:12px;"><div style="font-size:0.75rem;color:var(--text-sub);margin-bottom:6px;font-weight:600;">🏆 Conquistas:</div><div style="display:flex;flex-wrap:wrap;gap:6px;">${data.conquistas.map(c => `<span style="background:var(--bg);padding:4px 8px;border-radius:6px;font-size:0.72rem;">${c.icon} ${c.label}</span>`).join('')}</div></div>` : ''}
+          ${data.destaques.melhor_materia ? `<div style="font-size:0.75rem;margin-bottom:4px;color:var(--green);">✅ Melhor: ${data.destaques.melhor_materia.materia} (${data.destaques.melhor_materia.pct}%)</div>` : ''}
+          ${data.destaques.pior_materia ? `<div style="font-size:0.75rem;margin-bottom:12px;color:var(--red);">⚠️ Focar: ${data.destaques.pior_materia.materia} (${data.destaques.pior_materia.pct}%)</div>` : ''}
+          <button onclick="document.getElementById('weekly-wrap-modal').remove()" style="width:100%;background:var(--accent,#cba6f7);color:var(--bg,#1e1e2e);border:none;border-radius:8px;padding:10px;font-weight:600;font-size:0.9rem;cursor:pointer;">👍 Fechar</button>
+        </div>
+      `;
+      document.body.appendChild(modal);
+    } catch(e) {}
+  }, 3000);
+})();
