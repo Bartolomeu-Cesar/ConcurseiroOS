@@ -146,7 +146,7 @@ def calendario_hoje(conn=Depends(get_db_session), user_id: int = Depends(get_use
     try:
         # Tópicos do edital com FSRS que precisam revisão nos próximos 2 dias
         topicos_urgentes = conn.execute("""
-            SELECT id, materia, topico, stability_edital, mastery_updated_at, mastery_level
+            SELECT id, materia, topico, stability_edital, mastery_updated_at, mastery_level, pdf_link, pdf_pagina
             FROM edital
             WHERE user_id = ? AND arquivado = 0 AND stability_edital > 0
             AND materia IN (SELECT DISTINCT materia FROM ciclo_estudos WHERE ativo = 1 AND user_id = ?)
@@ -163,6 +163,9 @@ def calendario_hoje(conn=Depends(get_db_session), user_id: int = Depends(get_use
                 "descricao": f"Revisar: {t['topico']}",
                 "motivo": "FSRS prediz queda de recall abaixo de 85%",
                 "mastery_level": t["mastery_level"] or 0,
+                "pdf_link": t["pdf_link"] or "",
+                "pdf_pagina": t["pdf_pagina"] or 0,
+                "edital_id": t["id"],
             })
     except Exception:
         pass
@@ -209,6 +212,9 @@ def calendario_hoje(conn=Depends(get_db_session), user_id: int = Depends(get_use
             "motivo": rev["motivo"],
             "tecnica": "Spaced Repetition — reforço antes do esquecimento",
             "cor": "#f9e2af",
+            "pdf_link": rev.get("pdf_link", ""),
+            "pdf_pagina": rev.get("pdf_pagina", 0),
+            "edital_id": rev.get("edital_id"),
         })
         cursor_min += bloco_min
         materias_usadas.add(rev["materia"])
@@ -258,24 +264,33 @@ def calendario_hoje(conn=Depends(get_db_session), user_id: int = Depends(get_use
         # Decidir tipo de atividade
         if m["total_questoes"] == 0 or m["pendentes"] > m["total_topicos"] * 0.7:
             tipo_bloco = "teoria"
-            # Buscar próximo tópico concreto
+            # Buscar próximo tópico concreto (com pdf_link)
             topico = conn.execute("""
-                SELECT topico FROM edital WHERE materia = ? AND status != 'Concluído'
+                SELECT id, topico, pdf_link, pdf_pagina FROM edital WHERE materia = ? AND status != 'Concluído'
                 AND arquivado = 0 AND user_id = ? ORDER BY id LIMIT 1
             """, (m["materia"], user_id)).fetchone()
             descricao = f"Estudar: {topico['topico']}" if topico else f"Avançar teoria de {m['materia']}"
             tecnica = "Elaboração ativa — resuma, explique, conecte"
             cor = "#89b4fa"
+            pdf_link = topico["pdf_link"] if topico and topico["pdf_link"] else ""
+            pdf_pagina = topico["pdf_pagina"] if topico and topico["pdf_pagina"] else 0
+            edital_id = topico["id"] if topico else None
         elif m["pct_acerto"] < 60:
             tipo_bloco = "questoes"
             descricao = f"Resolver questões de {m['materia']} (foco nos erros)"
             tecnica = "Retrieval Practice + análise de erros"
             cor = "#cba6f7"
+            pdf_link = ""
+            pdf_pagina = 0
+            edital_id = None
         else:
             tipo_bloco = "questoes_avancadas"
             descricao = f"Questões avançadas de {m['materia']} (elevar nível)"
             tecnica = "Desirable Difficulty — questões acima do nível atual"
             cor = "#cba6f7"
+            pdf_link = ""
+            pdf_pagina = 0
+            edital_id = None
 
         blocos.append({
             "id": bloco_count,
@@ -288,6 +303,9 @@ def calendario_hoje(conn=Depends(get_db_session), user_id: int = Depends(get_use
             "motivo": f"Score {m['score']:.0f} | {m['pct_acerto']:.0f}% acerto | {m['pendentes']} pendentes",
             "tecnica": tecnica,
             "cor": cor,
+            "pdf_link": pdf_link,
+            "pdf_pagina": pdf_pagina,
+            "edital_id": edital_id,
         })
         cursor_min += bloco_min
         materias_usadas.add(m["materia"])

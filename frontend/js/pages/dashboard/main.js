@@ -1355,6 +1355,8 @@ async function loadAgendaHoje() {
       <div class="agenda-timeline">
         ${blocos.map(b => {
           const isPausa = b.tipo === 'pausa' || b.tipo === 'pausa_longa';
+          const isStudy = !isPausa;
+          const playBtn = isStudy ? `<button class="agenda-play-btn" onclick="agendaPlay('${(b.materia||'').replace(/'/g,"\\'")}', ${b.duracao_min}, '${b.pdf_link||''}', ${b.pdf_pagina||0}, ${b.edital_id||0})" title="Iniciar estudo">▶</button>` : '';
           return `
             <div class="agenda-bloco ${isPausa ? 'agenda-bloco--pausa' : ''}" style="border-left:4px solid ${b.cor};">
               <div class="agenda-bloco__hora">${b.hora_inicio}</div>
@@ -1362,6 +1364,7 @@ async function loadAgendaHoje() {
                 <div class="agenda-bloco__desc">${b.descricao}</div>
                 ${!isPausa ? `<div class="agenda-bloco__meta">${b.materia || ''} · ${b.duracao_min}min${b.tecnica ? ' · ' + b.tecnica : ''}</div>` : ''}
               </div>
+              ${playBtn}
             </div>`;
         }).join('')}
       </div>
@@ -1374,6 +1377,33 @@ async function loadAgendaHoje() {
   }
 }
 window.loadAgendaHoje = loadAgendaHoje;
+
+// Ação do botão Play na agenda: inicia timer e navega para PDF
+window.agendaPlay = function(materia, duracao, pdfLink, pdfPagina, editalId) {
+  // 1. Iniciar timer global
+  if (window.startGlobalTimer) {
+    window.startGlobalTimer(materia, duracao, 'estudo');
+  }
+
+  // 2. Se tem PDF vinculado, navegar para o viewer
+  if (pdfLink) {
+    const page = pdfPagina > 0 ? `&page=${pdfPagina}` : '';
+    window.location.href = `/viewer.html?file=${encodeURIComponent(pdfLink)}${page}`;
+  } else if (editalId && editalId > 0) {
+    // Sem PDF vinculado: informar e sugerir vincular
+    const msg = `📎 Nenhum PDF vinculado a este tópico.\n\nVá em Edital → clique no tópico → "Vincular PDF" para associar um material de estudo.`;
+    if (window.toast) {
+      window.toast(msg, 'warning', 5000);
+    } else {
+      alert(msg);
+    }
+  } else {
+    // Bloco de questões sem PDF - ir para página de questões
+    if (materia) {
+      window.location.href = `/questoes.html?materia=${encodeURIComponent(materia)}`;
+    }
+  }
+};
 
 window.openStudyPrefs = function() {
   const overlay = document.createElement('div');
