@@ -323,7 +323,20 @@ async function loadVideosList() {
     const data = await fetch('/api/edital?arquivado=0').then(r => r.json());
     const items = (data.items || data).filter(t => t.video_link);
     if (!items.length) {
-      el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-sub);"><div style="font-size:2rem;margin-bottom:8px;">🎬</div><p>Nenhum vídeo vinculado ainda.</p><p style="font-size:0.78rem;">Vincule vídeos YouTube aos tópicos na aba Edital (botão 🎬).</p></div>';
+      el.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-sub);">
+        <div style="font-size:2.5rem;margin-bottom:12px;">🎬</div>
+        <p style="font-size:0.95rem;font-weight:600;color:var(--text);margin-bottom:8px;">Nenhum vídeo vinculado ainda</p>
+        <p style="font-size:0.82rem;margin-bottom:16px;">Vincule vídeos YouTube aos tópicos do edital para assistir aqui.</p>
+        <div style="text-align:left;background:var(--bg);border-radius:10px;padding:14px;font-size:0.82rem;max-width:400px;margin:0 auto;">
+          <p style="font-weight:600;color:var(--accent);margin-bottom:8px;">Como vincular:</p>
+          <ol style="margin:0;padding-left:18px;color:var(--text);line-height:1.8;">
+            <li>Vá na aba <strong>Edital</strong></li>
+            <li>Encontre o tópico desejado</li>
+            <li>Clique no botão <strong>🎬</strong> ao lado do tópico</li>
+            <li>Cole o link do YouTube</li>
+          </ol>
+        </div>
+      </div>`;
       return;
     }
     // Agrupar por matéria
@@ -369,6 +382,19 @@ setTimeout(() => {
     loadVideosList();
   }
 }, 300);
+
+// Also load when tab becomes visible (backup for goSection)
+const _videosObserver = new MutationObserver(() => {
+  const videosTab = document.getElementById('tab-videos');
+  if (videosTab && videosTab.classList.contains('active')) {
+    const el = document.getElementById('videos-list');
+    if (el && el.textContent.includes('Carregando')) loadVideosList();
+  }
+});
+setTimeout(() => {
+  const videosTab = document.getElementById('tab-videos');
+  if (videosTab) _videosObserver.observe(videosTab, { attributes: true, attributeFilter: ['class'] });
+}, 500);
 
 // ===== SERVICE WORKER REGISTRATION =====
 if ('serviceWorker' in navigator) {
