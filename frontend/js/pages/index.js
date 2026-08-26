@@ -176,6 +176,15 @@ function switchCicloView(view, btn) {
 }
 window.switchCicloView = switchCicloView;
 
+// Fallback: se ciclo-view-content está vazio após 2s, recarregar
+setTimeout(() => {
+  const el = document.getElementById('ciclo-view-content');
+  const cicloTab = document.getElementById('tab-ciclo');
+  if (el && cicloTab && cicloTab.classList.contains('active') && (!el.innerHTML || el.innerHTML.trim() === '')) {
+    loadCicloVisao();
+  }
+}, 2000);
+
 function renderCicloView(view) {
   const el = document.getElementById('ciclo-view-content');
   if (!el || !cicloVisaoData) return;
