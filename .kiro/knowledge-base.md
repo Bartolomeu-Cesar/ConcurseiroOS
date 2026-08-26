@@ -492,3 +492,57 @@ SELECT data FROM streaks WHERE (horas_estudadas > 0 OR questoes_resolvidas > 0 O
 -- Tópicos pendentes do edital (ciclo ativo)
 SELECT materia, topico FROM edital WHERE status != 'Concluído' AND arquivado = 0 AND user_id = ?
 ```
+
+---
+
+## 10. LIÇÕES APRENDIDAS (EARS)
+
+> Formato: **Event** (o que aconteceu) → **Action** (o que fizemos) → **Result** (resultado) → **Summary** (regra extraída)
+
+### #1 — Streak falso-positivo de freeze (26/08/2026)
+- **Event:** App mostrava "Streak em risco! Usar freeze?" mesmo tendo estudado ontem.
+- **Action:** `calculate_streak()` começava verificando se HOJE tinha registro. Se não (dia em andamento), retornava 0.
+- **Result:** Alterado para começar de ontem se hoje não tem registro. Streak preservado.
+- **Summary:** Lógica temporal deve considerar que o dia atual está em andamento — nunca penalizar antes do dia acabar.
+
+### #2 — Recomendações de concurso antigo (26/08/2026)
+- **Event:** Treinador recomendava "Resolver questões de STM 2025" mesmo com ciclo ativo de outro concurso.
+- **Action:** Queries de `_get_study_gaps`, `study-intelligence` e `conquistas-diarias` buscavam TODAS as matérias sem filtro.
+- **Result:** Adicionado filtro por `ciclo_estudos WHERE ativo = 1` em 3 endpoints.
+- **Summary:** Toda query de recomendação DEVE filtrar pelo ciclo ativo. Dados históricos existem mas não devem poluir sugestões atuais.
+
+### #3 — Botões do ciclo não funcionavam (26/08/2026)
+- **Event:** Botões Semanal/Mensal/Completo no ciclo de estudos não respondiam ao click.
+- **Action:** SW usava cache-first para `.js` mas `/js/pages/index.js` não estava no PRECACHE_URLS. Versão antiga (sem `window.switchCicloView`) era servida do cache.
+- **Result:** Adicionado scripts de páginas ao PRECACHE_URLS + incrementado SW version para invalidar cache.
+- **Summary:** Todo JS que usa `window.funcao` para onclick DEVE estar no PRECACHE_URLS. Sempre incrementar SW version ao alterar JS cacheado.
+
+### #4 — Feedback C/E mostrava "Resposta: A" (26/08/2026)
+- **Event:** Ao errar questão Certo/Errado, feedback mostrava "Resposta: A" e Self-Explanation dizia "a resposta correta é 'A'" em vez de "CERTO".
+- **Action:** `q.resposta_correta` era exibido cru (letra) sem traduzir para texto em questões C/E.
+- **Result:** Adicionado check `isCE` com tradução `A→CERTO, B→ERRADO` em 3 arquivos (modules/questoes.js, treinador.js, viewer.js).
+- **Summary:** Questões C/E armazenam resposta como letra (A/B) no banco. Todo feedback ao usuário deve traduzir para texto legível.
+
+### #5 — Card do Domingo quebrando layout (26/08/2026)
+- **Event:** No calendário semanal, o card de Domingo ficava fora do container principal.
+- **Action:** Grid de 7 colunas sem `min-width:0` permitia que conteúdo longo expandisse o card além do espaço disponível.
+- **Result:** Adicionado `min-width:0` + `overflow:hidden` no `.cal-grid` e `.cal-day`. Textos de matéria com `ellipsis`.
+- **Summary:** CSS Grid items precisam de `min-width:0` para respeitar o espaço alocado. Sem isso, conteúdo longo empurra o layout.
+
+### #6 — CSS truncava texto que tinha expansão JS (26/08/2026)
+- **Event:** Após fix do layout, detalhe dos tópicos ficou truncado sem possibilidade de expandir ao clicar.
+- **Action:** `white-space:nowrap` + `text-overflow:ellipsis` no CSS sobrescrevia a lógica JS de truncar/expandir via onclick.
+- **Result:** Removido CSS forçado do `.cal-activity-detail`. Truncamento volta a ser controlado pelo JS (slice + data-full + onclick).
+- **Summary:** Nunca aplicar CSS de truncamento em elementos que têm comportamento interativo via JS. O JS é quem controla a UX, CSS só estiliza.
+
+### #7 — Menu de perfil diferente em cada página (26/08/2026)
+- **Event:** Clicar no avatar mostrava menu diferente dependendo da tela (index = completo, dashboard = links, questões = redirecionava).
+- **Action:** Cada página tinha implementação própria do menu de perfil (3 versões independentes).
+- **Result:** Unificado para usar `handleAuthNav()` → `showProfileMenu()` do `auth.js` em todas as páginas.
+- **Summary:** Componentes de UI (menus, modais, toasts) devem ter implementação ÚNICA em módulo compartilhado. Duplicar = divergir inevitavelmente.
+
+### #8 — API key truncada ao salvar configuração de IA (sessão anterior)
+- **Event:** Ao salvar configuração do AI Tutor, a chave era sobrescrita com valor mascarado (`****...xxxx`).
+- **Action:** Modal preenchia o input com o valor mascarado. Ao salvar, backend gravava o valor mascarado como a nova key.
+- **Result:** Input de API key agora fica vazio. Backend preserva a key existente se o campo vier vazio.
+- **Summary:** Campos de segredo nunca devem ser pré-preenchidos com valor mascarado. Vazio = "não alterar".
