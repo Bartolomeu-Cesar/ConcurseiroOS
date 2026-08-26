@@ -290,7 +290,12 @@ def call_llm_sync(messages: list[dict], max_tokens: int = 1000) -> tuple[str, in
                 )
                 response.raise_for_status()
                 data = response.json()
-                text = data["choices"][0]["message"]["content"]
+                try:
+                    text = data["choices"][0]["message"]["content"]
+                except (KeyError, IndexError, TypeError):
+                    # Gemini sometimes returns different structure or empty response
+                    log.warning(f"[AI:{provider}] Unexpected response format: {str(data)[:300]}")
+                    text = data.get("choices", [{}])[0].get("message", {}).get("content") or str(data.get("error", "Resposta vazia do modelo"))
                 tokens = data.get("usage", {}).get("total_tokens", len(text) // 3)
                 return text, tokens
         except httpx.HTTPStatusError as e:
