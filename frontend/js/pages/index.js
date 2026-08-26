@@ -403,8 +403,13 @@ if ('serviceWorker' in navigator) {
       const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
       console.log('[App] SW registered, scope:', registration.scope);
 
-      // Check for updates periodically (every 60 minutes)
-      setInterval(() => registration.update(), 60 * 60 * 1000);
+      // Check for updates periodically (every 5 minutes)
+      setInterval(() => registration.update(), 5 * 60 * 1000);
+
+      // Also check when returning from background
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') registration.update();
+      });
 
       // Handle SW updates
       registration.addEventListener('updatefound', () => {
