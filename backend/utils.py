@@ -32,7 +32,11 @@ def build_tree(root: str) -> list:
 
 
 def calculate_streak(conn, user_id: int = 1) -> dict:
-    """Calcula streak atual e melhor streak histórico."""
+    """Calcula streak atual e melhor streak histórico.
+
+    Se hoje ainda não tem atividade, começa a contar a partir de ontem
+    (o dia ainda está em andamento, não deve quebrar o streak).
+    """
     rows = conn.execute(
         "SELECT data FROM streaks WHERE (horas_estudadas > 0 OR questoes_resolvidas > 0 OR flashcards_revisados > 0) AND user_id = ? ORDER BY data DESC",
         (user_id,)
@@ -40,6 +44,12 @@ def calculate_streak(conn, user_id: int = 1) -> dict:
 
     streak = 0
     check_date = date.today()
+
+    # Se hoje ainda não tem registro, começa checando a partir de ontem
+    # (o usuário ainda pode estudar hoje — não penalizar antes do dia acabar)
+    if not rows or rows[0][0] != check_date.isoformat():
+        check_date -= timedelta(days=1)
+
     for row in rows:
         if row[0] == check_date.isoformat():
             streak += 1
