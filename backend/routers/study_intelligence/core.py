@@ -57,22 +57,44 @@ def study_intelligence(
     trinta_dias = (hoje - timedelta(days=30)).isoformat()
     sete_dias = (hoje - timedelta(days=7)).isoformat()
 
+    # Matérias do ciclo ativo (se houver) — filtra apenas matérias relevantes
+    materias_ciclo = [r[0] for r in conn.execute(
+        "SELECT materia FROM ciclo_estudos WHERE ativo = 1 AND user_id = ?", (user_id,)
+    ).fetchall()]
+
     # ======= 1. DIFFICULTY SCORE POR TÓPICO =======
     # Fonte: questões respondidas (taxa de erro + tempo + recência)
-    topic_stats = conn.execute("""
-        SELECT q.materia, q.topico,
-               COUNT(*) as total_respostas,
-               SUM(CASE WHEN qr.acertou = 0 THEN 1 ELSE 0 END) as total_erros,
-               AVG(qr.tempo_segundos) as avg_tempo,
-               MAX(qr.data) as ultima_resposta,
-               SUM(CASE WHEN qr.data >= ? AND qr.acertou = 0 THEN 1 ELSE 0 END) as erros_recentes,
-               SUM(CASE WHEN qr.data >= ? AND qr.acertou = 1 THEN 1 ELSE 0 END) as acertos_recentes
-        FROM questoes_respostas qr
-        JOIN questoes q ON q.id = qr.questao_id
-        WHERE qr.user_id = ?
-        GROUP BY q.materia, q.topico
-        HAVING total_respostas >= 2
-    """, (sete_dias, sete_dias, user_id)).fetchall()
+    if materias_ciclo:
+        placeholders = ','.join('?' * len(materias_ciclo))
+        topic_stats = conn.execute(f"""
+            SELECT q.materia, q.topico,
+                   COUNT(*) as total_respostas,
+                   SUM(CASE WHEN qr.acertou = 0 THEN 1 ELSE 0 END) as total_erros,
+                   AVG(qr.tempo_segundos) as avg_tempo,
+                   MAX(qr.data) as ultima_resposta,
+                   SUM(CASE WHEN qr.data >= ? AND qr.acertou = 0 THEN 1 ELSE 0 END) as erros_recentes,
+                   SUM(CASE WHEN qr.data >= ? AND qr.acertou = 1 THEN 1 ELSE 0 END) as acertos_recentes
+            FROM questoes_respostas qr
+            JOIN questoes q ON q.id = qr.questao_id
+            WHERE qr.user_id = ? AND q.materia IN ({placeholders})
+            GROUP BY q.materia, q.topico
+            HAVING total_respostas >= 2
+        """, (sete_dias, sete_dias, user_id, *materias_ciclo)).fetchall()
+    else:
+        topic_stats = conn.execute("""
+            SELECT q.materia, q.topico,
+                   COUNT(*) as total_respostas,
+                   SUM(CASE WHEN qr.acertou = 0 THEN 1 ELSE 0 END) as total_erros,
+                   AVG(qr.tempo_segundos) as avg_tempo,
+                   MAX(qr.data) as ultima_resposta,
+                   SUM(CASE WHEN qr.data >= ? AND qr.acertou = 0 THEN 1 ELSE 0 END) as erros_recentes,
+                   SUM(CASE WHEN qr.data >= ? AND qr.acertou = 1 THEN 1 ELSE 0 END) as acertos_recentes
+            FROM questoes_respostas qr
+            JOIN questoes q ON q.id = qr.questao_id
+            WHERE qr.user_id = ?
+            GROUP BY q.materia, q.topico
+            HAVING total_respostas >= 2
+        """, (sete_dias, sete_dias, user_id)).fetchall()
 
     # Fonte: flashcards (ratings baixos indicam dificuldade)
     flash_difficulty = {}
