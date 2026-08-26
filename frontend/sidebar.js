@@ -76,6 +76,7 @@
         <div class="sidebar-section-title">Estudar</div>
         <ul class="sidebar-nav">
           <li><a href="/" class="${activeClass('/')}"><span class="nav-icon" aria-hidden="true">📖</span><span class="nav-label">PDFs / Leitura</span></a></li>
+          <li><a href="/#videos" onclick="goSection('tab-videos', event)"><span class="nav-icon" aria-hidden="true">🎬</span><span class="nav-label">Vídeos</span></a></li>
           <li><a href="/#edital" onclick="goSection('tab-edital', event)"><span class="nav-icon" aria-hidden="true">📋</span><span class="nav-label">Edital</span></a></li>
           <li><a href="/#ciclo" onclick="goSection('tab-ciclo', event)"><span class="nav-icon" aria-hidden="true">🔄</span><span class="nav-label">Ciclo</span></a></li>
         </ul>
@@ -273,7 +274,7 @@
     // Using localStorage ensures the tab activates after page load (no hash race condition)
     localStorage.setItem('concurseiro_active_tab', tabId);
     localStorage.setItem('concurseiro_tab_redirect', '1');
-    const hashMap = {'tab-ciclo':'ciclo','tab-edital':'edital','tab-flashcards':'flashcards','tab-sumulas':'sumulas','tab-pdfs':'pdfs'};
+    const hashMap = {'tab-ciclo':'ciclo','tab-edital':'edital','tab-flashcards':'flashcards','tab-sumulas':'sumulas','tab-pdfs':'pdfs','tab-videos':'videos'};
     window.location.href = '/#' + (hashMap[tabId] || '');
     return false;
   };

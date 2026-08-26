@@ -300,7 +300,11 @@ function loadCicloOntem() {
 
 // Load ontem when ciclo tab is shown
 const _origNav = navigateTo;
-window.navigateTo = function(tabId, btn) { _origNav(tabId, btn); if (tabId === 'tab-ciclo') { loadCicloOntem(); loadCicloVisao(); } };
+window.navigateTo = function(tabId, btn) {
+  _origNav(tabId, btn);
+  if (tabId === 'tab-ciclo') { loadCicloOntem(); loadCicloVisao(); }
+  if (tabId === 'tab-videos') { loadVideosList(); }
+};
 
 // Auto-load ciclo data if tab-ciclo is currently visible
 setTimeout(() => {
@@ -308,6 +312,61 @@ setTimeout(() => {
   if (cicloTab && cicloTab.classList.contains('active')) {
     loadCicloOntem();
     loadCicloVisao();
+  }
+}, 300);
+
+// ===== VIDEOS LIST =====
+async function loadVideosList() {
+  const el = document.getElementById('videos-list');
+  if (!el) return;
+  try {
+    const data = await fetch('/api/edital?arquivado=0').then(r => r.json());
+    const items = (data.items || data).filter(t => t.video_link);
+    if (!items.length) {
+      el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-sub);"><div style="font-size:2rem;margin-bottom:8px;">🎬</div><p>Nenhum vídeo vinculado ainda.</p><p style="font-size:0.78rem;">Vincule vídeos YouTube aos tópicos na aba Edital (botão 🎬).</p></div>';
+      return;
+    }
+    // Agrupar por matéria
+    const grouped = {};
+    items.forEach(t => {
+      if (!grouped[t.materia]) grouped[t.materia] = [];
+      grouped[t.materia].push(t);
+    });
+    let html = '';
+    for (const [materia, topics] of Object.entries(grouped)) {
+      html += `<div style="margin-bottom:16px;">
+        <div style="font-size:0.85rem;font-weight:700;color:var(--accent);margin-bottom:6px;">${materia} (${topics.length})</div>`;
+      for (const t of topics) {
+        const videoId = extractYTId(t.video_link);
+        const thumb = videoId ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` : '';
+        html += `<div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg);border-radius:8px;margin-bottom:6px;cursor:pointer;" onclick="openVideoPlayer(${t.id},'${t.video_link.replace(/'/g,"\\'")}','${(t.topico||'').replace(/'/g,"\\'")}')">
+          ${thumb ? `<img src="${thumb}" style="width:80px;height:45px;border-radius:6px;object-fit:cover;flex-shrink:0;" alt="">` : ''}
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:0.82rem;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${t.topico || 'Sem tópico'}</div>
+            <div style="font-size:0.72rem;color:var(--text-sub);">${t.status} · ${t.horas_estudadas || 0}h estudadas</div>
+          </div>
+          <span style="font-size:1.2rem;">▶️</span>
+        </div>`;
+      }
+      html += '</div>';
+    }
+    el.innerHTML = html;
+  } catch(e) {
+    el.innerHTML = '<div style="color:var(--red);font-size:0.85rem;">Erro ao carregar vídeos.</div>';
+  }
+}
+
+function extractYTId(url) {
+  if (!url) return null;
+  const m = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/) || url.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
+  return m ? m[1] : null;
+}
+
+// Auto-load videos if tab is active
+setTimeout(() => {
+  const videosTab = document.getElementById('tab-videos');
+  if (videosTab && videosTab.classList.contains('active')) {
+    loadVideosList();
   }
 }, 300);
 

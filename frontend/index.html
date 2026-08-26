@@ -67,7 +67,7 @@
   <script>
     (function() {
       var hash = window.location.hash.replace('#', '');
-      var map = {'ciclo':'tab-ciclo','edital':'tab-edital','flashcards':'tab-flashcards','sumulas':'tab-sumulas','pdfs':'tab-pdfs'};
+      var map = {'ciclo':'tab-ciclo','edital':'tab-edital','flashcards':'tab-flashcards','sumulas':'tab-sumulas','pdfs':'tab-pdfs','videos':'tab-videos'};
       // Only activate from hash (cross-page navigation) or fresh localStorage redirect
       var target = null;
       if (hash && map[hash]) {
@@ -158,6 +158,17 @@
   </div>
 
   <!-- Tab: Ciclo de Estudos -->
+  <!-- Tab: Vídeos -->
+  <div id="tab-videos" class="tab-content" role="tabpanel">
+    <div class="flash-panel">
+      <h2>🎬 Vídeos Vinculados</h2>
+      <p style="font-size:0.82rem;color:var(--text-sub);margin-bottom:12px;">Vídeos YouTube vinculados aos tópicos do edital. Clique para assistir (tempo conta como estudo).</p>
+      <div id="videos-list" style="display:flex;flex-direction:column;gap:8px;">
+        <div style="color:var(--text-sub);font-size:0.85rem;">Carregando...</div>
+      </div>
+    </div>
+  </div>
+
   <div id="tab-ciclo" class="tab-content" role="tabpanel">
     <div class="panel">
       <h2>🔄 Ciclo de Estudos</h2>
