@@ -768,6 +768,7 @@ def auto_gerar_simulado(
     random.shuffle(questao_ids)
 
     # Criar o simulado
+    hoje = date.today()
     titulo = f"Simulado Automático — {hoje.strftime('%d/%m/%Y')} ({len(questao_ids)}q)"
     cur = conn.execute("""
         INSERT INTO simulados (titulo, tempo_limite_min, total_questoes, status, created_at, user_id, tipo)
