@@ -991,6 +991,9 @@ function loadRelatorioSemanal() {
   fetch('/api/relatorio-semanal').then(r => r.json()).then(renderRelatorio).catch(() => {});
 }
 
+// Export for sidebar goPanel access (module scope is not global)
+window.loadActivePanel = loadActivePanel;
+
 // Restore panel from sidebar navigation
 const savedPanel = localStorage.getItem('concurseiro_dash_panel');
 if (savedPanel) {
