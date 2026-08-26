@@ -455,6 +455,14 @@ export async function loadSpacing() {
 
 // Micro-revisão
 let microItems = [], microIdx = 0, microAcertos = 0;
+
+window.microSabia = function() { microAcertos++; microIdx++; showMicroItem(); };
+window.microNaoSabia = function() { microIdx++; showMicroItem(); };
+window.microReveal = function() {
+  document.getElementById('micro-resp').style.display = 'block';
+  document.getElementById('micro-reveal-btn').style.display = 'none';
+  document.getElementById('micro-btns').style.display = 'flex';
+};
 export async function iniciarMicroRevisao() {
   try {
     const data = await fetch('/api/micro-revisao?quantidade=5').then(r => r.json());
@@ -473,7 +481,7 @@ function showMicroItem() {
     return;
   }
   const item = microItems[microIdx];
-  area.innerHTML = `<div style="padding:12px;background:var(--bg);border-radius:8px;"><div style="font-size:0.7rem;color:var(--text-sub);margin-bottom:4px;">${microIdx+1}/${microItems.length} · ${item.materia}</div><div style="font-size:0.9rem;color:var(--text);margin-bottom:10px;font-weight:600;">${item.pergunta}</div><div id="micro-resp" style="display:none;padding:8px;background:var(--bg-surface);border-radius:6px;color:var(--green);font-size:0.82rem;margin-bottom:8px;">${item.resposta}</div><div style="display:flex;gap:6px;"><button onclick="document.getElementById('micro-resp').style.display='block';this.style.display='none';document.getElementById('micro-btns').style.display='flex';" style="background:var(--yellow);color:var(--bg);border:none;border-radius:6px;padding:6px 12px;font-weight:600;cursor:pointer;">👁 Revelar</button><div id="micro-btns" style="display:none;gap:6px;"><button onclick="microAcertos++;microIdx++;showMicroItem();" style="background:var(--green);color:var(--bg);border:none;border-radius:6px;padding:6px 12px;font-weight:600;cursor:pointer;">✓ Sabia</button><button onclick="microIdx++;showMicroItem();" style="background:var(--red);color:var(--bg);border:none;border-radius:6px;padding:6px 12px;font-weight:600;cursor:pointer;">✗ Não sabia</button></div></div></div>`;
+  area.innerHTML = `<div style="padding:12px;background:var(--bg);border-radius:8px;"><div style="font-size:0.7rem;color:var(--text-sub);margin-bottom:4px;">${microIdx+1}/${microItems.length} · ${item.materia}</div><div style="font-size:0.9rem;color:var(--text);margin-bottom:10px;font-weight:600;">${item.pergunta}</div><div id="micro-resp" style="display:none;padding:8px;background:var(--bg-surface);border-radius:6px;color:var(--green);font-size:0.82rem;margin-bottom:8px;">${item.resposta}</div><div style="display:flex;gap:6px;"><button id="micro-reveal-btn" onclick="microReveal()" style="background:var(--yellow);color:var(--bg);border:none;border-radius:6px;padding:6px 12px;font-weight:600;cursor:pointer;">👁 Revelar</button><div id="micro-btns" style="display:none;gap:6px;"><button onclick="microSabia()" style="background:var(--green);color:var(--bg);border:none;border-radius:6px;padding:6px 12px;font-weight:600;cursor:pointer;">✓ Sabia</button><button onclick="microNaoSabia()" style="background:var(--red);color:var(--bg);border:none;border-radius:6px;padding:6px 12px;font-weight:600;cursor:pointer;">✗ Não sabia</button></div></div></div>`;
 }
 
 // Autoavaliação
