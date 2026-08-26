@@ -85,7 +85,12 @@ export async function loadTreinador() {
         <div style="display:grid;gap:4px;">
           ${intel.forgetting_risk.slice(0, 5).map(item => {
             const urgColor = item.urgencia === 'critica' ? 'var(--red)' : item.urgencia === 'alta' ? 'var(--peach)' : 'var(--yellow)';
-            return `<div style="display:flex;align-items:flex-start;gap:8px;font-size:0.78rem;padding:8px 10px;background:var(--bg);border-radius:6px;">
+            const clickAction = item.tipo === 'flashcard'
+              ? `onclick="window.location.href='/#flashcards';setTimeout(()=>{if(window.iniciarSessaoFlash)window.iniciarSessaoFlash('revisao')},500)" style="cursor:pointer;" title="Revisar flashcard"`
+              : item.tipo === 'edital'
+                ? `onclick="window.location.href='/#edital'" style="cursor:pointer;" title="Ver no edital"`
+                : '';
+            return `<div ${clickAction} style="display:flex;align-items:flex-start;gap:8px;font-size:0.78rem;padding:8px 10px;background:var(--bg);border-radius:6px;${clickAction ? 'cursor:pointer;transition:background 0.2s;' : ''}" ${clickAction ? 'onmouseover="this.style.background=\'var(--bg-elevated)\'" onmouseout="this.style.background=\'var(--bg)\'"' : ''}>
               <div style="min-width:44px;text-align:center;font-weight:700;color:${urgColor};padding-top:1px;">${item.recall_estimado}%</div>
               <div style="flex:1;color:var(--text);line-height:1.4;">${item.descricao}</div>
               <div style="font-size:0.68rem;color:var(--text-sub);min-width:55px;text-align:right;padding-top:1px;">${item.tipo}</div>
