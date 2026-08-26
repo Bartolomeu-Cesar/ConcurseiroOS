@@ -353,6 +353,28 @@ MAX_LEAGUE_SIZE = 20
 | **Anxiety Management** | Test anxiety literature | Média | Exposição gradual a condições de prova |
 | **Progress Milestones** | Goal-setting theory (Locke) | Baixa | Celebrações em marcos (50%, 75%, edital completo) |
 
+### 5.3 Integrações Externas
+
+| Integração | API | Complexidade | Caso de Uso |
+|-----------|-----|-------------|-------------|
+| **WhatsApp Cloud API** | Meta for Developers (gratuita) | Média | Notificar amigos, enviar resumo diário, lembrete de streak, compartilhar progresso |
+| **Telegram Bot API** | Telegram (gratuita, sem aprovação) | Baixa | Alternativa ao WhatsApp, flashcards via bot, lembretes |
+| **Google Calendar** | Google Calendar API | Média | Sincronizar calendário de estudos com agenda pessoal |
+| **Notion API** | Notion (gratuita) | Média | Exportar edital/progresso para Notion |
+
+#### WhatsApp Cloud API — Detalhes
+- **Requisitos**: Conta Meta Business, número verificado, templates aprovados
+- **Limites**: 1000 conversas/mês grátis (tier Business), mensagens template precisam aprovação
+- **Funcionalidades possíveis**:
+  - 📊 Resumo diário de estudo (horas, questões, streak) às 22h
+  - 🔔 Lembrete de flashcards pendentes
+  - 🔥 Alerta de streak em risco
+  - 🏆 Notificação de conquista/badge
+  - 💬 Mensagem de amigo no app → notifica via WhatsApp
+  - 📋 "O que estudar hoje" (agenda do dia)
+- **Fluxo**: Backend → WhatsApp Cloud API (POST /messages) → Usuário recebe no WhatsApp
+- **Webhook**: Receber respostas do user (ex: "OK" confirma que vai estudar)
+
 ### 5.3 Evoluções de Arquitetura
 
 | Evolução | Motivo | Prioridade |
