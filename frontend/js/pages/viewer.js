@@ -436,7 +436,9 @@ async function selectSideAlt(el) {
   });
 
   const fb = document.getElementById(`fb-${qId}`);
-  fb.textContent = res.acertou ? '✓ Correto!' : `✗ Errado. Resposta: ${correct}`;
+  const isCE = question.querySelectorAll('.sp-alt').length === 2;
+  const correctLabel = isCE ? (correct === 'A' ? 'CERTO' : 'ERRADO') : `Alternativa ${correct}`;
+  fb.textContent = res.acertou ? '✓ Correto!' : `✗ Errado. Resposta: ${correctLabel}`;
   fb.style.color = res.acertou ? '#a6e3a1' : '#f38ba8';
   fb.classList.add('show');
 }

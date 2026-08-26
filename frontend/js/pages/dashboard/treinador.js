@@ -207,7 +207,9 @@ export async function responderDailyChallenge(qId, letra, btn) {
       fb.innerHTML = `<span style="color:var(--green);font-weight:600;">✓ Correto!</span>`;
       btn.style.background = 'var(--green)'; btn.style.color = 'var(--bg)';
     } else {
-      fb.innerHTML = `<span style="color:var(--red);font-weight:600;">✗ Errado. Resposta: ${res.resposta_correta}</span>`;
+      const isCE = !document.querySelector(`button[onclick*=",'C',"]`);
+      const resTexto = isCE ? (res.resposta_correta === 'A' ? 'CERTO' : 'ERRADO') : `Alternativa ${res.resposta_correta}`;
+      fb.innerHTML = `<span style="color:var(--red);font-weight:600;">✗ Errado. Resposta: ${resTexto}</span>`;
       btn.style.background = 'var(--red)'; btn.style.color = 'var(--bg)';
     }
     btn.parentElement.querySelectorAll('button').forEach(b => { b.disabled = true; b.style.opacity = '0.6'; });

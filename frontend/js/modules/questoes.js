@@ -134,11 +134,13 @@ export async function responderQuestaoDia(letra) {
       <br><button onclick="advanceQuestao()" style="margin-top:8px;background:#89b4fa;color:#1e1e2e;border:none;border-radius:6px;padding:6px 14px;font-weight:600;cursor:pointer;">Próxima →</button>`;
   } else {
     // Self-Explanation: obrigatório explicar POR QUÊ errou (+40% retenção)
-    fb.innerHTML = `<strong>✗ Errado! Resposta: ${q.resposta_correta}</strong>
+    const isCE = !q.alternativa_c && !q.alternativa_d;
+    const respostaTexto = isCE ? (q.resposta_correta === 'A' ? 'CERTO' : 'ERRADO') : q.resposta_correta;
+    fb.innerHTML = `<strong>✗ Errado! Resposta: ${respostaTexto}</strong>
       <span style="float:right;color:#9399b2;font-size:0.75rem;">⏱ ${tempoFmt}</span>
       ${q.explicacao ? '<br><span style="color:#cdd6f4;font-size:0.78rem;">💡 ' + q.explicacao + '</span>' : ''}
       <div style="margin-top:10px;padding:10px;background:rgba(249,226,175,0.1);border:1px solid var(--yellow);border-radius:8px;">
-        <div style="font-size:0.75rem;color:var(--yellow);font-weight:600;margin-bottom:6px;">🧠 Self-Explanation — Explique por que a resposta correta é "${q.resposta_correta}":</div>
+        <div style="font-size:0.75rem;color:var(--yellow);font-weight:600;margin-bottom:6px;">🧠 Self-Explanation — Explique por que a resposta correta é "${respostaTexto}":</div>
         <textarea id="qdia-self-explain" placeholder="Escreva com suas palavras por que esta é a resposta correta... (Isso melhora sua retenção em 40%!)" 
           style="width:100%;min-height:50px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-size:0.82rem;font-family:inherit;resize:vertical;"></textarea>
         <button onclick="submitSelfExplanation(${q.id})" style="margin-top:6px;background:var(--yellow);color:var(--bg);border:none;border-radius:6px;padding:6px 14px;font-weight:600;cursor:pointer;font-size:0.82rem;">💾 Salvar e continuar</button>
