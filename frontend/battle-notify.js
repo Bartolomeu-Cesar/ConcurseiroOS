@@ -14,17 +14,22 @@
   let _notifying = false;
 
   function checkBatalha() {
+    // Não fazer polling se não está logado
+    if (!localStorage.getItem('auth_token')) return;
+
     fetch('/api/batalha/pendente')
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) return null; // Ignore errors silently (401, 500)
+        return r.json();
+      })
       .then(data => {
-        if (!data.ativa) return;
+        if (!data || !data.ativa) return;
         if (_dismissed === data.codigo) return; // Já dispensou essa
         if (_notifying) return;
 
         if (data.status === 'em_andamento') {
           showBattleNotification(data, 'em_andamento');
         } else if (data.status === 'aguardando' && !data.is_creator) {
-          // Só notifica participantes (criador já está na batalha)
           showBattleNotification(data, 'aguardando');
         }
       })
