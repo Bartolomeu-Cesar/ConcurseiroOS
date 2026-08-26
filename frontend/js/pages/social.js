@@ -997,9 +997,23 @@ window.toggleAudioRecording = async function() {
 };
 
 async function startRecording() {
+  // Verificar se mediaDevices está disponível (requer HTTPS ou localhost)
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showToast('Gravação requer HTTPS ou localhost. Acesse via localhost:8000', 'error');
+    return;
+  }
+
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    _mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+
+    // Verificar mimeType suportado
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+      ? 'audio/webm;codecs=opus'
+      : MediaRecorder.isTypeSupported('audio/webm')
+        ? 'audio/webm'
+        : 'audio/ogg';
+
+    _mediaRecorder = new MediaRecorder(stream, { mimeType });
     _audioChunks = [];
 
     _mediaRecorder.ondataavailable = (e) => {
@@ -1026,7 +1040,13 @@ async function startRecording() {
     btn.textContent = '⏹';
     btn.title = 'Parar gravação';
   } catch(e) {
-    showToast('Não foi possível acessar o microfone', 'error');
+    if (e.name === 'NotAllowedError') {
+      showToast('Permissão do microfone negada. Permita nas configurações do browser.', 'error');
+    } else if (e.name === 'NotFoundError') {
+      showToast('Nenhum microfone encontrado no dispositivo.', 'error');
+    } else {
+      showToast('Não foi possível acessar o microfone. Use localhost ou HTTPS.', 'error');
+    }
   }
 }
 
