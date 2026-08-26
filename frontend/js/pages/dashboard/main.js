@@ -751,6 +751,50 @@ async function limparCalendario() {
 // Pomodoro
 let pomoInterval = null, pomoSeconds = 0, pomoTotal = 0, pomoPaused = false;
 function startPomodoro(materia, tempoMin, tipo) {
+  // Iniciar timer global (widget flutuante que persiste entre páginas)
+  if (window.startGlobalTimer) {
+    window.startGlobalTimer(materia || 'Estudo', tempoMin, tipo || 'estudo');
+  }
+
+  // Navegar para o conteúdo baseado no tipo
+  if (tipo === 'revisao') {
+    // Flashcards
+    window.location.href = '/#flashcards';
+    return;
+  } else if (tipo === 'questoes') {
+    // Questões da matéria
+    window.location.href = `/questoes.html?materia=${encodeURIComponent(materia || '')}`;
+    return;
+  } else if (tipo === 'estudo' || tipo === 'teoria') {
+    // Buscar PDF vinculado à matéria
+    fetch(`/api/edital?edital_nome=&cargo=&limit=1&page=1`)
+      .then(r => r.json())
+      .then(() => {
+        // Buscar tópico com PDF vinculado para essa matéria
+        fetch(`/api/edital?limit=50`)
+          .then(r => r.json())
+          .then(data => {
+            const items = data.items || data || [];
+            const comPdf = items.find(t => t.materia === materia && t.pdf_link);
+            if (comPdf) {
+              const page = comPdf.pdf_pagina > 0 ? `&page=${comPdf.pdf_pagina}` : '';
+              window.location.href = `/viewer.html?file=${encodeURIComponent(comPdf.pdf_link)}${page}`;
+            } else {
+              // Sem PDF, mostrar aviso
+              if (window.toast) {
+                window.toast(`📎 Nenhum PDF vinculado a "${materia}". Vincule em Edital → tópico → Vincular PDF.`, 'warning', 5000);
+              }
+            }
+          }).catch(() => {});
+      }).catch(() => {});
+    return;
+  }
+
+  // Fallback: abrir pomodoro overlay (comportamento antigo)
+  _startPomoOverlay(materia, tempoMin, tipo);
+}
+
+function _startPomoOverlay(materia, tempoMin, tipo) {
   pomoSeconds = tempoMin * 60;
   pomoTotal = pomoSeconds;
   pomoPaused = false;
@@ -782,9 +826,6 @@ function startPomodoro(materia, tempoMin, tipo) {
     materia, tipo: tipo || 'estudo', totalSeconds: pomoTotal,
     endTime: Date.now() + pomoTotal * 1000, paused: false, remainingWhenPaused: 0
   }));
-  if (tipo === 'revisao' || tipo === 'flashcard') window.location.href = '/#tab-flashcards';
-  else if (tipo === 'questoes') window.location.href = '/questoes.html';
-  else if (tipo === 'estudo') window.location.href = '/';
   if (Notification.permission === 'default') Notification.requestPermission();
 }
 function updatePomoDisplay() {
