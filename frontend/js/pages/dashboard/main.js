@@ -1339,6 +1339,7 @@ async function loadAgendaHoje() {
     if (!res.ok) throw new Error('Erro ao carregar agenda');
     const data = await res.json();
     const blocos = data.blocos || [];
+    window._agendaBlocos = blocos;
 
     if (!blocos.length) {
       container.innerHTML = '<p style="color:var(--text-sub);font-size:0.85rem;text-align:center;padding:16px;">Adicione matérias ao ciclo para gerar sua agenda.</p>';
@@ -1353,10 +1354,10 @@ async function loadAgendaHoje() {
         ${data.resumo.revisoes_preditivas > 0 ? `<span style="color:var(--yellow);">🔮 ${data.resumo.revisoes_preditivas} revisões preditivas</span>` : ''}
       </div>
       <div class="agenda-timeline">
-        ${blocos.map(b => {
+        ${blocos.map((b, idx) => {
           const isPausa = b.tipo === 'pausa' || b.tipo === 'pausa_longa';
           const isStudy = !isPausa;
-          const playBtn = isStudy ? `<button class="agenda-play-btn" onclick="agendaPlay('${(b.materia||'').replace(/'/g,"\\'")}', ${b.duracao_min}, '${b.pdf_link||''}', ${b.pdf_pagina||0}, ${b.edital_id||0})" title="Iniciar estudo">▶</button>` : '';
+          const playBtn = isStudy ? `<button class="agenda-play-btn" data-idx="${idx}" title="Iniciar estudo">▶</button>` : '';
           return `
             <div class="agenda-bloco ${isPausa ? 'agenda-bloco--pausa' : ''}" style="border-left:4px solid ${b.cor};">
               <div class="agenda-bloco__hora">${b.hora_inicio}</div>
@@ -1379,31 +1380,36 @@ async function loadAgendaHoje() {
 window.loadAgendaHoje = loadAgendaHoje;
 
 // Ação do botão Play na agenda: inicia timer e navega para PDF
-window.agendaPlay = function(materia, duracao, pdfLink, pdfPagina, editalId) {
+// Usa event delegation — os dados dos blocos ficam em window._agendaBlocos
+window._agendaBlocos = [];
+
+document.addEventListener('click', function(e) {
+  const btn = e.target.closest('.agenda-play-btn');
+  if (!btn) return;
+  const idx = parseInt(btn.dataset.idx);
+  const b = window._agendaBlocos[idx];
+  if (!b) return;
+
   // 1. Iniciar timer global
   if (window.startGlobalTimer) {
-    window.startGlobalTimer(materia, duracao, 'estudo');
+    window.startGlobalTimer(b.materia || 'Estudo', b.duracao_min, 'estudo');
   }
 
-  // 2. Se tem PDF vinculado, navegar para o viewer
-  if (pdfLink) {
-    const page = pdfPagina > 0 ? `&page=${pdfPagina}` : '';
-    window.location.href = `/viewer.html?file=${encodeURIComponent(pdfLink)}${page}`;
-  } else if (editalId && editalId > 0) {
+  // 2. Navegar de acordo com o tipo
+  if (b.pdf_link) {
+    const page = b.pdf_pagina > 0 ? `&page=${b.pdf_pagina}` : '';
+    window.location.href = `/viewer.html?file=${encodeURIComponent(b.pdf_link)}${page}`;
+  } else if (b.tipo === 'questoes' || b.tipo === 'questoes_avancadas') {
+    window.location.href = `/questoes.html?materia=${encodeURIComponent(b.materia || '')}`;
+  } else if (b.edital_id) {
     // Sem PDF vinculado: informar e sugerir vincular
-    const msg = `📎 Nenhum PDF vinculado a este tópico.\n\nVá em Edital → clique no tópico → "Vincular PDF" para associar um material de estudo.`;
     if (window.toast) {
-      window.toast(msg, 'warning', 5000);
+      window.toast('📎 Nenhum PDF vinculado a este tópico. Vá em Edital → clique no tópico → "Vincular PDF" para associar um material.', 'warning', 5000);
     } else {
-      alert(msg);
-    }
-  } else {
-    // Bloco de questões sem PDF - ir para página de questões
-    if (materia) {
-      window.location.href = `/questoes.html?materia=${encodeURIComponent(materia)}`;
+      alert('📎 Nenhum PDF vinculado. Vincule um PDF ao tópico no Edital.');
     }
   }
-};
+});
 
 window.openStudyPrefs = function() {
   const overlay = document.createElement('div');
