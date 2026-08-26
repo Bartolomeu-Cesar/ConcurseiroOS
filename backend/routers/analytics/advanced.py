@@ -482,7 +482,11 @@ def raio_x_prioridades(banca: str = "", edital_nome: str = "", cargo: str = "", 
     freq_data = conn.execute(freq_query, freq_params).fetchall()
     freq_map = {(r[0], r[1]): r[2] for r in freq_data}
 
-    # Get edital topics with mastery
+    # Get edital topics with mastery — filter by ciclo ativo if available
+    materias_ciclo = [r[0] for r in conn.execute(
+        "SELECT materia FROM ciclo_estudos WHERE ativo = 1 AND user_id = ?", (user_id,)
+    ).fetchall()]
+
     edital_where = "user_id = ? AND arquivado = 0"
     edital_params = [user_id]
     if edital_nome:
@@ -491,10 +495,15 @@ def raio_x_prioridades(banca: str = "", edital_nome: str = "", cargo: str = "", 
     if cargo:
         edital_where += " AND cargo = ?"
         edital_params.append(cargo)
+    if materias_ciclo and not edital_nome:
+        placeholders = ','.join('?' * len(materias_ciclo))
+        edital_where += f" AND materia IN ({placeholders})"
+        edital_params.extend(materias_ciclo)
 
     topics = conn.execute(f"""
         SELECT id, materia, topico, status, mastery_level
         FROM edital WHERE {edital_where}
+        GROUP BY materia, topico
         ORDER BY materia, topico
     """, edital_params).fetchall()
 
