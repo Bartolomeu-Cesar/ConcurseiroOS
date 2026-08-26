@@ -153,11 +153,15 @@ function renderEditalTree() {
           const pdfBtn = item.pdf_link
             ? `<a class="tree-pdf-btn" href="viewer.html?path=${encodeURIComponent(item.pdf_link)}${item.pdf_pagina ? '#page=' + item.pdf_pagina : ''}" target="_blank" onclick="event.stopPropagation()" title="Abrir PDF">📖</a>`
             : `<button class="tree-pdf-link-btn" onclick="event.stopPropagation();linkPdfToTopic(${item.id},'${safeMateria}')" title="Vincular PDF">🔗</button>`;
+          const videoBtn = item.video_link
+            ? `<button class="tree-pdf-btn" onclick="event.stopPropagation();openVideoPlayer(${item.id},'${escapeHtml(item.video_link).replace(/'/g, "\\'")}','${safeTopico}')" title="Assistir vídeo">▶️</button>`
+            : `<button class="tree-pdf-link-btn" onclick="event.stopPropagation();linkVideoToTopic(${item.id},'${safeTopico}')" title="Vincular vídeo YouTube">🎬</button>`;
           html += `<div class="tree-leaf${sel}" data-id="${item.id}" onclick="selectEditalTopic(${item.id}, '${safeMateria}', '${safeTopico}')">
             <span class="tree-status ${getStatusClass(item.status)}" onclick="event.stopPropagation();toggleEditalStatus(${item.id})">${item.status === 'Concluído' ? '✓' : item.status === 'Em Andamento' ? '◐' : '○'}</span>
             <span class="tree-topic">${escapeHtml(item.topico)}</span>
             ${item.horas_estudadas > 0 ? `<span class="tree-hours">${formatHours(item.horas_estudadas)}</span>` : ''}
             ${pdfBtn}
+            ${videoBtn}
             <button class="tree-note" onclick="event.stopPropagation();openNoteModal(${item.id})" title="Notas">📝</button>
             <button class="tree-del" onclick="event.stopPropagation();deleteEditalItem(${item.id})">×</button>
           </div>`;
@@ -478,4 +482,127 @@ export function initEdital(deps) {
   }
 
   loadEdital();
+}
+
+// ==================== VÍDEO YOUTUBE ====================
+
+window.linkVideoToTopic = function(editalId, topico) {
+  const link = prompt(`🎬 Cole o link do YouTube para "${topico}":`);
+  if (!link || !link.trim()) return;
+  if (!link.includes('youtu')) {
+    toast('Link deve ser do YouTube', 'error');
+    return;
+  }
+  fetch(`/api/edital/${editalId}/video`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ video_link: link.trim() })
+  }).then(r => r.json()).then(res => {
+    if (res.ok) {
+      toast('🎬 Vídeo vinculado!', 'success');
+      loadEdital();
+    } else {
+      toast(res.detail || 'Erro ao vincular', 'error');
+    }
+  }).catch(() => toast('Erro de conexão', 'error'));
+};
+
+window.openVideoPlayer = function(editalId, videoLink, topico) {
+  // Extrair ID do YouTube
+  const videoId = extractYouTubeId(videoLink);
+  if (!videoId) {
+    toast('Link de vídeo inválido', 'error');
+    return;
+  }
+
+  // Criar modal com player embed
+  const existing = document.getElementById('video-player-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'video-player-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(30,30,46,0.95);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;';
+  modal.innerHTML = `
+    <div style="width:100%;max-width:800px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <span style="color:var(--text);font-weight:600;font-size:0.9rem;">🎬 ${escapeHtml(topico)}</span>
+        <button onclick="closeVideoPlayer(${editalId})" style="background:var(--bg-elevated);color:var(--text);border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:0.85rem;">✕ Fechar</button>
+      </div>
+      <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:12px;">
+        <iframe id="yt-player" src="https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0" 
+          style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;" 
+          allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" 
+          allowfullscreen></iframe>
+      </div>
+      <div style="margin-top:12px;display:flex;align-items:center;gap:12px;">
+        <span style="color:var(--text-sub);font-size:0.78rem;" id="video-timer">⏱ 0:00</span>
+        <button onclick="removeVideoLink(${editalId})" style="margin-left:auto;background:none;border:none;color:var(--red);cursor:pointer;font-size:0.78rem;">🗑 Desvincular</button>
+      </div>
+    </div>
+  `;
+  modal.onclick = (e) => { if (e.target === modal) closeVideoPlayer(editalId); };
+  document.body.appendChild(modal);
+
+  // Timer de tempo assistido
+  window._videoStartTime = Date.now();
+  window._videoTimerInterval = setInterval(() => {
+    const elapsed = Math.round((Date.now() - window._videoStartTime) / 1000);
+    const min = Math.floor(elapsed / 60);
+    const sec = String(elapsed % 60).padStart(2, '0');
+    const el = document.getElementById('video-timer');
+    if (el) el.textContent = `⏱ ${min}:${sec}`;
+  }, 1000);
+};
+
+window.closeVideoPlayer = function(editalId) {
+  // Calcular tempo assistido
+  if (window._videoTimerInterval) clearInterval(window._videoTimerInterval);
+  const elapsed = Math.round((Date.now() - (window._videoStartTime || Date.now())) / 1000);
+  const minutos = Math.round(elapsed / 60);
+
+  // Remover modal
+  document.getElementById('video-player-modal')?.remove();
+
+  // Registrar sessão se assistiu >= 1 minuto
+  if (minutos >= 1) {
+    fetch(`/api/edital/${editalId}/video-session`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ minutos })
+    }).then(r => r.json()).then(res => {
+      if (res.ok) {
+        toast(`📹 ${minutos}min registrados como estudo de ${res.materia}`, 'success');
+      }
+    }).catch(() => {});
+  }
+};
+
+window.removeVideoLink = function(editalId) {
+  if (!confirm('Remover vídeo vinculado?')) return;
+  fetch(`/api/edital/${editalId}/video`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ video_link: '' })
+  }).then(r => r.json()).then(res => {
+    if (res.ok) {
+      toast('Vídeo removido', 'info');
+      document.getElementById('video-player-modal')?.remove();
+      if (window._videoTimerInterval) clearInterval(window._videoTimerInterval);
+      loadEdital();
+    }
+  });
+};
+
+function extractYouTubeId(url) {
+  if (!url) return null;
+  // Formatos: youtube.com/watch?v=ID, youtu.be/ID, youtube.com/embed/ID
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
+    /[?&]v=([a-zA-Z0-9_-]{11})/,
+  ];
+  for (const p of patterns) {
+    const match = url.match(p);
+    if (match) return match[1];
+  }
+  return null;
 }

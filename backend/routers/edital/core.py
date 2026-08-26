@@ -131,7 +131,7 @@ def list_editais_arquivados(conn=Depends(get_db_session), user_id: int = Depends
 
 @router.get("/api/edital", summary="Listar tópicos do edital", description="Retorna todos os tópicos do edital, com filtros opcionais e paginação")
 def list_edital(edital_nome: str = "", cargo: str = "", incluir_arquivados: bool = False, page: int | None = Query(None), limit: int = 50, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
-    query = "SELECT id, edital_nome, cargo, materia, topico, status, horas_estudadas, pdf_link, pdf_pagina FROM edital WHERE user_id = ?"
+    query = "SELECT id, edital_nome, cargo, materia, topico, status, horas_estudadas, pdf_link, pdf_pagina, video_link FROM edital WHERE user_id = ?"
     params = [user_id]
     if not incluir_arquivados:
         query += " AND (arquivado IS NULL OR arquivado = 0)"
@@ -226,6 +226,57 @@ def link_pdf_to_edital(id: int, body: EditalPdfLink, conn=Depends(get_db_session
                  (body.pdf_link, body.pdf_pagina, id, user_id))
     conn.commit()
     return {"ok": True, "pdf_link": body.pdf_link, "pdf_pagina": body.pdf_pagina}
+
+
+@router.put("/api/edital/{id}/video")
+def link_video_to_edital(id: int, body: dict = Body(...), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Vincula um vídeo YouTube a um tópico do edital."""
+    video_link = body.get("video_link", "").strip()
+    # Validar que é um link YouTube válido
+    if video_link and "youtu" not in video_link and "youtube" not in video_link:
+        raise HTTPException(status_code=400, detail="Link deve ser do YouTube.")
+    conn.execute("UPDATE edital SET video_link = ? WHERE id = ? AND user_id = ?",
+                 (video_link, id, user_id))
+    conn.commit()
+    return {"ok": True, "video_link": video_link}
+
+
+@router.post("/api/edital/{id}/video-session")
+def register_video_session(id: int, body: dict = Body(...), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Registra tempo assistido de vídeo como sessão de estudo."""
+    from datetime import date
+    from utils import today_str
+
+    minutos = body.get("minutos", 0)
+    if minutos < 1:
+        raise HTTPException(status_code=400, detail="Tempo mínimo: 1 minuto.")
+
+    # Buscar matéria do tópico
+    topico = conn.execute("SELECT materia, topico FROM edital WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
+    if not topico:
+        raise HTTPException(status_code=404, detail="Tópico não encontrado.")
+
+    horas = round(minutos / 60, 3)
+    materia = topico["materia"]
+
+    # Registrar sessão de estudo
+    conn.execute(
+        "INSERT INTO sessoes_estudo (materia, horas, data, tipo, created_at, user_id) VALUES (?, ?, ?, 'video', datetime('now'), ?)",
+        (materia, horas, today_str(), user_id)
+    )
+
+    # Atualizar horas no edital
+    conn.execute("UPDATE edital SET horas_estudadas = horas_estudadas + ? WHERE id = ? AND user_id = ?", (horas, id, user_id))
+
+    # Atualizar streak do dia
+    existing = conn.execute("SELECT id FROM streaks WHERE data = ? AND user_id = ?", (today_str(), user_id)).fetchone()
+    if existing:
+        conn.execute("UPDATE streaks SET horas_estudadas = horas_estudadas + ? WHERE data = ? AND user_id = ?", (horas, today_str(), user_id))
+    else:
+        conn.execute("INSERT INTO streaks (data, horas_estudadas, questoes_resolvidas, flashcards_revisados, user_id) VALUES (?, ?, 0, 0, ?)", (today_str(), horas, user_id))
+
+    conn.commit()
+    return {"ok": True, "horas": horas, "materia": materia}
 
 
 @router.put("/api/edital/vincular-bulk")

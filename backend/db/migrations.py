@@ -312,6 +312,14 @@ def _m44_questoes_prova_origem(conn):
         conn.execute("ALTER TABLE questoes ADD COLUMN prova_origem TEXT DEFAULT ''")
         log.info("Migration: added column prova_origem to questoes")
 
+def _m45_edital_video_link(conn):
+    """Add video_link column to edital for YouTube videos."""
+    try:
+        conn.execute("SELECT video_link FROM edital LIMIT 1")
+    except Exception:
+        conn.execute("ALTER TABLE edital ADD COLUMN video_link TEXT DEFAULT ''")
+        log.info("Migration: added column video_link to edital")
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -357,6 +365,7 @@ MIGRATIONS = [
     (42, _m42_generation_responses),
     (43, _m43_sessao_adaptativa),
     (44, _m44_questoes_prova_origem),
+    (45, _m45_edital_video_link),
 ]
 
 
