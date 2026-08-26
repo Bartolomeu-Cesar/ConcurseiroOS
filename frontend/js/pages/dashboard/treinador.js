@@ -81,16 +81,14 @@ export async function loadTreinador() {
 
     if (intel.forgetting_risk && intel.forgetting_risk.length > 0) {
       html += `<div style="margin-bottom:12px;">
-        <div style="font-size:0.8rem;color:var(--text-sub);margin-bottom:6px;font-weight:600;">⚠️ Risco de Esquecimento (FSRS):</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+          <span style="font-size:0.8rem;color:var(--text-sub);font-weight:600;">⚠️ Risco de Esquecimento (FSRS):</span>
+          <button onclick="iniciarRevisaoUrgente()" style="background:var(--green);color:var(--bg);border:none;border-radius:6px;padding:5px 12px;font-size:0.72rem;font-weight:600;cursor:pointer;">▶ Revisar Todos</button>
+        </div>
         <div style="display:grid;gap:4px;">
           ${intel.forgetting_risk.slice(0, 5).map(item => {
             const urgColor = item.urgencia === 'critica' ? 'var(--red)' : item.urgencia === 'alta' ? 'var(--peach)' : 'var(--yellow)';
-            const clickAction = item.tipo === 'flashcard'
-              ? `onclick="window.location.href='/#flashcards';setTimeout(()=>{if(window.iniciarSessaoFlash)window.iniciarSessaoFlash('revisao')},500)" style="cursor:pointer;" title="Revisar flashcard"`
-              : item.tipo === 'edital'
-                ? `onclick="window.location.href='/#edital'" style="cursor:pointer;" title="Ver no edital"`
-                : '';
-            return `<div ${clickAction} style="display:flex;align-items:flex-start;gap:8px;font-size:0.78rem;padding:8px 10px;background:var(--bg);border-radius:6px;${clickAction ? 'cursor:pointer;transition:background 0.2s;' : ''}" ${clickAction ? 'onmouseover="this.style.background=\'var(--bg-elevated)\'" onmouseout="this.style.background=\'var(--bg)\'"' : ''}>
+            return `<div onclick="revisarItemUrgente('${item.tipo}', ${item.id})" style="display:flex;align-items:flex-start;gap:8px;font-size:0.78rem;padding:8px 10px;background:var(--bg);border-radius:6px;cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background='var(--bg-elevated)'" onmouseout="this.style.background='var(--bg)'" title="Clique para revisar">
               <div style="min-width:44px;text-align:center;font-weight:700;color:${urgColor};padding-top:1px;">${item.recall_estimado}%</div>
               <div style="flex:1;color:var(--text);line-height:1.4;">${item.descricao}</div>
               <div style="font-size:0.68rem;color:var(--text-sub);min-width:55px;text-align:right;padding-top:1px;">${item.tipo}</div>
@@ -643,6 +641,36 @@ window.iniciarMicroRevisao = iniciarMicroRevisao;
 window.iniciarAutoavaliacao = iniciarAutoavaliacao;
 window.gerarDissertativa = gerarDissertativa;
 window.salvarDissertativa = salvarDissertativa;
+
+// ===== REVISÃO URGENTE (Risco de Esquecimento) =====
+window.iniciarRevisaoUrgente = function() {
+  // Navegar para flashcards e iniciar sessão de revisão SRS
+  window.location.href = '/#flashcards';
+  setTimeout(() => {
+    if (window.iniciarSessaoFlash) window.iniciarSessaoFlash('revisao');
+    else if (window.loadFlashcardsToday) window.loadFlashcardsToday();
+  }, 600);
+};
+
+window.revisarItemUrgente = function(tipo, id) {
+  if (tipo === 'flashcard') {
+    // Navegar direto para flashcards e iniciar revisão
+    window.location.href = '/#flashcards';
+    setTimeout(() => {
+      if (window.iniciarSessaoFlash) window.iniciarSessaoFlash('revisao');
+      else if (window.loadFlashcardsToday) window.loadFlashcardsToday();
+    }, 600);
+  } else if (tipo === 'sumula') {
+    // Navegar para súmulas
+    window.location.href = '/#sumulas';
+    setTimeout(() => {
+      if (window.loadSumulasToday) window.loadSumulasToday();
+    }, 600);
+  } else if (tipo === 'edital') {
+    // Navegar para edital
+    window.location.href = '/#edital';
+  }
+};
 window.autoConfianca = autoConfianca;
 window.autoRegistrar = autoRegistrar;
 
