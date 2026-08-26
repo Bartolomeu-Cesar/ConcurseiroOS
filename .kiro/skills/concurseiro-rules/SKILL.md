@@ -27,3 +27,49 @@
 - `_get_ai_config()`: user_id=1 hardcoded. Multi-user precisará refatorar.
 - SW: Após deploy, orientar unregister: `navigator.serviceWorker.getRegistrations().then(r => r.forEach(sw => sw.unregister())).then(() => location.reload())`
 - `progress.db` no git: é o banco real. Cuidado com conflitos no pull (usar `git checkout -- backend/progress.db` se necessário).
+
+## Performance & Banco de Dados
+
+- Queries com JOIN devem ter índice nos campos de filtro. Verificar `db/indexes.py` antes de criar query nova.
+- Nunca `SELECT *` em tabelas grandes (questoes, questoes_respostas) sem LIMIT ou filtro por user_id+data.
+- Paginação: usar `sql_paginate()` para novos endpoints (LIMIT/OFFSET no SQL, não em Python).
+- SQLite: WAL mode + busy_timeout=5000ms. Não abrir transações longas (lock contention com 2 workers).
+- Flashcards/questões: prefixar queries com `AND user_id = ?` SEMPRE (multi-tenant).
+
+## Segurança
+
+- Nunca expor dados de um user para outro. Todo endpoint filtra por `user_id`.
+- API keys: mascarar no frontend (`****...últimos4`). Backend preserva key se input vier vazio.
+- Rate limiting: já existe via `rate_limit.db`. Endpoints AI têm limite diário de tokens.
+- Inputs: Pydantic valida no backend. Frontend deve sanitizar HTML em campos de texto livre (XSS).
+- JWT: access token curto (15min), refresh longo (30d). Não armazenar em localStorage (usar httpOnly quando possível).
+
+## UX & Frontend
+
+- Sempre dar feedback visual: loading state, toast de sucesso/erro, disabled em botões durante fetch.
+- Mobile-first: testar em viewport 375px. Usar `flex-wrap:wrap` em containers de botões.
+- Offline: SW garante app funciona sem rede. Mutations ficam em queue (Background Sync).
+- Tema: suportar escuro (padrão Catppuccin Mocha) e claro. Usar variáveis CSS (`var(--text)`, `var(--bg)`, etc.).
+- Acessibilidade: botões com `title`, inputs com `placeholder`, contraste mínimo 4.5:1.
+
+## Decisões Técnicas (por que assim)
+
+- **Sem ORM**: SQLite + queries diretas = máximo controle, zero overhead, fácil debugar.
+- **Sem framework frontend**: Bundle zero, load instantâneo, PWA leve. Complexidade gerenciada por ES modules.
+- **FSRS sobre SM-2**: FSRS-5 é 30% mais preciso que SM-2 em scheduling (paper com 700M+ reviews).
+- **SQLite sobre PostgreSQL**: Single-user/small-team, deploy trivial (1 arquivo), backup = copiar .db.
+- **Monolito**: 42 features num único deploy. Separar em microserviços só quando scaling exigir.
+- **Sem WebSocket (ainda)**: Polling funciona para study room. WebSocket planejado quando real-time for crítico.
+
+## Workflow de Desenvolvimento
+
+```bash
+# 1. Antes de codar: ler código existente do módulo afetado
+# 2. Implementar alteração
+# 3. Rodar testes: python3 -m pytest tests/ -q
+# 4. Se teste novo necessário: criar em tests/test_{modulo}.py
+# 5. Verificar: 0 falhas
+# 6. Commit: git add <arquivos> && git commit -m "tipo: descrição"
+# 7. Push: git push
+# 8. Se alterou JS cacheado: incrementar SW version
+```

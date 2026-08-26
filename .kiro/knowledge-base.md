@@ -407,3 +407,88 @@ MAX_LEAGUE_SIZE = 20
 | API key truncada | Modal preenche com valor mascarado | Input vazio + backend preserva se vazio |
 | Rota não encontrada (405) | Package `__init__.py` não importa sub-router | Verificar includes no `__init__.py` |
 | Calendário vazio | `ciclo_estudos` sem matérias ativas | Importar do edital ou criar ciclo |
+| Frontend não atualiza | SW servindo cache antigo | Unregister SW + reload |
+| Endpoint retorna 401 | Token expirado ou AUTH_ENABLED=true sem token | Verificar `deps.py`, usar refresh token |
+| Dados de outro user aparecem | Query sem `AND user_id = ?` | Adicionar filtro user_id em TODA query |
+
+---
+
+## 8. SCHEMA DO BANCO (Tabelas Principais)
+
+### Core de Estudo
+| Tabela | Colunas-chave | Propósito |
+|--------|--------------|-----------|
+| `sessoes_estudo` | materia, horas, data, tipo, user_id | Registro de tempo estudado |
+| `streaks` | data, horas_estudadas, questoes_resolvidas, flashcards_revisados, user_id | Streak diário |
+| `edital` | edital_nome, cargo, materia, topico, status, horas_estudadas, pdf_link, user_id | Tópicos do edital |
+| `ciclo_estudos` | materia, horas_alvo, horas_cumpridas, ordem, ativo, user_id | Ciclo ativo de matérias |
+| `metas_config` | meta_horas, meta_questoes, meta_flashcards, streak_freezes_available, desired_retention, user_id | Configurações e metas |
+
+### Questões & Flashcards
+| Tabela | Colunas-chave | Propósito |
+|--------|--------------|-----------|
+| `questoes` | materia, topico, enunciado, alternativa_a..e, resposta_correta, banca, ano | Banco de questões |
+| `questoes_respostas` | questao_id, acertou, tempo_segundos, data, user_id, confianca | Respostas registradas |
+| `flashcards` | pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia, stability, difficulty, user_id | Flashcards com FSRS/SM-2 |
+| `erros_revisao` | questao_id, intervalo_atual, proxima_revisao, revisoes_count, user_id | Caderno de erros (FSRS) |
+| `simulados` | titulo, tempo_limite_min, status, nota, total_questoes, acertos, user_id | Simulados |
+
+### Gamificação & Social
+| Tabela | Colunas-chave | Propósito |
+|--------|--------------|-----------|
+| `desafios` | titulo, meta_tipo, meta_valor, progresso, dias, finalizado, user_id | Desafios semanais |
+| `leagues` | week_start, tier | Ligas semanais |
+| `league_members` | league_id, user_id, weekly_xp, rank, promoted, demoted | Membros das ligas |
+| `battles` | codigo, criador_id, materias, total_rodadas, status | Batalhas multiplayer |
+| `friendships` | user_a, user_b, status | Amizades |
+| `study_groups` | nome, edital_nome, criador_id | Grupos de estudo |
+| `direct_messages` | sender_id, receiver_id, mensagem, lida | Chat direto |
+
+### Calendário & Planejamento
+| Tabela | Colunas-chave | Propósito |
+|--------|--------------|-----------|
+| `calendario_personalizado` | dia_semana, materia, tipo, tempo_min, ordem, user_id | Grade semanal salva |
+| `calendario_atividades` | data, materia, tipo, tempo_min, concluida, user_id | Atividades concluídas |
+| `study_preferences` | hora_inicio, hora_fim, bloco_min, pausa_min, user_id | Preferências de horário |
+
+### AI & Metacognição
+| Tabela | Colunas-chave | Propósito |
+|--------|--------------|-----------|
+| `ai_config` | user_id, provider, api_key, model | Config do AI provider |
+| `ai_conversations` | tipo, pergunta, resposta, tokens, user_id | Histórico AI tutor |
+| `ai_usage` | data, tokens_used, requests_count, user_id | Uso diário de tokens |
+| `elaboration_log` | flashcard_id, questao_id, prompt_tipo, resposta_usuario | Log de elaboração |
+| `sessao_adaptativa` | session_id, materia, theta, questoes_respondidas, user_id | CAT (IRT) |
+
+### Auth & Sistema
+| Tabela | Colunas-chave | Propósito |
+|--------|--------------|-----------|
+| `users` | email, nome, plano, role, user_id | Usuários |
+| `push_subscriptions` | endpoint, p256dh, auth, user_id | Web Push |
+| `progress` | path, current_page, total_pages, user_id | Progresso em PDFs |
+
+---
+
+## 9. QUERIES FREQUENTES (Referência Rápida)
+
+```sql
+-- Matérias do ciclo ativo
+SELECT materia FROM ciclo_estudos WHERE ativo = 1 AND user_id = ?
+
+-- Questões respondidas por matéria (com % acerto)
+SELECT q.materia, COUNT(*) as total, SUM(qr.acertou) as acertos
+FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id
+WHERE qr.user_id = ? GROUP BY q.materia
+
+-- Flashcards pendentes hoje (reviews + novos limitados a 20)
+SELECT * FROM flashcards WHERE proxima_revisao <= date('now') AND user_id = ?
+
+-- Horas estudadas hoje
+SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE data = date('now') AND user_id = ?
+
+-- Streak: dias com atividade (para calculate_streak)
+SELECT data FROM streaks WHERE (horas_estudadas > 0 OR questoes_resolvidas > 0 OR flashcards_revisados > 0) AND user_id = ? ORDER BY data DESC
+
+-- Tópicos pendentes do edital (ciclo ativo)
+SELECT materia, topico FROM edital WHERE status != 'Concluído' AND arquivado = 0 AND user_id = ?
+```
