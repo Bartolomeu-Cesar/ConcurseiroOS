@@ -1022,12 +1022,19 @@ def update_ai_config_endpoint(
         )
     """)
 
+    # If api_key is empty, preserve existing key
+    if not body.api_key:
+        existing = db.execute("SELECT api_key FROM ai_config WHERE user_id = ?", (user_id,)).fetchone()
+        existing_key = existing[0] if existing else ""
+    else:
+        existing_key = body.api_key
+
     db.execute(
         """INSERT INTO ai_config (user_id, provider, api_key, model)
            VALUES (?, ?, ?, ?)
            ON CONFLICT(user_id) DO UPDATE SET
              provider = ?, api_key = ?, model = ?""",
-        (user_id, body.provider, body.api_key, body.model, body.provider, body.api_key, body.model),
+        (user_id, body.provider, existing_key, body.model, body.provider, existing_key, body.model),
     )
     db.commit()
 

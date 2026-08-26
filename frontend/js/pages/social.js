@@ -206,7 +206,8 @@ function openAIConfig() {
   // Load current config
   fetch('/api/ai/config').then(r => r.json()).then(config => {
     document.getElementById('ai-config-provider').value = config.provider || 'auto';
-    document.getElementById('ai-config-key').value = config.api_key_masked || '';
+    document.getElementById('ai-config-key').value = '';
+    document.getElementById('ai-config-key').placeholder = config.has_key ? `Chave atual: ${config.api_key_masked} (deixe vazio para manter)` : 'Cole sua API key aqui...';
     document.getElementById('ai-config-model').value = config.model_override || '';
     onProviderChange();
   }).catch(() => {
@@ -279,14 +280,18 @@ window.testAIConfig = testAIConfig;
 
 async function saveAIConfig() {
   const provider = document.getElementById('ai-config-provider').value;
-  const key = document.getElementById('ai-config-key').value;
+  const key = document.getElementById('ai-config-key').value.trim();
   const model = document.getElementById('ai-config-model').value;
+
+  // Only send api_key if user typed a new one (not empty = keep existing)
+  const payload = { provider, model };
+  if (key) payload.api_key = key;
 
   try {
     const res = await fetch('/api/ai/config', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider, api_key: key, model })
+      body: JSON.stringify(payload)
     });
     const data = await res.json();
     if (data.ok) {
