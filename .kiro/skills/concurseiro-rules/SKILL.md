@@ -2,7 +2,8 @@
 
 ## Regras Invioláveis
 
-1. **SW Version**: Sempre incrementar `CACHE_VERSION` no `frontend/sw.js` ao alterar qualquer JS listado em `PRECACHE_URLS`.
+1. **Pull ao iniciar sessão**: Sempre fazer `git pull` no repositório antes de iniciar qualquer trabalho. Garantir que o código local está sincronizado com o remoto.
+2. **SW Version**: Sempre incrementar `CACHE_VERSION` no `frontend/sw.js` ao alterar qualquer JS listado em `PRECACHE_URLS`.
 2. **Filtro Ciclo Ativo**: Queries de recomendação/treinador/study-intelligence devem filtrar por `ciclo_estudos WHERE ativo = 1` — nunca mostrar matérias de concursos inativos.
 3. **Testes antes de push**: Sempre rodar `python3 -m pytest tests/ -q` e confirmar que TODOS os testes passam antes de commit. Nunca fazer push com testes falhando.
 4. **window.funcao**: Em ES modules, toda função usada em `onclick` inline deve ser exposta com `window.funcao = funcao`.
