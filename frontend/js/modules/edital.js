@@ -529,10 +529,13 @@ window.openVideoPlayer = function(editalId, videoLink, topico) {
         <button onclick="closeVideoPlayer(${editalId})" style="background:var(--bg-elevated);color:var(--text);border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:0.85rem;">✕ Fechar</button>
       </div>
       <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:12px;">
-        <iframe id="yt-player" src="https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0" 
+        <iframe id="yt-player" src="https://www.youtube.com/embed/${videoId}?rel=0" 
           style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;" 
           allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" 
           allowfullscreen></iframe>
+      </div>
+      <div style="margin-top:8px;text-align:center;">
+        <a href="https://www.youtube.com/watch?v=${videoId}" target="_blank" style="font-size:0.75rem;color:var(--blue);text-decoration:none;">Se o vídeo não carregar, clique aqui para abrir no YouTube ↗</a>
       </div>
       <div style="margin-top:12px;display:flex;align-items:center;gap:12px;">
         <span style="color:var(--text-sub);font-size:0.78rem;" id="video-timer">⏱ 0:00</span>
