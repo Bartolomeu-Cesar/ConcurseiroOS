@@ -900,9 +900,9 @@ window.openChat = async function(friendId, nome) {
   document.getElementById('chat-conversations').style.display = 'none';
   document.getElementById('chat-window').style.display = 'flex';
   document.getElementById('chat-friend-name').textContent = nome;
-  document.getElementById('chat-messages').innerHTML = '';
-  document.getElementById('chat-input').value = '';
-  document.getElementById('chat-input').focus();
+  document.getElementById('dm-messages').innerHTML = '';
+  document.getElementById('dm-input').value = '';
+  document.getElementById('dm-input').focus();
 
   await loadMessages();
   startChatPolling();
@@ -929,7 +929,7 @@ async function loadMessages() {
     const data = await res.json();
     const messages = data.messages || [];
 
-    const container = document.getElementById('chat-messages');
+    const container = document.getElementById('dm-messages');
     container.innerHTML = messages.map(m => {
       const time = new Date(m.created_at).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
       return `
@@ -953,7 +953,7 @@ async function loadMessages() {
 }
 
 window.sendChatMessage = async function() {
-  const input = document.getElementById('chat-input');
+  const input = document.getElementById('dm-input');
   const msg = input.value.trim();
   if (!msg || !_chatFriendId) return;
 
