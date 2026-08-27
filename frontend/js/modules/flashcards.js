@@ -229,8 +229,18 @@ export async function reviewFlashcard(quality) {
       } catch(e) {}
     }
 
-    const data = await api(`/api/flashcards/${card.id}/review-sm2`, { method: 'POST', body: { quality } });
-    const msgs = ['Esqueceu — recomeçar','Quase — recomeçar','Errou — recomeçar','Difícil — +1d','Bom — +' + data.intervalo_dias + 'd','Fácil — +' + data.intervalo_dias + 'd'];
+    const data = await api(`/api/flashcards/${card.id}/review-fsrs`, { method: 'POST', body: { quality } });
+    const intervalLabel = data.intervalo_dias >= 30 ? `${Math.round(data.intervalo_dias / 30)}m` : `${data.intervalo_dias}d`;
+    const stateNames = ['Novo', 'Aprendendo', 'Revisão', 'Reaprendendo'];
+    const stateLabel = stateNames[data.fsrs_state] || '';
+    const msgs = [
+      'Esqueceu — amanhã',
+      'Errou — amanhã',
+      'Quase — amanhã',
+      `Difícil — +${intervalLabel}`,
+      `Bom — +${intervalLabel}`,
+      `Fácil — +${intervalLabel}`,
+    ];
 
     // Metacognition feedback toast
     let metacogMsg = '';
@@ -240,7 +250,7 @@ export async function reviewFlashcard(quality) {
       else if (lastMetacog.calibrated) metacogMsg = ' ✅ Boa calibração!';
     }
 
-    toast(`${msgs[quality]} (EF: ${data.easiness_factor.toFixed(2)})${metacogMsg}`, quality >= 3 ? 'success' : 'warning', 3000);
+    toast(`${msgs[quality]} [${stateLabel}]${metacogMsg}`, quality >= 3 ? 'success' : 'warning', 3000);
 
     // Feed adaptive pomodoro fatigue detection
     if (window._adaptivePomo) {
@@ -391,7 +401,7 @@ function showSessaoFlashcard() {
 export async function sessaoNext(quality) {
   const card = flashSessao[flashSessaoIndex];
   if (card && card.id) {
-    try { await api(`/api/flashcards/${card.id}/review-sm2`, { method: 'POST', body: { quality } }); } catch(e) {}
+    try { await api(`/api/flashcards/${card.id}/review-fsrs`, { method: 'POST', body: { quality } }); } catch(e) {}
   }
   flashSessaoIndex++;
   showSessaoFlashcard();

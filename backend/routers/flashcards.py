@@ -40,10 +40,15 @@ def list_flashcards_materias(conn=Depends(get_db_session), user_id: int = Depend
 
 @router.get("/api/flashcards/today")
 def get_flashcards_today(materia: str = "", max_novos: int = Query(20, description="Máximo de flashcards novos por dia (padrão 20, como Anki)"), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
-    """Retorna flashcards pendentes com ordenação inteligente baseada em 6 técnicas
-    de estudo com evidência científica (spaced practice, interleaving, desirable difficulty,
-    retrieval practice, successive relearning, pre-testing effect).
+    """Retorna flashcards pendentes com ordenação inteligente baseada em FSRS state.
 
+    Prioridade de revisão (baseado em evidência científica):
+    1. Relearning (fsrs_state=3) — cards que foram esquecidos recentemente
+    2. Learning (fsrs_state=1) — cards em fase inicial de aprendizado
+    3. Review (fsrs_state=2) — cards maduros que venceram o intervalo
+    4. New (fsrs_state=0) — cards nunca vistos (limitados a max_novos/dia)
+
+    Dentro de cada grupo, aplica interleaving por matéria para maximizar retenção.
     Limita novos cards (repetitions=0) a max_novos por dia (padrão 20).
     Reviews (cards já revisados antes) não têm limite.
     """
@@ -51,12 +56,12 @@ def get_flashcards_today(materia: str = "", max_novos: int = Query(20, descripti
 
     if materia:
         rows = conn.execute(
-            "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia FROM flashcards WHERE proxima_revisao <= ? AND materia = ? AND user_id = ?",
+            "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia, fsrs_state FROM flashcards WHERE proxima_revisao <= ? AND materia = ? AND user_id = ?",
             (today_str(), materia, user_id)
         ).fetchall()
     else:
         rows = conn.execute(
-            "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia FROM flashcards WHERE proxima_revisao <= ? AND user_id = ?",
+            "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia, fsrs_state FROM flashcards WHERE proxima_revisao <= ? AND user_id = ?",
             (today_str(), user_id)
         ).fetchall()
     items = [dict(r) for r in rows]
@@ -64,15 +69,17 @@ def get_flashcards_today(materia: str = "", max_novos: int = Query(20, descripti
     if not items:
         return []
 
-    # Separar: reviews (já revisados antes) vs novos (nunca revisados)
-    reviews = [c for c in items if (c.get("repetitions") or 0) > 0]
-    novos = [c for c in items if (c.get("repetitions") or 0) == 0]
+    # Separar por estado FSRS (prioridade de revisão)
+    relearning = [c for c in items if (c.get("fsrs_state") or 0) == 3]  # Esquecidos
+    learning = [c for c in items if (c.get("fsrs_state") or 0) == 1]    # Aprendendo
+    review = [c for c in items if (c.get("fsrs_state") or 0) == 2]      # Maduros vencidos
+    new_cards = [c for c in items if (c.get("fsrs_state") or 0) == 0]   # Novos
 
     # Limitar novos cards por dia (como Anki: padrão 20)
-    novos_limitados = novos[:max_novos]
+    novos_limitados = new_cards[:max_novos]
 
-    # Combinar reviews (sem limite) + novos (limitados)
-    combined = reviews + novos_limitados
+    # Combinar na ordem de prioridade FSRS
+    combined = relearning + learning + review + novos_limitados
 
     result = order_items_intelligently(
         combined,
@@ -82,6 +89,7 @@ def get_flashcards_today(materia: str = "", max_novos: int = Query(20, descripti
     # Limpar campos internos
     for card in result:
         card.pop("_expanding_retrieval", None)
+        card.pop("fsrs_state", None)
 
     return result
 
@@ -315,6 +323,70 @@ def review_flashcard_fsrs(id: int, body: FlashcardReviewSM2, conn=Depends(get_db
                 flash_row["pergunta"], flash_row["resposta"], flash_row["materia"] or ""
             )
     return result
+
+
+@router.post("/api/flashcards/migrate-to-fsrs", summary="Migrar cards SM-2 para FSRS",
+             description="Migra todos os flashcards que ainda usam SM-2 para estado FSRS equivalente.")
+def migrate_flashcards_to_fsrs(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Migra cards existentes de SM-2 para FSRS-5.
+
+    - Cards com reps > 0: converte EF/interval/reps para stability/difficulty/state FSRS
+    - Cards novos (reps=0): reseta para estado FSRS New (serão agendados no primeiro review)
+    - Recalcula proxima_revisao baseado na stability FSRS
+    """
+    from fsrs import migrate_sm2_to_fsrs, _next_interval, STATE_NEW, STATE_REVIEW
+    from constants import FSRS_DEFAULT_RETENTION
+
+    # Obter desired_retention do user
+    desired_retention = FSRS_DEFAULT_RETENTION
+    try:
+        meta_row = conn.execute(
+            "SELECT desired_retention FROM metas_config WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        if meta_row and meta_row[0]:
+            desired_retention = meta_row[0]
+    except Exception:
+        pass
+
+    # Buscar cards que ainda não foram migrados (stability = 0 indica não-migrado)
+    rows = conn.execute("""
+        SELECT id, easiness_factor, repetitions, intervalo_dias, proxima_revisao
+        FROM flashcards WHERE user_id = ? AND (stability IS NULL OR stability = 0)
+    """, (user_id,)).fetchall()
+
+    migrated = 0
+    for r in rows:
+        ef = r["easiness_factor"] if r["easiness_factor"] else 2.5
+        reps = r["repetitions"] if r["repetitions"] else 0
+        interval = r["intervalo_dias"] if r["intervalo_dias"] else 1
+
+        if reps == 0:
+            # Card novo: manter como STATE_NEW, será agendado no primeiro review
+            conn.execute("""
+                UPDATE flashcards SET stability = 0, difficulty = 0, fsrs_state = 0
+                WHERE id = ? AND user_id = ?
+            """, (r["id"], user_id))
+        else:
+            # Card já revisado: converter SM-2 → FSRS
+            fsrs_card = migrate_sm2_to_fsrs(ef, reps, interval)
+            # Recalcular próxima revisão baseado na nova stability
+            new_interval = _next_interval(fsrs_card.stability, desired_retention)
+            # Manter a proxima_revisao original se ainda não venceu, senão recalcular
+            proxima = r["proxima_revisao"]
+            if not proxima or proxima <= date.today().isoformat():
+                proxima = (date.today() + timedelta(days=1)).isoformat()
+
+            conn.execute("""
+                UPDATE flashcards SET stability = ?, difficulty = ?, fsrs_state = ?,
+                       intervalo_dias = ?, proxima_revisao = ?
+                WHERE id = ? AND user_id = ?
+            """, (round(fsrs_card.stability, 6), round(fsrs_card.difficulty, 4),
+                  fsrs_card.state, new_interval, proxima, r["id"], user_id))
+        migrated += 1
+
+    conn.commit()
+    log.info(f"FSRS migration: {migrated} cards migrated for user {user_id}")
+    return {"ok": True, "migrated": migrated, "total": len(rows)}
 
 
 @router.put("/api/flashcards/{id}", summary="Editar flashcard", description="Atualiza pergunta, resposta e/ou matéria de um flashcard")
