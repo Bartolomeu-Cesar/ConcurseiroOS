@@ -620,3 +620,75 @@ SELECT materia, topico FROM edital WHERE status != 'Concluído' AND arquivado = 
 **FCC**: 5 alternativas, sem penalização, provas extensas, interpretação, gestão de tempo.
 **FGV**: 5 alternativas, sem penalização, imprevisível, math pura em RLM, varia por órgão.
 **VUNESP**: 5 alternativas, sem penalização, SP, direta, legislação específica.
+
+
+---
+
+## 8. ROADMAP — Features Gap vs Mercado (implementação progressiva)
+
+### 8.1 Comparativo Competitivo (27/08/2026)
+
+**Nosso diferencial exclusivo (ninguém no mercado tem):**
+- 22 técnicas de estudo com base científica integradas no fluxo
+- FSRS-5 em flashcards E questões (spaced repetition de verdade)
+- Seleção inteligente (exclui dominadas, prioriza erradas + nunca vistas)
+- Detecção automática: fadiga, blocked practice, overlearning, platô
+- Sleep consolidation, retrieval warmup, minimum effective dose
+- Boss Battle, banca-specific training, anxiety exposure
+- PWA offline-first gratuita e open-source
+
+**Gaps identificados vs QConcursos, Gran Cursos, RemNote, EmÁudio:**
+
+### 8.2 Features para Implementar (prioridade decrescente)
+
+| # | Feature | Referência | Impacto | Complexidade | Status |
+|---|---------|-----------|---------|--------------|--------|
+| 1 | **Comentários em questões** | QConcursos, Gran | ⭐⭐⭐ | Média | 🔲 Pendente |
+|   | Permitir user e IA adicionarem explicações/comentários em cada questão. Comunidade vota nos melhores. | | | | |
+| 2 | **Estudo por áudio (TTS)** | EmÁudio, Gran | ⭐⭐⭐ | Baixa-Média | 🔲 Pendente |
+|   | Text-to-Speech para flashcards, súmulas e leis. Modo "commuting" (ouvir enquanto caminha/dirige). Web Speech API no frontend ou API externa (ElevenLabs/Google TTS). | | | | |
+| 3 | **Mapas mentais visuais** | Gran, RemNote | ⭐⭐ | Média | 🔲 Pendente |
+|   | Geração automática via IA a partir de tópicos do edital. Templates visuais (canvas SVG ou lib como Mermaid/D3). | | | | |
+| 4 | **Notificações push inteligentes** | Quizlet, Anki | ⭐⭐ | Baixa | 🔲 Pendente |
+|   | Backend já tem push_subscriptions + notification_log. Falta: triggers automáticos (streak em risco, flashcard pendente, sleep consolidation, meta não batida). Cron job ou check no login. | | | | |
+| 5 | **Importação direta de provas (scraping)** | QConcursos, TEC | ⭐⭐⭐ | Alta | 🔲 Pendente |
+|   | Scraper para importar questões de sites públicos (QConcursos, PCI). Parser de PDF de prova com OCR (já tem endpoint parcial). | | | | |
+| 6 | **Vade mecum digital** | Gran | ⭐⭐ | Média | 🔲 Pendente |
+|   | Leis indexadas com busca full-text. Links entre artigos e questões. Anotações inline. Highlight de trechos cobrados. | | | | |
+| 7 | **Compartilhamento de progresso** | Aprovado | ⭐ | Baixa | 🔲 Pendente |
+|   | Card bonito para compartilhar em redes sociais (imagem gerada server-side com stats do user). "Estudei 50h essa semana!" | | | | |
+| 8 | **Modo commuting (áudio flashcards)** | EmÁudio | ⭐⭐ | Média | 🔲 Pendente |
+|   | Player de áudio que lê pergunta → pausa → lê resposta. Controle por gesture/fone. Ideal para transporte. | | | | |
+
+### 8.3 Features Futuras (longo prazo)
+
+| # | Feature | Descrição | Complexidade |
+|---|---------|-----------|--------------|
+| 9 | **Videoaulas integradas** | Player com anotações timestamped, vincular ao tópico do edital | Alta |
+| 10 | **OCR em tempo real** | Fotografar caderno/livro → gerar flashcards automaticamente | Alta |
+| 11 | **Estudo colaborativo síncrono** | Estudar junto com resolução simultânea (like Google Docs) | Alta |
+| 12 | **IA geradora de questões** | Gerar questões inéditas no estilo da banca a partir do tópico | Média |
+| 13 | **Simulado adaptativo real-time** | CAT verdadeiro que ajusta dificuldade A CADA questão | Média |
+| 14 | **Resumos automáticos** | IA resume PDFs/aulas em bullets para revisão rápida | Média |
+| 15 | **Planner de longo prazo** | Countdown até prova com distribuição ótima de matérias ao longo dos meses | Média |
+| 16 | **Integração WhatsApp/Telegram** | Bot que manda lembrete de revisão, quiz rápido, resumo do dia | Média |
+
+### 8.4 Ordem de Implementação Recomendada
+
+**Sprint 1 (próxima sessão):**
+1. Notificações push inteligentes (backend quase pronto)
+2. Estudo por áudio / TTS (Web Speech API = sem custo)
+3. Comentários em questões (CRUD + IA auto-comment)
+
+**Sprint 2:**
+4. Importação de provas melhorada (PDF parser + scraping)
+5. Compartilhamento de progresso (card social)
+6. Mapas mentais (Mermaid.js)
+
+**Sprint 3:**
+7. Vade mecum digital (leis indexadas)
+8. Modo commuting (player áudio)
+9. IA geradora de questões
+
+**Sprint 4 (longo prazo):**
+10-16. Features de alta complexidade conforme demanda
