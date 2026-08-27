@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends
 from database import get_db_session
 from deps import get_user_id
 from logger import log
+from sanitize import sanitize_input
 from schemas import NotaCreate, OkResponse
 
 router = APIRouter(prefix="", tags=["Notas"])
@@ -19,8 +20,9 @@ def get_notas_pdf(path: str, conn=Depends(get_db_session), user_id: int = Depend
 
 @router.post("/api/notas")
 def create_nota(body: NotaCreate, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    conteudo = sanitize_input(body.conteudo, max_length=2000)
     cur = conn.execute("INSERT INTO notas_pdf (pdf_path, pagina, conteudo, created_at, user_id) VALUES (?, ?, ?, ?, ?)",
-                       (body.pdf_path, body.pagina, body.conteudo, datetime.now().isoformat(), user_id))
+                       (body.pdf_path, body.pagina, conteudo, datetime.now().isoformat(), user_id))
     conn.commit()
     log.info(f"Nota created: {body.pdf_path} p.{body.pagina}")
     return {"id": cur.lastrowid, "ok": True}

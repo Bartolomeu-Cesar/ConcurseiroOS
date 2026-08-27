@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from database import get_db_session
 from deps import get_user_id
 from logger import log
+from sanitize import sanitize_input
 from schemas import CadernoAddItem, CadernoCreate
 
 router = APIRouter(prefix="", tags=["Cadernos"])
@@ -25,10 +26,12 @@ def list_cadernos(conn=Depends(get_db_session), user_id: int = Depends(get_user_
 
 @router.post("/api/cadernos")
 def create_caderno(body: CadernoCreate, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    nome = sanitize_input(body.nome)
+    descricao = sanitize_input(body.descricao, max_length=1000) if body.descricao else ""
     cur = conn.execute("INSERT INTO cadernos (nome, descricao, created_at, user_id) VALUES (?, ?, ?, ?)",
-                       (body.nome, body.descricao, datetime.now().isoformat(), user_id))
+                       (nome, descricao, datetime.now().isoformat(), user_id))
     conn.commit()
-    log.info(f"Caderno created: {body.nome}")
+    log.info(f"Caderno created: {nome}")
     return {"id": cur.lastrowid, "ok": True}
 
 

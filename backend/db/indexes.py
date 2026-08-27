@@ -35,3 +35,23 @@ def _create_indexes(conn):
             tokenize='unicode61'
         )
     """)
+
+    # Índices em user_id para isolamento multi-tenant
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_streaks_user_id ON streaks(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_sessoes_user_id ON sessoes_estudo(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_questoes_respostas_user_id ON questoes_respostas(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_edital_user_id ON edital(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_flashcards_user_id ON flashcards(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_sumulas_user_id ON sumulas(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_ciclo_user_id ON ciclo_estudos(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_simulados_user_id ON simulados(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_notas_pdf_user_id ON notas_pdf(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_bookmarks_pdf_user_id ON bookmarks_pdf(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_cadernos_user_id ON cadernos(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_feynman_user_id ON feynman(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_calendario_atividades_user_id ON calendario_atividades(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_desafios_user_id ON desafios(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_ai_conversations_user_id ON ai_conversations(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_notas_topico_user_id ON notas_topico(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_planejador_user_id ON planejador_semanal(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_user_gamification_user_id ON user_gamification(user_id)")

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends
 from database import get_db_session
 from deps import get_user_id
 from logger import log
+from sanitize import sanitize_input
 from schemas import BookmarkCreate, OkResponse
 
 router = APIRouter(prefix="", tags=["Bookmarks"])
@@ -19,8 +20,9 @@ def get_bookmarks(path: str, conn=Depends(get_db_session), user_id: int = Depend
 
 @router.post("/api/bookmarks")
 def create_bookmark(body: BookmarkCreate, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    label = sanitize_input(body.label) if body.label else ""
     cur = conn.execute("INSERT INTO bookmarks_pdf (pdf_path, pagina, label, cor, created_at, user_id) VALUES (?, ?, ?, ?, ?, ?)",
-                       (body.pdf_path, body.pagina, body.label, body.cor, datetime.now().isoformat(), user_id))
+                       (body.pdf_path, body.pagina, label, body.cor, datetime.now().isoformat(), user_id))
     conn.commit()
     log.info(f"Bookmark created: {body.pdf_path} p.{body.pagina}")
     return {"id": cur.lastrowid, "ok": True}

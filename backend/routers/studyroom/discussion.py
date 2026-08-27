@@ -7,6 +7,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 from database import get_db_session
 from deps import get_user_id
 from logger import log
+from sanitize import sanitize_input
 
 from .helpers import get_user_name
 from .tables import ensure_discussion_tables
@@ -169,6 +170,9 @@ def comment_discussion(
 
     if not comentario or not comentario.strip():
         raise HTTPException(status_code=400, detail="Comentário não pode ser vazio")
+
+    # Sanitizar conteúdo
+    comentario = sanitize_input(comentario, max_length=1000)
 
     # Buscar a última resposta da discussão para associar o comentário
     last_response = conn.execute("""

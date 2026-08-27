@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse
 from database import get_db_session
 from deps import get_user_id
 from logger import log
+from sanitize import sanitize_input
 
 from .helpers import _ensure_messages_table, _are_friends, _get_friend_ids
 
@@ -32,6 +33,9 @@ def send_message(
         raise HTTPException(status_code=400, detail="Mensagem não pode ser vazia.")
     if len(mensagem) > 1000:
         raise HTTPException(status_code=400, detail="Mensagem muito longa (máx. 1000 caracteres).")
+
+    # Sanitizar conteúdo
+    mensagem = sanitize_input(mensagem, max_length=1000)
     if receiver_id == user_id:
         raise HTTPException(status_code=400, detail="Não é possível enviar mensagem para si mesmo.")
 
