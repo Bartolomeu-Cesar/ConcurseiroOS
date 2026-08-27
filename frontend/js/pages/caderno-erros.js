@@ -334,5 +334,73 @@ function showToast(msg) {
   }, 3000);
 }
 
+// ===== Error Analysis Stats =====
+
+const MOTIVO_LABELS = {
+  leitura_incompleta: '📖 Leitura incompleta',
+  conceito_errado: '❌ Conceito errado',
+  excecao_regra: '⚠️ Exceção da regra',
+  pegadinha: '🪤 Pegadinha',
+  chute: '🎲 Chutei',
+  desatencao: '😵 Desatenção',
+  tempo: '⏰ Faltou tempo'
+};
+
+const MOTIVO_COLORS = [
+  'var(--ce-accent, #f38ba8)',
+  'var(--ce-blue, #89b4fa)',
+  'var(--ce-warning, #f9e2af)',
+  'var(--ce-success, #a6e3a1)',
+  'var(--ce-mauve, #cba6f7)',
+  'var(--ce-wrong, #f38ba8)',
+  'var(--ce-subtext, #a6adc8)'
+];
+
+async function loadErrorAnalysisStats() {
+  try {
+    const res = await fetch(`${API_BASE}/api/questoes/erros/analise/stats`);
+    if (!res.ok) return;
+    const data = await res.json();
+
+    if (!data || data.total_analisados <= 0) return;
+
+    const container = document.getElementById('error-analysis-stats');
+    if (!container) return;
+
+    const barsHtml = data.stats.map((item, idx) => {
+      const label = MOTIVO_LABELS[item.motivo] || item.motivo;
+      const color = MOTIVO_COLORS[idx % MOTIVO_COLORS.length];
+      return `
+        <div style="margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+            <span style="font-size:0.82rem;color:var(--ce-text);">${label}</span>
+            <span style="font-size:0.75rem;color:var(--ce-subtext);font-weight:600;">${item.total} (${item.percentual.toFixed(1)}%)</span>
+          </div>
+          <div style="background:var(--ce-border);border-radius:6px;height:8px;overflow:hidden;">
+            <div style="width:${item.percentual}%;height:100%;background:${color};border-radius:6px;transition:width 0.4s ease;"></div>
+          </div>
+        </div>`;
+    }).join('');
+
+    const dicaHtml = data.dica ? `
+      <div style="margin-top:14px;padding:10px 14px;background:rgba(249,226,175,0.1);border:1px solid rgba(249,226,175,0.25);border-radius:8px;font-size:0.82rem;color:var(--ce-warning);line-height:1.5;">
+        ${data.dica}
+      </div>` : '';
+
+    container.innerHTML = `
+      <div style="background:var(--ce-card);border-radius:12px;padding:16px 20px;margin-bottom:24px;">
+        <div style="font-size:1rem;font-weight:700;color:var(--ce-mauve);margin-bottom:14px;display:flex;align-items:center;gap:8px;">
+          📋 Análise de Erros
+          <span style="font-size:0.72rem;font-weight:600;color:var(--ce-subtext);margin-left:auto;">${data.total_analisados} analisados</span>
+        </div>
+        ${barsHtml}
+        ${dicaHtml}
+      </div>`;
+  } catch (err) {
+    // Silently fail — non-critical section
+  }
+}
+
 // Init
 fetchCaderno();
+loadErrorAnalysisStats();
