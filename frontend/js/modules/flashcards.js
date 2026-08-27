@@ -488,6 +488,116 @@ export async function saveFlashEdit() {
 }
 
 // ============================================================
+// ESTUDO POR ÁUDIO (TTS) — Web Speech API
+// Modo "ouvir": pergunta → pausa → resposta
+// ============================================================
+
+let _ttsPlaying = false;
+let _ttsQueue = [];
+let _ttsIndex = 0;
+let _ttsPaused = false;
+
+export function startAudioMode() {
+  if (!('speechSynthesis' in window)) {
+    toast('Seu navegador não suporta Text-to-Speech.', 'error');
+    return;
+  }
+  if (flashcardsToday.length === 0) {
+    toast('Nenhum flashcard pendente para ouvir.', 'warning');
+    return;
+  }
+  _ttsQueue = [...flashcardsToday];
+  _ttsIndex = 0;
+  _ttsPlaying = true;
+  _ttsPaused = false;
+  toast(`🔊 Modo Áudio: ${_ttsQueue.length} cards. Ouça a pergunta e tente lembrar a resposta.`, 'success', 4000);
+  _ttsPlayCard();
+}
+
+export function stopAudioMode() {
+  window.speechSynthesis.cancel();
+  _ttsPlaying = false;
+  _ttsPaused = false;
+  _ttsQueue = [];
+  toast('🔇 Modo áudio encerrado.', 'info');
+}
+
+export function pauseAudioMode() {
+  if (_ttsPaused) {
+    window.speechSynthesis.resume();
+    _ttsPaused = false;
+    toast('▶ Áudio retomado', 'info', 1500);
+  } else {
+    window.speechSynthesis.pause();
+    _ttsPaused = true;
+    toast('⏸ Áudio pausado', 'info', 1500);
+  }
+}
+
+export function skipAudioCard() {
+  window.speechSynthesis.cancel();
+  _ttsIndex++;
+  if (_ttsIndex < _ttsQueue.length) {
+    _ttsPlayCard();
+  } else {
+    toast('🎉 Todos os cards ouvidos!', 'success');
+    _ttsPlaying = false;
+  }
+}
+
+function _ttsPlayCard() {
+  if (_ttsIndex >= _ttsQueue.length || !_ttsPlaying) {
+    _ttsPlaying = false;
+    toast('🎉 Sessão de áudio concluída!', 'success');
+    return;
+  }
+  const card = _ttsQueue[_ttsIndex];
+  const synth = window.speechSynthesis;
+
+  // Configurar voz pt-BR
+  const voices = synth.getVoices();
+  const ptVoice = voices.find(v => v.lang.startsWith('pt')) || voices[0];
+
+  // 1. Falar "Pergunta:" + pergunta
+  const uttPergunta = new SpeechSynthesisUtterance(`Pergunta. ${card.pergunta}`);
+  uttPergunta.lang = 'pt-BR';
+  uttPergunta.rate = 0.9;
+  if (ptVoice) uttPergunta.voice = ptVoice;
+
+  // 2. Pausa de 3 segundos para pensar
+  // 3. Falar "Resposta:" + resposta
+  const uttResposta = new SpeechSynthesisUtterance(`Resposta. ${card.resposta}`);
+  uttResposta.lang = 'pt-BR';
+  uttResposta.rate = 0.9;
+  if (ptVoice) uttResposta.voice = ptVoice;
+
+  uttPergunta.onend = () => {
+    // Pausa de 3s antes da resposta
+    setTimeout(() => {
+      if (!_ttsPlaying) return;
+      synth.speak(uttResposta);
+    }, 3000);
+  };
+
+  uttResposta.onend = () => {
+    // Pausa de 2s antes do próximo card
+    setTimeout(() => {
+      _ttsIndex++;
+      if (_ttsPlaying) _ttsPlayCard();
+    }, 2000);
+  };
+
+  // Mostrar visual do card atual
+  const q = document.getElementById('flash-question');
+  if (q) {
+    const badge = card.materia ? `<span style="font-size:0.7rem;background:var(--bg-surface);color:var(--accent);padding:2px 8px;border-radius:4px;display:inline-block;margin-bottom:4px;">🔊 ${card.materia}</span><br>` : '';
+    q.innerHTML = badge + `<div style="font-size:0.9rem;">${_ttsIndex + 1}/${_ttsQueue.length} — ${card.pergunta}</div>`;
+  }
+
+  synth.speak(uttPergunta);
+}
+
+// ============================================================
 // BOSS BATTLE MODE — Gamified Flashcard Review
 // ============================================================
 

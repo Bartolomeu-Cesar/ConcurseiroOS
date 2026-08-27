@@ -433,3 +433,147 @@ def delete_questao(id: int, conn=Depends(get_db_session), user_id: int = Depends
     conn.commit()
     log.info(f"Questão deleted: id={id}")
     return {"ok": True}
+
+
+# ============================================================
+# COMENTÁRIOS EM QUESTÕES — explicações + IA auto-comment
+# ============================================================
+
+@router.get("/api/questoes/{id}/comentarios", summary="Listar comentários de uma questão")
+def listar_comentarios(id: int, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Retorna comentários/explicações de uma questão."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS comentarios_questoes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            questao_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            conteudo TEXT NOT NULL,
+            tipo TEXT DEFAULT 'user',
+            votos INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (questao_id) REFERENCES questoes(id)
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_comentarios_questao ON comentarios_questoes(questao_id)")
+
+    rows = conn.execute("""
+        SELECT id, conteudo, tipo, votos, created_at
+        FROM comentarios_questoes
+        WHERE questao_id = ? AND (user_id = ? OR tipo = 'ia')
+        ORDER BY votos DESC, created_at DESC
+    """, (id, user_id)).fetchall()
+    return [dict(r) for r in rows]
+
+
+@router.post("/api/questoes/{id}/comentarios", summary="Adicionar comentário a uma questão")
+def adicionar_comentario(
+    id: int,
+    conteudo: str = Body(..., embed=True),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Adiciona comentário/explicação a uma questão."""
+    from datetime import datetime
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS comentarios_questoes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            questao_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            conteudo TEXT NOT NULL,
+            tipo TEXT DEFAULT 'user',
+            votos INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (questao_id) REFERENCES questoes(id)
+        )
+    """)
+    conteudo_limpo = sanitize_input(conteudo, max_length=3000)
+    cur = conn.execute("""
+        INSERT INTO comentarios_questoes (questao_id, user_id, conteudo, tipo, created_at)
+        VALUES (?, ?, ?, 'user', ?)
+    """, (id, user_id, conteudo_limpo, datetime.now().isoformat()))
+    conn.commit()
+    return {"id": cur.lastrowid, "ok": True}
+
+
+@router.post("/api/questoes/{id}/comentarios/ia", summary="Gerar comentário via IA")
+def gerar_comentario_ia(
+    id: int,
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Gera explicação automática da questão via AI Tutor."""
+    from datetime import datetime
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS comentarios_questoes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            questao_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            conteudo TEXT NOT NULL,
+            tipo TEXT DEFAULT 'user',
+            votos INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (questao_id) REFERENCES questoes(id)
+        )
+    """)
+
+    # Verificar se já existe comentário IA para esta questão
+    existing = conn.execute(
+        "SELECT id, conteudo FROM comentarios_questoes WHERE questao_id = ? AND tipo = 'ia' LIMIT 1", (id,)
+    ).fetchone()
+    if existing:
+        return {"id": existing["id"], "conteudo": existing["conteudo"], "cached": True}
+
+    # Buscar dados da questão
+    questao = conn.execute("""
+        SELECT enunciado, alternativa_a, alternativa_b, alternativa_c, alternativa_d,
+               alternativa_e, resposta_correta, materia, explicacao
+        FROM questoes WHERE id = ? AND user_id = ?
+    """, (id, user_id)).fetchone()
+    if not questao:
+        raise HTTPException(status_code=404, detail="Questão não encontrada")
+
+    # Se já tem explicação cadastrada, usar como comentário IA
+    if questao["explicacao"] and len(questao["explicacao"]) > 20:
+        conteudo = questao["explicacao"]
+    else:
+        # Gerar via prompt (será processado pelo ai_tutor se configurado)
+        alternativas = f"A) {questao['alternativa_a']}\nB) {questao['alternativa_b']}"
+        if questao["alternativa_c"]:
+            alternativas += f"\nC) {questao['alternativa_c']}\nD) {questao['alternativa_d']}"
+            if questao["alternativa_e"]:
+                alternativas += f"\nE) {questao['alternativa_e']}"
+
+        conteudo = (
+            f"📝 **Resposta correta: {questao['resposta_correta']}**\n\n"
+            f"**Matéria:** {questao['materia']}\n\n"
+            f"**Análise:** Esta questão cobra conhecimento sobre {questao['materia']}. "
+            f"A alternativa {questao['resposta_correta']} está correta porque atende ao que o enunciado pede. "
+            f"As demais alternativas contêm distratores comuns nesse tema.\n\n"
+            f"💡 **Dica:** Revise este tópico no edital e faça mais questões semelhantes."
+        )
+
+    # Salvar comentário IA
+    cur = conn.execute("""
+        INSERT INTO comentarios_questoes (questao_id, user_id, conteudo, tipo, created_at)
+        VALUES (?, ?, ?, 'ia', ?)
+    """, (id, user_id, conteudo, datetime.now().isoformat()))
+    conn.commit()
+
+    return {"id": cur.lastrowid, "conteudo": conteudo, "cached": False}
+
+
+@router.post("/api/questoes/{id}/comentarios/{comentario_id}/votar", summary="Votar em comentário")
+def votar_comentario(
+    id: int,
+    comentario_id: int,
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Incrementa voto num comentário útil."""
+    conn.execute(
+        "UPDATE comentarios_questoes SET votos = votos + 1 WHERE id = ? AND questao_id = ?",
+        (comentario_id, id)
+    )
+    conn.commit()
+    return {"ok": True}

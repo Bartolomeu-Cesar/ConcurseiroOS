@@ -546,7 +546,98 @@ def check_triggers(conn=Depends(get_db_session)):
                             _log_notification(conn, uid, "inactivity", notif["title"], notif["body"])
                             results["inactivity"] += 1
 
+        # --- 6. SLEEP CONSOLIDATION REMINDER (21h-22h) ---
+        if flashcard_enabled and 21 <= now.hour <= 22:
+            if not _already_sent_today(conn, uid, "sleep_consolidation"):
+                # Check if user has errors today that need consolidation
+                erros_hoje = conn.execute(
+                    "SELECT COUNT(*) as cnt FROM questoes_respostas WHERE user_id = ? AND data = ? AND acertou = 0",
+                    (uid, hoje)
+                ).fetchone()
+                fc_frageis = conn.execute(
+                    "SELECT COUNT(*) as cnt FROM flashcards WHERE user_id = ? AND stability > 0 AND stability <= 3",
+                    (uid,)
+                ).fetchone()
+                total_itens = (erros_hoje["cnt"] or 0) + (fc_frageis["cnt"] or 0)
+
+                if total_itens > 0:
+                    sent = _send_push_to_user(
+                        conn, uid,
+                        "🌙 Revisão Pré-Sono",
+                        f"Revise {total_itens} itens antes de dormir para +20% retenção amanhã. Seu cérebro consolida memórias durante o sono!",
+                        "/",
+                        "sleep_consolidation"
+                    )
+                    if sent > 0:
+                        _log_notification(conn, uid, "sleep_consolidation", "🌙 Revisão Pré-Sono", f"{total_itens} itens")
+                        results["sleep_consolidation"] = results.get("sleep_consolidation", 0) + 1
+
+        # --- 7. DAILY META NOT REACHED (20h-21h) ---
+        if streak_enabled and 20 <= now.hour <= 21:
+            if not _already_sent_today(conn, uid, "meta_diaria"):
+                try:
+                    meta = conn.execute("SELECT meta_horas, meta_questoes FROM metas_config WHERE user_id = ?", (uid,)).fetchone()
+                    if meta:
+                        streak_hoje = conn.execute("SELECT horas_estudadas, questoes_resolvidas FROM streaks WHERE data = ? AND user_id = ?", (hoje, uid)).fetchone()
+                        horas_hoje = streak_hoje["horas_estudadas"] if streak_hoje else 0
+                        quest_hoje = streak_hoje["questoes_resolvidas"] if streak_hoje else 0
+                        meta_horas = meta["meta_horas"] or 3
+                        meta_quest = meta["meta_questoes"] or 30
+                        pct_horas = horas_hoje / meta_horas * 100 if meta_horas > 0 else 100
+                        pct_quest = quest_hoje / meta_quest * 100 if meta_quest > 0 else 100
+
+                        if pct_horas < 50 or pct_quest < 50:
+                            falta_horas = max(0, meta_horas - horas_hoje)
+                            falta_quest = max(0, meta_quest - quest_hoje)
+                            msg = f"Faltam {falta_horas:.1f}h e {falta_quest} questões para bater a meta. Ainda dá tempo!"
+                            sent = _send_push_to_user(conn, uid, "⚠️ Meta Diária", msg, "/", "meta_diaria")
+                            if sent > 0:
+                                _log_notification(conn, uid, "meta_diaria", "⚠️ Meta Diária", msg)
+                                results["meta_diaria"] = results.get("meta_diaria", 0) + 1
+                except Exception:
+                    pass
+
     return {"ok": True, "notifications_sent": results}
+
+
+@router.get("/api/push/auto-check", summary="Auto-check triggers (chamado pelo frontend no login)")
+def auto_check_triggers(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Verifica triggers para o user atual e retorna alertas pendentes (sem enviar push).
+    Chamado pelo frontend ao abrir o app para mostrar alertas inline."""
+    _ensure_tables(conn)
+    hoje = date.today().isoformat()
+    now = datetime.now()
+    alertas = []
+
+    # Flashcards pendentes
+    fc = conn.execute("SELECT COUNT(*) as cnt FROM flashcards WHERE proxima_revisao <= ? AND user_id = ?", (hoje, user_id)).fetchone()
+    if fc and fc["cnt"] > 5:
+        alertas.append({"tipo": "flashcards", "icone": "🧠", "msg": f"{fc['cnt']} flashcards pendentes para revisão", "acao": "/#flashcards"})
+
+    # Erros pendentes de revisão
+    try:
+        erros = conn.execute("SELECT COUNT(*) as cnt FROM erros_revisao WHERE user_id = ? AND proxima_revisao <= ?", (user_id, hoje)).fetchone()
+        if erros and erros["cnt"] > 3:
+            alertas.append({"tipo": "erros", "icone": "📝", "msg": f"{erros['cnt']} questões erradas agendadas para revisão", "acao": "/caderno-erros.html"})
+    except Exception:
+        pass
+
+    # Sleep consolidation (se 21h-1h)
+    if 21 <= now.hour or now.hour <= 1:
+        alertas.append({"tipo": "sleep", "icone": "🌙", "msg": "Hora da revisão pré-sono! Revise erros do dia antes de dormir.", "acao": "/"})
+
+    # Meta diária
+    try:
+        meta = conn.execute("SELECT meta_horas, meta_questoes FROM metas_config WHERE user_id = ?", (user_id,)).fetchone()
+        streak_hoje = conn.execute("SELECT horas_estudadas, questoes_resolvidas FROM streaks WHERE data = ? AND user_id = ?", (hoje, user_id)).fetchone()
+        if meta and streak_hoje:
+            pct = (streak_hoje["horas_estudadas"] or 0) / (meta["meta_horas"] or 3) * 100
+            if pct < 30 and now.hour >= 18:
+                alertas.append({"tipo": "meta", "icone": "⚠️", "msg": f"Meta diária em {pct:.0f}%. Ainda dá tempo!", "acao": "/"})
+    except Exception:
+        pass
+
+    return {"alertas": alertas, "total": len(alertas)}
 
 
 # ============================================================
