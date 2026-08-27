@@ -1426,3 +1426,181 @@ window.executarImportCSV = executarImportCSV;
 
 // ==================== THEME (imported via ES module at bottom of HTML) ====================
 // toggleTheme is imported and assigned to window by the theme module script tag
+
+// ============================================================
+// GENERATION MODE — Responder sem alternativas
+// ============================================================
+
+let _genQuestoes = [];
+let _genIdx = 0;
+let _genStartTime = null;
+let _genAcertos = 0;
+
+async function startGenerationMode() {
+  const materia = document.getElementById('gen-filtro-materia')?.value || '';
+  const params = materia ? `?materia=${encodeURIComponent(materia)}&limit=10` : '?limit=10';
+
+  try {
+    const questoes = await fetch(`/api/questoes/modo-geracao${params}`).then(r => r.json());
+    if (!questoes.length) {
+      document.getElementById('gen-container').innerHTML = `
+        <div style="text-align:center;padding:20px;color:var(--text-sub);">
+          <p>Nenhuma questão disponível${materia ? ` para "${materia}"` : ''}.</p>
+          <p style="font-size:0.78rem;">Cadastre questões na tab "Cadastrar" primeiro.</p>
+        </div>`;
+      return;
+    }
+    _genQuestoes = questoes;
+    _genIdx = 0;
+    _genAcertos = 0;
+    showGenQuestao();
+  } catch (e) {
+    showToast('Erro ao carregar questões', 'error');
+  }
+}
+
+function showGenQuestao() {
+  const container = document.getElementById('gen-container');
+  if (_genIdx >= _genQuestoes.length) {
+    // Fim da sessão
+    const pct = _genQuestoes.length > 0 ? Math.round((_genAcertos / _genQuestoes.length) * 100) : 0;
+    container.innerHTML = `
+      <div style="text-align:center;padding:24px;background:var(--bg-elevated);border-radius:12px;">
+        <div style="font-size:2rem;margin-bottom:8px;">🏁</div>
+        <h3 style="margin-bottom:8px;">Sessão concluída!</h3>
+        <p style="font-size:1.2rem;font-weight:600;color:${pct >= 70 ? 'var(--green)' : pct >= 40 ? 'var(--yellow)' : 'var(--red)'};">
+          ${_genAcertos}/${_genQuestoes.length} (${pct}%)
+        </p>
+        <p style="font-size:0.78rem;color:var(--text-sub);margin-top:8px;">
+          ${pct >= 70 ? '🎉 Excelente! Seu recall está forte.' : pct >= 40 ? '💪 Bom progresso. Continue praticando.' : '📚 Revise esses tópicos antes de praticar novamente.'}
+        </p>
+        <button onclick="startGenerationMode()" class="btn btn-primary" style="margin-top:12px;">🔄 Nova sessão</button>
+      </div>`;
+    loadGenStats();
+    return;
+  }
+
+  const q = _genQuestoes[_genIdx];
+  _genStartTime = Date.now();
+
+  container.innerHTML = `
+    <div style="background:var(--bg-elevated);border-radius:12px;padding:16px 20px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-size:0.72rem;color:var(--text-sub);">${q.materia || ''} ${q.topico ? '· ' + q.topico : ''}</span>
+        <span style="font-size:0.72rem;color:var(--accent);">${_genIdx + 1}/${_genQuestoes.length}</span>
+      </div>
+      <p style="font-size:0.92rem;line-height:1.5;margin-bottom:16px;">${q.enunciado}</p>
+      <div style="margin-bottom:12px;">
+        <textarea id="gen-resposta" placeholder="Digite sua resposta de memória..." 
+          style="width:100%;min-height:60px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text);font-size:0.88rem;font-family:inherit;resize:vertical;"
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitGenResposta(${q.id})}"></textarea>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button onclick="submitGenResposta(${q.id})" class="btn btn-primary" style="font-size:0.85rem;">Conferir ✓</button>
+        <button onclick="revealGenAlternativas(${q.id})" style="background:var(--bg-surface);color:var(--text-sub);border:1px solid var(--border);border-radius:6px;padding:6px 12px;font-size:0.78rem;cursor:pointer;">👁 Revelar alternativas</button>
+        <button onclick="skipGenQuestao()" style="background:none;border:none;color:var(--text-sub);cursor:pointer;font-size:0.78rem;margin-left:auto;">Pular →</button>
+      </div>
+      <div id="gen-feedback" style="margin-top:12px;"></div>
+    </div>`;
+
+  document.getElementById('gen-resposta')?.focus();
+}
+
+async function submitGenResposta(questaoId) {
+  const textarea = document.getElementById('gen-resposta');
+  const resposta = textarea?.value?.trim();
+  if (!resposta) {
+    textarea.style.borderColor = 'var(--red)';
+    return;
+  }
+
+  const tempoMs = Date.now() - _genStartTime;
+
+  try {
+    const data = await fetch(`/api/questoes/${questaoId}/responder-geracao`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resposta_digitada: resposta, tempo_ms: tempoMs })
+    }).then(r => r.json());
+
+    if (data.acertou) _genAcertos++;
+
+    const fbEl = document.getElementById('gen-feedback');
+    const scoreColor = data.match_score >= 0.7 ? 'var(--green)' : data.match_score >= 0.4 ? 'var(--yellow)' : 'var(--red)';
+
+    fbEl.innerHTML = `
+      <div style="padding:12px;border-radius:8px;background:${data.acertou ? 'rgba(166,227,161,0.1)' : 'rgba(243,139,168,0.1)'};border:1px solid ${data.acertou ? 'var(--green)' : 'var(--red)'};">
+        <div style="font-weight:600;color:${data.acertou ? 'var(--green)' : 'var(--red)'};">
+          ${data.acertou ? '✓ ' : '✗ '}${data.feedback}
+        </div>
+        <div style="font-size:0.78rem;color:var(--text-sub);margin-top:4px;">
+          Match score: <strong style="color:${scoreColor};">${Math.round(data.match_score * 100)}%</strong>
+          · Resposta: <strong>${data.resposta_correta}</strong>${data.alternativa_correta_texto ? ' — ' + data.alternativa_correta_texto : ''}
+        </div>
+        ${data.explicacao ? `<div style="font-size:0.78rem;color:var(--text);margin-top:6px;">💡 ${data.explicacao}</div>` : ''}
+        <button onclick="_genIdx++;showGenQuestao()" class="btn btn-primary" style="margin-top:8px;font-size:0.82rem;">Próxima →</button>
+      </div>`;
+
+    // Disable input
+    textarea.disabled = true;
+  } catch (e) {
+    showToast('Erro ao enviar resposta', 'error');
+  }
+}
+
+async function revealGenAlternativas(questaoId) {
+  try {
+    const q = await fetch(`/api/questoes/${questaoId}`).then(r => r.json());
+    const fbEl = document.getElementById('gen-feedback');
+    fbEl.innerHTML = `
+      <div style="padding:10px;background:var(--bg-surface);border-radius:8px;font-size:0.82rem;">
+        <div style="font-size:0.72rem;color:var(--text-sub);margin-bottom:4px;">Alternativas (modo reconhecimento):</div>
+        ${q.alternativa_a ? `<div>A) ${q.alternativa_a}</div>` : ''}
+        ${q.alternativa_b ? `<div>B) ${q.alternativa_b}</div>` : ''}
+        ${q.alternativa_c ? `<div>C) ${q.alternativa_c}</div>` : ''}
+        ${q.alternativa_d ? `<div>D) ${q.alternativa_d}</div>` : ''}
+        ${q.alternativa_e ? `<div>E) ${q.alternativa_e}</div>` : ''}
+      </div>`;
+  } catch (e) {}
+}
+
+function skipGenQuestao() {
+  _genIdx++;
+  showGenQuestao();
+}
+
+async function loadGenStats() {
+  try {
+    const data = await fetch('/api/questoes/modo-geracao/stats').then(r => r.json());
+    const el = document.getElementById('gen-stats-mini');
+    if (!el || data.total_respondidas === 0) return;
+    el.innerHTML = `📊 Geração: <strong>${data.pct_acerto}%</strong> acerto (${data.total_respondidas} questões) · Múltipla escolha: <strong>${data.comparativo_mc.pct_acerto_multipla_escolha}%</strong>`;
+  } catch (e) {}
+}
+
+// Carregar stats ao abrir a tab
+document.addEventListener('DOMContentLoaded', () => {
+  loadGenStats();
+  // Popular filtro de matérias na tab geração
+  const genSelect = document.getElementById('gen-filtro-materia');
+  const mainSelect = document.getElementById('filtro-materia');
+  if (genSelect && mainSelect) {
+    setTimeout(() => {
+      Array.from(mainSelect.options).forEach(opt => {
+        if (opt.value) {
+          const newOpt = document.createElement('option');
+          newOpt.value = opt.value;
+          newOpt.textContent = opt.textContent;
+          genSelect.appendChild(newOpt);
+        }
+      });
+    }, 1000);
+  }
+});
+
+// Expose globally
+window.startGenerationMode = startGenerationMode;
+window.showGenQuestao = showGenQuestao;
+window.submitGenResposta = submitGenResposta;
+window.revealGenAlternativas = revealGenAlternativas;
+window.skipGenQuestao = skipGenQuestao;

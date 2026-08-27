@@ -167,10 +167,29 @@
 
   <div class="qtab-bar">
     <button class="qtab-btn active" data-tab="tab-resolver">Resolver</button>
+    <button class="qtab-btn" data-tab="tab-geracao">🧠 Geração</button>
     <button class="qtab-btn" data-tab="tab-simulados">Simulados</button>
     <button class="qtab-btn" data-tab="tab-erros">Caderno de Erros</button>
     <button class="qtab-btn" data-tab="tab-cadastrar">Cadastrar</button>
     <button class="qtab-btn" data-tab="tab-banco">Banco (Todas)</button>
+  </div>
+
+  <!-- Tab: Generation Mode -->
+  <div id="tab-geracao" class="qtab-content">
+    <div class="panel">
+      <h2>🧠 Modo Geração <span style="font-size:0.72rem;color:var(--green);font-weight:normal;">(+40% retenção)</span></h2>
+      <p style="font-size:0.82rem;color:var(--text-sub);margin-bottom:12px;">
+        Responda <strong>sem ver alternativas</strong>. Gerar a resposta de memória (recall) é 40% mais efetivo que reconhecimento (múltipla escolha).
+      </p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
+        <select id="gen-filtro-materia" style="background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:0.82rem;">
+          <option value="">Todas as matérias</option>
+        </select>
+        <button class="btn btn-primary" onclick="startGenerationMode()" style="font-size:0.82rem;padding:6px 14px;">▶ Iniciar sessão</button>
+      </div>
+      <div id="gen-stats-mini" style="font-size:0.78rem;color:var(--text-sub);margin-bottom:12px;"></div>
+      <div id="gen-container"></div>
+    </div>
   </div>
 
   <!-- Tab: Resolver Questões -->
