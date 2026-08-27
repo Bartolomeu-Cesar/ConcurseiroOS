@@ -65,8 +65,24 @@ def meta_adaptativa(conn=Depends(get_db_session), user_id: int = Depends(get_use
         (user_id, inicio_esta_semana)
     ).fetchone()[0]
 
-    # === Calcular meta adaptativa (+15% sobre semana passada, mínimo razoável) ===
-    FATOR_PROGRESSAO = 1.15
+    # === Detectar burnout para ajustar fator de progressão ===
+    burnout_risk = None
+    try:
+        from routers.treinador.analise import _detect_burnout
+        burnout_info = _detect_burnout(conn, user_id)
+        burnout_risk = burnout_info.get("risk")
+    except Exception:
+        pass
+
+    # === Calcular meta adaptativa (ajustada por burnout) ===
+    # Normal: +15% | Burnout moderado: -10% | Burnout alto: -25%
+    if burnout_risk == "alto":
+        FATOR_PROGRESSAO = 0.75  # Reduz 25% — forçar descanso
+    elif burnout_risk == "moderado":
+        FATOR_PROGRESSAO = 0.90  # Reduz 10% — suavizar carga
+    else:
+        FATOR_PROGRESSAO = 1.15  # Normal: progressão gradual
+
     MIN_HORAS_SEMANA = 5.0
     MIN_QUESTOES_SEMANA = 20
     MIN_FLASHCARDS_SEMANA = 10
@@ -127,7 +143,13 @@ def meta_adaptativa(conn=Depends(get_db_session), user_id: int = Depends(get_use
     pct_flashcards = round(flashcards_esta_semana / meta_flashcards * 100) if meta_flashcards > 0 else 0
 
     # Status motivacional
-    if pct_horas >= 100 and pct_questoes >= 100:
+    if burnout_risk == "alto":
+        status = "burnout_alto"
+        mensagem = "🛑 Burnout detectado! Metas REDUZIDAS em 25%. Descanse hoje — seu cérebro precisa consolidar."
+    elif burnout_risk == "moderado":
+        status = "burnout_moderado"
+        mensagem = "⚠️ Carga elevada detectada. Metas reduzidas em 10%. Intercale dias leves para melhor retenção."
+    elif pct_horas >= 100 and pct_questoes >= 100:
         status = "acima"
         mensagem = "🚀 Acima da meta! Você está evoluindo rápido."
     elif pct_horas >= 70 or pct_questoes >= 70:
@@ -171,6 +193,7 @@ def meta_adaptativa(conn=Depends(get_db_session), user_id: int = Depends(get_use
         "status": status,
         "mensagem": mensagem,
         "fator_progressao": FATOR_PROGRESSAO,
+        "burnout_risk": burnout_risk,
     }
 
 

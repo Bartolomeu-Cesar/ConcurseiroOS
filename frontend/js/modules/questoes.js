@@ -1,6 +1,7 @@
 // ==================== QUESTÕES DO DIA ====================
 import { escapeHtml, toast } from './utils.js';
 import { switchTab } from './tabs.js';
+import { showQuestionXp } from './xp-notify.js';
 
 let questoesDia = [], qDiaIdx = 0, qDiaAcertos = 0;
 let qDiaStartTime = null; // Timestamp de quando a questão foi exibida
@@ -111,6 +112,9 @@ export async function responderQuestaoDia(letra) {
   if (window._qDiaTimerInterval) clearInterval(window._qDiaTimerInterval);
   const acertou = letra.toUpperCase() === q.resposta_correta.toUpperCase();
   if (acertou) qDiaAcertos++;
+
+  // XP real-time feedback
+  showQuestionXp(acertou);
 
   // Feed adaptive pomodoro fatigue detection
   if (window._adaptivePomo) {

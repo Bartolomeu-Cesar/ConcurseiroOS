@@ -2,6 +2,7 @@
 // ES module (strict mode by default)
 import { toast } from '../modules/toast.js';
 import { handleAuthNav } from '../modules/auth.js';
+import { showQuestionXp } from '../modules/xp-notify.js';
 window.handleAuthNav = handleAuthNav;
 
 // Tab navigation
@@ -100,13 +101,44 @@ async function loadQuestoesResolver() {
   const materia = document.getElementById('filtro-materia').value;
   const banca = document.getElementById('filtro-banca').value;
   const status = document.getElementById('filtro-status').value;
+  const dificuldade = document.getElementById('filtro-dificuldade').value;
+
+  // Se nenhum filtro ativo, usar seleção inteligente (prática deliberada)
+  if (!materia && !banca && !status && !dificuldade) {
+    try {
+      const smart = await fetch('/api/pratica-deliberada').then(r => r.json());
+      const focoMaterias = (smart.materias_para_focar || []).map(m => m.materia);
+      const naoEstudadas = smart.materias_nao_estudadas || [];
+      // Priorizar: matérias fracas > não estudadas > aleatório
+      const prioridade = [...focoMaterias, ...naoEstudadas];
+      if (prioridade.length > 0) {
+        // Buscar questões da matéria prioritária (primeira da lista)
+        const materiaFoco = prioridade[0];
+        questoesPool = await fetch(`/api/questoes?materia=${encodeURIComponent(materiaFoco)}`).then(r => r.json());
+        if (questoesPool.length > 0) {
+          // Priorizar: erradas > nunca respondidas > resto
+          const erradas = questoesPool.filter(q => q.ultimo_resultado === 0);
+          const nuncaResp = questoesPool.filter(q => q.ultimo_resultado === null || q.ultimo_resultado === undefined);
+          const resto = questoesPool.filter(q => q.ultimo_resultado === 1);
+          const ordenadas = [...erradas, ...nuncaResp, ...resto];
+          showQuestao(ordenadas[0]);
+          // Mostrar badge de prática deliberada
+          toast(`🎯 Prática deliberada: ${materiaFoco} (${smart.materias_para_focar[0]?.percentual || 0}% acerto)`, 'info', 4000);
+          return;
+        }
+      }
+    } catch (e) {
+      // Fallback para seleção normal se API falhar
+    }
+  }
+
+  // Fallback: busca com filtros (comportamento original)
   let url = '/api/questoes?';
   if (materia) url += `materia=${encodeURIComponent(materia)}&`;
   if (banca) url += `banca=${encodeURIComponent(banca)}&`;
   if (status) url += `status=${encodeURIComponent(status)}&`;
   questoesPool = await fetch(url).then(r => r.json());
 
-  const dificuldade = document.getElementById('filtro-dificuldade').value;
   if (dificuldade) {
     questoesPool = questoesPool.filter(q => q.dificuldade === dificuldade);
   }
@@ -116,9 +148,12 @@ async function loadQuestoesResolver() {
     return;
   }
 
-  // Sortear uma questão aleatória
-  const rand = Math.floor(Math.random() * questoesPool.length);
-  showQuestao(questoesPool[rand]);
+  // Priorizar: erradas > nunca respondidas > aleatório
+  const erradas = questoesPool.filter(q => q.ultimo_resultado === 0);
+  const nuncaResp = questoesPool.filter(q => q.ultimo_resultado === null || q.ultimo_resultado === undefined);
+  const resto = questoesPool.filter(q => q.ultimo_resultado === 1);
+  const priorizada = [...erradas, ...nuncaResp, ...resto];
+  showQuestao(priorizada.length > 0 ? priorizada[0] : questoesPool[Math.floor(Math.random() * questoesPool.length)]);
 }
 window.loadQuestoesResolver = loadQuestoesResolver;
 
@@ -245,6 +280,9 @@ async function confirmarResposta() {
   }).then(r => r.json());
 
   respondida = true;
+
+  // XP real-time feedback
+  showQuestionXp(res.acertou);
 
   // Marcar correta/errada visualmente
   const isCertoErrado = document.querySelector('.alternativa.ce-btn') !== null;

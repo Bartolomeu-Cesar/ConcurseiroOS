@@ -70,7 +70,106 @@ window.closeSidebar = closeSidebar;
   loadUserAvatar();
   // Load recent PDFs
   loadRecentPdfs();
+  // Load CTA "Continuar Estudando"
+  loadCtaContinuarEstudando();
+  // Check milestones (celebration modal para marcos não-vistos)
+  checkNewMilestones();
 })();
+
+// ===== CTA: Continuar Estudando =====
+function loadCtaContinuarEstudando() {
+  const container = document.getElementById('cta-continuar-estudando');
+  if (!container) return;
+
+  fetch('/api/ciclo/proximo')
+    .then(r => r.json())
+    .then(data => {
+      if (!data || !data.materia || data.materia === 'Nenhuma matéria no ciclo') {
+        container.style.display = 'none';
+        return;
+      }
+      container.style.display = 'block';
+      const materiaEl = document.getElementById('cta-materia');
+      const detailEl = document.getElementById('cta-detail');
+      const subtitleEl = document.getElementById('cta-subtitle');
+      const iconEl = document.getElementById('cta-icon');
+
+      materiaEl.textContent = data.materia;
+
+      // Progresso
+      const horasCumpridas = data.horas_cumpridas || 0;
+      const horasAlvo = data.horas_alvo || 1;
+      const pct = Math.min(100, Math.round((horasCumpridas / horasAlvo) * 100));
+      detailEl.textContent = `${horasCumpridas.toFixed(1)}h / ${horasAlvo}h no ciclo (${pct}%)`;
+
+      // Ícone e subtitle baseado no contexto
+      const hour = new Date().getHours();
+      if (hour < 12) {
+        subtitleEl.textContent = '☀️ Bom dia! Próxima matéria do ciclo:';
+        iconEl.textContent = '📖';
+      } else if (hour < 18) {
+        subtitleEl.textContent = '☀️ Boa tarde! Continue de onde parou:';
+        iconEl.textContent = '📚';
+      } else {
+        subtitleEl.textContent = '🌙 Boa noite! Sessão noturna:';
+        iconEl.textContent = '🌟';
+      }
+
+      // Guardar matéria para a ação
+      container.dataset.materia = data.materia;
+    })
+    .catch(() => { container.style.display = 'none'; });
+}
+
+function ctaContinuarEstudando() {
+  // Navegar para a aba Ciclo e iniciar timer
+  navigateTo('tab-ciclo');
+  // Dar tempo para o tab renderizar
+  setTimeout(() => {
+    // Tentar selecionar a matéria no ciclo
+    const materia = document.getElementById('cta-continuar-estudando')?.dataset?.materia;
+    if (materia && window.startCicloTimer) {
+      window.startCicloTimer(materia);
+    }
+  }, 300);
+}
+window.ctaContinuarEstudando = ctaContinuarEstudando;
+
+// ===== MILESTONES: Celebration Modal =====
+async function checkNewMilestones() {
+  try {
+    const data = await fetch('/api/milestones/check').then(r => r.json());
+    if (data.new_milestones && data.new_milestones.length > 0) {
+      // Delay para não conflitar com CTA loading
+      setTimeout(() => {
+        data.new_milestones.forEach((m, i) => {
+          setTimeout(() => showMilestoneCelebration(m), i * 3000);
+        });
+      }, 1500);
+    }
+  } catch (e) {}
+}
+
+function showMilestoneCelebration(milestone) {
+  const overlay = document.createElement('div');
+  overlay.className = 'milestone-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;animation:fadeIn 0.3s ease;';
+  overlay.innerHTML = `
+    <div style="background:var(--bg-elevated, #45475a);border-radius:20px;padding:32px;max-width:400px;width:90%;text-align:center;animation:scaleIn 0.4s ease;">
+      <div style="font-size:3.5rem;margin-bottom:12px;animation:bounce 0.6s ease;">${milestone.emoji}</div>
+      <h2 style="color:var(--accent, #cba6f7);margin-bottom:8px;font-size:1.3rem;">${milestone.titulo}</h2>
+      <p style="color:var(--text, #cdd6f4);font-size:0.92rem;margin-bottom:6px;">${milestone.msg}</p>
+      <div style="font-size:2.2rem;font-weight:800;color:var(--green, #a6e3a1);margin:12px 0;">${milestone.pct}%</div>
+      <button onclick="this.closest('.milestone-overlay').remove()"
+        style="background:var(--accent, #cba6f7);color:var(--bg, #1e1e2e);border:none;border-radius:10px;padding:12px 28px;font-weight:700;cursor:pointer;font-size:0.95rem;">
+        Continuar 💪
+      </button>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  // Auto-remove após 10s
+  setTimeout(() => { if (overlay.parentNode) overlay.remove(); }, 10000);
+}
 
 function loadRecentPdfs() {
   fetch('/api/progress/recentes?limit=5')

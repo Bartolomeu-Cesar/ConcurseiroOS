@@ -1,6 +1,7 @@
 // ==================== TAB 4: FLASHCARDS ====================
 import { escapeHtml, toast, showLoading, showEmpty, api, undoableDelete } from './utils.js';
 import { switchTab } from './tabs.js';
+import { showFlashcardXp } from './xp-notify.js';
 
 let flashcardsToday = [], currentFlashIndex = 0;
 let flashSessao = [], flashSessaoIndex = 0, flashSessaoMode = '';
@@ -251,6 +252,9 @@ export async function reviewFlashcard(quality) {
     }
 
     toast(`${msgs[quality]} [${stateLabel}]${metacogMsg}`, quality >= 3 ? 'success' : 'warning', 3000);
+
+    // XP real-time feedback
+    showFlashcardXp(quality);
 
     // Feed adaptive pomodoro fatigue detection
     if (window._adaptivePomo) {

@@ -94,19 +94,53 @@ def _select_challenge_questions(conn, user_id: int, quantidade: int = 5) -> list
     - Exclui dominadas: 3+ acertos consecutivos
 
     Também prioriza questões da tabela erros_revisao com proxima_revisao <= hoje.
+
+    IMPORTANTE: Filtra apenas por matérias do ciclo ativo (regra #2 do projeto).
     """
     from routers.simulados import _smart_select_questions
+
+    # 0. Buscar matérias do ciclo ativo (regra: nunca mostrar matérias de concursos inativos)
+    materias_ativas = None
+    try:
+        rows_ciclo = conn.execute(
+            "SELECT materia FROM ciclo_estudos WHERE ativo = 1 AND user_id = ?",
+            (user_id,)
+        ).fetchall()
+        if rows_ciclo:
+            materias_ativas = [r[0] for r in rows_ciclo]
+    except Exception:
+        # Fallback: tabela pode não ter coluna user_id em schemas antigos
+        try:
+            rows_ciclo = conn.execute(
+                "SELECT materia FROM ciclo_estudos WHERE ativo = 1"
+            ).fetchall()
+            if rows_ciclo:
+                materias_ativas = [r[0] for r in rows_ciclo]
+        except Exception:
+            pass  # Sem ciclo = sem filtro (usa todas as matérias)
 
     # 1. Verificar se há questões agendadas para revisão (erros_revisao com FSRS)
     hoje = today_str()
     revisao_pendentes = []
     try:
-        rows = conn.execute("""
-            SELECT er.questao_id FROM erros_revisao er
-            WHERE er.user_id = ? AND er.proxima_revisao <= ?
-            ORDER BY er.proxima_revisao ASC
-            LIMIT ?
-        """, (user_id, hoje, max(2, quantidade // 2))).fetchall()
+        # Filtrar revisão também por matérias ativas
+        if materias_ativas:
+            placeholders_mat = ",".join("?" * len(materias_ativas))
+            rows = conn.execute(f"""
+                SELECT er.questao_id FROM erros_revisao er
+                JOIN questoes q ON q.id = er.questao_id AND q.user_id = er.user_id
+                WHERE er.user_id = ? AND er.proxima_revisao <= ?
+                AND q.materia IN ({placeholders_mat})
+                ORDER BY er.proxima_revisao ASC
+                LIMIT ?
+            """, [user_id, hoje] + materias_ativas + [max(2, quantidade // 2)]).fetchall()
+        else:
+            rows = conn.execute("""
+                SELECT er.questao_id FROM erros_revisao er
+                WHERE er.user_id = ? AND er.proxima_revisao <= ?
+                ORDER BY er.proxima_revisao ASC
+                LIMIT ?
+            """, (user_id, hoje, max(2, quantidade // 2))).fetchall()
         revisao_ids = [r[0] for r in rows]
         if revisao_ids:
             placeholders = ",".join("?" * len(revisao_ids))
@@ -117,11 +151,11 @@ def _select_challenge_questions(conn, user_id: int, quantidade: int = 5) -> list
     except Exception:
         pass  # tabela erros_revisao pode não existir
 
-    # 2. Completar com seleção inteligente
+    # 2. Completar com seleção inteligente (filtrada por matérias ativas)
     qtd_restante = quantidade - len(revisao_pendentes)
     smart_qs = []
     if qtd_restante > 0:
-        smart_qs = _smart_select_questions(conn, user_id, qtd_restante)
+        smart_qs = _smart_select_questions(conn, user_id, qtd_restante, materias=materias_ativas)
 
     # 3. Combinar: revisão agendada + smart selection (sem duplicatas)
     seen_ids = {q["id"] for q in revisao_pendentes}

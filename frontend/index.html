@@ -63,6 +63,21 @@
       <!-- Page Content -->
       <main class="page-content" id="page-content">
 
+  <!-- CTA: Continuar Estudando (carregado dinamicamente) -->
+  <div id="cta-continuar-estudando" style="display:none;background:linear-gradient(135deg, var(--bg-surface, #313244), var(--bg-elevated, #45475a));border-radius:14px;padding:16px 20px;margin-bottom:16px;border:1px solid var(--accent, #cba6f7);position:relative;overflow:hidden;">
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+      <div style="font-size:2rem;" id="cta-icon">📚</div>
+      <div style="flex:1;min-width:180px;">
+        <div style="font-size:0.78rem;color:var(--text-sub, #9399b2);margin-bottom:2px;" id="cta-subtitle">Próxima matéria do ciclo</div>
+        <div style="font-size:1.05rem;font-weight:700;color:var(--text, #cdd6f4);" id="cta-materia">Carregando...</div>
+        <div style="font-size:0.75rem;color:var(--text-sub, #9399b2);margin-top:4px;" id="cta-detail"></div>
+      </div>
+      <button onclick="ctaContinuarEstudando()" style="background:var(--accent, #cba6f7);color:var(--bg, #1e1e2e);border:none;border-radius:10px;padding:10px 20px;font-size:0.88rem;font-weight:700;cursor:pointer;white-space:nowrap;transition:transform 0.1s,opacity 0.2s;" onmousedown="this.style.transform='scale(0.95)'" onmouseup="this.style.transform='scale(1)'" title="Iniciar estudo agora">
+        ▶ Estudar Agora
+      </button>
+    </div>
+  </div>
+
   <!-- Early tab activation: prevents flash of wrong tab -->
   <script>
     (function() {

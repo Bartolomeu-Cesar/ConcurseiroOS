@@ -19,7 +19,7 @@ router = APIRouter(prefix="", tags=["Analytics"])
 def curva_esquecimento(edital_nome: str = "", cargo: str = "", materia: str = "", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     query = """
         SELECT id, edital_nome, cargo, materia, topico, proxima_revisao,
-               intervalo_revisao, easiness_factor_edital
+               intervalo_revisao, easiness_factor_edital, stability_edital
         FROM edital WHERE proxima_revisao != '' AND proxima_revisao IS NOT NULL AND user_id = ?
     """
     params = [user_id]
@@ -38,7 +38,11 @@ def curva_esquecimento(edital_nome: str = "", cargo: str = "", materia: str = ""
     resultado = []
     hoje = date.today()
     for r in rows:
-        proxima_revisao, intervalo, ef = r[5], r[6] or 1, r[7] if r[7] is not None else 2.5
+        proxima_revisao = r["proxima_revisao"]
+        intervalo = r["intervalo_revisao"] or 1
+        ef = r["easiness_factor_edital"] if r["easiness_factor_edital"] is not None else 2.5
+        stability_real = r["stability_edital"] if r["stability_edital"] else 0
+
         try:
             prox = date.fromisoformat(proxima_revisao)
             ultima_revisao = prox - timedelta(days=intervalo)
@@ -47,15 +51,25 @@ def curva_esquecimento(edital_nome: str = "", cargo: str = "", materia: str = ""
             continue
         if t < 0:
             t = 0
-        S = intervalo * ef
-        if S <= 0:
-            S = 1
+
+        # Usar stability real do FSRS quando disponível; fallback para proxy
+        if stability_real and stability_real > 0:
+            S = stability_real
+        else:
+            S = intervalo * ef
+            if S <= 0:
+                S = 1
+
         # FSRS-5 power-law retrievability: R(t, S) = (1 + t/(9*S))^(-1)
         retencao = (1.0 + t / (9.0 * S)) ** (-1)
         retencao_pct = round(retencao * 100, 1)
         resultado.append({
-            "id": r[0], "materia": r[3], "topico": r[4], "retencao_pct": retencao_pct,
-            "dias_desde_revisao": t, "proxima_revisao": proxima_revisao, "urgente": retencao_pct < 50
+            "id": r["id"], "materia": r["materia"], "topico": r["topico"],
+            "retencao_pct": retencao_pct,
+            "dias_desde_revisao": t, "proxima_revisao": proxima_revisao,
+            "urgente": retencao_pct < 50,
+            "stability": round(S, 1),
+            "usando_fsrs": bool(stability_real and stability_real > 0),
         })
 
     resultado.sort(key=lambda x: x["retencao_pct"])
