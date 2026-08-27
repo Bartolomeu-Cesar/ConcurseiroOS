@@ -1816,3 +1816,469 @@ def error_patterns(
         },
         "tecnica": "Error Analysis (metacognição + distractor analysis): entender POR QUE erra é mais eficaz que apenas revisar o conteúdo. Atacar a causa elimina categorias inteiras de erro.",
     }
+
+
+# ============================================================
+# RETRIEVAL PRACTICE FORÇADO — Roediger & Butler (2011)
+# Recall ANTES de estudar = Testing Effect (+50% retenção vs reler)
+# ============================================================
+
+@router.get("/api/study-intelligence/retrieval-warmup", summary="Retrieval Practice Warmup",
+            description="""Gera 3-5 perguntas de recall rápido ANTES de estudar um tópico.
+O Testing Effect (Roediger 2011) mostra que tentar lembrar ANTES de estudar:
+- Ativa conhecimento prévio (schema activation)
+- Identifica lacunas (direciona atenção durante estudo)
+- Melhora retenção em 50% vs simplesmente reler
+Deve ser chamado ao iniciar qualquer sessão de estudo.""")
+def retrieval_warmup(
+    materia: str,
+    topico: str = "",
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Gera perguntas de recall para warmup antes de estudar."""
+
+    # 1. Buscar questões que o user JÁ RESPONDEU dessa matéria (recall de memória existente)
+    params = [user_id, materia, user_id]
+    filtro_topico = ""
+    if topico:
+        filtro_topico = "AND q.topico LIKE ?"
+        params.insert(2, f"%{topico}%")
+
+    # Priorizar questões que errou recentemente (successive relearning)
+    erradas = conn.execute(f"""
+        SELECT q.id, q.enunciado, q.resposta_correta, q.materia, q.topico, q.explicacao
+        FROM questoes q
+        JOIN questoes_respostas qr ON qr.questao_id = q.id AND qr.user_id = q.user_id
+        WHERE q.user_id = ? AND q.materia = ? {filtro_topico}
+        AND qr.acertou = 0
+        AND q.id IN (SELECT questao_id FROM questoes_respostas WHERE user_id = ?)
+        ORDER BY qr.id DESC
+        LIMIT 2
+    """, params).fetchall()
+    recall_questions = [dict(r) for r in erradas]
+
+    # 2. Buscar flashcards da matéria como perguntas de recall
+    fc_params = [user_id, materia]
+    flashcards = conn.execute("""
+        SELECT id, pergunta, resposta, materia
+        FROM flashcards
+        WHERE user_id = ? AND materia = ?
+        ORDER BY CASE
+            WHEN stability > 0 AND stability < 5 THEN 0
+            WHEN repetitions = 0 THEN 2
+            ELSE 1
+        END, RANDOM()
+        LIMIT 3
+    """, fc_params).fetchall()
+
+    recall_flashcards = [{
+        "id": f["id"],
+        "pergunta": f["pergunta"],
+        "resposta": f["resposta"],
+        "tipo": "flashcard_recall",
+    } for f in flashcards]
+
+    # 3. Gerar perguntas abertas baseadas nos tópicos do edital
+    topicos_edital = conn.execute("""
+        SELECT topico FROM edital
+        WHERE user_id = ? AND materia = ? AND arquivado = 0 AND status = 'Concluído'
+        ORDER BY RANDOM() LIMIT 3
+    """, (user_id, materia)).fetchall()
+
+    perguntas_abertas = [{
+        "pergunta": f"O que você lembra sobre '{t['topico']}'? Liste os pontos principais.",
+        "topico": t["topico"],
+        "tipo": "recall_aberto",
+    } for t in topicos_edital]
+
+    # Combinar: máx 5 itens (2 questões erradas + 2 flashcards + 1 aberta)
+    warmup_items = []
+    warmup_items.extend([{
+        "tipo": "questao_recall",
+        "id": q["id"],
+        "pergunta": q["enunciado"][:200] + "..." if len(q["enunciado"]) > 200 else q["enunciado"],
+        "resposta": q["resposta_correta"],
+        "explicacao": q.get("explicacao", ""),
+    } for q in recall_questions[:2]])
+
+    warmup_items.extend(recall_flashcards[:2])
+    warmup_items.extend(perguntas_abertas[:1])
+
+    # Se não tem nada (matéria nova), sugerir pre-test
+    if not warmup_items:
+        return {
+            "materia": materia,
+            "modo": "pre_test",
+            "items": [],
+            "mensagem": f"Primeira sessão de {materia}! Comece respondendo algumas questões para mapear seu nível.",
+            "sugestao": "Use o Pre-Test ou responda 5-10 questões antes de começar a teoria.",
+            "tecnica": "Pre-testing Effect (Richland 2009): responder perguntas ANTES de estudar o conteúdo ativa curiosidade e direciona atenção.",
+        }
+
+    return {
+        "materia": materia,
+        "topico": topico or "geral",
+        "modo": "retrieval_warmup",
+        "items": warmup_items[:5],
+        "total_items": len(warmup_items),
+        "instrucao": "⚡ ANTES de estudar, tente responder cada item DE MEMÓRIA. Não consulte. Errar aqui é BOM — direciona seu estudo.",
+        "mensagem": f"Warmup de {materia}: tente lembrar antes de estudar!",
+        "tecnica": "Testing Effect (Roediger 2011): recall ativo antes do estudo melhora retenção em ~50% vs reler passivamente. Errar no warmup aumenta atenção durante o estudo subsequente.",
+    }
+
+
+@router.post("/api/study-intelligence/retrieval-warmup/resultado", summary="Registrar resultado do warmup")
+def retrieval_warmup_resultado(
+    materia: str = Body(...),
+    acertos: int = Body(0),
+    total: int = Body(0),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Registra o resultado do warmup para tracking de progresso."""
+    from datetime import datetime
+    conn.execute("""
+        INSERT INTO sessoes_estudo (materia, horas, data, tipo, user_id, created_at)
+        VALUES (?, 0.05, ?, 'retrieval_warmup', ?, ?)
+    """, (materia, today_str(), user_id, datetime.now().isoformat()))
+    conn.commit()
+    pct = round(acertos / total * 100) if total > 0 else 0
+    if pct >= 80:
+        msg = "🧠 Excelente recall! Sua memória está forte nessa matéria."
+    elif pct >= 50:
+        msg = "👍 Recall parcial. O estudo de hoje vai reforçar os pontos fracos que você identificou."
+    else:
+        msg = "🎯 Muitas lacunas identificadas! Ótimo — agora seu cérebro está preparado para absorver o conteúdo."
+    return {"ok": True, "pct_recall": pct, "mensagem": msg}
+
+
+# ============================================================
+# MINIMUM EFFECTIVE DOSE — Ericsson (1993) Deliberate Practice
+# Tempo ótimo por matéria: não mais que o necessário, não menos
+# ============================================================
+
+@router.get("/api/study-intelligence/minimum-dose", summary="Minimum Effective Dose",
+            description="""Calcula o tempo MÍNIMO necessário por matéria para progredir.
+Baseado em Deliberate Practice (Ericsson 1993): qualidade > quantidade.
+Matérias com >80% acerto precisam de manutenção (20min/dia).
+Matérias com <50% precisam de investimento pesado (1-2h/dia).
+Evita overlearning em matérias fortes e subinvestimento em fracas.""")
+def minimum_effective_dose(
+    horas_disponiveis: float = Query(default=3.0, description="Horas disponíveis por dia"),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Calcula distribuição ótima do tempo de estudo."""
+
+    # Buscar matérias do ciclo ativo
+    ciclo = conn.execute("""
+        SELECT materia FROM ciclo_estudos WHERE user_id = ? AND ativo = 1 ORDER BY ordem
+    """, (user_id,)).fetchall()
+
+    if not ciclo:
+        return {"materias": [], "mensagem": "Nenhuma matéria no ciclo. Importe do edital."}
+
+    materias_analise = []
+    total_minutos = int(horas_disponiveis * 60)
+
+    for c in ciclo:
+        mat = c["materia"]
+
+        # Taxa de acerto
+        stats = conn.execute("""
+            SELECT COUNT(*) as total, COALESCE(SUM(acertou), 0) as acertos
+            FROM questoes_respostas qr
+            JOIN questoes q ON q.id = qr.questao_id
+            WHERE qr.user_id = ? AND q.materia = ?
+        """, (user_id, mat)).fetchone()
+        total_q = stats["total"]
+        pct_acerto = round(stats["acertos"] / total_q * 100, 1) if total_q > 0 else 0
+
+        # Tópicos pendentes
+        topicos = conn.execute("""
+            SELECT COUNT(*) as total,
+                   SUM(CASE WHEN status != 'Concluído' THEN 1 ELSE 0 END) as pendentes
+            FROM edital WHERE materia = ? AND user_id = ? AND arquivado = 0
+        """, (mat, user_id)).fetchone()
+        pct_concluido = round((topicos["total"] - (topicos["pendentes"] or 0)) / max(topicos["total"], 1) * 100, 1)
+
+        # Flashcards pendentes
+        fc_pendentes = conn.execute("""
+            SELECT COUNT(*) FROM flashcards
+            WHERE materia = ? AND user_id = ? AND proxima_revisao <= ?
+        """, (mat, user_id, today_str())).fetchone()[0]
+
+        # Questões em erros_revisao
+        erros_pendentes = 0
+        try:
+            erros_pendentes = conn.execute("""
+                SELECT COUNT(*) FROM erros_revisao er
+                JOIN questoes q ON q.id = er.questao_id
+                WHERE er.user_id = ? AND q.materia = ? AND er.proxima_revisao <= ?
+            """, (user_id, mat, today_str())).fetchone()[0]
+        except Exception:
+            pass
+
+        # === CALCULAR DOSE MÍNIMA ===
+        # Fórmula adaptativa baseada em performance
+        if pct_acerto >= 85 and pct_concluido >= 80:
+            # Matéria DOMINADA: apenas manutenção
+            categoria = "manutencao"
+            min_minutos = 15
+            max_minutos = 30
+            atividade_principal = "Revisão espaçada (flashcards + questões agendadas)"
+        elif pct_acerto >= 70:
+            # Matéria BOA: reforço leve
+            categoria = "reforco"
+            min_minutos = 25
+            max_minutos = 45
+            atividade_principal = "Questões de dificuldade média/difícil + revisão de erros"
+        elif pct_acerto >= 50:
+            # Matéria MEDIANA: investimento moderado
+            categoria = "investimento"
+            min_minutos = 40
+            max_minutos = 75
+            atividade_principal = "Teoria dos tópicos fracos + questões + flashcards novos"
+        elif total_q >= 5:
+            # Matéria FRACA (com dados): investimento pesado
+            categoria = "intensivo"
+            min_minutos = 60
+            max_minutos = 120
+            atividade_principal = "Teoria completa + muitas questões fáceis/médias + flashcards"
+        else:
+            # Matéria SEM DADOS: investimento inicial
+            categoria = "inicial"
+            min_minutos = 45
+            max_minutos = 90
+            atividade_principal = "Estudar teoria + resolver 10-15 questões para calibrar nível"
+
+        # Boost se tem revisões pendentes (FSRS pede revisão HOJE)
+        urgencia_boost = 0
+        if fc_pendentes > 5:
+            urgencia_boost += 10
+        if erros_pendentes > 3:
+            urgencia_boost += 10
+
+        materias_analise.append({
+            "materia": mat,
+            "categoria": categoria,
+            "min_minutos": min_minutos + urgencia_boost,
+            "max_minutos": max_minutos + urgencia_boost,
+            "pct_acerto": pct_acerto,
+            "pct_concluido": pct_concluido,
+            "total_questoes": total_q,
+            "fc_pendentes": fc_pendentes,
+            "erros_pendentes": erros_pendentes,
+            "atividade_principal": atividade_principal,
+        })
+
+    # === DISTRIBUIR tempo disponível ===
+    # Prioridade: intensivo > investimento > inicial > reforço > manutenção
+    prioridade_map = {"intensivo": 5, "inicial": 4, "investimento": 3, "reforco": 2, "manutencao": 1}
+    materias_analise.sort(key=lambda m: -prioridade_map.get(m["categoria"], 0))
+
+    # Distribuição proporcional ao peso da prioridade
+    total_peso = sum(prioridade_map.get(m["categoria"], 1) for m in materias_analise)
+    minutos_restantes = total_minutos
+
+    for m in materias_analise:
+        peso = prioridade_map.get(m["categoria"], 1)
+        proporcao = peso / total_peso
+        minutos_ideais = int(total_minutos * proporcao)
+        # Clamp entre min e max
+        minutos_alocados = max(m["min_minutos"], min(m["max_minutos"], minutos_ideais))
+        # Não exceder o disponível
+        minutos_alocados = min(minutos_alocados, minutos_restantes)
+        m["minutos_alocados"] = minutos_alocados
+        m["horas_alocadas"] = round(minutos_alocados / 60, 1)
+        minutos_restantes -= minutos_alocados
+
+    # Se sobrou tempo, distribuir para as mais necessitadas
+    if minutos_restantes > 0:
+        for m in materias_analise:
+            if m["categoria"] in ("intensivo", "investimento", "inicial"):
+                extra = min(minutos_restantes, m["max_minutos"] - m["minutos_alocados"])
+                m["minutos_alocados"] += extra
+                m["horas_alocadas"] = round(m["minutos_alocados"] / 60, 1)
+                minutos_restantes -= extra
+                if minutos_restantes <= 0:
+                    break
+
+    # Resumo
+    total_alocado = sum(m["minutos_alocados"] for m in materias_analise)
+    eficiencia = round(total_alocado / total_minutos * 100) if total_minutos > 0 else 0
+
+    return {
+        "horas_disponiveis": horas_disponiveis,
+        "total_minutos_alocados": total_alocado,
+        "eficiencia_pct": eficiencia,
+        "materias": materias_analise,
+        "resumo": {
+            "manutencao": len([m for m in materias_analise if m["categoria"] == "manutencao"]),
+            "reforco": len([m for m in materias_analise if m["categoria"] == "reforco"]),
+            "investimento": len([m for m in materias_analise if m["categoria"] == "investimento"]),
+            "intensivo": len([m for m in materias_analise if m["categoria"] == "intensivo"]),
+            "inicial": len([m for m in materias_analise if m["categoria"] == "inicial"]),
+        },
+        "dica": "Foque nos itens 'intensivo' e 'investimento' — são onde você ganha mais pontos na prova com menos tempo.",
+        "tecnica": "Minimum Effective Dose (Ericsson 1993): tempo de qualidade > quantidade bruta. Cada matéria tem um ponto ótimo onde mais estudo tem retorno decrescente. Acima de 85% de acerto, mantenha. Abaixo de 50%, invista pesado.",
+    }
+
+
+# ============================================================
+# IMPLEMENTATION INTENTIONS — Gollwitzer (1999)
+# Compromisso pré-sessão aumenta execução em 2-3x
+# ============================================================
+
+@router.post("/api/study-intelligence/intention", summary="Registrar Implementation Intention",
+             description="""Registra um micro-compromisso antes da sessão de estudo.
+Baseado em Gollwitzer (1999): 'Eu vou [ação] em [hora] no [local]'
+aumenta a probabilidade de execução em 2-3x comparado com apenas 'quero estudar'.""")
+def register_intention(
+    materia: str = Body(...),
+    duracao_min: int = Body(30),
+    atividade: str = Body("estudo"),
+    meta_especifica: str = Body(""),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Registra intenção de estudo (compromisso pré-sessão)."""
+    from datetime import datetime
+
+    # Garantir tabela existe
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS study_intentions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            materia TEXT NOT NULL,
+            duracao_min INTEGER NOT NULL,
+            atividade TEXT DEFAULT 'estudo',
+            meta_especifica TEXT DEFAULT '',
+            criado_em TEXT NOT NULL,
+            concluido INTEGER DEFAULT 0,
+            reflexao TEXT DEFAULT '',
+            real_duracao_min INTEGER DEFAULT 0,
+            real_acertos INTEGER DEFAULT 0,
+            real_questoes INTEGER DEFAULT 0
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_intentions_user ON study_intentions(user_id, criado_em)")
+
+    now = datetime.now().isoformat()
+    cur = conn.execute("""
+        INSERT INTO study_intentions (user_id, materia, duracao_min, atividade, meta_especifica, criado_em)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (user_id, materia, duracao_min, atividade, meta_especifica or "", now))
+    conn.commit()
+
+    return {
+        "id": cur.lastrowid,
+        "ok": True,
+        "mensagem": f"✅ Compromisso registrado: {duracao_min}min de {atividade} em {materia}",
+        "dica": "Agora COMECE. A intenção registrada aumenta sua chance de execução em 2-3x.",
+        "tecnica": "Implementation Intentions (Gollwitzer 1999): declarar especificamente O QUE, QUANDO e COMO reduz procrastinação e aumenta follow-through.",
+    }
+
+
+@router.post("/api/study-intelligence/intention/{id}/concluir", summary="Concluir sessão e confrontar com intenção")
+def concluir_intention(
+    id: int,
+    reflexao: str = Body(""),
+    real_duracao_min: int = Body(0),
+    real_acertos: int = Body(0),
+    real_questoes: int = Body(0),
+    nota_foco: int = Body(3, description="Autoavaliação 1-5 do foco durante sessão"),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Confronta o realizado com a intenção. Gera feedback metacognitivo."""
+    intention = conn.execute(
+        "SELECT * FROM study_intentions WHERE id = ? AND user_id = ?", (id, user_id)
+    ).fetchone()
+    if not intention:
+        raise HTTPException(status_code=404, detail="Intenção não encontrada")
+
+    conn.execute("""
+        UPDATE study_intentions SET
+            concluido = 1, reflexao = ?, real_duracao_min = ?,
+            real_acertos = ?, real_questoes = ?
+        WHERE id = ? AND user_id = ?
+    """, (reflexao, real_duracao_min, real_acertos, real_questoes, id, user_id))
+    conn.commit()
+
+    # Análise: comparar intenção vs realidade
+    planejado_min = intention["duracao_min"]
+    pct_cumprido = round(real_duracao_min / planejado_min * 100) if planejado_min > 0 else 0
+
+    if pct_cumprido >= 100:
+        status = "superou"
+        emoji = "🏆"
+        feedback = "Superou o planejado! Consistência é a chave."
+    elif pct_cumprido >= 80:
+        status = "cumpriu"
+        emoji = "✅"
+        feedback = "Meta cumprida! Bom trabalho."
+    elif pct_cumprido >= 50:
+        status = "parcial"
+        emoji = "⚠️"
+        feedback = "Parcialmente cumprido. O que impediu? Anote para a próxima."
+    else:
+        status = "nao_cumpriu"
+        emoji = "❌"
+        feedback = "Abaixo do planejado. Tente um compromisso menor amanhã (meta alcançável = motivação)."
+
+    # Histórico de cumprimento (últimos 7 dias)
+    try:
+        historico = conn.execute("""
+            SELECT COUNT(*) as total,
+                   SUM(CASE WHEN concluido = 1 AND real_duracao_min >= duracao_min * 0.8 THEN 1 ELSE 0 END) as cumpridos
+            FROM study_intentions
+            WHERE user_id = ? AND criado_em >= date('now', '-7 days')
+        """, (user_id,)).fetchall()
+        total_intencoes = historico[0]["total"] if historico else 0
+        cumpridos = historico[0]["cumpridos"] if historico else 0
+        taxa_cumprimento = round(cumpridos / total_intencoes * 100) if total_intencoes > 0 else 0
+    except Exception:
+        taxa_cumprimento = 0
+        total_intencoes = 0
+
+    return {
+        "status": status,
+        "emoji": emoji,
+        "feedback": feedback,
+        "pct_cumprido": pct_cumprido,
+        "planejado_min": planejado_min,
+        "real_min": real_duracao_min,
+        "taxa_cumprimento_7dias": taxa_cumprimento,
+        "total_intencoes_7dias": total_intencoes,
+        "sugestao_proxima": f"Tente {max(15, planejado_min - 10)}min amanhã" if status == "nao_cumpriu" else f"Mantenha {planejado_min}min ou aumente para {planejado_min + 10}min",
+        "tecnica": "Reflexão metacognitiva: confrontar intenção vs realidade calibra expectativas futuras e reduz o 'planning fallacy'.",
+    }
+
+
+@router.get("/api/study-intelligence/intention/hoje", summary="Intenções de hoje")
+def intencoes_hoje(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Retorna intenções registradas hoje (para exibir no dashboard)."""
+    hoje = today_str()
+    try:
+        rows = conn.execute("""
+            SELECT * FROM study_intentions
+            WHERE user_id = ? AND criado_em >= ? AND criado_em < date(?, '+1 day')
+            ORDER BY criado_em
+        """, (user_id, hoje, hoje)).fetchall()
+        intencoes = [dict(r) for r in rows]
+    except Exception:
+        intencoes = []
+
+    total = len(intencoes)
+    concluidas = sum(1 for i in intencoes if i.get("concluido"))
+    pendentes = total - concluidas
+
+    return {
+        "total": total,
+        "concluidas": concluidas,
+        "pendentes": pendentes,
+        "intencoes": intencoes,
+        "mensagem": f"📋 {concluidas}/{total} sessões concluídas hoje" if total > 0 else "Nenhum compromisso registrado hoje. Declare uma intenção para começar!",
+    }
