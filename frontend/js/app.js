@@ -5,7 +5,7 @@ import { initOfflineListeners, escapeHtml, confirmModal, toast, removeToast, sho
 import { switchTab, initTabs } from './modules/tabs.js';
 import { initShortcuts, goToEditalItem } from './modules/shortcuts.js';
 import { load, exportProgress, importProgress, uploadPdf, initPdfs } from './modules/pdfs.js';
-import { loadEdital, toggleTree, toggleAllEdital, selectEditalTopic, toggleEditalStatus, deleteEditalItem, addEdital, importEditalPdf, arquivarCargo, excluirCargo, arquivarConcurso, excluirConcurso, editarEdital, salvarEdicaoEdital, showArquivados, iniciarQuestoesPosEstudo, iniciarFlashPosEstudo, initEdital } from './modules/edital.js';
+import { loadEdital, toggleTree, toggleAllEdital, selectEditalTopic, toggleEditalStatus, deleteEditalItem, addEdital, importEditalPdf, arquivarCargo, excluirCargo, arquivarConcurso, excluirConcurso, editarEdital, salvarEdicaoEdital, showArquivados, iniciarQuestoesPosEstudo, iniciarFlashPosEstudo, showSpacingDetails, initEdital } from './modules/edital.js';
 import { loadCiclo, cicloTimerToggle, cicloTimerStop, importarCicloDoEdital, addCiclo, deleteCiclo, resetarCiclo, limparCiclo, initCiclo } from './modules/ciclo.js';
 import { loadFlashcardsToday, revealAnswer, reviewFlashcard, addFlashcard, loadAllFlashcards, toggleFlashGroup, iniciarSessaoFlash, sessaoNext, deleteFlashcard, openFlashEditModal, closeFlashEditModal, saveFlashEdit, initFlashcards, toggleGenerationMode, setFlashConfidence } from './modules/flashcards.js';
 import { loadSumulasToday, revealSumula, reviewSumula, addSumula, loadAllSumulas, iniciarSessaoSumulas, deleteSumula, editSumula, toggleSumulaGroup, initSumulas } from './modules/sumulas.js';
@@ -33,7 +33,7 @@ Object.assign(window, {
   deleteEditalItem, addEdital, importEditalPdf,
   arquivarCargo, excluirCargo, arquivarConcurso, excluirConcurso,
   editarEdital, salvarEdicaoEdital, showArquivados,
-  iniciarQuestoesPosEstudo, iniciarFlashPosEstudo,
+  iniciarQuestoesPosEstudo, iniciarFlashPosEstudo, showSpacingDetails,
   // Ciclo
   loadCiclo, cicloTimerToggle, cicloTimerStop, importarCicloDoEdital, addCiclo, deleteCiclo, resetarCiclo, limparCiclo,
   // Flashcards

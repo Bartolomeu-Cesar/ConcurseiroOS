@@ -48,6 +48,76 @@ export async function loadEdital() {
     }
   }
   renderEditalTree();
+  loadSpacingAlert();
+}
+
+async function loadSpacingAlert() {
+  try {
+    const data = await fetch('/api/spacing/resumo').then(r => r.json());
+    const el = document.getElementById('spacing-alert');
+    if (!el) return;
+
+    const pendentes = data.precisam_revisao || 0;
+    if (pendentes === 0) {
+      el.style.display = 'none';
+      return;
+    }
+
+    el.style.display = 'block';
+    const overdueText = data.overdue > 0 ? `<span style="color:var(--red);font-weight:600;">${data.overdue} atrasados</span>` : '';
+    const dueText = data.due > 0 ? `<span style="color:var(--yellow);">${data.due} na hora</span>` : '';
+    const separator = overdueText && dueText ? ' · ' : '';
+
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span style="font-size:1.2rem;">📐</span>
+        <div>
+          <div style="font-size:0.85rem;font-weight:600;">Spacing Calculator</div>
+          <div style="font-size:0.78rem;color:var(--text-sub);">
+            ${pendentes} tópico${pendentes > 1 ? 's' : ''} precisa${pendentes > 1 ? 'm' : ''} de revisão: ${overdueText}${separator}${dueText}
+          </div>
+        </div>
+        <button onclick="showSpacingDetails()" style="margin-left:auto;background:var(--accent);color:var(--bg);border:none;border-radius:6px;padding:5px 12px;font-size:0.78rem;font-weight:600;cursor:pointer;">Ver tópicos</button>
+      </div>`;
+  } catch (e) {}
+}
+
+export async function showSpacingDetails() {
+  try {
+    const data = await fetch('/api/spacing?apenas_pendentes=true').then(r => r.json());
+    const topicos = data.topicos || [];
+    if (topicos.length === 0) { toast('Nenhum tópico pendente de revisão.', 'info'); return; }
+
+    const urgencyColors = { overdue: 'var(--red)', due: 'var(--yellow)', soon: 'var(--blue)', ok: 'var(--green)' };
+    const urgencyLabels = { overdue: '⚠️ Atrasado', due: '🔔 Na hora', soon: '📅 Em breve', ok: '✅ OK' };
+
+    let html = topicos.slice(0, 20).map(t => `
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);">
+        <span style="color:${urgencyColors[t.urgency]};font-size:0.72rem;font-weight:600;min-width:70px;">${urgencyLabels[t.urgency]}</span>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:0.8rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.topico}</div>
+          <div style="font-size:0.68rem;color:var(--text-sub);">${t.materia} · Gap ideal: ${t.optimal_gap_dias}d · Última: ${t.days_since_review === 999 ? 'nunca' : t.days_since_review + 'd atrás'}</div>
+        </div>
+      </div>`).join('');
+
+    if (topicos.length > 20) html += `<div style="font-size:0.72rem;color:var(--text-sub);padding:8px 0;">...e mais ${topicos.length - 20} tópicos</div>`;
+
+    const modal = document.createElement('div');
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:9999;display:flex;align-items:center;justify-content:center;';
+    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+    modal.innerHTML = `
+      <div style="background:var(--bg-elevated);border-radius:16px;padding:20px;max-width:500px;width:92%;max-height:80vh;overflow-y:auto;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <h3 style="font-size:1rem;">📐 Tópicos para Revisão</h3>
+          <button onclick="this.closest('div[style*=fixed]').remove()" style="background:none;border:none;color:var(--text-sub);cursor:pointer;font-size:1.2rem;">✕</button>
+        </div>
+        <div style="font-size:0.78rem;color:var(--text-sub);margin-bottom:12px;">
+          Retenção desejada: <strong>${Math.round(data.desired_retention * 100)}%</strong> · ${data.overdue} atrasados · ${data.due} na hora
+        </div>
+        ${html}
+      </div>`;
+    document.body.appendChild(modal);
+  } catch (e) { toast('Erro ao carregar spacing', 'error'); }
 }
 
 function renderEditalTree() {
@@ -211,7 +281,43 @@ export async function toggleEditalStatus(id) {
   if (res.status === 'Concluído') {
     const topico = state.editalData.find(t => t.id === id);
     if (topico) ofereceQuestoesPosEstudo(topico.materia, topico.topico);
+    // Check milestones
+    checkMilestones();
   }
+}
+
+async function checkMilestones() {
+  try {
+    const data = await fetch('/api/milestones/check').then(r => r.json());
+    if (data.new_milestones && data.new_milestones.length > 0) {
+      // Atrasar para não conflitar com modal de tópico concluído
+      setTimeout(() => {
+        data.new_milestones.forEach(m => showMilestoneCelebration(m));
+      }, 2000);
+    }
+  } catch (e) {}
+}
+
+function showMilestoneCelebration(milestone) {
+  const overlay = document.createElement('div');
+  overlay.className = 'milestone-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;animation:fadeIn 0.3s ease;';
+  overlay.innerHTML = `
+    <div style="background:var(--bg-elevated);border-radius:20px;padding:32px;max-width:400px;width:90%;text-align:center;animation:scaleIn 0.4s ease;">
+      <div style="font-size:3rem;margin-bottom:12px;">${milestone.emoji}</div>
+      <h2 style="color:var(--accent);margin-bottom:8px;font-size:1.3rem;">${milestone.titulo}</h2>
+      <p style="color:var(--text);font-size:0.92rem;margin-bottom:6px;">${milestone.msg}</p>
+      <div style="font-size:2rem;font-weight:700;color:var(--green);margin:12px 0;">${milestone.pct}%</div>
+      <button onclick="this.closest('.milestone-overlay').remove()" 
+        style="background:var(--accent);color:var(--bg);border:none;border-radius:8px;padding:10px 24px;font-weight:600;cursor:pointer;font-size:0.9rem;">
+        Continuar 💪
+      </button>
+    </div>`;
+  document.body.appendChild(overlay);
+  // Confetti se disponível
+  if (typeof launchConfetti === 'function') launchConfetti();
+  // Auto-remove após 10s
+  setTimeout(() => overlay.remove(), 10000);
 }
 
 function ofereceQuestoesPosEstudo(materia, topico) {

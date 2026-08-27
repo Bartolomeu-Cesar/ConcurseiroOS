@@ -15,8 +15,8 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from routers import (
     adaptive, analytics, auth, bookmarks, cadernos, calendario, ciclo, dashboard,
-    desafios, edital, error_analysis, fatigue, feynman, flashcards, generation, misc, notas, notifications, pdf,
-    planejador, questoes, simulados, streaks, sumulas, treinador,
+    desafios, edital, error_analysis, fatigue, feynman, flashcards, generation, milestones, misc, notas, notifications, pdf,
+    planejador, questoes, simulados, spacing, streaks, sumulas, treinador,
     leagues, ai_tutor, social, batalha, admin, studyroom, study_intelligence, sidebar
 )
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -356,6 +356,8 @@ app.include_router(adaptive.router)
 app.include_router(misc.router)
 app.include_router(sidebar.router)
 app.include_router(error_analysis.router)
+app.include_router(milestones.router)
+app.include_router(spacing.router)
 
 # ============================================================
 # API VERSIONING — /api/v1/* → /api/* (307 redirect)
