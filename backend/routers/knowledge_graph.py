@@ -276,3 +276,187 @@ def suggest_dependencies(
     # Ordenar por confiança e limitar
     suggestions.sort(key=lambda s: -s["confidence"])
     return {"suggestions": suggestions[:limit], "total_available": len(suggestions)}
+
+
+# ============================================================
+# ORDEM ÓTIMA DE ESTUDO (Topological Sort + Scoring)
+# ============================================================
+
+@router.get("/optimal-order", summary="Ordem ótima de estudo",
+            description="""Calcula a ordem ideal para estudar os tópicos baseado em:
+1. Pré-requisitos (topological sort): não estude X antes de dominar Y
+2. Urgência (dias sem estudar, flashcards pendentes)
+3. Impacto (peso da matéria no edital, questões disponíveis)
+4. Status atual (priorizar não-iniciados com pré-requisitos satisfeitos)
+
+Retorna lista ordenada de tópicos com razão da priorização.""")
+def optimal_study_order(
+    materia: str = Query("", description="Filtrar por matéria (vazio = todas)"),
+    limit: int = Query(20, ge=5, le=50),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Calcula ordem ótima de estudo considerando dependências e performance."""
+    _ensure_table(conn)
+
+    # Buscar tópicos
+    query = "SELECT id, materia, topico, status, horas_estudadas FROM edital WHERE arquivado = 0 AND user_id = ?"
+    params = [user_id]
+    if materia:
+        query += " AND materia = ?"
+        params.append(materia)
+    query += " ORDER BY materia, id"
+
+    topicos = conn.execute(query, params).fetchall()
+    if not topicos:
+        return {"ordem": [], "mensagem": "Nenhum tópico no edital."}
+
+    topicos_map = {t["id"]: dict(t) for t in topicos}
+    topico_ids = set(topicos_map.keys())
+
+    # Buscar dependências (prerequisite)
+    deps = conn.execute("""
+        SELECT topic_id, depends_on_id FROM topic_dependencies
+        WHERE user_id = ? AND relationship = 'prerequisite'
+    """, (user_id,)).fetchall()
+
+    # Construir grafo de dependências
+    dependencias = {}  # topic_id → [depends_on_ids]
+    dependentes = {}   # depends_on_id → [topic_ids que dependem dele]
+    for d in deps:
+        tid = d["topic_id"]
+        dep_id = d["depends_on_id"]
+        if tid in topico_ids and dep_id in topico_ids:
+            dependencias.setdefault(tid, []).append(dep_id)
+            dependentes.setdefault(dep_id, []).append(tid)
+
+    # Topological sort (Kahn's algorithm)
+    in_degree = {tid: 0 for tid in topico_ids}
+    for tid, deps_list in dependencias.items():
+        in_degree[tid] = len(deps_list)
+
+    # Queue: tópicos sem pré-requisitos pendentes (in_degree = 0)
+    # Mas só se os pré-requisitos estão concluídos
+    queue = []
+    blocked = []
+
+    for tid in topico_ids:
+        if in_degree[tid] == 0:
+            queue.append(tid)
+        else:
+            # Verificar se pré-requisitos estão concluídos
+            prereqs = dependencias.get(tid, [])
+            all_done = all(topicos_map.get(p, {}).get("status") == "Concluído" for p in prereqs)
+            if all_done:
+                queue.append(tid)
+            else:
+                blocked.append(tid)
+
+    # Scoring para priorização dentro de cada nível do grafo
+    def _score_topico(tid):
+        t = topicos_map[tid]
+        score = 0
+
+        # Status: não iniciado > em andamento > concluído
+        if t["status"] == "Não iniciado":
+            score += 30
+        elif t["status"] == "Em andamento":
+            score += 20
+        elif t["status"] == "Concluído":
+            score += 0
+
+        # Quantos tópicos dependem deste (impacto de desbloqueio)
+        desbloqueios = len(dependentes.get(tid, []))
+        score += desbloqueios * 15  # Cada tópico desbloqueado = +15
+
+        # Horas estudadas (menos estudo = mais prioridade)
+        horas = t.get("horas_estudadas") or 0
+        if horas == 0:
+            score += 10
+        elif horas < 1:
+            score += 5
+
+        return score
+
+    # Ordenar queue por score (maior primeiro)
+    queue.sort(key=lambda tid: -_score_topico(tid))
+
+    # Gerar lista ordenada
+    ordem = []
+    visited = set()
+
+    for tid in queue:
+        if tid in visited:
+            continue
+        visited.add(tid)
+        t = topicos_map[tid]
+        prereqs = dependencias.get(tid, [])
+        prereqs_status = [
+            {"topico": topicos_map[p]["topico"], "status": topicos_map[p]["status"]}
+            for p in prereqs if p in topicos_map
+        ]
+
+        # Razão da priorização
+        razoes = []
+        if not prereqs:
+            razoes.append("Sem pré-requisitos (pode começar agora)")
+        elif all(topicos_map.get(p, {}).get("status") == "Concluído" for p in prereqs):
+            razoes.append("Pré-requisitos satisfeitos ✅")
+
+        desbloqueios = len(dependentes.get(tid, []))
+        if desbloqueios > 0:
+            razoes.append(f"Desbloqueia {desbloqueios} tópico(s) ao concluir")
+
+        if t["status"] == "Não iniciado":
+            razoes.append("Ainda não iniciado")
+        elif t["status"] == "Em andamento":
+            razoes.append("Em andamento — continue")
+
+        ordem.append({
+            "posicao": len(ordem) + 1,
+            "id": tid,
+            "materia": t["materia"],
+            "topico": t["topico"],
+            "status": t["status"],
+            "horas_estudadas": t.get("horas_estudadas") or 0,
+            "score": _score_topico(tid),
+            "prerequisites": prereqs_status,
+            "desbloqueios": desbloqueios,
+            "razao": " · ".join(razoes),
+        })
+
+    # Adicionar bloqueados no final (com aviso)
+    for tid in blocked:
+        if tid in visited:
+            continue
+        t = topicos_map[tid]
+        prereqs = dependencias.get(tid, [])
+        prereqs_nao_concluidos = [
+            topicos_map[p]["topico"]
+            for p in prereqs
+            if p in topicos_map and topicos_map[p]["status"] != "Concluído"
+        ]
+
+        ordem.append({
+            "posicao": len(ordem) + 1,
+            "id": tid,
+            "materia": t["materia"],
+            "topico": t["topico"],
+            "status": t["status"],
+            "horas_estudadas": t.get("horas_estudadas") or 0,
+            "score": 0,
+            "prerequisites": [{"topico": topicos_map[p]["topico"], "status": topicos_map[p]["status"]} for p in prereqs if p in topicos_map],
+            "desbloqueios": len(dependentes.get(tid, [])),
+            "razao": f"⚠️ BLOQUEADO: conclua primeiro: {', '.join(prereqs_nao_concluidos[:3])}",
+            "bloqueado": True,
+        })
+
+    return {
+        "ordem": ordem[:limit],
+        "total_topicos": len(topicos_map),
+        "total_desbloqueados": len(queue),
+        "total_bloqueados": len(blocked),
+        "mensagem": f"📊 {len(queue)} tópicos prontos para estudar, {len(blocked)} aguardando pré-requisitos.",
+        "dica": "Comece pelos tópicos no topo — eles desbloqueiam outros e não têm pré-requisitos pendentes.",
+        "tecnica": "Knowledge Graph + Topological Sort: estudar na ordem certa evita frustração (estudar algo que depende de conceito não dominado) e maximiza desbloqueio de conteúdo.",
+    }
