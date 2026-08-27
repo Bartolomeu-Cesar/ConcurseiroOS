@@ -57,14 +57,23 @@ export function cicloTimerToggle() {
     cicloStartedAt = null;
     btn.textContent = '▶ Continuar'; btn.style.background = '#fab387';
   } else {
-    if (cicloPaused) { cicloStartedAt = Date.now() - (cicloElapsed * 1000); }
-    else { cicloStartedAt = Date.now(); cicloElapsed = 0; }
-    cicloPaused = false;
-    cicloTimerInterval = setInterval(cicloTimerTick, 250);
-    btn.textContent = '⏸ Pausar'; btn.style.background = '#fab387';
-    stopBtn.style.display = 'inline-block';
-    cicloTimerTick();
+    // Se é início novo (não continuar), mostrar Retrieval Warmup
+    if (!cicloPaused && cicloProximoMateria) {
+      _showRetrievalWarmup(cicloProximoMateria, () => _startCicloTimer(btn, stopBtn));
+      return;
+    }
+    _startCicloTimer(btn, stopBtn);
   }
+}
+
+function _startCicloTimer(btn, stopBtn) {
+  if (cicloPaused) { cicloStartedAt = Date.now() - (cicloElapsed * 1000); }
+  else { cicloStartedAt = Date.now(); cicloElapsed = 0; }
+  cicloPaused = false;
+  cicloTimerInterval = setInterval(cicloTimerTick, 250);
+  btn.textContent = '⏸ Pausar'; btn.style.background = '#fab387';
+  stopBtn.style.display = 'inline-block';
+  cicloTimerTick();
 }
 
 function cicloTimerTick() {
@@ -187,6 +196,49 @@ export async function limparCiclo() {
   const res = await fetch('/api/ciclo/limpar', { method: 'DELETE' }).then(r => r.json());
   loadCiclo();
   toast(`Ciclo limpo! ${res.removidos} matérias removidas.`, 'success');
+}
+
+// Retrieval Warmup modal antes de iniciar estudo
+async function _showRetrievalWarmup(materia, onContinue) {
+  try {
+    const data = await fetch(`/api/study-intelligence/retrieval-warmup?materia=${encodeURIComponent(materia)}`).then(r => r.ok ? r.json() : null);
+    if (!data || !data.items || data.items.length === 0) {
+      // Sem warmup disponível, continuar direto
+      onContinue();
+      return;
+    }
+    // Mostrar modal de warmup
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(30,30,46,0.9);z-index:99999;display:flex;align-items:center;justify-content:center;overflow-y:auto;padding:20px;';
+    overlay.innerHTML = `
+      <div style="background:var(--bg-surface);border-radius:16px;padding:24px;max-width:440px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+        <div style="text-align:center;margin-bottom:12px;">
+          <span style="font-size:2rem;">⚡</span>
+          <h3 style="color:var(--text);margin:8px 0 4px;font-size:1rem;">Retrieval Warmup</h3>
+          <p style="font-size:0.78rem;color:var(--text-sub);margin:0;">${data.instrucao}</p>
+        </div>
+        <div style="margin-bottom:16px;">
+          ${data.items.map((item, i) => `
+            <div style="background:var(--bg);border-radius:8px;padding:10px;margin-bottom:8px;border-left:3px solid var(--accent);">
+              <div style="font-size:0.8rem;color:var(--text);font-weight:500;margin-bottom:4px;">${i+1}. ${item.pergunta || ''}</div>
+              <div class="warmup-answer" style="display:none;font-size:0.75rem;color:var(--green);padding:4px 8px;background:var(--bg-surface);border-radius:4px;margin-top:4px;">
+                ${item.resposta || item.tipo || ''}
+              </div>
+            </div>`).join('')}
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button onclick="document.querySelectorAll('.warmup-answer').forEach(a=>a.style.display='block')" style="flex:1;padding:10px;background:var(--border);color:var(--text);border:none;border-radius:8px;cursor:pointer;font-size:0.82rem;">👁 Ver Respostas</button>
+          <button id="warmup-continue-btn" style="flex:1;padding:10px;background:var(--green);color:#1e1e2e;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:0.82rem;">▶ Começar Estudo</button>
+        </div>
+        <div style="font-size:0.68rem;color:var(--text-sub);margin-top:8px;text-align:center;font-style:italic;">Testing Effect: tentar lembrar ANTES de estudar melhora retenção em ~50%</div>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.onclick = (e) => { if (e.target === overlay) { overlay.remove(); onContinue(); } };
+    document.getElementById('warmup-continue-btn').onclick = () => { overlay.remove(); onContinue(); };
+  } catch(e) {
+    // Erro no warmup não deve bloquear o estudo
+    onContinue();
+  }
 }
 
 export function initCiclo(deps) {

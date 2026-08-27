@@ -310,30 +310,24 @@ async function confirmarResposta() {
 
   loadStats();
 
-  // Blocked Practice Detection — alertar se 10+ questões da mesma matéria seguidas
-  const materia = document.querySelector('.questao-meta span')?.textContent || '';
-  if (materia) {
-    if (!window._blockedPracticeTracker) window._blockedPracticeTracker = [];
-    window._blockedPracticeTracker.push(materia);
-    // Manter últimas 15
-    if (window._blockedPracticeTracker.length > 15) window._blockedPracticeTracker.shift();
-    // Checar se as últimas 10 são a mesma matéria
-    const ultimas10 = window._blockedPracticeTracker.slice(-10);
-    if (ultimas10.length >= 10 && ultimas10.every(m => m === ultimas10[0]) && !sessionStorage.getItem('blocked_alert_' + ultimas10[0])) {
-      sessionStorage.setItem('blocked_alert_' + ultimas10[0], '1');
+  // Blocked Practice Detection — usar alerta do backend se disponível
+  if (res.alerta && res.alerta.tipo === 'blocked_practice') {
+    const alert = res.alerta;
+    if (!sessionStorage.getItem('blocked_alert_shown_today')) {
+      sessionStorage.setItem('blocked_alert_shown_today', '1');
       setTimeout(() => {
         const alertDiv = document.createElement('div');
-        alertDiv.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);background:#313244;border:2px solid #f9e2af;border-radius:12px;padding:16px 20px;z-index:99999;max-width:400px;box-shadow:0 8px 24px rgba(0,0,0,0.4);animation:slideDown 0.3s ease;';
+        alertDiv.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);background:#313244;border:2px solid #f9e2af;border-radius:12px;padding:16px 20px;z-index:99999;max-width:420px;box-shadow:0 8px 24px rgba(0,0,0,0.4);animation:slideDown 0.3s ease;';
         alertDiv.innerHTML = `
           <div style="display:flex;align-items:flex-start;gap:10px;">
             <span style="font-size:1.3rem;">🔀</span>
             <div>
               <div style="font-weight:600;color:#f9e2af;font-size:0.88rem;margin-bottom:4px;">Blocked Practice Detectada!</div>
-              <div style="font-size:0.78rem;color:#cdd6f4;line-height:1.4;">Você fez 10+ questões seguidas de <strong>${ultimas10[0]}</strong>. Intercalar matérias melhora retenção em 20-40% (Rohrer, 2012).</div>
-              <div style="display:flex;gap:8px;margin-top:8px;">
-                <button onclick="this.closest('div[style]').parentElement.parentElement.remove()" style="background:#f9e2af;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;font-size:0.78rem;font-weight:600;cursor:pointer;">🔀 Trocar matéria</button>
-                <button onclick="this.closest('div[style]').parentElement.parentElement.remove()" style="background:#45475a;color:#cdd6f4;border:none;border-radius:6px;padding:6px 12px;font-size:0.78rem;cursor:pointer;">Continuar</button>
-              </div>
+              <div style="font-size:0.78rem;color:#cdd6f4;line-height:1.4;">${alert.mensagem}</div>
+              ${alert.sugestao_materia ? `<div style="display:flex;gap:8px;margin-top:8px;">
+                <button onclick="document.getElementById('filtro-materia').value='${alert.sugestao_materia}';loadQuestoesResolver();this.closest('div[style*=position]').remove();" style="background:#f9e2af;color:#1e1e2e;border:none;border-radius:6px;padding:6px 12px;font-size:0.78rem;font-weight:600;cursor:pointer;">🔀 Ir para ${alert.sugestao_materia}</button>
+                <button onclick="this.closest('div[style*=position]').remove()" style="background:#45475a;color:#cdd6f4;border:none;border-radius:6px;padding:6px 12px;font-size:0.78rem;cursor:pointer;">Continuar</button>
+              </div>` : ''}
             </div>
           </div>`;
         document.body.appendChild(alertDiv);

@@ -1674,3 +1674,140 @@ window.gerarSimuladoAutomatico = async function() {
 };
 
 loadSimuladoPendente();
+
+
+// ============================================================
+// STUDY INTELLIGENCE WIDGETS (Sleep Consolidation + Milestones + Intentions)
+// ============================================================
+
+async function loadStudyIntelligenceWidgets() {
+  const box = document.getElementById('study-intelligence-box');
+  if (!box) return;
+
+  let html = '';
+
+  // 1. Sleep Consolidation (se no horário certo)
+  try {
+    const sc = await fetch('/api/study-intelligence/sleep-consolidation').then(r => r.ok ? r.json() : null);
+    if (sc && sc.modo !== 'fora_janela' && (sc.total_flashcards > 0 || sc.total_questoes > 0)) {
+      html += `
+        <div style="background:var(--bg-surface);border-radius:var(--radius-lg);padding:16px;margin-bottom:12px;border-left:4px solid ${sc.modo === 'noturno' ? 'var(--accent)' : 'var(--yellow)'};">
+          <div style="font-size:0.88rem;font-weight:700;color:var(--text);margin-bottom:6px;">${sc.modo === 'noturno' ? '🌙' : '☀️'} ${sc.modo === 'noturno' ? 'Revisão Pré-Sono' : 'Revisão Matinal'}</div>
+          <div style="font-size:0.78rem;color:var(--text-sub);margin-bottom:10px;">${sc.mensagem}</div>
+          ${sc.flashcards.length > 0 ? `<div style="margin-bottom:8px;">
+            <div style="font-size:0.72rem;color:var(--text-sub);margin-bottom:4px;">🧠 ${sc.total_flashcards} flashcards para consolidar:</div>
+            ${sc.flashcards.slice(0, 3).map(f => `<div style="font-size:0.75rem;color:var(--text);padding:4px 8px;background:var(--bg);border-radius:6px;margin-bottom:3px;">${f.pergunta?.substring(0, 60) || ''}${(f.pergunta?.length || 0) > 60 ? '...' : ''}</div>`).join('')}
+            ${sc.total_flashcards > 3 ? `<div style="font-size:0.7rem;color:var(--text-sub);">+${sc.total_flashcards - 3} mais</div>` : ''}
+          </div>` : ''}
+          ${sc.questoes.length > 0 ? `<div style="font-size:0.72rem;color:var(--text-sub);">❓ ${sc.total_questoes} questões erradas para revisar</div>` : ''}
+          <button onclick="window.location.href='/#flashcards'" style="margin-top:8px;background:var(--accent);color:#1e1e2e;border:none;border-radius:6px;padding:6px 14px;font-size:0.78rem;font-weight:600;cursor:pointer;">Revisar Agora</button>
+          ${sc.dica ? `<div style="font-size:0.68rem;color:var(--text-sub);margin-top:6px;font-style:italic;">${sc.dica}</div>` : ''}
+        </div>`;
+    }
+  } catch(e) {}
+
+  // 2. Milestones (próximos marcos)
+  try {
+    const ms = await fetch('/api/study-intelligence/milestones').then(r => r.ok ? r.json() : null);
+    if (ms && ms.proximos_marcos && ms.proximos_marcos.length > 0) {
+      html += `
+        <div style="background:var(--bg-surface);border-radius:var(--radius-lg);padding:16px;margin-bottom:12px;">
+          <div style="font-size:0.88rem;font-weight:700;color:var(--text);margin-bottom:8px;">🏆 Próximos Marcos</div>
+          ${ms.proximos_marcos.slice(0, 3).map(m => `
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+              <span style="font-size:1rem;">${m.icone}</span>
+              <div style="flex:1;">
+                <div style="font-size:0.78rem;color:var(--text);">${m.titulo}</div>
+                <div style="height:4px;background:var(--border);border-radius:2px;margin-top:3px;overflow:hidden;">
+                  <div style="height:100%;width:${m.pct}%;background:${m.pct >= 80 ? 'var(--green)' : m.pct >= 50 ? 'var(--yellow)' : 'var(--blue)'};border-radius:2px;transition:width 0.3s;"></div>
+                </div>
+              </div>
+              <span style="font-size:0.7rem;color:var(--text-sub);min-width:35px;text-align:right;">${m.pct}%</span>
+            </div>`).join('')}
+          ${ms.mensagem_motivacional ? `<div style="font-size:0.72rem;color:var(--accent);margin-top:6px;">${ms.mensagem_motivacional}</div>` : ''}
+        </div>`;
+    }
+  } catch(e) {}
+
+  // 3. Implementation Intentions (compromissos de hoje)
+  try {
+    const intentions = await fetch('/api/study-intelligence/intention/hoje').then(r => r.ok ? r.json() : null);
+    if (intentions) {
+      html += `
+        <div style="background:var(--bg-surface);border-radius:var(--radius-lg);padding:16px;margin-bottom:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <span style="font-size:0.88rem;font-weight:700;color:var(--text);">📋 Compromissos Hoje</span>
+            <span style="font-size:0.72rem;color:var(--text-sub);">${intentions.concluidas}/${intentions.total} feitos</span>
+          </div>
+          ${intentions.total === 0 ? `
+            <div style="font-size:0.78rem;color:var(--text-sub);margin-bottom:8px;">Nenhum compromisso registrado. Declare uma intenção para +200% execução!</div>
+            <button onclick="window._showIntentionModal()" style="background:var(--accent);color:#1e1e2e;border:none;border-radius:6px;padding:6px 14px;font-size:0.78rem;font-weight:600;cursor:pointer;">+ Nova Intenção</button>
+          ` : `
+            ${intentions.intencoes.slice(0, 3).map(i => `
+              <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);">
+                <span style="font-size:0.9rem;">${i.concluido ? '✅' : '⬜'}</span>
+                <div style="flex:1;font-size:0.78rem;color:var(--text);">${i.materia} · ${i.duracao_min}min · ${i.atividade}</div>
+              </div>`).join('')}
+            <button onclick="window._showIntentionModal()" style="margin-top:8px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 14px;font-size:0.75rem;cursor:pointer;">+ Adicionar</button>
+          `}
+        </div>`;
+    }
+  } catch(e) {}
+
+  if (html) box.innerHTML = html;
+}
+
+// Modal rápido para criar intenção
+window._showIntentionModal = function() {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(30,30,46,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:var(--bg-surface);border-radius:var(--radius-lg);padding:24px;max-width:360px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+      <h3 style="color:var(--text);margin:0 0 12px;font-size:1rem;">📋 Nova Intenção de Estudo</h3>
+      <div style="font-size:0.78rem;color:var(--text-sub);margin-bottom:12px;">Declare O QUE vai estudar para +200% chance de executar</div>
+      <select id="intention-materia" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);margin-bottom:8px;font-size:0.85rem;">
+        <option value="">Escolha a matéria...</option>
+      </select>
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
+        <input id="intention-duracao" type="number" value="30" min="10" max="180" style="flex:1;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85rem;">
+        <span style="align-self:center;font-size:0.8rem;color:var(--text-sub);">min</span>
+      </div>
+      <select id="intention-atividade" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);margin-bottom:12px;font-size:0.85rem;">
+        <option value="teoria">📖 Estudar teoria</option>
+        <option value="questoes">❓ Resolver questões</option>
+        <option value="revisao">🔄 Revisão (flashcards)</option>
+        <option value="simulado">📝 Simulado</option>
+      </select>
+      <div style="display:flex;gap:8px;">
+        <button onclick="this.closest('div[style*=fixed]').remove()" style="flex:1;padding:10px;background:var(--border);color:var(--text);border:none;border-radius:8px;cursor:pointer;">Cancelar</button>
+        <button onclick="window._saveIntention()" style="flex:1;padding:10px;background:var(--accent);color:#1e1e2e;border:none;border-radius:8px;cursor:pointer;font-weight:600;">Começar! 🚀</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  // Carregar matérias
+  fetch('/api/edital/materias-disponiveis').then(r => r.json()).then(mats => {
+    const sel = document.getElementById('intention-materia');
+    mats.forEach(m => { const opt = document.createElement('option'); opt.value = m; opt.textContent = m; sel.appendChild(opt); });
+  }).catch(() => {});
+};
+
+window._saveIntention = async function() {
+  const materia = document.getElementById('intention-materia').value;
+  const duracao = parseInt(document.getElementById('intention-duracao').value) || 30;
+  const atividade = document.getElementById('intention-atividade').value;
+  if (!materia) { alert('Escolha uma matéria'); return; }
+  try {
+    await fetch('/api/study-intelligence/intention', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ materia, duracao_min: duracao, atividade })
+    });
+    document.querySelector('div[style*="position:fixed"][style*="inset:0"]')?.remove();
+    _toastDash('✅ Compromisso registrado! Agora COMECE.');
+    loadStudyIntelligenceWidgets();
+  } catch(e) { _toastDash('Erro ao salvar intenção'); }
+};
+
+// Load on dashboard init
+setTimeout(loadStudyIntelligenceWidgets, 500);

@@ -487,6 +487,126 @@ export async function saveFlashEdit() {
   } catch(e) { toast('Erro ao salvar edição', 'error'); }
 }
 
+// ============================================================
+// BOSS BATTLE MODE — Gamified Flashcard Review
+// ============================================================
+
+let _bossBattle = null;
+
+export async function startBossBattle() {
+  try {
+    const data = await fetch('/api/study-intelligence/boss-battle').then(r => r.json());
+    if (!data.boss || !data.cards.length) {
+      toast(data.mensagem || 'Sem flashcards pendentes para batalha!', 'info');
+      return;
+    }
+    _bossBattle = {
+      boss: data.boss,
+      cards: data.cards,
+      dano_map: data.dano_map,
+      index: 0,
+      danoTotal: 0,
+      stats: { easy: 0, good: 0, hard: 0, again: 0 },
+    };
+    _renderBossBattle();
+    toast(`⚔️ ${data.boss.emoji} ${data.boss.nome} apareceu!`, 'warning', 3000);
+  } catch(e) { toast('Erro ao iniciar Boss Battle', 'error'); }
+}
+
+function _renderBossBattle() {
+  const b = _bossBattle;
+  if (!b) return;
+  const q = document.getElementById('flash-question'), a = document.getElementById('flash-answer');
+  const rb = document.getElementById('flash-reveal-btn'), rv = document.getElementById('flash-review-btns');
+  const progressEl = document.getElementById('flash-progress');
+
+  // Boss HP bar
+  const hpPct = Math.max(0, Math.round((b.boss.hp_atual - b.danoTotal) / b.boss.hp_total * 100));
+  const hpColor = hpPct > 50 ? 'var(--red)' : hpPct > 25 ? 'var(--peach)' : 'var(--green)';
+
+  if (progressEl) {
+    progressEl.style.display = 'block';
+    document.getElementById('flash-progress-text').textContent = `⚔️ ${b.boss.emoji} ${b.boss.nome} — HP: ${Math.max(0, b.boss.hp_total - b.danoTotal)}/${b.boss.hp_total}`;
+    document.getElementById('flash-progress-pct').textContent = `${b.index}/${b.cards.length}`;
+    document.getElementById('flash-progress-bar').style.width = `${100 - hpPct}%`;
+    document.getElementById('flash-progress-bar').style.background = hpPct > 50 ? 'var(--blue)' : hpPct > 25 ? 'var(--peach)' : 'var(--green)';
+  }
+
+  // Boss derrotado?
+  if (b.danoTotal >= b.boss.hp_total || b.index >= b.cards.length) {
+    const derrotou = b.danoTotal >= b.boss.hp_total;
+    q.innerHTML = derrotou
+      ? `<div style="text-align:center;"><span style="font-size:2.5rem;">🏆</span><br><strong style="color:var(--green);font-size:1.2rem;">BOSS DERROTADO!</strong><br><span style="color:var(--text-sub);">${b.boss.emoji} ${b.boss.nome} foi eliminado!</span></div>`
+      : `<div style="text-align:center;"><span style="font-size:2.5rem;">😤</span><br><strong style="color:var(--peach);font-size:1.1rem;">Boss sobreviveu!</strong><br><span style="color:var(--text-sub);">HP restante: ${b.boss.hp_total - b.danoTotal}. Volte amanhã!</span></div>`;
+    a.style.display = 'none'; rb.style.display = 'none'; rv.style.display = 'none';
+    // Registrar resultado
+    fetch('/api/study-intelligence/boss-battle/resultado', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ boss_tier: b.boss.tier || 1, boss_hp_total: b.boss.hp_total, dano_total: b.danoTotal, cards_revisados: b.index, acertos_easy: b.stats.easy, acertos_good: b.stats.good, acertos_hard: b.stats.hard, erros_again: b.stats.again, derrotou })
+    }).catch(() => {});
+    _bossBattle = null;
+    return;
+  }
+
+  // Mostrar card atual
+  const card = b.cards[b.index];
+  q.innerHTML = `<div style="text-align:center;margin-bottom:6px;font-size:0.72rem;color:var(--text-sub);">⚔️ Card ${b.index + 1}/${b.cards.length} | Dano total: ${b.danoTotal}</div>` +
+    `<div style="font-size:0.95rem;color:var(--text);">${card.pergunta}</div>`;
+  a.style.display = 'none';
+  rb.style.display = 'inline-block';
+  rv.style.display = 'none';
+
+  // Override reveal para boss mode
+  rb.onclick = function() {
+    // Buscar resposta do card
+    fetch(`/api/flashcards?page=1&limit=1`).catch(() => {});
+    // Mostrar resposta (precisa buscar do servidor)
+    fetch(`/api/flashcards`).then(r => r.json()).then(all => {
+      const fullCard = (Array.isArray(all) ? all : all.items || []).find(c => c.id === card.id);
+      a.textContent = fullCard ? fullCard.resposta : '(resposta)';
+      a.style.display = 'block';
+      rb.style.display = 'none';
+      rv.style.display = 'flex';
+      rv.innerHTML = `
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;width:100%;">
+          <button onclick="bossBattleReview(1)" style="background:var(--red);color:var(--bg);border:none;border-radius:6px;padding:8px 4px;font-size:0.72rem;font-weight:600;cursor:pointer;">💨 Miss<br>5dmg</button>
+          <button onclick="bossBattleReview(2)" style="background:var(--peach);color:var(--bg);border:none;border-radius:6px;padding:8px 4px;font-size:0.72rem;font-weight:600;cursor:pointer;">⚔️ Fraco<br>15dmg</button>
+          <button onclick="bossBattleReview(3)" style="background:var(--blue);color:var(--bg);border:none;border-radius:6px;padding:8px 4px;font-size:0.72rem;font-weight:600;cursor:pointer;">🗡️ Forte<br>30dmg</button>
+          <button onclick="bossBattleReview(4)" style="background:var(--green);color:var(--bg);border:none;border-radius:6px;padding:8px 4px;font-size:0.72rem;font-weight:600;cursor:pointer;">💥 Critical<br>50dmg</button>
+        </div>`;
+    }).catch(() => { a.textContent = '(erro ao carregar)'; a.style.display = 'block'; });
+  };
+}
+
+export async function bossBattleReview(rating) {
+  if (!_bossBattle) return;
+  const card = _bossBattle.cards[_bossBattle.index];
+  const dano = _bossBattle.dano_map[rating] || 0;
+  _bossBattle.danoTotal += dano;
+
+  // Track stats
+  if (rating === 4) _bossBattle.stats.easy++;
+  else if (rating === 3) _bossBattle.stats.good++;
+  else if (rating === 2) _bossBattle.stats.hard++;
+  else _bossBattle.stats.again++;
+
+  // Review the flashcard via FSRS
+  const quality = {1: 0, 2: 2, 3: 4, 4: 5}[rating] || 3;
+  try {
+    await fetch(`/api/flashcards/${card.id}/review-fsrs`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ quality })
+    });
+  } catch(e) {}
+
+  // Feedback visual rápido
+  const msgs = ['💨 Miss! 5 dano', '⚔️ 15 dano!', '🗡️ 30 dano!', '💥 CRITICAL! 50 dano!'];
+  toast(msgs[rating - 1], rating >= 3 ? 'success' : 'warning', 1500);
+
+  _bossBattle.index++;
+  _renderBossBattle();
+}
+
 export function initFlashcards(deps) {
   _loadMetas = deps.loadMetas;
   _loadStreakBadge = deps.loadStreakBadge;
