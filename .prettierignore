@@ -1,0 +1,5 @@
+node_modules/
+backend/
+frontend/pdfjs/
+frontend/src/
+*.db

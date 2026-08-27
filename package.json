@@ -1,27 +1,34 @@
 {
-  "name": "leitorpdf",
-  "version": "1.0.0",
-  "description": "Aplicação web para leitura de PDFs organizados em pastas, com rastreamento de progresso por arquivo e por pasta.",
+  "name": "concurseiro-os",
+  "version": "2.4.0",
+  "description": "Sistema de estudos para concursos públicos — PWA offline-first.",
   "main": "index.js",
+  "type": "module",
   "scripts": {
-    "build": "cd frontend && tsc --noEmitOnError false",
-    "watch": "cd frontend && tsc --watch --noEmitOnError false",
+    "lint": "eslint frontend/",
+    "lint:fix": "eslint frontend/ --fix",
+    "format": "prettier --write 'frontend/**/*.{js,css,html}'",
+    "format:check": "prettier --check 'frontend/**/*.{js,css,html}'",
     "typecheck": "cd frontend && tsc --noEmit",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "cd backend && python3 -m pytest"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Bartolomeu-Cesar/ConcurseiroOS.git"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": ["educação", "concursos", "pwa", "spaced-repetition"],
+  "author": "Bartolomeu César",
   "license": "ISC",
-  "type": "commonjs",
   "bugs": {
     "url": "https://github.com/Bartolomeu-Cesar/ConcurseiroOS/issues"
   },
   "homepage": "https://github.com/Bartolomeu-Cesar/ConcurseiroOS#readme",
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.11.0",
+    "prettier": "^3.9.6",
     "typescript": "^5.9.3"
   }
 }
