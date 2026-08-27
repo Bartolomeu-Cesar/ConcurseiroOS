@@ -92,7 +92,7 @@ function renderNodes(nodes, container, bulk, prefix) {
       const vinculado = state.editalData.find(e => e.pdf_link === path);
       const materiaTag = vinculado ? `<span class="pdf-materia-tag">${escapeHtml(vinculado.materia)}</span>` : '';
       const linkBtn = vinculado
-        ? `<button class="pdf-link-disc-btn pdf-unlink" onclick="event.stopPropagation();unlinkPdf('${path.replace(/'/g, "\\'")}')" title="Desvincular disciplina">❌</button>`
+        ? `<button class="pdf-link-disc-btn pdf-unlink" onclick="event.stopPropagation();unlinkPdf('${path.replace(/'/g, "\\'")}')" title="Desvincular disciplina" aria-label="Desvincular disciplina">❌</button>`
         : `<button class="pdf-link-disc-btn" onclick="event.stopPropagation();linkPdfToDisc('${path.replace(/'/g, "\\'")}')" title="Vincular a disciplina">🔗</button>`;
       const div = document.createElement('div');
       div.innerHTML = `

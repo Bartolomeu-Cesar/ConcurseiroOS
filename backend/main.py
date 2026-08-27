@@ -17,7 +17,7 @@ from routers import (
     adaptive, analytics, auth, bookmarks, cadernos, calendario, ciclo, dashboard,
     desafios, edital, fatigue, feynman, flashcards, generation, misc, notas, notifications, pdf,
     planejador, questoes, simulados, streaks, sumulas, treinador,
-    leagues, ai_tutor, social, batalha, admin, studyroom, study_intelligence
+    leagues, ai_tutor, social, batalha, admin, studyroom, study_intelligence, sidebar
 )
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
@@ -354,6 +354,7 @@ app.include_router(study_intelligence.router)
 app.include_router(fatigue.router)
 app.include_router(adaptive.router)
 app.include_router(misc.router)
+app.include_router(sidebar.router)
 
 # ============================================================
 # API VERSIONING — /api/v1/* → /api/* (307 redirect)

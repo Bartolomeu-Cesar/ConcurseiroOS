@@ -614,7 +614,7 @@ async function loadCalendario() {
             html += `<button class="cal-pomo-btn" onclick="startPomodoro('${pomoLabel.replace(/'/g, "\\'")}', ${ativ.tempo_min}, '${ativ.tipo}')" title="Iniciar Timer">▶</button>`;
           }
           if ((calendarMode !== 'auto') && ativ.id) {
-            html += `<button class="cal-delete-btn" onclick="removeCalItem(${ativ.id})">❌</button>`;
+            html += `<button class="cal-delete-btn" onclick="removeCalItem(${ativ.id})" aria-label="Remover atividade">❌</button>`;
           }
           html += `</div>`;
         }

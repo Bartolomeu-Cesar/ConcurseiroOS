@@ -126,8 +126,19 @@
     </nav>
   `;
 
-  // Inject sidebar before body content
-  document.body.insertAdjacentHTML('afterbegin', sidebarHTML);
+  // Inject skip-link for accessibility (all pages)
+  if (!document.querySelector('.skip-link')) {
+    const skipTarget = document.getElementById('page-content') ? '#page-content' : '#main-content';
+    document.body.insertAdjacentHTML('afterbegin', `<a href="${skipTarget}" class="skip-link">Pular para conteúdo</a>`);
+  }
+
+  // Inject sidebar after skip-link
+  const skipEl = document.querySelector('.skip-link');
+  if (skipEl) {
+    skipEl.insertAdjacentHTML('afterend', sidebarHTML);
+  } else {
+    document.body.insertAdjacentHTML('afterbegin', sidebarHTML);
+  }
 
   // Wrap existing content in main-content div if not already wrapped
   if (!document.querySelector('.main-content')) {
@@ -135,11 +146,14 @@
     const children = [];
     Array.from(document.body.children).forEach(el => {
       if (el.classList.contains('sidebar') || el.classList.contains('sidebar-overlay')) return;
+      if (el.classList.contains('skip-link')) return;
+      if (el.id === 'bottom-nav' || el.classList.contains('bottom-nav')) return;
       if (el.tagName === 'SCRIPT') { scripts.push(el); return; }
       children.push(el);
     });
     const wrapper = document.createElement('div');
     wrapper.className = 'main-content';
+    wrapper.id = 'main-content';
     children.forEach(child => wrapper.appendChild(child));
     // Insert before scripts
     if (scripts.length > 0) {
@@ -147,6 +161,10 @@
     } else {
       document.body.appendChild(wrapper);
     }
+  } else {
+    // Ensure existing wrapper has id for skip-link target
+    const existing = document.querySelector('.main-content');
+    if (existing && !existing.id) existing.id = 'main-content';
   }
 
   // Add collapsed class to body if saved
@@ -168,76 +186,66 @@
   }
 
   // Load streak/XP/freezes
-  fetch('/api/streaks').then(r => r.json()).then(data => {
+  // Restore cached sidebar data immediately (prevents flicker between pages)
+  const cachedSidebar = JSON.parse(localStorage.getItem('sidebar_data') || '{}');
+  if (cachedSidebar.streak !== undefined) {
     const el = document.getElementById('sidebar-streak');
-    if (el) el.textContent = data.streak_atual || 0;
-  }).catch(() => {});
-
-  fetch('/api/gamification').then(r => r.json()).then(data => {
+    if (el) el.textContent = cachedSidebar.streak || 0;
+  }
+  if (cachedSidebar.nivel) {
     const el = document.getElementById('sidebar-xp');
-    if (el) el.textContent = `⭐ Nv.${data.nivel || 1}`;
-  }).catch(() => {});
-
-  fetch('/api/streak-freeze').then(r => r.json()).then(data => {
+    if (el) el.textContent = `⭐ Nv.${cachedSidebar.nivel}`;
+  }
+  if (cachedSidebar.freezes_available !== undefined) {
     const el = document.getElementById('sidebar-freeze-count');
-    if (el) el.textContent = data.freezes_available || 0;
-  }).catch(() => {});
+    if (el) el.textContent = cachedSidebar.freezes_available;
+  }
+  if (cachedSidebar.badges) {
+    const b = cachedSidebar.badges;
+    const elF = document.getElementById('badge-flashcards');
+    const elS = document.getElementById('badge-sumulas');
+    const elC = document.getElementById('badge-caderno-erros');
+    const elBnav = document.getElementById('bnav-badge-praticar');
+    if (elF) elF.textContent = b.flashcards > 0 ? b.flashcards : '';
+    if (elS) elS.textContent = b.sumulas > 0 ? b.sumulas : '';
+    if (elC) elC.textContent = b.caderno > 0 ? b.caderno : '';
+    if (elBnav) elBnav.textContent = b.flashcards > 0 ? b.flashcards : '';
+  }
 
-  // Load badges (pending counts) - slight delay to ensure sidebar DOM is ready
-  setTimeout(() => {
-    // Restore cached badges immediately (prevents flicker between pages)
-    const cachedBadges = JSON.parse(localStorage.getItem('sidebar_badges') || '{}');
-    if (cachedBadges.flashcards) {
-      const el = document.getElementById('badge-flashcards');
-      if (el) el.textContent = cachedBadges.flashcards;
-    }
-    if (cachedBadges.sumulas) {
-      const el = document.getElementById('badge-sumulas');
-      if (el) el.textContent = cachedBadges.sumulas;
-    }
-    if (cachedBadges.caderno) {
-      const el = document.getElementById('badge-caderno-erros');
-      if (el) el.textContent = cachedBadges.caderno;
-    }
+  // Single consolidated fetch for all sidebar data
+  fetch('/api/sidebar-data').then(r => r.json()).then(data => {
+    // Streak
+    const elStreak = document.getElementById('sidebar-streak');
+    if (elStreak) elStreak.textContent = data.streak || 0;
 
-    // Then fetch fresh data
-    const badges = {};
+    // Level
+    const elXp = document.getElementById('sidebar-xp');
+    if (elXp) elXp.textContent = `⭐ Nv.${data.nivel || 1}`;
 
-    fetch('/api/flashcards/today').then(r => r.json()).then(data => {
-      const count = data.length || 0;
-      const el = document.getElementById('badge-flashcards');
-      const bnavEl = document.getElementById('bnav-badge-praticar');
-      if (el) el.textContent = count > 0 ? count : '';
-      if (bnavEl) bnavEl.textContent = count > 0 ? count : '';
-      badges.flashcards = count > 0 ? String(count) : '';
-      localStorage.setItem('sidebar_badges', JSON.stringify({...cachedBadges, ...badges}));
-    }).catch(() => {});
+    // Freezes
+    const elFreeze = document.getElementById('sidebar-freeze-count');
+    if (elFreeze) elFreeze.textContent = data.freezes_available || 0;
 
-    fetch('/api/sumulas/today').then(r => r.json()).then(data => {
-      const count = Array.isArray(data) ? data.length : (data.pendentes || 0);
-      const el = document.getElementById('badge-sumulas');
-      if (el) el.textContent = count > 0 ? count : '';
-      badges.sumulas = count > 0 ? String(count) : '';
-      localStorage.setItem('sidebar_badges', JSON.stringify({...cachedBadges, ...badges}));
-    }).catch(() => {});
+    // Badges
+    const b = data.badges || {};
+    const elF = document.getElementById('badge-flashcards');
+    const elS = document.getElementById('badge-sumulas');
+    const elC = document.getElementById('badge-caderno-erros');
+    const elBnav = document.getElementById('bnav-badge-praticar');
+    if (elF) elF.textContent = b.flashcards > 0 ? b.flashcards : '';
+    if (elS) elS.textContent = b.sumulas > 0 ? b.sumulas : '';
+    if (elC) elC.textContent = b.caderno > 0 ? b.caderno : '';
+    if (elBnav) elBnav.textContent = b.flashcards > 0 ? b.flashcards : '';
 
-    // Badge: Caderno de Erros (pendentes hoje)
-    fetch('/api/questoes/erros/caderno').then(r => r.json()).then(data => {
-      const count = data.pendentes_hoje ? data.pendentes_hoje.length : (Array.isArray(data) ? data.length : 0);
-      const el = document.getElementById('badge-caderno-erros');
-      if (el) el.textContent = count > 0 ? count : '';
-      badges.caderno = count > 0 ? String(count) : '';
-      localStorage.setItem('sidebar_badges', JSON.stringify({...cachedBadges, ...badges}));
-    }).catch(() => {});
-  }, 100);
-
-  // CTA: load suggested materia for quick session
-  fetch('/api/treinador/sugestao-rapida').then(r => r.json()).then(data => {
+    // CTA sugestão
     const cta = document.getElementById('sidebar-cta');
-    if (cta && data.materia) {
-      cta.setAttribute('data-materia', data.materia);
-      cta.setAttribute('data-tempo', data.tempo_min || 25);
+    if (cta && data.sugestao && data.sugestao.materia) {
+      cta.setAttribute('data-materia', data.sugestao.materia);
+      cta.setAttribute('data-tempo', data.sugestao.tempo_min || 25);
     }
+
+    // Cache for next page load
+    localStorage.setItem('sidebar_data', JSON.stringify(data));
   }).catch(() => {});
 
   // Global functions

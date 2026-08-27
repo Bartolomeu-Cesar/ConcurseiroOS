@@ -470,7 +470,7 @@ async function loadNotesForPage() {
           <div style="font-size:0.82rem;color:#cdd6f4;line-height:1.5;white-space:pre-wrap;">${n.conteudo}</div>
           <div style="display:flex;justify-content:space-between;margin-top:6px;">
             <span style="font-size:0.7rem;color:#585b70;">${n.created_at?.split('T')[0] || ''}</span>
-            <button onclick="deleteNote(${n.id})" style="background:none;border:none;color:#f38ba855;cursor:pointer;font-size:0.75rem;">🗑</button>
+            <button onclick="deleteNote(${n.id})" style="background:none;border:none;color:#f38ba855;cursor:pointer;font-size:0.75rem;" aria-label="Excluir nota">🗑</button>
           </div>
         </div>
       `).join('');

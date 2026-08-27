@@ -88,7 +88,7 @@ function renderEditalTree() {
         <div class="tree-bar"><div class="tree-bar-fill" style="width:${concPct}%"></div></div>
         <button class="tree-archive-btn" onclick="event.stopPropagation();editarEdital('${concurso.replace(/'/g, "\\'")}')" title="Editar metadados">✏️</button>
         <button class="tree-archive-btn" onclick="event.stopPropagation();arquivarConcurso('${concurso.replace(/'/g, "\\'")}')" title="Arquivar concurso inteiro">📦</button>
-        <button class="tree-archive-btn tree-excluir-btn" onclick="event.stopPropagation();excluirConcurso('${concurso.replace(/'/g, "\\'")}')" title="Excluir concurso inteiro">🗑</button>
+        <button class="tree-archive-btn tree-excluir-btn" onclick="event.stopPropagation();excluirConcurso('${concurso.replace(/'/g, "\\'")}')" title="Excluir concurso inteiro" aria-label="Excluir concurso">🗑</button>
       </div>
       <div class="tree-children ${concOpen ? 'open' : ''}">`;
     const cargos = Object.keys(tree[concurso]).sort();
@@ -113,7 +113,7 @@ function renderEditalTree() {
           <span class="tree-stats">${cargoDone}/${cargoItems.length}</span>
           <div class="tree-bar"><div class="tree-bar-fill" style="width:${cargoPct}%"></div></div>
           <button class="tree-archive-btn" onclick="event.stopPropagation();arquivarCargo('${concurso.replace(/'/g, "\\'")}','${cargo.replace(/'/g, "\\'")}')\" title="Arquivar">📦</button>
-          <button class="tree-archive-btn tree-excluir-btn" onclick="event.stopPropagation();excluirCargo('${concurso.replace(/'/g, "\\'")}','${cargo.replace(/'/g, "\\'")}')\" title="Excluir permanentemente">🗑</button>
+          <button class="tree-archive-btn tree-excluir-btn" onclick="event.stopPropagation();excluirCargo('${concurso.replace(/'/g, "\\'")}','${cargo.replace(/'/g, "\\'")}')\" title="Excluir permanentemente" aria-label="Excluir cargo">🗑</button>
         </div>
         <div class="tree-children ${cargoOpen ? 'open' : ''}">`;
       if (info) {

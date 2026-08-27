@@ -1,4 +1,5 @@
 """Router do Dashboard principal."""
+import time
 from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends
@@ -10,10 +11,27 @@ from utils import today_str
 
 router = APIRouter(prefix="", tags=["Dashboard"])
 
+# Simple TTL cache for dashboard stats (30s per user)
+_dashboard_cache: dict = {}  # {user_id: {"data": ..., "ts": time.time()}}
+_CACHE_TTL = 30  # seconds
+
+
+def _invalidate_dashboard_cache(user_id: int = None):
+    """Invalida cache do dashboard. Chamar após mutations que afetam stats."""
+    if user_id:
+        _dashboard_cache.pop(user_id, None)
+    else:
+        _dashboard_cache.clear()
+
 
 @router.get("/api/dashboard", response_model=DashboardResponse, summary="Dashboard principal",
             description="Retorna métricas consolidadas do estudo: horas por dia (últimos 14 dias), progresso do edital, questões respondidas com percentual de acerto, evolução diária, distribuição por matéria e flashcards pendentes.")
 def get_dashboard(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    # Check TTL cache
+    cached = _dashboard_cache.get(user_id)
+    if cached and (time.time() - cached["ts"]) < _CACHE_TTL:
+        return cached["data"]
+
     # Horas por dia (últimos 14 dias)
     horas_dia = conn.execute("""
         SELECT data, SUM(horas) as total_horas
@@ -133,7 +151,7 @@ def get_dashboard(conn=Depends(get_db_session), user_id: int = Depends(get_user_
         "SELECT COALESCE(SUM(flashcards_revisados), 0) FROM streaks WHERE user_id = ?", (user_id,)
     ).fetchone()[0]
 
-    return {
+    result = {
         "horas_por_dia": [dict(r) for r in horas_dia],
         "total_horas": round(total_horas, 1),
         "horas_estudo": horas_estudo,
@@ -151,3 +169,7 @@ def get_dashboard(conn=Depends(get_db_session), user_id: int = Depends(get_user_
         "horas_por_materia": [dict(r) for r in horas_materia],
         "flashcards": {"pendentes": flashcards_pendentes, "total": flashcards_total, "revisados_total": flashcards_revisados_total}
     }
+
+    # Store in cache
+    _dashboard_cache[user_id] = {"data": result, "ts": time.time()}
+    return result

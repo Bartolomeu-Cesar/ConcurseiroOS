@@ -301,11 +301,11 @@ export async function loadAllFlashcards() {
               <span><span class="flash-chevron" id="chev-${matId}">▶</span> 📚 ${mat} (${cards.length})</span>
             </div>
             <div id="${matId}" style="display:none;">`;
-          html += cards.map(c => `<div class="flash-list-item"><span style="flex:1;color:#cdd6f4;">${escapeHtml(c.pergunta)}</span><button class="flash-list-edit" onclick="openFlashEditModal(${c.id})" title="Editar">✏️</button><button class="flash-list-delete" onclick="deleteFlashcard(${c.id})">🗑</button></div>`).join('');
+          html += cards.map(c => `<div class="flash-list-item"><span style="flex:1;color:#cdd6f4;">${escapeHtml(c.pergunta)}</span><button class="flash-list-edit" onclick="openFlashEditModal(${c.id})" title="Editar" aria-label="Editar flashcard">✏️</button><button class="flash-list-delete" onclick="deleteFlashcard(${c.id})" aria-label="Excluir flashcard">🗑</button></div>`).join('');
           html += '</div></div>';
         }
       } else {
-        html = all.map(c => `<div class="flash-list-item"><span style="flex:1;color:#cdd6f4;">${escapeHtml(c.pergunta)}</span><button class="flash-list-edit" onclick="openFlashEditModal(${c.id})" title="Editar">✏️</button><button class="flash-list-delete" onclick="deleteFlashcard(${c.id})">🗑</button></div>`).join('');
+        html = all.map(c => `<div class="flash-list-item"><span style="flex:1;color:#cdd6f4;">${escapeHtml(c.pergunta)}</span><button class="flash-list-edit" onclick="openFlashEditModal(${c.id})" title="Editar" aria-label="Editar flashcard">✏️</button><button class="flash-list-delete" onclick="deleteFlashcard(${c.id})" aria-label="Excluir flashcard">🗑</button></div>`).join('');
       }
       document.getElementById('flash-list').innerHTML = html;
     }

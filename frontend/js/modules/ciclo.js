@@ -37,7 +37,7 @@ export async function loadCiclo() {
         <div class="ciclo-bar"><div class="ciclo-bar-fill" style="width:${pct}%;${pct >= 100 ? 'background:#a6e3a1;' : ''}"></div></div>
         <span class="ciclo-pct">${Math.round(pct)}%</span>
         <span class="ciclo-hours">${c.horas_cumpridas.toFixed(1)}h / ${c.horas_alvo.toFixed(1)}h</span>
-        <button class="ciclo-delete" onclick="deleteCiclo(${c.id})">🗑</button>
+        <button class="ciclo-delete" onclick="deleteCiclo(${c.id})" aria-label="Excluir ciclo">🗑</button>
       </div>`;
     }).join('');
     list.innerHTML = html;

@@ -531,7 +531,7 @@ async function loadSimulados() {
       <span class="sim-title">${s.titulo}</span>
       <span class="sim-status ${s.status}">${s.status}</span>
       ${s.status === 'finalizado' ? `<span class="sim-nota">${s.nota}%</span>` : `<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 10px;" onclick="iniciarSimulado(${s.id})">Continuar</button>`}
-      <button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 8px;" onclick="deleteSimulado(${s.id})">🗑</button>
+      <button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 8px;" onclick="deleteSimulado(${s.id})" aria-label="Excluir simulado">🗑</button>
     </div>
   `).join('');
 }
@@ -1043,7 +1043,7 @@ async function loadBanco() {
         <span class="q-list-text">${q.enunciado.substring(0, 100)}${q.enunciado.length > 100 ? '...' : ''}</span>
         <span class="q-list-meta" style="font-size:0.7rem;color:#9399b2;margin-left:4px;">${q.banca || ''}${provaInfo}${gabBadge}</span>
         <button class="q-list-edit" onclick="editQuestao(${q.id})" title="Editar gabarito" style="background:none;border:none;color:#89b4fa;cursor:pointer;font-size:1rem;margin-right:4px;">✏️</button>
-        <button class="q-list-delete" onclick="deleteQuestao(${q.id})" title="Excluir">🗑</button>
+        <button class="q-list-delete" onclick="deleteQuestao(${q.id})" title="Excluir" aria-label="Excluir questão">🗑</button>
       </div>`;
     });
     html += `</div></div>`;
