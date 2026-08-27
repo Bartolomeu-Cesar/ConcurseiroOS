@@ -226,6 +226,22 @@ def review_sumula_sm2(id: int, body: SumulaReviewSM2, conn=Depends(get_db_sessio
         INSERT INTO streaks (data, sumulas_revisadas, user_id) VALUES (?, 1, ?)
         ON CONFLICT(user_id, data) DO UPDATE SET sumulas_revisadas = COALESCE(sumulas_revisadas, 0) + 1
     """, (today_str(), user_id))
+
+    # Registrar tempo de revisão (~30s/súmula)
+    horas_rev = 0.5 / 60  # 30 segundos
+    existing_sessao = conn.execute(
+        "SELECT id FROM sessoes_estudo WHERE data = ? AND tipo = 'sumulas' AND user_id = ?",
+        (today_str(), user_id)
+    ).fetchone()
+    if existing_sessao:
+        conn.execute("UPDATE sessoes_estudo SET horas = horas + ? WHERE id = ? AND user_id = ?",
+                     (horas_rev, existing_sessao["id"], user_id))
+    else:
+        from datetime import datetime
+        conn.execute(
+            "INSERT INTO sessoes_estudo (materia, horas, data, tipo, user_id, created_at) VALUES (?, ?, ?, 'sumulas', ?, ?)",
+            ("Súmulas (Revisão)", horas_rev, today_str(), user_id, datetime.now().isoformat())
+        )
     conn.commit()
 
     log.info(f"Súmula SM-2: id={id} quality={quality} ef={ef:.4f} reps={reps} interval={intervalo}")

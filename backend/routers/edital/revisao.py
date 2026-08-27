@@ -108,6 +108,26 @@ def revisar_topico_sm2(id: int, body: EditalReviewSM2, conn=Depends(get_db_sessi
     )
     conn.commit()
 
+    # Registrar tempo de revisão (~5min/tópico) + streak
+    from utils import update_streak
+    horas_revisao = 5 / 60  # ~5 minutos por revisão de tópico
+    materia = conn.execute("SELECT materia FROM edital WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
+    mat_nome = materia["materia"] if materia else "Revisão Edital"
+    existing_sessao = conn.execute(
+        "SELECT id FROM sessoes_estudo WHERE data = ? AND materia = ? AND tipo = 'revisao_edital' AND user_id = ?",
+        (today_str(), mat_nome, user_id)
+    ).fetchone()
+    if existing_sessao:
+        conn.execute("UPDATE sessoes_estudo SET horas = horas + ? WHERE id = ? AND user_id = ?",
+                     (horas_revisao, existing_sessao["id"], user_id))
+    else:
+        conn.execute(
+            "INSERT INTO sessoes_estudo (materia, horas, data, tipo, user_id, created_at) VALUES (?, ?, ?, 'revisao_edital', ?, ?)",
+            (mat_nome, horas_revisao, today_str(), user_id, datetime.now().isoformat())
+        )
+    update_streak(conn, "horas_estudadas", horas_revisao, user_id=user_id)
+    conn.commit()
+
     log.info(f"Edital SM-2 revisar: id={id} quality={quality} ef={ef:.4f} reps={reps} interval={intervalo}")
     return {
         "id": id,
@@ -196,6 +216,26 @@ def revisar_topico_fsrs(id: int, body: EditalReviewSM2, conn=Depends(get_db_sess
             (proxima, output.interval, id, user_id)
         )
 
+    conn.commit()
+
+    # Registrar tempo de revisão (~5min/tópico) + streak
+    from utils import update_streak
+    horas_revisao = 5 / 60
+    materia_row = conn.execute("SELECT materia FROM edital WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
+    mat_nome = materia_row["materia"] if materia_row else "Revisão Edital"
+    existing_sessao = conn.execute(
+        "SELECT id FROM sessoes_estudo WHERE data = ? AND materia = ? AND tipo = 'revisao_edital' AND user_id = ?",
+        (today_str(), mat_nome, user_id)
+    ).fetchone()
+    if existing_sessao:
+        conn.execute("UPDATE sessoes_estudo SET horas = horas + ? WHERE id = ? AND user_id = ?",
+                     (horas_revisao, existing_sessao["id"], user_id))
+    else:
+        conn.execute(
+            "INSERT INTO sessoes_estudo (materia, horas, data, tipo, user_id, created_at) VALUES (?, ?, ?, 'revisao_edital', ?, ?)",
+            (mat_nome, horas_revisao, today_str(), user_id, datetime.now().isoformat())
+        )
+    update_streak(conn, "horas_estudadas", horas_revisao, user_id=user_id)
     conn.commit()
 
     log.info(f"Edital FSRS revisar: id={id} rating={rating} S={output.stability:.4f} D={output.difficulty:.4f} I={output.interval}")
