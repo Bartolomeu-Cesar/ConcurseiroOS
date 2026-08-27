@@ -83,87 +83,55 @@ def _ensure_desafio_diario_table(conn):
 
 
 def _select_challenge_questions(conn, user_id: int, quantidade: int = 5) -> list[dict]:
-    """Seleciona questões para o desafio diário baseado em fraquezas e revisão.
+    """Seleciona questões para o desafio diário com seleção inteligente.
 
-    Estratégia:
-    - 2 questões: tópicos com maior taxa de erro (pontos fracos)
-    - 2 questões: matérias que não foram estudadas recentemente (FSRS/revisão)
-    - 1 questão: aleatória (variedade)
+    Usa _smart_select_questions (6 técnicas de estudo):
+    - Successive Relearning: erradas recentes primeiro
+    - Pre-testing: inclui nunca respondidas
+    - Spacing Effect: revisita erradas antigas
+    - Desirable Difficulty: questões no limiar de domínio
+    - Interleaving: mistura matérias
+    - Exclui dominadas: 3+ acertos consecutivos
+
+    Também prioriza questões da tabela erros_revisao com proxima_revisao <= hoje.
     """
-    selected_ids = set()
-    questions = []
+    from routers.simulados import _smart_select_questions
 
-    # 1. Questões de tópicos fracos (maior taxa de erro)
-    weak_topics = conn.execute("""
-        SELECT q.materia, COUNT(*) as total, SUM(CASE WHEN qr.acertou = 0 THEN 1 ELSE 0 END) as erros
-        FROM questoes_respostas qr
-        JOIN questoes q ON q.id = qr.questao_id
-        WHERE qr.user_id = ?
-        GROUP BY q.materia
-        HAVING total >= 3
-        ORDER BY CAST(erros AS FLOAT) / total DESC
-        LIMIT 5
-    """, (user_id,)).fetchall()
-
-    weak_materias = [r["materia"] for r in weak_topics]
-
-    for materia in weak_materias:
-        if len(questions) >= 2:
-            break
-        # Pegar questão não respondida dessa matéria, ou respondida errada
-        q = conn.execute("""
-            SELECT q.* FROM questoes q
-            WHERE q.user_id = ? AND q.materia = ?
-            AND q.id NOT IN (SELECT questao_id FROM questoes_respostas WHERE user_id = ? AND acertou = 1)
-            ORDER BY RANDOM()
-            LIMIT 1
-        """, (user_id, materia, user_id)).fetchone()
-        if q and q["id"] not in selected_ids:
-            questions.append(dict(q))
-            selected_ids.add(q["id"])
-
-    # 2. Questões de matérias não estudadas recentemente (revisão)
-    neglected = conn.execute("""
-        SELECT materia, MAX(data) as ultima
-        FROM sessoes_estudo
-        WHERE user_id = ?
-        GROUP BY materia
-        ORDER BY ultima ASC
-        LIMIT 5
-    """, (user_id,)).fetchall()
-
-    neglected_materias = [r["materia"] for r in neglected if r["materia"]]
-
-    for materia in neglected_materias:
-        if len(questions) >= 4:
-            break
-        q = conn.execute("""
-            SELECT q.* FROM questoes q
-            WHERE q.user_id = ? AND q.materia = ?
-            AND q.id NOT IN (?)
-            ORDER BY RANDOM()
-            LIMIT 1
-        """.replace("NOT IN (?)", f"NOT IN ({','.join(str(i) for i in selected_ids) or '0'})"),
-            (user_id, materia)).fetchone()
-        if q and q["id"] not in selected_ids:
-            questions.append(dict(q))
-            selected_ids.add(q["id"])
-
-    # 3. Preencher restante com questões aleatórias
-    remaining = quantidade - len(questions)
-    if remaining > 0:
-        exclude_clause = f"AND q.id NOT IN ({','.join(str(i) for i in selected_ids)})" if selected_ids else ""
-        random_qs = conn.execute(f"""
-            SELECT q.* FROM questoes q
-            WHERE q.user_id = ? {exclude_clause}
-            ORDER BY RANDOM()
+    # 1. Verificar se há questões agendadas para revisão (erros_revisao com FSRS)
+    hoje = today_str()
+    revisao_pendentes = []
+    try:
+        rows = conn.execute("""
+            SELECT er.questao_id FROM erros_revisao er
+            WHERE er.user_id = ? AND er.proxima_revisao <= ?
+            ORDER BY er.proxima_revisao ASC
             LIMIT ?
-        """, (user_id, remaining)).fetchall()
-        for q in random_qs:
-            questions.append(dict(q))
-            selected_ids.add(q["id"])
+        """, (user_id, hoje, max(2, quantidade // 2))).fetchall()
+        revisao_ids = [r[0] for r in rows]
+        if revisao_ids:
+            placeholders = ",".join("?" * len(revisao_ids))
+            qs = conn.execute(f"""
+                SELECT * FROM questoes WHERE id IN ({placeholders}) AND user_id = ?
+            """, revisao_ids + [user_id]).fetchall()
+            revisao_pendentes = [dict(q) for q in qs]
+    except Exception:
+        pass  # tabela erros_revisao pode não existir
 
-    return questions[:quantidade]
+    # 2. Completar com seleção inteligente
+    qtd_restante = quantidade - len(revisao_pendentes)
+    smart_qs = []
+    if qtd_restante > 0:
+        smart_qs = _smart_select_questions(conn, user_id, qtd_restante)
+
+    # 3. Combinar: revisão agendada + smart selection (sem duplicatas)
+    seen_ids = {q["id"] for q in revisao_pendentes}
+    combined = list(revisao_pendentes)
+    for q in smart_qs:
+        if q["id"] not in seen_ids:
+            combined.append(q)
+            seen_ids.add(q["id"])
+
+    return combined[:quantidade]
 
 
 def calcular_tempo_questao(enunciado: str, num_alternativas: int) -> int:

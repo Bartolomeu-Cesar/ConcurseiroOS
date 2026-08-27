@@ -1,4 +1,6 @@
 """CRUD de questões: listar, obter, criar, editar, deletar, responder, vincular lote."""
+from datetime import date, timedelta
+
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from database import get_db_session
@@ -10,6 +12,120 @@ from schemas import QuestionLinkBatch, QuestionUpdate
 from utils import sql_paginate, today_str, update_streak
 
 router = APIRouter()
+
+
+# Tempo mínimo (segundos) para considerar resposta "confiante" por nível de dificuldade
+# Abaixo disso = provável chute → volta mais cedo na revisão
+_CONFIDENCE_THRESHOLDS = {
+    "Fácil": 8,
+    "Médio": 12,
+    "Difícil": 18,
+}
+
+
+def _schedule_question_review(conn, questao_id: int, user_id: int, acertou: int, tempo_seg: int, confianca: int | None):
+    """Agenda revisão espaçada para questões usando FSRS.
+
+    Lógica:
+    - ERROU → cria/atualiza entrada em erros_revisao com FSRS rating=1 (Again)
+    - ACERTOU com chute (tempo < threshold) → rating=2 (Hard) — volta mais cedo
+    - ACERTOU com confiança → rating=3 (Good) ou 4 (Easy)
+    - Se questão já está em erros_revisao e acertou → atualiza com spacing maior
+    """
+    try:
+        from fsrs import FSRSCard, review_card, RATING_AGAIN, RATING_HARD, RATING_GOOD, RATING_EASY
+
+        # Buscar dados existentes de revisão para esta questão
+        existing = conn.execute("""
+            SELECT id, stability, difficulty, fsrs_state, reps, last_review
+            FROM erros_revisao WHERE questao_id = ? AND user_id = ?
+        """, (questao_id, user_id)).fetchone()
+
+        # Determinar rating FSRS baseado no resultado + confiança
+        if not acertou:
+            rating = RATING_AGAIN  # Errou → revisão curta
+        else:
+            # Verificar se foi chute (tempo muito baixo)
+            dificuldade = conn.execute(
+                "SELECT dificuldade FROM questoes WHERE id = ? AND user_id = ?",
+                (questao_id, user_id)
+            ).fetchone()
+            dif_nome = dificuldade[0] if dificuldade else "Médio"
+            threshold = _CONFIDENCE_THRESHOLDS.get(dif_nome, 12)
+
+            if tempo_seg > 0 and tempo_seg < threshold:
+                # Chute: acertou mas muito rápido → Hard (volta mais cedo)
+                rating = RATING_HARD
+            elif confianca is not None and confianca <= 2:
+                # Baixa confiança declarada → Hard
+                rating = RATING_HARD
+            elif confianca is not None and confianca >= 5:
+                # Alta confiança → Easy
+                rating = RATING_EASY
+            else:
+                # Acertou normal → Good
+                rating = RATING_GOOD
+
+        if existing:
+            # Atualizar scheduling existente
+            card = FSRSCard(
+                stability=existing["stability"] or 0.0,
+                difficulty=existing["difficulty"] or 0.0,
+                state=existing["fsrs_state"] or 0,
+                last_review=existing["last_review"] or "",
+                reps=existing["reps"] or 0,
+            )
+            output = review_card(card, rating)
+
+            # Se acertou com Good/Easy e já tem bastante repetições, remover da revisão
+            if acertou and rating >= RATING_GOOD and (existing["reps"] or 0) >= 3:
+                conn.execute("DELETE FROM erros_revisao WHERE id = ? AND user_id = ?", (existing["id"], user_id))
+            else:
+                conn.execute("""
+                    UPDATE erros_revisao SET
+                        stability = ?, difficulty = ?, fsrs_state = ?,
+                        reps = ?, last_review = ?, proxima_revisao = ?,
+                        intervalo_atual = ?, revisoes_count = revisoes_count + 1,
+                        updated_at = ?
+                    WHERE id = ? AND user_id = ?
+                """, (
+                    round(output.stability, 6), round(output.difficulty, 4),
+                    output.state, (existing["reps"] or 0) + 1,
+                    today_str(), output.next_review, output.interval,
+                    today_str(), existing["id"], user_id
+                ))
+        elif not acertou or (acertou and rating == RATING_HARD):
+            # Criar nova entrada de revisão (errou ou chutou)
+            card = FSRSCard(stability=0.0, difficulty=0.0, state=0, reps=0)
+            output = review_card(card, rating)
+
+            # Buscar resposta_id mais recente
+            resp_row = conn.execute("""
+                SELECT id FROM questoes_respostas
+                WHERE questao_id = ? AND user_id = ?
+                ORDER BY id DESC LIMIT 1
+            """, (questao_id, user_id)).fetchone()
+            resposta_id = resp_row[0] if resp_row else 0
+
+            conn.execute("""
+                INSERT INTO erros_revisao
+                (user_id, questao_id, resposta_id, intervalo_atual, proxima_revisao,
+                 revisoes_count, stability, difficulty, fsrs_state, reps, last_review, created_at)
+                VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, 1, ?, ?)
+            """, (
+                user_id, questao_id, resposta_id, output.interval,
+                output.next_review, round(output.stability, 6),
+                round(output.difficulty, 4), output.state, today_str(), today_str()
+            ))
+
+        conn.commit()
+    except Exception as e:
+        # Non-critical: don't fail the main response if scheduling fails
+        log.warning(f"Question review scheduling failed: {e}")
+        try:
+            conn.commit()
+        except Exception:
+            pass
 
 
 @router.get("/api/questoes", summary="Listar questões", description="Lista todas as questões do banco, com filtros por matéria/tópico e paginação opcional")
@@ -171,6 +287,12 @@ def responder_questao(id: int, body: QuestaoResposta, conn=Depends(get_db_sessio
         update_streak(conn, "horas_estudadas", horas, user_id=user_id)
 
     conn.commit()
+
+    # === SPACED REPETITION para questões (FSRS) ===
+    # Quando erra: agendar revisão futura
+    # Quando acerta questão agendada: atualizar scheduling (intervalo maior)
+    # Confidence-based: questão "chutada" (tempo < threshold) volta mais cedo
+    _schedule_question_review(conn, id, user_id, acertou, body.tempo_segundos, body.confianca)
 
     # Update mastery for the relevant topic
     try:
