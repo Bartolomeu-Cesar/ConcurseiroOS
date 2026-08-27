@@ -978,3 +978,299 @@ def burnout_detection(conn=Depends(get_db_session), user_id: int = Depends(get_u
     """Retorna análise de risco de burnout baseado nos últimos 7 dias."""
     return _detect_burnout(conn, user_id)
 
+
+
+# ============================================================
+# BLOCKED PRACTICE DETECTION — Rohrer (2012)
+# Interleaving produz +20-40% retenção vs prática em bloco
+# ============================================================
+
+@router.get("/api/study-intelligence/blocked-practice", summary="Blocked Practice Detection",
+            description="""Detecta quando o usuário está estudando em bloco (mesma matéria por muito tempo)
+e sugere intercalar. Interleaving produz 20-40% mais retenção que blocked practice (Rohrer 2012).""")
+def blocked_practice_detection(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Analisa sessão atual e retorna alerta se detectar prática em bloco."""
+    hoje = today_str()
+
+    # Verificar últimas 15 respostas de questões de hoje
+    ultimas = conn.execute("""
+        SELECT q.materia, qr.data, qr.id
+        FROM questoes_respostas qr
+        JOIN questoes q ON q.id = qr.questao_id
+        WHERE qr.user_id = ? AND qr.data = ?
+        ORDER BY qr.id DESC LIMIT 15
+    """, (user_id, hoje)).fetchall()
+
+    if len(ultimas) < 5:
+        return {"blocked": False, "message": "Dados insuficientes para análise", "streak_count": 0}
+
+    # Contar sequência consecutiva da mesma matéria (mais recentes primeiro)
+    current_materia = ultimas[0]["materia"]
+    streak = 0
+    for r in ultimas:
+        if r["materia"] == current_materia:
+            streak += 1
+        else:
+            break
+
+    # Verificar também sessões de estudo (timer/pomodoro) do mesmo tópico
+    sessao_mesma = conn.execute("""
+        SELECT SUM(horas) as total FROM sessoes_estudo
+        WHERE user_id = ? AND data = ? AND materia = ?
+    """, (user_id, hoje, current_materia)).fetchone()
+    horas_mesma = sessao_mesma["total"] or 0
+
+    # Alertar se: 8+ questões seguidas da mesma matéria OU 1.5h+ da mesma matéria hoje
+    is_blocked = streak >= 8 or horas_mesma >= 1.5
+
+    # Sugerir matéria diferente para intercalar
+    sugestao_materia = None
+    if is_blocked:
+        # Buscar matéria menos estudada hoje
+        outras = conn.execute("""
+            SELECT DISTINCT materia FROM edital
+            WHERE user_id = ? AND materia != ? AND arquivado = 0
+            AND materia NOT IN (
+                SELECT DISTINCT q.materia FROM questoes_respostas qr
+                JOIN questoes q ON q.id = qr.questao_id
+                WHERE qr.user_id = ? AND qr.data = ?
+                AND qr.id > (SELECT MAX(id) - 5 FROM questoes_respostas WHERE user_id = ? AND data = ?)
+            )
+            ORDER BY RANDOM() LIMIT 1
+        """, (user_id, current_materia, user_id, hoje, user_id, hoje)).fetchone()
+        if outras:
+            sugestao_materia = outras["materia"]
+        else:
+            # Qualquer outra matéria do ciclo
+            outra = conn.execute("""
+                SELECT materia FROM ciclo_estudos
+                WHERE user_id = ? AND ativo = 1 AND materia != ?
+                ORDER BY horas_cumpridas / horas_alvo ASC LIMIT 1
+            """, (user_id, current_materia)).fetchone()
+            if outra:
+                sugestao_materia = outra["materia"]
+
+    motivo = ""
+    if streak >= 8:
+        motivo = f"Você respondeu {streak} questões seguidas de {current_materia}."
+    elif horas_mesma >= 1.5:
+        motivo = f"Você já estudou {horas_mesma:.1f}h de {current_materia} hoje."
+
+    return {
+        "blocked": is_blocked,
+        "materia_atual": current_materia,
+        "streak_count": streak,
+        "horas_materia_hoje": round(horas_mesma, 2),
+        "motivo": motivo,
+        "sugestao": f"Intercale com {sugestao_materia} para melhorar retenção em 20-40%." if sugestao_materia else "",
+        "sugestao_materia": sugestao_materia,
+        "tecnica": "Interleaving (Rohrer 2012): alternar matérias durante o estudo produz aprendizado mais duradouro que estudar uma matéria por vez.",
+    }
+
+
+# ============================================================
+# SLEEP CONSOLIDATION — Born & Wilhelm (2012)
+# Revisão antes de dormir + ao acordar = +20% retenção
+# ============================================================
+
+@router.get("/api/study-intelligence/sleep-consolidation", summary="Sleep Consolidation Review",
+            description="""Retorna itens ideais para revisão pré-sono (21h-1h) e matinal (5h-9h).
+Baseado em Born & Wilhelm (2012): memórias são consolidadas durante o sono.
+Revisar material difícil antes de dormir e re-testar ao acordar melhora retenção em ~20%.""")
+def sleep_consolidation(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Retorna flashcards e questões para revisão de consolidação."""
+    from datetime import datetime
+    hora_atual = datetime.now().hour
+    hoje = today_str()
+    ontem = (date.today() - timedelta(days=1)).isoformat()
+
+    # Determinar modo: noturno (21h-1h) ou matinal (5h-9h)
+    if 21 <= hora_atual or hora_atual <= 1:
+        modo = "noturno"
+    elif 5 <= hora_atual <= 9:
+        modo = "matinal"
+    else:
+        modo = "fora_janela"
+
+    # === FLASHCARDS para consolidação ===
+    # Prioridade: erros do dia + cards com baixo stability + cards revisados hoje com difficulty alta
+    flashcards_consolidacao = []
+
+    if modo == "noturno":
+        # Noturno: itens ERRADOS hoje + cards que foram difíceis hoje
+        # 1. Flashcards que errou hoje (quality < 3)
+        fc_errados = conn.execute("""
+            SELECT f.id, f.pergunta, f.resposta, f.materia, f.stability, f.difficulty
+            FROM flashcards f
+            WHERE f.user_id = ? AND f.difficulty > 5
+            AND f.id IN (
+                SELECT id FROM flashcards WHERE user_id = ? AND proxima_revisao = ?
+            )
+            ORDER BY f.difficulty DESC
+            LIMIT 5
+        """, (user_id, user_id, (date.today() + timedelta(days=1)).isoformat())).fetchall()
+        flashcards_consolidacao.extend([dict(r) for r in fc_errados])
+
+        # 2. Flashcards novos vistos hoje (stability baixa = frágil)
+        fc_frageis = conn.execute("""
+            SELECT id, pergunta, resposta, materia, stability, difficulty
+            FROM flashcards
+            WHERE user_id = ? AND stability > 0 AND stability <= 3
+            AND proxima_revisao > ?
+            ORDER BY stability ASC
+            LIMIT 5
+        """, (user_id, hoje)).fetchall()
+        for r in fc_frageis:
+            if r["id"] not in {f["id"] for f in flashcards_consolidacao}:
+                flashcards_consolidacao.append(dict(r))
+
+    elif modo == "matinal":
+        # Matinal: re-testar os mesmos itens da noite anterior (ou erros de ontem)
+        # Cards com próxima revisão = hoje (normal FSRS) + erros de ontem
+        fc_hoje = conn.execute("""
+            SELECT id, pergunta, resposta, materia, stability, difficulty
+            FROM flashcards
+            WHERE user_id = ? AND proxima_revisao <= ?
+            ORDER BY difficulty DESC, stability ASC
+            LIMIT 8
+        """, (user_id, hoje)).fetchall()
+        flashcards_consolidacao = [dict(r) for r in fc_hoje]
+
+    # === QUESTÕES para consolidação ===
+    questoes_consolidacao = []
+
+    if modo == "noturno":
+        # Questões erradas hoje
+        q_erradas = conn.execute("""
+            SELECT q.id, q.enunciado, q.materia, q.resposta_correta, q.explicacao
+            FROM questoes q
+            JOIN questoes_respostas qr ON qr.questao_id = q.id
+            WHERE qr.user_id = ? AND qr.data = ? AND qr.acertou = 0
+            ORDER BY qr.id DESC
+            LIMIT 5
+        """, (user_id, hoje)).fetchall()
+        questoes_consolidacao = [dict(r) for r in q_erradas]
+
+    elif modo == "matinal":
+        # Questões erradas ontem (re-testar após consolidação do sono)
+        q_ontem = conn.execute("""
+            SELECT q.id, q.enunciado, q.materia, q.resposta_correta, q.explicacao
+            FROM questoes q
+            JOIN questoes_respostas qr ON qr.questao_id = q.id
+            WHERE qr.user_id = ? AND qr.data = ? AND qr.acertou = 0
+            ORDER BY RANDOM()
+            LIMIT 5
+        """, (user_id, ontem)).fetchall()
+        questoes_consolidacao = [dict(r) for r in q_ontem]
+
+    # Mensagem contextual
+    mensagens = {
+        "noturno": "🌙 Revisão pré-sono: consolidação de memória durante o sono melhora retenção em ~20%. Revise estes itens difíceis antes de dormir.",
+        "matinal": "☀️ Revisão matinal: re-teste após o sono. Seu cérebro consolidou estas memórias durante a noite — agora é hora de fortalecer.",
+        "fora_janela": "⏰ As janelas ideais de consolidação são: 21h-1h (pré-sono) e 5h-9h (matinal). Volte nesses horários para máxima eficácia.",
+    }
+
+    return {
+        "modo": modo,
+        "hora_atual": hora_atual,
+        "mensagem": mensagens[modo],
+        "flashcards": flashcards_consolidacao[:8],
+        "questoes": questoes_consolidacao[:5],
+        "total_flashcards": len(flashcards_consolidacao),
+        "total_questoes": len(questoes_consolidacao),
+        "tecnica": "Sleep Consolidation (Born & Wilhelm 2012): memórias são transferidas do hipocampo para o neocórtex durante o sono. Revisar antes de dormir e re-testar ao acordar maximiza esse processo.",
+        "dica": "Não estude conteúdo NOVO antes de dormir — apenas REVISE o que já viu hoje." if modo == "noturno" else "Tente recordar ANTES de olhar a resposta (retrieval practice)." if modo == "matinal" else "",
+    }
+
+
+# ============================================================
+# OVERLEARNING DETECTION — Rohrer & Taylor (2006)
+# Revisar itens já dominados é ineficiente (rendimento decrescente)
+# ============================================================
+
+@router.get("/api/study-intelligence/overlearning", summary="Overlearning Detection",
+            description="""Detecta itens que estão sendo revisados desnecessariamente (já dominados).
+Baseado em Rohrer & Taylor (2006): após 3+ acertos consecutivos, prática adicional
+tem retorno mínimo. O tempo seria melhor investido em itens fracos.""")
+def overlearning_detection(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Identifica flashcards e questões over-studied e sugere redistribuição do tempo."""
+
+    overlearned_flashcards = []
+    overlearned_questoes = []
+    hoje = today_str()
+
+    # === FLASHCARDS com stability > 60 dias (já consolidados) ===
+    # Se stability > 60 e proxima_revisao > hoje + 30 dias: não precisa mais revisar tão cedo
+    fc_over = conn.execute("""
+        SELECT id, pergunta, materia, stability, difficulty, intervalo_dias, proxima_revisao
+        FROM flashcards
+        WHERE user_id = ? AND stability > 60 AND fsrs_state = 2
+        ORDER BY stability DESC
+        LIMIT 10
+    """, (user_id,)).fetchall()
+    overlearned_flashcards = [dict(r) for r in fc_over]
+
+    # === QUESTÕES respondidas 5+ vezes TODAS corretas ===
+    q_over = conn.execute("""
+        SELECT q.id, q.enunciado, q.materia,
+               COUNT(*) as total_respostas,
+               SUM(qr.acertou) as total_acertos
+        FROM questoes_respostas qr
+        JOIN questoes q ON q.id = qr.questao_id
+        WHERE qr.user_id = ?
+        GROUP BY qr.questao_id
+        HAVING total_respostas >= 5 AND total_acertos = total_respostas
+        ORDER BY total_respostas DESC
+        LIMIT 10
+    """, (user_id,)).fetchall()
+    overlearned_questoes = [dict(r) for r in q_over]
+
+    # === Matérias com OVER-STUDY (muitas horas + alta taxa acerto) ===
+    materias_over = conn.execute("""
+        SELECT q.materia,
+               COUNT(*) as total,
+               ROUND(CAST(SUM(qr.acertou) AS FLOAT) / COUNT(*) * 100, 1) as pct_acerto,
+               COALESCE(SUM(se.horas), 0) as horas_total
+        FROM questoes_respostas qr
+        JOIN questoes q ON q.id = qr.questao_id
+        LEFT JOIN (
+            SELECT materia, SUM(horas) as horas
+            FROM sessoes_estudo WHERE user_id = ?
+            GROUP BY materia
+        ) se ON se.materia = q.materia
+        WHERE qr.user_id = ?
+        GROUP BY q.materia
+        HAVING pct_acerto >= 85 AND total >= 20
+        ORDER BY pct_acerto DESC
+    """, (user_id, user_id)).fetchall()
+
+    # Sugerir redistribuição
+    # Matérias com MAIS necessidade (baixo acerto, pouco estudo)
+    materias_necessitadas = conn.execute("""
+        SELECT q.materia,
+               COUNT(*) as total,
+               ROUND(CAST(SUM(qr.acertou) AS FLOAT) / COUNT(*) * 100, 1) as pct_acerto
+        FROM questoes_respostas qr
+        JOIN questoes q ON q.id = qr.questao_id
+        WHERE qr.user_id = ?
+        GROUP BY q.materia
+        HAVING pct_acerto < 60 AND total >= 5
+        ORDER BY pct_acerto ASC
+        LIMIT 3
+    """, (user_id,)).fetchall()
+
+    # Calcular tempo desperdiçado (estimativa)
+    tempo_potencial_min = len(overlearned_flashcards) * 2 + len(overlearned_questoes) * 3  # ~2min/flash, ~3min/questão
+
+    has_overlearning = bool(overlearned_flashcards or overlearned_questoes or materias_over)
+
+    return {
+        "has_overlearning": has_overlearning,
+        "overlearned_flashcards": overlearned_flashcards,
+        "overlearned_questoes": overlearned_questoes,
+        "materias_over_studied": [dict(r) for r in materias_over],
+        "materias_necessitadas": [dict(r) for r in materias_necessitadas],
+        "tempo_potencial_redistribuir_min": tempo_potencial_min,
+        "sugestao": f"Redistribua ~{tempo_potencial_min}min/dia de itens dominados para: {', '.join(r['materia'] for r in materias_necessitadas)}" if materias_necessitadas and has_overlearning else "Nenhuma redistribuição necessária no momento.",
+        "tecnica": "Overlearning (Rohrer & Taylor 2006): após 3+ acertos perfeitos, prática adicional tem retorno decrescente. Invista o tempo em matérias com < 60% de acerto para maximizar ganho marginal.",
+    }

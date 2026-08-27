@@ -309,7 +309,38 @@ def responder_questao(id: int, body: QuestaoResposta, conn=Depends(get_db_sessio
     except Exception:
         pass
 
-    return {"acertou": bool(acertou), "resposta_correta": questao[0]}
+    # === Blocked Practice Detection (inline) ===
+    # Check if user is studying in blocks (8+ same subject in a row)
+    blocked_alert = None
+    try:
+        ultimas_mats = conn.execute("""
+            SELECT q.materia FROM questoes_respostas qr
+            JOIN questoes q ON q.id = qr.questao_id
+            WHERE qr.user_id = ? AND qr.data = ?
+            ORDER BY qr.id DESC LIMIT 10
+        """, (user_id, today_str())).fetchall()
+        if len(ultimas_mats) >= 8:
+            current_mat = ultimas_mats[0]["materia"]
+            streak = sum(1 for r in ultimas_mats if r["materia"] == current_mat)
+            if streak >= 8:
+                outra = conn.execute("""
+                    SELECT materia FROM ciclo_estudos
+                    WHERE user_id = ? AND ativo = 1 AND materia != ?
+                    ORDER BY horas_cumpridas / horas_alvo ASC LIMIT 1
+                """, (user_id, current_mat)).fetchone()
+                blocked_alert = {
+                    "tipo": "blocked_practice",
+                    "streak": streak,
+                    "mensagem": f"⚠️ {streak} questões seguidas de {current_mat}. Intercale para +30% retenção!",
+                    "sugestao_materia": outra["materia"] if outra else None,
+                }
+    except Exception:
+        pass
+
+    result = {"acertou": bool(acertou), "resposta_correta": questao[0]}
+    if blocked_alert:
+        result["alerta"] = blocked_alert
+    return result
 
 
 @router.put("/api/questoes/vincular-lote", summary="Vincular disciplina em lote",
