@@ -49,6 +49,7 @@ export async function loadEdital() {
   }
   renderEditalTree();
   loadSpacingAlert();
+  loadKnowledgeGraph();
 }
 
 async function loadSpacingAlert() {
@@ -760,4 +761,159 @@ function extractYouTubeId(url) {
     if (match) return match[1];
   }
   return null;
+}
+
+// ============================================================
+// KNOWLEDGE GRAPH — Visualização interativa
+// ============================================================
+
+let _kgData = null;
+
+export async function loadKnowledgeGraph() {
+  const panel = document.getElementById('knowledge-graph-panel');
+  if (!panel) return;
+
+  const materia = document.getElementById('kg-filtro-materia')?.value || '';
+  const params = materia ? `?materia=${encodeURIComponent(materia)}` : '';
+
+  try {
+    const data = await fetch(`/api/knowledge-graph${params}`).then(r => r.json());
+    _kgData = data;
+
+    if (data.stats.total_nodes === 0) {
+      panel.style.display = 'none';
+      return;
+    }
+
+    panel.style.display = 'block';
+
+    const statsEl = document.getElementById('kg-stats');
+    statsEl.textContent = `${data.stats.total_nodes} tópicos · ${data.stats.total_edges} dependências`;
+
+    renderKnowledgeGraph(data);
+  } catch (e) {
+    panel.style.display = 'none';
+  }
+}
+
+function renderKnowledgeGraph(data) {
+  const container = document.getElementById('kg-container');
+  if (!container) return;
+
+  const width = container.clientWidth;
+  const height = 350;
+
+  // Limitar nodes para visualização (max 50 para performance)
+  const nodes = data.nodes.slice(0, 50);
+  const nodeIds = new Set(nodes.map(n => n.id));
+  const edges = data.edges.filter(e => nodeIds.has(e.topic_id) && nodeIds.has(e.depends_on_id));
+
+  // Layout simples: grid com deslocamento aleatório baseado em matéria
+  const materias = [...new Set(nodes.map(n => n.materia))];
+  const matColors = {};
+  const palette = ['#89b4fa', '#a6e3a1', '#f9e2af', '#f38ba8', '#cba6f7', '#89dceb', '#fab387', '#94e2d5'];
+  materias.forEach((m, i) => { matColors[m] = palette[i % palette.length]; });
+
+  const nodePositions = {};
+  const cols = Math.ceil(Math.sqrt(nodes.length));
+  nodes.forEach((n, i) => {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    nodePositions[n.id] = {
+      x: 40 + col * ((width - 80) / cols) + (Math.random() * 20 - 10),
+      y: 30 + row * ((height - 60) / Math.ceil(nodes.length / cols)) + (Math.random() * 10 - 5),
+    };
+  });
+
+  // Render SVG
+  let svg = `<svg width="${width}" height="${height}" style="width:100%;height:100%;">`;
+
+  // Edges
+  edges.forEach(e => {
+    const from = nodePositions[e.depends_on_id];
+    const to = nodePositions[e.topic_id];
+    if (!from || !to) return;
+    const dash = e.relationship === 'related' ? 'stroke-dasharray="4"' : '';
+    svg += `<line x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" stroke="#585b70" stroke-width="1" ${dash} marker-end="url(#arrow)"/>`;
+  });
+
+  // Arrow marker
+  svg += `<defs><marker id="arrow" markerWidth="6" markerHeight="6" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="#585b70"/></marker></defs>`;
+
+  // Nodes
+  nodes.forEach(n => {
+    const pos = nodePositions[n.id];
+    const color = n.status === 'Concluído' ? '#a6e3a1' : n.status === 'Em Andamento' ? '#f9e2af' : '#6c7086';
+    const label = n.topico.length > 18 ? n.topico.slice(0, 18) + '…' : n.topico;
+    svg += `<circle cx="${pos.x}" cy="${pos.y}" r="6" fill="${color}" stroke="${matColors[n.materia]}" stroke-width="2" style="cursor:pointer;" onclick="showKgNodeInfo(${n.id})"/>`;
+    svg += `<text x="${pos.x}" y="${pos.y + 14}" text-anchor="middle" font-size="7" fill="#9399b2">${label}</text>`;
+  });
+
+  svg += '</svg>';
+  container.innerHTML = svg;
+}
+
+export async function showKgSuggestions() {
+  const materia = document.getElementById('kg-filtro-materia')?.value || '';
+  const params = materia ? `?materia=${encodeURIComponent(materia)}&limit=15` : '?limit=15';
+
+  try {
+    const data = await fetch(`/api/knowledge-graph/suggest${params}`).then(r => r.json());
+    const sugs = data.suggestions || [];
+    if (!sugs.length) { showToast('Nenhuma sugestão disponível', 'info'); return; }
+
+    let html = sugs.map(s => `
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:0.8rem;">${s.topic_name} <span style="color:var(--text-sub);">←</span> ${s.depends_on_name}</div>
+          <div style="font-size:0.68rem;color:var(--text-sub);">${s.materia} · ${s.reason} · ${Math.round(s.confidence * 100)}% confiança</div>
+        </div>
+        <button onclick="acceptKgSuggestion(${s.topic_id},${s.depends_on_id},'${s.relationship}',this)" 
+          style="background:var(--green);color:var(--bg);border:none;border-radius:4px;padding:3px 8px;font-size:0.72rem;cursor:pointer;" aria-label="Aceitar sugestão">✓</button>
+      </div>`).join('');
+
+    const modal = document.createElement('div');
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:9999;display:flex;align-items:center;justify-content:center;';
+    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+    modal.innerHTML = `
+      <div style="background:var(--bg-elevated);border-radius:16px;padding:20px;max-width:500px;width:92%;max-height:80vh;overflow-y:auto;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <h3 style="font-size:1rem;">💡 Sugestões de Dependência</h3>
+          <button onclick="this.closest('div[style*=fixed]').remove()" style="background:none;border:none;color:var(--text-sub);cursor:pointer;font-size:1.2rem;" aria-label="Fechar">✕</button>
+        </div>
+        <p style="font-size:0.78rem;color:var(--text-sub);margin-bottom:12px;">${data.total_available} sugestões disponíveis. Aceite as que fazem sentido.</p>
+        ${html}
+      </div>`;
+    document.body.appendChild(modal);
+  } catch (e) { showToast('Erro ao carregar sugestões', 'error'); }
+}
+
+export async function acceptKgSuggestion(topicId, dependsOnId, relationship, btn) {
+  try {
+    await fetch('/api/knowledge-graph/edges', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topic_id: topicId, depends_on_id: dependsOnId, relationship })
+    });
+    btn.textContent = '✓';
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+    loadKnowledgeGraph();
+  } catch (e) {}
+}
+
+export async function showKgNodeInfo(topicId) {
+  try {
+    const data = await fetch(`/api/knowledge-graph/prerequisites/${topicId}`).then(r => r.json());
+    if (data.prerequisites.length === 0) {
+      showToast('Nenhum pré-requisito cadastrado', 'info');
+      return;
+    }
+    let html = data.prerequisites.map(p => {
+      const statusIcon = p.status === 'Concluído' ? '✅' : p.status === 'Em Andamento' ? '🟡' : '⬜';
+      return `<div style="padding:4px 0;font-size:0.82rem;">${'  '.repeat(p.depth)}${statusIcon} ${p.topico} <span style="color:var(--text-sub);font-size:0.72rem;">(${p.materia})</span></div>`;
+    }).join('');
+
+    showToast(`${data.all_completed ? '✅' : '⚠️'} ${data.total} pré-requisitos${data.all_completed ? ' — todos concluídos!' : ''}`, data.all_completed ? 'success' : 'warning');
+  } catch (e) {}
 }

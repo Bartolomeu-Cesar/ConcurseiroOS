@@ -338,6 +338,26 @@ def _m46_error_analysis(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_error_analysis_motivo ON error_analysis(motivo, user_id)")
     log.info("Migration: created error_analysis table")
 
+
+def _m47_topic_dependencies(conn):
+    """Create topic_dependencies table for knowledge graph."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS topic_dependencies (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            topic_id INTEGER NOT NULL,
+            depends_on_id INTEGER NOT NULL,
+            relationship TEXT NOT NULL DEFAULT 'prerequisite',
+            user_id INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (topic_id) REFERENCES edital(id),
+            FOREIGN KEY (depends_on_id) REFERENCES edital(id)
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_topic_deps_topic ON topic_dependencies(topic_id, user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_topic_deps_depends ON topic_dependencies(depends_on_id, user_id)")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_topic_deps_unique ON topic_dependencies(topic_id, depends_on_id, user_id)")
+    log.info("Migration: created topic_dependencies table")
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -385,6 +405,7 @@ MIGRATIONS = [
     (44, _m44_questoes_prova_origem),
     (45, _m45_edital_video_link),
     (46, _m46_error_analysis),
+    (47, _m47_topic_dependencies),
 ]
 
 
