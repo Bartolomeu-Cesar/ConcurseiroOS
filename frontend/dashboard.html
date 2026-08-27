@@ -443,6 +443,7 @@
       <span id="dash-countdown" style="background:var(--bg-surface);border-radius:20px;padding:4px 12px;font-size:0.78rem;color:var(--red);font-weight:600;"></span>
       <button class="export-btn" onclick="exportStats()">⬇ Exportar</button>
       <button onclick="toggleTheme()" title="Alternar tema" aria-label="Alternar tema claro/escuro" style="background:var(--bg-elevated);color:var(--text);border:none;border-radius:6px;padding:6px 10px;font-size:0.9rem;cursor:pointer;">🌓</button>
+      <button onclick="showNotificationPrefs()" title="Preferências de notificação" aria-label="Notificações" style="background:var(--bg-elevated);color:var(--text);border:none;border-radius:6px;padding:6px 10px;font-size:0.9rem;cursor:pointer;">🔔</button>
       <div id="dash-user-section" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-left:8px;position:relative;" onclick="toggleDashProfileMenu()" title="Perfil">
         <div id="dash-user-avatar" style="width:32px;height:32px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.8rem;color:var(--bg);"></div>
         <div>
@@ -966,6 +967,14 @@
     </div>
 
     <!-- Ranking de Matérias -->
+    <div class="charts">
+      <div class="chart-box" style="grid-column: span 2;">
+        <h3>💰 ROI por Matéria — Onde Investir Tempo</h3>
+        <p style="font-size:0.75rem;color:var(--text-sub);margin-bottom:10px;">Matérias com maior ganho potencial por hora extra de estudo. ROI = (peso × gap) / (horas + 1).</p>
+        <div id="roi-materias-box"></div>
+      </div>
+    </div>
+
     <div class="charts">
       <div class="chart-box" style="grid-column: span 2;">
         <h3>🏆 Ranking de Matérias — Fortes vs Fracas</h3>

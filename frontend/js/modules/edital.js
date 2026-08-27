@@ -277,8 +277,18 @@ export function selectEditalTopic(id, materia, topico) {
 }
 
 export async function toggleEditalStatus(id) {
+  // Verificar status anterior para disparar pre-test
+  const topicoAntes = state.editalData?.find(t => t.id === id);
+  const statusAnterior = topicoAntes?.status || '';
+
   const res = await fetch(`/api/edital/${id}/status`, { method: 'PUT' }).then(r => r.json());
   loadEdital();
+
+  // Pre-test: disparar quando tópico muda de "Não Iniciado" para "Em Andamento"
+  if (statusAnterior === 'Não Iniciado' && res.status === 'Em Andamento' && topicoAntes) {
+    showPreTest(topicoAntes.materia, topicoAntes.topico);
+  }
+
   if (res.status === 'Concluído') {
     const topico = state.editalData.find(t => t.id === id);
     if (topico) ofereceQuestoesPosEstudo(topico.materia, topico.topico);
@@ -319,6 +329,98 @@ function showMilestoneCelebration(milestone) {
   if (typeof launchConfetti === 'function') launchConfetti();
   // Auto-remove após 10s
   setTimeout(() => overlay.remove(), 10000);
+}
+
+// ===== Pre-Test: disparar antes de tópicos novos =====
+async function showPreTest(materia, topico) {
+  try {
+    const url = `/api/study-intelligence/pre-test?materia=${encodeURIComponent(materia)}${topico ? `&topico=${encodeURIComponent(topico)}` : ''}&quantidade=3`;
+    const data = await fetch(url).then(r => r.json());
+    if (!data.disponivel || !data.questoes || data.questoes.length === 0) return;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'pretest-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(30,30,46,0.9);z-index:99999;display:flex;align-items:center;justify-content:center;overflow-y:auto;padding:20px;';
+
+    let currentQ = 0;
+    let respostas = [];
+
+    function renderQuestion() {
+      const q = data.questoes[currentQ];
+      const alts = Object.entries(q.alternativas).filter(([k, v]) => v);
+      overlay.innerHTML = `
+        <div style="background:var(--bg-elevated, #45475a);border-radius:16px;padding:24px;max-width:440px;width:100%;text-align:left;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <span style="font-size:0.82rem;font-weight:700;color:var(--accent, #cba6f7);">🧪 Pre-Test (${currentQ + 1}/${data.questoes.length})</span>
+            <span style="font-size:0.72rem;color:var(--text-sub, #9399b2);">${materia}</span>
+          </div>
+          <div style="font-size:0.78rem;color:var(--yellow, #f9e2af);margin-bottom:12px;padding:8px;background:rgba(249,226,175,0.08);border-radius:8px;">
+            💡 ${data.instrucao}
+          </div>
+          <div style="font-size:0.9rem;color:var(--text, #cdd6f4);line-height:1.6;margin-bottom:16px;">${q.enunciado}</div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            ${alts.map(([letra, texto]) => `
+              <button class="pretest-alt" data-letra="${letra}" onclick="window._pretestResponder('${letra}')"
+                style="text-align:left;padding:12px 14px;background:var(--bg, #1e1e2e);border:2px solid var(--border, #45475a);border-radius:10px;color:var(--text, #cdd6f4);font-size:0.85rem;cursor:pointer;transition:border-color 0.2s;">
+                <strong>${letra})</strong> ${texto}
+              </button>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    window._pretestResponder = function(letra) {
+      const q = data.questoes[currentQ];
+      const correta = q.resposta_correta?.toUpperCase();
+      const acertou = letra.toUpperCase() === correta;
+      respostas.push({ questao_id: q.id, resposta: letra, acertou });
+
+      // Feedback visual rápido
+      document.querySelectorAll('.pretest-alt').forEach(btn => {
+        btn.disabled = true;
+        btn.style.cursor = 'default';
+        if (btn.dataset.letra === correta) {
+          btn.style.borderColor = 'var(--green, #a6e3a1)';
+          btn.style.background = 'rgba(166,227,161,0.1)';
+        } else if (btn.dataset.letra === letra && !acertou) {
+          btn.style.borderColor = 'var(--red, #f38ba8)';
+          btn.style.opacity = '0.6';
+        }
+      });
+
+      // Avançar após 1.2s
+      setTimeout(() => {
+        currentQ++;
+        if (currentQ < data.questoes.length) {
+          renderQuestion();
+        } else {
+          // Resultado do pre-test
+          const acertos = respostas.filter(r => r.acertou).length;
+          const total = respostas.length;
+          overlay.innerHTML = `
+            <div style="background:var(--bg-elevated, #45475a);border-radius:16px;padding:24px;max-width:380px;width:100%;text-align:center;">
+              <div style="font-size:2rem;margin-bottom:8px;">🧪</div>
+              <h3 style="color:var(--text, #cdd6f4);margin-bottom:8px;">Pre-Test Concluído!</h3>
+              <div style="font-size:1.5rem;font-weight:800;color:${acertos >= 2 ? 'var(--green)' : 'var(--yellow)'};margin-bottom:8px;">${acertos}/${total}</div>
+              <p style="font-size:0.82rem;color:var(--text-sub, #9399b2);margin-bottom:16px;">
+                ${acertos === 0 ? 'Tudo bem! Errar no pre-test MELHORA sua aprendizagem. Agora seu cérebro sabe no que focar.' :
+                  acertos === total ? 'Excelente! Você já domina o básico. Estude os detalhes avançados.' :
+                  'Bom! Agora você sabe seus gaps. Foque nos pontos que errou.'}
+              </p>
+              <button onclick="document.getElementById('pretest-overlay').remove()" style="background:var(--accent, #cba6f7);color:var(--bg, #1e1e2e);border:none;border-radius:10px;padding:12px 24px;font-weight:700;font-size:0.9rem;cursor:pointer;">
+                Iniciar Estudo →
+              </button>
+            </div>`;
+        }
+      }, 1200);
+    };
+
+    document.body.appendChild(overlay);
+    renderQuestion();
+  } catch(e) {
+    // Silently fail — pre-test não é obrigatório
+  }
 }
 
 function ofereceQuestoesPosEstudo(materia, topico) {

@@ -3,6 +3,7 @@
 import { toast } from '../modules/toast.js';
 import { handleAuthNav } from '../modules/auth.js';
 import { showQuestionXp } from '../modules/xp-notify.js';
+import { startFatigueSession, sendHeartbeat, hasActiveSession } from '../modules/fatigue-tracker.js';
 window.handleAuthNav = handleAuthNav;
 
 // Tab navigation
@@ -283,6 +284,16 @@ async function confirmarResposta() {
 
   // XP real-time feedback
   showQuestionXp(res.acertou);
+
+  // Fatigue tracking — enviar heartbeat
+  if (hasActiveSession()) {
+    sendHeartbeat(tempoSegundos * 1000, res.acertou);
+  } else {
+    // Iniciar sessão na primeira questão (lazy start)
+    startFatigueSession(currentQuestao?.materia || '', 'questoes').then(() => {
+      sendHeartbeat(tempoSegundos * 1000, res.acertou);
+    });
+  }
 
   // Marcar correta/errada visualmente
   const isCertoErrado = document.querySelector('.alternativa.ce-btn') !== null;

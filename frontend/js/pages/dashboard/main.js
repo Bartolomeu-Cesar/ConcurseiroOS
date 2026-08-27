@@ -1011,6 +1011,7 @@ function loadActivePanel() {
       loadConsistencia();
       loadMetasRealizado();
       loadRankingMaterias();
+      loadRoiMaterias();
       break;
     case 'panel-gamification':
       loadGamification();
@@ -1920,3 +1921,193 @@ async function loadSiTechniquesAlerts() {
 
 // Load after main widgets (give time for session to register)
 setTimeout(loadSiTechniquesAlerts, 1200);
+
+
+// ============================================================
+// PUSH NOTIFICATIONS — Preferences UI + Auto-check
+// ============================================================
+
+// Auto-check triggers on page load (inline alerts)
+(async function autoCheckNotifications() {
+  try {
+    const data = await fetch('/api/push/auto-check').then(r => r.ok ? r.json() : null);
+    if (!data || !data.alertas || data.alertas.length === 0) return;
+
+    // Mostrar alertas inline no topo do dashboard
+    const target = document.querySelector('.panel-visao .charts') || document.querySelector('.panel-visao');
+    if (!target) return;
+
+    const alertsHtml = data.alertas.map(a => `
+      <a href="${a.acao}" style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg-surface);border-radius:10px;text-decoration:none;border-left:3px solid var(--accent);transition:background 0.2s;" onmouseover="this.style.background='var(--bg-elevated)'" onmouseout="this.style.background='var(--bg-surface)'">
+        <span style="font-size:1.2rem;">${a.icone}</span>
+        <span style="font-size:0.82rem;color:var(--text);flex:1;">${a.msg}</span>
+        <span style="font-size:0.75rem;color:var(--accent);">→</span>
+      </a>
+    `).join('');
+
+    const container = document.createElement('div');
+    container.id = 'push-alerts-inline';
+    container.style.cssText = 'display:flex;flex-direction:column;gap:6px;margin-bottom:16px;';
+    container.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <span style="font-size:0.82rem;font-weight:700;color:var(--text);">🔔 Alertas</span>
+        <button onclick="document.getElementById('push-alerts-inline').remove()" style="background:none;border:none;color:var(--text-sub);font-size:0.75rem;cursor:pointer;">Fechar</button>
+      </div>
+      ${alertsHtml}
+    `;
+    target.insertBefore(container, target.firstChild);
+  } catch(e) {}
+})();
+
+// Notification Preferences Modal
+window.showNotificationPrefs = async function() {
+  try {
+    const prefs = await fetch('/api/push/preferences').then(r => r.json());
+    const status = await fetch('/api/push/status').then(r => r.json()).catch(() => ({ subscribed: false }));
+
+    const overlay = document.createElement('div');
+    overlay.id = 'notif-prefs-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(30,30,46,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;';
+    overlay.innerHTML = `
+      <div style="background:var(--bg-elevated, #45475a);border-radius:16px;padding:24px;max-width:400px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <h3 style="color:var(--text);margin:0;font-size:1.05rem;">🔔 Preferências de Notificação</h3>
+          <button onclick="document.getElementById('notif-prefs-overlay').remove()" style="background:none;border:none;color:var(--text-sub);font-size:1.3rem;cursor:pointer;">✕</button>
+        </div>
+
+        <div style="margin-bottom:16px;padding:10px;background:var(--bg);border-radius:8px;font-size:0.78rem;color:var(--text-sub);">
+          Status: ${status.subscribed ? '✅ Push ativo' : '❌ Push inativo'}.
+          ${!status.subscribed ? '<button onclick="window._requestPushPermission()" style="margin-left:8px;background:var(--accent);color:#1e1e2e;border:none;border-radius:6px;padding:4px 10px;font-size:0.75rem;cursor:pointer;">Ativar</button>' : ''}
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+            <input type="checkbox" id="pref-streak" ${prefs.streak_reminders ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--accent);">
+            <div><div style="font-size:0.85rem;color:var(--text);">🔥 Lembretes de Streak</div><div style="font-size:0.72rem;color:var(--text-sub);">Avisa quando streak está em risco</div></div>
+          </label>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+            <input type="checkbox" id="pref-flashcard" ${prefs.flashcard_reminders ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--accent);">
+            <div><div style="font-size:0.85rem;color:var(--text);">🧠 Flashcards Pendentes</div><div style="font-size:0.72rem;color:var(--text-sub);">Avisa quando há >10 flashcards atrasados</div></div>
+          </label>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+            <input type="checkbox" id="pref-exam" ${prefs.exam_reminders ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--accent);">
+            <div><div style="font-size:0.85rem;color:var(--text);">📅 Provas Próximas</div><div style="font-size:0.72rem;color:var(--text-sub);">Countdown quando prova está em 30 dias</div></div>
+          </label>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+            <input type="checkbox" id="pref-challenge" ${prefs.challenge_reminders ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--accent);">
+            <div><div style="font-size:0.85rem;color:var(--text);">🎯 Desafios Expirando</div><div style="font-size:0.72rem;color:var(--text-sub);">Avisa quando desafio expira em <1 dia</div></div>
+          </label>
+
+          <div style="border-top:1px solid var(--border);margin-top:4px;padding-top:12px;">
+            <div style="font-size:0.82rem;font-weight:600;color:var(--text);margin-bottom:8px;">🌙 Horário Silencioso</div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <input type="number" id="pref-quiet-start" value="${prefs.quiet_hours_start}" min="0" max="23" style="width:50px;padding:6px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85rem;text-align:center;">
+              <span style="color:var(--text-sub);font-size:0.8rem;">h até</span>
+              <input type="number" id="pref-quiet-end" value="${prefs.quiet_hours_end}" min="0" max="23" style="width:50px;padding:6px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85rem;text-align:center;">
+              <span style="color:var(--text-sub);font-size:0.8rem;">h</span>
+            </div>
+          </div>
+        </div>
+
+        <button onclick="window._saveNotifPrefs()" style="width:100%;margin-top:16px;padding:12px;background:var(--accent);color:#1e1e2e;border:none;border-radius:10px;font-weight:700;font-size:0.9rem;cursor:pointer;">
+          Salvar Preferências
+        </button>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  } catch(e) {
+    if (typeof _toastDash === 'function') _toastDash('Erro ao carregar preferências');
+  }
+};
+
+window._saveNotifPrefs = async function() {
+  const body = {
+    streak_reminders: document.getElementById('pref-streak').checked,
+    flashcard_reminders: document.getElementById('pref-flashcard').checked,
+    exam_reminders: document.getElementById('pref-exam').checked,
+    challenge_reminders: document.getElementById('pref-challenge').checked,
+    quiet_hours_start: parseInt(document.getElementById('pref-quiet-start').value) || 22,
+    quiet_hours_end: parseInt(document.getElementById('pref-quiet-end').value) || 7,
+  };
+
+  try {
+    await fetch('/api/push/preferences', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    document.getElementById('notif-prefs-overlay')?.remove();
+    if (typeof _toastDash === 'function') _toastDash('✅ Preferências salvas!');
+  } catch(e) {
+    if (typeof _toastDash === 'function') _toastDash('Erro ao salvar');
+  }
+};
+
+
+// ============================================================
+// ROI POR MATÉRIA — Retorno sobre investimento de tempo
+// ============================================================
+
+async function loadRoiMaterias() {
+  const box = document.getElementById('roi-materias-box');
+  if (!box) return;
+
+  try {
+    const data = await fetch('/api/analytics/roi-materias').then(r => r.json());
+    if (!data.materias || data.materias.length === 0) {
+      box.innerHTML = '<div style="font-size:0.82rem;color:var(--text-sub);padding:12px;">Sem dados suficientes. Resolva questões de diferentes matérias para calcular o ROI.</div>';
+      return;
+    }
+
+    const maxRoi = Math.max(...data.materias.map(m => m.roi), 1);
+
+    let html = `
+      <div style="display:flex;gap:8px;margin-bottom:12px;font-size:0.72rem;">
+        <span style="color:var(--green);">● Alto ROI (${data.resumo.alto_roi})</span>
+        <span style="color:var(--yellow);">● Médio (${data.resumo.medio})</span>
+        <span style="color:var(--text-sub);">● Baixo (${data.resumo.baixo})</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+    `;
+
+    data.materias.slice(0, 10).forEach((m, i) => {
+      const barWidth = Math.max(5, Math.round((m.roi / maxRoi) * 100));
+      const color = m.classificacao === 'Alto ROI' ? 'var(--green, #a6e3a1)' :
+                    m.classificacao === 'Médio' ? 'var(--yellow, #f9e2af)' : 'var(--text-sub, #6c7086)';
+      const badge = m.classificacao === 'Alto ROI' ? '🔥' : m.classificacao === 'Médio' ? '' : '📉';
+
+      html += `
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:0.72rem;color:var(--text-sub);min-width:18px;text-align:right;">${i + 1}.</span>
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
+              <span style="font-size:0.78rem;color:var(--text);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${badge} ${m.materia}</span>
+              <span style="font-size:0.68rem;color:var(--text-sub);white-space:nowrap;margin-left:8px;">${m.horas_investidas}h | ${m.pct_atual}% acerto</span>
+            </div>
+            <div style="height:6px;background:var(--border, #45475a);border-radius:3px;overflow:hidden;">
+              <div style="height:100%;width:${barWidth}%;background:${color};border-radius:3px;transition:width 0.4s;"></div>
+            </div>
+          </div>
+          <span style="font-size:0.72rem;font-weight:700;color:${color};min-width:40px;text-align:right;">${m.roi.toFixed(1)}</span>
+        </div>
+      `;
+    });
+
+    html += '</div>';
+
+    // Recomendação
+    const topMat = data.materias[0];
+    if (topMat && topMat.classificacao === 'Alto ROI') {
+      html += `
+        <div style="margin-top:12px;padding:10px;background:rgba(166,227,161,0.08);border:1px solid var(--green);border-radius:8px;font-size:0.78rem;color:var(--text);">
+          💡 <strong>Recomendação:</strong> Invista mais tempo em <strong>${topMat.materia}</strong> — peso ${topMat.peso_banca}% na banca, acerto atual ${topMat.pct_atual}%, com apenas ${topMat.horas_investidas}h investidas. Alto potencial de ganho!
+        </div>
+      `;
+    }
+
+    box.innerHTML = html;
+  } catch(e) {
+    box.innerHTML = '<div style="font-size:0.78rem;color:var(--text-sub);">Erro ao carregar ROI</div>';
+  }
+}
