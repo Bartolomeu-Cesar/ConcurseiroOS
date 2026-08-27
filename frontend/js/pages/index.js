@@ -28,8 +28,10 @@ function toggleSidebar() {
 window.toggleSidebar = toggleSidebar;
 
 function closeSidebar() {
-  document.getElementById('sidebar').classList.remove('open');
-  document.getElementById('sidebar-overlay').classList.remove('open');
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+  if (sidebar) sidebar.classList.remove('open');
+  if (overlay) overlay.classList.remove('open');
 }
 window.closeSidebar = closeSidebar;
 
@@ -146,164 +148,8 @@ function globalSearch(query) {
 }
 window.globalSearch = globalSearch;
 
-// ===== CICLO VISÕES (Diário/Semanal/Mensal/Completo) =====
-let cicloVisaoData = null;
-let cicloViewAtual = 'diario';
-
-function loadCicloVisao() {
-  const el = document.getElementById('ciclo-view-content');
-  if (el && !cicloVisaoData) el.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Carregando ciclo...</p>';
-  fetch('/api/ciclo/visao')
-    .then(r => {
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.json();
-    })
-    .then(data => {
-      if (data && data.diario) {
-        cicloVisaoData = data;
-        renderCicloView(cicloViewAtual);
-      }
-    })
-    .catch(() => {
-      // Retry once after 2s (auth token may not be ready yet)
-      setTimeout(() => {
-        fetch('/api/ciclo/visao')
-          .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-          .then(data => { if (data && data.diario) { cicloVisaoData = data; renderCicloView(cicloViewAtual); } })
-          .catch(() => {
-            if (el) el.innerHTML = '<p style="color:#f38ba8;font-size:0.85rem;">Erro ao carregar ciclo. Tente recarregar a página.</p>';
-          });
-      }, 2000);
-    });
-}
-
-function switchCicloView(view, btn) {
-  cicloViewAtual = view;
-  document.querySelectorAll('.ciclo-view-btn').forEach(b => b.classList.remove('active'));
-  if (btn) btn.classList.add('active');
-
-  const el = document.getElementById('ciclo-view-content');
-  if (!el) return;
-
-  if (cicloVisaoData && cicloVisaoData.diario && !cicloVisaoData.sem_dados) {
-    renderCicloView(view);
-  } else {
-    el.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Carregando...</p>';
-    fetch('/api/ciclo/visao')
-      .then(r => {
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r.json();
-      })
-      .then(data => {
-        if (data && data.diario) {
-          cicloVisaoData = data;
-          renderCicloView(cicloViewAtual);
-        } else {
-          el.innerHTML = '<p style="color:#9399b2;">Adicione matérias ao edital para gerar o ciclo.</p>';
-        }
-      })
-      .catch(e => {
-        el.innerHTML = '<p style="color:#f38ba8;">Erro ao carregar: ' + e.message + '</p>';
-      });
-  }
-}
-window.switchCicloView = switchCicloView;
-
-// Fallback: se ciclo-view-content está vazio após 2s, recarregar
-setTimeout(() => {
-  const el = document.getElementById('ciclo-view-content');
-  const cicloTab = document.getElementById('tab-ciclo');
-  if (el && cicloTab && cicloTab.classList.contains('active') && (!el.innerHTML || el.innerHTML.trim() === '')) {
-    loadCicloVisao();
-  }
-}, 2000);
-
-function renderCicloView(view) {
-  const el = document.getElementById('ciclo-view-content');
-  if (!el || !cicloVisaoData) return;
-  if (cicloVisaoData.sem_dados) { el.innerHTML = '<p style="color:#9399b2;">Adicione matérias ao edital para gerar o ciclo.</p>'; return; }
-  if (view === 'diario') renderDiario(el, cicloVisaoData.diario);
-  else if (view === 'semanal') renderSemanal(el, cicloVisaoData.semanal);
-  else if (view === 'mensal') renderMensal(el, cicloVisaoData.mensal);
-  else renderCompleto(el, cicloVisaoData.completo, cicloVisaoData.stats);
-}
-
-function renderDiario(el, items) {
-  if (!items || !items.length) { el.innerHTML = '<p style="color:#9399b2;">Nenhuma matéria no ciclo. Importe do edital.</p>'; return; }
-  el.innerHTML = items.map(m => `
-    <div style="background:#1e1e2e;border-radius:10px;padding:14px;margin-bottom:8px;border-left:4px solid ${m.prioridade==='alta'?'#f38ba8':'#fab387'};">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-        <strong style="font-size:0.95rem;">${m.materia}</strong>
-        <span style="font-size:0.82rem;background:#313244;border-radius:12px;padding:3px 10px;">${m.horas}h</span>
-      </div>
-      <div style="font-size:0.82rem;color:#a6e3a1;margin-bottom:4px;">→ ${m.acao}</div>
-      ${m.atividades && m.atividades.length ? `<div style="margin:8px 0;padding:8px;background:#313244;border-radius:8px;">
-        ${m.atividades.map(a => `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:0.78rem;">
-          <span style="color:${a.tipo==='teoria'?'#89b4fa':a.tipo==='questoes'?'#cba6f7':'#a6e3a1'};">${a.tipo==='teoria'?'📖':a.tipo==='questoes'?'❓':'🔄'}</span>
-          <span style="flex:1;color:#cdd6f4;">${a.descricao}</span>
-          <span style="color:#9399b2;white-space:nowrap;">${a.tempo_min}min</span>
-        </div>`).join('')}
-      </div>` : ''}
-      <div style="font-size:0.75rem;color:#9399b2;">${m.motivo}</div>
-      <div style="display:flex;gap:12px;margin-top:6px;font-size:0.75rem;color:#a6adc8;">
-        <span>📊 ${m.pct_acerto}% acerto</span><span>📋 ${m.pendentes} pendentes</span>
-      </div>
-    </div>`).join('');
-}
-
-function renderSemanal(el, dias) {
-  if (!dias || !dias.length) { el.innerHTML = '<p style="color:#9399b2;">Sem dados semanais disponíveis.</p>'; return; }
-  el.innerHTML = dias.map(d => `
-    <div style="margin-bottom:10px;${d.is_hoje?'background:#1e1e2e;border:1px solid #cba6f7;border-radius:10px;padding:10px;':''}">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-        <strong style="font-size:0.88rem;${d.is_hoje?'color:#cba6f7;':'color:#cdd6f4;'}">${d.dia}${d.is_hoje?' (HOJE)':''}</strong>
-        <span style="font-size:0.78rem;color:#9399b2;">${d.horas_total}h</span>
-      </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;">
-        ${d.materias.map(m => `<span style="font-size:0.78rem;background:${m.prioridade==='alta'?'#45475a':'#313244'};border-radius:6px;padding:4px 10px;border-left:3px solid ${m.prioridade==='alta'?'#f38ba8':m.prioridade==='media'?'#fab387':'#a6e3a1'};">${m.materia} <span style="color:#9399b2;">(${m.horas}h)</span></span>`).join('')}
-      </div>
-    </div>`).join('');
-}
-
-function renderMensal(el, semanas) {
-  if (!semanas || !semanas.length) { el.innerHTML = '<p style="color:#9399b2;">Sem dados mensais disponíveis.</p>'; return; }
-  el.innerHTML = semanas.map(s => `
-    <div style="background:#1e1e2e;border-radius:10px;padding:14px;margin-bottom:10px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <strong>Semana ${s.semana}</strong>
-        <span style="font-size:0.78rem;color:#9399b2;">${s.foco} · ${s.horas_total}h</span>
-      </div>
-      <div style="height:4px;background:#313244;border-radius:2px;margin-bottom:8px;overflow:hidden;">
-        <div style="height:100%;width:${s.fator_questoes}%;background:#89b4fa;border-radius:2px;"></div>
-      </div>
-      <div style="font-size:0.72rem;color:#9399b2;margin-bottom:6px;">Teoria ${100-s.fator_questoes}% | Questões ${s.fator_questoes}%</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;">
-        ${s.materias.slice(0,5).map(m => `<span style="font-size:0.75rem;background:#313244;border-radius:6px;padding:3px 8px;">${m.materia} <span style="color:#a6adc8;">${m.horas_teoria}h+${m.questoes_meta}q</span></span>`).join('')}
-        ${s.materias.length>5?`<span style="font-size:0.75rem;color:#9399b2;">+${s.materias.length-5}</span>`:''}
-      </div>
-    </div>`).join('');
-}
-
-function renderCompleto(el, items, stats) {
-  if (!items || !items.length || !stats) { el.innerHTML = '<p style="color:#9399b2;">Sem dados disponíveis.</p>'; return; }
-  let h = `<div style="display:flex;gap:16px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
-    <div style="font-size:0.85rem;"><strong style="font-size:1.3rem;color:#cba6f7;">${stats.pct_geral}%</strong> completo</div>
-    <div style="font-size:0.78rem;color:#9399b2;">${stats.horas_cumpridas}/${stats.horas_alvo}h</div>
-    ${stats.dias_prova!==null?`<div style="font-size:0.78rem;color:#f38ba8;font-weight:600;">📅 ${stats.dias_prova} dias</div>`:''}
-    <div style="font-size:0.78rem;color:#a6e3a1;">✅ ${stats.dominadas} dominadas</div>
-    <div style="font-size:0.78rem;color:#f38ba8;">⚠️ ${stats.criticas} críticas</div></div>`;
-  h += items.map(m => `
-    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #313244;">
-      <div style="width:8px;height:8px;border-radius:50%;background:${m.cor};flex-shrink:0;"></div>
-      <span style="flex:1;font-size:0.85rem;font-weight:500;">${m.materia}</span>
-      <span style="font-size:0.72rem;color:#9399b2;min-width:55px;">${m.pct_acerto}%</span>
-      <div style="width:80px;height:6px;background:#313244;border-radius:3px;overflow:hidden;">
-        <div style="height:100%;width:${m.pct_ciclo}%;background:${m.cor};border-radius:3px;"></div>
-      </div>
-      <span style="font-size:0.72rem;color:#a6adc8;min-width:35px;text-align:right;">${m.pct_ciclo}%</span>
-    </div>`).join('');
-  el.innerHTML = h;
-}
+// ===== CICLO VISÕES — moved to modules/ciclo.js =====
+// switchCicloView is now exported from ciclo.js and registered in app.js
 
 // Load ciclo "ontem" card
 function loadCicloOntem() {
@@ -354,16 +200,15 @@ function loadCicloOntem() {
 const _origNav = navigateTo;
 window.navigateTo = function(tabId, btn) {
   _origNav(tabId, btn);
-  if (tabId === 'tab-ciclo') { loadCicloOntem(); loadCicloVisao(); }
+  if (tabId === 'tab-ciclo') { loadCicloOntem(); }
   if (tabId === 'tab-videos') { loadVideosList(); }
 };
 
-// Auto-load ciclo data if tab-ciclo is currently visible
+// Auto-load ciclo ontem if tab-ciclo is currently visible
 setTimeout(() => {
   const cicloTab = document.getElementById('tab-ciclo');
   if (cicloTab && cicloTab.classList.contains('active')) {
     loadCicloOntem();
-    loadCicloVisao();
   }
 }, 300);
 

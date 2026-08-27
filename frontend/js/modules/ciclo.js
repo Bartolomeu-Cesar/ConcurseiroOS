@@ -192,4 +192,137 @@ export async function limparCiclo() {
 export function initCiclo(deps) {
   _loadStreakBadge = deps.loadStreakBadge;
   loadCiclo();
+  // Load ciclo visões (Diário/Semanal/Mensal/Completo)
+  _loadCicloVisaoFromModule();
+}
+
+// ============================================================
+// CICLO VISÕES — carregamento integrado ao módulo
+// ============================================================
+let _cicloVisaoData = null;
+let _cicloViewAtual = 'diario';
+
+function _loadCicloVisaoFromModule() {
+  const el = document.getElementById('ciclo-view-content');
+  if (!el) return;
+  el.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Carregando plano de estudos...</p>';
+  fetch('/api/ciclo/visao')
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(data => {
+      _cicloVisaoData = data;
+      _renderCicloView(_cicloViewAtual);
+    })
+    .catch(() => {
+      // Retry after 2s (token may not be ready)
+      setTimeout(() => {
+        fetch('/api/ciclo/visao')
+          .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+          .then(data => { _cicloVisaoData = data; _renderCicloView(_cicloViewAtual); })
+          .catch(e => { if (el) el.innerHTML = `<p style="color:#f38ba8;">Erro: ${e.message}. Recarregue a página.</p>`; });
+      }, 2000);
+    });
+}
+
+export function switchCicloView(view, btn) {
+  _cicloViewAtual = view;
+  document.querySelectorAll('.ciclo-view-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const el = document.getElementById('ciclo-view-content');
+  if (!el) return;
+  if (_cicloVisaoData && (_cicloVisaoData.diario || _cicloVisaoData.sem_dados)) {
+    _renderCicloView(view);
+  } else {
+    el.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Carregando...</p>';
+    fetch('/api/ciclo/visao')
+      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(data => { _cicloVisaoData = data; _renderCicloView(view); })
+      .catch(e => { el.innerHTML = `<p style="color:#f38ba8;">Erro: ${e.message}</p>`; });
+  }
+}
+
+function _renderCicloView(view) {
+  const el = document.getElementById('ciclo-view-content');
+  if (!el || !_cicloVisaoData) return;
+  if (_cicloVisaoData.sem_dados) { el.innerHTML = '<p style="color:#9399b2;">Adicione matérias ao edital para gerar o ciclo.</p>'; return; }
+  if (view === 'diario') _renderDiario(el, _cicloVisaoData.diario);
+  else if (view === 'semanal') _renderSemanal(el, _cicloVisaoData.semanal);
+  else if (view === 'mensal') _renderMensal(el, _cicloVisaoData.mensal);
+  else _renderCompleto(el, _cicloVisaoData.completo, _cicloVisaoData.stats);
+}
+
+function _renderDiario(el, items) {
+  if (!items || !items.length) { el.innerHTML = '<p style="color:#9399b2;">Nenhuma matéria no ciclo. Importe do edital.</p>'; return; }
+  el.innerHTML = items.map(m => `
+    <div style="background:var(--bg);border-radius:10px;padding:14px;margin-bottom:8px;border-left:4px solid ${m.prioridade==='alta'?'var(--red)':'var(--peach)'};">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <strong style="font-size:0.95rem;color:var(--text);">${m.materia}</strong>
+        <span style="font-size:0.82rem;background:var(--bg-surface);border-radius:12px;padding:3px 10px;color:var(--text-sub);">${m.horas}h</span>
+      </div>
+      <div style="font-size:0.82rem;color:var(--green);margin-bottom:4px;">→ ${m.acao}</div>
+      ${m.atividades && m.atividades.length ? `<div style="margin:8px 0;padding:8px;background:var(--bg-surface);border-radius:8px;">
+        ${m.atividades.map(a => `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:0.78rem;">
+          <span style="color:${a.tipo==='teoria'?'var(--blue)':a.tipo==='questoes'?'var(--accent)':'var(--green)'};">${a.tipo==='teoria'?'📖':a.tipo==='questoes'?'❓':'🔄'}</span>
+          <span style="flex:1;color:var(--text);">${a.descricao}</span>
+          <span style="color:var(--text-sub);white-space:nowrap;">${a.tempo_min}min</span>
+        </div>`).join('')}
+      </div>` : ''}
+      <div style="font-size:0.75rem;color:var(--text-sub);">${m.motivo}</div>
+      <div style="display:flex;gap:12px;margin-top:6px;font-size:0.75rem;color:var(--text-sub);">
+        <span>📊 ${m.pct_acerto}% acerto</span><span>📋 ${m.pendentes} pendentes</span>
+      </div>
+    </div>`).join('');
+}
+
+function _renderSemanal(el, dias) {
+  if (!dias || !dias.length) { el.innerHTML = '<p style="color:var(--text-sub);">Sem dados semanais.</p>'; return; }
+  el.innerHTML = dias.map(d => `
+    <div style="margin-bottom:10px;${d.is_hoje?'background:var(--bg);border:1px solid var(--accent);border-radius:10px;padding:10px;':''}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <strong style="font-size:0.88rem;${d.is_hoje?'color:var(--accent);':'color:var(--text);'}">${d.dia}${d.is_hoje?' (HOJE)':''}</strong>
+        <span style="font-size:0.78rem;color:var(--text-sub);">${d.horas_total}h · ${d.tipo_dia || ''}</span>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        ${(d.materias||[]).map(m => `<span style="font-size:0.78rem;background:var(--bg-surface);border-radius:6px;padding:4px 10px;border-left:3px solid ${m.prioridade==='alta'?'var(--red)':m.prioridade==='media'?'var(--peach)':'var(--green)'};">${m.materia} <span style="color:var(--text-sub);">(${m.horas}h)</span></span>`).join('')}
+      </div>
+    </div>`).join('');
+}
+
+function _renderMensal(el, semanas) {
+  if (!semanas || !semanas.length) { el.innerHTML = '<p style="color:var(--text-sub);">Sem dados mensais.</p>'; return; }
+  el.innerHTML = semanas.map(s => `
+    <div style="background:var(--bg);border-radius:10px;padding:14px;margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <strong style="color:var(--text);">Semana ${s.semana}</strong>
+        <span style="font-size:0.78rem;color:var(--text-sub);">${s.foco} · ${s.horas_total}h</span>
+      </div>
+      <div style="height:4px;background:var(--bg-surface);border-radius:2px;margin-bottom:8px;overflow:hidden;">
+        <div style="height:100%;width:${s.fator_questoes}%;background:var(--blue);border-radius:2px;"></div>
+      </div>
+      <div style="font-size:0.72rem;color:var(--text-sub);margin-bottom:6px;">Teoria ${100-s.fator_questoes}% | Questões ${s.fator_questoes}%</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        ${(s.materias||[]).slice(0,5).map(m => `<span style="font-size:0.75rem;background:var(--bg-surface);border-radius:6px;padding:3px 8px;color:var(--text);">${m.materia} <span style="color:var(--text-sub);">${m.horas_teoria}h+${m.questoes_meta}q</span></span>`).join('')}
+        ${(s.materias||[]).length>5?`<span style="font-size:0.75rem;color:var(--text-sub);">+${s.materias.length-5}</span>`:''}
+      </div>
+    </div>`).join('');
+}
+
+function _renderCompleto(el, items, stats) {
+  if (!items || !items.length || !stats) { el.innerHTML = '<p style="color:var(--text-sub);">Sem dados disponíveis.</p>'; return; }
+  let h = `<div style="display:flex;gap:16px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
+    <div style="font-size:0.85rem;color:var(--text);"><strong style="font-size:1.3rem;color:var(--accent);">${stats.pct_geral}%</strong> completo</div>
+    <div style="font-size:0.78rem;color:var(--text-sub);">${stats.horas_cumpridas}/${stats.horas_alvo}h</div>
+    ${stats.dias_prova!==null?`<div style="font-size:0.78rem;color:var(--red);font-weight:600;">📅 ${stats.dias_prova} dias p/ prova</div>`:''}
+    <div style="font-size:0.78rem;color:var(--green);">✅ ${stats.dominadas} dominadas</div>
+    <div style="font-size:0.78rem;color:var(--red);">⚠️ ${stats.criticas} críticas</div></div>`;
+  h += items.map(m => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
+      <div style="width:8px;height:8px;border-radius:50%;background:${m.cor};flex-shrink:0;"></div>
+      <span style="flex:1;font-size:0.85rem;font-weight:500;color:var(--text);">${m.materia}</span>
+      <span style="font-size:0.72rem;color:var(--text-sub);min-width:55px;">${m.pct_acerto}%</span>
+      <div style="width:80px;height:6px;background:var(--bg-surface);border-radius:3px;overflow:hidden;">
+        <div style="height:100%;width:${m.pct_ciclo}%;background:${m.cor};border-radius:3px;"></div>
+      </div>
+      <span style="font-size:0.72rem;color:var(--text-sub);min-width:35px;text-align:right;">${m.pct_ciclo}%</span>
+    </div>`).join('');
+  el.innerHTML = h;
 }
