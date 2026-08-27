@@ -2923,3 +2923,166 @@ def peer_teaching_registrar(
         "xp_ganho": 30,
         "mensagem": f"🎓 +30 XP por ensinar {materia}! Ensinar é a forma mais eficaz de fixar conhecimento.",
     }
+
+
+# ============================================================
+# GAMIFIED SPACED REPETITION — Boss Battle Mode
+# Flashcard review como RPG: Boss HP = difficulty, dano = rating
+# Motivação via narrativa + mecânicas de jogo
+# ============================================================
+
+@router.get("/api/study-intelligence/boss-battle", summary="Boss Battle — Gamified Flashcard Review",
+            description="""Transforma revisão de flashcards em batalha contra um Boss.
+Boss HP proporcional à dificuldade dos cards pendentes.
+Cada card respondido = ataque. Rating determina dano.
+Derrota o boss = XP + badge. Motivação via narrativa de jogo.""")
+def boss_battle_start(
+    materia: str = "",
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Gera uma boss battle com flashcards pendentes."""
+    import random
+    hoje = today_str()
+
+    # Buscar flashcards pendentes para revisão
+    params = [hoje, user_id]
+    filtro_mat = ""
+    if materia:
+        filtro_mat = "AND materia = ?"
+        params.append(materia)
+
+    cards = conn.execute(f"""
+        SELECT id, pergunta, resposta, materia, difficulty, stability, fsrs_state
+        FROM flashcards
+        WHERE proxima_revisao <= ? AND user_id = ? {filtro_mat}
+        ORDER BY difficulty DESC, stability ASC
+        LIMIT 15
+    """, params).fetchall()
+
+    if not cards:
+        return {
+            "boss": None,
+            "mensagem": "🎉 Sem flashcards pendentes! Todos os bosses foram derrotados hoje.",
+            "cards": [],
+        }
+
+    cards_list = [dict(c) for c in cards]
+
+    # Calcular Boss stats baseado nos cards
+    avg_difficulty = sum(c.get("difficulty") or 3 for c in cards_list) / len(cards_list)
+    total_cards = len(cards_list)
+
+    # Boss HP = média de difficulty × quantidade de cards × 10
+    boss_hp = int(avg_difficulty * total_cards * 10)
+
+    # Escolher boss baseado na dificuldade
+    bosses = [
+        {"nome": "Esquecimento Leve", "emoji": "👻", "tier": 1, "hp_range": (0, 100)},
+        {"nome": "Confusão Mental", "emoji": "🌀", "tier": 2, "hp_range": (101, 200)},
+        {"nome": "Bloqueio Cognitivo", "emoji": "🧱", "tier": 3, "hp_range": (201, 350)},
+        {"nome": "Amnésia Profunda", "emoji": "🕳️", "tier": 4, "hp_range": (351, 500)},
+        {"nome": "Dragão do Esquecimento", "emoji": "🐉", "tier": 5, "hp_range": (501, 9999)},
+    ]
+
+    boss = bosses[0]
+    for b in bosses:
+        if b["hp_range"][0] <= boss_hp <= b["hp_range"][1]:
+            boss = b
+            break
+        boss = b  # Fallback para o último
+
+    # Dano por rating: Again=5, Hard=15, Good=30, Easy=50
+    dano_map = {1: 5, 2: 15, 3: 30, 4: 50}
+
+    # Preparar cards para batalha (sem mostrar resposta)
+    battle_cards = [{
+        "id": c["id"],
+        "pergunta": c["pergunta"],
+        "materia": c["materia"],
+        "difficulty": round(c.get("difficulty") or 3, 1),
+    } for c in cards_list]
+
+    return {
+        "boss": {
+            "nome": boss["nome"],
+            "emoji": boss["emoji"],
+            "tier": boss["tier"],
+            "hp_total": boss_hp,
+            "hp_atual": boss_hp,
+        },
+        "cards": battle_cards,
+        "total_cards": total_cards,
+        "dano_map": dano_map,
+        "dano_descricao": {
+            "again": "5 dano (Miss! 💨)",
+            "hard": "15 dano (Ataque fraco ⚔️)",
+            "good": "30 dano (Ataque forte 🗡️)",
+            "easy": "50 dano (Critical Hit! 💥)",
+        },
+        "recompensas": {
+            "derrotar_boss": f"+{boss['tier'] * 20} XP",
+            "sem_erros": "+50 XP bônus (Perfect Battle!)",
+            "combo_3_easy": "+30 XP (Combo Easy ×3)",
+        },
+        "mensagem": f"⚔️ {boss['emoji']} {boss['nome']} (Tier {boss['tier']}) apareceu! HP: {boss_hp}. Revise os flashcards para atacar!",
+        "instrucao": "Cada flashcard = 1 ataque. Avalie honestamente: Again(5dmg), Hard(15), Good(30), Easy(50). Derrote o boss!",
+    }
+
+
+@router.post("/api/study-intelligence/boss-battle/resultado", summary="Registrar resultado da Boss Battle")
+def boss_battle_resultado(
+    boss_tier: int = Body(1),
+    boss_hp_total: int = Body(100),
+    dano_total: int = Body(0),
+    cards_revisados: int = Body(0),
+    acertos_easy: int = Body(0),
+    acertos_good: int = Body(0),
+    acertos_hard: int = Body(0),
+    erros_again: int = Body(0),
+    derrotou: bool = Body(False),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Registra resultado da boss battle e calcula XP ganho."""
+
+    xp_total = 0
+
+    # XP por derrotar boss
+    if derrotou:
+        xp_total += boss_tier * 20
+
+    # Bônus perfect (sem erros)
+    if erros_again == 0 and cards_revisados > 0:
+        xp_total += 50
+
+    # Bônus combo Easy ×3+
+    if acertos_easy >= 3:
+        xp_total += 30
+
+    # XP base por cards revisados
+    xp_total += cards_revisados * 5
+
+    # Feedback narrativo
+    if derrotou and erros_again == 0:
+        narrativa = f"🏆 PERFECT VICTORY! {boss_tier * '⭐'} {acertos_easy + acertos_good + acertos_hard} ataques, 0 falhas. Lendário!"
+    elif derrotou:
+        narrativa = f"⚔️ BOSS DERROTADO! Dano total: {dano_total}. Você venceu o esquecimento!"
+    elif dano_total > boss_hp_total * 0.7:
+        narrativa = f"😤 Quase! Boss com apenas {boss_hp_total - dano_total} HP restante. Volte amanhã para finalizar!"
+    else:
+        narrativa = f"💀 Boss sobreviveu com {boss_hp_total - dano_total} HP. Revise mais e tente novamente!"
+
+    return {
+        "xp_ganho": xp_total,
+        "derrotou": derrotou,
+        "narrativa": narrativa,
+        "stats": {
+            "cards_revisados": cards_revisados,
+            "dano_total": dano_total,
+            "easy": acertos_easy,
+            "good": acertos_good,
+            "hard": acertos_hard,
+            "again": erros_again,
+        },
+    }
