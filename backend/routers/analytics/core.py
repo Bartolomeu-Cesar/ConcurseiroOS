@@ -11,7 +11,7 @@ from database import get_db_session
 from deps import get_user_id
 from logger import log
 from services import get_acertos_por_materia, get_horas_estudadas
-from utils import calculate_streak, paginate, sql_paginate, today_str
+from utils import calculate_streak, sql_paginate, today_str
 
 router = APIRouter(prefix="", tags=["Analytics"])
 

@@ -37,3 +37,11 @@ backend/.vapid_public_key
 rate_limit.db
 rate_limit.db-wal
 rate_limit.db-shm
+
+# DB maintenance marker
+backend/.last_vacuum
+
+# Coverage reports
+.coverage
+backend/.coverage
+htmlcov/

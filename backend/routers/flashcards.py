@@ -16,7 +16,7 @@ from schemas import (
     OkResponse,
 )
 from sanitize import sanitize_input
-from utils import paginate, today_str, update_streak
+from utils import sql_paginate, today_str, update_streak
 
 router = APIRouter(prefix="", tags=["Flashcards"])
 
@@ -24,11 +24,12 @@ router = APIRouter(prefix="", tags=["Flashcards"])
 @router.get("/api/flashcards", summary="Listar flashcards", description="Lista todos os flashcards com paginação opcional e filtro por matéria")
 def list_flashcards(materia: str = "", page: int | None = Query(None), limit: int = 50, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     if materia:
-        rows = conn.execute("SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia FROM flashcards WHERE materia = ? AND user_id = ?", (materia, user_id)).fetchall()
+        query = "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia FROM flashcards WHERE materia = ? AND user_id = ?"
+        params = (materia, user_id)
     else:
-        rows = conn.execute("SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia FROM flashcards WHERE user_id = ?", (user_id,)).fetchall()
-    items = [dict(r) for r in rows]
-    return paginate(items, page, limit)
+        query = "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia FROM flashcards WHERE user_id = ?"
+        params = (user_id,)
+    return sql_paginate(conn, query, params, page, limit)
 
 
 @router.get("/api/flashcards/materias", summary="Listar matérias dos flashcards")

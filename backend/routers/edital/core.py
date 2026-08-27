@@ -12,7 +12,7 @@ from logger import log
 from schemas import EditalCreate, EditalHoras, EditalPdfLink, EditalReviewSM2, NotaTopicoCreate, OkResponse, ResumoCreate
 from sanitize import sanitize_input
 from schemas import CreateEditalInfoRequest, RenomearEditalRequest, UpdateEditalInfoRequest
-from utils import paginate, sql_paginate, today_str
+from utils import sql_paginate, today_str
 
 router = APIRouter(prefix="", tags=["Edital"])
 

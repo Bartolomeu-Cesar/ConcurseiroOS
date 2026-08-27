@@ -85,10 +85,10 @@ def _record_request(conn: sqlite3.Connection, identifier: str, endpoint_type: st
         conn.commit()
 
 
-def check_rate_limit(identifier: str, endpoint_type: str, limit: int) -> bool:
+def check_rate_limit(identifier: str, endpoint_type: str, limit: int) -> tuple[bool, int]:
     """Check if the identifier is within rate limits.
 
-    Returns True if allowed, False if rate limited.
+    Returns (True, 0) if allowed, (False, retry_after_seconds) if rate limited.
     Records the request if allowed.
     """
     now = time.time()
@@ -101,10 +101,17 @@ def check_rate_limit(identifier: str, endpoint_type: str, limit: int) -> bool:
 
         count = _count_requests(conn, identifier, endpoint_type, now)
         if count >= limit:
-            return False
+            # Calculate when the oldest request in window expires
+            cutoff = now - _WINDOW_SECONDS
+            oldest = conn.execute(
+                "SELECT MIN(timestamp) FROM rate_limits WHERE ip = ? AND endpoint_type = ? AND timestamp > ?",
+                (identifier, endpoint_type, cutoff),
+            ).fetchone()[0]
+            retry_after = max(1, int((oldest + _WINDOW_SECONDS) - now)) if oldest else _WINDOW_SECONDS
+            return False, retry_after
 
         _record_request(conn, identifier, endpoint_type, now)
-        return True
+        return True, 0
     finally:
         conn.close()
 
@@ -158,12 +165,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             identifier = client_ip
 
         # Check rate limit
-        allowed = check_rate_limit(identifier, endpoint_type, limit)
+        allowed, retry_after = check_rate_limit(identifier, endpoint_type, limit)
         if not allowed:
             return Response(
                 content='{"detail":"Too Many Requests. Tente novamente em alguns instantes."}',
                 status_code=429,
                 media_type="application/json",
+                headers={"Retry-After": str(retry_after)},
             )
 
         return await call_next(request)

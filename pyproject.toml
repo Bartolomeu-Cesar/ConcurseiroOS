@@ -34,3 +34,19 @@ known-first-party = ["database", "models", "utils", "logger", "backup", "constan
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]
 pythonpath = ["backend"]
+
+[tool.coverage.run]
+source = ["."]
+omit = [
+    "tests/*",
+    "database_pg.py",
+    "main_old.py",
+]
+
+[tool.coverage.report]
+fail_under = 50
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.",
+    "pass",
+]
