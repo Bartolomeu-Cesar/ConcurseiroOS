@@ -1274,3 +1274,545 @@ def overlearning_detection(conn=Depends(get_db_session), user_id: int = Depends(
         "sugestao": f"Redistribua ~{tempo_potencial_min}min/dia de itens dominados para: {', '.join(r['materia'] for r in materias_necessitadas)}" if materias_necessitadas and has_overlearning else "Nenhuma redistribuição necessária no momento.",
         "tecnica": "Overlearning (Rohrer & Taylor 2006): após 3+ acertos perfeitos, prática adicional tem retorno decrescente. Invista o tempo em matérias com < 60% de acerto para maximizar ganho marginal.",
     }
+
+
+# ============================================================
+# TRANSFER TESTING — Barnett & Ceci (2002)
+# Testar em formato diferente do estudo = transferência mais profunda
+# ============================================================
+
+@router.get("/api/study-intelligence/transfer-test", summary="Transfer Testing",
+            description="""Retorna questões em formato DIFERENTE do que o aluno costuma responder.
+Se só respondeu múltipla-escolha, oferece C/E. Se só C/E, oferece aberta.
+Baseado em Barnett & Ceci (2002): variar formato força processamento mais profundo.""")
+def transfer_test(
+    materia: str = "",
+    quantidade: int = 5,
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Gera teste de transferência: mesmo conteúdo, formato diferente."""
+    hoje = today_str()
+
+    # Detectar formato predominante das últimas 30 respostas
+    ultimas = conn.execute("""
+        SELECT q.id, q.alternativa_c, q.alternativa_d
+        FROM questoes_respostas qr
+        JOIN questoes q ON q.id = qr.questao_id
+        WHERE qr.user_id = ?
+        ORDER BY qr.id DESC LIMIT 30
+    """, (user_id,)).fetchall()
+
+    # Classificar: se tem alternativa_c = múltipla escolha, senão = C/E
+    multipla = sum(1 for r in ultimas if r["alternativa_c"])
+    certo_errado = len(ultimas) - multipla
+
+    # Formato preferido vs formato alternativo
+    if multipla > certo_errado:
+        formato_predominante = "multipla_escolha"
+        formato_transferencia = "certo_errado"
+        # Buscar questões C/E (sem alternativa_c)
+        filtro_formato = "AND (q.alternativa_c IS NULL OR q.alternativa_c = '')"
+    else:
+        formato_predominante = "certo_errado"
+        formato_transferencia = "multipla_escolha"
+        filtro_formato = "AND q.alternativa_c IS NOT NULL AND q.alternativa_c != ''"
+
+    # Filtro de matéria
+    filtro_materia = ""
+    params = [user_id]
+    if materia:
+        filtro_materia = "AND q.materia = ?"
+        params.append(materia)
+
+    # Buscar questões no formato alternativo que o user NUNCA respondeu
+    questoes = conn.execute(f"""
+        SELECT q.id, q.enunciado, q.alternativa_a, q.alternativa_b, q.alternativa_c,
+               q.alternativa_d, q.alternativa_e, q.resposta_correta, q.materia, q.dificuldade
+        FROM questoes q
+        WHERE q.user_id = ? {filtro_materia} {filtro_formato}
+        AND q.id NOT IN (SELECT questao_id FROM questoes_respostas WHERE user_id = ?)
+        ORDER BY RANDOM() LIMIT ?
+    """, params + [user_id, quantidade]).fetchall()
+
+    # Se não tem questões no formato alternativo, pegar questões já respondidas
+    # mas apresentar como "geração" (sem alternativas, só enunciado)
+    formato_geracao = []
+    if len(questoes) < quantidade:
+        faltando = quantidade - len(questoes)
+        geracoes = conn.execute(f"""
+            SELECT q.id, q.enunciado, q.resposta_correta, q.materia, q.explicacao
+            FROM questoes q
+            WHERE q.user_id = ? {filtro_materia}
+            AND q.id IN (SELECT questao_id FROM questoes_respostas WHERE user_id = ? AND acertou = 1)
+            ORDER BY RANDOM() LIMIT ?
+        """, params + [user_id, faltando]).fetchall()
+        formato_geracao = [dict(r) for r in geracoes]
+
+    return {
+        "formato_predominante": formato_predominante,
+        "formato_transferencia": formato_transferencia,
+        "questoes_formato_alternativo": [dict(q) for q in questoes],
+        "questoes_formato_geracao": formato_geracao,
+        "total": len(questoes) + len(formato_geracao),
+        "mensagem": f"Você costuma responder {formato_predominante.replace('_', ' ')}. Vamos testar transferência com {formato_transferencia.replace('_', ' ')}!",
+        "tecnica": "Transfer Testing (Barnett & Ceci 2002): responder no mesmo formato sempre cria 'ilusão de aprendizado'. Variar o formato testa se realmente entendeu o conceito.",
+    }
+
+
+# ============================================================
+# ADAPTIVE BREAK SCHEDULING — Ultradian Rhythms + Fatigue Detection
+# Pausas inteligentes baseadas em fadiga real, não timer fixo
+# ============================================================
+
+@router.get("/api/study-intelligence/adaptive-break", summary="Adaptive Break Scheduling",
+            description="""Calcula o momento ideal para pausa baseado em fadiga real:
+tempo de resposta crescente + taxa de acerto decrescente + duração da sessão.
+Baseado em ritmos ultradianos (~90min) e detecção de fadiga cognitiva.""")
+def adaptive_break(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Analisa sessão atual e recomenda se deve pausar ou continuar."""
+    hoje = today_str()
+
+    # Últimas 20 respostas de hoje com tempo
+    respostas = conn.execute("""
+        SELECT qr.acertou, qr.tempo_segundos, qr.id
+        FROM questoes_respostas qr
+        WHERE qr.user_id = ? AND qr.data = ? AND qr.tempo_segundos > 0
+        ORDER BY qr.id ASC
+    """, (user_id, hoje)).fetchall()
+
+    if len(respostas) < 5:
+        return {
+            "deve_pausar": False,
+            "fadiga_nivel": "insuficiente",
+            "motivo": "Menos de 5 respostas hoje — dados insuficientes para análise.",
+            "sugestao_pausa_min": 0,
+            "sessao_min_estimado": 0,
+        }
+
+    # Dividir em primeira metade e segunda metade da sessão
+    meio = len(respostas) // 2
+    primeira_metade = respostas[:meio]
+    segunda_metade = respostas[meio:]
+
+    # Métricas da primeira metade
+    tempo_medio_inicio = sum(r["tempo_segundos"] for r in primeira_metade) / len(primeira_metade)
+    acerto_inicio = sum(1 for r in primeira_metade if r["acertou"]) / len(primeira_metade)
+
+    # Métricas da segunda metade (recente)
+    tempo_medio_fim = sum(r["tempo_segundos"] for r in segunda_metade) / len(segunda_metade)
+    acerto_fim = sum(1 for r in segunda_metade if r["acertou"]) / len(segunda_metade)
+
+    # Últimas 5 respostas (janela curta para detecção imediata)
+    ultimas5 = respostas[-5:]
+    tempo_ultimas5 = sum(r["tempo_segundos"] for r in ultimas5) / 5
+    acerto_ultimas5 = sum(1 for r in ultimas5 if r["acertou"]) / 5
+
+    # Calcular indicadores de fadiga
+    tempo_aumento_pct = ((tempo_medio_fim - tempo_medio_inicio) / tempo_medio_inicio * 100) if tempo_medio_inicio > 0 else 0
+    acerto_queda_pct = ((acerto_inicio - acerto_fim) / acerto_inicio * 100) if acerto_inicio > 0 else 0
+
+    # Tempo total de sessão (estimado pela diferença entre primeiro e último registro)
+    # Aproximar pelo número de questões × tempo médio
+    sessao_min = sum(r["tempo_segundos"] for r in respostas) / 60
+
+    # === Determinar nível de fadiga ===
+    # Critérios:
+    # - Tempo de resposta aumentou > 30% → fadiga leve
+    # - Tempo aumentou > 50% OU acerto caiu > 20% → fadiga moderada
+    # - Tempo aumentou > 70% E acerto caiu > 30% → fadiga alta
+    # - Sessão > 90min (ritmo ultradiano) → sugerir pausa independente
+    if tempo_aumento_pct > 70 and acerto_queda_pct > 30:
+        fadiga = "alta"
+        deve_pausar = True
+        pausa_min = 20
+    elif tempo_aumento_pct > 50 or acerto_queda_pct > 20:
+        fadiga = "moderada"
+        deve_pausar = True
+        pausa_min = 10
+    elif tempo_aumento_pct > 30 or sessao_min > 90:
+        fadiga = "leve"
+        deve_pausar = sessao_min > 60  # Só sugere se já passou 60min
+        pausa_min = 5
+    else:
+        fadiga = "baixa"
+        deve_pausar = False
+        pausa_min = 0
+
+    # Sugerir atividade de pausa
+    if pausa_min >= 15:
+        atividade_pausa = "Levante, hidrate-se, faça alongamento. Considere uma caminhada curta."
+    elif pausa_min >= 10:
+        atividade_pausa = "Respiração 4-4-6 (2min) + água. Evite telas."
+    elif pausa_min > 0:
+        atividade_pausa = "Feche os olhos 2min. Respire fundo. Depois continue."
+    else:
+        atividade_pausa = ""
+
+    # Construir motivo detalhado
+    motivos = []
+    if tempo_aumento_pct > 30:
+        motivos.append(f"Tempo de resposta aumentou {tempo_aumento_pct:.0f}%")
+    if acerto_queda_pct > 15:
+        motivos.append(f"Taxa de acerto caiu {acerto_queda_pct:.0f}%")
+    if sessao_min > 90:
+        motivos.append(f"Sessão de {sessao_min:.0f}min (ritmo ultradiano: pausa a cada ~90min)")
+    if acerto_ultimas5 < 0.4:
+        motivos.append(f"Últimas 5 questões: apenas {int(acerto_ultimas5*100)}% de acerto")
+
+    return {
+        "deve_pausar": deve_pausar,
+        "fadiga_nivel": fadiga,
+        "motivo": " · ".join(motivos) if motivos else "Performance estável. Continue!",
+        "sugestao_pausa_min": pausa_min,
+        "atividade_pausa": atividade_pausa,
+        "sessao_min_estimado": round(sessao_min, 1),
+        "metricas": {
+            "total_questoes_hoje": len(respostas),
+            "tempo_medio_inicio_seg": round(tempo_medio_inicio, 1),
+            "tempo_medio_fim_seg": round(tempo_medio_fim, 1),
+            "acerto_inicio_pct": round(acerto_inicio * 100, 1),
+            "acerto_fim_pct": round(acerto_fim * 100, 1),
+            "tempo_aumento_pct": round(tempo_aumento_pct, 1),
+            "acerto_queda_pct": round(acerto_queda_pct, 1),
+        },
+        "tecnica": "Adaptive Break (ritmos ultradianos + detecção de fadiga): pausar quando a performance CAI é mais eficiente que pausar por timer fixo. Produtividade pós-pausa aumenta 15-20%.",
+    }
+
+
+# ============================================================
+# PROGRESS MILESTONES — Locke & Latham (2002) Goal-Setting Theory
+# Celebrações em marcos de progresso = motivação sustentada
+# ============================================================
+
+@router.get("/api/study-intelligence/milestones", summary="Progress Milestones",
+            description="""Verifica e retorna marcos de progresso alcançados recentemente.
+Baseado em Goal-Setting Theory (Locke & Latham 2002): marcos intermediários
+com feedback positivo mantêm motivação e senso de progresso.""")
+def progress_milestones(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Retorna conquistas/marcos alcançados e próximos marcos."""
+    hoje = today_str()
+
+    milestones_alcancados = []
+    proximos_marcos = []
+
+    # === Total de questões respondidas ===
+    total_questoes = conn.execute(
+        "SELECT COUNT(*) FROM questoes_respostas WHERE user_id = ?", (user_id,)
+    ).fetchone()[0]
+
+    marcos_questoes = [50, 100, 250, 500, 1000, 2500, 5000]
+    for marco in marcos_questoes:
+        if total_questoes >= marco:
+            milestones_alcancados.append({
+                "tipo": "questoes_total",
+                "marco": marco,
+                "atual": total_questoes,
+                "icone": "❓",
+                "titulo": f"{marco} questões respondidas!",
+            })
+        else:
+            proximos_marcos.append({
+                "tipo": "questoes_total",
+                "marco": marco,
+                "atual": total_questoes,
+                "pct": round(total_questoes / marco * 100, 1),
+                "falta": marco - total_questoes,
+                "icone": "❓",
+                "titulo": f"{marco} questões",
+            })
+            break
+
+    # === Flashcards revisados ===
+    total_flash = conn.execute(
+        "SELECT COALESCE(SUM(flashcards_revisados), 0) FROM streaks WHERE user_id = ?", (user_id,)
+    ).fetchone()[0]
+
+    marcos_flash = [50, 100, 300, 500, 1000, 3000]
+    for marco in marcos_flash:
+        if total_flash >= marco:
+            milestones_alcancados.append({
+                "tipo": "flashcards_total",
+                "marco": marco,
+                "atual": total_flash,
+                "icone": "🧠",
+                "titulo": f"{marco} revisões de flashcard!",
+            })
+        else:
+            proximos_marcos.append({
+                "tipo": "flashcards_total",
+                "marco": marco,
+                "atual": total_flash,
+                "pct": round(total_flash / marco * 100, 1),
+                "falta": marco - total_flash,
+                "icone": "🧠",
+                "titulo": f"{marco} revisões",
+            })
+            break
+
+    # === Matérias dominadas (>80% acerto + 20+ questões) ===
+    materias_dominadas = conn.execute("""
+        SELECT q.materia, COUNT(*) as total,
+               ROUND(CAST(SUM(qr.acertou) AS FLOAT) / COUNT(*) * 100, 1) as pct
+        FROM questoes_respostas qr
+        JOIN questoes q ON q.id = qr.questao_id
+        WHERE qr.user_id = ?
+        GROUP BY q.materia
+        HAVING total >= 20 AND pct >= 80
+    """, (user_id,)).fetchall()
+
+    for m in materias_dominadas:
+        milestones_alcancados.append({
+            "tipo": "materia_dominada",
+            "marco": 80,
+            "atual": m["pct"],
+            "icone": "🏆",
+            "titulo": f"{m['materia']} dominada ({m['pct']}%)!",
+            "materia": m["materia"],
+        })
+
+    # === Streak máximo ===
+    try:
+        from utils import get_streak_info
+        streak_info = get_streak_info(conn, user_id=user_id)
+        streak_atual = streak_info.get("streak_atual", 0)
+        streak_max = streak_info.get("streak_maximo", 0)
+    except Exception:
+        streak_atual = 0
+        streak_max = 0
+
+    marcos_streak = [3, 7, 14, 30, 60, 100]
+    for marco in marcos_streak:
+        if streak_max >= marco:
+            milestones_alcancados.append({
+                "tipo": "streak",
+                "marco": marco,
+                "atual": streak_max,
+                "icone": "🔥",
+                "titulo": f"Streak de {marco} dias!",
+            })
+        else:
+            proximos_marcos.append({
+                "tipo": "streak",
+                "marco": marco,
+                "atual": streak_atual,
+                "pct": round(streak_atual / marco * 100, 1),
+                "falta": marco - streak_atual,
+                "icone": "🔥",
+                "titulo": f"Streak de {marco} dias",
+            })
+            break
+
+    # === Horas totais de estudo ===
+    total_horas = conn.execute(
+        "SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE user_id = ?", (user_id,)
+    ).fetchone()[0]
+
+    marcos_horas = [10, 25, 50, 100, 250, 500, 1000]
+    for marco in marcos_horas:
+        if total_horas >= marco:
+            milestones_alcancados.append({
+                "tipo": "horas_total",
+                "marco": marco,
+                "atual": round(total_horas, 1),
+                "icone": "⏱️",
+                "titulo": f"{marco}h de estudo!",
+            })
+        else:
+            proximos_marcos.append({
+                "tipo": "horas_total",
+                "marco": marco,
+                "atual": round(total_horas, 1),
+                "pct": round(total_horas / marco * 100, 1),
+                "falta": round(marco - total_horas, 1),
+                "icone": "⏱️",
+                "titulo": f"{marco}h de estudo",
+            })
+            break
+
+    # === Progresso do edital ===
+    edital_stats = conn.execute("""
+        SELECT COUNT(*) as total, SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) as concluidos
+        FROM edital WHERE user_id = ? AND arquivado = 0
+    """, (user_id,)).fetchone()
+    if edital_stats["total"] > 0:
+        pct_edital = round(edital_stats["concluidos"] / edital_stats["total"] * 100, 1)
+        marcos_edital = [25, 50, 75, 100]
+        for marco in marcos_edital:
+            if pct_edital >= marco:
+                milestones_alcancados.append({
+                    "tipo": "edital_progresso",
+                    "marco": marco,
+                    "atual": pct_edital,
+                    "icone": "📋",
+                    "titulo": f"Edital {marco}% concluído!",
+                })
+            else:
+                proximos_marcos.append({
+                    "tipo": "edital_progresso",
+                    "marco": marco,
+                    "atual": pct_edital,
+                    "pct": round(pct_edital / marco * 100, 1),
+                    "falta": round(marco - pct_edital, 1),
+                    "icone": "📋",
+                    "titulo": f"Edital {marco}%",
+                })
+                break
+
+    # Próximo marco mais próximo (para destacar)
+    proximos_marcos.sort(key=lambda x: -x["pct"])
+
+    return {
+        "total_alcancados": len(milestones_alcancados),
+        "milestones_alcancados": milestones_alcancados,
+        "proximos_marcos": proximos_marcos[:5],  # Top 5 mais próximos
+        "mensagem_motivacional": _milestone_message(milestones_alcancados, proximos_marcos),
+        "tecnica": "Goal-Setting Theory (Locke & Latham 2002): marcos intermediários com celebração mantêm motivação intrínseca e sensação de progresso contínuo.",
+    }
+
+
+def _milestone_message(alcancados: list, proximos: list) -> str:
+    """Gera mensagem motivacional baseada nos marcos."""
+    if not alcancados:
+        return "🚀 Comece agora! Cada questão te aproxima do primeiro marco."
+    if proximos and proximos[0]["pct"] >= 90:
+        return f"🔥 Quase lá! Faltam apenas {proximos[0]['falta']} para '{proximos[0]['titulo']}'!"
+    total = len(alcancados)
+    if total >= 10:
+        return "🏆 Incrível! Mais de 10 marcos conquistados. Você está no caminho certo!"
+    elif total >= 5:
+        return "💪 Excelente progresso! Continue assim, a aprovação está mais perto."
+    else:
+        return "👏 Bom começo! Cada sessão de estudo constrói a base da sua aprovação."
+
+
+# ============================================================
+# ERROR ANALYSIS PATTERNS — Distractor Analysis + Metacognition
+# Categorizar POR QUE erra para atacar a raiz
+# ============================================================
+
+@router.get("/api/study-intelligence/error-patterns", summary="Error Analysis Patterns",
+            description="""Analisa padrões nos erros do usuário e categoriza as causas.
+Categorias: interpretação de texto, conceito errado, exceção à regra, pegadinha/distrator, desatenção.
+Permite atacar a CAUSA dos erros, não apenas revisar o conteúdo.""")
+def error_patterns(
+    materia: str = "",
+    dias: int = 30,
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Analisa padrões de erro por matéria nos últimos N dias."""
+    data_inicio = (date.today() - timedelta(days=dias)).isoformat()
+
+    # Buscar erros com contexto
+    filtro_mat = "AND q.materia = ?" if materia else ""
+    params = [user_id, data_inicio]
+    if materia:
+        params.append(materia)
+
+    erros = conn.execute(f"""
+        SELECT qr.id as resposta_id, qr.tempo_segundos, qr.confianca,
+               q.materia, q.dificuldade, q.enunciado, q.resposta_correta,
+               qr.resposta_usuario
+        FROM questoes_respostas qr
+        JOIN questoes q ON q.id = qr.questao_id
+        WHERE qr.user_id = ? AND qr.data >= ? AND qr.acertou = 0
+        {filtro_mat}
+        ORDER BY qr.id DESC
+    """, params).fetchall()
+
+    if not erros:
+        return {
+            "total_erros": 0,
+            "padroes": [],
+            "distribuicao": {},
+            "recomendacoes": ["Sem erros no período analisado. Aumente a dificuldade!"],
+        }
+
+    # Classificar erros por padrão provável (heurísticas)
+    padroes = {
+        "desatencao": [],      # Tempo muito rápido + confiança alta
+        "conceito": [],         # Tempo normal + matéria com baixo acerto geral
+        "interpretacao": [],    # Tempo alto (leu mas não entendeu)
+        "pegadinha": [],        # Tempo normal + confiança alta + errou
+        "exceção": [],          # Alternativa próxima da correta
+    }
+
+    for e in erros:
+        erro = dict(e)
+        tempo = erro["tempo_segundos"] or 0
+        confianca = erro["confianca"]
+        dif = erro["dificuldade"] or "Médio"
+
+        # Threshold de tempo por dificuldade
+        tempo_normal = {"Fácil": 30, "Médio": 60, "Difícil": 90}.get(dif, 60)
+
+        # Heurísticas de classificação:
+        if tempo > 0 and tempo < tempo_normal * 0.3:
+            # Muito rápido = desatenção (não leu direito)
+            padroes["desatencao"].append(erro)
+        elif tempo > tempo_normal * 1.5:
+            # Muito lento = dificuldade de interpretação
+            padroes["interpretacao"].append(erro)
+        elif confianca is not None and confianca >= 4:
+            # Alta confiança mas errou = pegadinha ou exceção
+            padroes["pegadinha"].append(erro)
+        elif confianca is not None and confianca <= 2:
+            # Baixa confiança = sabe que não sabe (conceito)
+            padroes["conceito"].append(erro)
+        else:
+            # Caso geral: conceito ou exceção
+            padroes["conceito"].append(erro)
+
+    # Distribuição
+    total = len(erros)
+    distribuicao = {
+        k: {"count": len(v), "pct": round(len(v) / total * 100, 1)}
+        for k, v in padroes.items() if v
+    }
+
+    # Matérias mais afetadas por cada padrão
+    por_materia = {}
+    for padrao, lista in padroes.items():
+        for e in lista:
+            mat = e["materia"]
+            if mat not in por_materia:
+                por_materia[mat] = {}
+            por_materia[mat][padrao] = por_materia[mat].get(padrao, 0) + 1
+
+    # Recomendações baseadas no padrão dominante
+    recomendacoes = []
+    padrao_dominante = max(padroes, key=lambda k: len(padroes[k])) if erros else None
+
+    if padrao_dominante == "desatencao":
+        recomendacoes.append("🎯 Leia TODAS as alternativas antes de responder. Seu erro principal é responder rápido demais.")
+        recomendacoes.append("⏱️ Espere pelo menos 10s antes de marcar (elimine a pressa).")
+    elif padrao_dominante == "interpretacao":
+        recomendacoes.append("📖 Foque em interpretação de texto. Sublinhe palavras-chave no enunciado.")
+        recomendacoes.append("🔍 Procure por: NÃO, EXCETO, INCORRETA, SEMPRE, NUNCA no enunciado.")
+    elif padrao_dominante == "pegadinha":
+        recomendacoes.append("⚠️ Cuidado com 'quase certo'. Leia o enunciado 2x quando a resposta parecer óbvia.")
+        recomendacoes.append("🧠 Procure a exceção ou condição que invalida a 'resposta óbvia'.")
+    elif padrao_dominante == "conceito":
+        recomendacoes.append("📚 Revise a teoria antes de fazer mais questões. Há lacunas conceituais.")
+        recomendacoes.append("🧠 Use elaboração: POR QUE esta é a resposta? Qual o fundamento?")
+    elif padrao_dominante == "exceção":
+        recomendacoes.append("📋 Faça uma lista de exceções por matéria. Bancas adoram cobrar exceções.")
+        recomendacoes.append("🔄 Crie flashcards específicos para regras + suas exceções.")
+
+    return {
+        "total_erros": total,
+        "periodo_dias": dias,
+        "padrao_dominante": padrao_dominante,
+        "distribuicao": distribuicao,
+        "por_materia": por_materia,
+        "recomendacoes": recomendacoes,
+        "detalhes_padroes": {
+            "desatencao": {"descricao": "Respondeu rápido demais (não leu direito)", "count": len(padroes["desatencao"])},
+            "conceito": {"descricao": "Não domina o conceito/regra", "count": len(padroes["conceito"])},
+            "interpretacao": {"descricao": "Dificuldade em interpretar o enunciado", "count": len(padroes["interpretacao"])},
+            "pegadinha": {"descricao": "Caiu em distrator/pegadinha (confiante mas errou)", "count": len(padroes["pegadinha"])},
+            "exceção": {"descricao": "Não conhecia a exceção à regra", "count": len(padroes["exceção"])},
+        },
+        "tecnica": "Error Analysis (metacognição + distractor analysis): entender POR QUE erra é mais eficaz que apenas revisar o conteúdo. Atacar a causa elimina categorias inteiras de erro.",
+    }
