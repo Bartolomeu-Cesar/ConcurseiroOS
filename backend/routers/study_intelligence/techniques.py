@@ -2796,3 +2796,130 @@ def anxiety_exposure_registrar(
         "sessoes_totais": len(historico),
         "recomendacao": f"Continue no nível {nivel}" if diff >= 0 else f"Tente nível {max(1, nivel-1)} na próxima",
     }
+
+
+# ============================================================
+# PEER TEACHING — Webb (1991), Fiorella & Mayer (2013)
+# Ensinar = processamento profundo + detecção de lacunas
+# "Se não consegue explicar, não entendeu de verdade"
+# ============================================================
+
+@router.get("/api/study-intelligence/peer-teaching", summary="Peer Teaching Suggestion",
+            description="""Sugere tópicos para o user ENSINAR a outros (no chat, grupo ou Study Room).
+Ensinar produz 'generative learning' — força reorganização do conhecimento.
+Baseado em Webb (1991): quem explica retém 90% vs 10% de quem apenas lê.
+Fiorella & Mayer (2013): 'learning by teaching' é uma das técnicas mais eficazes.""")
+def peer_teaching_suggestion(
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Sugere tópicos ideais para ensinar (domínio suficiente mas não perfeito)."""
+    hoje = today_str()
+
+    # Tópicos ideais para ensinar: acerto entre 70-90% (sabe o suficiente mas ensinar consolida)
+    materias_para_ensinar = conn.execute("""
+        SELECT q.materia,
+               COUNT(*) as total,
+               ROUND(CAST(SUM(qr.acertou) AS FLOAT) / COUNT(*) * 100, 1) as pct_acerto
+        FROM questoes_respostas qr
+        JOIN questoes q ON q.id = qr.questao_id
+        WHERE qr.user_id = ?
+        GROUP BY q.materia
+        HAVING total >= 10 AND pct_acerto BETWEEN 70 AND 92
+        ORDER BY pct_acerto DESC
+    """, (user_id,)).fetchall()
+
+    sugestoes = []
+    for m in materias_para_ensinar[:5]:
+        # Buscar tópico específico dessa matéria que tem bom domínio
+        topico = conn.execute("""
+            SELECT topico FROM edital
+            WHERE materia = ? AND user_id = ? AND status = 'Concluído' AND arquivado = 0
+            ORDER BY RANDOM() LIMIT 1
+        """, (m["materia"], user_id)).fetchone()
+
+        sugestoes.append({
+            "materia": m["materia"],
+            "pct_acerto": m["pct_acerto"],
+            "total_questoes": m["total"],
+            "topico_sugerido": topico["topico"] if topico else None,
+            "como_ensinar": _gerar_prompt_ensino(m["materia"], topico["topico"] if topico else ""),
+        })
+
+    # Verificar se já ensinou recentemente (XP bonus tracking)
+    xp_ensino = 0
+    try:
+        ensinos = conn.execute("""
+            SELECT COUNT(*) as total FROM peer_teaching_log
+            WHERE user_id = ? AND created_at >= date('now', '-7 days')
+        """, (user_id,)).fetchone()
+        xp_ensino = (ensinos["total"] or 0) * 30  # 30 XP por ensino
+    except Exception:
+        pass
+
+    return {
+        "sugestoes": sugestoes,
+        "total_sugestoes": len(sugestoes),
+        "xp_ensino_semana": xp_ensino,
+        "mensagem": "🎓 Ensinar é a forma mais eficaz de aprender! Escolha um tópico e explique para alguém (chat, grupo ou Study Room).",
+        "beneficios": [
+            "Retenção de 90% (vs 10% de leitura passiva)",
+            "Identifica lacunas: se não consegue explicar, precisa revisar",
+            "Reforça conexões neurais pelo processamento generativo",
+            "Ganha 30 XP por cada sessão de ensino registrada",
+        ],
+        "tecnica": "Peer Teaching (Webb 1991, Fiorella & Mayer 2013): explicar para outros força reorganização do conhecimento e detecção de lacunas. Pirâmide de aprendizagem: ensinar = 90% retenção.",
+    }
+
+
+def _gerar_prompt_ensino(materia: str, topico: str) -> str:
+    """Gera prompt/desafio para ensinar o tópico."""
+    if topico:
+        return f"Explique '{topico}' como se estivesse ensinando para um colega que nunca estudou {materia}. Use exemplos práticos."
+    return f"Escolha um conceito de {materia} que você domina e explique em no máximo 3 parágrafos, como se fosse para alguém que está começando."
+
+
+@router.post("/api/study-intelligence/peer-teaching/registrar", summary="Registrar sessão de ensino")
+def peer_teaching_registrar(
+    materia: str = Body(...),
+    topico: str = Body(""),
+    formato: str = Body("texto", description="texto, audio, video, chat, studyroom"),
+    duracao_min: int = Body(5),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Registra que o user ensinou algo (dá XP bônus)."""
+    from datetime import datetime
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS peer_teaching_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            materia TEXT NOT NULL,
+            topico TEXT DEFAULT '',
+            formato TEXT DEFAULT 'texto',
+            duracao_min INTEGER DEFAULT 5,
+            created_at TEXT NOT NULL
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_peer_teaching_user ON peer_teaching_log(user_id)")
+
+    conn.execute("""
+        INSERT INTO peer_teaching_log (user_id, materia, topico, formato, duracao_min, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (user_id, materia, topico, formato, duracao_min, datetime.now().isoformat()))
+
+    # Registrar como sessão de estudo (tipo 'ensino')
+    horas = duracao_min / 60
+    conn.execute("""
+        INSERT INTO sessoes_estudo (materia, horas, data, tipo, user_id, created_at)
+        VALUES (?, ?, ?, 'ensino', ?, ?)
+    """, (materia, round(horas, 3), today_str(), user_id, datetime.now().isoformat()))
+
+    conn.commit()
+
+    return {
+        "ok": True,
+        "xp_ganho": 30,
+        "mensagem": f"🎓 +30 XP por ensinar {materia}! Ensinar é a forma mais eficaz de fixar conhecimento.",
+    }
