@@ -243,6 +243,28 @@ def revisar_erro(id: int, body: RevisarErroRequest, conn=Depends(get_db_session)
         revisao["id"],
         user_id,
     ))
+
+    # Registrar tempo de revisão (~2min por questão) + atualizar streak
+    from utils import update_streak
+    horas_revisao = 2 / 60  # ~2 minutos por revisão de erro
+    materia = conn.execute("SELECT materia FROM questoes WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
+    mat_nome = materia["materia"] if materia else "Caderno de Erros"
+
+    existing = conn.execute(
+        "SELECT id, horas FROM sessoes_estudo WHERE data = ? AND materia = ? AND tipo = 'caderno_erros' AND user_id = ?",
+        (hoje, mat_nome, user_id)
+    ).fetchone()
+    if existing:
+        conn.execute("UPDATE sessoes_estudo SET horas = horas + ? WHERE id = ? AND user_id = ?",
+                     (horas_revisao, existing["id"], user_id))
+    else:
+        from datetime import datetime as dt
+        conn.execute(
+            "INSERT INTO sessoes_estudo (materia, horas, data, tipo, user_id, created_at) VALUES (?, ?, ?, 'caderno_erros', ?, ?)",
+            (mat_nome, horas_revisao, hoje, user_id, dt.now().isoformat())
+        )
+    update_streak(conn, "questoes_resolvidas", user_id=user_id)
+
     conn.commit()
 
     return {
