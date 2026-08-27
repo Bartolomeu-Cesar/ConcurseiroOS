@@ -465,3 +465,115 @@ def plano_automatico(edital_nome: str = "", cargo: str = "", horas_dia: float = 
             "total_horas": round(total_horas_disponiveis, 0), "topicos_restantes": total_topicos_restantes,
             "plano": sorted(plano, key=lambda x: -x['topicos_restantes'])}
 
+
+
+# ============================================================
+# COMPARTILHAMENTO DE PROGRESSO — Card Social
+# ============================================================
+
+@router.get("/api/analytics/share-card", summary="Card de compartilhamento de progresso",
+            description="Gera dados para card de progresso compartilhável em redes sociais.")
+def share_card(
+    periodo: str = Query("semana", description="semana, mes, total"),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Gera dados para card de compartilhamento com stats do período."""
+    from datetime import timedelta
+
+    hoje = date.today()
+
+    if periodo == "semana":
+        inicio = (hoje - timedelta(days=hoje.weekday())).isoformat()
+        titulo = f"Resumo da Semana"
+        subtitulo = f"{inicio} a {hoje.isoformat()}"
+    elif periodo == "mes":
+        inicio = hoje.replace(day=1).isoformat()
+        titulo = f"Resumo do Mês"
+        subtitulo = f"{hoje.strftime('%B %Y')}"
+    else:
+        inicio = "2000-01-01"
+        titulo = "Progresso Total"
+        subtitulo = "Desde o início"
+
+    # Horas estudadas no período
+    horas = conn.execute("""
+        SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo
+        WHERE user_id = ? AND data >= ?
+    """, (user_id, inicio)).fetchone()[0]
+
+    # Questões resolvidas
+    questoes = conn.execute("""
+        SELECT COUNT(*) as total, COALESCE(SUM(acertou), 0) as acertos
+        FROM questoes_respostas WHERE user_id = ? AND data >= ?
+    """, (user_id, inicio)).fetchone()
+    total_q = questoes["total"]
+    acertos_q = questoes["acertos"]
+    pct_acerto = round(acertos_q / total_q * 100, 1) if total_q > 0 else 0
+
+    # Streak
+    try:
+        from utils import get_streak_info
+        streak_info = get_streak_info(conn, user_id=user_id)
+        streak = streak_info.get("streak_atual", 0)
+    except Exception:
+        streak = 0
+
+    # Dias ativos no período
+    dias_ativos = conn.execute("""
+        SELECT COUNT(DISTINCT data) FROM streaks
+        WHERE user_id = ? AND data >= ?
+        AND (horas_estudadas > 0 OR questoes_resolvidas > 0 OR flashcards_revisados > 0)
+    """, (user_id, inicio)).fetchone()[0]
+
+    # Melhor matéria (maior % acerto com >10 questões)
+    melhor = conn.execute("""
+        SELECT q.materia, ROUND(CAST(SUM(qr.acertou) AS FLOAT) / COUNT(*) * 100, 1) as pct
+        FROM questoes_respostas qr
+        JOIN questoes q ON q.id = qr.questao_id
+        WHERE qr.user_id = ? AND qr.data >= ?
+        GROUP BY q.materia HAVING COUNT(*) >= 5
+        ORDER BY pct DESC LIMIT 1
+    """, (user_id, inicio)).fetchone()
+
+    # Pior matéria
+    pior = conn.execute("""
+        SELECT q.materia, ROUND(CAST(SUM(qr.acertou) AS FLOAT) / COUNT(*) * 100, 1) as pct
+        FROM questoes_respostas qr
+        JOIN questoes q ON q.id = qr.questao_id
+        WHERE qr.user_id = ? AND qr.data >= ?
+        GROUP BY q.materia HAVING COUNT(*) >= 5
+        ORDER BY pct ASC LIMIT 1
+    """, (user_id, inicio)).fetchone()
+
+    # Conquistas do período
+    conquistas = []
+    if horas >= 10:
+        conquistas.append(f"🏆 {horas:.1f}h estudadas")
+    if total_q >= 50:
+        conquistas.append(f"💯 {total_q} questões resolvidas")
+    if streak >= 7:
+        conquistas.append(f"🔥 Streak de {streak} dias")
+    if pct_acerto >= 70:
+        conquistas.append(f"🎯 {pct_acerto}% de acerto")
+
+    dias_semana = 7 if periodo == "semana" else 30 if periodo == "mes" else dias_ativos
+
+    return {
+        "titulo": titulo,
+        "subtitulo": subtitulo,
+        "stats": {
+            "horas": round(horas, 1),
+            "questoes": total_q,
+            "pct_acerto": pct_acerto,
+            "streak": streak,
+            "dias_ativos": dias_ativos,
+            "dias_total": dias_semana,
+        },
+        "destaques": {
+            "melhor_materia": {"materia": melhor["materia"], "pct": melhor["pct"]} if melhor else None,
+            "pior_materia": {"materia": pior["materia"], "pct": pior["pct"]} if pior else None,
+        },
+        "conquistas": conquistas,
+        "share_text": f"📊 {titulo}\n{subtitulo}\n\n{horas:.1f}h estudadas\n{total_q} questões ({pct_acerto}% acerto)\n🔥{streak} dias de streak\n{'/'.join(conquistas[:2])}\n\n#ConcurseiroOS #EstudosPraConcurso",
+    }

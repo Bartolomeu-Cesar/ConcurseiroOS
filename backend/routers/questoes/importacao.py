@@ -1033,3 +1033,194 @@ async def importar_questoes_url(
         "url": prova_url,
         "mensagem": f"✅ {count} questões importadas de {nome_prova}. {duplicates} duplicatas ignoradas.",
     }
+
+
+# ============================================================
+# PARSER CESPE/CEBRASPE — Questões Certo/Errado
+# ============================================================
+
+def _parse_cespe_certo_errado(texto: str, materia_override: str = "", gabarito: dict = None) -> list:
+    """Parser específico para provas CESPE/CEBRASPE formato Certo/Errado.
+
+    Detecta itens numerados onde a resposta é C (Certo) ou E (Errado).
+    Formato típico: número do item + enunciado + julgamento C/E no gabarito.
+    """
+    questoes = []
+    if gabarito is None:
+        gabarito = {}
+
+    # Detectar padrão CESPE: itens numerados sequenciais
+    # Padrão 1: "XX  texto do item" (2 espaços entre número e texto)
+    # Padrão 2: "Item XX. texto"
+    # Padrão 3: "XX) texto" ou "XX. texto"
+    patterns = [
+        r'(?:^|\n)\s*(\d{1,3})\s{2,}(.+?)(?=\n\s*\d{1,3}\s{2,}|\Z)',
+        r'(?:^|\n)\s*(?:Item\s+)?(\d{1,3})\s*[.)]\s*(.+?)(?=\n\s*(?:Item\s+)?\d{1,3}\s*[.)]|\Z)',
+    ]
+
+    itens = []
+    for pattern in patterns:
+        matches = re.findall(pattern, texto, re.DOTALL)
+        if len(matches) >= 5:  # Mínimo 5 itens para considerar prova CESPE
+            itens = matches
+            break
+
+    if not itens:
+        return []
+
+    # Se não tem gabarito, tentar extrair do final do texto
+    if not gabarito:
+        # Padrão gabarito CESPE: "1-C 2-E 3-C" ou grid
+        gab_patterns = [
+            r'(\d+)\s*[-–]\s*([CEce])',
+            r'(\d+)\s+([CEce])(?:\s|$)',
+        ]
+        last_chunk = texto[-2000:]
+        for gp in gab_patterns:
+            gab_matches = re.findall(gp, last_chunk)
+            if len(gab_matches) >= 5:
+                for num, resp in gab_matches:
+                    gabarito[int(num)] = "A" if resp.upper() == "C" else "B"
+                break
+
+    for num_str, enunciado in itens:
+        num = int(num_str)
+        enunciado = enunciado.strip()
+        enunciado = re.sub(r'\s+', ' ', enunciado)  # Normalizar espaços
+
+        if len(enunciado) < 15:
+            continue
+
+        # Resposta: A = CERTO, B = ERRADO (convenção interna)
+        resposta = gabarito.get(num, "")
+
+        questoes.append({
+            "materia": materia_override,
+            "topico": "",
+            "enunciado": enunciado,
+            "alternativa_a": "CERTO",
+            "alternativa_b": "ERRADO",
+            "alternativa_c": "",
+            "alternativa_d": "",
+            "alternativa_e": "",
+            "resposta_correta": resposta,
+            "explicacao": "",
+            "dificuldade": "Médio",
+            "banca": "CESPE",
+            "ano": "",
+        })
+
+    return questoes
+
+
+# ============================================================
+# ENDPOINT: Preview antes de importar (pré-visualização)
+# ============================================================
+
+@router.post("/api/questoes/importar/preview", summary="Pré-visualizar importação de prova",
+             description="Analisa o PDF/arquivo e retorna preview das questões detectadas sem importar. Permite revisar antes de confirmar.")
+def preview_importacao(
+    file: UploadFile = File(...),
+    materia: str = Query("", description="Matéria padrão"),
+    banca: str = Query("", description="Banca (CESPE, FCC, FGV, VUNESP)"),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Pré-visualiza questões do arquivo sem importar. Retorna preview para confirmação."""
+    content = file.file.read()
+    filename = file.filename or ""
+
+    questoes_preview = []
+
+    if filename.lower().endswith('.pdf'):
+        # Salvar temporariamente para processar
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
+        tmp.write(content)
+        tmp.close()
+
+        try:
+            texto = _extrair_texto_pdf(tmp.name)
+        except Exception as e:
+            os.unlink(tmp.name)
+            raise HTTPException(400, f"Erro ao ler PDF: {e}")
+        finally:
+            try:
+                os.unlink(tmp.name)
+            except OSError:
+                pass
+
+        # Detectar formato automaticamente
+        formato_detectado = "generico"
+        banca_detectada = banca.upper() if banca else ""
+
+        # Detectar banca pelo conteúdo
+        texto_upper = texto.upper()
+        if "CEBRASPE" in texto_upper or "CESPE" in texto_upper:
+            banca_detectada = "CESPE"
+        elif "FCC" in texto_upper or "FUNDAÇÃO CARLOS CHAGAS" in texto_upper:
+            banca_detectada = "FCC"
+        elif "FGV" in texto_upper or "FUNDAÇÃO GETÚLIO VARGAS" in texto_upper or "GETULIO VARGAS" in texto_upper:
+            banca_detectada = "FGV"
+        elif "VUNESP" in texto_upper:
+            banca_detectada = "VUNESP"
+
+        # Extrair gabarito
+        gabarito = _parse_gabarito(texto)
+
+        # Tentar parser CESPE primeiro (se detectado ou se itens C/E no gabarito)
+        ce_values = [v for v in gabarito.values() if v in ('A', 'B', 'C', 'E')]
+        is_cespe = banca_detectada == "CESPE" or (len(ce_values) > 10 and all(v in ('A', 'B') for v in gabarito.values()))
+
+        if is_cespe:
+            questoes_preview = _parse_cespe_certo_errado(texto, materia, gabarito)
+            formato_detectado = "cespe_ce"
+
+        # Se CESPE não encontrou suficiente, tentar genérico
+        if len(questoes_preview) < 5:
+            questoes_preview = _parse_generic(texto, materia)
+            formato_detectado = "multipla_escolha"
+
+        # Aplicar gabarito se disponível
+        if gabarito:
+            for i, q in enumerate(questoes_preview):
+                num = i + 1
+                if num in gabarito and not q.get("resposta_correta"):
+                    q["resposta_correta"] = gabarito[num]
+
+        # Aplicar banca detectada
+        for q in questoes_preview:
+            if not q.get("banca"):
+                q["banca"] = banca_detectada
+            if materia and not q.get("materia"):
+                q["materia"] = materia
+
+    elif filename.lower().endswith('.csv'):
+        text = content.decode('utf-8', errors='replace')
+        reader = csv.DictReader(io.StringIO(text))
+        fmt = _detect_csv_format(reader.fieldnames or [])
+        for row in reader:
+            if fmt == "qconcursos":
+                q = _parse_csv_qconcursos(row)
+            elif fmt == "gran":
+                q = _parse_csv_gran(row)
+            else:
+                q = _parse_csv_generic(row)
+            if q:
+                questoes_preview.append(q)
+        formato_detectado = f"csv_{fmt}"
+
+    # Stats do preview
+    com_gabarito = sum(1 for q in questoes_preview if q.get("resposta_correta"))
+    sem_gabarito = len(questoes_preview) - com_gabarito
+    materias_detectadas = list(set(q.get("materia", "") for q in questoes_preview if q.get("materia")))
+
+    return {
+        "total_detectadas": len(questoes_preview),
+        "com_gabarito": com_gabarito,
+        "sem_gabarito": sem_gabarito,
+        "formato_detectado": formato_detectado,
+        "banca_detectada": banca_detectada if 'banca_detectada' in dir() else banca,
+        "materias_detectadas": materias_detectadas,
+        "preview": questoes_preview[:20],  # Primeiras 20 para preview
+        "mensagem": f"Detectadas {len(questoes_preview)} questões ({formato_detectado}). {com_gabarito} com gabarito, {sem_gabarito} sem.",
+    }

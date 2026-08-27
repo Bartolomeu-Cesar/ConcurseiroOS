@@ -1,4 +1,5 @@
 import os
+import re
 import tempfile
 from datetime import date, datetime, timedelta
 
@@ -524,3 +525,144 @@ async def importar_edital_pdf_v2(
     }
 
 
+
+
+# ============================================================
+# MAPAS MENTAIS — Geração automática (Mermaid.js)
+# ============================================================
+
+@router.get("/api/edital/mapa-mental", summary="Gerar mapa mental de uma matéria",
+            description="Gera código Mermaid.js para visualização de mapa mental dos tópicos de uma matéria.")
+def gerar_mapa_mental(
+    materia: str,
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Gera mapa mental (Mermaid mindmap) dos tópicos de uma matéria com status."""
+    topicos = conn.execute("""
+        SELECT id, topico, status, horas_estudadas, mastery_level
+        FROM edital
+        WHERE materia = ? AND user_id = ? AND arquivado = 0
+        ORDER BY id
+    """, (materia, user_id)).fetchall()
+
+    if not topicos:
+        return {"mermaid": "", "mensagem": f"Nenhum tópico encontrado para '{materia}'."}
+
+    # Gerar código Mermaid mindmap
+    # Agrupar por subtemas (primeiro nível numérico)
+    grupos = {}
+    for t in topicos:
+        topico_texto = t["topico"]
+        # Tentar extrair grupo pelo número/prefixo (ex: "1 Direito Constitucional", "1.1 Princípios")
+        match = re.match(r'^(\d+(?:\.\d+)?)\s*[-–.]?\s*(.+)', topico_texto)
+        if match:
+            num = match.group(1)
+            nome = match.group(2).strip()
+            grupo_num = num.split('.')[0]
+        else:
+            nome = topico_texto
+            grupo_num = "0"
+
+        if grupo_num not in grupos:
+            grupos[grupo_num] = []
+        grupos[grupo_num].append({
+            "id": t["id"],
+            "nome": nome[:60],  # Limitar tamanho
+            "status": t["status"],
+            "mastery": t["mastery_level"] or 0,
+        })
+
+    # Construir Mermaid mindmap
+    lines = ["mindmap"]
+    lines.append(f"  root(({materia}))")
+
+    for grupo_num, items in grupos.items():
+        if len(items) == 1:
+            # Item solto: direto como filho do root
+            item = items[0]
+            icon = _status_icon(item["status"])
+            lines.append(f"    {icon} {item['nome']}")
+        else:
+            # Grupo com subitens
+            primeiro = items[0]
+            grupo_nome = primeiro["nome"].split(':')[0].split('-')[0].strip()[:40]
+            lines.append(f"    {grupo_nome}")
+            for item in items:
+                icon = _status_icon(item["status"])
+                lines.append(f"      {icon} {item['nome'][:50]}")
+
+    mermaid_code = "\n".join(lines)
+
+    # Também gerar formato flowchart para visualização alternativa
+    flow_lines = ["graph TD"]
+    flow_lines.append(f'  ROOT["{materia}"]')
+
+    for i, t in enumerate(topicos[:20]):  # Limitar a 20 para não explodir
+        node_id = f"T{t['id']}"
+        status = t["status"]
+        nome_curto = t["topico"][:40].replace('"', "'")
+
+        if status == "Concluído":
+            style = f'style {node_id} fill:#a6e3a1,color:#1e1e2e'
+        elif status == "Em andamento":
+            style = f'style {node_id} fill:#89b4fa,color:#1e1e2e'
+        else:
+            style = f'style {node_id} fill:#45475a,color:#cdd6f4'
+
+        flow_lines.append(f'  ROOT --> {node_id}["{nome_curto}"]')
+        flow_lines.append(f'  {style}')
+
+    flowchart_code = "\n".join(flow_lines)
+
+    # Stats para contexto
+    total = len(topicos)
+    concluidos = sum(1 for t in topicos if t["status"] == "Concluído")
+    em_andamento = sum(1 for t in topicos if t["status"] == "Em andamento")
+
+    return {
+        "materia": materia,
+        "mermaid_mindmap": mermaid_code,
+        "mermaid_flowchart": flowchart_code,
+        "stats": {
+            "total": total,
+            "concluidos": concluidos,
+            "em_andamento": em_andamento,
+            "nao_iniciados": total - concluidos - em_andamento,
+            "pct_concluido": round(concluidos / total * 100, 1) if total > 0 else 0,
+        },
+        "render_url": f"https://mermaid.ink/svg/{_encode_mermaid(mermaid_code)}",
+    }
+
+
+def _status_icon(status: str) -> str:
+    if status == "Concluído":
+        return "✅"
+    elif status == "Em andamento":
+        return "🔵"
+    return "⬜"
+
+
+def _encode_mermaid(code: str) -> str:
+    """Encode Mermaid code for mermaid.ink URL."""
+    import base64
+    return base64.urlsafe_b64encode(code.encode()).decode()
+
+
+@router.get("/api/edital/mapas-mentais-disponiveis", summary="Listar matérias com mapas mentais disponíveis")
+def mapas_mentais_disponiveis(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Lista matérias que têm tópicos suficientes para gerar mapa mental."""
+    materias = conn.execute("""
+        SELECT materia, COUNT(*) as total,
+               SUM(CASE WHEN status = 'Concluído' THEN 1 ELSE 0 END) as concluidos
+        FROM edital WHERE user_id = ? AND arquivado = 0
+        GROUP BY materia HAVING total >= 3
+        ORDER BY total DESC
+    """, (user_id,)).fetchall()
+
+    return [{
+        "materia": m["materia"],
+        "total_topicos": m["total"],
+        "concluidos": m["concluidos"],
+        "pct": round(m["concluidos"] / m["total"] * 100, 1),
+    } for m in materias]
