@@ -116,6 +116,14 @@ function enterRoomView(codigo) {
 }
 
 function sairSala() {
+  // Registrar tempo focado antes de sair (muda status para 'ausente' que aciona award_focus_xp no backend)
+  if (currentRoom) {
+    fetch(`/api/studyroom/status/${currentRoom}`, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'ausente' })
+    }).catch(() => {});
+  }
   // Show session summary before leaving
   showSessionSummary();
   stopPolling();
@@ -1652,3 +1660,37 @@ if (code) {
   document.getElementById('input-codigo').value = code.toUpperCase();
   entrarSala();
 }
+
+// ============================================================
+// PROTEÇÃO: Registrar tempo ao fechar aba/navegar para outra página
+// ============================================================
+window.addEventListener('beforeunload', () => {
+  if (currentRoom && myStatus === 'focando') {
+    // sendBeacon é mais confiável que fetch em beforeunload
+    navigator.sendBeacon(
+      `/api/studyroom/status/${currentRoom}`,
+      new Blob([JSON.stringify({ status: 'ausente' })], { type: 'application/json' })
+    );
+  }
+});
+
+window.addEventListener('visibilitychange', () => {
+  // Quando aba fica hidden por muito tempo (>30min), pausar para evitar tempo inflado
+  if (document.hidden && currentRoom && myStatus === 'focando') {
+    window._studyroomHiddenAt = Date.now();
+  }
+  if (!document.hidden && window._studyroomHiddenAt && currentRoom) {
+    const hiddenMinutes = (Date.now() - window._studyroomHiddenAt) / 60000;
+    if (hiddenMinutes > 30) {
+      // Aba ficou oculta > 30min: pausar automaticamente
+      fetch(`/api/studyroom/status/${currentRoom}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ status: 'pausando' })
+      }).catch(() => {});
+      myStatus = 'pausando';
+      updateStatusButtons();
+    }
+    window._studyroomHiddenAt = null;
+  }
+});
