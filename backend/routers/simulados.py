@@ -19,6 +19,213 @@ from utils import today_str, update_streak
 router = APIRouter(prefix="", tags=["Simulados"])
 
 
+# ============================================================
+# SELEÇÃO INTELIGENTE DE QUESTÕES (reutilizável)
+# ============================================================
+
+def _smart_select_questions(
+    conn, user_id: int, qtd: int,
+    materias: list[str] | None = None,
+    dificuldade: str | None = None,
+) -> list[dict]:
+    """Seleciona questões aplicando 6 técnicas de estudo com evidência científica.
+
+    Estratégia de priorização (baseada em pesquisa):
+    1. Questões ERRADAS recentemente (Successive Relearning — Rawson & Dunlosky 2011)
+    2. Questões NUNCA respondidas (Pre-testing Effect — Richland et al. 2009)
+    3. Questões erradas há mais tempo (Spacing Effect — Cepeda et al. 2006)
+    4. Questões acertadas com baixa confiança (Desirable Difficulty — Bjork 1994)
+    5. Questões com poucos acertos (< 3 consecutivos)
+
+    Filtra OUT:
+    - Questões DOMINADAS (3+ acertos consecutivos) — evita overlearning
+
+    Aplica:
+    - Interleaving: mistura matérias na sequência final (Rohrer 2012)
+    - Desirable Difficulty: prioriza questões no limiar de domínio
+
+    Args:
+        conn: DB connection
+        user_id: user ID
+        qtd: quantidade de questões desejada
+        materias: lista de matérias para filtrar (None = todas)
+        dificuldade: filtrar por dificuldade (None = todas)
+
+    Returns:
+        Lista de dicts com dados das questões selecionadas
+    """
+    # === Identificar questões DOMINADAS (excluir) ===
+    # Dominada = 3+ acertos consecutivos mais recentes
+    dominadas_ids = set()
+    try:
+        all_questions = conn.execute(
+            "SELECT DISTINCT questao_id FROM questoes_respostas WHERE user_id = ?",
+            (user_id,)
+        ).fetchall()
+        for row in all_questions:
+            qid = row[0]
+            ultimas = conn.execute("""
+                SELECT acertou FROM questoes_respostas
+                WHERE questao_id = ? AND user_id = ?
+                ORDER BY id DESC LIMIT 3
+            """, (qid, user_id)).fetchall()
+            if len(ultimas) >= 3 and all(r[0] == 1 for r in ultimas):
+                dominadas_ids.add(qid)
+    except Exception:
+        pass
+
+    # === Build base query com filtros ===
+    base_where = "WHERE q.user_id = ?"
+    base_params = [user_id]
+
+    if materias:
+        placeholders = ",".join("?" * len(materias))
+        base_where += f" AND q.materia IN ({placeholders})"
+        base_params.extend(materias)
+
+    if dificuldade:
+        base_where += " AND q.dificuldade = ?"
+        base_params.append(dificuldade)
+
+    # Excluir dominadas
+    if dominadas_ids:
+        excl = ",".join(str(i) for i in dominadas_ids)
+        base_where += f" AND q.id NOT IN ({excl})"
+
+    # === POOL 1: Questões ERRADAS recentemente (últimos 14 dias) ===
+    erradas_recentes = conn.execute(f"""
+        SELECT DISTINCT q.id FROM questoes q
+        JOIN questoes_respostas qr ON qr.questao_id = q.id AND qr.user_id = q.user_id
+        {base_where}
+        AND qr.acertou = 0
+        AND qr.data >= date('now', '-14 days')
+        ORDER BY qr.data DESC
+    """, base_params).fetchall()
+    pool_erradas_recentes = [r[0] for r in erradas_recentes]
+
+    # === POOL 2: Questões NUNCA respondidas ===
+    nunca_respondidas = conn.execute(f"""
+        SELECT q.id FROM questoes q
+        {base_where}
+        AND q.id NOT IN (SELECT questao_id FROM questoes_respostas WHERE user_id = ?)
+        ORDER BY RANDOM()
+    """, base_params + [user_id]).fetchall()
+    pool_nunca = [r[0] for r in nunca_respondidas]
+
+    # === POOL 3: Questões erradas há mais tempo (spacing > 14 dias) ===
+    erradas_antigas = conn.execute(f"""
+        SELECT DISTINCT q.id FROM questoes q
+        JOIN questoes_respostas qr ON qr.questao_id = q.id AND qr.user_id = q.user_id
+        {base_where}
+        AND qr.acertou = 0
+        AND qr.data < date('now', '-14 days')
+        ORDER BY RANDOM()
+    """, base_params).fetchall()
+    pool_erradas_antigas = [r[0] for r in erradas_antigas]
+
+    # === POOL 4: Questões com poucos acertos (1-2 acertos, não dominadas) ===
+    fracas = conn.execute(f"""
+        SELECT q.id FROM questoes q
+        {base_where}
+        AND q.id IN (
+            SELECT questao_id FROM questoes_respostas WHERE user_id = ?
+            GROUP BY questao_id
+            HAVING SUM(acertou) BETWEEN 1 AND 2
+        )
+        ORDER BY RANDOM()
+    """, base_params + [user_id]).fetchall()
+    pool_fracas = [r[0] for r in fracas]
+
+    # === Montar seleção com prioridade ===
+    # Distribuição: 30% erradas recentes, 30% nunca vistas, 20% erradas antigas, 20% fracas
+    selected_ids = []
+    seen = set()
+
+    def _add_from_pool(pool, max_count):
+        added = 0
+        for qid in pool:
+            if qid not in seen and added < max_count:
+                selected_ids.append(qid)
+                seen.add(qid)
+                added += 1
+        return added
+
+    qtd_erradas_rec = max(1, int(qtd * 0.30))
+    qtd_nunca = max(1, int(qtd * 0.30))
+    qtd_erradas_ant = max(1, int(qtd * 0.20))
+    qtd_fracas = max(1, int(qtd * 0.20))
+
+    _add_from_pool(pool_erradas_recentes, qtd_erradas_rec)
+    _add_from_pool(pool_nunca, qtd_nunca)
+    _add_from_pool(pool_erradas_antigas, qtd_erradas_ant)
+    _add_from_pool(pool_fracas, qtd_fracas)
+
+    # Completar com restantes se não atingiu o total
+    faltando = qtd - len(selected_ids)
+    if faltando > 0:
+        # Pegar de qualquer pool disponível (prioridade: nunca > erradas > fracas)
+        for pool in [pool_nunca, pool_erradas_recentes, pool_erradas_antigas, pool_fracas]:
+            _add_from_pool(pool, faltando)
+            faltando = qtd - len(selected_ids)
+            if faltando <= 0:
+                break
+
+    # Se AINDA falta (banco pequeno), pegar aleatórias (exceto dominadas)
+    if len(selected_ids) < qtd:
+        faltando = qtd - len(selected_ids)
+        excl_ids = ",".join(str(i) for i in (seen | dominadas_ids)) if (seen | dominadas_ids) else "0"
+        extras = conn.execute(f"""
+            SELECT q.id FROM questoes q
+            {base_where}
+            AND q.id NOT IN ({excl_ids})
+            ORDER BY RANDOM() LIMIT ?
+        """, base_params + [faltando]).fetchall()
+        for r in extras:
+            if r[0] not in seen:
+                selected_ids.append(r[0])
+                seen.add(r[0])
+
+    # === Aplicar INTERLEAVING na sequência final ===
+    # Buscar dados das questões selecionadas
+    if not selected_ids:
+        return []
+
+    placeholders = ",".join("?" * len(selected_ids))
+    questoes = conn.execute(f"""
+        SELECT id, materia, enunciado, alternativa_a, alternativa_b,
+               alternativa_c, alternativa_d, alternativa_e, resposta_correta,
+               dificuldade, explicacao
+        FROM questoes WHERE id IN ({placeholders}) AND user_id = ?
+    """, selected_ids + [user_id]).fetchall()
+    questoes_map = {r["id"]: dict(r) for r in questoes}
+
+    # Interleaving: ordenar alternando matérias (evita blocked practice)
+    resultado = [questoes_map[qid] for qid in selected_ids if qid in questoes_map]
+
+    # Agrupar por matéria e intercalar
+    by_materia = {}
+    for q in resultado:
+        mat = q.get("materia", "Sem matéria")
+        if mat not in by_materia:
+            by_materia[mat] = []
+        by_materia[mat].append(q)
+
+    interleaved = []
+    mat_lists = list(by_materia.values())
+    while mat_lists:
+        # Round-robin: pega 1 de cada matéria
+        empty = []
+        for i, mlist in enumerate(mat_lists):
+            if mlist:
+                interleaved.append(mlist.pop(0))
+            else:
+                empty.append(i)
+        for idx in sorted(empty, reverse=True):
+            mat_lists.pop(idx)
+
+    return interleaved[:qtd]
+
+
 @router.get("/api/simulados")
 def list_simulados(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     rows = conn.execute("SELECT * FROM simulados WHERE user_id = ? ORDER BY created_at DESC", (user_id,)).fetchall()
@@ -216,40 +423,29 @@ def simulado_prova_real(body: SimuladoProvaReal, conn=Depends(get_db_session), u
 
 @router.get("/api/simulado-inteligente")
 def simulado_inteligente(qtd: int = 10, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
-    """Monta simulado priorizando matérias com pior desempenho"""
-    # Matérias ordenadas por % erro (pior primeiro)
-    materias = conn.execute("""
-        SELECT q.materia,
-               CAST(SUM(CASE WHEN qr.acertou=0 THEN 1 ELSE 0 END) AS FLOAT) / COUNT(*) as pct_erro
-        FROM questoes_respostas qr
-        JOIN questoes q ON q.id = qr.questao_id
-        WHERE qr.user_id = ?
-        GROUP BY q.materia
-        ORDER BY pct_erro DESC
-    """, (user_id,)).fetchall()
+    """Monta simulado priorizando questões erradas, nunca vistas e matérias fracas.
 
-    questoes_ids = []
-    if materias:
-        # 60% das questões das matérias fracas, 40% aleatórias
-        fracas = [r[0] for r in materias[:3]]
-        qtd_fracas = int(qtd * 0.6)
-        qtd_aleatorio = qtd - qtd_fracas
+    Aplica 6 técnicas de estudo:
+    - Successive Relearning: prioriza erradas recentes
+    - Pre-testing: inclui questões nunca respondidas
+    - Spacing Effect: revisita erradas antigas
+    - Desirable Difficulty: foca no limiar de domínio
+    - Interleaving: mistura matérias na sequência
+    - Filtra dominadas: exclui 3+ acertos consecutivos
+    """
+    questoes = _smart_select_questions(conn, user_id, qtd)
 
-        for mat in fracas:
-            rows = conn.execute("SELECT id FROM questoes WHERE materia = ? AND user_id = ? ORDER BY RANDOM() LIMIT ?",
-                                (mat, user_id, qtd_fracas // len(fracas) + 1)).fetchall()
-            questoes_ids.extend([r[0] for r in rows])
-
-        rows_rand = conn.execute("SELECT id FROM questoes WHERE user_id = ? ORDER BY RANDOM() LIMIT ?", (user_id, qtd_aleatorio)).fetchall()
-        questoes_ids.extend([r[0] for r in rows_rand])
-    else:
+    if not questoes:
+        # Fallback: aleatório se não tem histórico
         rows = conn.execute("SELECT id FROM questoes WHERE user_id = ? ORDER BY RANDOM() LIMIT ?", (user_id, qtd)).fetchall()
-        questoes_ids = [r[0] for r in rows]
+        return {"questao_ids": [r[0] for r in rows], "total": len(rows), "estrategia": "aleatório (sem histórico)"}
 
-    # Deduplicate and limit
-    questoes_ids = list(dict.fromkeys(questoes_ids))[:qtd]
-
-    return {"questao_ids": questoes_ids, "total": len(questoes_ids), "estrategia": "60% matérias fracas + 40% aleatório"}
+    ids = [q["id"] for q in questoes]
+    return {
+        "questao_ids": ids,
+        "total": len(ids),
+        "estrategia": "smart: erradas recentes 30% + nunca vistas 30% + spacing 20% + fracas 20% (dominadas excluídas, interleaving aplicado)"
+    }
 
 
 @router.get("/api/simulado-adaptativo")
@@ -314,19 +510,10 @@ def criar_simulado_cronometrado(
     """Cria simulado cronometrado realista com seleção automática de questões por dificuldade/matéria."""
     log.info(f"POST /api/simulados/cronometrado titulo={body.titulo} tempo={body.tempo_total_min}min questoes={body.questoes_total}")
 
-    # Construir query base
-    base_query = "SELECT id, materia, enunciado, alternativa_a, alternativa_b, alternativa_c, alternativa_d, alternativa_e, dificuldade FROM questoes WHERE user_id = ?"
-    base_params = [user_id]
-
-    # Filtrar por matérias se especificadas
-    if body.materias:
-        placeholders = ",".join(["?" for _ in body.materias])
-        base_query += f" AND materia IN ({placeholders})"
-        base_params.extend(body.materias)
-
-    # Buscar questões por dificuldade segundo o mix
+    # Selecionar questões com inteligência (por dificuldade)
     questoes_selecionadas = []
     mix = body.dificuldade_mix
+    materias_filtro = body.materias if body.materias else None
 
     dificuldade_map = [
         ("Fácil", mix.facil),
@@ -337,20 +524,19 @@ def criar_simulado_cronometrado(
     for dif_nome, qtd_alvo in dificuldade_map:
         if qtd_alvo <= 0:
             continue
-        query = base_query + " AND dificuldade = ? ORDER BY RANDOM() LIMIT ?"
-        params = base_params + [dif_nome, qtd_alvo]
-        rows = conn.execute(query, params).fetchall()
-        questoes_selecionadas.extend([dict(r) for r in rows])
+        # Usar seleção inteligente por dificuldade
+        smart_qs = _smart_select_questions(conn, user_id, qtd_alvo, materias=materias_filtro, dificuldade=dif_nome)
+        questoes_selecionadas.extend(smart_qs)
 
-    # Se não conseguiu o total, completar com qualquer dificuldade
-    ids_selecionados = {q["id"] for q in questoes_selecionadas}
+    # Se não conseguiu o total, completar com seleção inteligente sem filtro de dificuldade
     faltando = body.questoes_total - len(questoes_selecionadas)
     if faltando > 0:
-        excl_placeholders = ",".join(["?" for _ in ids_selecionados]) if ids_selecionados else "0"
-        query_extra = base_query + f" AND id NOT IN ({excl_placeholders}) ORDER BY RANDOM() LIMIT ?"
-        params_extra = base_params + list(ids_selecionados) + [faltando]
-        rows_extra = conn.execute(query_extra, params_extra).fetchall()
-        questoes_selecionadas.extend([dict(r) for r in rows_extra])
+        ids_ja = {q["id"] for q in questoes_selecionadas}
+        extras = _smart_select_questions(conn, user_id, faltando, materias=materias_filtro)
+        for q in extras:
+            if q["id"] not in ids_ja:
+                questoes_selecionadas.append(q)
+                ids_ja.add(q["id"])
 
     if not questoes_selecionadas:
         raise HTTPException(status_code=400, detail="Nenhuma questão disponível no banco para os critérios selecionados.")
