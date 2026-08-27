@@ -418,19 +418,21 @@ class SessaoEstudoRegistrar(BaseModel):
 def registrar_sessao_estudo(body: SessaoEstudoRegistrar, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     if body.horas <= 0:
         return {"ok": False, "message": "Tempo inválido"}
+    # Cap: máximo 4h por registro individual (evita bugs de timer abandonado)
+    horas = min(body.horas, 4.0)
     from datetime import datetime
     now_iso = datetime.now().isoformat()
     conn.execute(
         "INSERT INTO sessoes_estudo (materia, horas, data, tipo, user_id, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-        (body.materia, body.horas, today_str(), body.tipo, user_id, now_iso)
+        (body.materia, horas, today_str(), body.tipo, user_id, now_iso)
     )
     conn.execute("""
         INSERT INTO streaks (data, horas_estudadas, user_id) VALUES (?, ?, ?)
         ON CONFLICT(user_id, data) DO UPDATE SET horas_estudadas = horas_estudadas + ?
-    """, (today_str(), body.horas, user_id, body.horas))
+    """, (today_str(), horas, user_id, horas))
     conn.commit()
-    log.info(f"Session registered: {body.horas:.2f}h ({body.materia})")
-    return {"ok": True, "horas": body.horas}
+    log.info(f"Session registered: {horas:.2f}h ({body.materia})")
+    return {"ok": True, "horas": horas}
 
 
 # ============================================================

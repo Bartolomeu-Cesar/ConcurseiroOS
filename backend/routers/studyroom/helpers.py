@@ -45,9 +45,15 @@ def is_focus_cycle(room, elapsed_sec: int) -> bool:
 def award_focus_xp(conn, user_id: int, tempo_foco_seg: int):
     """Registra sessão de estudo e calcula XP por tempo focado.
     XP: 20 por hora de foco (proporcional).
+    Cap: máximo 4h por sessão individual (evita tempo inflado por sessões abandonadas).
     """
     if tempo_foco_seg <= 0:
         return 0
+
+    # Cap: máximo 4 horas por registro individual (14400 seg)
+    # Sessões maiores indicam timer abandonado sem stop
+    MAX_SESSION_SEC = 4 * 3600
+    tempo_foco_seg = min(tempo_foco_seg, MAX_SESSION_SEC)
 
     horas = tempo_foco_seg / 3600.0
     hoje = datetime.now().strftime("%Y-%m-%d")
