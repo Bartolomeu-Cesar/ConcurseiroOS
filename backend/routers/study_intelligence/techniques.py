@@ -2577,3 +2577,222 @@ def banca_training_session(
         "threshold_confianca": profile["threshold_responder"],
         "instrucao": f"Treine como se fosse prova {profile['nome_completo']}. {'NÃO CHUTE se < 70% certeza!' if profile['penalizacao'] else 'Responda TODAS — sem penalização.'}",
     }
+
+
+# ============================================================
+# EXAM ANXIETY EXPOSURE — Exposição Gradual a Pressão de Prova
+# Baseado em literatura de test anxiety (Zeidner 1998, Hembree 1988)
+# Dessensibilização sistemática: pressão gradual reduz ansiedade
+# ============================================================
+
+@router.get("/api/study-intelligence/anxiety-exposure", summary="Exam Anxiety Exposure Config",
+            description="""Gera configuração de simulado com pressão gradual para dessensibilização.
+4 níveis progressivos de estresse simulado:
+- Nível 1 (Confortável): tempo normal, sem pressão
+- Nível 2 (Moderado): tempo -20%, cronômetro visível
+- Nível 3 (Realista): tempo -20% + nota de corte visível + penalização C/E
+- Nível 4 (Alta pressão): tempo -30% + nota corte + penalização + ranking
+
+Baseado em Zeidner (1998): exposição gradual a condições de prova reduz ansiedade
+em 40-60% após 4-6 sessões. Hembree (1988): meta-análise confirma eficácia.""")
+def anxiety_exposure_config(
+    nivel: int = Query(1, description="Nível de pressão (1-4)"),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Retorna configuração de simulado com nível de ansiedade progressivo."""
+
+    # Detectar nível recomendado baseado no histórico
+    nivel_recomendado = 1
+    try:
+        simulados_feitos = conn.execute("""
+            SELECT COUNT(*) FROM simulados WHERE user_id = ? AND status = 'finalizado'
+        """, (user_id,)).fetchone()[0]
+
+        # Progresso gradual: a cada 3 simulados, sobe 1 nível
+        if simulados_feitos >= 12:
+            nivel_recomendado = 4
+        elif simulados_feitos >= 8:
+            nivel_recomendado = 3
+        elif simulados_feitos >= 4:
+            nivel_recomendado = 2
+        else:
+            nivel_recomendado = 1
+    except Exception:
+        pass
+
+    nivel = max(1, min(4, nivel))
+
+    # Configurações por nível
+    configs = {
+        1: {
+            "nome": "Confortável",
+            "emoji": "😊",
+            "tempo_fator": 1.0,        # Tempo normal
+            "penalizacao": False,
+            "nota_corte_visivel": False,
+            "cronometro_visivel": False,
+            "ranking_visivel": False,
+            "distracoes": False,
+            "mensagem_pressao": "",
+            "descricao": "Simulado normal, sem pressão. Foque em aprender.",
+        },
+        2: {
+            "nome": "Moderado",
+            "emoji": "😐",
+            "tempo_fator": 0.80,        # 20% menos tempo
+            "penalizacao": False,
+            "nota_corte_visivel": False,
+            "cronometro_visivel": True,  # Cronômetro regressivo visível
+            "ranking_visivel": False,
+            "distracoes": False,
+            "mensagem_pressao": "⏱️ Tempo reduzido em 20%. Gerencie bem cada questão.",
+            "descricao": "Tempo apertado + cronômetro visível. Treine gestão de tempo.",
+        },
+        3: {
+            "nome": "Realista",
+            "emoji": "😰",
+            "tempo_fator": 0.80,
+            "penalizacao": True,         # -1 por erro (estilo CESPE)
+            "nota_corte_visivel": True,   # Nota de corte aparece durante o simulado
+            "cronometro_visivel": True,
+            "ranking_visivel": False,
+            "distracoes": False,
+            "mensagem_pressao": "⚠️ Penalização ativa: 1 erro anula 1 acerto. Nota de corte: 60%.",
+            "descricao": "Condições de prova CESPE: penalização + nota de corte visível.",
+        },
+        4: {
+            "nome": "Alta Pressão",
+            "emoji": "🥵",
+            "tempo_fator": 0.70,         # 30% menos tempo
+            "penalizacao": True,
+            "nota_corte_visivel": True,
+            "cronometro_visivel": True,
+            "ranking_visivel": True,      # Mostra posição vs outros candidatos (bots)
+            "distracoes": True,           # Alertas aleatórios simulando ambiente de prova
+            "mensagem_pressao": "🔥 ALTA PRESSÃO: tempo -30%, penalização, nota de corte, ranking ao vivo. Respire fundo.",
+            "descricao": "Simulação máxima de estresse. Se passar aqui, passa na prova real.",
+        },
+    }
+
+    config = configs[nivel]
+
+    # Calcular tempo com fator
+    tempo_base_min = 180  # 3h padrão
+    try:
+        # Buscar do edital_info se existir
+        ei = conn.execute(
+            "SELECT tempo_prova_min FROM edital_info WHERE user_id = ? LIMIT 1", (user_id,)
+        ).fetchone()
+        if ei and ei[0]:
+            tempo_base_min = ei[0]
+    except Exception:
+        pass
+
+    tempo_ajustado = int(tempo_base_min * config["tempo_fator"])
+
+    # Nota de corte
+    nota_corte = 60.0  # Padrão para maioria dos concursos
+    try:
+        nc = conn.execute(
+            "SELECT nota_corte FROM notas_corte WHERE user_id = ? ORDER BY id DESC LIMIT 1", (user_id,)
+        ).fetchone()
+        if nc:
+            nota_corte = nc[0]
+    except Exception:
+        pass
+
+    # Dicas anti-ansiedade baseadas no nível
+    dicas_anti_ansiedade = [
+        "🫁 Antes de começar: 3 respirações profundas (4s inspira, 4s segura, 6s expira)",
+        "📋 Estratégia: leia todas as questões antes, marque as fáceis primeiro",
+        "🧠 Se travar: pule e volte depois. Não gaste mais de 3min numa questão",
+    ]
+    if nivel >= 3:
+        dicas_anti_ansiedade.append("⚡ Penalização: se < 60% de certeza, DEIXE EM BRANCO")
+        dicas_anti_ansiedade.append("🎯 Foco no que SABE. Não tente resolver tudo.")
+    if nivel >= 4:
+        dicas_anti_ansiedade.append("💪 Lembre: isso é TREINO. A prova real será mais fácil porque você já treinou sob pressão.")
+
+    return {
+        "nivel": nivel,
+        "nivel_recomendado": nivel_recomendado,
+        "config": config,
+        "tempo_base_min": tempo_base_min,
+        "tempo_ajustado_min": tempo_ajustado,
+        "nota_corte": nota_corte,
+        "dicas_anti_ansiedade": dicas_anti_ansiedade,
+        "progresso_exposicao": {
+            "simulados_feitos": simulados_feitos if 'simulados_feitos' in dir() else 0,
+            "proximo_nivel_em": max(0, (nivel * 4) - (simulados_feitos if 'simulados_feitos' in dir() else 0)),
+        },
+        "tecnica": "Exam Anxiety Exposure (Zeidner 1998): exposição gradual a condições estressantes reduz ansiedade em 40-60% após 4-6 sessões. Seu cérebro aprende que 'pressão não é perigo'.",
+    }
+
+
+@router.post("/api/study-intelligence/anxiety-exposure/registrar", summary="Registrar resultado de sessão de exposição")
+def anxiety_exposure_registrar(
+    nivel: int = Body(1),
+    nota: float = Body(0),
+    tempo_seg: int = Body(0),
+    completou: bool = Body(True),
+    ansiedade_antes: int = Body(5, description="Nível de ansiedade antes (1-10)"),
+    ansiedade_depois: int = Body(5, description="Nível de ansiedade depois (1-10)"),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Registra resultado da sessão de exposição para tracking de progresso."""
+    from datetime import datetime
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS anxiety_exposure_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            nivel INTEGER NOT NULL,
+            nota REAL,
+            tempo_seg INTEGER,
+            completou INTEGER DEFAULT 1,
+            ansiedade_antes INTEGER,
+            ansiedade_depois INTEGER,
+            created_at TEXT NOT NULL
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_anxiety_log_user ON anxiety_exposure_log(user_id)")
+
+    conn.execute("""
+        INSERT INTO anxiety_exposure_log (user_id, nivel, nota, tempo_seg, completou, ansiedade_antes, ansiedade_depois, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (user_id, nivel, nota, tempo_seg, int(completou), ansiedade_antes, ansiedade_depois, datetime.now().isoformat()))
+    conn.commit()
+
+    # Calcular progresso (redução de ansiedade ao longo do tempo)
+    historico = conn.execute("""
+        SELECT ansiedade_antes, ansiedade_depois, nivel, nota
+        FROM anxiety_exposure_log WHERE user_id = ?
+        ORDER BY id DESC LIMIT 10
+    """, (user_id,)).fetchall()
+
+    reducao_media = 0
+    if historico:
+        reducoes = [r["ansiedade_antes"] - r["ansiedade_depois"] for r in historico if r["ansiedade_antes"] and r["ansiedade_depois"]]
+        reducao_media = round(sum(reducoes) / len(reducoes), 1) if reducoes else 0
+
+    # Feedback
+    diff = ansiedade_antes - ansiedade_depois
+    if diff > 2:
+        feedback = "🎉 Excelente! Sua ansiedade reduziu significativamente. A exposição está funcionando!"
+    elif diff > 0:
+        feedback = "👍 Leve redução. Continue praticando — a melhora é progressiva."
+    elif diff == 0:
+        feedback = "🔄 Ansiedade estável. Normal nos primeiros treinos. Persista!"
+    else:
+        feedback = "⚠️ Ansiedade aumentou. Tente um nível abaixo na próxima sessão até se adaptar."
+
+    return {
+        "ok": True,
+        "feedback": feedback,
+        "reducao_sessao": diff,
+        "reducao_media_historico": reducao_media,
+        "sessoes_totais": len(historico),
+        "recomendacao": f"Continue no nível {nivel}" if diff >= 0 else f"Tente nível {max(1, nivel-1)} na próxima",
+    }
