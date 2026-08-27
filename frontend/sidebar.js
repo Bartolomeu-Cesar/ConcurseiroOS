@@ -79,6 +79,7 @@
           <li><a href="/#videos" onclick="goSection('tab-videos', event)"><span class="nav-icon" aria-hidden="true">🎬</span><span class="nav-label">Vídeos</span></a></li>
           <li><a href="/#edital" onclick="goSection('tab-edital', event)"><span class="nav-icon" aria-hidden="true">📋</span><span class="nav-label">Edital</span></a></li>
           <li><a href="/#ciclo" onclick="goSection('tab-ciclo', event)"><span class="nav-icon" aria-hidden="true">🔄</span><span class="nav-label">Ciclo</span></a></li>
+          <li><a href="/vademecum.html" class="${activeClass('/vademecum')}"><span class="nav-icon" aria-hidden="true">⚖️</span><span class="nav-label">Vade Mecum</span></a></li>
         </ul>
       </div>
 

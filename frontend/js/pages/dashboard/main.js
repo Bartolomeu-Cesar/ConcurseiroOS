@@ -21,6 +21,7 @@ import {
 } from './treinador.js';
 import { loadDesafioDiarioCard } from './desafio.js';
 import { handleAuthNav } from '../../modules/auth.js';
+import { renderCatStartCard } from '../../modules/cat-session.js';
 
 // ===== Dashboard Tab Navigation =====
 document.querySelectorAll('.dash-tab').forEach(tab => {
@@ -985,6 +986,9 @@ function loadActivePanel() {
       loadDailyChallenge();
       loadIntercalacao();
       loadPraticaDelib();
+      // Render CAT start card
+      const catContainer = document.getElementById('cat-session-container');
+      if (catContainer) renderCatStartCard(catContainer, { showTitle: false });
       loadFeynmanMaterias();
       loadPontosFragcos();
       loadConexoes();
@@ -1811,3 +1815,108 @@ window._saveIntention = async function() {
 
 // Load on dashboard init
 setTimeout(loadStudyIntelligenceWidgets, 500);
+
+
+// ============================================================
+// STUDY INTELLIGENCE — Técnicas Adicionais (Alertas Proativos)
+// ============================================================
+
+async function loadSiTechniquesAlerts() {
+  const box = document.getElementById('si-techniques-alerts');
+  if (!box) return;
+
+  let html = '';
+
+  // 1. Burnout Detection
+  try {
+    const burnout = await fetch('/api/study-intelligence/burnout').then(r => r.ok ? r.json() : null);
+    if (burnout && burnout.risk) {
+      const borderColor = burnout.risk === 'alto' ? 'var(--red, #f38ba8)' : 'var(--yellow, #f9e2af)';
+      const icon = burnout.risk === 'alto' ? '🛑' : '⚠️';
+      html += `
+        <div style="background:var(--bg-surface);border-radius:10px;padding:14px;margin-bottom:10px;border-left:4px solid ${borderColor};">
+          <div style="font-size:0.85rem;font-weight:700;color:var(--text);">${icon} Alerta de Burnout (${burnout.risk})</div>
+          <div style="font-size:0.78rem;color:var(--text-sub);margin-top:4px;">${burnout.sugestao}</div>
+          <div style="font-size:0.72rem;color:var(--text-sub);margin-top:6px;">📊 Média 7 dias: ${burnout.media_horas_7d}h/dia | Meta: ${burnout.meta_horas}h | Overwork: ${burnout.dias_overwork} dias</div>
+        </div>`;
+    }
+  } catch(e) {}
+
+  // 2. Overlearning Detection
+  try {
+    const overlearn = await fetch('/api/study-intelligence/overlearning').then(r => r.ok ? r.json() : null);
+    if (overlearn && overlearn.itens_overlearned && overlearn.itens_overlearned.length > 0) {
+      html += `
+        <div style="background:var(--bg-surface);border-radius:10px;padding:14px;margin-bottom:10px;border-left:4px solid var(--blue, #89b4fa);">
+          <div style="font-size:0.85rem;font-weight:700;color:var(--text);">📚 Overlearning Detectado</div>
+          <div style="font-size:0.78rem;color:var(--text-sub);margin-top:4px;">${overlearn.itens_overlearned.length} tópico(s) com stability > 60 dias sendo revisados. Seu tempo é melhor investido em tópicos novos!</div>
+          <div style="font-size:0.72rem;color:var(--text-sub);margin-top:6px;">${overlearn.itens_overlearned.slice(0, 3).map(i => `• ${i.materia}: ${i.topico}`).join('<br>')}</div>
+        </div>`;
+    }
+  } catch(e) {}
+
+  // 3. Calibration (metacognição)
+  try {
+    const calib = await fetch('/api/study-intelligence/calibration').then(r => r.ok ? r.json() : null);
+    if (calib && calib.status && calib.status !== 'calibrado') {
+      const icon = calib.status === 'overconfident' ? '⚠️' : '💡';
+      const msg = calib.status === 'overconfident'
+        ? 'Você tende a superestimar seu domínio. Faça pré-testes antes de avançar para novos tópicos.'
+        : 'Você subestima o que sabe. Tente resolver questões difíceis — pode se surpreender!';
+      html += `
+        <div style="background:var(--bg-surface);border-radius:10px;padding:14px;margin-bottom:10px;border-left:4px solid var(--accent, #cba6f7);">
+          <div style="font-size:0.85rem;font-weight:700;color:var(--text);">${icon} Calibração: ${calib.status}</div>
+          <div style="font-size:0.78rem;color:var(--text-sub);margin-top:4px;">${msg}</div>
+          ${calib.gap_medio ? `<div style="font-size:0.72rem;color:var(--text-sub);margin-top:4px;">Gap médio: ${calib.gap_medio > 0 ? '+' : ''}${calib.gap_medio.toFixed(1)} (confiança vs resultado)</div>` : ''}
+        </div>`;
+    }
+  } catch(e) {}
+
+  // 4. Adaptive Break Suggestion
+  try {
+    const brk = await fetch('/api/study-intelligence/adaptive-break').then(r => r.ok ? r.json() : null);
+    if (brk && brk.sugerir_pausa) {
+      html += `
+        <div style="background:var(--bg-surface);border-radius:10px;padding:14px;margin-bottom:10px;border-left:4px solid var(--green, #a6e3a1);">
+          <div style="font-size:0.85rem;font-weight:700;color:var(--text);">☕ Pausa Recomendada</div>
+          <div style="font-size:0.78rem;color:var(--text-sub);margin-top:4px;">${brk.mensagem || 'Ritmo ultradian sugere pausa agora. Descanse 15min para otimizar retenção.'}</div>
+          <div style="font-size:0.72rem;color:var(--text-sub);margin-top:4px;">⏱ Próxima pausa ideal em: ${brk.minutos_ate_pausa || '?'}min</div>
+        </div>`;
+    }
+  } catch(e) {}
+
+  // 5. Successive Relearning (tópicos para reaprender)
+  try {
+    const sr = await fetch('/api/study-intelligence/successive-relearning').then(r => r.ok ? r.json() : null);
+    if (sr && sr.topicos_para_reaprender && sr.topicos_para_reaprender.length > 0) {
+      html += `
+        <div style="background:var(--bg-surface);border-radius:10px;padding:14px;margin-bottom:10px;border-left:4px solid var(--yellow, #f9e2af);">
+          <div style="font-size:0.85rem;font-weight:700;color:var(--text);">🔁 Reaprendizado Necessário</div>
+          <div style="font-size:0.78rem;color:var(--text-sub);margin-top:4px;">${sr.topicos_para_reaprender.length} tópico(s) com retenção em queda que precisam de revisão ativa:</div>
+          <div style="font-size:0.72rem;color:var(--text-sub);margin-top:6px;">
+            ${sr.topicos_para_reaprender.slice(0, 4).map(t => `• ${t.materia}: ${t.topico} (${t.retencao_pct || '?'}%)`).join('<br>')}
+          </div>
+        </div>`;
+    }
+  } catch(e) {}
+
+  // 6. Banca Profile (se disponível)
+  try {
+    const banca = await fetch('/api/study-intelligence/banca-profile').then(r => r.ok ? r.json() : null);
+    if (banca && banca.banca && banca.estilo) {
+      html += `
+        <div style="background:var(--bg-surface);border-radius:10px;padding:14px;margin-bottom:10px;border-left:4px solid var(--accent, #cba6f7);">
+          <div style="font-size:0.85rem;font-weight:700;color:var(--text);">🎯 Perfil da Banca: ${banca.banca}</div>
+          <div style="font-size:0.78rem;color:var(--text-sub);margin-top:4px;">${banca.estilo}</div>
+          ${banca.dicas ? `<div style="font-size:0.72rem;color:var(--text-sub);margin-top:6px;">${banca.dicas.slice(0, 2).map(d => `💡 ${d}`).join('<br>')}</div>` : ''}
+        </div>`;
+    }
+  } catch(e) {}
+
+  if (html) {
+    box.innerHTML = html;
+  }
+}
+
+// Load after main widgets (give time for session to register)
+setTimeout(loadSiTechniquesAlerts, 1200);

@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Vade Mecum Digital — ConcurseiroOS</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#1e1e2e">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/main.css">
+  <style>
+    /* Vade Mecum — page-specific styles */
+
+    /* Tab bar */
+    .vm-tab-bar { display: flex; gap: 0; background: var(--bg-elevated, #313244); border-radius: 10px 10px 0 0; margin-bottom: 20px; overflow: hidden; }
+    .vm-tab-btn {
+      flex: 1; padding: 12px 16px; border: none; background: transparent;
+      color: var(--text-sub, #9399b2); font-size: 0.92rem; font-weight: 600; cursor: pointer;
+      border-bottom: 3px solid transparent; transition: all 0.2s;
+    }
+    .vm-tab-btn:hover { color: var(--text, #cdd6f4); background: #45475a; }
+    .vm-tab-btn.active { color: var(--text, #cdd6f4); border-bottom-color: var(--accent, #cba6f7); background: #45475a; }
+    .vm-tab-content { display: none; }
+    .vm-tab-content.active { display: block; }
+
+    /* Search bar */
+    .vm-search-bar {
+      display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;
+    }
+    .vm-search-bar input {
+      flex: 1; min-width: 180px; padding: 10px 14px; border-radius: 8px;
+      border: 1px solid #45475a; background: var(--bg, #1e1e2e); color: var(--text, #cdd6f4);
+      font-size: 0.9rem;
+    }
+    .vm-search-bar input::placeholder { color: var(--text-sub, #9399b2); }
+    .vm-search-bar select {
+      padding: 10px 14px; border-radius: 8px;
+      border: 1px solid #45475a; background: var(--bg, #1e1e2e); color: var(--text, #cdd6f4);
+      font-size: 0.9rem; min-width: 140px;
+    }
+    .vm-search-bar button {
+      padding: 10px 18px; border-radius: 8px; border: none;
+      background: var(--accent, #cba6f7); color: #1e1e2e; font-weight: 600;
+      cursor: pointer; font-size: 0.9rem; white-space: nowrap;
+    }
+    .vm-search-bar button:hover { opacity: 0.85; }
+
+    /* Result card */
+    .vm-result-card {
+      background: var(--bg, #1e1e2e); border-radius: 10px; padding: 16px;
+      margin-bottom: 10px; border: 1px solid #45475a; cursor: pointer;
+      transition: border-color 0.15s;
+    }
+    .vm-result-card:hover { border-color: var(--accent, #cba6f7); }
+    .vm-result-lei { font-size: 0.75rem; color: var(--accent, #cba6f7); font-weight: 600; margin-bottom: 4px; }
+    .vm-result-num { font-size: 0.82rem; font-weight: 700; color: var(--text, #cdd6f4); margin-bottom: 4px; }
+    .vm-result-caput { font-size: 0.88rem; color: var(--text-sub, #9399b2); line-height: 1.5; }
+    .vm-result-caput mark { background: var(--yellow, #f9e2af); color: #1e1e2e; border-radius: 2px; padding: 0 2px; }
+    .vm-result-actions { display: flex; gap: 8px; margin-top: 10px; }
+    .vm-result-actions button {
+      padding: 5px 10px; border-radius: 6px; border: none;
+      font-size: 0.78rem; cursor: pointer; font-weight: 600; transition: opacity 0.15s;
+    }
+    .vm-result-actions button:hover { opacity: 0.8; }
+    .vm-btn-star { background: var(--yellow, #f9e2af); color: #1e1e2e; }
+    .vm-btn-note { background: var(--blue, #89b4fa); color: #1e1e2e; }
+
+    /* Lei card */
+    .vm-lei-card {
+      background: var(--bg, #1e1e2e); border-radius: 10px; padding: 16px;
+      margin-bottom: 10px; border: 1px solid #45475a;
+    }
+    .vm-lei-header {
+      display: flex; align-items: center; gap: 10px; cursor: pointer; flex-wrap: wrap;
+    }
+    .vm-lei-header:hover .vm-lei-name { color: var(--accent, #cba6f7); }
+    .vm-lei-sigla {
+      background: var(--accent, #cba6f7); color: #1e1e2e; font-size: 0.72rem;
+      font-weight: 700; padding: 3px 8px; border-radius: 4px; white-space: nowrap;
+    }
+    .vm-lei-name { flex: 1; font-weight: 600; font-size: 0.92rem; color: var(--text, #cdd6f4); transition: color 0.15s; min-width: 0; }
+    .vm-lei-count { font-size: 0.75rem; color: var(--text-sub, #9399b2); white-space: nowrap; }
+    .vm-lei-chevron { font-size: 0.75rem; color: var(--text-sub); transition: transform 0.2s; }
+    .vm-lei-chevron.open { transform: rotate(90deg); color: var(--accent); }
+    .vm-lei-actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+    .vm-lei-actions button {
+      padding: 6px 12px; border-radius: 6px; border: none;
+      font-size: 0.78rem; cursor: pointer; font-weight: 600;
+    }
+    .vm-btn-import { background: var(--green, #a6e3a1); color: #1e1e2e; }
+    .vm-btn-delete { background: var(--red, #f38ba8); color: #1e1e2e; }
+
+    /* Artigos list dentro de uma lei */
+    .vm-artigos-list {
+      display: none; margin-top: 12px; border-top: 1px solid #45475a;
+      padding-top: 10px; max-height: 400px; overflow-y: auto;
+    }
+    .vm-artigos-list.open { display: block; }
+    .vm-artigo-item {
+      padding: 8px 12px; border-bottom: 1px solid #313244;
+      font-size: 0.85rem; cursor: pointer; transition: background 0.1s;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .vm-artigo-item:last-child { border-bottom: none; }
+    .vm-artigo-item:hover { background: #45475a; border-radius: 6px; }
+    .vm-artigo-num { font-weight: 700; color: var(--accent, #cba6f7); white-space: nowrap; min-width: 50px; }
+    .vm-artigo-caput { flex: 1; color: var(--text-sub, #9399b2); overflow: hidden; min-width: 0; }
+
+    /* Artigo expandido (detalhe) */
+    .vm-artigo-detail {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8);
+      z-index: 99999; align-items: center; justify-content: center; padding: 16px;
+    }
+    .vm-artigo-detail.open { display: flex; }
+    .vm-artigo-detail-content {
+      background: var(--bg-surface, #313244); border-radius: 16px; padding: 24px;
+      max-width: 600px; width: 100%; max-height: 85vh; overflow-y: auto;
+    }
+    .vm-detail-header {
+      display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;
+    }
+    .vm-detail-header h3 { color: var(--accent, #cba6f7); margin: 0; font-size: 1.1rem; }
+    .vm-detail-close {
+      background: none; border: none; color: var(--text-sub); font-size: 1.5rem;
+      cursor: pointer; line-height: 1;
+    }
+    .vm-detail-caput { font-size: 0.95rem; line-height: 1.6; color: var(--text, #cdd6f4); margin-bottom: 12px; }
+    .vm-detail-paragrafos, .vm-detail-incisos {
+      font-size: 0.88rem; line-height: 1.5; color: var(--text-sub, #9399b2);
+      margin-bottom: 12px; padding-left: 16px;
+    }
+    .vm-detail-paragrafos p, .vm-detail-incisos p { margin: 4px 0; }
+    .vm-detail-section-label { font-size: 0.75rem; font-weight: 700; color: var(--accent); margin-bottom: 4px; text-transform: uppercase; }
+
+    .vm-detail-anotacao {
+      width: 100%; min-height: 80px; padding: 10px; border-radius: 8px;
+      border: 1px solid #45475a; background: var(--bg, #1e1e2e); color: var(--text, #cdd6f4);
+      font-size: 0.88rem; resize: vertical; margin-bottom: 12px;
+    }
+    .vm-detail-anotacao::placeholder { color: var(--text-sub); }
+    .vm-detail-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .vm-detail-actions button {
+      padding: 8px 16px; border-radius: 8px; border: none;
+      font-size: 0.85rem; font-weight: 600; cursor: pointer;
+    }
+    .vm-btn-save { background: var(--green, #a6e3a1); color: #1e1e2e; }
+    .vm-btn-highlight { background: var(--yellow, #f9e2af); color: #1e1e2e; }
+    .vm-btn-highlight.active { box-shadow: 0 0 0 2px var(--accent); }
+    .vm-btn-questoes { background: var(--blue, #89b4fa); color: #1e1e2e; }
+
+    /* Questões relacionadas */
+    .vm-questoes-list { margin-top: 12px; }
+    .vm-questao-item {
+      background: var(--bg, #1e1e2e); border-radius: 8px; padding: 10px;
+      margin-bottom: 6px; font-size: 0.82rem; color: var(--text-sub);
+    }
+
+    /* Destaques */
+    .vm-destaque-card {
+      background: var(--bg, #1e1e2e); border-radius: 10px; padding: 16px;
+      margin-bottom: 10px; border-left: 4px solid var(--yellow, #f9e2af); cursor: pointer;
+    }
+    .vm-destaque-card:hover { background: #45475a; }
+    .vm-destaque-lei { font-size: 0.72rem; color: var(--accent, #cba6f7); font-weight: 600; }
+    .vm-destaque-num { font-weight: 700; font-size: 0.88rem; color: var(--text); margin: 4px 0; }
+    .vm-destaque-caput { font-size: 0.85rem; color: var(--text-sub); line-height: 1.4; }
+    .vm-destaque-nota { font-size: 0.8rem; color: var(--green, #a6e3a1); margin-top: 6px; font-style: italic; }
+
+    /* Toolbar actions on leis tab */
+    .vm-toolbar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .vm-toolbar button {
+      padding: 10px 16px; border-radius: 8px; border: none;
+      font-size: 0.85rem; font-weight: 600; cursor: pointer;
+    }
+    .vm-btn-add-lei { background: var(--accent, #cba6f7); color: #1e1e2e; }
+
+    /* Modal genérico */
+    .vm-modal {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8);
+      z-index: 99998; align-items: center; justify-content: center; padding: 16px;
+    }
+    .vm-modal.open { display: flex; }
+    .vm-modal-content {
+      background: var(--bg-surface, #313244); border-radius: 16px; padding: 24px;
+      max-width: 500px; width: 100%; max-height: 85vh; overflow-y: auto;
+    }
+    .vm-modal-header {
+      display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;
+    }
+    .vm-modal-header h3 { color: var(--accent); margin: 0; }
+    .vm-modal-close {
+      background: none; border: none; color: var(--text-sub); font-size: 1.4rem; cursor: pointer;
+    }
+    .vm-form-row { margin-bottom: 12px; }
+    .vm-form-row label { display: block; font-size: 0.8rem; color: var(--text-sub); margin-bottom: 4px; font-weight: 600; }
+    .vm-form-row input, .vm-form-row textarea {
+      width: 100%; padding: 10px; border-radius: 8px;
+      border: 1px solid #45475a; background: var(--bg, #1e1e2e); color: var(--text, #cdd6f4);
+      font-size: 0.9rem;
+    }
+    .vm-form-row textarea { min-height: 120px; resize: vertical; }
+    .vm-form-row input::placeholder, .vm-form-row textarea::placeholder { color: var(--text-sub); }
+    .vm-form-submit {
+      width: 100%; padding: 12px; border-radius: 8px; border: none;
+      background: var(--accent, #cba6f7); color: #1e1e2e; font-weight: 700;
+      font-size: 0.95rem; cursor: pointer;
+    }
+    .vm-form-submit:hover { opacity: 0.85; }
+    .vm-form-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Empty state */
+    .vm-empty { text-align: center; padding: 40px 16px; color: var(--text-sub); }
+    .vm-empty-icon { font-size: 2.5rem; margin-bottom: 8px; }
+    .vm-empty p { font-size: 0.9rem; }
+
+    /* Loading */
+    .vm-loading { text-align: center; padding: 20px; color: var(--text-sub); font-size: 0.85rem; }
+
+    /* Light theme overrides */
+    body.light-theme .vm-tab-bar { background: #e6e9ef; }
+    body.light-theme .vm-tab-btn { color: #6c6f85; }
+    body.light-theme .vm-tab-btn:hover { color: #4c4f69; background: #ccd0da; }
+    body.light-theme .vm-tab-btn.active { color: #4c4f69; background: #dce0e8; border-bottom-color: #8839ef; }
+    body.light-theme .vm-result-card,
+    body.light-theme .vm-lei-card,
+    body.light-theme .vm-destaque-card { background: #dce0e8; border-color: #bcc0cc; }
+    body.light-theme .vm-result-card:hover,
+    body.light-theme .vm-lei-card:hover { border-color: #8839ef; }
+    body.light-theme .vm-search-bar input,
+    body.light-theme .vm-search-bar select,
+    body.light-theme .vm-detail-anotacao,
+    body.light-theme .vm-form-row input,
+    body.light-theme .vm-form-row textarea { background: #dce0e8; border-color: #bcc0cc; color: #4c4f69; }
+    body.light-theme .vm-artigo-item:hover { background: #ccd0da; }
+    body.light-theme .vm-artigo-detail-content,
+    body.light-theme .vm-modal-content { background: #e6e9ef; }
+  </style>
+</head>
+<body>
+  <div class="main-content">
+    <div class="header">
+      <h1>📜 Vade Mecum Digital</h1>
+      <div class="header-links">
+        <a href="/dashboard.html">📊 Dashboard</a>
+        <a href="/questoes.html">❓ Questões</a>
+        <button onclick="toggleTheme()" title="Alternar tema" aria-label="Alternar tema claro/escuro" style="background:var(--bg-elevated);color:var(--text);border:none;border-radius:6px;padding:6px 10px;font-size:0.9rem;cursor:pointer;">🌓</button>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="vm-tab-bar">
+      <button class="vm-tab-btn active" data-tab="tab-busca" onclick="switchTab('tab-busca')">🔍 Busca</button>
+      <button class="vm-tab-btn" data-tab="tab-leis" onclick="switchTab('tab-leis')">📚 Leis</button>
+      <button class="vm-tab-btn" data-tab="tab-destaques" onclick="switchTab('tab-destaques')">⭐ Destaques</button>
+    </div>
+
+    <!-- Tab: Busca -->
+    <div id="tab-busca" class="vm-tab-content active">
+      <div class="panel">
+        <div class="vm-search-bar">
+          <input type="text" id="vm-search-input" placeholder="Buscar artigo, termo ou número..." onkeydown="if(event.key==='Enter')vmBuscar()">
+          <select id="vm-search-lei">
+            <option value="0">Todas as leis</option>
+          </select>
+          <button onclick="vmBuscar()">🔍 Buscar</button>
+        </div>
+        <div id="vm-search-results">
+          <div class="vm-empty">
+            <div class="vm-empty-icon">🔍</div>
+            <p>Digite um termo para buscar nos artigos de todas as leis cadastradas.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Leis -->
+    <div id="tab-leis" class="vm-tab-content">
+      <div class="panel">
+        <div class="vm-toolbar">
+          <button class="vm-btn-add-lei" onclick="openModalLei()">➕ Nova Lei</button>
+        </div>
+        <div id="vm-leis-list">
+          <div class="vm-loading">Carregando leis...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Destaques -->
+    <div id="tab-destaques" class="vm-tab-content">
+      <div class="panel">
+        <div id="vm-destaques-list">
+          <div class="vm-loading">Carregando destaques...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Nova Lei -->
+  <div id="modal-nova-lei" class="vm-modal">
+    <div class="vm-modal-content">
+      <div class="vm-modal-header">
+        <h3>➕ Cadastrar Nova Lei</h3>
+        <button class="vm-modal-close" onclick="closeModalLei()">&times;</button>
+      </div>
+      <div class="vm-form-row">
+        <label for="lei-nome">Nome</label>
+        <input type="text" id="lei-nome" placeholder="Ex: Constituição Federal">
+      </div>
+      <div class="vm-form-row">
+        <label for="lei-sigla">Sigla</label>
+        <input type="text" id="lei-sigla" placeholder="Ex: CF/88">
+      </div>
+      <div class="vm-form-row">
+        <label for="lei-numero">Número</label>
+        <input type="text" id="lei-numero" placeholder="Ex: 8.666/1993">
+      </div>
+      <div class="vm-form-row">
+        <label for="lei-ementa">Ementa</label>
+        <input type="text" id="lei-ementa" placeholder="Breve descrição da lei">
+      </div>
+      <button class="vm-form-submit" onclick="salvarLei()">💾 Salvar Lei</button>
+    </div>
+  </div>
+
+  <!-- Modal: Importar Texto -->
+  <div id="modal-importar" class="vm-modal">
+    <div class="vm-modal-content">
+      <div class="vm-modal-header">
+        <h3>📥 Importar Texto da Lei</h3>
+        <button class="vm-modal-close" onclick="closeModalImportar()">&times;</button>
+      </div>
+      <p style="font-size:0.82rem;color:var(--text-sub);margin-bottom:12px;">
+        Cole o texto da lei inteira abaixo. O parser automático identificará os artigos, parágrafos e incisos.
+      </p>
+      <div class="vm-form-row">
+        <label for="importar-texto">Texto da Lei</label>
+        <textarea id="importar-texto" placeholder="Art. 1º Texto do artigo...&#10;§ 1º Parágrafo...&#10;I - inciso..." style="min-height:200px;"></textarea>
+      </div>
+      <button class="vm-form-submit" id="btn-importar" onclick="importarTexto()">🚀 Importar</button>
+    </div>
+  </div>
+
+  <!-- Modal: Artigo Detalhe -->
+  <div id="vm-artigo-detail" class="vm-artigo-detail">
+    <div class="vm-artigo-detail-content">
+      <div class="vm-detail-header">
+        <h3 id="detail-titulo">Art. X</h3>
+        <button class="vm-detail-close" onclick="closeDetail()">&times;</button>
+      </div>
+      <div id="detail-lei-info" style="font-size:0.75rem;color:var(--accent);margin-bottom:12px;font-weight:600;"></div>
+      <div id="detail-capitulo" style="font-size:0.78rem;color:var(--text-sub);margin-bottom:8px;display:none;"></div>
+      <div class="vm-detail-caput" id="detail-caput"></div>
+      <div id="detail-paragrafos-container" style="display:none;">
+        <div class="vm-detail-section-label">Parágrafos</div>
+        <div class="vm-detail-paragrafos" id="detail-paragrafos"></div>
+      </div>
+      <div id="detail-incisos-container" style="display:none;">
+        <div class="vm-detail-section-label">Incisos</div>
+        <div class="vm-detail-incisos" id="detail-incisos"></div>
+      </div>
+      <div class="vm-detail-section-label" style="margin-top:16px;">Anotação</div>
+      <textarea class="vm-detail-anotacao" id="detail-anotacao" placeholder="Escreva sua anotação aqui..."></textarea>
+      <div class="vm-detail-actions">
+        <button class="vm-btn-save" onclick="salvarAnotacao()">💾 Salvar</button>
+        <button class="vm-btn-highlight" id="btn-destacar" onclick="toggleDestacar()">⭐ Destacar</button>
+        <button class="vm-btn-questoes" onclick="verQuestoesRelacionadas()">📝 Ver Questões</button>
+      </div>
+      <div id="detail-questoes" class="vm-questoes-list"></div>
+    </div>
+  </div>
+
+  <script type="module" src="/js/pages/vademecum.js"></script>
+  <script src="/timer-global.js"></script>
+  <script src="/auth-interceptor.js"></script>
+  <script src="/sidebar.js"></script>
+  <script type="module">
+    import { toggleTheme, initTheme } from './js/modules/theme.js';
+    window.toggleTheme = toggleTheme;
+    initTheme();
+  </script>
+</body>
+</html>
