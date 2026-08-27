@@ -9,7 +9,7 @@ import unicodedata
 from datetime import date
 from difflib import SequenceMatcher
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from database import get_db_session
 from deps import get_user_id
@@ -409,3 +409,174 @@ def completar_lacuna(
         "dica": resultado["dica"],
         "lacunas": resultado["lacunas"],
     }
+
+
+# ============================================================
+# IA GERADORA DE QUESTÕES — Gerar questões inéditas por tópico
+# Usa prompt estruturado para LLM (qualquer provider configurado)
+# ============================================================
+
+@router.post("/api/questoes/gerar-ia", summary="Gerar questões inéditas via IA",
+             description="""Gera questões inéditas no estilo da banca a partir de um tópico do edital.
+Usa o AI Tutor configurado pelo usuário (Gemini, OpenAI, Claude, etc.).""")
+def gerar_questoes_ia(
+    materia: str = Query(..., description="Matéria da questão"),
+    topico: str = Query("", description="Tópico específico (opcional)"),
+    banca: str = Query("CESPE", description="Estilo da banca: CESPE, FCC, FGV"),
+    quantidade: int = Query(3, ge=1, le=10, description="Quantidade de questões (1-10)"),
+    dificuldade: str = Query("Médio", description="Fácil, Médio, Difícil"),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Gera questões inéditas via IA no estilo da banca escolhida."""
+
+    # Buscar configuração de IA do usuário
+    try:
+        from routers.ai_tutor import _get_ai_config, call_llm_sync
+        config = _get_ai_config()
+    except Exception:
+        raise HTTPException(400, "Configure a IA nas configurações (API key necessária).")
+
+    # Buscar contexto do edital para melhorar a geração
+    contexto_topicos = ""
+    if topico:
+        topicos_rel = conn.execute("""
+            SELECT topico FROM edital WHERE materia = ? AND user_id = ? AND arquivado = 0
+            AND topico LIKE ? LIMIT 5
+        """, (materia, user_id, f"%{topico}%")).fetchall()
+        if topicos_rel:
+            contexto_topicos = "Tópicos relacionados no edital: " + ", ".join(t["topico"] for t in topicos_rel)
+
+    # Prompt estruturado por banca
+    if banca.upper() == "CESPE":
+        formato_instrucao = """Formato CESPE (Certo/Errado):
+- Cada questão é uma AFIRMAÇÃO que deve ser julgada como CERTO ou ERRADO
+- Alternativas: apenas "CERTO" e "ERRADO"
+- A resposta correta deve ser a letra da alternativa (A para CERTO, B para ERRADO)
+- Enunciados devem ser assertivos, sem pergunta direta
+- Inclua pegadinhas sutis (palavras absolutas, exceções, trocas de sujeito)"""
+    elif banca.upper() == "FCC":
+        formato_instrucao = """Formato FCC (Múltipla Escolha com 5 alternativas):
+- Enunciado com caso prático ou interpretação
+- 5 alternativas (A, B, C, D, E), apenas uma correta
+- Alternativas bem construídas e plausíveis
+- Enunciados podem ser longos e detalhados"""
+    else:
+        formato_instrucao = """Formato FGV (Múltipla Escolha com 5 alternativas):
+- Questões interpretativas e aplicadas
+- 5 alternativas (A, B, C, D, E), apenas uma correta
+- Pode exigir raciocínio além da letra da lei
+- Nível elevado"""
+
+    prompt = f"""Gere exatamente {quantidade} questão(ões) inédita(s) para concurso público.
+
+Matéria: {materia}
+{f'Tópico: {topico}' if topico else ''}
+Dificuldade: {dificuldade}
+{contexto_topicos}
+
+{formato_instrucao}
+
+FORMATO DE SAÍDA (JSON):
+Retorne APENAS um array JSON válido, sem texto antes ou depois:
+[
+  {{
+    "enunciado": "texto do enunciado",
+    "alternativa_a": "texto alternativa A",
+    "alternativa_b": "texto alternativa B",
+    "alternativa_c": "texto alternativa C (vazio se CESPE)",
+    "alternativa_d": "texto alternativa D (vazio se CESPE)",
+    "alternativa_e": "texto alternativa E (vazio se CESPE)",
+    "resposta_correta": "A",
+    "explicacao": "explicação detalhada de por que está correta",
+    "dificuldade": "{dificuldade}"
+  }}
+]
+
+REGRAS:
+- Questões devem ser INÉDITAS (não copie de provas existentes)
+- Base em legislação vigente e doutrina majoritária
+- Explicação deve citar o fundamento legal quando aplicável
+- Dificuldade '{dificuldade}': {"básico, conceitual" if dificuldade == "Fácil" else "aplicação, interpretação" if dificuldade == "Médio" else "exceções, jurisprudência, pegadinhas"}
+"""
+
+    try:
+        resposta = call_llm_sync(prompt)
+    except Exception as e:
+        raise HTTPException(500, f"Erro ao chamar IA: {str(e)}")
+
+    # Parse JSON da resposta
+    import json
+    questoes_geradas = []
+    try:
+        # Extrair JSON do texto (pode vir com markdown ```json ... ```)
+        json_match = re.search(r'\[[\s\S]*\]', resposta)
+        if json_match:
+            questoes_geradas = json.loads(json_match.group())
+        else:
+            questoes_geradas = json.loads(resposta)
+    except json.JSONDecodeError:
+        # Tentar parse linha a linha
+        raise HTTPException(500, "IA retornou formato inválido. Tente novamente.")
+
+    # Validar e normalizar
+    questoes_validas = []
+    for q in questoes_geradas:
+        if not q.get("enunciado") or not q.get("resposta_correta"):
+            continue
+        questoes_validas.append({
+            "enunciado": q["enunciado"],
+            "alternativa_a": q.get("alternativa_a", "CERTO"),
+            "alternativa_b": q.get("alternativa_b", "ERRADO"),
+            "alternativa_c": q.get("alternativa_c", ""),
+            "alternativa_d": q.get("alternativa_d", ""),
+            "alternativa_e": q.get("alternativa_e", ""),
+            "resposta_correta": q["resposta_correta"].upper()[:1],
+            "explicacao": q.get("explicacao", ""),
+            "dificuldade": q.get("dificuldade", dificuldade),
+            "materia": materia,
+            "topico": topico,
+            "banca": banca.upper(),
+            "gerada_por_ia": True,
+        })
+
+    return {
+        "questoes": questoes_validas,
+        "total_geradas": len(questoes_validas),
+        "materia": materia,
+        "topico": topico,
+        "banca": banca,
+        "dificuldade": dificuldade,
+        "mensagem": f"✅ {len(questoes_validas)} questão(ões) gerada(s) no estilo {banca}. Revise e salve as que forem boas.",
+    }
+
+
+@router.post("/api/questoes/gerar-ia/salvar", summary="Salvar questões geradas pela IA no banco")
+def salvar_questoes_ia(
+    questoes: list = Body(...),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Salva questões geradas pela IA no banco de questões do usuário."""
+    from datetime import datetime
+    count = 0
+    for q in questoes:
+        if not q.get("enunciado"):
+            continue
+        conn.execute("""
+            INSERT INTO questoes (enunciado, alternativa_a, alternativa_b, alternativa_c,
+                alternativa_d, alternativa_e, resposta_correta, explicacao, materia,
+                topico, dificuldade, banca, user_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            q["enunciado"], q.get("alternativa_a", ""), q.get("alternativa_b", ""),
+            q.get("alternativa_c", ""), q.get("alternativa_d", ""), q.get("alternativa_e", ""),
+            q.get("resposta_correta", ""), q.get("explicacao", ""),
+            q.get("materia", ""), q.get("topico", ""),
+            q.get("dificuldade", "Médio"), q.get("banca", ""),
+            user_id
+        ))
+        count += 1
+    conn.commit()
+    log.info(f"IA: {count} questões salvas para user {user_id}")
+    return {"ok": True, "salvas": count}

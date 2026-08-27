@@ -598,6 +598,130 @@ function _ttsPlayCard() {
 }
 
 // ============================================================
+// MODO COMMUTING — Player áudio hands-free (pausas longas)
+// Ideal para ônibus/carro: pergunta → 10s pensar → resposta
+// Controle via MediaSession API (botões do fone bluetooth)
+// ============================================================
+
+let _commutingActive = false;
+
+export function startCommutingMode() {
+  if (!('speechSynthesis' in window)) {
+    toast('Seu navegador não suporta Text-to-Speech.', 'error');
+    return;
+  }
+  if (flashcardsToday.length === 0) {
+    toast('Nenhum flashcard pendente. Adicione cards para usar o modo commuting.', 'warning');
+    return;
+  }
+  _ttsQueue = [...flashcardsToday];
+  _ttsIndex = 0;
+  _ttsPlaying = true;
+  _ttsPaused = false;
+  _commutingActive = true;
+
+  // Registrar MediaSession para controle por fone bluetooth
+  if ('mediaSession' in navigator) {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: 'ConcurseiroOS — Modo Commuting',
+      artist: `${_ttsQueue.length} flashcards pendentes`,
+      album: 'Revisão por Áudio',
+    });
+    navigator.mediaSession.setActionHandler('play', () => pauseAudioMode());
+    navigator.mediaSession.setActionHandler('pause', () => pauseAudioMode());
+    navigator.mediaSession.setActionHandler('nexttrack', () => skipAudioCard());
+    navigator.mediaSession.setActionHandler('previoustrack', () => {}); // no-op
+  }
+
+  toast(`🎧 Modo Commuting: ${_ttsQueue.length} cards. Ouça → pense 10s → ouça resposta. Use fone para controlar.`, 'success', 5000);
+  _commutingPlayCard();
+}
+
+export function stopCommutingMode() {
+  window.speechSynthesis.cancel();
+  _ttsPlaying = false;
+  _commutingActive = false;
+  if ('mediaSession' in navigator) {
+    navigator.mediaSession.metadata = null;
+  }
+  toast('🎧 Modo commuting encerrado.', 'info');
+}
+
+function _commutingPlayCard() {
+  if (_ttsIndex >= _ttsQueue.length || !_ttsPlaying) {
+    _ttsPlaying = false;
+    _commutingActive = false;
+    toast('🎉 Revisão commuting concluída! Todos os cards ouvidos.', 'success');
+    return;
+  }
+  const card = _ttsQueue[_ttsIndex];
+  const synth = window.speechSynthesis;
+  const voices = synth.getVoices();
+  const ptVoice = voices.find(v => v.lang.startsWith('pt')) || voices[0];
+
+  // Anunciar número do card
+  const uttNum = new SpeechSynthesisUtterance(`Card ${_ttsIndex + 1} de ${_ttsQueue.length}. ${card.materia || ''}.`);
+  uttNum.lang = 'pt-BR';
+  uttNum.rate = 1.0;
+  if (ptVoice) uttNum.voice = ptVoice;
+
+  // Pergunta
+  const uttPergunta = new SpeechSynthesisUtterance(card.pergunta);
+  uttPergunta.lang = 'pt-BR';
+  uttPergunta.rate = 0.85;  // Mais lento no commuting
+  if (ptVoice) uttPergunta.voice = ptVoice;
+
+  // Resposta
+  const uttResposta = new SpeechSynthesisUtterance(`Resposta: ${card.resposta}`);
+  uttResposta.lang = 'pt-BR';
+  uttResposta.rate = 0.85;
+  if (ptVoice) uttResposta.voice = ptVoice;
+
+  // Fluxo: anúncio → pergunta → 10s pausa → "resposta:" → resposta → 3s → próximo
+  uttNum.onend = () => {
+    if (!_ttsPlaying) return;
+    synth.speak(uttPergunta);
+  };
+
+  uttPergunta.onend = () => {
+    if (!_ttsPlaying) return;
+    // Pausa LONGA de 10s para pensar (commuting = sem visual)
+    setTimeout(() => {
+      if (!_ttsPlaying) return;
+      // Beep sonoro antes da resposta (feedback auditivo)
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.frequency.value = 880; gain.gain.value = 0.2;
+        osc.start(); osc.stop(ctx.currentTime + 0.15);
+      } catch(e) {}
+      setTimeout(() => { if (_ttsPlaying) synth.speak(uttResposta); }, 300);
+    }, 10000);
+  };
+
+  uttResposta.onend = () => {
+    // 3s entre cards
+    setTimeout(() => {
+      _ttsIndex++;
+      if (_ttsPlaying && _commutingActive) _commutingPlayCard();
+    }, 3000);
+  };
+
+  // Atualizar MediaSession
+  if ('mediaSession' in navigator) {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: card.pergunta.substring(0, 60),
+      artist: card.materia || 'Flashcard',
+      album: `${_ttsIndex + 1}/${_ttsQueue.length}`,
+    });
+  }
+
+  synth.speak(uttNum);
+}
+
+// ============================================================
 // BOSS BATTLE MODE — Gamified Flashcard Review
 // ============================================================
 
