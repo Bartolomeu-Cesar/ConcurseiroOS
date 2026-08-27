@@ -5,6 +5,7 @@ import { switchTab } from './tabs.js';
 let questoesDia = [], qDiaIdx = 0, qDiaAcertos = 0;
 let qDiaStartTime = null; // Timestamp de quando a questão foi exibida
 let _loadMetas = null, _loadStreakBadge = null, _getConfigSessoes = null;
+let _lastRespostaId = null; // ID da última resposta registrada (para error analysis)
 
 export async function carregarQuestoesDia() {
   try {
@@ -143,12 +144,28 @@ export async function responderQuestaoDia(letra) {
         <div style="font-size:0.75rem;color:var(--yellow);font-weight:600;margin-bottom:6px;">🧠 Self-Explanation — Explique por que a resposta correta é "${respostaTexto}":</div>
         <textarea id="qdia-self-explain" placeholder="Escreva com suas palavras por que esta é a resposta correta... (Isso melhora sua retenção em 40%!)" 
           style="width:100%;min-height:50px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-size:0.82rem;font-family:inherit;resize:vertical;"></textarea>
+        <div style="margin-top:8px;">
+          <div style="font-size:0.72rem;color:var(--text-sub);margin-bottom:4px;">📋 Por que errei?</div>
+          <div id="qdia-error-chips" style="display:flex;flex-wrap:wrap;gap:4px;">
+            <button class="error-chip" data-motivo="leitura_incompleta" onclick="selectErrorChip(this)">📖 Leitura incompleta</button>
+            <button class="error-chip" data-motivo="conceito_errado" onclick="selectErrorChip(this)">❌ Conceito errado</button>
+            <button class="error-chip" data-motivo="excecao_regra" onclick="selectErrorChip(this)">⚠️ Exceção da regra</button>
+            <button class="error-chip" data-motivo="pegadinha" onclick="selectErrorChip(this)">🪤 Pegadinha</button>
+            <button class="error-chip" data-motivo="chute" onclick="selectErrorChip(this)">🎲 Chutei</button>
+            <button class="error-chip" data-motivo="desatencao" onclick="selectErrorChip(this)">😵 Desatenção</button>
+            <button class="error-chip" data-motivo="tempo" onclick="selectErrorChip(this)">⏰ Faltou tempo</button>
+          </div>
+        </div>
         <button onclick="submitSelfExplanation(${q.id})" style="margin-top:6px;background:var(--yellow);color:var(--bg);border:none;border-radius:6px;padding:6px 14px;font-weight:600;cursor:pointer;font-size:0.82rem;">💾 Salvar e continuar</button>
         <button onclick="advanceQuestao()" style="margin-top:6px;margin-left:6px;background:var(--bg-elevated);color:var(--text-sub);border:none;border-radius:6px;padding:6px 14px;font-size:0.78rem;cursor:pointer;">Pular →</button>
       </div>`;
   }
   try {
-    await fetch(`/api/questoes/${q.id}/responder`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ resposta: letra, tempo_segundos: tempoSegundos }) });
+    const resp = await fetch(`/api/questoes/${q.id}/responder`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ resposta: letra, tempo_segundos: tempoSegundos }) });
+    if (resp.ok) {
+      const data = await resp.json();
+      _lastRespostaId = data.id || data.resposta_id || null;
+    }
     if (_loadMetas) _loadMetas();
     if (_loadStreakBadge) _loadStreakBadge();
   } catch(e) {}
@@ -174,7 +191,30 @@ export async function submitSelfExplanation(questaoId) {
     });
     toast('💡 Explicação salva! Isso fortalece sua memória.', 'success');
   } catch (e) {}
+
+  // Enviar error analysis se motivo selecionado
+  const selectedChip = document.querySelector('.error-chip.selected');
+  if (selectedChip && _lastRespostaId) {
+    try {
+      await fetch('/api/questoes/erros/analise', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          resposta_id: _lastRespostaId,
+          motivo: selectedChip.dataset.motivo,
+          detalhe: explicacao
+        })
+      });
+    } catch (e) {}
+  }
+
   advanceQuestao();
+}
+
+// Error Analysis: selecionar chip de motivo
+export function selectErrorChip(btn) {
+  document.querySelectorAll('.error-chip').forEach(c => c.classList.remove('selected'));
+  btn.classList.add('selected');
 }
 
 export function initQuestoes(deps) {

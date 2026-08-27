@@ -320,6 +320,24 @@ def _m45_edital_video_link(conn):
         conn.execute("ALTER TABLE edital ADD COLUMN video_link TEXT DEFAULT ''")
         log.info("Migration: added column video_link to edital")
 
+
+def _m46_error_analysis(conn):
+    """Create error_analysis table for categorizing why user got questions wrong."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS error_analysis (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            resposta_id INTEGER NOT NULL,
+            motivo TEXT NOT NULL,
+            detalhe TEXT DEFAULT '',
+            created_at TEXT NOT NULL,
+            user_id INTEGER NOT NULL DEFAULT 1,
+            FOREIGN KEY (resposta_id) REFERENCES questoes_respostas(id)
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_error_analysis_user_id ON error_analysis(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_error_analysis_motivo ON error_analysis(motivo, user_id)")
+    log.info("Migration: created error_analysis table")
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -366,6 +384,7 @@ MIGRATIONS = [
     (43, _m43_sessao_adaptativa),
     (44, _m44_questoes_prova_origem),
     (45, _m45_edital_video_link),
+    (46, _m46_error_analysis),
 ]
 
 

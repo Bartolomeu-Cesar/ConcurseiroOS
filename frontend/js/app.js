@@ -9,7 +9,7 @@ import { loadEdital, toggleTree, toggleAllEdital, selectEditalTopic, toggleEdita
 import { loadCiclo, cicloTimerToggle, cicloTimerStop, importarCicloDoEdital, addCiclo, deleteCiclo, resetarCiclo, limparCiclo, initCiclo } from './modules/ciclo.js';
 import { loadFlashcardsToday, revealAnswer, reviewFlashcard, addFlashcard, loadAllFlashcards, toggleFlashGroup, iniciarSessaoFlash, sessaoNext, deleteFlashcard, openFlashEditModal, closeFlashEditModal, saveFlashEdit, initFlashcards, toggleGenerationMode, setFlashConfidence } from './modules/flashcards.js';
 import { loadSumulasToday, revealSumula, reviewSumula, addSumula, loadAllSumulas, iniciarSessaoSumulas, deleteSumula, editSumula, toggleSumulaGroup, initSumulas } from './modules/sumulas.js';
-import { carregarQuestoesDia, showQuestaoDia, responderQuestaoDia, advanceQuestao, submitSelfExplanation, initQuestoes } from './modules/questoes.js';
+import { carregarQuestoesDia, showQuestaoDia, responderQuestaoDia, advanceQuestao, submitSelfExplanation, selectErrorChip, initQuestoes } from './modules/questoes.js';
 import { loadMetas, salvarMetas, getConfigSessoes, salvarConfigSessoes, loadConfigSessoes, loadStreakBadge, initMetas } from './modules/metas.js';
 import { openSelectModal, selectModalChoice, closeSelectModal, initModalSelecao } from './modules/modal-selecao.js';
 import { linkPdfToTopic, linkPdfToMateria, unlinkPdf, linkPdfToDisc, openNoteModal, closeNoteModal, saveNote, deleteNote, initVincularPdf } from './modules/vincular-pdf.js';
@@ -45,7 +45,7 @@ Object.assign(window, {
   loadSumulasToday, revealSumula, reviewSumula, addSumula, loadAllSumulas,
   iniciarSessaoSumulas, deleteSumula, editSumula, toggleSumulaGroup,
   // Questões
-  carregarQuestoesDia, showQuestaoDia, responderQuestaoDia, advanceQuestao, submitSelfExplanation,
+  carregarQuestoesDia, showQuestaoDia, responderQuestaoDia, advanceQuestao, submitSelfExplanation, selectErrorChip,
   // Metas
   loadMetas, salvarMetas, getConfigSessoes, salvarConfigSessoes, loadConfigSessoes, loadStreakBadge,
   // Modal Seleção

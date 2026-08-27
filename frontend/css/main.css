@@ -1293,3 +1293,26 @@ body.light-theme .select-item .si-label { color: #4c4f69; }
 /* Modo Foco */
 body.focus-mode { padding: 12px; }
 body.focus-mode .panel { margin-bottom: 8px; }
+
+/* ===== Error Analysis Chips ===== */
+.error-chip {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 4px 10px;
+  font-size: 0.72rem;
+  color: var(--text-sub);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.error-chip:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.error-chip.selected {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+  font-weight: 600;
+}
