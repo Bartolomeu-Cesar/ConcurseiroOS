@@ -568,3 +568,55 @@ SELECT materia, topico FROM edital WHERE status != 'Concluído' AND arquivado = 
 - **Action:** Modal preenchia o input com o valor mascarado. Ao salvar, backend gravava o valor mascarado como a nova key.
 - **Result:** Input de API key agora fica vazio. Backend preserva a key existente se o campo vier vazio.
 - **Summary:** Campos de segredo nunca devem ser pré-preenchidos com valor mascarado. Vazio = "não alterar".
+
+
+---
+
+## 7. SESSÃO 27/08/2026 — Migração FSRS + 18 Técnicas de Estudo
+
+### 7.1 Migrações Executadas
+- **SM-2 → FSRS-5**: Frontend agora chama `/review-fsrs`. 14 cards migrados. Good = ~3d no primeiro acerto (antes: 1d).
+- **Spaced Repetition em Questões**: `_schedule_question_review()` no `/api/questoes/{id}/responder` agenda revisão FSRS para erros e chutes.
+- **Smart Selection**: `_smart_select_questions()` em simulados e desafio diário (exclui dominadas, prioriza erradas + nunca vistas + interleaving).
+
+### 7.2 Técnicas Implementadas (Endpoints)
+
+| # | Técnica | Endpoint | Commit |
+|---|---------|----------|--------|
+| 1 | FSRS-5 Flashcards | `/api/flashcards/{id}/review-fsrs` | 811e1ab |
+| 2 | FSRS Questões | Automático em `/responder` | f3d3c39 |
+| 3 | Smart Selection | `/api/simulado-inteligente` + cronometrado + desafio | 29ed216 + f3d3c39 |
+| 4 | Confidence-based | Automático em `/responder` (tempo + confiança) | f3d3c39 |
+| 5 | Blocked Practice Detection | `/api/study-intelligence/blocked-practice` + inline | 3361afd |
+| 6 | Sleep Consolidation | `/api/study-intelligence/sleep-consolidation` | 3361afd |
+| 7 | Overlearning Detection | `/api/study-intelligence/overlearning` | 3361afd |
+| 8 | Transfer Testing | `/api/study-intelligence/transfer-test` | b3289a9 |
+| 9 | Adaptive Break | `/api/study-intelligence/adaptive-break` | b3289a9 |
+| 10 | Progress Milestones | `/api/study-intelligence/milestones` | b3289a9 |
+| 11 | Error Analysis Patterns | `/api/study-intelligence/error-patterns` | b3289a9 |
+| 12 | Retrieval Warmup | `/api/study-intelligence/retrieval-warmup` | 957a8ad |
+| 13 | Minimum Effective Dose | `/api/study-intelligence/minimum-dose` | 957a8ad |
+| 14 | Implementation Intentions | `/api/study-intelligence/intention` + `/concluir` + `/hoje` | 957a8ad |
+| 15 | Banca-Specific Profile | `/api/study-intelligence/banca-profile` | 3ed975a |
+| 16 | Banca Training Session | `/api/study-intelligence/banca-training` | 3ed975a |
+
+### 7.3 Bugs Corrigidos
+- **Study Room 61.48h**: Sessão inflada → cap 4h/sessão + fix sairSala() não registrava tempo
+- **Ciclo visões não carregavam**: closeSidebar null crashava index.js → switchCicloView movida para ciclo.js
+- **Resumo semanal errado**: Dados corrigidos (total real: 5.74h, não 65.2h)
+
+### 7.4 Roadmap — Técnicas Futuras (implementar progressivamente)
+
+| # | Técnica | Complexidade | Dependências | Descrição |
+|---|---------|-------------|--------------|-----------|
+| 1 | **Exam Anxiety Exposure** | Média | Simulados | Simulados progressivamente mais estressantes (tempo apertado → nota de corte visível → ambiente barulhento simulado). Exposição gradual reduz ansiedade. |
+| 2 | **Peer Teaching via Chat** | Alta | Social/Chat | Explicar conteúdo para amigos no chat = processamento profundo (Webb 1991). Detectar quando user ensina e dar XP bônus. |
+| 3 | **Gamified Spaced Rep** | Baixa | Flashcards + Batalha | Flashcard review como "batalha contra chefe". Boss HP = difficulty do card. Critical hit = Easy. Miss = Again. Motivação via narrativa. |
+| 4 | **Knowledge Graph Navigation** | Alta | Edital + Mastery | Visualizar mapa de dependências entre tópicos. "Não estude X antes de dominar Y". Sugere ordem ótima baseada em pré-requisitos. |
+
+### 7.5 Perfis de Banca (dados compilados)
+
+**CESPE/CEBRASPE**: C/E, penalização -1, doutrina+jurisprudência, NÃO CHUTE se <70% certeza.
+**FCC**: 5 alternativas, sem penalização, provas extensas, interpretação, gestão de tempo.
+**FGV**: 5 alternativas, sem penalização, imprevisível, math pura em RLM, varia por órgão.
+**VUNESP**: 5 alternativas, sem penalização, SP, direta, legislação específica.
