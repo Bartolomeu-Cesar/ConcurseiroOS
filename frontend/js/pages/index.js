@@ -151,10 +151,30 @@ let cicloVisaoData = null;
 let cicloViewAtual = 'diario';
 
 function loadCicloVisao() {
+  const el = document.getElementById('ciclo-view-content');
+  if (el && !cicloVisaoData) el.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Carregando ciclo...</p>';
   fetch('/api/ciclo/visao')
-    .then(r => r.json())
-    .then(data => { cicloVisaoData = data; renderCicloView(cicloViewAtual); })
-    .catch(() => {});
+    .then(r => {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(data => {
+      if (data && data.diario) {
+        cicloVisaoData = data;
+        renderCicloView(cicloViewAtual);
+      }
+    })
+    .catch(() => {
+      // Retry once after 2s (auth token may not be ready yet)
+      setTimeout(() => {
+        fetch('/api/ciclo/visao')
+          .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+          .then(data => { if (data && data.diario) { cicloVisaoData = data; renderCicloView(cicloViewAtual); } })
+          .catch(() => {
+            if (el) el.innerHTML = '<p style="color:#f38ba8;font-size:0.85rem;">Erro ao carregar ciclo. Tente recarregar a página.</p>';
+          });
+      }, 2000);
+    });
 }
 
 function switchCicloView(view, btn) {
@@ -165,7 +185,7 @@ function switchCicloView(view, btn) {
   const el = document.getElementById('ciclo-view-content');
   if (!el) return;
 
-  if (cicloVisaoData && !cicloVisaoData.sem_dados) {
+  if (cicloVisaoData && cicloVisaoData.diario && !cicloVisaoData.sem_dados) {
     renderCicloView(view);
   } else {
     el.innerHTML = '<p style="color:#9399b2;font-size:0.85rem;">Carregando...</p>';
@@ -175,8 +195,12 @@ function switchCicloView(view, btn) {
         return r.json();
       })
       .then(data => {
-        cicloVisaoData = data;
-        renderCicloView(cicloViewAtual);
+        if (data && data.diario) {
+          cicloVisaoData = data;
+          renderCicloView(cicloViewAtual);
+        } else {
+          el.innerHTML = '<p style="color:#9399b2;">Adicione matérias ao edital para gerar o ciclo.</p>';
+        }
       })
       .catch(e => {
         el.innerHTML = '<p style="color:#f38ba8;">Erro ao carregar: ' + e.message + '</p>';
@@ -205,7 +229,7 @@ function renderCicloView(view) {
 }
 
 function renderDiario(el, items) {
-  if (!items.length) { el.innerHTML = '<p style="color:#9399b2;">Nenhuma matéria no ciclo.</p>'; return; }
+  if (!items || !items.length) { el.innerHTML = '<p style="color:#9399b2;">Nenhuma matéria no ciclo. Importe do edital.</p>'; return; }
   el.innerHTML = items.map(m => `
     <div style="background:#1e1e2e;border-radius:10px;padding:14px;margin-bottom:8px;border-left:4px solid ${m.prioridade==='alta'?'#f38ba8':'#fab387'};">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
@@ -213,6 +237,13 @@ function renderDiario(el, items) {
         <span style="font-size:0.82rem;background:#313244;border-radius:12px;padding:3px 10px;">${m.horas}h</span>
       </div>
       <div style="font-size:0.82rem;color:#a6e3a1;margin-bottom:4px;">→ ${m.acao}</div>
+      ${m.atividades && m.atividades.length ? `<div style="margin:8px 0;padding:8px;background:#313244;border-radius:8px;">
+        ${m.atividades.map(a => `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:0.78rem;">
+          <span style="color:${a.tipo==='teoria'?'#89b4fa':a.tipo==='questoes'?'#cba6f7':'#a6e3a1'};">${a.tipo==='teoria'?'📖':a.tipo==='questoes'?'❓':'🔄'}</span>
+          <span style="flex:1;color:#cdd6f4;">${a.descricao}</span>
+          <span style="color:#9399b2;white-space:nowrap;">${a.tempo_min}min</span>
+        </div>`).join('')}
+      </div>` : ''}
       <div style="font-size:0.75rem;color:#9399b2;">${m.motivo}</div>
       <div style="display:flex;gap:12px;margin-top:6px;font-size:0.75rem;color:#a6adc8;">
         <span>📊 ${m.pct_acerto}% acerto</span><span>📋 ${m.pendentes} pendentes</span>
@@ -221,6 +252,7 @@ function renderDiario(el, items) {
 }
 
 function renderSemanal(el, dias) {
+  if (!dias || !dias.length) { el.innerHTML = '<p style="color:#9399b2;">Sem dados semanais disponíveis.</p>'; return; }
   el.innerHTML = dias.map(d => `
     <div style="margin-bottom:10px;${d.is_hoje?'background:#1e1e2e;border:1px solid #cba6f7;border-radius:10px;padding:10px;':''}">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
@@ -234,6 +266,7 @@ function renderSemanal(el, dias) {
 }
 
 function renderMensal(el, semanas) {
+  if (!semanas || !semanas.length) { el.innerHTML = '<p style="color:#9399b2;">Sem dados mensais disponíveis.</p>'; return; }
   el.innerHTML = semanas.map(s => `
     <div style="background:#1e1e2e;border-radius:10px;padding:14px;margin-bottom:10px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
@@ -252,6 +285,7 @@ function renderMensal(el, semanas) {
 }
 
 function renderCompleto(el, items, stats) {
+  if (!items || !items.length || !stats) { el.innerHTML = '<p style="color:#9399b2;">Sem dados disponíveis.</p>'; return; }
   let h = `<div style="display:flex;gap:16px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
     <div style="font-size:0.85rem;"><strong style="font-size:1.3rem;color:#cba6f7;">${stats.pct_geral}%</strong> completo</div>
     <div style="font-size:0.78rem;color:#9399b2;">${stats.horas_cumpridas}/${stats.horas_alvo}h</div>
