@@ -3353,3 +3353,75 @@ def temporal_landmark(
         "boost_multiplier": boost_multiplier,
         "sugestao_meta": sugestao,
     }
+
+
+@router.get("/api/study-intelligence/spacing-gap", summary="Spacing Gap Optimization",
+            description="""Calcula o gap ótimo entre sessões baseado na última atividade.
+Evidência: Cepeda et al. (2008) — Gap ótimo = 10-20% do intervalo de retenção desejado.
+Ex: prova em 30d → gap ideal = 3-6h entre sessões. Prova em 90d → gap = 9-18h.""")
+def spacing_gap(
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Sugere o horário ideal para a próxima sessão de estudo."""
+    from datetime import datetime, timedelta
+    from services import get_dias_ate_prova
+
+    agora = datetime.now()
+
+    # Buscar última atividade
+    ultima = conn.execute("""
+        SELECT MAX(created_at) as ultimo FROM sessoes_estudo WHERE user_id = ?
+    """, (user_id,)).fetchone()
+
+    ultima_atividade = None
+    if ultima and ultima[0]:
+        try:
+            ultima_atividade = datetime.fromisoformat(ultima[0].replace('Z', ''))
+        except (ValueError, TypeError):
+            pass
+
+    # Calcular gap ótimo baseado nos dias até a prova
+    dias_prova = get_dias_ate_prova(conn, user_id)
+
+    if dias_prova and dias_prova > 0:
+        # Cepeda (2008): gap ótimo = 10-20% do intervalo de retenção
+        gap_horas_min = max(2, dias_prova * 24 * 0.01)  # Mínimo 2h
+        gap_horas_max = max(4, dias_prova * 24 * 0.02)  # Máximo razoável
+        # Cap em 12h (não faz sentido sugerir voltar em 3 dias)
+        gap_horas_min = min(gap_horas_min, 6)
+        gap_horas_max = min(gap_horas_max, 12)
+    else:
+        # Sem prova definida: gap padrão de 4-8h
+        gap_horas_min = 4
+        gap_horas_max = 8
+
+    # Calcular próxima sessão ideal
+    if ultima_atividade:
+        horas_desde_ultima = (agora - ultima_atividade).total_seconds() / 3600
+        proxima_ideal = ultima_atividade + timedelta(hours=gap_horas_min)
+        ja_passou = agora >= proxima_ideal
+    else:
+        horas_desde_ultima = None
+        proxima_ideal = agora
+        ja_passou = True
+
+    # Formatar sugestão
+    if ja_passou:
+        sugestao = "🟢 Hora ideal para estudar! Seu gap de spacing já foi atingido."
+    else:
+        falta = (proxima_ideal - agora).total_seconds() / 3600
+        if falta < 1:
+            sugestao = f"⏳ Volte em {int(falta * 60)} minutos para gap ótimo."
+        else:
+            sugestao = f"⏳ Volte em {falta:.1f}h para gap ótimo de spacing."
+
+    return {
+        "gap_horas_min": round(gap_horas_min, 1),
+        "gap_horas_max": round(gap_horas_max, 1),
+        "horas_desde_ultima": round(horas_desde_ultima, 1) if horas_desde_ultima else None,
+        "proxima_sessao_ideal": proxima_ideal.isoformat() if proxima_ideal else None,
+        "pronto_para_estudar": ja_passou,
+        "dias_ate_prova": dias_prova,
+        "sugestao": sugestao,
+    }
