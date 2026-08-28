@@ -284,13 +284,13 @@ export function revealAnswer() {
   // Mostrar hint sutil a cada 4 cards (não em todo card para não irritar)
   _productionCount = (_productionCount || 0) + 1;
   if (!_examMode && _productionCount % 4 === 1) {
-    const answerEl = document.getElementById('flash-answer');
-    if (answerEl) {
+    const ansEl = document.getElementById('flash-answer');
+    if (ansEl) {
       const hint = document.createElement('div');
       hint.id = 'production-hint';
       hint.style.cssText = 'font-size:0.65rem;color:var(--accent);text-align:center;margin-top:6px;opacity:0.8;';
       hint.innerHTML = '🔊 <em>Leia a resposta em voz alta — melhora memória em 15% (MacLeod, 2010)</em>';
-      answerEl.parentElement.insertBefore(hint, answerEl.nextSibling);
+      ansEl.parentElement.insertBefore(hint, ansEl.nextSibling);
     }
   }
 
@@ -298,7 +298,6 @@ export function revealAnswer() {
   _autoStartTimerIfNeeded('Flashcards (Revisão)');
 
   // Show metacognition feedback if confidence was recorded
-  const card = flashcardsToday[currentFlashIndex];
   let metacogHtml = '';
   if (confidence > 0 && card) {
     _metacogHistory.push({ cardId: card.id, confidence, timestamp: Date.now() });
