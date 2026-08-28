@@ -133,6 +133,12 @@ def order_items_intelligently(
     # Inserir itens de reforço novamente mais adiante na sessão (micro-spacing)
     result = _apply_expanding_retrieval(result, faixa_reforco)
 
+    # === ETAPA 7: Serial Position Effect (Primacy/Recency) ===
+    # Itens mais críticos nas posições 1-3 (primacy) e últimas 2-3 (recency)
+    # Evidência: Murdock (1962), Glanzer & Cunitz (1966) — itens no meio da
+    # lista são 30-40% menos lembrados que os do início/fim.
+    result = _apply_serial_position(result, faixa_reforco, faixa_relearning)
+
     return result
 
 
@@ -207,3 +213,51 @@ def _apply_expanding_retrieval(items: list[dict], reforco_items: list[dict]) -> 
             result.insert(insert_pos, repeated)
 
     return result
+
+
+def _apply_serial_position(
+    items: list[dict],
+    reforco_items: list[dict],
+    relearning_items: list[dict],
+) -> list[dict]:
+    """Serial Position Effect: posiciona itens críticos nas extremidades da sessão.
+
+    Evidência:
+    - Murdock (1962) — Itens no início (primacy) e fim (recency) de uma lista
+      são lembrados 30-40% melhor que os do meio.
+    - Glanzer & Cunitz (1966) — Primacy: consolidação por rehearsal.
+      Recency: disponibilidade na memória de trabalho.
+
+    Estratégia:
+    - Posições 1-2 (primacy): itens de REFORÇO (esqueceu → precisa consolidar
+      com rehearsal imediato, beneficia-se da atenção elevada no início)
+    - Posições -2 a -1 (recency): itens de RELEARNING (frágeis → ficam frescos
+      na memória de trabalho, maior chance de consolidação pós-sessão)
+    - Meio: itens regulares (menor impacto da posição, compensado por
+      desirable difficulty e interleaving)
+
+    Só aplica se sessão tem 6+ itens (efeito pouco relevante em listas curtas).
+    """
+    if len(items) < 6:
+        return items
+
+    # Identificar IDs críticos
+    reforco_ids = {id(item) for item in reforco_items}
+    relearning_ids = {id(item) for item in relearning_items}
+
+    # Separar itens que estão na lista final
+    primacy_candidates = []  # Para o início
+    recency_candidates = []  # Para o final
+    middle = []
+
+    for item in items:
+        item_id = id(item)
+        if item_id in reforco_ids and len(primacy_candidates) < 2:
+            primacy_candidates.append(item)
+        elif item_id in relearning_ids and len(recency_candidates) < 2:
+            recency_candidates.append(item)
+        else:
+            middle.append(item)
+
+    # Remontar: primacy + meio + recency
+    return primacy_candidates + middle + recency_candidates
