@@ -252,6 +252,9 @@ def enforce_plan_limit(conn, user_id: int, recurso: str):
     ).fetchone()
     user_dict = dict(user) if user else {"id": user_id, "plano": "free", "plano_expira": ""}
 
+    # Persistir expiração se detectada (garante banco consistente)
+    check_and_expire_plan(conn, user_id, user_dict)
+
     limites = get_limits(user_dict)
     limite = limites.get(recurso)
 
@@ -313,6 +316,37 @@ def get_plan_info(user):
         "plano_expira": plano_expira,
         "vitalicio": is_vitalicio,
     }
+
+
+def check_and_expire_plan(conn, user_id: int, user: dict) -> str:
+    """Verifica se o plano expirou e persiste o downgrade para free no banco.
+
+    Retorna o plano efetivo ('free' se expirou, plano original se não).
+    Deve ser chamado em pontos-chave (login, /me, dashboard) para garantir
+    que o banco reflete o estado real.
+    """
+    plano = user.get("plano", "free")
+    if plano != "premium":
+        return plano
+
+    plano_expira = user.get("plano_expira", "")
+    if not plano_expira or plano_expira.lower() in ("vitalicio", "vitalício", "lifetime"):
+        return plano  # Vitalício, não expira
+
+    try:
+        expira = datetime.fromisoformat(plano_expira)
+        if expira < datetime.now(timezone.utc):
+            # Expirou — persistir downgrade no banco
+            conn.execute(
+                "UPDATE users SET plano = 'free', plano_expira = '' WHERE id = ?",
+                (user_id,)
+            )
+            conn.commit()
+            return "free"
+    except (ValueError, TypeError):
+        pass
+
+    return plano
 
 
 # ==================== SISTEMA DE CRÉDITOS ====================

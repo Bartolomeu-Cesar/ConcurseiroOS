@@ -361,6 +361,8 @@ def refresh_token(body: RefreshTokenRequest, conn=Depends(get_db_session)):
             description="Retorna perfil completo do usuário. Se não autenticado, retorna dados do usuário padrão (guest).")
 def get_me(user=Depends(get_optional_user), conn=Depends(get_db_session)):
     """Retorna dados do perfil do usuário autenticado (ou guest fallback)."""
+    from plans import get_plan, check_and_expire_plan
+
     if not user:
         # Fallback: return guest/default user info
         default_user = conn.execute("SELECT * FROM users WHERE id = 1").fetchone()
@@ -378,18 +380,23 @@ def get_me(user=Depends(get_optional_user), conn=Depends(get_db_session)):
             }
         return {"id": 1, "email": "", "nome": "Estudante", "avatar": "", "plano": "ilimitado", "role": "admin", "auth_enabled": settings.AUTH_ENABLED}
 
+    # Verificar e persistir expiração do plano (se aplicável)
+    plano_efetivo = check_and_expire_plan(conn, user["id"], user)
+    plano_expirou = plano_efetivo == "free" and user.get("plano") == "premium"
+
     return {
         "id": user["id"],
         "email": user["email"],
         "nome": user["nome"],
         "avatar": user["avatar"],
-        "plano": user.get("plano", "ilimitado"),
-        "plano_expira": user.get("plano_expira", ""),
+        "plano": plano_efetivo,
+        "plano_expira": "" if plano_expirou else user.get("plano_expira", ""),
         "role": user.get("role", "user"),
         "email_verified": bool(user["email_verified"]),
         "created_at": user["created_at"],
         "last_login": user["last_login"],
         "auth_enabled": True,
+        "plano_expirado": plano_expirou,
     }
 
 
