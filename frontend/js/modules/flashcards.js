@@ -919,6 +919,35 @@ export async function bossBattleReview(rating) {
   _renderBossBattle();
 }
 
+/**
+ * Inicia revisão de flashcards filtrada por matéria.
+ * Chamada pelo dashboard (metas.js) ao clicar na matéria.
+ * Usa /api/flashcards/today?materia=X para trazer apenas os pendentes SRS daquela matéria.
+ */
+export async function startFlashByMateria(materia) {
+  try {
+    const pendentes = await fetch(`/api/flashcards/today?materia=${encodeURIComponent(materia)}`).then(r => r.json());
+    if (!pendentes || pendentes.length === 0) {
+      toast(`Nenhum flashcard pendente em "${materia}".`, 'info');
+      return;
+    }
+    // Carregar na fila de revisão principal
+    flashcardsToday = pendentes;
+    currentFlashIndex = 0;
+    _flashOriginalTotal = pendentes.length;
+    _flashReviewedToday = 0;
+    _flashSessionStart = Date.now();
+    _flashSessionSeconds = 0;
+
+    // Navegar para a aba de flashcards
+    switchTab('tab-flashcards');
+    showCurrentFlashcard();
+    toast(`📚 Revisão: ${materia} (${pendentes.length} pendentes)`, 'success');
+  } catch (e) {
+    toast('Erro ao iniciar revisão por matéria', 'error');
+  }
+}
+
 export function initFlashcards(deps) {
   _loadMetas = deps.loadMetas;
   _loadStreakBadge = deps.loadStreakBadge;

@@ -108,9 +108,9 @@ export async function loadMetaDetails() {
       </div>`;
 
       if (Object.keys(materias).length > 0) {
-        html += '<div style="font-size:0.75rem;color:var(--text-muted);">Pendentes por matéria:</div>';
+        html += '<div style="font-size:0.75rem;color:var(--text-muted);">Pendentes por matéria <span style="font-size:0.65rem;">(clique para revisar)</span>:</div>';
         html += Object.entries(materias).sort((a,b) => b[1]-a[1]).slice(0, 5).map(([m, c]) =>
-          `<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>${m}</span><span style="color:var(--accent);">${c}</span></div>`
+          `<div onclick="startFlashByMateria('${m.replace(/'/g, "\\'")}')" style="display:flex;justify-content:space-between;padding:4px 6px;cursor:pointer;border-radius:6px;transition:background 0.2s;" onmouseover="this.style.background='var(--bg-elevated)'" onmouseout="this.style.background='transparent'" title="Revisar ${c} flashcards de ${m}"><span>📚 ${m}</span><span style="color:var(--accent);font-weight:600;">${c}</span></div>`
         ).join('');
       }
       flashEl.innerHTML = html;
