@@ -386,6 +386,34 @@ def _m49_questoes_texto_base(conn):
         pass  # Column already exists
 
 
+def _m50_creditos_users(conn):
+    """Add credit system columns to users table."""
+    try:
+        conn.execute("ALTER TABLE users ADD COLUMN creditos_saldo INTEGER DEFAULT 0")
+    except Exception:
+        pass
+    try:
+        conn.execute("ALTER TABLE users ADD COLUMN creditos_expira TEXT DEFAULT ''")
+    except Exception:
+        pass
+    # Tabela de histórico de créditos (compras, consumos)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS creditos_historico (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            tipo TEXT NOT NULL,
+            quantidade INTEGER NOT NULL,
+            saldo_anterior INTEGER NOT NULL DEFAULT 0,
+            saldo_posterior INTEGER NOT NULL DEFAULT 0,
+            motivo TEXT DEFAULT '',
+            expira TEXT DEFAULT '',
+            created_at TEXT NOT NULL
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_creditos_hist_user ON creditos_historico(user_id)")
+    log.info("Migration: added credit system (creditos_saldo, creditos_historico)")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -436,6 +464,7 @@ MIGRATIONS = [
     (47, _m47_topic_dependencies),
     (48, _m48_brain_dump_log),
     (49, _m49_questoes_texto_base),
+    (50, _m50_creditos_users),
 ]
 
 

@@ -9,7 +9,7 @@ from email.mime.text import MIMEText
 
 import bcrypt
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, Header, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Header, Request
 
 from database import get_db_session
 from logger import log
@@ -481,6 +481,204 @@ def upgrade_plan(body: UpgradePlanRequest, user=Depends(get_current_user), conn=
     tipo = "vitalício" if body.vitalicio or plano == "ilimitado" else "mensal"
     log.info(f"User {user['email']} upgraded to {plano} ({tipo})")
     return {"ok": True, "plano": plano, "expira": expires, "vitalicio": body.vitalicio or plano == "ilimitado"}
+
+
+# ==================== SISTEMA DE CRÉDITOS ====================
+
+@router.get("/creditos")
+def get_creditos(user=Depends(get_current_user), conn=Depends(get_db_session)):
+    """Retorna saldo de créditos e info do sistema."""
+    from plans import CREDIT_CONFIG, calcular_dias_creditos
+
+    saldo = 0
+    expira = ""
+    try:
+        row = conn.execute("SELECT creditos_saldo, creditos_expira FROM users WHERE id = ?", (user["id"],)).fetchone()
+        if row:
+            saldo = row[0] or 0
+            expira = row[1] or ""
+    except Exception:
+        pass
+
+    # Verificar se créditos expiraram
+    if expira and expira not in ("", "never"):
+        try:
+            exp_date = datetime.fromisoformat(expira)
+            if exp_date < datetime.now(timezone.utc):
+                # Créditos expiraram — zerar
+                conn.execute("UPDATE users SET creditos_saldo = 0, creditos_expira = '' WHERE id = ?", (user["id"],))
+                conn.commit()
+                saldo = 0
+                expira = ""
+        except (ValueError, TypeError):
+            pass
+
+    dias_disponiveis = calcular_dias_creditos(saldo)
+    return {
+        "saldo": saldo,
+        "dias_disponiveis": dias_disponiveis,
+        "creditos_por_mes": CREDIT_CONFIG["creditos_por_mes"],
+        "dias_por_credito": CREDIT_CONFIG["dias_por_credito"],
+        "expira": expira,
+        "precos": CREDIT_CONFIG["precos"],
+    }
+
+
+@router.post("/creditos/comprar")
+def comprar_creditos(
+    body: dict = Body(...),
+    user=Depends(get_current_user),
+    conn=Depends(get_db_session)
+):
+    """Compra créditos e adiciona ao saldo.
+
+    body: {quantidade: int, expiracao_dias: int (opcional, null=sem expiração)}
+    Em produção: integraria com gateway de pagamento.
+    """
+    from plans import CREDIT_CONFIG, calcular_dias_creditos
+
+    quantidade = body.get("quantidade", 0)
+    expiracao_dias = body.get("expiracao_dias")  # None = sem expiração
+
+    if quantidade < 1:
+        raise HTTPException(status_code=400, detail="Quantidade mínima: 1 crédito")
+
+    # Saldo atual
+    row = conn.execute("SELECT creditos_saldo FROM users WHERE id = ?", (user["id"],)).fetchone()
+    saldo_anterior = row[0] if row and row[0] else 0
+    saldo_posterior = saldo_anterior + quantidade
+
+    # Calcular expiração
+    expira = ""
+    if expiracao_dias and expiracao_dias > 0:
+        expira = (datetime.now(timezone.utc) + timedelta(days=expiracao_dias)).isoformat()
+
+    # Atualizar saldo
+    try:
+        conn.execute(
+            "UPDATE users SET creditos_saldo = ?, creditos_expira = ? WHERE id = ?",
+            (saldo_posterior, expira or "never", user["id"])
+        )
+    except Exception:
+        # Se coluna não existe ainda, apenas registrar no histórico
+        pass
+
+    # Registrar no histórico
+    try:
+        conn.execute("""
+            INSERT INTO creditos_historico (user_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, expira, created_at)
+            VALUES (?, 'compra', ?, ?, ?, ?, ?, ?)
+        """, (user["id"], quantidade, saldo_anterior, saldo_posterior,
+              f"Compra de {quantidade} créditos", expira, datetime.now(timezone.utc).isoformat()))
+    except Exception:
+        pass
+
+    conn.commit()
+
+    # Calcular preço (em produção viria do gateway)
+    preco = CREDIT_CONFIG["precos"].get(quantidade, quantidade * 4.90)
+
+    log.info(f"User {user['email']} comprou {quantidade} créditos (saldo: {saldo_posterior})")
+    return {
+        "ok": True,
+        "quantidade": quantidade,
+        "saldo_anterior": saldo_anterior,
+        "saldo_posterior": saldo_posterior,
+        "dias_adicionados": calcular_dias_creditos(quantidade),
+        "preco": preco,
+        "expira": expira or "Sem expiração",
+    }
+
+
+@router.post("/creditos/ativar")
+def ativar_creditos(
+    body: dict = Body(...),
+    user=Depends(get_current_user),
+    conn=Depends(get_db_session)
+):
+    """Ativa créditos convertendo em dias de acesso Premium.
+
+    body: {creditos: int} — quantos créditos gastar (mínimo 1 = 3 dias)
+    Créditos residuais (saldo após ativação) ficam para próxima ativação.
+    """
+    from plans import CREDIT_CONFIG, calcular_dias_creditos
+
+    creditos_usar = body.get("creditos", 0)
+    if creditos_usar < 1:
+        raise HTTPException(status_code=400, detail="Mínimo 1 crédito para ativar")
+
+    # Verificar saldo
+    row = conn.execute("SELECT creditos_saldo, plano, plano_expira FROM users WHERE id = ?", (user["id"],)).fetchone()
+    saldo = row[0] if row and row[0] else 0
+
+    if creditos_usar > saldo:
+        raise HTTPException(status_code=400, detail=f"Saldo insuficiente. Você tem {saldo} créditos.")
+
+    # Calcular dias a adicionar
+    dias = calcular_dias_creditos(creditos_usar)
+    if dias < 1:
+        raise HTTPException(status_code=400, detail="Créditos insuficientes para 1 dia de acesso")
+
+    # Determinar data base (se já tem premium ativo, estender; senão, partir de hoje)
+    plano_atual = row[1] or "free"
+    plano_expira = row[2] or ""
+
+    if plano_atual == "premium" and plano_expira and plano_expira not in ("vitalicio", "vitalício", "lifetime"):
+        try:
+            base = datetime.fromisoformat(plano_expira)
+            if base > datetime.now(timezone.utc):
+                nova_expira = (base + timedelta(days=dias)).isoformat()
+            else:
+                nova_expira = (datetime.now(timezone.utc) + timedelta(days=dias)).isoformat()
+        except (ValueError, TypeError):
+            nova_expira = (datetime.now(timezone.utc) + timedelta(days=dias)).isoformat()
+    else:
+        nova_expira = (datetime.now(timezone.utc) + timedelta(days=dias)).isoformat()
+
+    # Debitar créditos e ativar premium
+    novo_saldo = saldo - creditos_usar
+    conn.execute(
+        "UPDATE users SET creditos_saldo = ?, plano = 'premium', plano_expira = ? WHERE id = ?",
+        (novo_saldo, nova_expira, user["id"])
+    )
+
+    # Registrar no histórico
+    try:
+        conn.execute("""
+            INSERT INTO creditos_historico (user_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, created_at)
+            VALUES (?, 'ativacao', ?, ?, ?, ?, ?)
+        """, (user["id"], -creditos_usar, saldo, novo_saldo,
+              f"Ativação de {dias} dias Premium ({creditos_usar} créditos)",
+              datetime.now(timezone.utc).isoformat()))
+    except Exception:
+        pass
+
+    conn.commit()
+
+    log.info(f"User {user['email']} ativou {creditos_usar} créditos = {dias} dias Premium (saldo: {novo_saldo})")
+    return {
+        "ok": True,
+        "creditos_usados": creditos_usar,
+        "dias_ativados": dias,
+        "saldo_restante": novo_saldo,
+        "plano": "premium",
+        "expira": nova_expira,
+        "mensagem": f"✅ {dias} dias de Premium ativados! Saldo restante: {novo_saldo} créditos.",
+    }
+
+
+@router.get("/creditos/historico")
+def historico_creditos(user=Depends(get_current_user), conn=Depends(get_db_session)):
+    """Retorna histórico de compras e ativações de créditos."""
+    try:
+        rows = conn.execute("""
+            SELECT tipo, quantidade, saldo_anterior, saldo_posterior, motivo, expira, created_at
+            FROM creditos_historico WHERE user_id = ?
+            ORDER BY created_at DESC LIMIT 50
+        """, (user["id"],)).fetchall()
+        return {"items": [dict(r) for r in rows]}
+    except Exception:
+        return {"items": []}
 
 
 @router.get("/check-limit/{recurso}")

@@ -252,3 +252,34 @@ def get_plan_info(user):
         "plano_expira": plano_expira,
         "vitalicio": is_vitalicio,
     }
+
+
+# ==================== SISTEMA DE CRÉDITOS ====================
+# 1 crédito = 3 dias de acesso Premium
+# 10 créditos = 30 dias (1 mês)
+# Créditos residuais (< 1 dia) ficam no saldo sem expirar por padrão
+
+CREDIT_CONFIG = {
+    "dias_por_credito": 3,           # 1 crédito = 3 dias de premium
+    "creditos_por_mes": 10,          # 10 créditos = 1 mês
+    "minimo_ativacao": 1,            # Mínimo 1 crédito para ativar (3 dias)
+    "expiracao_padrao_dias": None,   # None = sem expiração (créditos não expiram)
+    "precos": {
+        1: 4.90,      # 1 crédito = R$4,90 (3 dias)
+        5: 19.90,     # 5 créditos = R$19,90 (15 dias) — economia 19%
+        10: 34.90,    # 10 créditos = R$34,90 (30 dias) — economia 29%
+        20: 59.90,    # 20 créditos = R$59,90 (60 dias) — economia 39%
+        50: 119.90,   # 50 créditos = R$119,90 (150 dias) — economia 51%
+    },
+}
+
+
+def calcular_dias_creditos(creditos: int) -> int:
+    """Converte créditos em dias de acesso. Mínimo 1 dia se creditos >= 1."""
+    dias = creditos * CREDIT_CONFIG["dias_por_credito"]
+    return dias
+
+
+def creditos_para_mes() -> int:
+    """Quantos créditos para 1 mês completo."""
+    return CREDIT_CONFIG["creditos_por_mes"]
