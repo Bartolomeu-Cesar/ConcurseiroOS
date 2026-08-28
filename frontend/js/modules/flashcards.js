@@ -15,6 +15,7 @@ let _flashSessionSeconds = 0; // Segundos acumulados na sessão
 let _chunkPauseShown = false; // Controle para não re-mostrar pausa de chunk
 let _examMode = false; // Encoding Specificity: modo prova sem ajudas
 let _productionCount = 0; // Production Effect: contador para hint de ler em voz alta
+let _currentFilterMateria = ''; // Matéria filtrada na sessão atual (para sugerir próxima)
 
 /**
  * Inicia o timer global automaticamente se não estiver ativo.
@@ -64,6 +65,7 @@ export function setFlashConfidence(level) {
 
 export async function loadFlashcardsToday() {
   try {
+    _currentFilterMateria = ''; // Reset filtro de matéria
     flashcardsToday = await fetch('/api/flashcards/today').then(r => r.json());
     currentFlashIndex = 0;
 
@@ -124,7 +126,18 @@ function showCurrentFlashcard() {
           style="width:100%;min-height:40px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-size:0.8rem;font-family:inherit;resize:vertical;"></textarea>
         <button onclick="saveSessionSummary()" style="margin-top:6px;background:var(--accent);color:var(--bg);border:none;border-radius:6px;padding:6px 12px;font-size:0.78rem;font-weight:600;cursor:pointer;">💾 Salvar resumo</button>
       </div>` : '';
-    q.innerHTML = `<span style="color:#a6e3a1;font-size:1.3rem;font-weight:600;">🎉 Parabéns! ${doneAll} flashcards revisados hoje!</span>${summaryPrompt}`;
+
+    // Se foi sessão filtrada por matéria, oferecer próxima matéria
+    let nextMateriaHtml = '';
+    if (_currentFilterMateria) {
+      nextMateriaHtml = `<div id="next-materia-suggestion" style="margin-top:12px;text-align:center;">
+        <div style="font-size:0.75rem;color:var(--text-sub);margin-bottom:6px;">Carregando próximas matérias...</div>
+      </div>`;
+      // Buscar próxima matéria async
+      _loadNextMateriaSuggestion();
+    }
+
+    q.innerHTML = `<span style="color:#a6e3a1;font-size:1.3rem;font-weight:600;">🎉 ${_currentFilterMateria ? _currentFilterMateria + ' concluída!' : 'Parabéns!'} ${doneAll} flashcards revisados!</span>${nextMateriaHtml}${summaryPrompt}`;
     a.style.display = 'none'; rb.style.display = 'none'; rv.style.display = 'none';
     if (progressEl) {
       document.getElementById('flash-progress-text').textContent = `${doneAll}/${total} revisados ✓`;
@@ -1412,6 +1425,7 @@ export async function startFlashByMateria(materia) {
     _flashReviewedToday = 0;
     _flashSessionStart = Date.now();
     _flashSessionSeconds = 0;
+    _currentFilterMateria = materia; // Tracking da matéria filtrada
 
     // Navegar para a aba de flashcards
     switchTab('tab-flashcards');
@@ -1612,7 +1626,6 @@ export function saveSessionSummary() {
     toast('Escreva pelo menos uma frase.', 'warning');
     return;
   }
-  // Salvar como elaboration tipo distributed_summary
   fetch('/api/study-intelligence/elaboration', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1623,9 +1636,38 @@ export function saveSessionSummary() {
     })
   }).catch(() => {});
   toast('📝 Resumo da sessão salvo! Isso consolida o aprendizado.', 'success', 2500);
-  // Remover o formulário e mostrar confirmação
   const container = input.closest('div');
   if (container) container.innerHTML = `<div style="color:var(--green);font-size:0.8rem;font-weight:600;text-align:center;padding:8px;">✅ Resumo salvo!</div>`;
+}
+
+async function _loadNextMateriaSuggestion() {
+  try {
+    const pendentes = await fetch('/api/flashcards/today').then(r => r.json());
+    if (!pendentes || pendentes.length === 0) {
+      const el = document.getElementById('next-materia-suggestion');
+      if (el) el.innerHTML = `<div style="color:var(--green);font-size:0.82rem;font-weight:600;">✅ Todas as matérias revisadas hoje! Zero pendentes.</div>`;
+      return;
+    }
+
+    // Agrupar por matéria
+    const materias = {};
+    pendentes.forEach(f => { const m = f.materia || 'Sem matéria'; materias[m] = (materias[m] || 0) + 1; });
+
+    const el = document.getElementById('next-materia-suggestion');
+    if (!el) return;
+
+    const sorted = Object.entries(materias).sort((a, b) => b[1] - a[1]);
+    el.innerHTML = `
+      <div style="font-size:0.78rem;color:var(--text-sub);margin-bottom:6px;">📚 Próximas matérias pendentes (${pendentes.length} restantes):</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;">
+        ${sorted.slice(0, 4).map(([m, c]) => `<button onclick="startFlashByMateria('${m.replace(/'/g, "\\'")}')" style="padding:6px 10px;background:var(--bg-surface);border:1px solid var(--border);border-radius:6px;color:var(--text);cursor:pointer;font-size:0.75rem;"><strong>${m}</strong> (${c})</button>`).join('')}
+      </div>
+      <button onclick="loadFlashcardsToday()" style="margin-top:8px;padding:6px 14px;background:var(--accent);color:var(--bg);border:none;border-radius:6px;font-size:0.78rem;font-weight:600;cursor:pointer;">▶ Revisar TODAS (${pendentes.length})</button>
+    `;
+  } catch(e) {
+    const el = document.getElementById('next-materia-suggestion');
+    if (el) el.innerHTML = '';
+  }
 }
 
 // ============================================================
