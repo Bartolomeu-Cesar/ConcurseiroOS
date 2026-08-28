@@ -364,14 +364,20 @@ export async function comprarCreditos(quantidade) {
       });
       const dataFallback = await resFallback.json();
       if (dataFallback.ok) {
-        if (typeof showToast === 'function') showToast(`✅ ${quantidade} crédito(s) adicionados (modo sandbox)! Saldo: ${dataFallback.saldo_posterior}`, 'success');
+        const _toast = window.toast || window.showToast;
+        if (_toast) _toast(`✅ ${quantidade} crédito(s) adicionados (modo sandbox)! Saldo: ${dataFallback.saldo_posterior}`, 'success');
         _loadCreditosSaldo();
+      } else {
+        const _toast = window.toast || window.showToast;
+        if (_toast) _toast(dataFallback.detail || 'Erro ao comprar créditos', 'error');
       }
     } else {
-      if (typeof showToast === 'function') showToast(data.detail || 'Erro ao criar pagamento', 'error');
+      const _toast = window.toast || window.showToast;
+      if (_toast) _toast(data.detail || 'Erro ao criar pagamento', 'error');
     }
   } catch(e) {
-    if (typeof showToast === 'function') showToast('Erro de conexão', 'error');
+    const _toast = window.toast || window.showToast;
+    if (_toast) _toast('Erro de conexão', 'error');
   }
 }
 
@@ -390,7 +396,7 @@ function _showPixQRCode(data) {
         <div style="font-size:0.72rem;color:#9399b2;margin-bottom:4px;">Ou copie o código PIX:</div>
         <div style="display:flex;gap:6px;">
           <input id="pix-code-input" type="text" value="${pix.qr_code}" readonly style="flex:1;padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;font-size:0.7rem;font-family:monospace;">
-          <button onclick="navigator.clipboard.writeText(document.getElementById('pix-code-input').value);if(typeof showToast==='function')showToast('📋 Código PIX copiado!','success')" style="padding:8px 12px;background:#89b4fa;color:#1e1e2e;border:none;border-radius:6px;font-size:0.75rem;font-weight:600;cursor:pointer;">Copiar</button>
+          <button onclick="navigator.clipboard.writeText(document.getElementById('pix-code-input').value);(window.toast||window.showToast)('📋 Código PIX copiado!','success')" style="padding:8px 12px;background:#89b4fa;color:#1e1e2e;border:none;border-radius:6px;font-size:0.75rem;font-weight:600;cursor:pointer;">Copiar</button>
         </div>
       </div>
       <div style="font-size:0.68rem;color:#585b70;margin-bottom:10px;">⏱ Expira em 30 minutos</div>
@@ -419,7 +425,8 @@ async function _checkPixStatus(paymentId) {
     if (data.aprovado) {
       // Pagamento aprovado!
       clearInterval(window._pixCheckInterval);
-      if (typeof showToast === 'function') showToast('✅ Pagamento confirmado! Créditos adicionados.', 'success');
+      const _toast = window.toast || window.showToast;
+      if (_toast) _toast('✅ Pagamento confirmado! Créditos adicionados.', 'success');
       setTimeout(() => {
         _loadCreditosSaldo();
         // Recarregar modal
@@ -435,7 +442,8 @@ export async function ativarCreditos() {
   const input = document.getElementById('creditos-ativar-input');
   const creditos = parseInt(input?.value || '0');
   if (creditos < 1) {
-    if (typeof showToast === 'function') showToast('Mínimo 1 crédito', 'warning');
+    const _toast = window.toast || window.showToast;
+    if (_toast) _toast('Mínimo 1 crédito', 'warning');
     return;
   }
 
@@ -450,13 +458,16 @@ export async function ativarCreditos() {
     });
     const data = await res.json();
     if (data.ok) {
-      if (typeof showToast === 'function') showToast(data.mensagem, 'success');
+      const _toast = window.toast || window.showToast;
+      if (_toast) _toast(data.mensagem, 'success');
       _loadCreditosSaldo();
     } else {
-      if (typeof showToast === 'function') showToast(data.detail || 'Erro ao ativar créditos', 'error');
+      const _toast = window.toast || window.showToast;
+      if (_toast) _toast(data.detail || 'Erro ao ativar créditos', 'error');
     }
   } catch(e) {
-    if (typeof showToast === 'function') showToast('Erro de conexão', 'error');
+    const _toast = window.toast || window.showToast;
+    if (_toast) _toast('Erro de conexão', 'error');
   }
 }
 
