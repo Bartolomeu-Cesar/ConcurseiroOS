@@ -14,6 +14,74 @@ from utils import sql_paginate, today_str, update_streak
 router = APIRouter()
 
 
+def _embaralhar_alternativas(questao: dict, user_id: int) -> dict:
+    """Embaralha as alternativas de uma questão de forma determinística por user+questão.
+
+    Usa hash(user_id + questao_id) como seed para garantir que o mesmo usuário
+    sempre vê a mesma ordem (consistência), mas usuários diferentes veem ordens diferentes.
+
+    Retorna a questão com alternativas reordenadas + campo 'mapeamento' que permite
+    traduzir a letra selecionada de volta para a letra original.
+    """
+    import hashlib
+
+    q_id = questao.get("id", 0)
+    # Seed determinístico por user + questão
+    seed_str = f"{user_id}-{q_id}"
+    seed = int(hashlib.md5(seed_str.encode()).hexdigest()[:8], 16)
+
+    # Coletar alternativas não-vazias
+    letras_originais = []
+    textos = []
+    for letra in ['A', 'B', 'C', 'D', 'E']:
+        key = f"alternativa_{letra.lower()}"
+        texto = questao.get(key, "")
+        if texto and texto.strip():
+            letras_originais.append(letra)
+            textos.append(texto)
+
+    # Se <= 2 alternativas (Certo/Errado), não embaralhar
+    if len(letras_originais) <= 2:
+        questao["embaralhada"] = False
+        return questao
+
+    # Criar permutação determinística usando Fisher-Yates com seed
+    import random
+    rng = random.Random(seed)
+    indices = list(range(len(letras_originais)))
+    rng.shuffle(indices)
+
+    # Remontar alternativas na nova ordem
+    novas_letras = ['A', 'B', 'C', 'D', 'E'][:len(letras_originais)]
+    mapeamento = {}  # nova_letra -> letra_original
+
+    for nova_pos, original_pos in enumerate(indices):
+        nova_letra = novas_letras[nova_pos]
+        letra_original = letras_originais[original_pos]
+        texto_original = textos[original_pos]
+
+        questao[f"alternativa_{nova_letra.lower()}"] = texto_original
+        mapeamento[nova_letra] = letra_original
+
+    # Limpar alternativas extras se houver
+    for i in range(len(letras_originais), 5):
+        questao[f"alternativa_{novas_letras[i].lower() if i < 5 else 'e'}"] = ""
+
+    # Atualizar resposta_correta para a nova posição
+    resp_original = questao.get("resposta_correta", "").upper()
+    nova_resp = ""
+    for nova, orig in mapeamento.items():
+        if orig == resp_original:
+            nova_resp = nova
+            break
+
+    questao["resposta_correta"] = nova_resp
+    questao["mapeamento"] = mapeamento  # nova_letra -> letra_original
+    questao["embaralhada"] = True
+
+    return questao
+
+
 # Tempo mínimo (segundos) para considerar resposta "confiante" por nível de dificuldade
 # Abaixo disso = provável chute → volta mais cedo na revisão
 _CONFIDENCE_THRESHOLDS = {
@@ -284,11 +352,16 @@ def get_questao_similar(
 @router.get("/api/questoes/{id}", response_model=QuestaoResponse, summary="Obter questão por ID",
             description="Retorna os dados completos de uma questão específica.",
             responses={404: {"description": "Questão não encontrada"}})
-def get_questao(id: int, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+def get_questao(id: int, embaralhar: bool = False, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     row = conn.execute("SELECT * FROM questoes WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Questão não encontrada")
-    return dict(row)
+    result = dict(row)
+
+    if embaralhar:
+        result = _embaralhar_alternativas(result, user_id)
+
+    return result
 
 
 @router.post("/api/questoes", summary="Criar questão", description="Adiciona uma nova questão ao banco de questões")
