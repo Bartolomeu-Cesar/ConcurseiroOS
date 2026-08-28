@@ -142,28 +142,32 @@ export async function responderQuestaoDia(letra) {
       ${q.explicacao ? '<br><span style="color:#cdd6f4;font-size:0.78rem;">' + q.explicacao + '</span>' : ''}
       <br><button onclick="advanceQuestao()" style="margin-top:8px;background:#89b4fa;color:#1e1e2e;border:none;border-radius:6px;padding:6px 14px;font-weight:600;cursor:pointer;">Próxima →</button>`;
   } else {
-    // Self-Explanation: obrigatório explicar POR QUÊ errou (+40% retenção)
+    // Self-Explanation corrigido (Chi et al. 1994):
+    // 1. Mostrar resposta correta + explicação
+    // 2. Pedir para REFORMULAR com próprias palavras (não explicar do zero)
     const isCE = !q.alternativa_c && !q.alternativa_d;
     const respostaTexto = isCE ? (q.resposta_correta === 'A' ? 'CERTO' : 'ERRADO') : q.resposta_correta;
+    const temExplicacao = q.explicacao && q.explicacao.trim();
     fb.innerHTML = `<strong>✗ Errado! Resposta: ${respostaTexto}</strong>
       <span style="float:right;color:#9399b2;font-size:0.75rem;">⏱ ${tempoFmt}</span>
-      ${q.explicacao ? '<br><span style="color:#cdd6f4;font-size:0.78rem;">💡 ' + q.explicacao + '</span>' : ''}
+      ${temExplicacao ? `<div style="margin-top:8px;padding:10px;background:rgba(166,227,161,0.08);border:1px solid var(--green);border-radius:8px;">
+        <div style="font-size:0.72rem;color:var(--green);font-weight:600;margin-bottom:4px;">💡 Explicação:</div>
+        <div style="font-size:0.82rem;color:var(--text);">${q.explicacao}</div>
+      </div>` : `<div style="margin-top:6px;font-size:0.78rem;color:var(--text-sub);font-style:italic;">Sem explicação cadastrada para esta questão.</div>`}
       <div style="margin-top:10px;padding:10px;background:rgba(249,226,175,0.1);border:1px solid var(--yellow);border-radius:8px;">
-        <div style="font-size:0.75rem;color:var(--yellow);font-weight:600;margin-bottom:6px;">🧠 Self-Explanation — Explique por que a resposta correta é "${respostaTexto}":</div>
-        <textarea id="qdia-self-explain" placeholder="Escreva com suas palavras por que esta é a resposta correta... (Isso melhora sua retenção em 40%!)" 
-          style="width:100%;min-height:50px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-size:0.82rem;font-family:inherit;resize:vertical;"></textarea>
-        <div style="margin-top:8px;">
-          <div style="font-size:0.72rem;color:var(--text-sub);margin-bottom:4px;">📋 Por que errei?</div>
-          <div id="qdia-error-chips" style="display:flex;flex-wrap:wrap;gap:4px;">
-            <button class="error-chip" data-motivo="leitura_incompleta" onclick="selectErrorChip(this)">📖 Leitura incompleta</button>
-            <button class="error-chip" data-motivo="conceito_errado" onclick="selectErrorChip(this)">❌ Conceito errado</button>
-            <button class="error-chip" data-motivo="excecao_regra" onclick="selectErrorChip(this)">⚠️ Exceção da regra</button>
-            <button class="error-chip" data-motivo="pegadinha" onclick="selectErrorChip(this)">🪤 Pegadinha</button>
-            <button class="error-chip" data-motivo="chute" onclick="selectErrorChip(this)">🎲 Chutei</button>
-            <button class="error-chip" data-motivo="desatencao" onclick="selectErrorChip(this)">😵 Desatenção</button>
-            <button class="error-chip" data-motivo="tempo" onclick="selectErrorChip(this)">⏰ Faltou tempo</button>
-          </div>
+        <div style="font-size:0.72rem;color:var(--text-sub);margin-bottom:4px;">📋 Por que errei?</div>
+        <div id="qdia-error-chips" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">
+          <button class="error-chip" data-motivo="leitura_incompleta" onclick="selectErrorChip(this)">📖 Leitura incompleta</button>
+          <button class="error-chip" data-motivo="conceito_errado" onclick="selectErrorChip(this)">❌ Conceito errado</button>
+          <button class="error-chip" data-motivo="excecao_regra" onclick="selectErrorChip(this)">⚠️ Exceção da regra</button>
+          <button class="error-chip" data-motivo="pegadinha" onclick="selectErrorChip(this)">🪤 Pegadinha</button>
+          <button class="error-chip" data-motivo="chute" onclick="selectErrorChip(this)">🎲 Chutei</button>
+          <button class="error-chip" data-motivo="desatencao" onclick="selectErrorChip(this)">😵 Desatenção</button>
+          <button class="error-chip" data-motivo="tempo" onclick="selectErrorChip(this)">⏰ Faltou tempo</button>
         </div>
+        <div style="font-size:0.75rem;color:var(--yellow);font-weight:600;margin-bottom:4px;">🧠 Reformule — agora que viu a explicação, resuma com suas palavras:</div>
+        <textarea id="qdia-self-explain" placeholder="Resuma com suas palavras o que aprendeu com esse erro... (reformular consolida a correção)" 
+          style="width:100%;min-height:50px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-size:0.82rem;font-family:inherit;resize:vertical;"></textarea>
         <button onclick="submitSelfExplanation(${q.id})" style="margin-top:6px;background:var(--yellow);color:var(--bg);border:none;border-radius:6px;padding:6px 14px;font-weight:600;cursor:pointer;font-size:0.82rem;">💾 Salvar e continuar</button>
         <button onclick="advanceQuestao()" style="margin-top:6px;margin-left:6px;background:var(--bg-elevated);color:var(--text-sub);border:none;border-radius:6px;padding:6px 14px;font-size:0.78rem;cursor:pointer;">Pular →</button>
       </div>`;
