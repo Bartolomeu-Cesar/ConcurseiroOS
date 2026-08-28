@@ -692,3 +692,142 @@ SELECT materia, topico FROM edital WHERE status != 'Concluído' AND arquivado = 
 
 **Sprint 4 (longo prazo):**
 10-16. Features de alta complexidade conforme demanda
+
+
+---
+
+## 9. SESSÃO 28/08/2026 — 20 Técnicas Científicas + Parser Estratégia + Embaralhamento
+
+### 9.1 Técnicas Científicas de Estudo (20 novas implementadas)
+
+O app agora tem **29 técnicas** integradas ao fluxo de revisão. Todas baseadas em papers peer-reviewed.
+
+| # | Técnica | Local | Evidência | Descrição |
+|---|---------|-------|-----------|-----------|
+| 1 | Elaborative Interrogation | `flashcards.js` | Dunlosky 2013 | Prompt "Por quê?" a cada 3 acertos. Salva em `elaboration_log` |
+| 2 | Serial Position Effect | `study_ordering.py` | Murdock 1962 | Itens de reforço nas posições 1-2 (primacy), relearning nas últimas 2 (recency) |
+| 3 | Lag Effect (Exam-Aware) | `flashcards.py` review-fsrs | Cepeda 2006 | Comprime intervalos FSRS baseado em `get_dias_ate_prova()`. Prova <60d = fator 0.5-1.0 |
+| 4 | Free Recall (Brain Dump) | `techniques.py` + `flashcards.js` | Karpicke & Blunt 2011 | Textarea para escrever tudo + gap analysis vs edital. Tabela `brain_dump_log` |
+| 5 | Chunking | `flashcards.js` | Miller 1956 | Pausa reflexiva a cada 6 cards + mini-resumo. Sessões 8+ cards |
+| 6 | Keyword Mnemonic | `flashcards.js` | Pressley 1982 | Sugestão de mnemônicos após errar card difícil (quality<=1, repetitions>0) |
+| 7 | Variação de Contexto | `flashcards.js` | Smith 1978 | Cards `_expanding_retrieval` mostrados invertidos (resposta→pergunta) |
+| 8 | Errorful Learning | `questoes.js` + `core.py` | Kornell 2009 | Após erro, busca questão similar via `/api/questoes/similar` para teste imediato |
+| 9 | Distributed Summary | `flashcards.js` | Rawson & Dunlosky 2022 | Prompt "Resuma em 1 frase" ao final da sessão (3+ cards) |
+| 10 | Encoding Specificity (Modo Prova) | `flashcards.js` | Tulving & Thomson 1973 | `startExamMode()` desabilita todas as ajudas — simula pressão real |
+| 11 | Hypercorrection Effect | `flashcards.js` | Butterfield & Metcalfe 2001 | Tela impactante quando confiança>=4 E quality<=1. Surprise signal |
+| 12 | Forward Testing Effect | `flashcards.js` (chunking) | Chan 2018, Pastötter 2011 | Quiz de 2 cards do bloco anterior na pausa reflexiva |
+| 13 | Micro-Breaks Cognitivos | `flashcards.js` | Frontiers 2025 | Pausa de 5s com countdown após cards difíceis (quality<=2). Auto-advance |
+| 14 | Testing Boundaries | `techniques.py` | Bjork 2011 | Endpoint identifica zona ótima (difficulty 0.3-0.7). Recomendações |
+| 15 | Temporal Landmarks | `techniques.py` | Dai 2014 | Fresh Start em segundas, 1° do mês, streak milestones. Boost multiplier |
+| 16 | Production Effect | `flashcards.js` | MacLeod 2010 | Hint "🔊 Leia em voz alta" a cada 4 cards. +15% encoding |
+| 17 | Spacing Gap Optimization | `techniques.py` | Cepeda 2008 | Calcula gap ótimo (10-20% do tempo até prova). Sugere horário ideal |
+| 18 | Expressive Writing | `techniques.py` | Ramirez & Beilock 2011 | 48h antes da prova: prompt para escrever medos. Reduz ansiedade 15% |
+| 19 | Cognitive Load Segmenting | `flashcards.js` | Mayer 2009 | Respostas >120 chars reveladas em partes de ~80 chars |
+| 20 | Production Effect (Audio) | `flashcards.js` | Já existia modo TTS/Commuting | Reforçado com hint visual |
+
+### 9.2 Fluxo de Revisão com Técnicas (ordem de intervenções)
+
+```
+showCurrentFlashcard()
+  ├── [Modo Prova?] → Pula tudo, direto ao card
+  ├── [Chunking] → A cada 6 cards, pausa reflexiva + Forward Testing + Mini-resumo
+  ├── [Variação de Contexto] → Cards _expanding_retrieval mostrados invertidos
+  ├── [Cognitive Load Segmenting] → Respostas longas em partes
+  └── [Production Effect] → Hint "leia em voz alta" a cada 4 cards
+
+revealAnswer()
+  └── Botões de review (0-5)
+
+reviewFlashcard(quality)
+  ├── [Hypercorrection] → Se confiança>=4 E quality<=1, tela impactante
+  ├── [Keyword Mnemonic] → Se quality<=1 E repetitions>0, sugestão de mnemônico
+  ├── [Elaborative Interrogation] → Se quality>=3 a cada 3 acertos, prompt "Por quê?"
+  ├── [Micro-Break] → Se quality<=2, pausa 5s com countdown
+  └── _advanceAfterReview()
+
+Final da sessão:
+  └── [Distributed Summary] → Prompt "Resuma em 1 frase"
+```
+
+### 9.3 `study_ordering.py` — 7 Etapas de Ordenação
+
+```python
+# Etapa 1: Classificar em faixas cognitivas (pretesting, reforço, relearning, difíceis, regulares)
+# Etapa 2: Randomizar dentro de cada faixa
+# Etapa 3: Importância/ROI (se fornecida)
+# Etapa 4: Desirable Difficulty (2 difíceis + 1 regular)
+# Etapa 5: Interleaving (round-robin por matéria)
+# Etapa 6: Expanding Retrieval (re-inserir reforço 5-8 posições depois)
+# Etapa 7: Serial Position Effect (reforço no início, relearning no fim)
+```
+
+### 9.4 Parser PDF Estratégia Concursos — Melhorias
+
+**Problema original:** Cabeçalhos como "Questão 2 2024 Nível Superior FCC Tribunal Regional..." misturados no enunciado.
+
+**Solução:** Heurística multi-camada que identifica e remove metadata antes do enunciado:
+
+1. **Ano**: `^\d{4}$` (4 dígitos sozinhos)
+2. **Bancas**: FCC, VUNESP, FGV, CESPE, FUNDATEC, etc.
+3. **"Questões oficiais"**: regex
+4. **"Nível Superior/Médio"**: regex
+5. **Tribunais/Órgãos**: linhas com Tribunal, Analista, Auditor, etc. que NÃO começam com artigo/preposição
+6. **Tópicos**: linhas curtas sem pontuação e sem verbos de enunciado
+7. **Numerais soltos**: `^[IVXivx\d]{1,5}$`
+8. **Letras soltas**: `^[A-Ea-e]$`
+
+**Extração de metadados** (antes de limpar):
+- `detected_banca` via regex de nomes de bancas
+- `detected_ano` via `^\d{4}$`
+- `detected_topico` via linhas que começam com "Da/Do/Dos" ou são capitalizadas curtas
+- `detected_dificuldade` via número 1-5 no cabeçalho (1-2=Fácil, 3=Médio, 4-5=Difícil)
+
+**Pattern de alternativas** (4 fallbacks):
+1. `\n\s*\(?([A-E])\)?\s*[-–.]?\s*(.+?)` — letra com parêntese
+2. `(?:^|\n)\s*([A-E])\s*[).\-–]\s*(.+?)` — letra com separador
+3. `\n([A-E]) (.+?)` — letra com espaço
+4. `\n([A-E])\n(.+?)` — **Estratégia**: letra sozinha na linha
+
+**Resultado:** 94.7% accuracy em Dir Constitucional (143/151 questões limpas)
+
+### 9.5 Texto Base em Questões
+
+**Coluna:** `texto_base TEXT DEFAULT ''` (migration 49)
+
+**Detecção:** Marcadores como:
+- "baseie-se no texto abaixo"
+- "Leia o texto a seguir"
+- "Considere o texto/trecho/fragmento"
+- "TEXTO I/II/III"
+
+**Separação:** Busca o último marcador de enunciado (assinale, é correto, considere as, de acordo com o texto, etc.) e separa em texto_base + enunciado. Fallback: última frase curta (<250 chars) após último ponto.
+
+**Resultado:** 32.3% das questões de português com texto base separado (131/406)
+
+### 9.6 Embaralhamento de Alternativas
+
+**Endpoint:** `GET /api/questoes/{id}?embaralhar=true`
+
+**Lógica:** `_embaralhar_alternativas(questao, user_id)`
+- Seed determinístico: `hash(md5(f"{user_id}-{q_id}"))` → mesmo user sempre vê mesma ordem
+- Fisher-Yates shuffle com Random(seed)
+- Não embaralha Certo/Errado (≤2 alternativas)
+- Retorna `mapeamento: {nova_letra: letra_original}` + `resposta_correta` atualizada
+- `embaralhada: true/false` no response
+
+### 9.7 Fix Push Notifications (VAPID)
+
+**Problema:** `InvalidAccessError: The provided applicationServerKey is not valid`
+**Causa:** Keys geradas com `secrets.token_urlsafe(65)` (bytes aleatórios) em vez de chave EC P-256
+**Fix:** Regenerar com `py_vapid` + `cryptography` usando `Encoding.X962 + UncompressedPoint` (65 bytes, começa com 0x04)
+
+### 9.8 Flashcards por Matéria (Dashboard)
+
+**Feature:** Clicar na matéria na seção "Pendentes por matéria" do dashboard inicia revisão filtrada.
+**Função:** `startFlashByMateria(materia)` → `GET /api/flashcards/today?materia=X` → `showCurrentFlashcard()`
+**Backend:** Endpoint já suportava parâmetro `materia` — apenas conectado ao frontend.
+
+### 9.9 Regras Atualizadas no SKILL.md
+
+- **Regra 7 reforçada:** "Commit + Push IMEDIATO" — sem exceções
+- **Regra 11 (nova):** "Técnicas Científicas de Estudo" — obrigatório considerar qual técnica se aplica ao implementar qualquer feature de estudo. Lista completa de 29 técnicas.
