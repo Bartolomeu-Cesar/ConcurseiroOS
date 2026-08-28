@@ -150,5 +150,14 @@ window.toggleMetaDetail = toggleMetaDetail;
 window._startFlashByMateria = function(materia) {
   // Salvar matéria no sessionStorage para que o app.js inicie a revisão ao carregar
   sessionStorage.setItem('flash_start_materia', materia);
-  window.location.href = '/#flashcards';
+  // Forçar navegação completa (não apenas hash change)
+  const target = window.location.origin + '/#flashcards';
+  if (window.location.pathname === '/' || window.location.pathname === '/index.html') {
+    // Já está na index — forçar reload com hash
+    window.location.hash = '#flashcards';
+    window.location.reload();
+  } else {
+    // Vem de outra página (dashboard) — navegar normalmente
+    window.location.href = target;
+  }
 };

@@ -1453,8 +1453,12 @@ export function initFlashcards(deps) {
   const pendingMateria = sessionStorage.getItem('flash_start_materia');
   if (pendingMateria) {
     sessionStorage.removeItem('flash_start_materia');
-    // Aguardar um pouco para o DOM estar pronto, depois iniciar revisão filtrada
-    setTimeout(() => startFlashByMateria(pendingMateria), 300);
+    // Garantir que a tab está visível e DOM pronto antes de iniciar
+    switchTab('tab-flashcards');
+    setTimeout(() => {
+      switchTab('tab-flashcards');
+      startFlashByMateria(pendingMateria);
+    }, 500);
   } else {
     loadFlashcardsToday();
   }
