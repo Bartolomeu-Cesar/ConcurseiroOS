@@ -494,3 +494,11 @@ async function _loadCreditosSaldo() {
 
 // Carregar saldo quando modal abre (chamado pelo showUpgradeModal via event)
 export function loadCreditosSaldo() { _loadCreditosSaldo(); }
+
+// ==================== EXPOR NO WINDOW ====================
+// Funções usadas em onclick inline gerados dinamicamente (modais/menus).
+// Necessário em TODAS as páginas que importem auth.js (regra #4).
+Object.assign(window, {
+  showUpgradeModal, doUpgrade, comprarCreditos, ativarCreditos,
+  showEditProfileModal, saveProfile, logout, handleAuthNav,
+});
