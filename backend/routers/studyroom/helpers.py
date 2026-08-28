@@ -71,23 +71,26 @@ def award_focus_xp(conn, user_id: int, tempo_foco_seg: int):
             )
         else:
             conn.execute(
+                "INSERT INTO sessoes_estudo (materia, horas, data, tipo, user_id, created_at) VALUES (?, ?, ?, 'studyroom', ?, ?)",
+                ("Study Room", round(horas, 4), hoje, user_id, hoje)
+            )
+    except Exception:
+        try:
+            conn.execute(
                 "INSERT INTO sessoes_estudo (materia, horas, data, tipo, user_id) VALUES (?, ?, ?, 'studyroom', ?)",
                 ("Study Room", round(horas, 4), hoje, user_id)
             )
-        # Atualizar streak de horas estudadas
+        except Exception:
+            pass
+
+    # SEMPRE atualizar streak (separado do try acima para garantir execução)
+    try:
         conn.execute("""
             INSERT INTO streaks (data, horas_estudadas, user_id) VALUES (?, ?, ?)
             ON CONFLICT(user_id, data) DO UPDATE SET horas_estudadas = horas_estudadas + ?
         """, (hoje, round(horas, 4), user_id, round(horas, 4)))
     except Exception:
-        # sessoes_estudo table may not have user_id column in some setups
-        try:
-            conn.execute(
-                "INSERT INTO sessoes_estudo (materia, horas, data, tipo) VALUES (?, ?, ?, 'studyroom')",
-                ("Study Room", round(horas, 4), hoje)
-            )
-        except Exception:
-            pass
+        pass
 
     xp_gained = int(20 * horas)
     return xp_gained
