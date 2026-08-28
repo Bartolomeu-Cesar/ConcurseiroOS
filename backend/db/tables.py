@@ -198,16 +198,35 @@ def _create_tables(conn):
         )
     """)
 
-    # Cadernos
+    # Cadernos de Questões
     conn.execute("""
         CREATE TABLE IF NOT EXISTS cadernos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL DEFAULT 1,
             nome TEXT NOT NULL,
             descricao TEXT DEFAULT '',
-            created_at TEXT NOT NULL
+            cor TEXT DEFAULT '#89b4fa',
+            created_at TEXT NOT NULL,
+            updated_at TEXT DEFAULT ''
         )
     """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_cadernos_user ON cadernos(user_id)")
 
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS cadernos_questoes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            caderno_id INTEGER NOT NULL,
+            questao_id INTEGER NOT NULL,
+            ordem INTEGER DEFAULT 0,
+            added_at TEXT NOT NULL,
+            FOREIGN KEY (caderno_id) REFERENCES cadernos(id) ON DELETE CASCADE,
+            FOREIGN KEY (questao_id) REFERENCES questoes(id)
+        )
+    """)
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_cadernos_questoes_unique ON cadernos_questoes(caderno_id, questao_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_cadernos_questoes_caderno ON cadernos_questoes(caderno_id)")
+
+    # Manter caderno_itens para backward compatibility
     conn.execute("""
         CREATE TABLE IF NOT EXISTS caderno_itens (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

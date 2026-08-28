@@ -595,19 +595,40 @@ class TestMisc:
 
     def test_cadernos_crud(self, client):
         r = client.post("/api/cadernos", json={"nome": "Caderno Teste", "descricao": "Desc"})
-        assert r.status_code == 200
+        assert r.status_code == 201
         cid = r.json()["id"]
 
         r = client.get("/api/cadernos")
         assert r.status_code == 200
         assert len(r.json()) >= 1
 
-        r = client.post(f"/api/cadernos/{cid}/adicionar", json={"tipo": "questao", "item_id": 1})
+        # Criar uma questão para adicionar ao caderno
+        r = client.post("/api/questoes", json={
+            "materia": "Direito", "enunciado": "Questão caderno?",
+            "alternativa_a": "A", "alternativa_b": "B",
+            "alternativa_c": "C", "alternativa_d": "D",
+            "resposta_correta": "A"
+        })
+        qid = r.json().get("id", 1)
+
+        r = client.post(f"/api/cadernos/{cid}/questoes", json={"questao_ids": [qid]})
         assert r.status_code == 200
+        assert r.json()["adicionadas"] == 1
 
         r = client.get(f"/api/cadernos/{cid}")
         assert r.status_code == 200
-        assert len(r.json()["itens"]) == 1
+        assert r.json()["total_questoes"] == 1
+
+        r = client.get(f"/api/cadernos/{cid}/resolver")
+        assert r.status_code == 200
+        assert r.json()["total"] == 1
+
+        r = client.get(f"/api/cadernos/{cid}/progresso")
+        assert r.status_code == 200
+        assert r.json()["total"] == 1
+
+        r = client.delete(f"/api/cadernos/{cid}/questoes/{qid}")
+        assert r.status_code == 200
 
         r = client.delete(f"/api/cadernos/{cid}")
         assert r.status_code == 200

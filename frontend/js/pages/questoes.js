@@ -1121,6 +1121,7 @@ async function loadBanco() {
       html += `<div class="q-list-item">
         <span class="q-list-text">${q.enunciado.substring(0, 100)}${q.enunciado.length > 100 ? '...' : ''}</span>
         <span class="q-list-meta" style="font-size:0.7rem;color:#9399b2;margin-left:4px;">${q.banca || ''}${provaInfo}${gabBadge}</span>
+        <button onclick="adicionarAoCaderno(${q.id})" title="Adicionar ao Caderno" style="background:none;border:none;color:#89b4fa;cursor:pointer;font-size:1rem;margin-right:2px;">📓</button>
         <button class="q-list-edit" onclick="editQuestao(${q.id})" title="Editar gabarito" style="background:none;border:none;color:#89b4fa;cursor:pointer;font-size:1rem;margin-right:4px;">✏️</button>
         <button class="q-list-delete" onclick="deleteQuestao(${q.id})" title="Excluir" aria-label="Excluir questão">🗑</button>
       </div>`;
@@ -1683,3 +1684,386 @@ window.showGenQuestao = showGenQuestao;
 window.submitGenResposta = submitGenResposta;
 window.revealGenAlternativas = revealGenAlternativas;
 window.skipGenQuestao = skipGenQuestao;
+
+// ==================== CADERNOS DE QUESTÕES ====================
+
+let cadernosCache = [];
+
+async function loadCadernos() {
+  const container = document.getElementById('cadernos-list');
+  if (!container) return;
+  try {
+    const cadernos = await fetch('/api/cadernos').then(r => r.json());
+    cadernosCache = cadernos;
+    if (cadernos.length === 0) {
+      container.innerHTML = `
+        <div style="text-align:center;padding:40px;color:var(--text-sub);">
+          <div style="font-size:2rem;margin-bottom:8px;">📓</div>
+          <p>Nenhum caderno criado ainda.</p>
+          <p style="font-size:0.82rem;margin-top:8px;">Crie cadernos para agrupar questões por tema, prova ou dificuldade.</p>
+        </div>`;
+      return;
+    }
+    container.innerHTML = cadernos.map(c => {
+      const pct = c.total_questoes > 0 ? Math.round((c.respondidas || 0) / c.total_questoes * 100) : 0;
+      return `
+        <div style="background:var(--bg-card);border-radius:10px;padding:16px;border-left:4px solid ${c.cor || '#89b4fa'};">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <div style="font-weight:600;font-size:1rem;color:var(--text);">${c.nome}</div>
+              ${c.descricao ? `<div style="font-size:0.78rem;color:var(--text-sub);margin-top:2px;">${c.descricao}</div>` : ''}
+            </div>
+            <div style="display:flex;gap:6px;">
+              <button onclick="resolverCaderno(${c.id})" class="btn btn-success" style="font-size:0.78rem;padding:6px 12px;" title="Resolver questões">▶ Resolver</button>
+              <button onclick="verCaderno(${c.id})" class="btn" style="font-size:0.78rem;padding:6px 12px;background:var(--bg-elevated);color:var(--text);" title="Ver detalhes">📋</button>
+              <button onclick="excluirCaderno(${c.id})" class="btn" style="font-size:0.78rem;padding:6px 12px;background:var(--bg-elevated);color:var(--red);" title="Excluir">🗑</button>
+            </div>
+          </div>
+          <div style="margin-top:10px;display:flex;align-items:center;gap:12px;">
+            <div style="flex:1;height:6px;background:var(--bg-elevated);border-radius:3px;overflow:hidden;">
+              <div style="width:${pct}%;height:100%;background:${c.cor || '#89b4fa'};border-radius:3px;transition:width 0.3s;"></div>
+            </div>
+            <span style="font-size:0.75rem;color:var(--text-sub);white-space:nowrap;">${c.respondidas || 0}/${c.total_questoes} (${pct}%)</span>
+          </div>
+        </div>`;
+    }).join('');
+  } catch (e) {
+    container.innerHTML = '<div style="color:var(--red);text-align:center;">Erro ao carregar cadernos</div>';
+  }
+}
+
+function showCriarCadernoModal() {
+  const cores = ['#89b4fa','#cba6f7','#a6e3a1','#f9e2af','#f38ba8','#94e2d5','#fab387','#74c7ec'];
+  const overlay = document.createElement('div');
+  overlay.id = 'caderno-modal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  overlay.innerHTML = `
+    <div style="background:var(--bg-card);border-radius:16px;padding:24px;max-width:400px;width:100%;">
+      <h3 style="color:var(--accent);margin:0 0 16px;">📓 Novo Caderno</h3>
+      <div style="margin-bottom:12px;">
+        <label style="font-size:0.8rem;color:var(--text-sub);display:block;margin-bottom:4px;">Nome *</label>
+        <input id="caderno-nome" type="text" placeholder="Ex: Direito Constitucional - TRF5" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;">
+      </div>
+      <div style="margin-bottom:12px;">
+        <label style="font-size:0.8rem;color:var(--text-sub);display:block;margin-bottom:4px;">Descrição (opcional)</label>
+        <input id="caderno-desc" type="text" placeholder="Ex: Questões para revisão final" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;">
+      </div>
+      <div style="margin-bottom:16px;">
+        <label style="font-size:0.8rem;color:var(--text-sub);display:block;margin-bottom:6px;">Cor</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          ${cores.map((cor, i) => `<span onclick="document.getElementById('caderno-cor').value='${cor}';document.querySelectorAll('.cor-opt').forEach(s=>s.style.border='2px solid transparent');this.style.border='2px solid var(--text)'" class="cor-opt" style="width:28px;height:28px;border-radius:50%;background:${cor};cursor:pointer;border:2px solid ${i === 0 ? 'var(--text)' : 'transparent'};"></span>`).join('')}
+        </div>
+        <input type="hidden" id="caderno-cor" value="#89b4fa">
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button onclick="document.getElementById('caderno-modal').remove()" class="btn" style="flex:1;background:var(--bg-elevated);color:var(--text);">Cancelar</button>
+        <button onclick="criarCaderno()" class="btn btn-primary" style="flex:1;">Criar Caderno</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  setTimeout(() => document.getElementById('caderno-nome').focus(), 100);
+}
+
+async function criarCaderno() {
+  const nome = document.getElementById('caderno-nome').value.trim();
+  const descricao = document.getElementById('caderno-desc').value.trim();
+  const cor = document.getElementById('caderno-cor').value;
+  if (!nome) { toast('Nome do caderno é obrigatório', 'warning'); return; }
+
+  try {
+    const res = await fetch('/api/cadernos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nome, descricao, cor })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      document.getElementById('caderno-modal')?.remove();
+      toast(`📓 Caderno "${nome}" criado!`, 'success');
+      loadCadernos();
+    } else {
+      toast(data.detail || 'Erro ao criar caderno', 'error');
+    }
+  } catch (e) { toast('Erro de conexão', 'error'); }
+}
+
+async function verCaderno(id) {
+  try {
+    const data = await fetch(`/api/cadernos/${id}`).then(r => r.json());
+    const progresso = await fetch(`/api/cadernos/${id}/progresso`).then(r => r.json());
+
+    const overlay = document.createElement('div');
+    overlay.id = 'caderno-detail-modal';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;';
+
+    const questoesHtml = data.questoes.length === 0
+      ? '<p style="color:var(--text-sub);text-align:center;padding:20px;">Nenhuma questão neste caderno. Adicione questões na aba "Banco (Todas)".</p>'
+      : data.questoes.map((q, i) => `
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg);border-radius:6px;margin-bottom:4px;">
+            <span style="font-size:0.75rem;color:var(--text-sub);min-width:24px;">#${i + 1}</span>
+            <span style="flex:1;font-size:0.82rem;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;">${q.enunciado.substring(0, 80)}${q.enunciado.length > 80 ? '...' : ''}</span>
+            <span style="font-size:0.72rem;color:var(--text-sub);white-space:nowrap;">${q.materia}</span>
+            ${q.ultimo_resultado !== null ? `<span style="font-size:0.9rem;">${q.ultimo_resultado === 1 ? '✅' : '❌'}</span>` : '<span style="font-size:0.72rem;color:var(--text-sub);">—</span>'}
+            <button onclick="removerDoCaderno(${id}, ${q.id})" style="background:none;border:none;cursor:pointer;font-size:0.9rem;" title="Remover">✕</button>
+          </div>`).join('');
+
+    overlay.innerHTML = `
+      <div style="background:var(--bg-card);border-radius:16px;padding:24px;max-width:600px;width:100%;max-height:85vh;overflow-y:auto;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <h3 style="color:${data.cor || 'var(--accent)'};margin:0;">📓 ${data.nome}</h3>
+          <button onclick="document.getElementById('caderno-detail-modal').remove()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--text-sub);">✕</button>
+        </div>
+        ${data.descricao ? `<p style="font-size:0.82rem;color:var(--text-sub);margin-bottom:12px;">${data.descricao}</p>` : ''}
+        <div style="display:flex;gap:16px;margin-bottom:16px;padding:12px;background:var(--bg);border-radius:8px;">
+          <div style="text-align:center;"><div style="font-size:1.2rem;font-weight:700;color:var(--text);">${progresso.total}</div><div style="font-size:0.7rem;color:var(--text-sub);">Total</div></div>
+          <div style="text-align:center;"><div style="font-size:1.2rem;font-weight:700;color:var(--green);">${progresso.acertos}</div><div style="font-size:0.7rem;color:var(--text-sub);">Acertos</div></div>
+          <div style="text-align:center;"><div style="font-size:1.2rem;font-weight:700;color:var(--red);">${progresso.erros}</div><div style="font-size:0.7rem;color:var(--text-sub);">Erros</div></div>
+          <div style="text-align:center;"><div style="font-size:1.2rem;font-weight:700;color:var(--blue);">${progresso.pct_concluido}%</div><div style="font-size:0.7rem;color:var(--text-sub);">Concluído</div></div>
+        </div>
+        <div style="margin-bottom:12px;">${questoesHtml}</div>
+        <div style="display:flex;gap:8px;">
+          <button onclick="document.getElementById('caderno-detail-modal').remove()" class="btn" style="flex:1;background:var(--bg-elevated);color:var(--text);">Fechar</button>
+          ${data.questoes.length > 0 ? `<button onclick="document.getElementById('caderno-detail-modal').remove();resolverCaderno(${id})" class="btn btn-success" style="flex:1;">▶ Resolver (${data.total_questoes})</button>` : ''}
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  } catch (e) { toast('Erro ao carregar caderno', 'error'); }
+}
+
+async function removerDoCaderno(cadernoId, questaoId) {
+  try {
+    await fetch(`/api/cadernos/${cadernoId}/questoes/${questaoId}`, { method: 'DELETE' });
+    toast('Questão removida do caderno', 'success');
+    // Recarregar modal
+    document.getElementById('caderno-detail-modal')?.remove();
+    verCaderno(cadernoId);
+    loadCadernos();
+  } catch (e) { toast('Erro ao remover', 'error'); }
+}
+
+async function excluirCaderno(id) {
+  if (!confirm('Excluir este caderno? As questões em si não serão apagadas.')) return;
+  try {
+    await fetch(`/api/cadernos/${id}`, { method: 'DELETE' });
+    toast('Caderno excluído', 'success');
+    loadCadernos();
+  } catch (e) { toast('Erro ao excluir', 'error'); }
+}
+
+// ===== RESOLVER CADERNO =====
+let cadernoResolverState = null;
+
+async function resolverCaderno(id) {
+  try {
+    const data = await fetch(`/api/cadernos/${id}/resolver?embaralhar=true`).then(r => r.json());
+    if (data.questoes.length === 0) {
+      toast('Caderno vazio — adicione questões primeiro', 'warning');
+      return;
+    }
+    cadernoResolverState = { caderno: data.caderno, questoes: data.questoes, index: 0, acertos: 0, total: data.total };
+
+    // Mudar para aba resolver e mostrar questão do caderno
+    document.querySelectorAll('.qtab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.qtab-content').forEach(c => c.classList.remove('active'));
+    document.querySelector('[data-tab="tab-resolver"]').classList.add('active');
+    document.getElementById('tab-resolver').classList.add('active');
+
+    showCadernoQuestao();
+  } catch (e) { toast('Erro ao iniciar caderno', 'error'); }
+}
+
+function showCadernoQuestao() {
+  if (!cadernoResolverState) return;
+  const { caderno, questoes, index } = cadernoResolverState;
+  if (index >= questoes.length) {
+    showCadernoResultado();
+    return;
+  }
+  const q = questoes[index];
+  currentQuestao = q;
+  respondida = false;
+  questaoStartTime = Date.now();
+
+  const area = document.getElementById('resolver-area');
+  const isCertoErrado = !q.alternativa_c && !q.alternativa_d;
+  const alternativas = isCertoErrado
+    ? [{ letter: 'A', text: 'CERTO' }, { letter: 'B', text: 'ERRADO' }]
+    : [
+        { letter: 'A', text: q.alternativa_a },
+        { letter: 'B', text: q.alternativa_b },
+        { letter: 'C', text: q.alternativa_c },
+        { letter: 'D', text: q.alternativa_d },
+        ...(q.alternativa_e ? [{ letter: 'E', text: q.alternativa_e }] : []),
+      ];
+
+  const altsHtml = alternativas.map(a => `
+    <div class="alternativa" data-letter="${a.letter}" onclick="selecionarAlternativa(this, '${a.letter}')">
+      <span class="alt-letter">${a.letter})</span>
+      <span class="alt-text">${a.text}</span>
+    </div>
+  `).join('');
+
+  area.innerHTML = `
+    <div style="background:${caderno.cor || '#89b4fa'}22;border:1px solid ${caderno.cor || '#89b4fa'}55;border-radius:8px;padding:8px 14px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;">
+      <span style="font-size:0.82rem;font-weight:600;color:${caderno.cor || '#89b4fa'};">📓 ${caderno.nome}</span>
+      <span style="font-size:0.78rem;color:var(--text-sub);">${index + 1} / ${questoes.length}</span>
+    </div>
+    <div class="questao-card">
+      <div class="questao-meta">
+        <span>${q.materia}</span>
+        ${q.topico ? `<span>${q.topico}</span>` : ''}
+        <span>${q.dificuldade || 'Médio'}</span>
+      </div>
+      <div class="questao-enunciado">${q.enunciado}</div>
+      <div class="questao-alternativas">${altsHtml}</div>
+      <div style="margin-top:12px;display:flex;gap:8px;">
+        <button class="btn btn-success" id="btn-confirmar" onclick="confirmarRespostaCaderno()">Confirmar</button>
+        <button class="btn" id="btn-proxima-caderno" style="display:none;background:var(--accent);color:#1e1e2e;" onclick="proximaCaderno()">Próxima →</button>
+        <button class="btn" style="background:var(--bg-elevated);color:var(--text-sub);margin-left:auto;" onclick="encerrarCaderno()">✕ Encerrar</button>
+      </div>
+      <div class="explicacao-box" id="explicacao-box">
+        <strong>Explicação:</strong> ${q.explicacao || 'Sem explicação cadastrada.'}
+      </div>
+    </div>
+  `;
+}
+
+async function confirmarRespostaCaderno() {
+  if (respondida) return;
+  const selected = document.querySelector('.alternativa.selected');
+  if (!selected) { toast('Selecione uma alternativa', 'warning'); return; }
+
+  const letra = selected.dataset.letter;
+  const tempoSeg = questaoStartTime ? Math.round((Date.now() - questaoStartTime) / 1000) : 0;
+
+  const res = await fetch(`/api/questoes/${currentQuestao.id}/responder`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ resposta: letra, tempo_segundos: tempoSeg })
+  }).then(r => r.json());
+
+  respondida = true;
+  if (res.acertou) cadernoResolverState.acertos++;
+
+  // Marcar correta/errada
+  document.querySelectorAll('.alternativa').forEach(a => {
+    a.style.cursor = 'default';
+    a.onclick = null;
+    if (a.dataset.letter === res.resposta_correta) a.classList.add('correct');
+    if (a.dataset.letter === letra && !res.acertou) a.classList.add('wrong');
+  });
+
+  document.getElementById('explicacao-box').classList.add('show');
+  document.getElementById('btn-confirmar').style.display = 'none';
+  document.getElementById('btn-proxima-caderno').style.display = 'inline-block';
+
+  // XP
+  if (res.acertou) showQuestionXp(10);
+}
+
+function proximaCaderno() {
+  cadernoResolverState.index++;
+  showCadernoQuestao();
+}
+
+function encerrarCaderno() {
+  if (cadernoResolverState && cadernoResolverState.index > 0) {
+    showCadernoResultado();
+  } else {
+    cadernoResolverState = null;
+    loadQuestoesResolver();
+  }
+}
+
+function showCadernoResultado() {
+  const { caderno, acertos, index, total } = cadernoResolverState;
+  const respondidas = Math.min(index + (respondida ? 1 : 0), total);
+  const pct = respondidas > 0 ? Math.round(acertos / respondidas * 100) : 0;
+
+  const area = document.getElementById('resolver-area');
+  area.innerHTML = `
+    <div style="text-align:center;padding:30px;">
+      <div style="font-size:2.5rem;margin-bottom:8px;">${pct >= 70 ? '🎉' : pct >= 50 ? '📊' : '📚'}</div>
+      <h2 style="color:var(--accent);margin-bottom:4px;">Caderno Finalizado!</h2>
+      <p style="color:var(--text-sub);font-size:0.9rem;margin-bottom:20px;">📓 ${caderno.nome}</p>
+      <div style="display:flex;justify-content:center;gap:24px;margin-bottom:20px;">
+        <div><div style="font-size:1.8rem;font-weight:700;color:var(--green);">${acertos}</div><div style="font-size:0.78rem;color:var(--text-sub);">Acertos</div></div>
+        <div><div style="font-size:1.8rem;font-weight:700;color:var(--red);">${respondidas - acertos}</div><div style="font-size:0.78rem;color:var(--text-sub);">Erros</div></div>
+        <div><div style="font-size:1.8rem;font-weight:700;color:var(--blue);">${pct}%</div><div style="font-size:0.78rem;color:var(--text-sub);">Aproveitamento</div></div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:center;">
+        <button onclick="resolverCaderno(${caderno.id})" class="btn btn-primary">🔄 Refazer</button>
+        <button onclick="cadernoResolverState=null;document.querySelector('[data-tab=tab-cadernos]').click();" class="btn" style="background:var(--bg-elevated);color:var(--text);">📓 Voltar aos Cadernos</button>
+      </div>
+    </div>
+  `;
+  cadernoResolverState = null;
+}
+
+// ===== ADICIONAR AO CADERNO (usado na aba Banco) =====
+async function adicionarAoCaderno(questaoId) {
+  // Carregar cadernos para seleção
+  const cadernos = await fetch('/api/cadernos').then(r => r.json());
+  if (cadernos.length === 0) {
+    toast('Crie um caderno primeiro na aba "📓 Cadernos"', 'warning');
+    return;
+  }
+
+  const overlay = document.createElement('div');
+  overlay.id = 'add-caderno-modal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  overlay.innerHTML = `
+    <div style="background:var(--bg-card);border-radius:12px;padding:20px;max-width:320px;width:100%;">
+      <h4 style="margin:0 0 12px;color:var(--accent);">📓 Adicionar ao Caderno</h4>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        ${cadernos.map(c => `
+          <button onclick="doAddToCaderno(${c.id}, ${questaoId})" style="display:flex;align-items:center;gap:8px;padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;cursor:pointer;text-align:left;color:var(--text);border-left:4px solid ${c.cor || '#89b4fa'};">
+            <span style="flex:1;font-size:0.85rem;">${c.nome}</span>
+            <span style="font-size:0.72rem;color:var(--text-sub);">${c.total_questoes} q</span>
+          </button>
+        `).join('')}
+      </div>
+      <button onclick="document.getElementById('add-caderno-modal').remove()" class="btn" style="width:100%;margin-top:12px;background:var(--bg-elevated);color:var(--text);">Cancelar</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+}
+
+async function doAddToCaderno(cadernoId, questaoId) {
+  try {
+    const res = await fetch(`/api/cadernos/${cadernoId}/questoes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ questao_ids: [questaoId] })
+    });
+    const data = await res.json();
+    document.getElementById('add-caderno-modal')?.remove();
+    if (data.adicionadas > 0) {
+      toast('✅ Questão adicionada ao caderno!', 'success');
+    } else {
+      toast('Questão já está neste caderno', 'info');
+    }
+  } catch (e) { toast('Erro ao adicionar', 'error'); }
+}
+
+// Carregar cadernos ao abrir a aba
+document.querySelector('[data-tab="tab-cadernos"]')?.addEventListener('click', loadCadernos);
+
+// Expose cadernos functions
+window.showCriarCadernoModal = showCriarCadernoModal;
+window.criarCaderno = criarCaderno;
+window.verCaderno = verCaderno;
+window.resolverCaderno = resolverCaderno;
+window.excluirCaderno = excluirCaderno;
+window.removerDoCaderno = removerDoCaderno;
+window.confirmarRespostaCaderno = confirmarRespostaCaderno;
+window.proximaCaderno = proximaCaderno;
+window.encerrarCaderno = encerrarCaderno;
+window.adicionarAoCaderno = adicionarAoCaderno;
+window.doAddToCaderno = doAddToCaderno;
+window.loadCadernos = loadCadernos;

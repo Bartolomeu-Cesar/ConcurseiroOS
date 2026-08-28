@@ -169,6 +169,7 @@
     <button class="qtab-btn active" data-tab="tab-resolver">Resolver</button>
     <button class="qtab-btn" data-tab="tab-geracao">🧠 Geração</button>
     <button class="qtab-btn" data-tab="tab-simulados">Simulados</button>
+    <button class="qtab-btn" data-tab="tab-cadernos">📓 Cadernos</button>
     <button class="qtab-btn" data-tab="tab-erros">Caderno de Erros</button>
     <button class="qtab-btn" data-tab="tab-cadastrar">Cadastrar</button>
     <button class="qtab-btn" data-tab="tab-banco">Banco (Todas)</button>
@@ -285,6 +286,22 @@
     <div class="panel">
       <h2>📚 Histórico de Simulados</h2>
       <div id="simulados-list"></div>
+    </div>
+  </div>
+
+  <!-- Tab: Cadernos de Questões -->
+  <div id="tab-cadernos" class="qtab-content">
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <h2>📓 Cadernos de Questões</h2>
+        <button onclick="showCriarCadernoModal()" class="btn btn-primary" style="font-size:0.82rem;">+ Novo Caderno</button>
+      </div>
+      <p style="font-size:0.82rem;color:var(--text-sub);margin-bottom:16px;">
+        Agrupe questões em cadernos temáticos e resolva em sequência. Ideal para revisão direcionada e simulados personalizados.
+      </p>
+      <div id="cadernos-list" style="display:flex;flex-direction:column;gap:10px;">
+        <div style="text-align:center;color:var(--text-sub);padding:40px;">Carregando...</div>
+      </div>
     </div>
   </div>
 

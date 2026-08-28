@@ -461,6 +461,34 @@ def _m52_pdf_organizacao_virtual(conn):
     log.info("Migration: created pdf_pastas_virtuais + pdf_organizacao tables")
 
 
+def _m53_cadernos_questoes(conn):
+    """Upgrade cadernos table and create cadernos_questoes for question notebooks."""
+    # Adicionar colunas novas à tabela cadernos existente
+    for col, defn in [("user_id", "INTEGER NOT NULL DEFAULT 1"), ("cor", "TEXT DEFAULT '#89b4fa'"), ("updated_at", "TEXT DEFAULT ''")]:
+        try:
+            conn.execute(f"ALTER TABLE cadernos ADD COLUMN {col} {defn}")
+        except Exception:
+            pass  # Coluna já existe
+
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_cadernos_user ON cadernos(user_id)")
+
+    # Nova tabela de associação cadernos ↔ questões
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS cadernos_questoes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            caderno_id INTEGER NOT NULL,
+            questao_id INTEGER NOT NULL,
+            ordem INTEGER DEFAULT 0,
+            added_at TEXT NOT NULL,
+            FOREIGN KEY (caderno_id) REFERENCES cadernos(id) ON DELETE CASCADE,
+            FOREIGN KEY (questao_id) REFERENCES questoes(id)
+        )
+    """)
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_cadernos_questoes_unique ON cadernos_questoes(caderno_id, questao_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_cadernos_questoes_caderno ON cadernos_questoes(caderno_id)")
+    log.info("Migration: upgraded cadernos + created cadernos_questoes table")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -514,6 +542,7 @@ MIGRATIONS = [
     (50, _m50_creditos_users),
     (51, _m51_pagamentos),
     (52, _m52_pdf_organizacao_virtual),
+    (53, _m53_cadernos_questoes),
 ]
 
 
