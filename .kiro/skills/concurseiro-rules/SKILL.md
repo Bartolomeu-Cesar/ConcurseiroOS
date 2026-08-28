@@ -13,6 +13,7 @@
 8. **Criar testes para toda alteração**: Toda feature nova ou bug fix DEVE ter teste correspondente. Se não existe teste para o código alterado, criar um. Objetivo: nunca diminuir a cobertura.
 9. **Não quebrar funcionalidades existentes**: Antes de refatorar ou alterar um módulo, verificar TODOS os imports e chamadores. Manter backward compatibility (re-exportar funções movidas, preservar assinaturas). Se um endpoint muda formato de retorno, garantir que o frontend consome corretamente.
 10. **Testar regressão**: Após qualquer fix, rodar os testes do módulo afetado E os testes que dependem dele. Se um teste falha que antes passava = regressão — corrigir antes de continuar.
+11. **Técnicas Científicas de Estudo**: Sempre que analisar, alterar ou implantar recursos novos, aplicar as técnicas científicas de estudo baseadas em evidência para melhorar a experiência do candidato. Técnicas implementadas: Spaced Practice (FSRS), Retrieval Practice, Interleaving, Pre-testing, Desirable Difficulty, Successive Relearning, Expanding Retrieval, Elaborative Interrogation, Serial Position Effect, Lag Effect (Exam-Aware), Chunking, Keyword Mnemonic, Free Recall (Brain Dump), Dual Coding, Contextual Variation, Self-Explanation, Concrete Examples. Toda feature de estudo deve considerar qual técnica se aplica e integrá-la ao fluxo.
 
 ## Padrões de Código
 

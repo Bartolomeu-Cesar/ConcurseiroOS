@@ -278,6 +278,15 @@ export async function reviewFlashcard(quality) {
       window._adaptivePomo.recordAnswer(quality >= 3, tempoCard);
     }
 
+    // Keyword Mnemonic: sugerir mnemônico após erro em card difícil
+    // Ativa quando: quality <= 1 (esqueceu/errou) E card já tem repetitions > 0
+    // Ou seja, errou um card que já deveria saber → precisa de ajuda mnemônica
+    _mnemonicErrorCount = (_mnemonicErrorCount || 0) + (quality <= 1 ? 1 : 0);
+    if (quality <= 1 && card.repetitions > 0 && _mnemonicErrorCount % 2 === 0) {
+      _showMnemonicSuggestion(card);
+      return; // Pausa — fluxo continua ao pular/salvar mnemônico
+    }
+
     // Elaborative Interrogation: prompt "Por quê?" após acerto (quality >= 3)
     // Mostrar a cada 3 cards acertados para não sobrecarregar (não em todo card)
     _elaborationAccertCount = (_elaborationAccertCount || 0) + (quality >= 3 ? 1 : 0);
@@ -292,6 +301,7 @@ export async function reviewFlashcard(quality) {
 }
 
 let _elaborationAccertCount = 0;
+let _mnemonicErrorCount = 0;
 
 function _advanceAfterReview() {
     currentFlashIndex++;
@@ -381,6 +391,87 @@ export function continueAfterChunk() {
   // Continuar para o próximo card
   _chunkPauseShown = false;
   showCurrentFlashcard();
+}
+
+// ============================================================
+// KEYWORD MNEMONIC — Sugestão de mnemônicos para cards difíceis
+// Evidência: Atkinson (1975), Pressley et al. (1982)
+// ============================================================
+
+function _showMnemonicSuggestion(card) {
+  const q = document.getElementById('flash-question');
+  const a = document.getElementById('flash-answer');
+  const rb = document.getElementById('flash-reveal-btn');
+  const rv = document.getElementById('flash-review-btns');
+
+  if (a) a.style.display = 'none';
+  if (rb) rb.style.display = 'none';
+  if (rv) rv.style.display = 'none';
+
+  // Gerar sugestões de mnemônicos baseadas na resposta
+  const resposta = card.resposta || '';
+  const pergunta = card.pergunta || '';
+  const palavrasChave = resposta.split(/\s+/).filter(p => p.length > 4).slice(0, 3);
+  const iniciais = palavrasChave.map(p => p[0].toUpperCase()).join('');
+
+  // Técnicas mnemônicas sugeridas
+  const sugestoes = [];
+  if (iniciais.length >= 2) {
+    sugestoes.push(`<strong>Acrônimo:</strong> "${iniciais}" → forme uma palavra ou frase com essas letras`);
+  }
+  sugestoes.push(`<strong>Associação visual:</strong> Imagine uma cena absurda/engraçada conectando a pergunta à resposta`);
+  sugestoes.push(`<strong>Rima/Música:</strong> Transforme a resposta em uma rima ou encaixe numa melodia conhecida`);
+  if (resposta.length < 100) {
+    sugestoes.push(`<strong>Palavra-chave:</strong> Associe "${palavrasChave[0] || resposta.split(' ')[0]}" a algo que você já conhece`);
+  }
+
+  q.innerHTML = `
+    <div style="text-align:center;margin-bottom:8px;">
+      <span style="font-size:1.3rem;">🔑</span>
+      <div style="font-size:0.88rem;font-weight:700;color:var(--peach);margin:4px 0;">Keyword Mnemonic</div>
+      <div style="font-size:0.7rem;color:var(--text-sub);">Você errou esse card novamente. Crie um mnemônico para fixar!</div>
+      <div style="font-size:0.65rem;color:var(--text-sub);">Pressley et al. (1982): Mnemônicos melhoram recall em 20-50%</div>
+    </div>
+    <div style="background:var(--bg-surface);border-radius:8px;padding:10px;margin-bottom:8px;">
+      <div style="font-size:0.75rem;color:var(--text-sub);margin-bottom:2px;">❓ ${escapeHtml(pergunta).substring(0, 100)}</div>
+      <div style="font-size:0.82rem;color:var(--text);font-weight:600;">✅ ${escapeHtml(resposta).substring(0, 150)}</div>
+    </div>
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px;">
+      <div style="font-size:0.75rem;font-weight:600;color:var(--accent);margin-bottom:6px;">💡 Sugestões de mnemônicos:</div>
+      ${sugestoes.map(s => `<div style="font-size:0.75rem;color:var(--text-sub);padding:3px 0;">• ${s}</div>`).join('')}
+    </div>
+    <textarea id="mnemonic-input" placeholder="Crie seu mnemônico aqui... (ex: 'Para lembrar que CF art.5 tem 78 incisos → 5+7+8=20, como nota máxima')"
+      style="width:100%;min-height:50px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text);font-size:0.82rem;font-family:inherit;resize:vertical;"></textarea>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button onclick="saveMnemonic()" style="flex:1;background:var(--peach);color:var(--bg);border:none;border-radius:6px;padding:8px;font-size:0.8rem;font-weight:600;cursor:pointer;">🔑 Salvar Mnemônico</button>
+      <button onclick="skipMnemonic()" style="flex:1;background:var(--bg-surface);color:var(--text-sub);border:1px solid var(--border);border-radius:6px;padding:8px;font-size:0.8rem;cursor:pointer;">⏭ Pular</button>
+    </div>
+  `;
+}
+
+export function skipMnemonic() {
+  _advanceAfterReview();
+}
+
+export async function saveMnemonic() {
+  const input = document.getElementById('mnemonic-input');
+  const texto = input ? input.value.trim() : '';
+  const card = flashcardsToday[currentFlashIndex];
+
+  if (texto && card) {
+    fetch('/api/study-intelligence/elaboration', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        flashcard_id: card.id,
+        prompt_tipo: 'keyword_mnemonic',
+        resposta_usuario: texto
+      })
+    }).catch(() => {});
+    toast('🔑 Mnemônico salvo! Será mostrado nas próximas revisões.', 'success', 2500);
+  }
+
+  _advanceAfterReview();
 }
 
 function _showElaborationPrompt(card) {
