@@ -105,6 +105,9 @@ async function loadQuestoesResolver() {
   const status = document.getElementById('filtro-status').value;
   const dificuldade = document.getElementById('filtro-dificuldade').value;
 
+  // Manter set de questões já exibidas na sessão (evitar repetição)
+  if (!window._questoesExibidasSessao) window._questoesExibidasSessao = new Set();
+
   // Se nenhum filtro ativo, usar seleção inteligente (prática deliberada)
   if (!materia && !banca && !status && !dificuldade) {
     try {
@@ -118,15 +121,20 @@ async function loadQuestoesResolver() {
         const materiaFoco = prioridade[0];
         questoesPool = await fetch(`/api/questoes?materia=${encodeURIComponent(materiaFoco)}`).then(r => r.json());
         if (questoesPool.length > 0) {
-          // Priorizar: erradas > nunca respondidas > resto
-          const erradas = questoesPool.filter(q => q.ultimo_resultado === 0);
-          const nuncaResp = questoesPool.filter(q => q.ultimo_resultado === null || q.ultimo_resultado === undefined);
-          const resto = questoesPool.filter(q => q.ultimo_resultado === 1);
+          // Priorizar: erradas > nunca respondidas > resto — EXCLUIR já exibidas
+          const erradas = questoesPool.filter(q => q.ultimo_resultado === 0 && !window._questoesExibidasSessao.has(q.id));
+          const nuncaResp = questoesPool.filter(q => (q.ultimo_resultado === null || q.ultimo_resultado === undefined) && !window._questoesExibidasSessao.has(q.id));
+          const resto = questoesPool.filter(q => q.ultimo_resultado === 1 && !window._questoesExibidasSessao.has(q.id));
           const ordenadas = [...erradas, ...nuncaResp, ...resto];
-          showQuestao(ordenadas[0]);
-          // Mostrar badge de prática deliberada
-          toast(`🎯 Prática deliberada: ${materiaFoco} (${smart.materias_para_focar[0]?.percentual || 0}% acerto)`, 'info', 4000);
-          return;
+
+          if (ordenadas.length > 0) {
+            window._questoesExibidasSessao.add(ordenadas[0].id);
+            showQuestao(ordenadas[0]);
+            toast(`🎯 Prática deliberada: ${materiaFoco} (${smart.materias_para_focar[0]?.percentual || 0}% acerto)`, 'info', 4000);
+            return;
+          }
+          // Se todas já exibidas nesta sessão, resetar e pegar de outra matéria
+          window._questoesExibidasSessao.clear();
         }
       }
     } catch (e) {
@@ -150,12 +158,16 @@ async function loadQuestoesResolver() {
     return;
   }
 
-  // Priorizar: erradas > nunca respondidas > aleatório
-  const erradas = questoesPool.filter(q => q.ultimo_resultado === 0);
-  const nuncaResp = questoesPool.filter(q => q.ultimo_resultado === null || q.ultimo_resultado === undefined);
-  const resto = questoesPool.filter(q => q.ultimo_resultado === 1);
+  // Priorizar: erradas > nunca respondidas > aleatório — excluir já exibidas
+  const erradas = questoesPool.filter(q => q.ultimo_resultado === 0 && !window._questoesExibidasSessao.has(q.id));
+  const nuncaResp = questoesPool.filter(q => (q.ultimo_resultado === null || q.ultimo_resultado === undefined) && !window._questoesExibidasSessao.has(q.id));
+  const resto = questoesPool.filter(q => q.ultimo_resultado === 1 && !window._questoesExibidasSessao.has(q.id));
   const priorizada = [...erradas, ...nuncaResp, ...resto];
-  showQuestao(priorizada.length > 0 ? priorizada[0] : questoesPool[Math.floor(Math.random() * questoesPool.length)]);
+  const escolhida = priorizada.length > 0 ? priorizada[0] : questoesPool.find(q => !window._questoesExibidasSessao.has(q.id)) || questoesPool[0];
+  if (escolhida) {
+    window._questoesExibidasSessao.add(escolhida.id);
+    showQuestao(escolhida);
+  }
 }
 window.loadQuestoesResolver = loadQuestoesResolver;
 
