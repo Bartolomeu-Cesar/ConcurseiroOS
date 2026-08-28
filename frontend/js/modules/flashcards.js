@@ -726,6 +726,76 @@ function _commutingPlayCard() {
 }
 
 // ============================================================
+// ============================================================
+// LEITNER SYSTEM — Visualização de Caixas 1-5
+// ============================================================
+
+export async function loadLeitnerBoxes() {
+  const container = document.getElementById('leitner-boxes');
+  if (!container) return;
+
+  try {
+    const all = await fetch('/api/flashcards').then(r => r.json());
+    if (!all || all.length === 0) { container.style.display = 'none'; return; }
+
+    // Mapear flashcards para caixas Leitner baseado no FSRS state + stability
+    const boxes = [
+      { num: 1, label: 'Novo/Aprendendo', color: '#f38ba8', interval: '1d', cards: [] },
+      { num: 2, label: 'Curto prazo', color: '#fab387', interval: '3d', cards: [] },
+      { num: 3, label: 'Médio prazo', color: '#f9e2af', interval: '7-30d', cards: [] },
+      { num: 4, label: 'Longo prazo', color: '#a6e3a1', interval: '1-3m', cards: [] },
+      { num: 5, label: 'Dominado', color: '#89b4fa', interval: '3m+', cards: [] },
+    ];
+
+    all.forEach(c => {
+      const state = c.fsrs_state || 0;
+      const stability = c.stability || 0;
+
+      if (state <= 1 || stability < 3) {
+        boxes[0].cards.push(c);
+      } else if (stability < 7) {
+        boxes[1].cards.push(c);
+      } else if (stability < 30) {
+        boxes[2].cards.push(c);
+      } else if (stability < 90) {
+        boxes[3].cards.push(c);
+      } else {
+        boxes[4].cards.push(c);
+      }
+    });
+
+    container.style.display = 'block';
+    const total = all.length;
+
+    container.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <span style="font-size:0.88rem;font-weight:700;color:var(--text);">📦 Sistema Leitner</span>
+        <span style="font-size:0.72rem;color:var(--text-sub);">${total} cards total</span>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        ${boxes.map(b => {
+          const pct = total > 0 ? Math.round(b.cards.length / total * 100) : 0;
+          const height = Math.max(40, Math.min(100, 40 + pct * 0.6));
+          return `
+            <div style="flex:1;min-width:55px;text-align:center;">
+              <div style="background:${b.color}22;border:2px solid ${b.color};border-radius:10px;height:${height}px;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;transition:height 0.3s;">
+                <span style="font-size:1.1rem;font-weight:800;color:${b.color};">${b.cards.length}</span>
+                <span style="font-size:0.6rem;color:var(--text-sub);">${pct}%</span>
+              </div>
+              <div style="font-size:0.65rem;font-weight:600;color:${b.color};margin-top:4px;">Caixa ${b.num}</div>
+              <div style="font-size:0.58rem;color:var(--text-sub);">${b.interval}</div>
+            </div>`;
+        }).join('')}
+      </div>
+      <div style="font-size:0.68rem;color:var(--text-sub);margin-top:8px;text-align:center;">
+        Responda corretamente → sobe de caixa | Erre → volta para caixa 1
+      </div>
+    `;
+  } catch(e) { container.style.display = 'none'; }
+}
+
+window.loadLeitnerBoxes = loadLeitnerBoxes;
+
 // BOSS BATTLE MODE — Gamified Flashcard Review
 // ============================================================
 

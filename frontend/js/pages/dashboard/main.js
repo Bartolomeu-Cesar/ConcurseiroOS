@@ -2487,3 +2487,147 @@ async function loadOverconfidenceAlert() {
 }
 
 setTimeout(loadOverconfidenceAlert, 2400);
+
+
+// ============================================================
+// PEER TEACHING — Sugestões de tópicos para ensinar
+// ============================================================
+
+async function loadPeerTeaching() {
+  const box = document.getElementById('si-techniques-alerts');
+  if (!box) return;
+
+  try {
+    const data = await fetch('/api/study-intelligence/peer-teaching').then(r => r.ok ? r.json() : null);
+    if (!data || !data.sugestoes || data.sugestoes.length === 0) return;
+
+    const widget = document.createElement('div');
+    widget.id = 'peer-teaching-widget';
+    widget.style.cssText = 'background:var(--bg-surface, #313244);border-radius:10px;padding:14px;margin-bottom:10px;border-left:4px solid var(--green, #a6e3a1);';
+    widget.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-size:0.85rem;font-weight:700;color:var(--text);">🎓 Ensine para Aprender (Peer Teaching)</span>
+        ${data.xp_ensino_semana > 0 ? `<span style="font-size:0.68rem;color:var(--green);font-weight:600;">+${data.xp_ensino_semana} XP esta semana</span>` : ''}
+      </div>
+      <div style="font-size:0.78rem;color:var(--text-sub);margin-bottom:10px;">${data.mensagem}</div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        ${data.sugestoes.slice(0, 3).map(s => `
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg, #1e1e2e);border-radius:8px;">
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:0.8rem;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${s.materia}</div>
+              ${s.topico_sugerido ? `<div style="font-size:0.7rem;color:var(--text-sub);">📌 ${s.topico_sugerido}</div>` : ''}
+              <div style="font-size:0.65rem;color:var(--text-sub);">Acerto: ${s.pct_acerto}% (${s.total_questoes}q)</div>
+            </div>
+            <button onclick="window._initPeerTeach('${s.materia.replace(/'/g, "\\'")}')" style="background:var(--green, #a6e3a1);color:#1e1e2e;border:none;border-radius:6px;padding:6px 10px;font-size:0.72rem;font-weight:600;cursor:pointer;white-space:nowrap;">Ensinar 🎤</button>
+          </div>
+        `).join('')}
+      </div>
+      <div style="font-size:0.65rem;color:var(--text-sub);margin-top:8px;">📊 Pirâmide: ensinar = 90% retenção vs 10% de leitura. +30 XP por sessão.</div>
+    `;
+    document.getElementById('peer-teaching-widget')?.remove();
+    box.appendChild(widget);
+  } catch(e) {}
+}
+
+window._initPeerTeach = function(materia) {
+  // Redirecionar para study room ou mostrar prompt
+  const msg = `Tente explicar "${materia}" como se fosse para alguém que não sabe nada do assunto. Use exemplos simples.`;
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(30,30,46,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:var(--bg-elevated, #45475a);border-radius:16px;padding:24px;max-width:420px;width:90%;">
+      <div style="font-size:1.5rem;text-align:center;margin-bottom:8px;">🎓</div>
+      <h3 style="color:var(--text);text-align:center;margin-bottom:12px;">Ensine: ${materia}</h3>
+      <p style="font-size:0.82rem;color:var(--text-sub);margin-bottom:16px;line-height:1.5;">${msg}</p>
+      <textarea id="peer-teach-text" placeholder="Escreva sua explicação aqui... (mínimo 50 caracteres)" style="width:100%;min-height:120px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;color:var(--text);font-size:0.85rem;font-family:inherit;resize:vertical;"></textarea>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <button onclick="this.closest('div[style*=fixed]').remove()" style="flex:1;padding:10px;background:var(--border);color:var(--text);border:none;border-radius:8px;cursor:pointer;">Cancelar</button>
+        <button onclick="window._submitPeerTeach('${materia.replace(/'/g, "\\'")}')" style="flex:1;padding:10px;background:var(--green);color:#1e1e2e;border:none;border-radius:8px;font-weight:600;cursor:pointer;">Registrar ✅</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+};
+
+window._submitPeerTeach = async function(materia) {
+  const text = document.getElementById('peer-teach-text')?.value || '';
+  if (text.length < 50) { if (typeof _toastDash === 'function') _toastDash('Escreva pelo menos 50 caracteres para registrar.'); return; }
+  try {
+    await fetch('/api/study-intelligence/peer-teaching/registrar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ materia, explicacao: text }),
+    });
+    document.querySelector('div[style*="position:fixed"][style*="99999"]')?.remove();
+    if (typeof _toastDash === 'function') _toastDash('🎓 Ensino registrado! +30 XP');
+  } catch(e) {
+    if (typeof _toastDash === 'function') _toastDash('Erro ao registrar');
+  }
+};
+
+setTimeout(loadPeerTeaching, 2600);
+
+// ============================================================
+// SPACING CALCULATOR — Gap ideal entre revisões por matéria
+// ============================================================
+
+async function loadSpacingCalculator() {
+  const box = document.getElementById('si-techniques-alerts');
+  if (!box) return;
+
+  try {
+    // Usar dados de flashcards + edital para calcular spacing ideal
+    // Gap ideal = 10-20% do período de retenção desejado (Cepeda 2008)
+    const flashcards = await fetch('/api/flashcards').then(r => r.ok ? r.json() : []);
+    if (!flashcards || flashcards.length === 0) return;
+
+    // Agrupar por matéria e calcular spacing médio
+    const materiaMap = {};
+    flashcards.forEach(fc => {
+      const mat = fc.materia || 'Geral';
+      if (!materiaMap[mat]) materiaMap[mat] = { total: 0, stabilities: [], pendentes: 0 };
+      materiaMap[mat].total++;
+      if (fc.stability > 0) materiaMap[mat].stabilities.push(fc.stability);
+      if (fc.proxima_revisao && new Date(fc.proxima_revisao) <= new Date()) materiaMap[mat].pendentes++;
+    });
+
+    // Calcular gap ideal por matéria
+    const spacingData = Object.entries(materiaMap).map(([mat, data]) => {
+      const avgStability = data.stabilities.length > 0
+        ? data.stabilities.reduce((a, b) => a + b, 0) / data.stabilities.length
+        : 1;
+      // Gap ideal (Cepeda 2008): ~10-20% do intervalo atual
+      // Se stability = 10 dias → revisar a cada 1-2 dias para manter 90%
+      const gapIdeal = Math.max(1, Math.round(avgStability * 0.15));
+      const proximaRevisaoIdeal = gapIdeal;
+      return { mat, total: data.total, avgStability: Math.round(avgStability * 10) / 10, gapIdeal, pendentes: data.pendentes };
+    }).sort((a, b) => a.gapIdeal - b.gapIdeal);
+
+    if (spacingData.length === 0) return;
+
+    const widget = document.createElement('div');
+    widget.id = 'spacing-calc-widget';
+    widget.style.cssText = 'background:var(--bg-surface, #313244);border-radius:10px;padding:14px;margin-bottom:10px;border-left:4px solid var(--blue, #89b4fa);';
+    widget.innerHTML = `
+      <div style="font-size:0.85rem;font-weight:700;color:var(--text);margin-bottom:8px;">📐 Spacing Calculator (Gap Ideal)</div>
+      <div style="font-size:0.72rem;color:var(--text-sub);margin-bottom:10px;">Cepeda (2008): o intervalo ótimo entre revisões é ~10-20% do período de retenção.</div>
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        ${spacingData.slice(0, 6).map(s => {
+          const urgencia = s.pendentes > 0 ? 'var(--red, #f38ba8)' : s.gapIdeal <= 2 ? 'var(--yellow, #f9e2af)' : 'var(--green, #a6e3a1)';
+          return `
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div style="width:6px;height:6px;border-radius:50%;background:${urgencia};"></div>
+              <span style="flex:1;font-size:0.78rem;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${s.mat}</span>
+              <span style="font-size:0.72rem;font-weight:600;color:var(--accent);min-width:55px;text-align:right;">a cada ${s.gapIdeal}d</span>
+              ${s.pendentes > 0 ? `<span style="font-size:0.65rem;color:var(--red);min-width:45px;">${s.pendentes} atrasados</span>` : `<span style="font-size:0.65rem;color:var(--text-sub);min-width:45px;">Stab: ${s.avgStability}d</span>`}
+            </div>`;
+        }).join('')}
+      </div>
+      <div style="font-size:0.65rem;color:var(--text-sub);margin-top:8px;">💡 Matérias com gap menor precisam de revisão mais frequente para manter 90%+ de retenção.</div>
+    `;
+    document.getElementById('spacing-calc-widget')?.remove();
+    box.appendChild(widget);
+  } catch(e) {}
+}
+
+setTimeout(loadSpacingCalculator, 2800);
