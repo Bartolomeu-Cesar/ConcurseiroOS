@@ -1288,10 +1288,13 @@ async function loadCalendarExtras() {
         if (dia.status === 'completo') color = 'var(--green)';
         else if (dia.status === 'parcial') color = 'var(--yellow)';
         else if (dia.status === 'perdido') color = 'rgba(243,139,168,0.15)';
-        const border = dia.is_today ? 'border:1px solid var(--accent);' : '';
-        bars += `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">
+        // Dia de hoje: fundo accent com destaque forte
+        const todayBg = dia.is_today ? 'background:rgba(203,166,247,0.15);' : '';
+        const border = dia.is_today ? 'border:2px solid var(--accent);box-shadow:0 0 6px rgba(203,166,247,0.4);' : '';
+        const labelWeight = dia.is_today ? 'font-weight:800;' : 'font-weight:400;';
+        bars += `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:3px 0;border-radius:6px;${todayBg}">
           <div style="width:100%;height:${h}px;background:${color};border-radius:3px;${border}transition:height 0.3s;"></div>
-          <span style="font-size:0.6rem;color:${dia.is_today ? 'var(--accent)' : 'var(--text-sub)'};font-weight:${dia.is_today ? '700' : '400'};">${dia.nome || ''}</span>
+          <span style="font-size:0.6rem;color:${dia.is_today ? 'var(--accent)' : 'var(--text-sub)'};${labelWeight}">${dia.is_today ? '● ' + (dia.nome || '') : dia.nome || ''}</span>
         </div>`;
       }
       if (barsEl) barsEl.innerHTML = bars;
