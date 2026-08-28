@@ -12,6 +12,7 @@ let _flashOriginalTotal = 0; // Total original (pendentes + já revisados)
 let _flashSessionStart = null; // Timestamp início da sessão de revisão
 let _flashCardStart = null; // Timestamp início do card atual
 let _flashSessionSeconds = 0; // Segundos acumulados na sessão
+let _chunkPauseShown = false; // Controle para não re-mostrar pausa de chunk
 
 /**
  * Inicia o timer global automaticamente se não estiver ativo.
@@ -85,6 +86,17 @@ function showCurrentFlashcard() {
   const totalOriginal = _flashOriginalTotal || pendentes;
   const done = _flashReviewedToday + currentFlashIndex;
   const total = totalOriginal || 1;
+
+  // === CHUNKING (Miller, 1956): Pausa reflexiva a cada 5-7 cards ===
+  // Só ativa em sessões com 8+ cards, pausa a cada CHUNK_SIZE cards revisados
+  const CHUNK_SIZE = 6;
+  if (pendentes >= 8 && currentFlashIndex > 0 && currentFlashIndex < pendentes
+      && currentFlashIndex % CHUNK_SIZE === 0 && !_chunkPauseShown) {
+    _chunkPauseShown = true;
+    _showChunkPause(currentFlashIndex, pendentes);
+    return;
+  }
+  _chunkPauseShown = false;
 
   if (progressEl && totalOriginal > 0) {
     progressEl.style.display = 'block';
@@ -299,6 +311,76 @@ function _advanceAfterReview() {
       }).catch(() => {});
       _flashSessionSeconds = 0; // Reset para próximo bloco
     }
+}
+
+function _showChunkPause(cardsDone, totalPendentes) {
+  const q = document.getElementById('flash-question');
+  const a = document.getElementById('flash-answer');
+  const rb = document.getElementById('flash-reveal-btn');
+  const rv = document.getElementById('flash-review-btns');
+
+  if (a) a.style.display = 'none';
+  if (rb) rb.style.display = 'none';
+  if (rv) rv.style.display = 'none';
+
+  const blocoNum = Math.ceil(cardsDone / 6);
+  const restantes = totalPendentes - cardsDone;
+
+  // Buscar matérias dos últimos 6 cards revisados
+  const blocoCarts = flashcardsToday.slice(Math.max(0, cardsDone - 6), cardsDone);
+  const materiasBlocos = [...new Set(blocoCarts.map(c => c.materia || 'Geral'))];
+
+  q.innerHTML = `
+    <div style="text-align:center;margin-bottom:10px;">
+      <span style="font-size:1.5rem;">🧩</span>
+      <div style="font-size:0.92rem;font-weight:700;color:var(--accent);margin:4px 0;">Pausa Reflexiva — Bloco ${blocoNum} concluído!</div>
+      <div style="font-size:0.7rem;color:var(--text-sub);">Chunking (Miller, 1956): Blocos de 5-7 itens otimizam a memória de trabalho</div>
+    </div>
+    <div style="background:var(--bg-surface);border-radius:8px;padding:12px;margin-bottom:10px;">
+      <div style="font-size:0.8rem;color:var(--text);font-weight:600;margin-bottom:6px;">📊 Progresso do bloco:</div>
+      <div style="display:flex;gap:10px;margin-bottom:8px;">
+        <div style="flex:1;text-align:center;">
+          <div style="font-size:1.1rem;font-weight:700;color:var(--green);">${cardsDone}</div>
+          <div style="font-size:0.65rem;color:var(--text-sub);">Revisados</div>
+        </div>
+        <div style="flex:1;text-align:center;">
+          <div style="font-size:1.1rem;font-weight:700;color:var(--yellow);">${restantes}</div>
+          <div style="font-size:0.65rem;color:var(--text-sub);">Restantes</div>
+        </div>
+      </div>
+      <div style="font-size:0.72rem;color:var(--text-sub);">Matérias: ${materiasBlocos.join(', ')}</div>
+    </div>
+    <div style="margin-bottom:10px;">
+      <div style="font-size:0.78rem;color:var(--text);font-weight:600;margin-bottom:4px;">🤔 Mini-resumo (opcional):</div>
+      <textarea id="chunk-resumo" placeholder="O que você aprendeu neste bloco? Conceitos-chave, regras, conexões..."
+        style="width:100%;min-height:50px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-size:0.8rem;font-family:inherit;resize:vertical;"></textarea>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button onclick="continueAfterChunk()" style="flex:1;background:var(--accent);color:var(--bg);border:none;border-radius:6px;padding:10px;font-size:0.85rem;font-weight:600;cursor:pointer;">▶ Próximo bloco (${restantes} cards)</button>
+    </div>
+  `;
+}
+
+export function continueAfterChunk() {
+  // Salvar mini-resumo se preenchido
+  const resumo = document.getElementById('chunk-resumo')?.value.trim();
+  if (resumo) {
+    // Salvar como elaboração do bloco
+    const card = flashcardsToday[currentFlashIndex - 1]; // Último card do bloco
+    fetch('/api/study-intelligence/elaboration', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        flashcard_id: card ? card.id : null,
+        prompt_tipo: 'chunk_summary',
+        resposta_usuario: resumo
+      })
+    }).catch(() => {});
+    toast('📝 Mini-resumo salvo!', 'success', 1500);
+  }
+  // Continuar para o próximo card
+  _chunkPauseShown = false;
+  showCurrentFlashcard();
 }
 
 function _showElaborationPrompt(card) {
