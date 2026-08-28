@@ -88,3 +88,7 @@ initQuestoes({ loadMetas, loadStreakBadge, getConfigSessoes });
 initTabs({ carregarQuestoesDia, iniciarSessaoFlash });
 initShortcuts();
 initUI();
+
+// Cross-module integrations (sidebar reativa, mastery auto-update, desafios, etc.)
+import { initIntegrations } from './modules/integrations.js';
+initIntegrations();

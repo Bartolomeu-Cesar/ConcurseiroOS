@@ -2,6 +2,7 @@
 import { escapeHtml, toast, showLoading, showEmpty, api, undoableDelete } from './utils.js';
 import { switchTab } from './tabs.js';
 import { showFlashcardXp } from './xp-notify.js';
+import { emit } from './event-bus.js';
 
 let flashcardsToday = [], currentFlashIndex = 0;
 let flashSessao = [], flashSessaoIndex = 0, flashSessaoMode = '';
@@ -255,6 +256,9 @@ export async function reviewFlashcard(quality) {
 
     // XP real-time feedback
     showFlashcardXp(quality);
+
+    // Emitir evento para integração cross-module
+    emit('flashcard:revisado', { materia: card.materia, quality, acertou: quality >= 3 });
 
     // Feed adaptive pomodoro fatigue detection
     if (window._adaptivePomo) {

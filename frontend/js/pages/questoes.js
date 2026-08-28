@@ -4,6 +4,7 @@ import { toast } from '../modules/toast.js';
 import { handleAuthNav } from '../modules/auth.js';
 import { showQuestionXp } from '../modules/xp-notify.js';
 import { startFatigueSession, sendHeartbeat, hasActiveSession } from '../modules/fatigue-tracker.js';
+import { emit } from '../modules/event-bus.js';
 window.handleAuthNav = handleAuthNav;
 
 // Tab navigation
@@ -294,6 +295,9 @@ async function confirmarResposta() {
       sendHeartbeat(tempoSegundos * 1000, res.acertou);
     });
   }
+
+  // Emitir evento para integração cross-module
+  emit('questao:respondida', { materia: currentQuestao?.materia, acertou: res.acertou, tempo_seg: tempoSegundos });
 
   // Marcar correta/errada visualmente
   const isCertoErrado = document.querySelector('.alternativa.ce-btn') !== null;

@@ -2,6 +2,7 @@
 import { escapeHtml, toast } from './utils.js';
 import { switchTab } from './tabs.js';
 import { showQuestionXp } from './xp-notify.js';
+import { emit } from './event-bus.js';
 
 let questoesDia = [], qDiaIdx = 0, qDiaAcertos = 0;
 let qDiaStartTime = null; // Timestamp de quando a questão foi exibida
@@ -115,6 +116,9 @@ export async function responderQuestaoDia(letra) {
 
   // XP real-time feedback
   showQuestionXp(acertou);
+
+  // Emitir evento para integração cross-module
+  emit('questao:respondida', { materia: q.materia, acertou, tempo_seg: tempoSegundos });
 
   // Feed adaptive pomodoro fatigue detection
   if (window._adaptivePomo) {

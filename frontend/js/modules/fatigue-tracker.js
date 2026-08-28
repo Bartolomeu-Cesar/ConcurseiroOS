@@ -17,6 +17,7 @@
  */
 
 import { showToast } from './toast.js';
+import { emit } from './event-bus.js';
 
 let _sessionId = null;
 let _questaoNum = 0;
@@ -95,6 +96,11 @@ function _handleFatigueAlert(res) {
   if (!res || !res.status) return;
 
   const { status, sugestao, metricas } = res;
+
+  // Emitir evento para integração cross-module
+  if (status !== 'flow') {
+    emit('fadiga:detectada', { nivel: status, sugestao, metricas });
+  }
 
   // Alerta leve — mostrar apenas uma vez
   if (status === 'fadiga_leve' && !_alertShown.leve) {
