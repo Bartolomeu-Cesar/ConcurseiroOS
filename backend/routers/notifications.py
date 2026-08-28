@@ -63,15 +63,23 @@ def _get_vapid_keys() -> tuple[str, str]:
     # Generate new VAPID keys
     try:
         from py_vapid import Vapid
+        from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+        import base64 as b64
+
         vapid = Vapid()
         vapid.generate_keys()
-        private_key = vapid.private_pem().decode("utf-8")
-        public_key = vapid.public_key_urlsafe_base64()
+        # Public key: uncompressed EC P-256 point (65 bytes) in base64url
+        pub_raw = vapid.public_key.public_bytes(Encoding.X962, PublicFormat.UncompressedPoint)
+        public_key = b64.urlsafe_b64encode(pub_raw).rstrip(b"=").decode()
+        # Private key: raw 32 bytes in base64url
+        priv_numbers = vapid.private_key.private_numbers()
+        priv_raw = priv_numbers.private_value.to_bytes(32, "big")
+        private_key = b64.urlsafe_b64encode(priv_raw).rstrip(b"=").decode()
     except ImportError:
-        # Fallback: generate a placeholder - user must provide real keys
-        log.warning("py_vapid not available - generating placeholder VAPID keys")
-        private_key = secrets.token_urlsafe(32)
-        public_key = secrets.token_urlsafe(65)
+        # Fallback: generate placeholder - push won't work without real keys
+        log.warning("py_vapid/cryptography not available - push notifications disabled")
+        private_key = ""
+        public_key = ""
 
     try:
         _VAPID_PRIVATE_KEY_FILE.write_text(private_key)
