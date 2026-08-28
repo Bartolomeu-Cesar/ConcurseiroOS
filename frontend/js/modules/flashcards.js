@@ -14,6 +14,7 @@ let _flashCardStart = null; // Timestamp início do card atual
 let _flashSessionSeconds = 0; // Segundos acumulados na sessão
 let _chunkPauseShown = false; // Controle para não re-mostrar pausa de chunk
 let _examMode = false; // Encoding Specificity: modo prova sem ajudas
+let _productionCount = 0; // Production Effect: contador para hint de ler em voz alta
 
 /**
  * Inicia o timer global automaticamente se não estiver ativo.
@@ -217,6 +218,21 @@ export function revealAnswer() {
   document.getElementById('flash-reveal-btn').style.display = 'none';
   document.getElementById('flash-confidence-area')?.remove();
   document.getElementById('flash-generation-area')?.remove();
+
+  // === PRODUCTION EFFECT (MacLeod 2010) ===
+  // Ler em voz alta melhora encoding em 10-15% vs ler silenciosamente
+  // Mostrar hint sutil a cada 4 cards (não em todo card para não irritar)
+  _productionCount = (_productionCount || 0) + 1;
+  if (!_examMode && _productionCount % 4 === 1) {
+    const answerEl = document.getElementById('flash-answer');
+    if (answerEl) {
+      const hint = document.createElement('div');
+      hint.id = 'production-hint';
+      hint.style.cssText = 'font-size:0.65rem;color:var(--accent);text-align:center;margin-top:6px;opacity:0.8;';
+      hint.innerHTML = '🔊 <em>Leia a resposta em voz alta — melhora memória em 15% (MacLeod, 2010)</em>';
+      answerEl.parentElement.insertBefore(hint, answerEl.nextSibling);
+    }
+  }
 
   // Auto-start global timer if not already running
   _autoStartTimerIfNeeded('Flashcards (Revisão)');
