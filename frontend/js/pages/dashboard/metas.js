@@ -95,6 +95,10 @@ export async function loadMetaDetails() {
       const materias = {};
       pendentes.forEach(f => { const m = f.materia || 'Sem matéria'; materias[m] = (materias[m] || 0) + 1; });
 
+      // Total original por matéria (pendentes + revisados = original)
+      // Buscar do streak quantos por matéria já foram revisados (aproximação)
+      const totalOriginal = totalPendentes + revisados;
+
       let html = `<div style="font-weight:600;color:var(--text);margin-bottom:6px;">🧠 Status dos flashcards:</div>`;
       html += `<div style="display:flex;gap:16px;margin-bottom:8px;">
         <div style="background:var(--bg-surface);border-radius:8px;padding:8px 12px;flex:1;text-align:center;">
@@ -103,16 +107,25 @@ export async function loadMetaDetails() {
         </div>
         <div style="background:var(--bg-surface);border-radius:8px;padding:8px 12px;flex:1;text-align:center;">
           <div style="font-size:1.1rem;font-weight:700;color:var(--yellow);">${totalPendentes}</div>
-          <div style="font-size:0.7rem;">Pendentes ainda</div>
+          <div style="font-size:0.7rem;">Restantes</div>
+        </div>
+        <div style="background:var(--bg-surface);border-radius:8px;padding:8px 12px;flex:1;text-align:center;">
+          <div style="font-size:1.1rem;font-weight:700;color:var(--blue);">${totalOriginal}</div>
+          <div style="font-size:0.7rem;">Total do dia</div>
         </div>
       </div>`;
 
       if (Object.keys(materias).length > 0) {
-        html += '<div style="font-size:0.75rem;color:var(--text-muted);">Pendentes por matéria <span style="font-size:0.65rem;">(clique para revisar)</span>:</div>';
+        html += '<div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">Restantes por matéria <span style="font-size:0.65rem;">(clique para revisar)</span>:</div>';
         html += Object.entries(materias).sort((a,b) => b[1]-a[1]).slice(0, 5).map(([m, c]) =>
-          `<div onclick="window._startFlashByMateria('${m.replace(/'/g, "\\'")}')" style="display:flex;justify-content:space-between;padding:4px 6px;cursor:pointer;border-radius:6px;transition:background 0.2s;" onmouseover="this.style.background='var(--bg-elevated)'" onmouseout="this.style.background='transparent'" title="Revisar ${c} flashcards de ${m}"><span>📚 ${m}</span><span style="color:var(--accent);font-weight:600;">${c}</span></div>`
+          `<div onclick="window._startFlashByMateria('${m.replace(/'/g, "\\'")}')" style="display:flex;justify-content:space-between;align-items:center;padding:4px 6px;cursor:pointer;border-radius:6px;transition:background 0.2s;" onmouseover="this.style.background='var(--bg-elevated)'" onmouseout="this.style.background='transparent'" title="Revisar ${c} flashcards restantes de ${m}"><span>📚 ${m}</span><span style="color:var(--accent);font-weight:600;">${c} restantes</span></div>`
         ).join('');
       }
+
+      if (totalPendentes === 0 && revisados > 0) {
+        html += `<div style="text-align:center;padding:8px;color:var(--green);font-weight:600;font-size:0.85rem;">🎉 Todos revisados hoje! Parabéns!</div>`;
+      }
+
       flashEl.innerHTML = html;
     }
   } catch (e) {
