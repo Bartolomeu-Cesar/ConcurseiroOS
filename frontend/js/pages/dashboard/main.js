@@ -2343,3 +2343,147 @@ async function loadForgettingAlerts() {
 
 // Chamar após loadSiTechniquesAlerts (que usa setTimeout 1200ms)
 setTimeout(loadForgettingAlerts, 1800);
+
+
+// ============================================================
+// MINIMUM DOSE — Quanto estudar por dia no mínimo
+// ============================================================
+
+async function loadMinimumDose() {
+  const box = document.getElementById('si-techniques-alerts');
+  if (!box) return;
+
+  try {
+    const data = await fetch('/api/study-intelligence/minimum-dose').then(r => r.ok ? r.json() : null);
+    if (!data || !data.materias || data.materias.length === 0) return;
+
+    const catEmoji = { intensivo: '🔴', investimento: '🟠', inicial: '🟡', reforco: '🔵', manutencao: '🟢' };
+    const catLabel = { intensivo: 'Intensivo', investimento: 'Investimento', inicial: 'Inicial', reforco: 'Reforço', manutencao: 'Manutenção' };
+
+    const widget = document.createElement('div');
+    widget.id = 'minimum-dose-widget';
+    widget.style.cssText = 'background:var(--bg-surface, #313244);border-radius:10px;padding:14px;margin-bottom:10px;border-left:4px solid var(--green, #a6e3a1);';
+    widget.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <span style="font-size:0.85rem;font-weight:700;color:var(--text);">💊 Dose Mínima por Matéria</span>
+        <span style="font-size:0.68rem;color:var(--text-sub);background:var(--bg);padding:3px 8px;border-radius:6px;">${data.total_minutos_alocados}min total</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        ${data.materias.slice(0, 6).map(m => `
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:0.75rem;">${catEmoji[m.categoria] || '⚪'}</span>
+            <span style="flex:1;font-size:0.78rem;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${m.materia}</span>
+            <span style="font-size:0.72rem;font-weight:700;color:var(--accent);min-width:40px;text-align:right;">${m.minutos_alocados}min</span>
+            <span style="font-size:0.65rem;color:var(--text-sub);min-width:50px;">${catLabel[m.categoria]}</span>
+          </div>
+        `).join('')}
+      </div>
+      ${data.dica ? `<div style="font-size:0.72rem;color:var(--text-sub);margin-top:8px;font-style:italic;">💡 ${data.dica}</div>` : ''}
+    `;
+    // Remove anterior se existir
+    document.getElementById('minimum-dose-widget')?.remove();
+    box.appendChild(widget);
+  } catch(e) {}
+}
+
+setTimeout(loadMinimumDose, 2000);
+
+// ============================================================
+// KNOWLEDGE GRAPH OPTIMAL ORDER — Ordem ótima de estudo
+// ============================================================
+
+async function loadOptimalOrder() {
+  const box = document.getElementById('si-techniques-alerts');
+  if (!box) return;
+
+  try {
+    const data = await fetch('/api/knowledge-graph/optimal-order?limit=8').then(r => r.ok ? r.json() : null);
+    if (!data || !data.ordem || data.ordem.length === 0) return;
+
+    const widget = document.createElement('div');
+    widget.id = 'optimal-order-widget';
+    widget.style.cssText = 'background:var(--bg-surface, #313244);border-radius:10px;padding:14px;margin-bottom:10px;border-left:4px solid var(--accent, #cba6f7);';
+
+    const statusIcon = { 'Não iniciado': '⬜', 'Em andamento': '🟡', 'Concluído': '✅' };
+
+    widget.innerHTML = `
+      <div style="font-size:0.85rem;font-weight:700;color:var(--text);margin-bottom:10px;">🗺️ Ordem Ótima de Estudo (por dependências)</div>
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        ${data.ordem.slice(0, 8).map((t, i) => `
+          <div style="display:flex;align-items:center;gap:8px;padding:4px 0;${t.bloqueado ? 'opacity:0.5;' : ''}">
+            <span style="font-size:0.72rem;color:var(--text-sub);min-width:20px;text-align:right;font-weight:600;">${i + 1}.</span>
+            <span style="font-size:0.8rem;">${statusIcon[t.status] || '⬜'}</span>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:0.78rem;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${t.topico}</div>
+              <div style="font-size:0.65rem;color:var(--text-sub);">${t.materia}${t.desbloqueios > 0 ? ` · 🔓 desbloqueia ${t.desbloqueios}` : ''}</div>
+            </div>
+            ${t.bloqueado ? '<span style="font-size:0.65rem;color:var(--red, #f38ba8);">🔒</span>' : ''}
+          </div>
+        `).join('')}
+      </div>
+      <div style="font-size:0.68rem;color:var(--text-sub);margin-top:8px;">📐 Baseado em pré-requisitos + impacto de desbloqueio + status atual</div>
+    `;
+    document.getElementById('optimal-order-widget')?.remove();
+    box.appendChild(widget);
+  } catch(e) {}
+}
+
+setTimeout(loadOptimalOrder, 2200);
+
+// ============================================================
+// OVERCONFIDENCE DETECTION — Alerta de calibração metacognitiva
+// ============================================================
+
+async function loadOverconfidenceAlert() {
+  const box = document.getElementById('si-techniques-alerts');
+  if (!box) return;
+
+  try {
+    const data = await fetch('/api/study-intelligence/overconfidence').then(r => r.ok ? r.json() : null);
+    if (!data || data.ilusoes_de_saber === 0) return;  // Só mostra se há problema
+
+    const widget = document.createElement('div');
+    widget.id = 'overconfidence-widget';
+    widget.style.cssText = 'background:var(--bg-surface, #313244);border-radius:10px;padding:14px;margin-bottom:10px;border-left:4px solid var(--red, #f38ba8);';
+
+    const top3 = data.top5_overconfidence.slice(0, 3);
+
+    widget.innerHTML = `
+      <div style="font-size:0.85rem;font-weight:700;color:var(--text);margin-bottom:6px;">🎭 Alerta: Ilusão de Saber</div>
+      <div style="font-size:0.78rem;color:var(--text-sub);margin-bottom:10px;">${data.alerta_geral}</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        ${top3.map(m => {
+          const barConf = Math.round(m.confianca_pct);
+          const barAcerto = Math.round(m.pct_acerto);
+          return `
+            <div style="padding:8px;background:var(--bg, #1e1e2e);border-radius:8px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                <span style="font-size:0.78rem;font-weight:600;color:var(--text);">${m.materia}</span>
+                <span style="font-size:0.68rem;padding:2px 6px;border-radius:4px;background:${m.status === 'ilusão de saber' ? 'rgba(243,139,168,0.2)' : 'rgba(249,226,175,0.2)'};color:${m.status === 'ilusão de saber' ? 'var(--red)' : 'var(--yellow)'};">${m.status}</span>
+              </div>
+              <div style="display:flex;gap:4px;align-items:center;margin-bottom:3px;">
+                <span style="font-size:0.65rem;color:var(--text-sub);min-width:55px;">Confiança:</span>
+                <div style="flex:1;height:5px;background:var(--border);border-radius:3px;overflow:hidden;">
+                  <div style="height:100%;width:${barConf}%;background:var(--accent, #cba6f7);border-radius:3px;"></div>
+                </div>
+                <span style="font-size:0.65rem;color:var(--text-sub);min-width:30px;text-align:right;">${barConf}%</span>
+              </div>
+              <div style="display:flex;gap:4px;align-items:center;">
+                <span style="font-size:0.65rem;color:var(--text-sub);min-width:55px;">Acerto real:</span>
+                <div style="flex:1;height:5px;background:var(--border);border-radius:3px;overflow:hidden;">
+                  <div style="height:100%;width:${barAcerto}%;background:var(--green, #a6e3a1);border-radius:3px;"></div>
+                </div>
+                <span style="font-size:0.65rem;color:var(--text-sub);min-width:30px;text-align:right;">${barAcerto}%</span>
+              </div>
+              ${m.sugestoes.length > 0 ? `<div style="font-size:0.68rem;color:var(--yellow);margin-top:6px;">${m.sugestoes[0]}</div>` : ''}
+            </div>`;
+        }).join('')}
+      </div>
+      <div style="font-size:0.68rem;color:var(--text-sub);margin-top:8px;">💡 ${data.dica_metodologica}</div>
+    `;
+    document.getElementById('overconfidence-widget')?.remove();
+    box.appendChild(widget);
+  } catch(e) {}
+}
+
+setTimeout(loadOverconfidenceAlert, 2400);
