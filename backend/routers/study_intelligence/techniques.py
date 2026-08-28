@@ -3193,3 +3193,79 @@ def brain_dump_historico(
             "tendencia": "melhorando" if len(items) >= 2 and items[0]["palavras"] > items[-1]["palavras"] else "estável",
         },
     }
+
+
+# ============================================================
+# TESTING BOUNDARIES — Bjork (2011) Zona Ótima de Aprendizado
+# ============================================================
+
+@router.get("/api/study-intelligence/testing-boundaries", summary="Testing Boundaries — Zona Ótima de Aprendizado",
+            description="""Identifica flashcards na zona ótima de aprendizado (quality médio 2-3 = quase acertou).
+Evidência: Bjork (2011) — Testar nos limites do conhecimento (nem fácil demais, nem impossível)
+produz o máximo de aprendizado. Cards com quality 2-3 são os que mais beneficiam de revisão.""")
+def testing_boundaries(
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Retorna análise da zona ótima de aprendizado."""
+    from datetime import date, timedelta
+    hoje = date.today().isoformat()
+    uma_semana = (date.today() - timedelta(days=7)).isoformat()
+
+    # Buscar flashcards revisados na última semana com quality médio
+    rows = conn.execute("""
+        SELECT f.id, f.materia, f.pergunta, f.stability, f.difficulty,
+               AVG(CASE WHEN fr.quality IS NOT NULL THEN fr.quality ELSE 3 END) as avg_quality,
+               COUNT(fr.id) as revisoes_semana
+        FROM flashcards f
+        LEFT JOIN (
+            SELECT flashcard_id, quality, id FROM flashcards_reviews
+            WHERE user_id = ? AND created_at >= ?
+        ) fr ON f.id = fr.flashcard_id
+        WHERE f.user_id = ? AND f.stability > 0
+        GROUP BY f.id
+        HAVING revisoes_semana > 0
+    """, (user_id, uma_semana, user_id)).fetchall()
+
+    # Se não tiver tabela flashcards_reviews, usar fallback com difficulty
+    if not rows:
+        rows = conn.execute("""
+            SELECT id, materia, pergunta, stability, difficulty
+            FROM flashcards
+            WHERE user_id = ? AND stability > 0 AND difficulty > 0
+        """, (user_id,)).fetchall()
+        # Classificar por difficulty (0.3-0.7 = zona ótima)
+        zona_otima = [dict(r) for r in rows if 0.3 <= (r["difficulty"] or 0) <= 0.7]
+        zona_facil = [dict(r) for r in rows if (r["difficulty"] or 0) < 0.3]
+        zona_dificil = [dict(r) for r in rows if (r["difficulty"] or 0) > 0.7]
+    else:
+        items = [dict(r) for r in rows]
+        zona_otima = [i for i in items if 2.0 <= (i.get("avg_quality") or 3) <= 3.5]
+        zona_facil = [i for i in items if (i.get("avg_quality") or 3) > 3.5]
+        zona_dificil = [i for i in items if (i.get("avg_quality") or 3) < 2.0]
+
+    total = len(zona_otima) + len(zona_facil) + len(zona_dificil)
+    pct_otima = round(len(zona_otima) / total * 100) if total > 0 else 0
+
+    # Matérias na zona ótima
+    materias_otima = {}
+    for item in zona_otima:
+        m = item.get("materia") or "Geral"
+        materias_otima[m] = materias_otima.get(m, 0) + 1
+
+    return {
+        "zona_otima": len(zona_otima),
+        "zona_facil": len(zona_facil),
+        "zona_dificil": len(zona_dificil),
+        "total_analisados": total,
+        "pct_zona_otima": pct_otima,
+        "materias_zona_otima": dict(sorted(materias_otima.items(), key=lambda x: -x[1])[:5]),
+        "recomendacao": (
+            "🎯 Ótimo! Maioria dos cards está na zona de máximo aprendizado."
+            if pct_otima >= 40 else
+            "⚠️ Poucos cards na zona ótima. Ajuste a dificuldade ou adicione mais cards intermediários."
+            if pct_otima < 20 else
+            "✅ Boa distribuição. Continue revisando os cards de dificuldade média."
+        ),
+        "explicacao": "Cards na 'zona ótima' (quality 2-3 / difficulty 0.3-0.7) são os que mais aprendem por sessão. Nem tão fáceis que desperdiçam tempo, nem tão difíceis que frustram.",
+    }
