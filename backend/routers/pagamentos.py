@@ -142,6 +142,92 @@ def criar_pix(
     }
 
 
+@router.post("/pix/vitalicio", summary="Criar cobrança PIX para plano Vitalício",
+             description="Gera QR Code PIX para pagamento único do plano Vitalício (R$97). Só disponível durante janela de venda.")
+def criar_pix_vitalicio(
+    body: dict = Body(default={}),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Cria pagamento PIX para plano Vitalício.
+
+    Verifica se a janela de venda está aberta antes de permitir a compra.
+    body: {email: str (opcional)}
+    """
+    from plans import is_vitalicio_disponivel, PLANS
+
+    # Verificar janela de venda
+    janela = is_vitalicio_disponivel()
+    if not janela["disponivel"]:
+        raise HTTPException(status_code=403, detail=janela["motivo"])
+
+    # Verificar se já é vitalício
+    user = conn.execute("SELECT plano FROM users WHERE id = ?", (user_id,)).fetchone()
+    if user and user[0] == "ilimitado":
+        raise HTTPException(status_code=400, detail="Você já possui o plano Vitalício!")
+
+    email = body.get("email", "")
+    valor = 97.00  # Preço fixo do vitalício
+
+    # Criar pagamento no Mercado Pago
+    sdk = _get_mp_sdk()
+    payment_data = {
+        "transaction_amount": valor,
+        "description": "ConcurseiroOS: Plano Vitalício — Acesso permanente",
+        "payment_method_id": "pix",
+        "payer": {
+            "email": email or f"user{user_id}@concurseiroos.app",
+        },
+        "metadata": {
+            "user_id": user_id,
+            "tipo": "vitalicio",
+        },
+        "date_of_expiration": (datetime.now(timezone.utc) + timedelta(minutes=30)).strftime("%Y-%m-%dT%H:%M:%S.000-03:00"),
+    }
+
+    payment_response = sdk.payment().create(payment_data)
+    payment = payment_response.get("response", {})
+
+    if payment_response.get("status") not in (200, 201):
+        log.error(f"Erro ao criar PIX vitalício: {payment_response}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao criar pagamento: {payment.get('message', 'Erro desconhecido')}"
+        )
+
+    pix_info = payment.get("point_of_interaction", {}).get("transaction_data", {})
+    qr_code = pix_info.get("qr_code", "")
+    qr_code_base64 = pix_info.get("qr_code_base64", "")
+    ticket_url = pix_info.get("ticket_url", "")
+    payment_id = payment.get("id")
+
+    # Salvar pagamento pendente
+    try:
+        conn.execute("""
+            INSERT INTO pagamentos (user_id, payment_id, tipo, creditos, valor, status, created_at)
+            VALUES (?, ?, 'pix_vitalicio', 0, ?, 'pending', ?)
+        """, (user_id, str(payment_id), valor, datetime.now(timezone.utc).isoformat()))
+        conn.commit()
+    except Exception as e:
+        log.warning(f"Erro ao salvar pagamento vitalício: {e}")
+
+    log.info(f"PIX vitalício criado: user={user_id} valor=R${valor} payment_id={payment_id}")
+
+    return {
+        "ok": True,
+        "payment_id": payment_id,
+        "valor": valor,
+        "tipo": "vitalicio",
+        "pix": {
+            "qr_code": qr_code,
+            "qr_code_base64": qr_code_base64,
+            "ticket_url": ticket_url,
+        },
+        "expira_em": "30 minutos",
+        "mensagem": f"Escaneie o QR Code ou copie o código PIX. R${valor:.2f} — Acesso Vitalício permanente!",
+    }
+
+
 @router.get("/status/{payment_id}", summary="Verificar status do pagamento")
 def status_pagamento(
     payment_id: str,
@@ -296,6 +382,25 @@ def _creditar_pagamento(conn, user_id: int, payment_id: str, payment: dict):
         pass
 
     metadata = payment.get("metadata", {})
+
+    # === TIPO VITALÍCIO: Ativar plano ilimitado diretamente ===
+    if metadata.get("tipo") == "vitalicio":
+        conn.execute(
+            "UPDATE users SET plano = 'ilimitado', plano_expira = 'vitalicio' WHERE id = ?",
+            (user_id,)
+        )
+        try:
+            conn.execute(
+                "UPDATE pagamentos SET status = 'approved' WHERE payment_id = ? AND user_id = ?",
+                (payment_id, user_id)
+            )
+        except Exception:
+            pass
+        conn.commit()
+        log.info(f"Plano Vitalício ativado: user={user_id} via PIX #{payment_id}")
+        return
+
+    # === TIPO CRÉDITOS: Converter em dias Premium ===
     creditos = metadata.get("creditos", 0)
 
     if not creditos:

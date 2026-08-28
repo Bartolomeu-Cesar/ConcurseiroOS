@@ -349,6 +349,74 @@ def check_and_expire_plan(conn, user_id: int, user: dict) -> str:
     return plano
 
 
+# ==================== JANELA DE VENDA DO VITALÍCIO ====================
+
+
+def is_vitalicio_disponivel() -> dict:
+    """Verifica se o plano Vitalício está disponível para compra.
+
+    Retorna dict com:
+    - disponivel: bool
+    - motivo: str (mensagem para o usuário)
+    - inicio: str (data de início da próxima/atual janela)
+    - fim: str (data de fim da próxima/atual janela)
+    """
+    from settings import settings
+    from datetime import date
+
+    inicio_str = settings.VITALICIO_VENDA_INICIO
+    fim_str = settings.VITALICIO_VENDA_FIM
+
+    # Se não configurado, sempre disponível (modo dev)
+    if not inicio_str or not fim_str:
+        return {
+            "disponivel": True,
+            "motivo": "Plano Vitalício disponível.",
+            "inicio": "",
+            "fim": "",
+            "sempre_disponivel": True,
+        }
+
+    try:
+        inicio = date.fromisoformat(inicio_str)
+        fim = date.fromisoformat(fim_str)
+    except (ValueError, TypeError):
+        # Config inválida → disponível por segurança
+        return {"disponivel": True, "motivo": "Configuração inválida — disponível.", "inicio": inicio_str, "fim": fim_str, "sempre_disponivel": False}
+
+    hoje = date.today()
+
+    if inicio <= hoje <= fim:
+        dias_restantes = (fim - hoje).days
+        return {
+            "disponivel": True,
+            "motivo": f"🔥 Oferta Vitalício disponível! Faltam {dias_restantes} dia(s) para encerrar.",
+            "inicio": inicio_str,
+            "fim": fim_str,
+            "dias_restantes": dias_restantes,
+            "sempre_disponivel": False,
+        }
+    elif hoje < inicio:
+        dias_para_abrir = (inicio - hoje).days
+        return {
+            "disponivel": False,
+            "motivo": f"⏳ Plano Vitalício abre em {dias_para_abrir} dia(s) ({inicio.strftime('%d/%m/%Y')}).",
+            "inicio": inicio_str,
+            "fim": fim_str,
+            "dias_para_abrir": dias_para_abrir,
+            "sempre_disponivel": False,
+        }
+    else:
+        # Já passou a janela
+        return {
+            "disponivel": False,
+            "motivo": "❌ Período de venda do Vitalício encerrado. Aguarde a próxima janela.",
+            "inicio": inicio_str,
+            "fim": fim_str,
+            "sempre_disponivel": False,
+        }
+
+
 # ==================== SISTEMA DE CRÉDITOS ====================
 # 1 crédito = 3 dias de acesso Premium
 # 10 créditos = 30 dias (1 mês)

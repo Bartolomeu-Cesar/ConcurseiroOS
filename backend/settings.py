@@ -128,5 +128,11 @@ class Settings:
     MERCADO_PAGO_WEBHOOK_SECRET: str = os.environ.get("MERCADO_PAGO_WEBHOOK_SECRET", "")
     PIX_CHAVE: str = os.environ.get("PIX_CHAVE", "99981368527")
 
+    # Janela de venda do plano Vitalício (ISO format: YYYY-MM-DD)
+    # Fora do período entre INICIO e FIM, o plano Vitalício não pode ser adquirido.
+    # Deixar vazio = sempre disponível (para testes/dev).
+    VITALICIO_VENDA_INICIO: str = os.environ.get("VITALICIO_VENDA_INICIO", "")  # ex: "2026-09-01"
+    VITALICIO_VENDA_FIM: str = os.environ.get("VITALICIO_VENDA_FIM", "")        # ex: "2026-09-07"
+
 
 settings = Settings()

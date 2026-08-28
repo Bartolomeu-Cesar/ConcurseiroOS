@@ -445,6 +445,14 @@ def list_plans():
     ]
 
 
+@router.get("/vitalicio-status", summary="Disponibilidade do plano Vitalício",
+            description="Retorna se o plano Vitalício está disponível para compra no período atual.")
+def vitalicio_status():
+    """Verifica se o plano Vitalício está na janela de venda."""
+    from plans import is_vitalicio_disponivel
+    return is_vitalicio_disponivel()
+
+
 @router.get("/my-plan")
 def my_plan(user=Depends(get_optional_user)):
     """Retorna o plano e limites do usuário atual."""
@@ -482,6 +490,7 @@ def upgrade_plan(body: UpgradePlanRequest, user=Depends(get_current_user), conn=
         if plano == "premium":
             expires = "vitalicio" if body.vitalicio else (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
         elif plano == "ilimitado":
+            # Admin ignora janela de venda
             expires = "vitalicio"
         else:
             expires = ""

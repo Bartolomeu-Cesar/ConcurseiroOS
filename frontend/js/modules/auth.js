@@ -154,7 +154,7 @@ export function showUpgradeModal() {
             <li>&nbsp;</li>
             <li>&nbsp;</li>
           </ul>
-          ${currentPlan === 'ilimitado' ? '<div style="margin-top:10px;padding:6px;border:1px solid #a6e3a1;border-radius:6px;font-size:0.75rem;color:#a6e3a1;font-weight:600;">✓ Plano Atual</div>' : `<button onclick="doUpgrade('ilimitado')" style="width:100%;margin-top:10px;padding:10px;border:none;border-radius:6px;background:#a6e3a1;color:#1e1e2e;font-size:0.82rem;font-weight:600;cursor:pointer;">Comprar Vitalício</button>`}
+          ${currentPlan === 'ilimitado' ? '<div style="margin-top:10px;padding:6px;border:1px solid #a6e3a1;border-radius:6px;font-size:0.75rem;color:#a6e3a1;font-weight:600;">✓ Plano Atual</div>' : `<div id="vitalicio-btn-container" style="margin-top:10px;"><button disabled style="width:100%;padding:10px;border:none;border-radius:6px;background:#45475a;color:#9399b2;font-size:0.78rem;cursor:wait;">⏳ Verificando disponibilidade...</button></div>`}
         </div>
       </div>
       <p style="text-align:center;font-size:0.72rem;color:#585b70;margin-top:12px;">Pagamento seguro • Cancele quando quiser • Satisfação garantida</p>
@@ -200,6 +200,7 @@ export function showUpgradeModal() {
   document.body.appendChild(overlay);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
   _loadCreditosSaldo();
+  _loadVitalicioStatus();
 }
 
 export async function doUpgrade(plano) {
@@ -506,10 +507,68 @@ async function _loadCreditosSaldo() {
 // Carregar saldo quando modal abre (chamado pelo showUpgradeModal via event)
 export function loadCreditosSaldo() { _loadCreditosSaldo(); }
 
+// ==================== VITALÍCIO — JANELA DE VENDA ====================
+
+async function _loadVitalicioStatus() {
+  const container = document.getElementById('vitalicio-btn-container');
+  if (!container) return;
+
+  try {
+    const res = await fetch('/api/auth/vitalicio-status');
+    const data = await res.json();
+
+    if (data.disponivel) {
+      container.innerHTML = `
+        <button onclick="comprarVitalicio()" style="width:100%;padding:10px;border:none;border-radius:6px;background:#a6e3a1;color:#1e1e2e;font-size:0.82rem;font-weight:600;cursor:pointer;">💎 Comprar Vitalício</button>
+        ${data.dias_restantes != null ? `<div style="font-size:0.65rem;color:#f9e2af;margin-top:4px;text-align:center;">⏳ ${data.dias_restantes} dia(s) restantes!</div>` : ''}
+      `;
+    } else {
+      container.innerHTML = `
+        <div style="padding:8px;border:1px solid #45475a;border-radius:6px;text-align:center;">
+          <div style="font-size:0.75rem;color:#9399b2;">${data.motivo}</div>
+          ${data.inicio ? `<div style="font-size:0.65rem;color:#585b70;margin-top:4px;">Período: ${data.inicio} a ${data.fim}</div>` : ''}
+        </div>
+      `;
+    }
+  } catch(e) {
+    // Erro de rede: permitir (fallback)
+    container.innerHTML = `<button onclick="comprarVitalicio()" style="width:100%;padding:10px;border:none;border-radius:6px;background:#a6e3a1;color:#1e1e2e;font-size:0.82rem;font-weight:600;cursor:pointer;">💎 Comprar Vitalício</button>`;
+  }
+}
+
+export async function comprarVitalicio() {
+  try {
+    const token = getToken();
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch('/api/pagamentos/pix/vitalicio', {
+      method: 'POST', headers, body: JSON.stringify({})
+    });
+    const data = await res.json();
+
+    if (res.status === 403) {
+      const _toast = window.toast || window.showToast;
+      if (_toast) _toast(data.detail || 'Vitalício não disponível no momento.', 'warning');
+      return;
+    }
+
+    if (data.ok && data.pix) {
+      _showPixQRCode({ ...data, creditos: 0, dias: '∞ (permanente)' });
+    } else {
+      const _toast = window.toast || window.showToast;
+      if (_toast) _toast(data.detail || 'Erro ao criar pagamento', 'error');
+    }
+  } catch(e) {
+    const _toast = window.toast || window.showToast;
+    if (_toast) _toast('Erro de conexão', 'error');
+  }
+}
+
 // ==================== EXPOR NO WINDOW ====================
 // Funções usadas em onclick inline gerados dinamicamente (modais/menus).
 // Necessário em TODAS as páginas que importem auth.js (regra #4).
 Object.assign(window, {
-  showUpgradeModal, doUpgrade, comprarCreditos, ativarCreditos,
+  showUpgradeModal, doUpgrade, comprarCreditos, ativarCreditos, comprarVitalicio,
   showEditProfileModal, saveProfile, logout, handleAuthNav,
 });
