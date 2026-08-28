@@ -433,6 +433,34 @@ def _m51_pagamentos(conn):
     log.info("Migration: created pagamentos table")
 
 
+def _m52_pdf_organizacao_virtual(conn):
+    """Create virtual folder organization for PDFs (per user)."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS pdf_pastas_virtuais (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL DEFAULT 1,
+            nome TEXT NOT NULL,
+            parent_id INTEGER DEFAULT NULL,
+            posicao INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (parent_id) REFERENCES pdf_pastas_virtuais(id)
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_pdf_pastas_user ON pdf_pastas_virtuais(user_id)")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS pdf_organizacao (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL DEFAULT 1,
+            pdf_path TEXT NOT NULL,
+            pasta_virtual_id INTEGER DEFAULT NULL,
+            posicao INTEGER DEFAULT 0,
+            FOREIGN KEY (pasta_virtual_id) REFERENCES pdf_pastas_virtuais(id)
+        )
+    """)
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_pdf_org_user_path ON pdf_organizacao(user_id, pdf_path)")
+    log.info("Migration: created pdf_pastas_virtuais + pdf_organizacao tables")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -485,6 +513,7 @@ MIGRATIONS = [
     (49, _m49_questoes_texto_base),
     (50, _m50_creditos_users),
     (51, _m51_pagamentos),
+    (52, _m52_pdf_organizacao_virtual),
 ]
 
 

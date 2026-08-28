@@ -2,7 +2,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from database import get_db_session
@@ -208,3 +208,167 @@ def delete_pdf(path: str, conn=Depends(get_db_session), user_id: int = Depends(g
     conn.execute("DELETE FROM progress WHERE path = ? AND user_id = ?", (path, user_id))
     conn.commit()
     return {"ok": True, "deleted": path}
+
+
+# ==================== ORGANIZAÇÃO VIRTUAL DE PDFS ====================
+# Pastas virtuais por usuário (não move arquivos reais)
+
+@router.get("/api/pdf/organizacao", summary="Árvore organizada pelo usuário",
+            description="Retorna a árvore de PDFs reorganizada pelo usuário com pastas virtuais.")
+def get_organizacao(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Retorna árvore real + overlay de organização virtual do usuário."""
+    from utils import build_tree
+
+    # Árvore real do filesystem
+    tree_real = build_tree(PDF_ROOT) if Path(PDF_ROOT).exists() else []
+
+    # Buscar pastas virtuais do usuário
+    pastas = conn.execute(
+        "SELECT id, nome, parent_id, posicao FROM pdf_pastas_virtuais WHERE user_id = ? ORDER BY posicao",
+        (user_id,)
+    ).fetchall()
+
+    # Buscar mapeamento de PDFs para pastas virtuais
+    org = conn.execute(
+        "SELECT pdf_path, pasta_virtual_id, posicao FROM pdf_organizacao WHERE user_id = ? ORDER BY posicao",
+        (user_id,)
+    ).fetchall()
+
+    if not pastas and not org:
+        # Sem organização personalizada — retorna árvore real
+        return {"organizado": False, "tree": tree_real}
+
+    # Montar árvore virtual
+    pastas_map = {p["id"]: {"id": p["id"], "type": "folder", "name": p["nome"], "virtual": True, "children": [], "parent_id": p["parent_id"]} for p in pastas}
+    org_map = {o["pdf_path"]: o["pasta_virtual_id"] for o in org}
+
+    # Coletar todos os PDFs da árvore real (flatten)
+    all_pdfs = {}
+    def _flatten(nodes, prefix=""):
+        for n in nodes:
+            if n["type"] == "pdf":
+                path = prefix + "/" + n["name"] if prefix else n["name"]
+                if "path" in n:
+                    path = n["path"]
+                all_pdfs[path] = n
+            elif n["type"] == "folder":
+                _flatten(n.get("children", []), prefix + "/" + n["name"] if prefix else n["name"])
+    _flatten(tree_real)
+
+    # Distribuir PDFs nas pastas virtuais
+    pdfs_organizados = set()
+    for pdf_path, pasta_id in org_map.items():
+        if pdf_path in all_pdfs and pasta_id in pastas_map:
+            pastas_map[pasta_id]["children"].append(all_pdfs[pdf_path])
+            pdfs_organizados.add(pdf_path)
+
+    # Montar hierarquia de pastas (parent_id → children)
+    root_folders = []
+    for pasta in pastas_map.values():
+        parent_id = pasta.pop("parent_id", None)
+        if parent_id and parent_id in pastas_map:
+            pastas_map[parent_id]["children"].append(pasta)
+        else:
+            root_folders.append(pasta)
+
+    # PDFs não organizados ficam na raiz
+    nao_organizados = []
+    for path, pdf in all_pdfs.items():
+        if path not in pdfs_organizados:
+            nao_organizados.append(pdf)
+
+    # Resultado: pastas virtuais primeiro, depois não-organizados
+    tree_final = root_folders + nao_organizados
+
+    return {"organizado": True, "tree": tree_final, "total_pdfs": len(all_pdfs), "organizados": len(pdfs_organizados)}
+
+
+@router.post("/api/pdf/pastas", summary="Criar pasta virtual")
+def criar_pasta_virtual(
+    body: dict = Body(...),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Cria uma nova pasta virtual para organizar PDFs."""
+    from utils import today_str
+    nome = body.get("nome", "").strip()
+    parent_id = body.get("parent_id")
+
+    if not nome:
+        raise HTTPException(status_code=400, detail="Nome da pasta é obrigatório")
+
+    cur = conn.execute(
+        "INSERT INTO pdf_pastas_virtuais (user_id, nome, parent_id, posicao, created_at) VALUES (?, ?, ?, 0, ?)",
+        (user_id, nome, parent_id, today_str())
+    )
+    conn.commit()
+    return {"ok": True, "id": cur.lastrowid, "nome": nome}
+
+
+@router.put("/api/pdf/pastas/{pasta_id}", summary="Renomear pasta virtual")
+def renomear_pasta(
+    pasta_id: int,
+    body: dict = Body(...),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Renomeia uma pasta virtual."""
+    nome = body.get("nome", "").strip()
+    if not nome:
+        raise HTTPException(status_code=400, detail="Nome é obrigatório")
+    conn.execute(
+        "UPDATE pdf_pastas_virtuais SET nome = ? WHERE id = ? AND user_id = ?",
+        (nome, pasta_id, user_id)
+    )
+    conn.commit()
+    return {"ok": True}
+
+
+@router.delete("/api/pdf/pastas/{pasta_id}", summary="Excluir pasta virtual")
+def excluir_pasta(pasta_id: int, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Exclui pasta virtual (PDFs voltam para raiz, não são deletados)."""
+    conn.execute("DELETE FROM pdf_organizacao WHERE pasta_virtual_id = ? AND user_id = ?", (pasta_id, user_id))
+    conn.execute("DELETE FROM pdf_pastas_virtuais WHERE id = ? AND user_id = ?", (pasta_id, user_id))
+    conn.commit()
+    return {"ok": True}
+
+
+@router.post("/api/pdf/mover", summary="Mover PDF para pasta virtual",
+             description="Move um PDF para dentro de uma pasta virtual (ou para raiz se pasta_id=null)")
+def mover_pdf(
+    body: dict = Body(...),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Move um PDF para uma pasta virtual.
+
+    body: {pdf_path: str, pasta_virtual_id: int|null, posicao: int (opcional)}
+    Se pasta_virtual_id=null, remove da organização (volta para posição real).
+    """
+    pdf_path = body.get("pdf_path", "").strip()
+    pasta_id = body.get("pasta_virtual_id")
+    posicao = body.get("posicao", 0)
+
+    if not pdf_path:
+        raise HTTPException(status_code=400, detail="pdf_path é obrigatório")
+
+    if pasta_id is None:
+        # Remover da organização (voltar para raiz)
+        conn.execute("DELETE FROM pdf_organizacao WHERE pdf_path = ? AND user_id = ?", (pdf_path, user_id))
+    else:
+        # Inserir ou atualizar organização
+        existing = conn.execute(
+            "SELECT id FROM pdf_organizacao WHERE pdf_path = ? AND user_id = ?", (pdf_path, user_id)
+        ).fetchone()
+        if existing:
+            conn.execute(
+                "UPDATE pdf_organizacao SET pasta_virtual_id = ?, posicao = ? WHERE pdf_path = ? AND user_id = ?",
+                (pasta_id, posicao, pdf_path, user_id)
+            )
+        else:
+            conn.execute(
+                "INSERT INTO pdf_organizacao (user_id, pdf_path, pasta_virtual_id, posicao) VALUES (?, ?, ?, ?)",
+                (user_id, pdf_path, pasta_id, posicao)
+            )
+    conn.commit()
+    return {"ok": True, "pdf_path": pdf_path, "pasta_virtual_id": pasta_id}

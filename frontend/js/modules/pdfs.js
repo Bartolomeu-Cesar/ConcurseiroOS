@@ -333,3 +333,159 @@ export function initPdfs(deps) {
 
   load();
 }
+
+
+// ==================== ORGANIZAÇÃO VIRTUAL (DRAG & DROP) ====================
+
+let _orgMode = false; // Modo organização ativo
+
+export function toggleOrgMode() {
+  _orgMode = !_orgMode;
+  const btn = document.getElementById('org-mode-btn');
+  if (btn) {
+    btn.textContent = _orgMode ? '✅ Sair do Modo Organizar' : '📂 Organizar PDFs';
+    btn.style.background = _orgMode ? 'var(--green)' : 'var(--bg-surface)';
+    btn.style.color = _orgMode ? 'var(--bg)' : 'var(--text)';
+  }
+  if (_orgMode) {
+    _loadOrganizacao();
+    toast('📂 Modo Organizar ativo! Arraste PDFs para pastas.', 'info', 3000);
+  } else {
+    load(); // Recarrega árvore normal
+  }
+}
+
+export async function criarPastaVirtual() {
+  const nome = prompt('Nome da nova pasta:');
+  if (!nome || !nome.trim()) return;
+  try {
+    await fetch('/api/pdf/pastas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nome: nome.trim() })
+    });
+    toast(`📁 Pasta "${nome}" criada!`, 'success');
+    _loadOrganizacao();
+  } catch(e) { toast('Erro ao criar pasta', 'error'); }
+}
+
+async function _loadOrganizacao() {
+  const container = document.getElementById('tree');
+  container.innerHTML = '<p style="color:var(--text-sub);padding:8px;">Carregando organização...</p>';
+
+  try {
+    const data = await fetch('/api/pdf/organizacao').then(r => r.json());
+    container.innerHTML = '';
+
+    // Botão criar pasta
+    const toolbar = document.createElement('div');
+    toolbar.style.cssText = 'display:flex;gap:8px;margin-bottom:10px;padding:4px;';
+    toolbar.innerHTML = `
+      <button onclick="criarPastaVirtual()" style="padding:6px 12px;background:var(--accent);color:var(--bg);border:none;border-radius:6px;font-size:0.78rem;font-weight:600;cursor:pointer;">➕ Nova Pasta</button>
+      <span style="font-size:0.7rem;color:var(--text-sub);align-self:center;">Arraste PDFs para pastas • ${data.total_pdfs || 0} PDFs, ${data.organizados || 0} organizados</span>
+    `;
+    container.appendChild(toolbar);
+
+    // Renderizar árvore organizada com drag-and-drop
+    _renderOrgTree(data.tree || [], container);
+  } catch(e) {
+    container.innerHTML = '<p style="color:var(--red);">Erro ao carregar organização</p>';
+  }
+}
+
+function _renderOrgTree(nodes, container) {
+  for (const node of nodes) {
+    if (node.type === 'folder') {
+      const div = document.createElement('div');
+      div.className = 'folder org-folder';
+      div.dataset.pastaId = node.id || '';
+      div.innerHTML = `
+        <div class="folder-header" style="display:flex;align-items:center;gap:6px;">
+          <span class="folder-icon">${node.virtual ? '📂' : '📁'}</span>
+          <span class="folder-name" style="flex:1;">${escapeHtml(node.name)}</span>
+          ${node.virtual ? `<button onclick="event.stopPropagation();_renomearPasta(${node.id},'${escapeHtml(node.name)}')" style="background:none;border:none;cursor:pointer;font-size:0.7rem;" title="Renomear">✏️</button><button onclick="event.stopPropagation();_excluirPasta(${node.id})" style="background:none;border:none;cursor:pointer;font-size:0.7rem;" title="Excluir">🗑</button>` : ''}
+          <span style="font-size:0.65rem;color:var(--text-sub);">${(node.children || []).length} itens</span>
+        </div>
+        <div class="folder-children open org-drop-zone" data-pasta-id="${node.id || ''}" style="min-height:30px;border:1px dashed transparent;border-radius:6px;transition:border-color 0.2s;padding:4px;"></div>
+      `;
+      const dropZone = div.querySelector('.org-drop-zone');
+      _setupDropZone(dropZone, node.id);
+      _renderOrgTree(node.children || [], dropZone);
+      container.appendChild(div);
+    } else if (node.type === 'pdf') {
+      const item = document.createElement('div');
+      item.className = 'pdf-item org-draggable';
+      item.draggable = true;
+      item.dataset.pdfPath = node.path || node.name;
+      item.style.cssText = 'padding:6px 8px;background:var(--bg-surface);border-radius:6px;margin:3px 0;cursor:grab;display:flex;align-items:center;gap:6px;font-size:0.8rem;transition:opacity 0.2s;';
+      item.innerHTML = `<span>📄</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(node.name.replace('.pdf', ''))}</span>`;
+
+      // Drag events
+      item.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', node.path || node.name);
+        e.dataTransfer.effectAllowed = 'move';
+        item.style.opacity = '0.5';
+      });
+      item.addEventListener('dragend', () => { item.style.opacity = '1'; });
+      container.appendChild(item);
+    }
+  }
+
+  // Drop zone para a raiz (se é o container principal)
+  if (container.id === 'tree' || container.parentElement?.id === 'tree') {
+    // A raiz já é um drop zone implícito
+    _setupDropZone(container, null);
+  }
+}
+
+function _setupDropZone(zone, pastaId) {
+  zone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    zone.style.borderColor = 'var(--accent)';
+    zone.style.background = 'rgba(137,180,250,0.05)';
+  });
+  zone.addEventListener('dragleave', () => {
+    zone.style.borderColor = 'transparent';
+    zone.style.background = '';
+  });
+  zone.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    zone.style.borderColor = 'transparent';
+    zone.style.background = '';
+    const pdfPath = e.dataTransfer.getData('text/plain');
+    if (!pdfPath) return;
+
+    try {
+      await fetch('/api/pdf/mover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pdf_path: pdfPath, pasta_virtual_id: pastaId || null })
+      });
+      toast(`📄 PDF movido ${pastaId ? 'para a pasta' : 'para raiz'}!`, 'success', 1500);
+      _loadOrganizacao(); // Recarrega
+    } catch(e) { toast('Erro ao mover PDF', 'error'); }
+  });
+}
+
+async function _renomearPasta(id, nomeAtual) {
+  const novoNome = prompt('Novo nome:', nomeAtual);
+  if (!novoNome || novoNome.trim() === nomeAtual) return;
+  await fetch(`/api/pdf/pastas/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nome: novoNome.trim() })
+  });
+  toast('✏️ Pasta renomeada!', 'success');
+  _loadOrganizacao();
+}
+
+async function _excluirPasta(id) {
+  if (!confirm('Excluir pasta? (PDFs não serão deletados, voltam para raiz)')) return;
+  await fetch(`/api/pdf/pastas/${id}`, { method: 'DELETE' });
+  toast('🗑 Pasta excluída', 'info');
+  _loadOrganizacao();
+}
+
+window._renomearPasta = _renomearPasta;
+window._excluirPasta = _excluirPasta;

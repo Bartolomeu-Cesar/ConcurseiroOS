@@ -4,7 +4,7 @@
 import { initOfflineListeners, escapeHtml, confirmModal, toast, removeToast, showLoading, showSpinner, showEmpty, api, undoableDelete, debounce, formatHours } from './modules/utils.js';
 import { switchTab, initTabs } from './modules/tabs.js';
 import { initShortcuts, goToEditalItem } from './modules/shortcuts.js';
-import { load, exportProgress, importProgress, uploadPdf, initPdfs } from './modules/pdfs.js';
+import { load, exportProgress, importProgress, uploadPdf, initPdfs, toggleOrgMode, criarPastaVirtual } from './modules/pdfs.js';
 import { loadEdital, toggleTree, toggleAllEdital, selectEditalTopic, toggleEditalStatus, deleteEditalItem, addEdital, importEditalPdf, arquivarCargo, excluirCargo, arquivarConcurso, excluirConcurso, editarEdital, salvarEdicaoEdital, showArquivados, iniciarQuestoesPosEstudo, iniciarFlashPosEstudo, showSpacingDetails, loadKnowledgeGraph, showKgSuggestions, acceptKgSuggestion, showKgNodeInfo, initEdital } from './modules/edital.js';
 import { loadCiclo, cicloTimerToggle, cicloTimerStop, importarCicloDoEdital, addCiclo, deleteCiclo, resetarCiclo, limparCiclo, switchCicloView, initCiclo } from './modules/ciclo.js';
 import { loadFlashcardsToday, revealAnswer, reviewFlashcard, addFlashcard, loadAllFlashcards, toggleFlashGroup, iniciarSessaoFlash, sessaoNext, deleteFlashcard, openFlashEditModal, closeFlashEditModal, saveFlashEdit, initFlashcards, toggleGenerationMode, setFlashConfidence, startBossBattle, bossBattleReview, startAudioMode, stopAudioMode, pauseAudioMode, skipAudioCard, startCommutingMode, stopCommutingMode, loadLeitnerBoxes, startFlashByMateria, skipElaboration, saveElaboration, openBrainDump, submitBrainDump, closeBrainDump, continueAfterChunk, saveMnemonic, skipMnemonic, saveSessionSummary, startExamMode, stopExamMode, dismissHypercorrection, skipMicroBreak, revealNextSegment } from './modules/flashcards.js';
@@ -27,7 +27,7 @@ Object.assign(window, {
   // Shortcuts
   goToEditalItem,
   // PDFs
-  load, exportProgress, importProgress, uploadPdf,
+  load, exportProgress, importProgress, uploadPdf, toggleOrgMode, criarPastaVirtual,
   // Edital
   loadEdital, toggleTree, toggleAllEdital, selectEditalTopic, toggleEditalStatus,
   deleteEditalItem, addEdital, importEditalPdf,
