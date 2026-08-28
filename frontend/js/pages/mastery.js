@@ -145,9 +145,6 @@ window.showToast = showToast;
               }
             });
           });
-              filterCargo.appendChild(opt);
-            }
-          });
         })
         .catch(function() {});
     }
