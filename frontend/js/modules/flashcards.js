@@ -1435,7 +1435,15 @@ export function initFlashcards(deps) {
   // Carregar disciplinas para o select de criação
   loadAddMaterias();
 
-  loadFlashcardsToday();
+  // Verificar se veio do dashboard com matéria para revisão
+  const pendingMateria = sessionStorage.getItem('flash_start_materia');
+  if (pendingMateria) {
+    sessionStorage.removeItem('flash_start_materia');
+    // Aguardar um pouco para o DOM estar pronto, depois iniciar revisão filtrada
+    setTimeout(() => startFlashByMateria(pendingMateria), 300);
+  } else {
+    loadFlashcardsToday();
+  }
   loadAllFlashcards();
 }
 

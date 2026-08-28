@@ -110,7 +110,7 @@ export async function loadMetaDetails() {
       if (Object.keys(materias).length > 0) {
         html += '<div style="font-size:0.75rem;color:var(--text-muted);">Pendentes por matéria <span style="font-size:0.65rem;">(clique para revisar)</span>:</div>';
         html += Object.entries(materias).sort((a,b) => b[1]-a[1]).slice(0, 5).map(([m, c]) =>
-          `<div onclick="startFlashByMateria('${m.replace(/'/g, "\\'")}')" style="display:flex;justify-content:space-between;padding:4px 6px;cursor:pointer;border-radius:6px;transition:background 0.2s;" onmouseover="this.style.background='var(--bg-elevated)'" onmouseout="this.style.background='transparent'" title="Revisar ${c} flashcards de ${m}"><span>📚 ${m}</span><span style="color:var(--accent);font-weight:600;">${c}</span></div>`
+          `<div onclick="window._startFlashByMateria('${m.replace(/'/g, "\\'")}')" style="display:flex;justify-content:space-between;padding:4px 6px;cursor:pointer;border-radius:6px;transition:background 0.2s;" onmouseover="this.style.background='var(--bg-elevated)'" onmouseout="this.style.background='transparent'" title="Revisar ${c} flashcards de ${m}"><span>📚 ${m}</span><span style="color:var(--accent);font-weight:600;">${c}</span></div>`
         ).join('');
       }
       flashEl.innerHTML = html;
@@ -132,3 +132,10 @@ export function toggleMetaDetail(id) {
 
 // Assign to window for HTML onclick
 window.toggleMetaDetail = toggleMetaDetail;
+
+// Navegar para a página principal e iniciar revisão de flashcards por matéria
+window._startFlashByMateria = function(materia) {
+  // Salvar matéria no sessionStorage para que o app.js inicie a revisão ao carregar
+  sessionStorage.setItem('flash_start_materia', materia);
+  window.location.href = '/#flashcards';
+};
