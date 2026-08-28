@@ -2,12 +2,14 @@
 // ES module (strict mode by default)
 
 const API = '';
-const TIMER_KEY = 'leitor_timer_state';
 const TIMER_LIMIT_KEY = 'leitor_timer_limit_min';
 
 const params = new URLSearchParams(location.search);
 const path = params.get('path');
 if (!path) { location.href = '/'; }
+
+// Chave única por PDF — evita conflito com timer pomodoro da listagem (pdfs.js)
+const TIMER_KEY = 'viewer_timer_' + (path || '').replace(/[^a-zA-Z0-9]/g, '_');
 
 function encodePath(p) {
   return p.split('/').map(encodeURIComponent).join('/');
