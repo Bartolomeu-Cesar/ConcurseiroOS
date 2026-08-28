@@ -2674,3 +2674,287 @@ async function loadSpacingCalculator() {
 }
 
 setTimeout(loadSpacingCalculator, 2800);
+
+
+// ============================================================
+// CONTEXTUAL VARIATION — Variação de formato de estudo
+// ============================================================
+
+async function loadContextualVariation() {
+  const container = document.getElementById('si-techniques-alerts');
+  if (!container) return;
+
+  try {
+    // Get first available materia from edital
+    const mats = await fetch('/api/edital/materias-disponiveis').then(r => r.ok ? r.json() : []);
+    if (!mats || mats.length === 0) return;
+    const materia = mats[Math.floor(Math.random() * Math.min(mats.length, 5))];
+
+    const data = await fetch(`/api/study-intelligence/contextual-variation?materia=${encodeURIComponent(materia)}`).then(r => r.ok ? r.json() : null);
+    if (!data || !data.variacoes || data.variacoes.length === 0) return;
+
+    // Pick a random variation that's NOT flashcard/questao (prioritize novel formats)
+    const novelFormats = data.variacoes.filter(v => ['dissertativa', 'ensinar', 'conexoes'].includes(v.formato));
+    const chosen = novelFormats.length > 0 ? novelFormats[Math.floor(Math.random() * novelFormats.length)] : data.variacoes[0];
+
+    const widget = document.createElement('div');
+    widget.id = 'si-contextual-variation-widget';
+    widget.style.cssText = 'background:var(--bg-surface, #313244);border-radius:10px;padding:14px;margin-bottom:10px;border-left:4px solid var(--mauve, #cba6f7);';
+    widget.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-size:0.85rem;font-weight:700;color:var(--text);">🔀 Varie o formato!</span>
+        <span style="font-size:0.68rem;color:var(--text-sub);background:var(--bg);padding:2px 8px;border-radius:6px;">${data.materia}</span>
+      </div>
+      <div style="font-size:0.78rem;color:var(--text-sub);margin-bottom:8px;">
+        ${chosen.icone} <strong style="color:var(--text);">${chosen.formato.charAt(0).toUpperCase() + chosen.formato.slice(1)}</strong> — ${chosen.instrucao}
+      </div>
+      ${chosen.conteudo?.prompt ? `<div style="font-size:0.75rem;color:var(--accent);background:var(--bg);padding:8px 10px;border-radius:8px;margin-bottom:8px;font-style:italic;">"${chosen.conteudo.prompt}"</div>` : ''}
+      <div style="font-size:0.68rem;color:var(--text-sub);margin-top:4px;">💡 ${data.instrucao_geral?.slice(0, 120) || 'Estudar em formatos variados melhora a transferência de conhecimento.'}</div>
+    `;
+    document.getElementById('si-contextual-variation-widget')?.remove();
+    container.appendChild(widget);
+  } catch(e) { /* graceful */ }
+}
+
+setTimeout(loadContextualVariation, 3000);
+
+// ============================================================
+// DUAL CODING — Representação visual sugerida
+// ============================================================
+
+async function loadDualCoding() {
+  const container = document.getElementById('si-techniques-alerts');
+  if (!container) return;
+
+  try {
+    const mats = await fetch('/api/edital/materias-disponiveis').then(r => r.ok ? r.json() : []);
+    if (!mats || mats.length === 0) return;
+    const materia = mats[Math.floor(Math.random() * Math.min(mats.length, 5))];
+
+    const data = await fetch(`/api/study-intelligence/dual-coding?materia=${encodeURIComponent(materia)}`).then(r => r.ok ? r.json() : null);
+    if (!data || !data.sugestao_principal) return;
+
+    const sugestao = data.sugestao_principal;
+
+    const widget = document.createElement('div');
+    widget.id = 'si-dual-coding-widget';
+    widget.style.cssText = 'background:var(--bg-surface, #313244);border-radius:10px;padding:14px;margin-bottom:10px;border-left:4px solid var(--teal, #94e2d5);';
+    widget.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-size:0.85rem;font-weight:700;color:var(--text);">🎨 Represente visualmente</span>
+        <span style="font-size:0.68rem;color:var(--text-sub);background:var(--bg);padding:2px 8px;border-radius:6px;">${data.materia}</span>
+      </div>
+      <div style="font-size:0.78rem;color:var(--text);margin-bottom:6px;">
+        ${sugestao.icone} <strong>${sugestao.tipo.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</strong>
+      </div>
+      <div style="font-size:0.75rem;color:var(--text-sub);margin-bottom:6px;">${sugestao.instrucao}</div>
+      ${sugestao.exemplo ? `<div style="font-size:0.72rem;color:var(--accent);background:var(--bg);padding:6px 10px;border-radius:6px;font-family:monospace;">${sugestao.exemplo}</div>` : ''}
+      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+        ${data.todas_opcoes.slice(0, 4).map(o => `<span style="font-size:0.68rem;background:var(--bg);padding:2px 6px;border-radius:4px;color:var(--text-sub);">${o.icone} ${o.tipo.replace(/_/g, ' ')}</span>`).join('')}
+      </div>
+      <div style="font-size:0.65rem;color:var(--text-sub);margin-top:8px;">💡 ${data.dica_geral?.slice(0, 100) || 'Dual Coding: texto + visual = 2 caminhos de memória.'}</div>
+    `;
+    document.getElementById('si-dual-coding-widget')?.remove();
+    container.appendChild(widget);
+  } catch(e) { /* graceful */ }
+}
+
+setTimeout(loadDualCoding, 3200);
+
+// ============================================================
+// CONCRETE EXAMPLES — Exemplos concretos para conceitos abstratos
+// ============================================================
+
+async function loadConcreteExamples() {
+  const container = document.getElementById('si-techniques-alerts');
+  if (!container) return;
+
+  try {
+    const mats = await fetch('/api/edital/materias-disponiveis').then(r => r.ok ? r.json() : []);
+    if (!mats || mats.length === 0) return;
+    const materia = mats[Math.floor(Math.random() * Math.min(mats.length, 5))];
+
+    const data = await fetch(`/api/study-intelligence/concrete-examples?materia=${encodeURIComponent(materia)}`).then(r => r.ok ? r.json() : null);
+    if (!data || (!data.exemplos_prontos?.length && !data.criar_proprio)) return;
+
+    const exemplo = data.exemplos_prontos?.length > 0
+      ? data.exemplos_prontos[Math.floor(Math.random() * data.exemplos_prontos.length)]
+      : null;
+
+    const widget = document.createElement('div');
+    widget.id = 'si-concrete-examples-widget';
+    widget.style.cssText = 'background:var(--bg-surface, #313244);border-radius:10px;padding:14px;margin-bottom:10px;border-left:4px solid var(--peach, #fab387);';
+    widget.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-size:0.85rem;font-weight:700;color:var(--text);">💡 Exemplo Concreto</span>
+        <span style="font-size:0.68rem;color:var(--text-sub);background:var(--bg);padding:2px 8px;border-radius:6px;">${data.materia}</span>
+      </div>
+      ${exemplo ? `
+        <div style="font-size:0.78rem;color:var(--accent);font-weight:600;margin-bottom:4px;">${exemplo.conceito}</div>
+        <div style="font-size:0.75rem;color:var(--text-sub);line-height:1.5;background:var(--bg);padding:8px 10px;border-radius:8px;">${exemplo.exemplo}</div>
+      ` : `
+        <div style="font-size:0.78rem;color:var(--text-sub);">Crie seus próprios exemplos concretos para ${data.materia}!</div>
+      `}
+      <div style="font-size:0.65rem;color:var(--text-sub);margin-top:8px;">🧠 ${data.por_que_funciona?.slice(0, 120) || 'Exemplos concretos ancoram conceitos abstratos na memória de longo prazo.'}</div>
+    `;
+    document.getElementById('si-concrete-examples-widget')?.remove();
+    container.appendChild(widget);
+  } catch(e) { /* graceful */ }
+}
+
+setTimeout(loadConcreteExamples, 3400);
+
+// ============================================================
+// MEMORY PALACE — Template de Palácio da Memória
+// ============================================================
+
+async function loadMemoryPalace() {
+  const container = document.getElementById('si-techniques-alerts');
+  if (!container) return;
+
+  try {
+    const mats = await fetch('/api/edital/materias-disponiveis').then(r => r.ok ? r.json() : []);
+    if (!mats || mats.length === 0) return;
+    const materia = mats[Math.floor(Math.random() * Math.min(mats.length, 5))];
+
+    const data = await fetch(`/api/study-intelligence/memory-palace?materia=${encodeURIComponent(materia)}`).then(r => r.ok ? r.json() : null);
+    if (!data || !data.palace_template) return;
+
+    const palace = data.palace_template;
+
+    const widget = document.createElement('div');
+    widget.id = 'si-memory-palace-widget';
+    widget.style.cssText = 'background:var(--bg-surface, #313244);border-radius:10px;padding:14px;margin-bottom:10px;border-left:4px solid var(--yellow, #f9e2af);';
+    widget.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-size:0.85rem;font-weight:700;color:var(--text);">🏰 Palácio da Memória</span>
+        <span style="font-size:0.68rem;color:var(--text-sub);background:var(--bg);padding:2px 8px;border-radius:6px;">${data.materia}</span>
+      </div>
+      <div style="font-size:0.75rem;color:var(--text-sub);margin-bottom:8px;">Use sua casa como palácio! Associe cada item a um local:</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;">
+        ${palace.locais.map(l => `
+          <div style="font-size:0.72rem;color:var(--text);display:flex;align-items:center;gap:4px;min-width:0;overflow:hidden;">
+            <span style="font-size:0.68rem;color:var(--text-sub);min-width:14px;">${l.posicao}.</span>
+            <span>${l.local}</span>
+          </div>
+        `).join('')}
+      </div>
+      ${data.items_para_memorizar?.length > 0 ? `
+        <div style="font-size:0.72rem;color:var(--accent);margin-top:8px;padding-top:8px;border-top:1px solid var(--border, #45475a);">
+          📋 Sugestão: memorize "${data.items_para_memorizar[0].pergunta?.slice(0, 60) || 'seus flashcards'}"
+        </div>
+      ` : ''}
+      <div style="font-size:0.65rem;color:var(--text-sub);margin-top:6px;">💡 Imagens absurdas e exageradas são mais memoráveis!</div>
+    `;
+    document.getElementById('si-memory-palace-widget')?.remove();
+    container.appendChild(widget);
+  } catch(e) { /* graceful */ }
+}
+
+setTimeout(loadMemoryPalace, 3600);
+
+// ============================================================
+// TRANSFER TEST — Teste de Transferência
+// ============================================================
+
+async function loadTransferTest() {
+  const container = document.getElementById('si-techniques-alerts');
+  if (!container) return;
+
+  try {
+    const data = await fetch('/api/study-intelligence/transfer-test').then(r => r.ok ? r.json() : null);
+    if (!data || data.total === 0) return;
+
+    const widget = document.createElement('div');
+    widget.id = 'si-transfer-test-widget';
+    widget.style.cssText = 'background:var(--bg-surface, #313244);border-radius:10px;padding:14px;margin-bottom:10px;border-left:4px solid var(--blue, #89b4fa);';
+    widget.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-size:0.85rem;font-weight:700;color:var(--text);">🔄 Teste de Transferência</span>
+        <span style="font-size:0.68rem;color:var(--text-sub);background:var(--bg);padding:2px 8px;border-radius:6px;">${data.total} questões</span>
+      </div>
+      <div style="font-size:0.78rem;color:var(--text-sub);margin-bottom:8px;">${data.mensagem}</div>
+      <div style="font-size:0.72rem;color:var(--text-sub);margin-bottom:10px;">
+        Formato habitual: <strong style="color:var(--text);">${(data.formato_predominante || '').replace(/_/g, ' ')}</strong>
+        → Transferir para: <strong style="color:var(--accent);">${(data.formato_transferencia || '').replace(/_/g, ' ')}</strong>
+      </div>
+      <button onclick="window.location.href='questoes.html?modo=transfer'" style="
+        background:var(--blue, #89b4fa);color:var(--bg);border:none;border-radius:8px;
+        padding:8px 16px;font-size:0.78rem;font-weight:600;cursor:pointer;width:100%;
+        transition:opacity 0.2s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">
+        ⚡ Iniciar Teste de Transferência
+      </button>
+      <div style="font-size:0.65rem;color:var(--text-sub);margin-top:8px;">🧠 ${data.tecnica?.slice(0, 130) || 'Variar formato testa se realmente entendeu o conceito.'}</div>
+    `;
+    document.getElementById('si-transfer-test-widget')?.remove();
+    container.appendChild(widget);
+  } catch(e) { /* graceful */ }
+}
+
+setTimeout(loadTransferTest, 3800);
+
+// ============================================================
+// BANCA TRAINING — Treino específico por banca
+// ============================================================
+
+async function loadBancaTraining() {
+  const container = document.getElementById('si-techniques-alerts');
+  if (!container) return;
+
+  try {
+    // First get the user's banca from banca-profile endpoint
+    const profile = await fetch('/api/study-intelligence/banca-profile').then(r => r.ok ? r.json() : null);
+    if (!profile || !profile.banca || !profile.profile) return;
+
+    const banca = profile.banca;
+    const p = profile.profile;
+
+    const widget = document.createElement('div');
+    widget.id = 'si-banca-training-widget';
+    widget.style.cssText = 'background:var(--bg-surface, #313244);border-radius:10px;padding:14px;margin-bottom:10px;border-left:4px solid var(--red, #f38ba8);';
+    widget.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-size:0.85rem;font-weight:700;color:var(--text);">🎯 Treino de Banca: ${banca}</span>
+        <span style="font-size:0.68rem;color:${p.penalizacao ? 'var(--red)' : 'var(--green)'};background:var(--bg);padding:2px 8px;border-radius:6px;font-weight:600;">
+          ${p.penalizacao ? '⚠️ Penalização' : '✅ Sem penalização'}
+        </span>
+      </div>
+      <div style="font-size:0.75rem;color:var(--text-sub);margin-bottom:6px;">${p.estilo?.slice(0, 100) || ''}</div>
+      <div style="font-size:0.72rem;color:var(--text-sub);margin-bottom:10px;">
+        ${p.armadilhas_comuns?.slice(0, 2).map(a => `<div style="margin-bottom:3px;">⚠️ ${a.slice(0, 80)}</div>`).join('') || ''}
+      </div>
+      ${profile.stats_usuario ? `
+        <div style="font-size:0.72rem;color:var(--text-sub);margin-bottom:8px;padding:6px 8px;background:var(--bg);border-radius:6px;">
+          📊 Seu desempenho ${banca}: <strong style="color:var(--accent);">${profile.stats_usuario.pct_acerto}%</strong> (${profile.stats_usuario.total_questoes} questões)
+        </div>
+      ` : ''}
+      <button onclick="window._startBancaTraining('${banca}')" style="
+        background:var(--red, #f38ba8);color:var(--bg);border:none;border-radius:8px;
+        padding:8px 16px;font-size:0.78rem;font-weight:600;cursor:pointer;width:100%;
+        transition:opacity 0.2s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">
+        ⚔️ Iniciar Sessão de Treino ${banca}
+      </button>
+      <div style="font-size:0.65rem;color:var(--text-sub);margin-top:6px;">💡 ${p.dicas_estrategicas?.[0]?.slice(0, 100) || 'Treine no estilo da banca para ganhar 15-20% no dia da prova.'}</div>
+    `;
+    document.getElementById('si-banca-training-widget')?.remove();
+    container.appendChild(widget);
+  } catch(e) { /* graceful */ }
+}
+
+// Helper: start banca training session
+window._startBancaTraining = async function(banca) {
+  try {
+    const data = await fetch(`/api/study-intelligence/banca-training?banca=${encodeURIComponent(banca)}&quantidade=10`).then(r => r.ok ? r.json() : null);
+    if (!data || !data.questao_ids || data.questao_ids.length === 0) {
+      _toastDash?.('Sem questões disponíveis para treino de banca') || alert('Sem questões disponíveis para treino de banca');
+      return;
+    }
+    // Navigate to questoes page with banca training mode
+    const ids = data.questao_ids.join(',');
+    window.location.href = `questoes.html?modo=banca&banca=${encodeURIComponent(banca)}&ids=${ids}`;
+  } catch(e) {
+    _toastDash?.('Erro ao iniciar treino de banca') || alert('Erro ao iniciar treino de banca');
+  }
+};
+
+setTimeout(loadBancaTraining, 4000);
