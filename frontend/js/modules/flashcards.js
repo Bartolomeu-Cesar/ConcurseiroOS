@@ -13,6 +13,7 @@ let _flashSessionStart = null; // Timestamp início da sessão de revisão
 let _flashCardStart = null; // Timestamp início do card atual
 let _flashSessionSeconds = 0; // Segundos acumulados na sessão
 let _chunkPauseShown = false; // Controle para não re-mostrar pausa de chunk
+let _examMode = false; // Encoding Specificity: modo prova sem ajudas
 
 /**
  * Inicia o timer global automaticamente se não estiver ativo.
@@ -89,8 +90,9 @@ function showCurrentFlashcard() {
 
   // === CHUNKING (Miller, 1956): Pausa reflexiva a cada 5-7 cards ===
   // Só ativa em sessões com 8+ cards, pausa a cada CHUNK_SIZE cards revisados
+  // Desativado no Modo Prova (Encoding Specificity)
   const CHUNK_SIZE = 6;
-  if (pendentes >= 8 && currentFlashIndex > 0 && currentFlashIndex < pendentes
+  if (!_examMode && pendentes >= 8 && currentFlashIndex > 0 && currentFlashIndex < pendentes
       && currentFlashIndex % CHUNK_SIZE === 0 && !_chunkPauseShown) {
     _chunkPauseShown = true;
     _showChunkPause(currentFlashIndex, pendentes);
@@ -148,6 +150,14 @@ function showCurrentFlashcard() {
   }
   a.style.display = 'none';
   rv.style.display = 'none';
+
+  // No Modo Prova: sem metacognição, sem generation mode — direto ao ponto
+  if (_examMode) {
+    rb.style.display = 'inline-block';
+    _flashCardStart = Date.now();
+    if (!_flashSessionStart) _flashSessionStart = Date.now();
+    return;
+  }
 
   // Add metacognition confidence slider + generation mode BEFORE reveal button
   const genModeToggle = `<div style="display:flex;justify-content:flex-end;margin-bottom:6px;">
@@ -300,18 +310,17 @@ export async function reviewFlashcard(quality) {
     }
 
     // Keyword Mnemonic: sugerir mnemônico após erro em card difícil
-    // Ativa quando: quality <= 1 (esqueceu/errou) E card já tem repetitions > 0
-    // Ou seja, errou um card que já deveria saber → precisa de ajuda mnemônica
+    // Desativado no Modo Prova
     _mnemonicErrorCount = (_mnemonicErrorCount || 0) + (quality <= 1 ? 1 : 0);
-    if (quality <= 1 && card.repetitions > 0 && _mnemonicErrorCount % 2 === 0) {
+    if (!_examMode && quality <= 1 && card.repetitions > 0 && _mnemonicErrorCount % 2 === 0) {
       _showMnemonicSuggestion(card);
       return; // Pausa — fluxo continua ao pular/salvar mnemônico
     }
 
     // Elaborative Interrogation: prompt "Por quê?" após acerto (quality >= 3)
-    // Mostrar a cada 3 cards acertados para não sobrecarregar (não em todo card)
+    // Desativado no Modo Prova
     _elaborationAccertCount = (_elaborationAccertCount || 0) + (quality >= 3 ? 1 : 0);
-    const shouldElaborate = quality >= 3 && _elaborationAccertCount % 3 === 0 && card.pergunta;
+    const shouldElaborate = !_examMode && quality >= 3 && _elaborationAccertCount % 3 === 0 && card.pergunta;
     if (shouldElaborate) {
       _showElaborationPrompt(card);
       return; // Pausa — o fluxo continua ao pular/salvar a elaboração
@@ -1417,4 +1426,23 @@ export function saveSessionSummary() {
   // Remover o formulário e mostrar confirmação
   const container = input.closest('div');
   if (container) container.innerHTML = `<div style="color:var(--green);font-size:0.8rem;font-weight:600;text-align:center;padding:8px;">✅ Resumo salvo!</div>`;
+}
+
+// ============================================================
+// ENCODING SPECIFICITY (MODO PROVA) — Simula condições reais
+// Evidência: Tulving & Thomson (1973) — Recall é melhor quando
+// condições de teste = condições de encoding. Simular pressão
+// de prova durante revisão melhora performance no dia da prova.
+// ============================================================
+
+export function startExamMode() {
+  _examMode = true;
+  toast('🎯 MODO PROVA ativado! Sem ajudas — simule a pressão real.', 'warning', 3000);
+  loadFlashcardsToday();
+}
+
+export function stopExamMode() {
+  _examMode = false;
+  toast('📚 Modo normal restaurado.', 'info', 2000);
+  loadFlashcardsToday();
 }

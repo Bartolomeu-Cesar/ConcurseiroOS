@@ -7,7 +7,7 @@ import { initShortcuts, goToEditalItem } from './modules/shortcuts.js';
 import { load, exportProgress, importProgress, uploadPdf, initPdfs } from './modules/pdfs.js';
 import { loadEdital, toggleTree, toggleAllEdital, selectEditalTopic, toggleEditalStatus, deleteEditalItem, addEdital, importEditalPdf, arquivarCargo, excluirCargo, arquivarConcurso, excluirConcurso, editarEdital, salvarEdicaoEdital, showArquivados, iniciarQuestoesPosEstudo, iniciarFlashPosEstudo, showSpacingDetails, loadKnowledgeGraph, showKgSuggestions, acceptKgSuggestion, showKgNodeInfo, initEdital } from './modules/edital.js';
 import { loadCiclo, cicloTimerToggle, cicloTimerStop, importarCicloDoEdital, addCiclo, deleteCiclo, resetarCiclo, limparCiclo, switchCicloView, initCiclo } from './modules/ciclo.js';
-import { loadFlashcardsToday, revealAnswer, reviewFlashcard, addFlashcard, loadAllFlashcards, toggleFlashGroup, iniciarSessaoFlash, sessaoNext, deleteFlashcard, openFlashEditModal, closeFlashEditModal, saveFlashEdit, initFlashcards, toggleGenerationMode, setFlashConfidence, startBossBattle, bossBattleReview, startAudioMode, stopAudioMode, pauseAudioMode, skipAudioCard, startCommutingMode, stopCommutingMode, loadLeitnerBoxes, startFlashByMateria, skipElaboration, saveElaboration, openBrainDump, submitBrainDump, closeBrainDump, continueAfterChunk, saveMnemonic, skipMnemonic, saveSessionSummary } from './modules/flashcards.js';
+import { loadFlashcardsToday, revealAnswer, reviewFlashcard, addFlashcard, loadAllFlashcards, toggleFlashGroup, iniciarSessaoFlash, sessaoNext, deleteFlashcard, openFlashEditModal, closeFlashEditModal, saveFlashEdit, initFlashcards, toggleGenerationMode, setFlashConfidence, startBossBattle, bossBattleReview, startAudioMode, stopAudioMode, pauseAudioMode, skipAudioCard, startCommutingMode, stopCommutingMode, loadLeitnerBoxes, startFlashByMateria, skipElaboration, saveElaboration, openBrainDump, submitBrainDump, closeBrainDump, continueAfterChunk, saveMnemonic, skipMnemonic, saveSessionSummary, startExamMode, stopExamMode } from './modules/flashcards.js';
 import { loadSumulasToday, revealSumula, reviewSumula, addSumula, loadAllSumulas, iniciarSessaoSumulas, deleteSumula, editSumula, toggleSumulaGroup, initSumulas } from './modules/sumulas.js';
 import { carregarQuestoesDia, showQuestaoDia, responderQuestaoDia, advanceQuestao, submitSelfExplanation, selectErrorChip, answerErrorfulLearning, initQuestoes } from './modules/questoes.js';
 import { loadMetas, salvarMetas, getConfigSessoes, salvarConfigSessoes, loadConfigSessoes, loadStreakBadge, initMetas } from './modules/metas.js';
@@ -44,7 +44,7 @@ Object.assign(window, {
   toggleGenerationMode, setFlashConfidence, startBossBattle, bossBattleReview,
   startAudioMode, stopAudioMode, pauseAudioMode, skipAudioCard,
   startCommutingMode, stopCommutingMode, startFlashByMateria, skipElaboration, saveElaboration,
-  openBrainDump, submitBrainDump, closeBrainDump, continueAfterChunk, saveMnemonic, skipMnemonic, saveSessionSummary,
+  openBrainDump, submitBrainDump, closeBrainDump, continueAfterChunk, saveMnemonic, skipMnemonic, saveSessionSummary, startExamMode, stopExamMode,
   // Súmulas
   loadSumulasToday, revealSumula, reviewSumula, addSumula, loadAllSumulas,
   iniciarSessaoSumulas, deleteSumula, editSumula, toggleSumulaGroup,
