@@ -347,21 +347,89 @@ export async function comprarCreditos(quantidade) {
     const headers = { 'Content-Type': 'application/json' };
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    const res = await fetch('/api/auth/creditos/comprar', {
+    // Criar cobrança PIX via Mercado Pago
+    const res = await fetch('/api/pagamentos/pix/criar', {
       method: 'POST', headers,
-      body: JSON.stringify({ quantidade })
+      body: JSON.stringify({ creditos: quantidade })
     });
     const data = await res.json();
-    if (data.ok) {
-      if (typeof showToast === 'function') showToast(`✅ ${quantidade} crédito(s) adicionados! Saldo: ${data.saldo_posterior}`, 'success');
-      _loadCreditosSaldo();
+
+    if (data.ok && data.pix) {
+      _showPixQRCode(data);
+    } else if (data.detail && data.detail.includes('Token')) {
+      // Fallback: creditar direto (modo dev/sandbox sem token configurado)
+      const resFallback = await fetch('/api/auth/creditos/comprar', {
+        method: 'POST', headers,
+        body: JSON.stringify({ quantidade })
+      });
+      const dataFallback = await resFallback.json();
+      if (dataFallback.ok) {
+        if (typeof showToast === 'function') showToast(`✅ ${quantidade} crédito(s) adicionados (modo sandbox)! Saldo: ${dataFallback.saldo_posterior}`, 'success');
+        _loadCreditosSaldo();
+      }
     } else {
-      if (typeof showToast === 'function') showToast(data.detail || 'Erro ao comprar créditos', 'error');
+      if (typeof showToast === 'function') showToast(data.detail || 'Erro ao criar pagamento', 'error');
     }
   } catch(e) {
     if (typeof showToast === 'function') showToast('Erro de conexão', 'error');
   }
 }
+
+function _showPixQRCode(data) {
+  const section = document.getElementById('creditos-section');
+  if (!section) return;
+
+  const { payment_id, valor, creditos, dias, pix } = data;
+
+  section.innerHTML = `
+    <div style="text-align:center;">
+      <div style="font-size:1.2rem;margin-bottom:6px;">📱 PIX - Escaneie para pagar</div>
+      <div style="font-size:0.82rem;color:#a6e3a1;font-weight:600;margin-bottom:10px;">R$${valor.toFixed(2)} → ${creditos} créditos (${dias} dias Premium)</div>
+      ${pix.qr_code_base64 ? `<img src="data:image/png;base64,${pix.qr_code_base64}" style="width:200px;height:200px;border-radius:8px;margin-bottom:10px;" alt="QR Code PIX">` : ''}
+      <div style="margin-bottom:10px;">
+        <div style="font-size:0.72rem;color:#9399b2;margin-bottom:4px;">Ou copie o código PIX:</div>
+        <div style="display:flex;gap:6px;">
+          <input id="pix-code-input" type="text" value="${pix.qr_code}" readonly style="flex:1;padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;font-size:0.7rem;font-family:monospace;">
+          <button onclick="navigator.clipboard.writeText(document.getElementById('pix-code-input').value);if(typeof showToast==='function')showToast('📋 Código PIX copiado!','success')" style="padding:8px 12px;background:#89b4fa;color:#1e1e2e;border:none;border-radius:6px;font-size:0.75rem;font-weight:600;cursor:pointer;">Copiar</button>
+        </div>
+      </div>
+      <div style="font-size:0.68rem;color:#585b70;margin-bottom:10px;">⏱ Expira em 30 minutos</div>
+      <button onclick="_checkPixStatus('${payment_id}')" id="pix-check-btn" style="padding:8px 16px;background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;font-size:0.82rem;font-weight:600;cursor:pointer;">🔄 Verificar Pagamento</button>
+      <button onclick="_loadCreditosSaldo();location.reload()" style="margin-left:8px;padding:8px 12px;background:#45475a;color:#9399b2;border:none;border-radius:6px;font-size:0.75rem;cursor:pointer;">Cancelar</button>
+      <div id="pix-status" style="margin-top:8px;font-size:0.78rem;"></div>
+    </div>
+  `;
+
+  // Auto-check a cada 5s
+  window._pixCheckInterval = setInterval(() => _checkPixStatus(payment_id), 5000);
+}
+
+async function _checkPixStatus(paymentId) {
+  try {
+    const token = getToken();
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(`/api/pagamentos/status/${paymentId}`, { headers });
+    const data = await res.json();
+
+    const statusEl = document.getElementById('pix-status');
+    if (statusEl) statusEl.innerHTML = `<span style="color:${data.aprovado ? '#a6e3a1' : '#f9e2af'};">${data.status_label}</span>`;
+
+    if (data.aprovado) {
+      // Pagamento aprovado!
+      clearInterval(window._pixCheckInterval);
+      if (typeof showToast === 'function') showToast('✅ Pagamento confirmado! Créditos adicionados.', 'success');
+      setTimeout(() => {
+        _loadCreditosSaldo();
+        // Recarregar modal
+        document.getElementById('upgrade-modal')?.remove();
+        showUpgradeModal();
+      }, 1500);
+    }
+  } catch(e) {}
+}
+window._checkPixStatus = _checkPixStatus;
 
 export async function ativarCreditos() {
   const input = document.getElementById('creditos-ativar-input');

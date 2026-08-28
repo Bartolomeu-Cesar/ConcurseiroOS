@@ -123,5 +123,10 @@ class Settings:
     VAPID_PUBLIC_KEY: str = os.environ.get("VAPID_PUBLIC_KEY", "")
     VAPID_SUBJECT: str = os.environ.get("VAPID_SUBJECT", "mailto:admin@concurseiroos.app")
 
+    # Pagamentos (Mercado Pago)
+    MERCADO_PAGO_ACCESS_TOKEN: str = os.environ.get("MERCADO_PAGO_ACCESS_TOKEN", "")
+    MERCADO_PAGO_WEBHOOK_SECRET: str = os.environ.get("MERCADO_PAGO_WEBHOOK_SECRET", "")
+    PIX_CHAVE: str = os.environ.get("PIX_CHAVE", "99981368527")
+
 
 settings = Settings()

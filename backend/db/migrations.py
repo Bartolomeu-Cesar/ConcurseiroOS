@@ -414,6 +414,25 @@ def _m50_creditos_users(conn):
     log.info("Migration: added credit system (creditos_saldo, creditos_historico)")
 
 
+def _m51_pagamentos(conn):
+    """Create pagamentos table for payment tracking."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS pagamentos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            payment_id TEXT NOT NULL,
+            tipo TEXT NOT NULL DEFAULT 'pix_creditos',
+            creditos INTEGER DEFAULT 0,
+            valor REAL DEFAULT 0,
+            status TEXT DEFAULT 'pending',
+            created_at TEXT NOT NULL
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_pagamentos_user ON pagamentos(user_id)")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_pagamentos_payment_id ON pagamentos(payment_id)")
+    log.info("Migration: created pagamentos table")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -465,6 +484,7 @@ MIGRATIONS = [
     (48, _m48_brain_dump_log),
     (49, _m49_questoes_texto_base),
     (50, _m50_creditos_users),
+    (51, _m51_pagamentos),
 ]
 
 

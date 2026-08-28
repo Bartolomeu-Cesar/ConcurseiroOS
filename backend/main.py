@@ -15,7 +15,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from routers import (
     adaptive, analytics, auth, bookmarks, cadernos, calendario, ciclo, dashboard,
-    desafios, edital, error_analysis, fatigue, feynman, flashcards, generation, knowledge_graph, milestones, misc, notas, notifications, pdf,
+    desafios, edital, error_analysis, fatigue, feynman, flashcards, generation, knowledge_graph, milestones, misc, notas, notifications, pagamentos, pdf,
     planejador, questoes, simulados, spacing, streaks, sumulas, treinador,
     leagues, ai_tutor, social, batalha, admin, studyroom, study_intelligence, sidebar, vademecum
 )
@@ -325,6 +325,7 @@ pdf.set_pdf_root(settings.PDF_ROOT)
 
 app.include_router(pdf.router)
 app.include_router(auth.router)
+app.include_router(pagamentos.router)
 app.include_router(edital.router)
 app.include_router(flashcards.router)
 app.include_router(generation.router)
