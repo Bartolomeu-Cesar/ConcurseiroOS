@@ -379,12 +379,32 @@ function _showChunkPause(cardsDone, totalPendentes) {
   const blocoCarts = flashcardsToday.slice(Math.max(0, cardsDone - 6), cardsDone);
   const materiasBlocos = [...new Set(blocoCarts.map(c => c.materia || 'Geral'))];
 
+  // === FORWARD TESTING EFFECT (Chan 2018, Pastötter 2011) ===
+  // Quiz rápido de 2 cards do bloco anterior → potencializa aprendizado do próximo bloco
+  const quizCards = blocoCarts.filter(c => c.pergunta && c.resposta).sort(() => Math.random() - 0.5).slice(0, 2);
+  let forwardTestHtml = '';
+  if (quizCards.length > 0) {
+    forwardTestHtml = `
+      <div style="margin-bottom:10px;padding:10px;background:rgba(137,180,250,0.1);border:1px solid var(--blue);border-radius:8px;">
+        <div style="font-size:0.75rem;color:var(--blue);font-weight:600;margin-bottom:6px;">⚡ Forward Testing — Relembre antes de avançar:</div>
+        ${quizCards.map((c, i) => `
+          <div style="margin-bottom:6px;padding:6px;background:var(--bg);border-radius:6px;">
+            <div style="font-size:0.75rem;color:var(--text);">${i + 1}. ${escapeHtml(c.pergunta).substring(0, 80)}${c.pergunta.length > 80 ? '...' : ''}</div>
+            <div class="fwd-answer" id="fwd-answer-${i}" style="display:none;font-size:0.72rem;color:var(--green);margin-top:3px;font-weight:600;">→ ${escapeHtml(c.resposta).substring(0, 60)}</div>
+            <button onclick="document.getElementById('fwd-answer-${i}').style.display='block';this.style.display='none';" style="font-size:0.65rem;color:var(--accent);background:none;border:none;cursor:pointer;margin-top:2px;">Revelar ↓</button>
+          </div>
+        `).join('')}
+        <div style="font-size:0.62rem;color:var(--text-sub);margin-top:4px;">Pastötter (2011): Testar bloco anterior melhora encoding do próximo em 20-30%</div>
+      </div>`;
+  }
+
   q.innerHTML = `
     <div style="text-align:center;margin-bottom:10px;">
       <span style="font-size:1.5rem;">🧩</span>
       <div style="font-size:0.92rem;font-weight:700;color:var(--accent);margin:4px 0;">Pausa Reflexiva — Bloco ${blocoNum} concluído!</div>
       <div style="font-size:0.7rem;color:var(--text-sub);">Chunking (Miller, 1956): Blocos de 5-7 itens otimizam a memória de trabalho</div>
     </div>
+    ${forwardTestHtml}
     <div style="background:var(--bg-surface);border-radius:8px;padding:12px;margin-bottom:10px;">
       <div style="font-size:0.8rem;color:var(--text);font-weight:600;margin-bottom:6px;">📊 Progresso do bloco:</div>
       <div style="display:flex;gap:10px;margin-bottom:8px;">
