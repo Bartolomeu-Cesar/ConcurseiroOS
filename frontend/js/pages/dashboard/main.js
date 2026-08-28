@@ -924,17 +924,45 @@ async function requestPushPermission() {
       const registration = await navigator.serviceWorker.ready;
       const vapidKey = await fetch('/api/push/vapid-key').then(r => r.json()).then(d => d.vapid_public_key).catch(() => null);
       if (vapidKey) {
+        // Convert base64url to Uint8Array for applicationServerKey
+        const applicationServerKey = _urlBase64ToUint8Array(vapidKey);
         const subscription = await registration.pushManager.subscribe({
-          userVisibleOnly: true, applicationServerKey: vapidKey
+          userVisibleOnly: true, applicationServerKey
         });
+        const headers = { 'Content-Type': 'application/json' };
+        const token = localStorage.getItem('auth_token');
+        if (token) headers['Authorization'] = `Bearer ${token}`;
         await fetch('/api/push/subscribe', {
-          method: 'POST', headers: {'Content-Type': 'application/json'},
+          method: 'POST', headers,
           body: JSON.stringify(subscription.toJSON())
         });
+        if (typeof showToast === 'function') showToast('🔔 Notificações ativadas!', 'success');
+        // Refresh modal status if open
+        const overlay = document.getElementById('notif-prefs-overlay');
+        if (overlay) { overlay.remove(); window.showNotificationPrefs(); }
+        return;
+      } else {
+        if (typeof showToast === 'function') showToast('Erro: VAPID key não disponível', 'error');
       }
-    } catch(e) { console.error('Push subscription error:', e); }
-    if (typeof showToast === 'function') showToast('🔔 Notificações ativadas!', 'success');
+    } catch(e) {
+      console.error('Push subscription error:', e);
+      if (typeof showToast === 'function') showToast('Erro ao ativar push: ' + e.message, 'error');
+    }
+  } else {
+    if (typeof showToast === 'function') showToast('Permissão negada pelo navegador', 'warning');
   }
+}
+
+// Helper: Convert base64url string to Uint8Array for Push API
+function _urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
 }
 
 // ===== User Profile =====
