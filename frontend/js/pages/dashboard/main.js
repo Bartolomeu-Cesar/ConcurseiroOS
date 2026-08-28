@@ -600,7 +600,7 @@ async function loadCalendario() {
           html += `<input type="checkbox" class="cal-check" data-key="${ativKey}" onchange="toggleAtivConcluida(this)" title="Marcar como concluída">`;
           html += `<span class="cal-activity-icon">${icon}</span>`;
           html += `<div class="cal-activity-info">`;
-          if (materia) html += `<div class="cal-activity-materia">${materia}</div>`;
+          if (materia) html += `<div class="cal-activity-materia truncated" onclick="this.classList.toggle('truncated');this.classList.toggle('expanded');" title="${materia}${detail ? ' — ' + detail.replace(/"/g,'&quot;') : ''}">${materia}</div>`;
           if (detail) {
             if (detail.length > 60) {
               const truncated = detail.slice(0,55) + '...';

@@ -359,7 +359,9 @@
     .cal-activity:last-child { border-bottom: none; }
     .cal-activity-icon { font-size: 0.85rem; min-width: 18px; }
     .cal-activity-info { flex: 1; min-width: 0; overflow: hidden; }
-    .cal-activity-materia { font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cal-activity-materia { font-weight: 600; color: var(--text); cursor: pointer; line-height: 1.3; }
+    .cal-activity-materia.truncated { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cal-activity-materia.expanded { white-space: normal; word-break: break-word; }
     .cal-activity-detail { color: var(--text-sub); font-size: 0.7rem; margin-top: 2px; word-break: break-word; }
     .cal-detail-truncated { cursor: pointer; }
     .cal-detail-truncated:hover { color: var(--blue); }
