@@ -497,6 +497,51 @@ def _parse_questoes_texto(texto: str, materia: str = "", banca: str = "") -> lis
             enunciado = bloco.split('\n')[0].strip()
 
         enunciado = re.sub(r'^\d+\s*[.):\-–]\s*', '', enunciado).strip()
+
+        # === EXTRAÇÃO DE METADADOS DO CABEÇALHO ESTRATÉGIA ===
+        # Antes de limpar, capturar banca, ano, tópico e dificuldade do bloco
+        bloco_meta = bloco[:500]  # Metadados estão nas primeiras linhas
+        detected_banca = ''
+        detected_ano = ''
+        detected_topico = ''
+        detected_dificuldade = 'Médio'
+
+        # Ano (4 dígitos sozinhos numa linha)
+        ano_match = re.search(r'(?:^|\n)\s*(20\d{2})\s*(?:\n|$)', bloco_meta)
+        if ano_match:
+            detected_ano = ano_match.group(1)
+
+        # Banca (nome de banca conhecido)
+        banca_match = re.search(r'(?:^|\n)\s*(FCC|CESPE|CESPE/Cebraspe|CEBRASPE|VUNESP|FGV|FUNDATEC|IADES|IBFC|QUADRIX|CESGRANRIO|FUNDEP|AOCP|COMPERVE|INSTITUTO ACESSO)\s*(?:\n|$)', bloco_meta, re.IGNORECASE)
+        if banca_match:
+            detected_banca = banca_match.group(1).strip()
+
+        # Tópico constitucional (linhas curtas sem pontuação que parecem tópico)
+        # Ex: "Da responsabilidade do Presidente da República", "Dos Tribunais e Juízes do Trabalho"
+        for line in bloco_meta.split('\n'):
+            l = line.strip()
+            if not l or len(l) > 80 or len(l) < 5:
+                continue
+            # Tópico: começa com "D" (Da, Do, Dos, Das) ou artigo constitucional
+            if re.match(r'^(Da |Do |Dos |Das |Art\.?\s*\d)', l) and not re.search(r'(Tribunal|Prefeitura|Analista|Auditor)', l):
+                detected_topico = l
+                break
+            # Tópico: linhas como "Capacidade Eleitoral Ativa", "Direitos Políticos"
+            if re.match(r'^[A-Z][a-záàâãéèêíïóôõúü]', l) and not re.search(r'[.?!;]', l) and not re.search(r'(Tribunal|Nível|Quest|Técnico|Analista|Auditor|Guarda|Oficial|Prefeitura|FCC|VUNESP|FGV|Concurso)', l):
+                if len(l) < 60 and ' ' in l:
+                    detected_topico = l
+
+        # Dificuldade: baseada no número indicador (1-5) que aparece no cabeçalho Estratégia
+        dif_match = re.search(r'(?:^|\n)\s*([1-5])\s*(?:\n|$)', bloco_meta)
+        if dif_match:
+            nivel_num = int(dif_match.group(1))
+            if nivel_num <= 2:
+                detected_dificuldade = 'Fácil'
+            elif nivel_num == 3:
+                detected_dificuldade = 'Médio'
+            else:
+                detected_dificuldade = 'Difícil'
+
         # === LIMPEZA CABEÇALHO ESTRATÉGIA CONCURSOS ===
         # Remove bloco de metadados: ano, banca, órgão, cargo, nível, tipo, tópico
         # Padrão: "2024\n...\nFCC\n...\nQuestões oficiais\n...\n[número romano/dígitos soltos]\n"
@@ -583,7 +628,7 @@ def _parse_questoes_texto(texto: str, materia: str = "", banca: str = "") -> lis
         questoes.append({
             "numero": num,
             "materia": materia,
-            "topico": "",
+            "topico": detected_topico,
             "enunciado": enunciado,
             "alternativa_a": alts['A'],
             "alternativa_b": alts['B'],
@@ -592,8 +637,9 @@ def _parse_questoes_texto(texto: str, materia: str = "", banca: str = "") -> lis
             "alternativa_e": alts['E'],
             "resposta_correta": resposta,
             "explicacao": "",
-            "dificuldade": "Médio",
-            "banca": banca,
+            "dificuldade": detected_dificuldade,
+            "banca": detected_banca or banca,
+            "ano": detected_ano,
         })
 
     return questoes
