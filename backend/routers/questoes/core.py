@@ -152,6 +152,9 @@ def list_questoes(
     if needs_not_in:
         query = "SELECT q.* FROM questoes q WHERE q.user_id = ? AND q.id NOT IN (SELECT questao_id FROM questoes_respostas WHERE user_id = ?)"
         params = [user_id, user_id]
+        # Excluir sem gabarito (a menos que explicitamente pedido)
+        if not sem_gabarito:
+            query += " AND q.resposta_correta != '' AND q.resposta_correta IS NOT NULL"
         if materia:
             query += " AND q.materia = ?"
             params.append(materia)
@@ -195,6 +198,9 @@ def list_questoes(
     else:
         query = "SELECT * FROM questoes WHERE user_id = ?"
         params = [user_id]
+        # Excluir sem gabarito por padrão (a menos que explicitamente pedido)
+        if not sem_gabarito:
+            query += " AND resposta_correta != '' AND resposta_correta IS NOT NULL"
         if materia:
             query += " AND materia = ?"
             params.append(materia)
