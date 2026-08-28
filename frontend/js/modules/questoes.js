@@ -216,6 +216,20 @@ export async function submitSelfExplanation(questaoId) {
     } catch (e) {}
   }
 
+  // === ERRORFUL LEARNING: Buscar questão similar para teste imediato ===
+  // Evidência: Kornell et al. (2009) — Errar + feedback + teste imediato do mesmo conceito
+  // consolida a correção e previne repetição do mesmo erro.
+  const q = questoesDia[qDiaIdx];
+  if (q && q.materia) {
+    try {
+      const similar = await fetch(`/api/questoes/similar?materia=${encodeURIComponent(q.materia)}&excluir_id=${q.id}&topico=${encodeURIComponent(q.topico || '')}`).then(r => r.json());
+      if (similar && similar.id) {
+        _showErrorfulLearningQuestion(similar);
+        return; // Não avança — mostra questão similar primeiro
+      }
+    } catch(e) {}
+  }
+
   advanceQuestao();
 }
 
@@ -223,6 +237,68 @@ export async function submitSelfExplanation(questaoId) {
 export function selectErrorChip(btn) {
   document.querySelectorAll('.error-chip').forEach(c => c.classList.remove('selected'));
   btn.classList.add('selected');
+}
+
+// ============================================================
+// ERRORFUL LEARNING — Questão similar após erro
+// Evidência: Kornell et al. (2009), Potts & Shanks (2014)
+// ============================================================
+
+function _showErrorfulLearningQuestion(q) {
+  const fb = document.getElementById('qdia-feedback');
+  const container = document.getElementById('qdia-container') || fb?.parentElement;
+  if (!container) { advanceQuestao(); return; }
+
+  // Montar alternativas
+  const alts = [];
+  if (q.alternativa_a) alts.push({ letra: 'A', texto: q.alternativa_a });
+  if (q.alternativa_b) alts.push({ letra: 'B', texto: q.alternativa_b });
+  if (q.alternativa_c) alts.push({ letra: 'C', texto: q.alternativa_c });
+  if (q.alternativa_d) alts.push({ letra: 'D', texto: q.alternativa_d });
+  if (q.alternativa_e) alts.push({ letra: 'E', texto: q.alternativa_e });
+
+  const isCE = alts.length <= 2;
+  let altsHtml;
+  if (isCE) {
+    altsHtml = `<div style="display:flex;gap:8px;margin-top:8px;">
+      <button class="efl-alt" onclick="answerErrorfulLearning('A','${q.resposta_correta}')" style="flex:1;padding:8px;background:var(--bg-surface);border:2px solid var(--green);border-radius:6px;color:var(--green);cursor:pointer;font-weight:600;">✓ CERTO</button>
+      <button class="efl-alt" onclick="answerErrorfulLearning('B','${q.resposta_correta}')" style="flex:1;padding:8px;background:var(--bg-surface);border:2px solid var(--red);border-radius:6px;color:var(--red);cursor:pointer;font-weight:600;">✗ ERRADO</button>
+    </div>`;
+  } else {
+    altsHtml = alts.map(a => `<button class="efl-alt" onclick="answerErrorfulLearning('${a.letra}','${q.resposta_correta}')" style="display:block;width:100%;text-align:left;padding:8px 12px;margin-top:4px;background:var(--bg-surface);border:1px solid var(--border);border-radius:6px;color:var(--text);cursor:pointer;font-size:0.8rem;"><strong>${a.letra})</strong> ${a.texto}</button>`).join('');
+  }
+
+  fb.style.display = 'block';
+  fb.style.background = 'rgba(137,180,250,0.1)';
+  fb.style.color = 'var(--text)';
+  fb.innerHTML = `
+    <div style="margin-bottom:8px;">
+      <span style="font-size:0.72rem;background:var(--blue);color:var(--bg);padding:2px 8px;border-radius:4px;font-weight:600;">⚡ Errorful Learning</span>
+      <span style="font-size:0.65rem;color:var(--text-sub);margin-left:6px;">Teste imediato do mesmo conceito — consolida a correção</span>
+    </div>
+    <div style="font-size:0.82rem;color:var(--text);margin-bottom:6px;">${q.enunciado}</div>
+    ${altsHtml}
+    <button onclick="advanceQuestao()" style="margin-top:8px;background:var(--bg-elevated);color:var(--text-sub);border:none;border-radius:6px;padding:4px 10px;font-size:0.72rem;cursor:pointer;">Pular →</button>
+  `;
+}
+
+export function answerErrorfulLearning(resposta, correta) {
+  const acertou = resposta.toUpperCase() === correta.toUpperCase();
+  const fb = document.getElementById('qdia-feedback');
+
+  // Desabilitar botões
+  document.querySelectorAll('.efl-alt').forEach(btn => {
+    btn.disabled = true; btn.style.cursor = 'default'; btn.style.opacity = '0.7';
+  });
+
+  // Feedback rápido
+  const msg = acertou
+    ? '<div style="margin-top:8px;color:var(--green);font-weight:600;">✅ Correto! O conceito está consolidado.</div>'
+    : `<div style="margin-top:8px;color:var(--red);font-weight:600;">❌ Errou novamente. Resposta: ${correta}. Revise esse tópico!</div>`;
+
+  fb.innerHTML += msg + `<button onclick="advanceQuestao()" style="margin-top:8px;background:var(--accent);color:var(--bg);border:none;border-radius:6px;padding:6px 14px;font-weight:600;cursor:pointer;font-size:0.82rem;">Próxima →</button>`;
+
+  toast(acertou ? '⚡ Conceito consolidado!' : '⚠️ Revise esse tópico.', acertou ? 'success' : 'warning', 2000);
 }
 
 export function initQuestoes(deps) {

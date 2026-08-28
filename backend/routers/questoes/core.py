@@ -239,6 +239,48 @@ def questoes_respondidas_hoje(conn=Depends(get_db_session), user_id: int = Depen
     return [r[0] for r in rows]
 
 
+@router.get("/api/questoes/similar", summary="Questão similar para Errorful Learning",
+            description="""Busca uma questão da mesma matéria/tópico para teste imediato após erro.
+Evidência: Kornell et al. (2009) — Errar + feedback + teste imediato do mesmo conceito
+consolida a correção e reduz repetição do erro em 30-50%.""")
+def get_questao_similar(
+    materia: str,
+    excluir_id: int = 0,
+    topico: str = "",
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Retorna uma questão similar (mesma matéria/tópico) que o aluno não respondeu recentemente."""
+    from utils import today_str
+
+    # Primeiro tentar pelo mesmo tópico
+    if topico:
+        row = conn.execute("""
+            SELECT id, enunciado, alternativa_a, alternativa_b, alternativa_c, alternativa_d, alternativa_e,
+                   resposta_correta, materia, topico
+            FROM questoes
+            WHERE user_id = ? AND materia = ? AND topico = ? AND id != ?
+            AND id NOT IN (SELECT questao_id FROM questoes_respostas WHERE user_id = ? AND data = ?)
+            ORDER BY RANDOM() LIMIT 1
+        """, (user_id, materia, topico, excluir_id, user_id, today_str())).fetchone()
+        if row:
+            return dict(row)
+
+    # Fallback: mesma matéria
+    row = conn.execute("""
+        SELECT id, enunciado, alternativa_a, alternativa_b, alternativa_c, alternativa_d, alternativa_e,
+               resposta_correta, materia, topico
+        FROM questoes
+        WHERE user_id = ? AND materia = ? AND id != ?
+        AND id NOT IN (SELECT questao_id FROM questoes_respostas WHERE user_id = ? AND data = ?)
+        ORDER BY RANDOM() LIMIT 1
+    """, (user_id, materia, excluir_id, user_id, today_str())).fetchone()
+
+    if row:
+        return dict(row)
+    return {}
+
+
 @router.get("/api/questoes/{id}", response_model=QuestaoResponse, summary="Obter questão por ID",
             description="Retorna os dados completos de uma questão específica.",
             responses={404: {"description": "Questão não encontrada"}})
