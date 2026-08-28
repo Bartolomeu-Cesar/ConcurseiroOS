@@ -81,42 +81,47 @@ function loadCtaContinuarEstudando() {
   const container = document.getElementById('cta-continuar-estudando');
   if (!container) return;
 
-  fetch('/api/ciclo/proximo')
-    .then(r => r.json())
-    .then(data => {
-      if (!data || !data.materia || data.materia === 'Nenhuma matéria no ciclo') {
-        container.style.display = 'none';
+  // Priorizar sugestão do calendário (consistente com o grid), fallback para ciclo
+  fetch('/api/calendario/agora')
+    .then(r => r.ok ? r.json() : null)
+    .then(agora => {
+      if (agora && agora.sugestao && agora.sugestao.tipo !== 'pausa') {
+        container.style.display = 'block';
+        const materiaEl = document.getElementById('cta-materia');
+        const detailEl = document.getElementById('cta-detail');
+        const subtitleEl = document.getElementById('cta-subtitle');
+        const iconEl = document.getElementById('cta-icon');
+
+        materiaEl.textContent = agora.sugestao.materia;
+        detailEl.textContent = agora.sugestao.motivo || `${agora.sugestao.tempo_min}min planejados`;
+
+        const hour = new Date().getHours();
+        if (hour < 12) { subtitleEl.textContent = '☀️ Bom dia! Próxima atividade:'; iconEl.textContent = '📖'; }
+        else if (hour < 18) { subtitleEl.textContent = '☀️ Boa tarde! Continue de onde parou:'; iconEl.textContent = '📚'; }
+        else { subtitleEl.textContent = '🌙 Boa noite! Sessão noturna:'; iconEl.textContent = '🌟'; }
+
+        container.dataset.materia = agora.sugestao.materia;
         return;
       }
-      container.style.display = 'block';
-      const materiaEl = document.getElementById('cta-materia');
-      const detailEl = document.getElementById('cta-detail');
-      const subtitleEl = document.getElementById('cta-subtitle');
-      const iconEl = document.getElementById('cta-icon');
+      // Fallback: usar ciclo/proximo
+      return fetch('/api/ciclo/proximo').then(r => r.json()).then(data => {
+        if (!data || !data.materia || data.materia === 'Nenhuma matéria no ciclo') {
+          container.style.display = 'none';
+          return;
+        }
+        container.style.display = 'block';
+        document.getElementById('cta-materia').textContent = data.materia;
+        const horasCumpridas = data.horas_cumpridas || 0;
+        const horasAlvo = data.horas_alvo || 1;
+        const pct = Math.min(100, Math.round((horasCumpridas / horasAlvo) * 100));
+        document.getElementById('cta-detail').textContent = `${horasCumpridas.toFixed(1)}h / ${horasAlvo}h no ciclo (${pct}%)`;
 
-      materiaEl.textContent = data.materia;
-
-      // Progresso
-      const horasCumpridas = data.horas_cumpridas || 0;
-      const horasAlvo = data.horas_alvo || 1;
-      const pct = Math.min(100, Math.round((horasCumpridas / horasAlvo) * 100));
-      detailEl.textContent = `${horasCumpridas.toFixed(1)}h / ${horasAlvo}h no ciclo (${pct}%)`;
-
-      // Ícone e subtitle baseado no contexto
-      const hour = new Date().getHours();
-      if (hour < 12) {
-        subtitleEl.textContent = '☀️ Bom dia! Próxima matéria do ciclo:';
-        iconEl.textContent = '📖';
-      } else if (hour < 18) {
-        subtitleEl.textContent = '☀️ Boa tarde! Continue de onde parou:';
-        iconEl.textContent = '📚';
-      } else {
-        subtitleEl.textContent = '🌙 Boa noite! Sessão noturna:';
-        iconEl.textContent = '🌟';
-      }
-
-      // Guardar matéria para a ação
-      container.dataset.materia = data.materia;
+        const hour = new Date().getHours();
+        if (hour < 12) { document.getElementById('cta-subtitle').textContent = '☀️ Bom dia! Próxima matéria:'; document.getElementById('cta-icon').textContent = '📖'; }
+        else if (hour < 18) { document.getElementById('cta-subtitle').textContent = '☀️ Boa tarde! Continue:'; document.getElementById('cta-icon').textContent = '📚'; }
+        else { document.getElementById('cta-subtitle').textContent = '🌙 Boa noite! Sessão noturna:'; document.getElementById('cta-icon').textContent = '🌟'; }
+        container.dataset.materia = data.materia;
+      });
     })
     .catch(() => { container.style.display = 'none'; });
 }
