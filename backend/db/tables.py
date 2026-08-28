@@ -582,6 +582,21 @@ def _create_tables(conn):
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_sessao_adapt_resp_session ON sessao_adaptativa_respostas(session_id)")
 
+    # ========== BRAIN DUMP LOG (Free Recall technique) ==========
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS brain_dump_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL DEFAULT 1,
+            materia TEXT NOT NULL,
+            topico TEXT DEFAULT '',
+            texto TEXT NOT NULL,
+            palavras INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_brain_dump_user ON brain_dump_log(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_brain_dump_materia ON brain_dump_log(user_id, materia)")
+
     # ========== SCHEMA VERSION (versionamento de migrations) ==========
     conn.execute("""
         CREATE TABLE IF NOT EXISTS schema_version (

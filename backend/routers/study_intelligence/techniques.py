@@ -3086,3 +3086,110 @@ def boss_battle_resultado(
             "again": erros_again,
         },
     }
+
+
+
+# ============================================================
+# FREE RECALL (Brain Dump) — Ativa recall sem prompt
+# ============================================================
+
+@router.post("/api/study-intelligence/brain-dump", summary="Salvar Brain Dump (Free Recall)",
+             description="""Free Recall: o aluno escreve tudo que lembra de uma matéria/tópico sem consulta.
+Evidência: Karpicke & Blunt (2011) — Free recall é tão eficaz quanto elaborated concept mapping
+para retenção de longo prazo, e superior para inferências. Roediger & Karpicke (2006) — Testing
+effect: tentar lembrar sem prompt consolida mais que reler.""")
+def save_brain_dump(
+    body: dict = Body(...),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Salva um brain dump e analisa gaps vs tópicos do edital.
+
+    body: {materia, texto, topico (opcional)}
+    Retorna: análise de cobertura (quais tópicos do edital foram mencionados e quais faltaram).
+    """
+    materia = body.get("materia", "").strip()
+    texto = body.get("texto", "").strip()
+    topico = body.get("topico", "").strip()
+
+    if not materia or not texto:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="Matéria e texto são obrigatórios")
+
+    # Salvar no banco
+    conn.execute("""
+        INSERT INTO brain_dump_log (user_id, materia, topico, texto, palavras, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (user_id, materia, topico, texto, len(texto.split()), today_str()))
+    conn.commit()
+
+    # Análise de gaps: buscar tópicos do edital dessa matéria
+    topicos_edital = conn.execute("""
+        SELECT topico FROM edital WHERE materia = ? AND user_id = ? AND arquivado = 0
+    """, (materia, user_id)).fetchall()
+
+    topicos_nomes = [t[0].lower() for t in topicos_edital if t[0]]
+    texto_lower = texto.lower()
+
+    # Verificar quais tópicos foram mencionados
+    mencionados = []
+    nao_mencionados = []
+    for t_nome in topicos_nomes:
+        # Buscar palavras-chave do tópico no texto (tokenização simples)
+        palavras_topico = [p for p in t_nome.split() if len(p) > 3]
+        match_count = sum(1 for p in palavras_topico if p in texto_lower)
+        if match_count >= max(1, len(palavras_topico) * 0.4):
+            mencionados.append(t_nome)
+        else:
+            nao_mencionados.append(t_nome)
+
+    cobertura_pct = (len(mencionados) / len(topicos_nomes) * 100) if topicos_nomes else 0
+
+    return {
+        "ok": True,
+        "palavras_escritas": len(texto.split()),
+        "analise": {
+            "total_topicos_edital": len(topicos_nomes),
+            "mencionados": len(mencionados),
+            "nao_mencionados": len(nao_mencionados),
+            "cobertura_pct": round(cobertura_pct, 1),
+            "gaps": nao_mencionados[:10],  # Top 10 gaps
+            "mencionados_lista": mencionados[:10],
+        },
+        "mensagem": (
+            f"✅ Excelente! Você cobriu {round(cobertura_pct)}% dos tópicos."
+            if cobertura_pct >= 70 else
+            f"⚠️ Gaps detectados: {len(nao_mencionados)} tópicos não mencionados. Revise-os!"
+        ),
+    }
+
+
+@router.get("/api/study-intelligence/brain-dump/historico", summary="Histórico de Brain Dumps",
+            description="Lista brain dumps anteriores do usuário com análise de evolução.")
+def brain_dump_historico(
+    materia: str = "",
+    limit: int = Query(10, ge=1, le=50),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Retorna histórico de brain dumps com palavras e data."""
+    params = [user_id]
+    query = "SELECT id, materia, topico, palavras, created_at FROM brain_dump_log WHERE user_id = ?"
+    if materia:
+        query += " AND materia = ?"
+        params.append(materia)
+    query += " ORDER BY created_at DESC LIMIT ?"
+    params.append(limit)
+
+    rows = conn.execute(query, params).fetchall()
+    items = [dict(r) for r in rows]
+
+    # Evolução: palavras escritas ao longo do tempo (mais palavras = mais recall)
+    return {
+        "items": items,
+        "total": len(items),
+        "evolucao": {
+            "media_palavras": round(sum(i["palavras"] for i in items) / len(items)) if items else 0,
+            "tendencia": "melhorando" if len(items) >= 2 and items[0]["palavras"] > items[-1]["palavras"] else "estável",
+        },
+    }

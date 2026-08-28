@@ -358,6 +358,25 @@ def _m47_topic_dependencies(conn):
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_topic_deps_unique ON topic_dependencies(topic_id, depends_on_id, user_id)")
     log.info("Migration: created topic_dependencies table")
 
+
+def _m48_brain_dump_log(conn):
+    """Create brain_dump_log table for Free Recall technique."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS brain_dump_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL DEFAULT 1,
+            materia TEXT NOT NULL,
+            topico TEXT DEFAULT '',
+            texto TEXT NOT NULL,
+            palavras INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_brain_dump_user ON brain_dump_log(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_brain_dump_materia ON brain_dump_log(user_id, materia)")
+    log.info("Migration: created brain_dump_log table")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -406,6 +425,7 @@ MIGRATIONS = [
     (45, _m45_edital_video_link),
     (46, _m46_error_analysis),
     (47, _m47_topic_dependencies),
+    (48, _m48_brain_dump_log),
 ]
 
 

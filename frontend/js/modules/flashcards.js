@@ -1054,3 +1054,145 @@ async function loadAddMaterias() {
     }
   } catch(e) { /* silencioso */ }
 }
+
+
+// ============================================================
+// FREE RECALL (Brain Dump) — Escrita livre sem consulta
+// Evidência: Karpicke & Blunt (2011), Roediger & Karpicke (2006)
+// ============================================================
+
+export async function openBrainDump() {
+  // Buscar matérias disponíveis
+  let materias = [];
+  try {
+    materias = await fetch('/api/edital/materias-disponiveis').then(r => r.json());
+  } catch(e) {}
+
+  if (materias.length === 0) {
+    toast('Adicione matérias ao edital primeiro.', 'warning');
+    return;
+  }
+
+  const q = document.getElementById('flash-question');
+  const a = document.getElementById('flash-answer');
+  const rb = document.getElementById('flash-reveal-btn');
+  const rv = document.getElementById('flash-review-btns');
+  const progressEl = document.getElementById('flash-progress');
+
+  if (a) a.style.display = 'none';
+  if (rb) rb.style.display = 'none';
+  if (rv) rv.style.display = 'none';
+  if (progressEl) progressEl.style.display = 'none';
+
+  const materiaOpts = materias.map(m => `<option value="${m}">${m}</option>`).join('');
+
+  q.innerHTML = `
+    <div style="text-align:center;margin-bottom:10px;">
+      <span style="font-size:1.5rem;">🧠</span>
+      <div style="font-size:0.95rem;font-weight:700;color:var(--accent);margin:4px 0;">Free Recall (Brain Dump)</div>
+      <div style="font-size:0.72rem;color:var(--text-sub);">Escreva TUDO que lembra sobre uma matéria — sem consultar nada!</div>
+      <div style="font-size:0.65rem;color:var(--text-sub);margin-top:2px;">Karpicke & Blunt (2011): Free recall = retenção igual ou superior a concept mapping</div>
+    </div>
+    <select id="brain-dump-materia" style="width:100%;padding:8px;background:var(--bg-surface);border:1px solid var(--border);border-radius:6px;color:var(--text);margin-bottom:8px;font-size:0.85rem;">
+      <option value="">📚 Escolha a matéria...</option>
+      ${materiaOpts}
+    </select>
+    <textarea id="brain-dump-texto" placeholder="Escreva tudo que lembra sobre essa matéria... conceitos, regras, exceções, exemplos, artigos, súmulas... O que vier à mente! Sem consultar nada."
+      style="width:100%;min-height:150px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;color:var(--text);font-size:0.85rem;font-family:inherit;resize:vertical;line-height:1.5;"></textarea>
+    <div id="brain-dump-counter" style="font-size:0.7rem;color:var(--text-sub);text-align:right;margin-top:2px;">0 palavras</div>
+    <div style="display:flex;gap:8px;margin-top:10px;">
+      <button onclick="submitBrainDump()" style="flex:1;background:var(--accent);color:var(--bg);border:none;border-radius:6px;padding:10px;font-size:0.85rem;font-weight:600;cursor:pointer;">📊 Analisar Gaps</button>
+      <button onclick="closeBrainDump()" style="flex:0.5;background:var(--bg-surface);color:var(--text-sub);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:0.85rem;cursor:pointer;">Cancelar</button>
+    </div>
+  `;
+
+  // Contador de palavras em tempo real
+  setTimeout(() => {
+    const textarea = document.getElementById('brain-dump-texto');
+    const counter = document.getElementById('brain-dump-counter');
+    if (textarea && counter) {
+      textarea.addEventListener('input', () => {
+        const words = textarea.value.trim().split(/\s+/).filter(w => w.length > 0).length;
+        counter.textContent = `${words} palavras`;
+        counter.style.color = words >= 50 ? 'var(--green)' : words >= 20 ? 'var(--yellow)' : 'var(--text-sub)';
+      });
+      textarea.focus();
+    }
+  }, 100);
+}
+
+export async function submitBrainDump() {
+  const materia = document.getElementById('brain-dump-materia')?.value;
+  const texto = document.getElementById('brain-dump-texto')?.value.trim();
+
+  if (!materia) { toast('Selecione uma matéria.', 'warning'); return; }
+  if (!texto || texto.split(/\s+/).length < 5) { toast('Escreva pelo menos 5 palavras.', 'warning'); return; }
+
+  try {
+    const result = await api('/api/study-intelligence/brain-dump', {
+      method: 'POST',
+      body: { materia, texto }
+    });
+
+    // Mostrar resultado da análise
+    const q = document.getElementById('flash-question');
+    const analise = result.analise;
+
+    let gapsHtml = '';
+    if (analise.gaps.length > 0) {
+      gapsHtml = `
+        <div style="margin-top:8px;">
+          <div style="font-size:0.78rem;font-weight:600;color:var(--red);margin-bottom:4px;">❌ Gaps (tópicos não mencionados):</div>
+          ${analise.gaps.map(g => `<div style="font-size:0.75rem;padding:2px 6px;color:var(--text-sub);">• ${g}</div>`).join('')}
+        </div>`;
+    }
+
+    let mencionadosHtml = '';
+    if (analise.mencionados_lista.length > 0) {
+      mencionadosHtml = `
+        <div style="margin-top:8px;">
+          <div style="font-size:0.78rem;font-weight:600;color:var(--green);margin-bottom:4px;">✅ Tópicos cobertos:</div>
+          ${analise.mencionados_lista.map(m => `<div style="font-size:0.75rem;padding:2px 6px;color:var(--text-sub);">• ${m}</div>`).join('')}
+        </div>`;
+    }
+
+    const coberturaColor = analise.cobertura_pct >= 70 ? 'var(--green)' : analise.cobertura_pct >= 40 ? 'var(--yellow)' : 'var(--red)';
+
+    q.innerHTML = `
+      <div style="text-align:center;margin-bottom:12px;">
+        <span style="font-size:1.5rem;">📊</span>
+        <div style="font-size:0.95rem;font-weight:700;color:var(--accent);">Resultado do Brain Dump</div>
+      </div>
+      <div style="display:flex;gap:12px;margin-bottom:10px;">
+        <div style="flex:1;background:var(--bg-surface);border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:1.3rem;font-weight:700;color:${coberturaColor};">${analise.cobertura_pct}%</div>
+          <div style="font-size:0.7rem;color:var(--text-sub);">Cobertura</div>
+        </div>
+        <div style="flex:1;background:var(--bg-surface);border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:1.3rem;font-weight:700;color:var(--blue);">${result.palavras_escritas}</div>
+          <div style="font-size:0.7rem;color:var(--text-sub);">Palavras</div>
+        </div>
+        <div style="flex:1;background:var(--bg-surface);border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:1.3rem;font-weight:700;color:var(--peach);">${analise.nao_mencionados}</div>
+          <div style="font-size:0.7rem;color:var(--text-sub);">Gaps</div>
+        </div>
+      </div>
+      <div style="font-size:0.82rem;color:var(--text);padding:8px;background:var(--bg-surface);border-radius:8px;margin-bottom:8px;">${result.mensagem}</div>
+      ${gapsHtml}
+      ${mencionadosHtml}
+      <div style="margin-top:12px;display:flex;gap:8px;">
+        <button onclick="openBrainDump()" style="flex:1;background:var(--accent);color:var(--bg);border:none;border-radius:6px;padding:8px;font-size:0.8rem;font-weight:600;cursor:pointer;">🔄 Novo Brain Dump</button>
+        <button onclick="closeBrainDump()" style="flex:1;background:var(--bg-surface);color:var(--text-sub);border:1px solid var(--border);border-radius:6px;padding:8px;font-size:0.8rem;cursor:pointer;">Voltar</button>
+      </div>
+    `;
+
+    toast(`Brain Dump salvo! ${analise.cobertura_pct}% de cobertura.`, analise.cobertura_pct >= 70 ? 'success' : 'warning');
+  } catch(e) {
+    toast('Erro ao salvar brain dump', 'error');
+  }
+}
+
+export function closeBrainDump() {
+  // Volta ao estado normal de flashcards
+  loadFlashcardsToday();
+}
