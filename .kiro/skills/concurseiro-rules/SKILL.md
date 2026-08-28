@@ -9,7 +9,7 @@
 4. **window.funcao**: Em ES modules, toda função usada em `onclick` inline deve ser exposta com `window.funcao = funcao`.
 5. **Streak tolerante**: `calculate_streak()` em `utils.py` deve começar de ontem se hoje não tem atividade (dia em andamento).
 6. **Auth Depends**: Todo endpoint novo precisa de `user_id: int = Depends(get_user_id)` e `conn = Depends(get_db_session)`.
-7. **Commits**: Usar conventional commits (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`). Commit + push após cada alteração validada.
+7. **Commit + Push IMEDIATO**: Toda alteração validada (testes passando) DEVE ser commitada e pushada imediatamente. Nunca acumular alterações sem commit. Usar conventional commits (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`). O fluxo é: implementar → testar → commit → push. Sem exceções.
 8. **Criar testes para toda alteração**: Toda feature nova ou bug fix DEVE ter teste correspondente. Se não existe teste para o código alterado, criar um. Objetivo: nunca diminuir a cobertura.
 9. **Não quebrar funcionalidades existentes**: Antes de refatorar ou alterar um módulo, verificar TODOS os imports e chamadores. Manter backward compatibility (re-exportar funções movidas, preservar assinaturas). Se um endpoint muda formato de retorno, garantir que o frontend consome corretamente.
 10. **Testar regressão**: Após qualquer fix, rodar os testes do módulo afetado E os testes que dependem dele. Se um teste falha que antes passava = regressão — corrigir antes de continuar.
