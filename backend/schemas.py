@@ -404,6 +404,7 @@ class ProfileUpdateRequest(BaseModel):
 class UpgradePlanRequest(BaseModel):
     """POST /api/auth/upgrade body."""
     plano: str = Field(default="premium", pattern=r"^(free|premium|ilimitado)$")
+    vitalicio: bool = False  # Se True, pagamento único sem expiração
 
 
 class RefreshTokenRequest(BaseModel):

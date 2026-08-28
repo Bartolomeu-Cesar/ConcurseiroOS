@@ -128,9 +128,9 @@ class TestCriarBatalha:
         })
         assert r.status_code == 200
         data = r.json()
-        # Deve ser clampado ao máximo do plano (5 para free, 20 para premium/ilimitado)
-        assert data["total_rodadas"] <= 20
-        assert data["max_jogadores"] <= 5
+        # Deve ser clampado ao máximo do plano (5 para free, 20 para premium, 50 para ilimitado/vitalício)
+        assert data["total_rodadas"] <= 50
+        assert data["max_jogadores"] <= 10
 
     def test_criar_sala_tempo_minimo(self, client, setup_questoes):
         """Tempo por questão não pode ser menor que 10s."""

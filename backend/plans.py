@@ -85,6 +85,7 @@ PLANS = {
         "nome": "Premium",
         "descricao": "Sem limites de conteúdo + recursos avançados",
         "preco": "R$14,90/mês",
+        "preco_vitalicio": "R$97 (único)",
         "limites": {
             # Conteúdo — TUDO ILIMITADO
             "editais": -1,
@@ -99,7 +100,7 @@ PLANS = {
             "batalha_max_jogadores": 5,# máx 5 jogadores
             "batalha_max_rodadas": 20, # máx 20 rodadas
             # Recursos — TUDO HABILITADO
-            "treinador": True,         # todas as 14 técnicas
+            "treinador": True,         # todas as técnicas
             "dashboard_completo": True,
             "export_import": True,     # exportar/importar tudo
             "calendario": True,
@@ -112,14 +113,24 @@ PLANS = {
             "streak": True,
             "relatorios": True,        # relatórios de desempenho
             "backup_auto": True,       # backup automático
+            # IA — com limite diário
+            "ai_tutor_ilimitado": False,
+            "ai_tokens_dia": 50000,    # 50k tokens/dia (~30 perguntas)
+            # Sem exclusivos vitalícios
+            "importacao_prioritaria": False,
+            "suporte_prioritario": False,
+            "beta_features": False,
+            "temas_exclusivos": False,
+            "study_room_privada": False,
+            "relatorios_pdf": False,
         }
     },
     "ilimitado": {
         "nome": "Vitalício",
-        "descricao": "Pague uma vez — acesso permanente a tudo + atualizações",
+        "descricao": "Pague uma vez — acesso permanente a tudo + exclusivos + atualizações vitalícias",
         "preco": "R$97 (único)",
         "limites": {
-            # Tudo do Premium sem expiração
+            # Tudo do Premium sem expiração + EXCLUSIVOS
             "editais": -1,
             "flashcards": -1,
             "questoes_dia": -1,
@@ -127,10 +138,11 @@ PLANS = {
             "pdfs": -1,
             "simulados": -1,
             "ciclo_materias": -1,
-            # Batalha
-            "batalha": True,           # acesso total
-            "batalha_max_jogadores": 5,# máx 5 jogadores
-            "batalha_max_rodadas": 20, # máx 20 rodadas
+            # Batalha — SUPERIOR ao premium
+            "batalha": True,
+            "batalha_max_jogadores": 10,  # Premium = 5
+            "batalha_max_rodadas": 50,    # Premium = 20
+            # Recursos — TUDO + EXCLUSIVOS
             "treinador": True,
             "dashboard_completo": True,
             "export_import": True,
@@ -144,22 +156,40 @@ PLANS = {
             "streak": True,
             "relatorios": True,
             "backup_auto": True,
+            # === EXCLUSIVOS VITALÍCIO ===
+            "ai_tutor_ilimitado": True,   # Sem limite diário de tokens IA
+            "ai_tokens_dia": -1,          # Premium = 50.000/dia
+            "importacao_prioritaria": True,# Parser com OCR avançado
+            "suporte_prioritario": True,  # Suporte direto
+            "beta_features": True,        # Acesso antecipado a novas features
+            "temas_exclusivos": True,     # Temas visuais extras
+            "study_room_privada": True,   # Sala de estudo privada
+            "relatorios_pdf": True,       # Exportar relatórios em PDF
         }
     },
 }
 
 
 def get_plan(user):
-    """Retorna o plano do usuário (ou DEFAULT_PLAN das settings se não autenticado)."""
+    """Retorna o plano do usuário (ou DEFAULT_PLAN das settings se não autenticado).
+
+    Lógica de expiração:
+    - plano_expira vazio ou "vitalicio" = acesso permanente (pagou vitalício)
+    - plano_expira com data = verifica se expirou (assinatura mensal)
+    """
     from settings import settings
 
     if not user:
         return settings.DEFAULT_PLAN if settings.DEFAULT_PLAN in PLANS else "guest"
     plano = user.get("plano", "free") if isinstance(user, dict) else (user["plano"] if user else "free")
-    # Verificar expiração do plano premium
+    # Verificar expiração do plano premium (mensal)
+    # Se plano_expira está vazio ou é "vitalicio", é acesso permanente
     if plano == "premium" and user.get("plano_expira"):
+        plano_expira = user["plano_expira"]
+        if plano_expira.lower() in ("vitalicio", "vitalício", "lifetime", ""):
+            return plano  # Vitalício, não expira
         try:
-            expira = datetime.fromisoformat(user["plano_expira"])
+            expira = datetime.fromisoformat(plano_expira)
             if expira < datetime.now(timezone.utc):
                 return "free"  # Expirou, volta para free
         except (ValueError, TypeError):
@@ -210,11 +240,15 @@ def get_plan_info(user):
     """Retorna informações completas do plano para exibir no frontend."""
     plano_key = get_plan(user)
     plano = PLANS[plano_key]
+    plano_expira = user.get("plano_expira", "") if user else ""
+    is_vitalicio = plano_key in ("ilimitado",) or (plano_expira and plano_expira.lower() in ("vitalicio", "vitalício", "lifetime")) or (plano_key == "premium" and not plano_expira)
     return {
         "plano": plano_key,
         "nome": plano["nome"],
         "descricao": plano["descricao"],
         "preco": plano["preco"],
+        "preco_vitalicio": plano.get("preco_vitalicio", ""),
         "limites": plano["limites"],
-        "plano_expira": user.get("plano_expira", "") if user else "",
+        "plano_expira": plano_expira,
+        "vitalicio": is_vitalicio,
     }

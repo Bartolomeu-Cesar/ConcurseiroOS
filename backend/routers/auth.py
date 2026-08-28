@@ -446,7 +446,11 @@ def my_plan(user=Depends(get_optional_user)):
 
 @router.post("/upgrade")
 def upgrade_plan(body: UpgradePlanRequest, user=Depends(get_current_user), conn=Depends(get_db_session)):
-    """Faz upgrade do plano do usuário (em produção integraria com pagamento)."""
+    """Faz upgrade do plano do usuário (em produção integraria com pagamento).
+
+    Se body.vitalicio=True, o plano não expira (pagamento único).
+    Se body.vitalicio=False, premium expira em 30 dias (assinatura mensal).
+    """
     if not user:
         raise HTTPException(status_code=401, detail="Não autenticado")
 
@@ -454,13 +458,16 @@ def upgrade_plan(body: UpgradePlanRequest, user=Depends(get_current_user), conn=
 
     # Em produção: verificar pagamento aqui
     # Por enquanto: ativa diretamente (para testes)
-    now = datetime.now(timezone.utc).isoformat()
     if plano == "premium":
-        # Premium expira em 30 dias (renovável)
-        expires = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        if body.vitalicio:
+            # Premium vitalício: pagamento único, sem expiração
+            expires = "vitalicio"
+        else:
+            # Premium mensal: expira em 30 dias (renovável)
+            expires = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
     elif plano == "ilimitado":
-        # Ilimitado: sem expiração
-        expires = ""
+        # Ilimitado: sempre vitalício por definição
+        expires = "vitalicio"
     else:
         # Free: sem expiração
         expires = ""
@@ -471,8 +478,9 @@ def upgrade_plan(body: UpgradePlanRequest, user=Depends(get_current_user), conn=
     )
     conn.commit()
 
-    log.info(f"User {user['email']} upgraded to {plano}")
-    return {"ok": True, "plano": plano, "expira": expires}
+    tipo = "vitalício" if body.vitalicio or plano == "ilimitado" else "mensal"
+    log.info(f"User {user['email']} upgraded to {plano} ({tipo})")
+    return {"ok": True, "plano": plano, "expira": expires, "vitalicio": body.vitalicio or plano == "ilimitado"}
 
 
 @router.get("/check-limit/{recurso}")
