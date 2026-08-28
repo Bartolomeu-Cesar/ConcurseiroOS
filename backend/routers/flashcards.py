@@ -276,7 +276,28 @@ def review_flashcard_fsrs(id: int, body: FlashcardReviewSM2, conn=Depends(get_db
     # Call FSRS algorithm
     output = review_card(card, rating, desired_retention=desired_retention)
 
-    proxima = (date.today() + timedelta(days=output.interval)).isoformat()
+    # === LAG EFFECT (Exam-Aware Spacing) ===
+    # Cepeda et al. (2006): O intervalo ótimo depende de quando o aluno precisa
+    # lembrar. Se a prova é em 30 dias, intervalos longos (ex: 45d) são inúteis.
+    # Fator de compressão: min(1.0, dias_ate_prova / (output.interval * 2))
+    # Só comprime se intervalo > dias restantes * 0.7 (não atrapalha spacing normal)
+    from services import get_dias_ate_prova
+    adjusted_interval = output.interval
+    try:
+        dias_ate_prova = get_dias_ate_prova(conn, user_id)
+        if dias_ate_prova and dias_ate_prova > 0 and adjusted_interval > 1:
+            # Se o intervalo ultrapassa 70% do tempo restante, comprimir
+            max_interval = max(1, int(dias_ate_prova * 0.7))
+            if adjusted_interval > max_interval:
+                adjusted_interval = max_interval
+            # Compressão suave adicional para provas próximas (< 60 dias)
+            if dias_ate_prova <= 60 and adjusted_interval > 3:
+                fator = max(0.5, dias_ate_prova / 90)  # Quanto mais perto, mais comprimi
+                adjusted_interval = max(1, int(adjusted_interval * fator))
+    except Exception:
+        pass  # Se não tiver data da prova, usa intervalo FSRS puro
+
+    proxima = (date.today() + timedelta(days=adjusted_interval)).isoformat()
     new_reps = reps + 1
 
     # Update flashcard with FSRS results
@@ -285,26 +306,26 @@ def review_flashcard_fsrs(id: int, body: FlashcardReviewSM2, conn=Depends(get_db
             """UPDATE flashcards SET intervalo_dias = ?, proxima_revisao = ?,
                stability = ?, difficulty = ?, fsrs_state = ?, repetitions = ?
                WHERE id = ? AND user_id = ?""",
-            (output.interval, proxima, round(output.stability, 6),
+            (adjusted_interval, proxima, round(output.stability, 6),
              round(output.difficulty, 4), output.state, new_reps, id, user_id)
         )
     except Exception:
         # Fallback if FSRS columns don't exist - just update interval and next review
         conn.execute(
             "UPDATE flashcards SET intervalo_dias = ?, proxima_revisao = ? WHERE id = ? AND user_id = ?",
-            (output.interval, proxima, id, user_id)
+            (adjusted_interval, proxima, id, user_id)
         )
 
     update_streak(conn, "flashcards_revisados", user_id=user_id)
     conn.commit()
 
-    log.info(f"Flashcard FSRS review: id={id} rating={rating} S={output.stability:.4f} D={output.difficulty:.4f} I={output.interval}")
+    log.info(f"Flashcard FSRS review: id={id} rating={rating} S={output.stability:.4f} D={output.difficulty:.4f} I={output.interval} adj_I={adjusted_interval}")
 
     # A3: Suggest elaboration when rating is low (FSRS rating 1 = Again, 2 = Hard)
     elaboration_suggested = rating <= 2
     result = {
         "id": id,
-        "intervalo_dias": output.interval,
+        "intervalo_dias": adjusted_interval,
         "proxima_revisao": proxima,
         "stability": round(output.stability, 6),
         "difficulty": round(output.difficulty, 4),
