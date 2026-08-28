@@ -264,12 +264,35 @@ def o_que_estudar_agora(conn=Depends(get_db_session), user_id: int = Depends(get
         turno_label = "🦉 Madrugada"
 
     # Buscar atividades planejadas para hoje
+    # Usar mesma lógica do grid: se personalizado tem dados atualizados, usar;
+    # senão, gerar a partir do planejador_semanal (mesmo comportamento do loadCalendario no frontend)
     atividades_hoje = conn.execute("""
         SELECT materia, topicos, tempo_min, tipo, ordem
         FROM calendario_personalizado
         WHERE dia_semana = ? AND user_id = ?
         ORDER BY ordem
     """, (dia_semana, user_id)).fetchall()
+
+    # Verificar se o calendário personalizado está sincronizado com o planejador
+    # Se o planejador tem matérias diferentes, o personalizado está desatualizado
+    planejador_materias = conn.execute("""
+        SELECT DISTINCT materia FROM planejador_semanal
+        WHERE dia_semana = ? AND user_id = ?
+    """, (dia_semana, user_id)).fetchall()
+    planejador_mats = set(r["materia"] for r in planejador_materias)
+    personalizado_mats = set(a["materia"] for a in atividades_hoje if a["materia"] and a["tipo"] not in ("pre-test", "revisao", "pausa", "consolidacao"))
+
+    # Se personalizado não tem NENHUMA matéria do planejador → desatualizado, usar planejador
+    if planejador_mats and personalizado_mats and not planejador_mats.intersection(personalizado_mats):
+        # Calendário personalizado desatualizado — gerar atividades do planejador
+        atividades_hoje = []
+        plan_items = conn.execute("""
+            SELECT materia, horas FROM planejador_semanal
+            WHERE dia_semana = ? AND user_id = ? ORDER BY id
+        """, (dia_semana, user_id)).fetchall()
+        for idx, p in enumerate(plan_items):
+            tempo = int(p["horas"] * 60)
+            atividades_hoje.append({"materia": p["materia"], "topicos": "", "tempo_min": tempo, "tipo": "estudo", "ordem": idx})
 
     # Se não tem calendário personalizado, buscar do ciclo/edital
     if not atividades_hoje:
