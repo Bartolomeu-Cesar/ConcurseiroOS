@@ -111,7 +111,17 @@ function showCurrentFlashcard() {
   } else if (progressEl) { progressEl.style.display = 'none'; }
   if (currentFlashIndex >= pendentes) {
     const doneAll = _flashReviewedToday + currentFlashIndex;
-    q.innerHTML = `<span style="color:#a6e3a1;font-size:1.3rem;font-weight:600;">🎉 Parabéns! ${doneAll} flashcards revisados hoje!</span>`;
+    // Distributed Summary: prompt de 1 frase ao final da sessão
+    // Evidência: Rawson & Dunlosky (2022) — Resumir distribuído consolida mais que resumir uma vez
+    const summaryPrompt = doneAll >= 3 ? `
+      <div style="margin-top:12px;padding:10px;background:var(--bg-surface);border-radius:8px;">
+        <div style="font-size:0.78rem;color:var(--accent);font-weight:600;margin-bottom:4px;">📝 Distributed Summary</div>
+        <div style="font-size:0.7rem;color:var(--text-sub);margin-bottom:6px;">Resuma em 1 frase o que aprendeu/revisou nesta sessão:</div>
+        <textarea id="session-summary-input" placeholder="Ex: 'Revisão de prazos processuais — mandado de segurança é 120 dias, habeas data é...' "
+          style="width:100%;min-height:40px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-size:0.8rem;font-family:inherit;resize:vertical;"></textarea>
+        <button onclick="saveSessionSummary()" style="margin-top:6px;background:var(--accent);color:var(--bg);border:none;border-radius:6px;padding:6px 12px;font-size:0.78rem;font-weight:600;cursor:pointer;">💾 Salvar resumo</button>
+      </div>` : '';
+    q.innerHTML = `<span style="color:#a6e3a1;font-size:1.3rem;font-weight:600;">🎉 Parabéns! ${doneAll} flashcards revisados hoje!</span>${summaryPrompt}`;
     a.style.display = 'none'; rb.style.display = 'none'; rv.style.display = 'none';
     if (progressEl) {
       document.getElementById('flash-progress-text').textContent = `${doneAll}/${total} revisados ✓`;
@@ -1379,4 +1389,32 @@ export async function submitBrainDump() {
 export function closeBrainDump() {
   // Volta ao estado normal de flashcards
   loadFlashcardsToday();
+}
+
+// ============================================================
+// DISTRIBUTED SUMMARY — Resumo de 1 frase ao final da sessão
+// Evidência: Rawson & Dunlosky (2022) — Successive Relearning
+// ============================================================
+
+export function saveSessionSummary() {
+  const input = document.getElementById('session-summary-input');
+  const texto = input ? input.value.trim() : '';
+  if (!texto) {
+    toast('Escreva pelo menos uma frase.', 'warning');
+    return;
+  }
+  // Salvar como elaboration tipo distributed_summary
+  fetch('/api/study-intelligence/elaboration', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      flashcard_id: null,
+      prompt_tipo: 'distributed_summary',
+      resposta_usuario: texto
+    })
+  }).catch(() => {});
+  toast('📝 Resumo da sessão salvo! Isso consolida o aprendizado.', 'success', 2500);
+  // Remover o formulário e mostrar confirmação
+  const container = input.closest('div');
+  if (container) container.innerHTML = `<div style="color:var(--green);font-size:0.8rem;font-weight:600;text-align:center;padding:8px;">✅ Resumo salvo!</div>`;
 }
