@@ -148,8 +148,11 @@ async def import_progress(file: UploadFile = File(...), conn=Depends(get_db_sess
 
 @router.post("/api/pdfs/upload", summary="Upload de PDF para estudo",
              description="Faz upload de um arquivo PDF para a biblioteca de estudo.")
-async def upload_pdf(file: UploadFile = File(...), user_id: int = Depends(get_user_id)):
+async def upload_pdf(file: UploadFile = File(...), user_id: int = Depends(get_user_id), conn=Depends(get_db_session)):
     """Salva um PDF na pasta de PDFs para leitura no viewer."""
+    from plans import enforce_plan_limit
+    enforce_plan_limit(conn, user_id, "pdfs")
+
     if not file.filename or not file.filename.lower().endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Apenas arquivos PDF são aceitos.")
 

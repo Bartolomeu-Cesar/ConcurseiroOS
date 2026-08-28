@@ -307,11 +307,18 @@ async function confirmarResposta() {
 
   const letra = selected.dataset.letter;
   const tempoSegundos = questaoStartTime ? Math.round((Date.now() - questaoStartTime) / 1000) : 0;
-  const res = await fetch(`/api/questoes/${currentQuestao.id}/responder`, {
+  const resp = await fetch(`/api/questoes/${currentQuestao.id}/responder`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ resposta: letra, tempo_segundos: tempoSegundos })
-  }).then(r => r.json());
+  });
+  if (resp.status === 403) {
+    const err = await resp.json().catch(() => ({}));
+    if (window.showToast) showToast(err.detail || 'Limite diário atingido!', 'warning');
+    if (window.showUpgradeModal) window.showUpgradeModal();
+    return;
+  }
+  const res = await resp.json();
 
   respondida = true;
 
@@ -435,6 +442,9 @@ async function loadStats() {
 
 // ==================== SIMULADOS ====================
 async function criarSimulado() {
+  // Verificar limite do plano
+  if (window.checkPlanLimit && !(await window.checkPlanLimit('simulados'))) return;
+
   const titulo = document.getElementById('sim-titulo').value.trim() || `Simulado ${new Date().toLocaleDateString('pt-BR')}`;
   const tempo = parseInt(document.getElementById('sim-tempo').value) || 60;
   const materiasSelecionadas = getSimMateriasSelecionadas();

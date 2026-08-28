@@ -174,6 +174,12 @@ export async function responderQuestaoDia(letra) {
   }
   try {
     const resp = await fetch(`/api/questoes/${q.id}/responder`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ resposta: letra, tempo_segundos: tempoSegundos }) });
+    if (resp.status === 403) {
+      const err = await resp.json().catch(() => ({}));
+      toast(err.detail || 'Limite de questões do dia atingido. Faça upgrade!', 'warning');
+      if (window.showUpgradeModal) window.showUpgradeModal();
+      return;
+    }
     if (resp.ok) {
       const data = await resp.json();
       _lastRespostaId = data.id || data.resposta_id || null;

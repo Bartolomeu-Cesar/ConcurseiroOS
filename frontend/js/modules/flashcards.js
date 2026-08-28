@@ -775,6 +775,8 @@ export async function saveElaboration() {
 export async function addFlashcard() {
   const p = document.getElementById('flash-pergunta').value.trim(), r = document.getElementById('flash-resposta').value.trim();
   if (!p || !r) { toast('Preencha pergunta e resposta.', 'warning'); return; }
+  // Verificar limite do plano antes de criar
+  if (window.checkPlanLimit && !(await window.checkPlanLimit('flashcards'))) return;
   const materia = document.getElementById('flash-add-materia')?.value || '';
   await fetch('/api/flashcards', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pergunta: p, resposta: r, materia }) });
   document.getElementById('flash-pergunta').value = '';

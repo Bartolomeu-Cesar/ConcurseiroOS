@@ -366,6 +366,9 @@ def get_questao(id: int, embaralhar: bool = False, conn=Depends(get_db_session),
 
 @router.post("/api/questoes", summary="Criar questão", description="Adiciona uma nova questão ao banco de questões")
 def create_questao(body: QuestaoCreate, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    from plans import enforce_plan_limit
+    enforce_plan_limit(conn, user_id, "questoes_banco")
+
     cur = conn.execute("""
         INSERT INTO questoes (materia, topico, enunciado, alternativa_a, alternativa_b,
             alternativa_c, alternativa_d, alternativa_e, resposta_correta, explicacao, dificuldade, banca, created_at, user_id)
@@ -388,6 +391,9 @@ def create_questao(body: QuestaoCreate, conn=Depends(get_db_session), user_id: i
 
 @router.post("/api/questoes/{id}/responder", response_model=QuestaoRespostaResponse, summary="Responder questão", description="Registra a resposta do usuário e retorna se acertou ou errou")
 def responder_questao(id: int, body: QuestaoResposta, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    from plans import enforce_plan_limit
+    enforce_plan_limit(conn, user_id, "questoes_dia")
+
     questao = conn.execute("SELECT resposta_correta, materia FROM questoes WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
     if not questao:
         raise HTTPException(status_code=404, detail="Questão não encontrada")

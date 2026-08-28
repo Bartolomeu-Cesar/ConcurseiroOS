@@ -179,6 +179,9 @@ def gerar_ciclo_automatico(horas_dia: float = Query(default=3.0), conn=Depends(g
     - Menos horas estudadas / Nunca estudadas (gaps)
     - Mais dias sem estudar (necessidade de revisão)
     """
+    from plans import enforce_plan_limit
+    enforce_plan_limit(conn, user_id, "ciclo_materias")
+
     result = _gerar_ciclo_automatico(conn, user_id, horas_dia)
     if not result["ok"]:
         raise HTTPException(status_code=400, detail=result["erro"])
@@ -206,6 +209,9 @@ def proximo_ciclo(conn=Depends(get_db_session), user_id: int = Depends(get_user_
 
 @router.post("/api/ciclo")
 def create_ciclo(body: CicloCreate, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    from plans import enforce_plan_limit
+    enforce_plan_limit(conn, user_id, "ciclo_materias")
+
     max_ordem = conn.execute("SELECT COALESCE(MAX(ordem), 0) FROM ciclo_estudos WHERE user_id = ?", (user_id,)).fetchone()[0]
     cur = conn.execute("INSERT INTO ciclo_estudos (materia, horas_alvo, ordem, user_id) VALUES (?, ?, ?, ?)",
                        (body.materia, body.horas_alvo, max_ordem + 1, user_id))

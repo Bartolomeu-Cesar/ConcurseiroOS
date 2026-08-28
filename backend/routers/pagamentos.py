@@ -186,7 +186,50 @@ async def webhook_mercadopago(request: Request, conn=Depends(get_db_session)):
     O MP envia POST com:
     - action: "payment.created" ou "payment.updated"
     - data.id: ID do pagamento
+    - Headers: x-signature (HMAC-SHA256), x-request-id
     """
+    # === VALIDAÇÃO HMAC ===
+    if MERCADO_PAGO_WEBHOOK_SECRET:
+        x_signature = request.headers.get("x-signature", "")
+        x_request_id = request.headers.get("x-request-id", "")
+
+        if not x_signature:
+            log.warning("Webhook sem x-signature — rejeitado")
+            return {"ok": True}  # Retorna 200 para não causar retries, mas não processa
+
+        # Extrair ts e v1 do header: "ts=1704908010,v1=abc123..."
+        parts = {}
+        for part in x_signature.split(","):
+            kv = part.strip().split("=", 1)
+            if len(kv) == 2:
+                parts[kv[0]] = kv[1]
+
+        ts = parts.get("ts", "")
+        received_hash = parts.get("v1", "")
+
+        if not ts or not received_hash:
+            log.warning("Webhook x-signature malformado — rejeitado")
+            return {"ok": True}
+
+        # Extrair data.id da query string (MP envia como ?data.id=XXX) ou do body
+        data_id = request.query_params.get("data.id", "")
+
+        # Montar template para HMAC: "id:{data_id};request-id:{x_request_id};ts:{ts};"
+        manifest = f"id:{data_id};request-id:{x_request_id};ts:{ts};"
+
+        # Calcular HMAC-SHA256
+        expected_hash = hmac.new(
+            MERCADO_PAGO_WEBHOOK_SECRET.encode(),
+            manifest.encode(),
+            hashlib.sha256
+        ).hexdigest()
+
+        if not hmac.compare_digest(expected_hash, received_hash):
+            log.warning(f"Webhook HMAC inválido — rejeitado (data_id={data_id})")
+            return {"ok": True}  # 200 para evitar retries, mas não credita
+
+        log.info(f"Webhook HMAC validado OK (data_id={data_id})")
+
     try:
         body = await request.json()
     except Exception:
@@ -236,7 +279,11 @@ def historico_pagamentos(conn=Depends(get_db_session), user_id: int = Depends(ge
 # ==================== FUNÇÕES AUXILIARES ====================
 
 def _creditar_pagamento(conn, user_id: int, payment_id: str, payment: dict):
-    """Credita os créditos do pagamento aprovado ao usuário."""
+    """Credita os créditos do pagamento aprovado ao usuário E auto-ativa Premium.
+
+    Fluxo: PIX aprovado → créditos adicionados → créditos convertidos em dias Premium automaticamente.
+    O estudante não precisa ativar manualmente — paga e já está Premium.
+    """
     # Verificar se já foi creditado (evitar duplicidade)
     try:
         existing = conn.execute(
@@ -265,6 +312,12 @@ def _creditar_pagamento(conn, user_id: int, payment_id: str, payment: dict):
     if creditos < 1:
         return
 
+    # Buscar saldo atual e plano
+    row = conn.execute(
+        "SELECT creditos_saldo, plano, plano_expira FROM users WHERE id = ?", (user_id,)
+    ).fetchone()
+    saldo_anterior = row[0] if row and row[0] else 0
+
     # Adicionar ao saldo
     try:
         conn.execute(
@@ -284,13 +337,57 @@ def _creditar_pagamento(conn, user_id: int, payment_id: str, payment: dict):
         pass
 
     # Registrar no histórico de créditos
+    saldo_posterior = saldo_anterior + creditos
     try:
         conn.execute("""
             INSERT INTO creditos_historico (user_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, created_at)
-            VALUES (?, 'pagamento_pix', ?, 0, 0, ?, ?)
-        """, (user_id, creditos, f"PIX aprovado (MP #{payment_id})", datetime.now(timezone.utc).isoformat()))
+            VALUES (?, 'pagamento_pix', ?, ?, ?, ?, ?)
+        """, (user_id, creditos, saldo_anterior, saldo_posterior,
+              f"PIX aprovado (MP #{payment_id})", datetime.now(timezone.utc).isoformat()))
     except Exception:
         pass
 
+    # === AUTO-ATIVAR PREMIUM ===
+    # Converter TODOS os créditos recém-comprados em dias de acesso Premium automaticamente.
+    dias = creditos * CREDIT_CONFIG["dias_por_credito"]
+
+    # Determinar data base: se já é premium ativo, estender; senão, partir de agora
+    plano_atual = row[1] if row else "free"
+    plano_expira = row[2] if row else ""
+
+    if plano_atual == "premium" and plano_expira and plano_expira not in ("vitalicio", "vitalício", "lifetime"):
+        try:
+            base = datetime.fromisoformat(plano_expira)
+            if base > datetime.now(timezone.utc):
+                nova_expira = (base + timedelta(days=dias)).isoformat()
+            else:
+                nova_expira = (datetime.now(timezone.utc) + timedelta(days=dias)).isoformat()
+        except (ValueError, TypeError):
+            nova_expira = (datetime.now(timezone.utc) + timedelta(days=dias)).isoformat()
+    elif plano_atual == "ilimitado":
+        # Já é vitalício, créditos ficam no saldo como reserva
+        nova_expira = None
+    else:
+        nova_expira = (datetime.now(timezone.utc) + timedelta(days=dias)).isoformat()
+
+    if nova_expira:
+        # Ativar premium e debitar créditos usados
+        conn.execute(
+            "UPDATE users SET plano = 'premium', plano_expira = ?, creditos_saldo = 0 WHERE id = ?",
+            (nova_expira, user_id)
+        )
+        # Registrar ativação no histórico
+        try:
+            conn.execute("""
+                INSERT INTO creditos_historico (user_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, created_at)
+                VALUES (?, 'ativacao_auto', ?, ?, 0, ?, ?)
+            """, (user_id, -creditos, saldo_posterior,
+                  f"Auto-ativação: {dias} dias Premium via PIX #{payment_id}",
+                  datetime.now(timezone.utc).isoformat()))
+        except Exception:
+            pass
+        log.info(f"Auto-ativação Premium: user={user_id} +{dias} dias (créditos={creditos}) via PIX #{payment_id}")
+    else:
+        log.info(f"Créditos adicionados (user já vitalício): user={user_id} +{creditos} via PIX #{payment_id}")
+
     conn.commit()
-    log.info(f"Créditos adicionados: user={user_id} +{creditos} via PIX #{payment_id}")

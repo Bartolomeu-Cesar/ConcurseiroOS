@@ -250,6 +250,9 @@ def get_simulado(id: int, conn=Depends(get_db_session), user_id: int = Depends(g
 
 @router.post("/api/simulados")
 def create_simulado(body: SimuladoCreate, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    from plans import enforce_plan_limit
+    enforce_plan_limit(conn, user_id, "simulados")
+
     cur = conn.execute("""
         INSERT INTO simulados (titulo, tempo_limite_min, total_questoes, created_at, user_id)
         VALUES (?, ?, ?, ?, ?)
@@ -343,6 +346,9 @@ def delete_simulado(id: int, conn=Depends(get_db_session), user_id: int = Depend
 @router.post("/api/simulados/prova-real")
 def simulado_prova_real(body: SimuladoProvaReal, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Monta simulado baseado na distribuição real do edital (proporção de tópicos por matéria)"""
+    from plans import enforce_plan_limit
+    enforce_plan_limit(conn, user_id, "simulados")
+
     log.info(f"POST /api/simulados/prova-real edital={body.edital_nome} cargo={body.cargo}")
     # Buscar matérias do edital com contagem de tópicos
     query = "SELECT materia, COUNT(*) as topicos FROM edital WHERE user_id = ?"

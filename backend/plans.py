@@ -236,6 +236,67 @@ def require_feature(feature):
     return check
 
 
+def enforce_plan_limit(conn, user_id: int, recurso: str):
+    """Verifica se o usuário pode criar mais do recurso dado.
+
+    Lança HTTPException 403 se o limite do plano foi atingido.
+    Deve ser chamado em endpoints POST de criação de recursos limitados.
+
+    Recursos suportados: flashcards, pdfs, simulados, ciclo_materias, editais.
+    Para questoes_dia usa contagem diária.
+    """
+    from utils import today_str as _today
+
+    user = conn.execute(
+        "SELECT id, plano, plano_expira FROM users WHERE id = ?", (user_id,)
+    ).fetchone()
+    user_dict = dict(user) if user else {"id": user_id, "plano": "free", "plano_expira": ""}
+
+    limites = get_limits(user_dict)
+    limite = limites.get(recurso)
+
+    # Sem limite definido ou ilimitado (-1) → permitir
+    if limite is None or limite == -1:
+        return
+    if isinstance(limite, bool):
+        if not limite:
+            plano = get_plan(user_dict)
+            raise HTTPException(
+                status_code=403,
+                detail=f"'{recurso}' não disponível no plano {PLANS[plano]['nome']}. Faça upgrade para Premium!"
+            )
+        return
+
+    # Contar uso atual
+    if recurso == "flashcards":
+        count = conn.execute("SELECT COUNT(*) FROM flashcards WHERE user_id = ?", (user_id,)).fetchone()[0]
+    elif recurso == "pdfs":
+        count = conn.execute("SELECT COUNT(*) FROM progress WHERE user_id = ?", (user_id,)).fetchone()[0]
+    elif recurso == "simulados":
+        count = conn.execute("SELECT COUNT(*) FROM simulados WHERE user_id = ?", (user_id,)).fetchone()[0]
+    elif recurso == "ciclo_materias":
+        count = conn.execute("SELECT COUNT(*) FROM ciclo_estudos WHERE ativo = 1 AND user_id = ?", (user_id,)).fetchone()[0]
+    elif recurso == "editais":
+        count = conn.execute("SELECT COUNT(DISTINCT edital_nome) FROM edital WHERE arquivado = 0 AND user_id = ?", (user_id,)).fetchone()[0]
+    elif recurso == "questoes_dia":
+        today = _today()
+        count = conn.execute(
+            "SELECT COUNT(*) FROM questoes_respostas WHERE user_id = ? AND data = ?",
+            (user_id, today)
+        ).fetchone()[0]
+    elif recurso == "questoes_banco":
+        count = conn.execute("SELECT COUNT(*) FROM questoes WHERE user_id = ?", (user_id,)).fetchone()[0]
+    else:
+        return  # Recurso desconhecido → permitir
+
+    if count >= limite:
+        plano = get_plan(user_dict)
+        raise HTTPException(
+            status_code=403,
+            detail=f"Limite de {recurso} atingido ({count}/{limite}) no plano {PLANS[plano]['nome']}. Faça upgrade para Premium!"
+        )
+
+
 def get_plan_info(user):
     """Retorna informações completas do plano para exibir no frontend."""
     plano_key = get_plan(user)

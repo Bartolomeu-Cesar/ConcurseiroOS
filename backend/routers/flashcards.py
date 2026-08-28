@@ -112,6 +112,9 @@ def get_flashcards_aleatorio(materia: str = "", quantidade: int = 10, conn=Depen
 
 @router.post("/api/flashcards", summary="Criar flashcard", description="Cria um novo flashcard com revisão SRS")
 def create_flashcard(body: FlashcardCreate, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    from plans import enforce_plan_limit
+    enforce_plan_limit(conn, user_id, "flashcards")
+
     pergunta = sanitize_input(body.pergunta, max_length=2000)
     resposta = sanitize_input(body.resposta, max_length=5000)
     materia = sanitize_input(getattr(body, 'materia', ''))

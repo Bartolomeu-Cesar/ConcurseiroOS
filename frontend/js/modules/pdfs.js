@@ -280,6 +280,8 @@ export async function uploadPdf(input) {
     input.value = '';
     return;
   }
+  // Verificar limite do plano antes de upload
+  if (window.checkPlanLimit && !(await window.checkPlanLimit('pdfs'))) { input.value = ''; return; }
   toast('Enviando PDF...', 'info');
   const form = new FormData();
   form.append('file', file);
