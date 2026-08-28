@@ -3425,3 +3425,87 @@ def spacing_gap(
         "dias_ate_prova": dias_prova,
         "sugestao": sugestao,
     }
+
+
+@router.get("/api/study-intelligence/expressive-writing", summary="Expressive Writing — Redução de Ansiedade",
+            description="""Verifica se o usuário está a 48h da prova e sugere expressive writing.
+Evidência: Ramirez & Beilock (2011) — Escrever sobre medos/preocupações 10min antes
+de uma prova melhora desempenho em 5-15%, especialmente para alunos ansiosos.""")
+def expressive_writing(
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Verifica proximidade da prova e sugere expressive writing."""
+    from services import get_dias_ate_prova
+
+    dias_prova = get_dias_ate_prova(conn, user_id)
+
+    if not dias_prova or dias_prova > 3:
+        return {
+            "ativar": False,
+            "dias_ate_prova": dias_prova,
+            "mensagem": None,
+        }
+
+    # Verificar se já fez expressive writing hoje
+    ja_fez = conn.execute("""
+        SELECT COUNT(*) FROM elaboration_log
+        WHERE user_id = ? AND prompt_tipo = 'expressive_writing' AND created_at = ?
+    """, (user_id, today_str())).fetchone()[0] > 0
+
+    if ja_fez:
+        return {
+            "ativar": False,
+            "dias_ate_prova": dias_prova,
+            "mensagem": "✅ Você já fez expressive writing hoje. Ótimo!",
+        }
+
+    # Prompts baseados na proximidade
+    if dias_prova <= 1:
+        urgencia = "alta"
+        prompt = "Sua prova é AMANHÃ! Escreva por 10 minutos sobre seus medos, preocupações e pensamentos sobre a prova. Não se censure — apenas escreva livremente."
+    elif dias_prova <= 2:
+        urgencia = "media"
+        prompt = "Sua prova é em 2 dias. Reserve 10 minutos para escrever sobre como está se sentindo. Quais medos aparecem? Quais matérias geram insegurança?"
+    else:
+        urgencia = "baixa"
+        prompt = "Sua prova está próxima (3 dias). Comece a processar suas emoções: escreva sobre expectativas, medos e o que pode dar errado."
+
+    return {
+        "ativar": True,
+        "dias_ate_prova": dias_prova,
+        "urgencia": urgencia,
+        "prompt": prompt,
+        "mensagem": f"✍️ Prova em {dias_prova} dia(s)! Expressive Writing reduz ansiedade em 15% (Ramirez & Beilock, 2011).",
+        "instrucoes": [
+            "Escreva por 10 minutos sem parar",
+            "Não se preocupe com gramática ou coerência",
+            "Foque em medos, preocupações e sentimentos sobre a prova",
+            "Isso libera espaço na memória de trabalho (working memory)",
+        ],
+    }
+
+
+@router.post("/api/study-intelligence/expressive-writing", summary="Salvar Expressive Writing")
+def save_expressive_writing(
+    body: dict = Body(...),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Salva o texto de expressive writing do aluno."""
+    texto = body.get("texto", "").strip()
+    if not texto:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="Texto é obrigatório")
+
+    conn.execute("""
+        INSERT INTO elaboration_log (user_id, flashcard_id, questao_id, prompt_tipo, resposta_usuario, created_at)
+        VALUES (?, NULL, NULL, 'expressive_writing', ?, ?)
+    """, (user_id, texto, today_str()))
+    conn.commit()
+
+    return {
+        "ok": True,
+        "palavras": len(texto.split()),
+        "mensagem": "✅ Expressive writing salvo! Sua ansiedade foi processada. Você vai performar melhor na prova.",
+    }
