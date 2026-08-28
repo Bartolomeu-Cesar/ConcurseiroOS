@@ -22,6 +22,7 @@ import {
 import { loadDesafioDiarioCard } from './desafio.js';
 import { handleAuthNav } from '../../modules/auth.js';
 import { renderCatStartCard } from '../../modules/cat-session.js';
+import { renderAnxietyCard } from '../../modules/anxiety-exposure.js';
 
 // ===== Dashboard Tab Navigation =====
 document.querySelectorAll('.dash-tab').forEach(tab => {
@@ -986,9 +987,13 @@ function loadActivePanel() {
       loadDailyChallenge();
       loadIntercalacao();
       loadPraticaDelib();
+      loadErrorAnalysisPatterns();
       // Render CAT start card
       const catContainer = document.getElementById('cat-session-container');
       if (catContainer) renderCatStartCard(catContainer, { showTitle: false });
+      // Render Anxiety Management card
+      const anxietyContainer = document.getElementById('anxiety-container');
+      if (anxietyContainer) renderAnxietyCard(anxietyContainer);
       loadFeynmanMaterias();
       loadPontosFragcos();
       loadConexoes();
@@ -2111,3 +2116,230 @@ async function loadRoiMaterias() {
     box.innerHTML = '<div style="font-size:0.78rem;color:var(--text-sub);">Erro ao carregar ROI</div>';
   }
 }
+
+
+// ============================================================
+// ERROR ANALYSIS PATTERNS — Widget de Análise de Padrões de Erro
+// ============================================================
+
+async function loadErrorAnalysisPatterns() {
+  const container = document.getElementById('si-techniques-alerts');
+  if (!container) return;
+
+  const PATTERN_COLORS = {
+    desatencao: '#f38ba8',
+    conceito: '#89b4fa',
+    interpretacao: '#f9e2af',
+    pegadinha: '#cba6f7',
+    'exceção': '#94e2d5'
+  };
+
+  const PATTERN_ICONS = {
+    desatencao: '⚡',
+    conceito: '📖',
+    interpretacao: '🔍',
+    pegadinha: '🪤',
+    'exceção': '⚠️'
+  };
+
+  try {
+    const res = await fetch('/api/study-intelligence/error-patterns');
+    if (!res.ok) return;
+    const data = await res.json();
+
+    if (!data || !data.distribuicao || data.total_erros === 0) return;
+
+    // Build horizontal bars for each pattern
+    const maxPct = Math.max(...Object.values(data.distribuicao).map(d => d.pct), 1);
+
+    let barsHtml = '';
+    for (const [padrao, info] of Object.entries(data.distribuicao)) {
+      const color = PATTERN_COLORS[padrao] || 'var(--text-sub)';
+      const icon = PATTERN_ICONS[padrao] || '●';
+      const barWidth = Math.max(5, Math.round((info.pct / maxPct) * 100));
+      const isDominant = padrao === data.padrao_dominante;
+      const descricao = data.detalhes_padroes?.[padrao]?.descricao || '';
+
+      barsHtml += `
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;${isDominant ? 'background:rgba(255,255,255,0.03);border-radius:8px;padding:6px 8px;border:1px solid ' + color + ';' : ''}">
+          <span style="font-size:1rem;min-width:20px;text-align:center;" title="${descricao}">${icon}</span>
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
+              <span style="font-size:0.78rem;color:var(--text);font-weight:${isDominant ? '700' : '500'};text-transform:capitalize;">
+                ${padrao}${isDominant ? ' <span style="font-size:0.65rem;color:' + color + ';margin-left:4px;">★ dominante</span>' : ''}
+              </span>
+              <span style="font-size:0.7rem;color:var(--text-sub);">${info.count} erros (${info.pct.toFixed(1)}%)</span>
+            </div>
+            <div style="height:8px;background:var(--bg-elevated, #45475a);border-radius:4px;overflow:hidden;">
+              <div style="height:100%;width:${barWidth}%;background:${color};border-radius:4px;transition:width 0.4s ease;"></div>
+            </div>
+            ${descricao ? `<div style="font-size:0.68rem;color:var(--text-sub);margin-top:2px;">${descricao}</div>` : ''}
+          </div>
+        </div>`;
+    }
+
+    // Recomendações
+    let recsHtml = '';
+    if (data.recomendacoes && data.recomendacoes.length > 0) {
+      recsHtml = `
+        <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border, #45475a);">
+          <div style="font-size:0.78rem;font-weight:600;color:var(--text);margin-bottom:6px;">💡 Recomendações</div>
+          ${data.recomendacoes.map(r => `
+            <div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:5px;">
+              <span style="color:var(--accent);font-size:0.75rem;margin-top:1px;">→</span>
+              <span style="font-size:0.75rem;color:var(--text-sub);line-height:1.4;">${r}</span>
+            </div>`).join('')}
+        </div>`;
+    }
+
+    // Matérias mais afetadas (top 3)
+    let materiasHtml = '';
+    if (data.por_materia && Object.keys(data.por_materia).length > 0) {
+      const materiasSorted = Object.entries(data.por_materia)
+        .map(([materia, padroes]) => ({
+          materia,
+          total: Object.values(padroes).reduce((a, b) => a + b, 0),
+          padroes
+        }))
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 3);
+
+      if (materiasSorted.length > 0) {
+        materiasHtml = `
+          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border, #45475a);">
+            <div style="font-size:0.78rem;font-weight:600;color:var(--text);margin-bottom:6px;">📚 Matérias Mais Afetadas</div>
+            ${materiasSorted.map(m => {
+              const topPadrao = Object.entries(m.padroes).sort((a, b) => b[1] - a[1])[0];
+              const topColor = PATTERN_COLORS[topPadrao[0]] || 'var(--text-sub)';
+              return `
+                <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border, #45475a);">
+                  <span style="width:6px;height:6px;border-radius:50%;background:${topColor};flex-shrink:0;"></span>
+                  <span style="flex:1;font-size:0.75rem;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${m.materia}</span>
+                  <span style="font-size:0.68rem;color:var(--text-sub);">${m.total} erros</span>
+                  <span style="font-size:0.65rem;color:${topColor};text-transform:capitalize;">${topPadrao[0]}</span>
+                </div>`;
+            }).join('')}
+          </div>`;
+      }
+    }
+
+    // Mount full widget HTML
+    const widgetHtml = `
+      <div style="background:var(--bg-surface);border-radius:10px;padding:16px;margin-bottom:12px;border-left:4px solid ${PATTERN_COLORS[data.padrao_dominante] || 'var(--accent)'};">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <div style="font-size:0.88rem;font-weight:700;color:var(--text);">🔍 Análise de Padrões de Erro</div>
+          <span style="font-size:0.7rem;color:var(--text-sub);">${data.total_erros} erros · ${data.periodo_dias} dias</span>
+        </div>
+        ${barsHtml}
+        ${recsHtml}
+        ${materiasHtml}
+      </div>
+    `;
+
+    // Append (não substituir, pois outros widgets podem já estar no container)
+    const wrapper = document.createElement('div');
+    wrapper.id = 'error-analysis-widget';
+    wrapper.innerHTML = widgetHtml;
+
+    // Remove old widget if re-loaded
+    const oldWidget = document.getElementById('error-analysis-widget');
+    if (oldWidget) oldWidget.remove();
+
+    container.insertBefore(wrapper, container.firstChild);
+  } catch (e) {
+    console.error('Erro ao carregar Error Analysis Patterns:', e);
+  }
+}
+
+
+// ============================================================
+// FORGETTING CURVE ALERTS — Widget de alertas de retenção
+// ============================================================
+
+async function loadForgettingAlerts() {
+  const container = document.getElementById('si-techniques-alerts');
+  if (!container) return;
+
+  try {
+    const res = await fetch('/api/study-intelligence/alerts');
+    if (!res.ok) return;
+    const data = await res.json();
+
+    const urgenciaColor = (u) => {
+      switch (u) {
+        case 'alta': return 'var(--red, #f38ba8)';
+        case 'media': return 'var(--yellow, #f9e2af)';
+        case 'baixa': return 'var(--green, #a6e3a1)';
+        default: return 'var(--text-sub)';
+      }
+    };
+
+    let html = '';
+
+    if (data.total_em_risco === 0) {
+      html = `
+        <div style="background:var(--bg-surface);border-radius:10px;padding:16px;margin-top:10px;border-left:4px solid var(--green, #a6e3a1);">
+          <div style="font-size:0.88rem;color:var(--text);text-align:center;">✅ Nenhum item em risco. Tudo sob controle!</div>
+        </div>`;
+    } else {
+      // Header
+      html += `
+        <div style="background:var(--bg-surface);border-radius:10px;padding:16px;margin-top:10px;border-left:4px solid var(--red, #f38ba8);">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+            <span style="font-size:0.92rem;font-weight:700;color:var(--text);">⚠️ Alertas de Retenção</span>
+            <span style="background:var(--red, #f38ba8);color:#1e1e2e;font-size:0.68rem;font-weight:700;padding:2px 8px;border-radius:10px;">${data.total_em_risco}</span>
+          </div>
+
+          <!-- Cards por matéria -->
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            ${data.alerts.map(alert => {
+              const cor = urgenciaColor(alert.urgencia);
+              const retencaoPct = Math.max(0, Math.min(100, alert.retencao_media));
+              const barColor = retencaoPct >= 80 ? 'var(--green, #a6e3a1)' :
+                               retencaoPct >= 60 ? 'var(--yellow, #f9e2af)' :
+                               retencaoPct >= 40 ? 'var(--peach, #fab387)' : 'var(--red, #f38ba8)';
+              return `
+                <div style="background:var(--bg);border-radius:8px;padding:12px;border-left:3px solid ${cor};">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                    <span style="font-size:0.82rem;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%;">${alert.materia}</span>
+                    <span style="font-size:0.68rem;font-weight:600;color:${cor};text-transform:uppercase;">${alert.urgencia}</span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                    <span style="font-size:0.72rem;color:var(--text-sub);">${alert.items_em_risco} itens em risco</span>
+                    <span style="font-size:0.72rem;color:var(--text-sub);">·</span>
+                    <span style="font-size:0.72rem;color:var(--text-sub);">⏱ ${alert.tempo_revisao_min}min</span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <div style="flex:1;height:6px;background:var(--border, #45475a);border-radius:3px;overflow:hidden;">
+                      <div style="height:100%;width:${retencaoPct}%;background:${barColor};border-radius:3px;transition:width 0.4s;"></div>
+                    </div>
+                    <span style="font-size:0.68rem;font-weight:600;color:${barColor};min-width:32px;text-align:right;">${retencaoPct.toFixed(0)}%</span>
+                  </div>
+                </div>`;
+            }).join('')}
+          </div>
+
+          <!-- Footer -->
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid var(--border, #45475a);">
+            <span style="font-size:0.75rem;color:var(--text-sub);">Tempo total para revisar tudo: <strong style="color:var(--text);">${data.tempo_total_min}min</strong></span>
+            <button onclick="window.location.href='/#flashcards'" style="background:var(--accent, #cba6f7);color:#1e1e2e;border:none;border-radius:8px;padding:8px 14px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">Revisar Agora</button>
+          </div>
+        </div>`;
+    }
+
+    // Appendar (não substituir)
+    const wrapper = document.createElement('div');
+    wrapper.id = 'forgetting-alerts-widget';
+    wrapper.innerHTML = html;
+    // Remover widget anterior se existir (evitar duplicação em reloads)
+    const existing = document.getElementById('forgetting-alerts-widget');
+    if (existing) existing.remove();
+    container.appendChild(wrapper);
+
+  } catch(e) {
+    console.error('Erro loadForgettingAlerts:', e);
+  }
+}
+
+// Chamar após loadSiTechniquesAlerts (que usa setTimeout 1200ms)
+setTimeout(loadForgettingAlerts, 1800);
