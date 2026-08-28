@@ -631,42 +631,78 @@ def _parse_questoes_texto(texto: str, materia: str = "", banca: str = "") -> lis
         # Padrão 2: Enunciado > 500 chars com marcador de texto/leitura
         texto_base = ''
         marcadores_texto_base = [
-            r'(?:Leia|Considere|Com base no?|Analise|A partir do?)\s+(?:o\s+)?texto\s+(?:a seguir|abaixo|seguinte)',
+            r'(?:Leia|Considere|Com base no?|Analise|A partir do?|baseie-se no?)\s+(?:o\s+)?(?:texto|trecho|excerto|fragmento)\s+(?:a seguir|abaixo|seguinte|apresentado)',
             r'(?:O texto|Texto)\s+(?:a seguir|abaixo|seguinte|para|I+)',
-            r'(?:Leia|Considere|Com base em)\s+(?:o\s+)?(?:trecho|excerto|fragmento)',
+            r'(?:Leia|Considere|Com base em|baseie-se)\s+(?:o\s+)?(?:trecho|excerto|fragmento)',
             r'(?:TEXTO|Texto)\s+(?:I{1,3}|[1-9])',
+            r'(?:Atenção|ATENÇÃO)\s*:?\s*(?:Para responder|para responder).*?(?:texto|trecho)\s+(?:abaixo|a seguir)',
         ]
         for marcador in marcadores_texto_base:
             match = re.search(marcador, enunciado, re.IGNORECASE)
             if match and len(enunciado) > 300:
-                # Encontrar onde o enunciado real começa (última frase interrogativa ou imperativa)
-                # Procurar de trás pra frente: "assinale", "é correto", "pode-se afirmar", "marque"
+                # Estratégia: buscar a ÚLTIMA frase interrogativa/imperativa (= enunciado real)
+                # O enunciado real geralmente é a última frase antes das alternativas
                 enunciado_markers = [
-                    r'[Aa]ssinale',
-                    r'[Éé] correto',
-                    r'[Pp]ode-se (?:afirmar|concluir|inferir)',
-                    r'[Mm]arque',
-                    r'[Jj]ulgue',
-                    r'[Éé] (?:CORRETO|INCORRETO|correto|incorreto)',
-                    r'[Dd]e acordo com o texto',
+                    r'[Aa]ssinale\s',
+                    r'[Éé]\s+correto\s',
+                    r'[Pp]ode-se\s+(?:afirmar|concluir|inferir)',
+                    r'[Mm]arque\s',
+                    r'[Jj]ulgue\s',
+                    r'[Éé]\s+(?:CORRETO|INCORRETO|correto|incorreto)',
+                    r'[Dd]e acordo com o (?:texto|autor)',
                     r'[Ss]egundo o (?:texto|autor)',
                     r'[Ii]nfere-se',
                     r'[Dd]epreende-se',
+                    r'[Aa] alternativa\s',
+                    r'[Aa] exclusão\s',
+                    r'[Oo] emprego\s',
+                    r'[Oo] segmento\s',
+                    r'[Aa] substituição\s',
+                    r'[Oo] termo\s',
+                    r'[Aa] expressão\s',
+                    r'[Oo] sentido\s',
+                    r'[Aa] frase\s',
+                    r'[Nn]o texto,?\s',
+                    r'[Nn]o contexto',
+                    r'[Cc]onsiderando.se o (?:texto|contexto|trecho)',
+                    r'[Cc]onsidere as\s',
+                    r'[Cc]onsidere o\s',
+                    r'[Aa] passagem\s',
+                    r'[Oo] pronome\s',
+                    r'[Aa] conjunção\s',
+                    r'[Oo] conectivo\s',
+                    r'[Éé] adequad[ao]\s',
+                    r'[Ee]stá corret[ao]\s',
+                    r'[Ee]m relação ao texto',
                 ]
+                # Buscar a última ocorrência de qualquer marcador de enunciado
                 last_marker_pos = -1
                 for em in enunciado_markers:
                     for em_match in re.finditer(em, enunciado):
-                        # Pegar o início da frase (buscar ponto/início anterior)
                         pos = em_match.start()
-                        # Voltar até o ponto anterior
+                        # Voltar até o início da frase (ponto anterior ou início)
                         frase_start = enunciado.rfind('. ', 0, pos)
-                        frase_start = frase_start + 2 if frase_start > 0 else 0
-                        if frase_start > last_marker_pos:
+                        if frase_start < 0:
+                            frase_start = enunciado.rfind('.) ', 0, pos)
+                        frase_start = frase_start + 2 if frase_start > 0 else pos
+                        if frase_start > last_marker_pos and frase_start > 100:
                             last_marker_pos = frase_start
 
                 if last_marker_pos > 100:  # Precisa ter texto base substancial antes
                     texto_base = enunciado[:last_marker_pos].strip()
                     enunciado = enunciado[last_marker_pos:].strip()
+                elif len(enunciado) > 500:
+                    # Fallback: se não achou marcador de enunciado mas texto é longo,
+                    # tentar separar pela última frase (após último ponto com > 100 chars restantes)
+                    last_period = -1
+                    for m in re.finditer(r'\.\s+[A-Z]', enunciado):
+                        # Se restam < 200 chars após este ponto, é provavelmente o enunciado
+                        remaining = len(enunciado) - m.start()
+                        if 30 < remaining < 250:
+                            last_period = m.start() + 1
+                    if last_period > 200:
+                        texto_base = enunciado[:last_period].strip()
+                        enunciado = enunciado[last_period:].strip()
                 break
 
         questoes.append({
