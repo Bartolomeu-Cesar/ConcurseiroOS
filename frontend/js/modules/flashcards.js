@@ -297,6 +297,15 @@ export async function reviewFlashcard(quality) {
 
     toast(`${msgs[quality]} [${stateLabel}]${metacogMsg}`, quality >= 3 ? 'success' : 'warning', 3000);
 
+    // === HYPERCORRECTION EFFECT (Butterfield & Metcalfe, 2001) ===
+    // Erros com alta confiança são corrigidos com mais eficácia.
+    // Quando confiança >= 4 E quality <= 1 → feedback especial que ativa surprise signal no cérebro
+    const isHypercorrection = lastMetacog && lastMetacog.confidence >= 4 && quality <= 1;
+    if (isHypercorrection && !_examMode) {
+      _showHypercorrectionFeedback(card, lastMetacog.confidence);
+      return; // Pausa — o aluno precisa processar o "surprise"
+    }
+
     // XP real-time feedback
     showFlashcardXp(quality);
 
@@ -421,6 +430,47 @@ export function continueAfterChunk() {
   // Continuar para o próximo card
   _chunkPauseShown = false;
   showCurrentFlashcard();
+}
+
+// ============================================================
+// HYPERCORRECTION EFFECT — Feedback especial para erros com alta confiança
+// Evidência: Butterfield & Metcalfe (2001) — Surprise signal do erro
+// inesperado ativa processos de encoding mais profundos
+// ============================================================
+
+function _showHypercorrectionFeedback(card, confidence) {
+  const q = document.getElementById('flash-question');
+  const a = document.getElementById('flash-answer');
+  const rb = document.getElementById('flash-reveal-btn');
+  const rv = document.getElementById('flash-review-btns');
+
+  if (a) a.style.display = 'none';
+  if (rb) rb.style.display = 'none';
+  if (rv) rv.style.display = 'none';
+
+  q.innerHTML = `
+    <div style="text-align:center;padding:8px;animation:pulse 1s ease-in-out;">
+      <div style="font-size:2rem;margin-bottom:6px;">⚡</div>
+      <div style="font-size:0.95rem;font-weight:800;color:var(--red);margin-bottom:6px;">HYPERCORRECTION ACTIVADO!</div>
+      <div style="font-size:0.72rem;color:var(--text-sub);margin-bottom:12px;">
+        Você tinha confiança ${'⭐'.repeat(confidence)} mas ERROU.<br>
+        <strong style="color:var(--green);">Isso é BOM!</strong> Seu cérebro vai fixar a correção com mais força.<br>
+        <span style="font-size:0.65rem;">(Butterfield & Metcalfe, 2001: erros surpresa são 30% mais bem corrigidos)</span>
+      </div>
+      <div style="background:var(--bg-surface);border-radius:8px;padding:12px;margin-bottom:10px;text-align:left;">
+        <div style="font-size:0.75rem;color:var(--red);margin-bottom:4px;">❌ Você pensava que sabia:</div>
+        <div style="font-size:0.82rem;color:var(--text);margin-bottom:8px;">${escapeHtml(card.pergunta)}</div>
+        <div style="font-size:0.75rem;color:var(--green);margin-bottom:4px;">✅ Resposta CORRETA (memorize agora!):</div>
+        <div style="font-size:0.92rem;font-weight:700;color:var(--green);padding:8px;background:rgba(166,227,161,0.1);border-radius:6px;">${escapeHtml(card.resposta)}</div>
+      </div>
+      <div style="font-size:0.72rem;color:var(--accent);margin-bottom:8px;">💡 Repita mentalmente 3x: "${card.resposta.substring(0, 50)}..."</div>
+      <button onclick="dismissHypercorrection()" style="background:var(--accent);color:var(--bg);border:none;border-radius:6px;padding:10px 20px;font-size:0.85rem;font-weight:600;cursor:pointer;">✓ Memorizado — Próximo</button>
+    </div>
+  `;
+}
+
+export function dismissHypercorrection() {
+  _advanceAfterReview();
 }
 
 // ============================================================
