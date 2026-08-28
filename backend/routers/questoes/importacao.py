@@ -481,6 +481,11 @@ def _parse_questoes_texto(texto: str, materia: str = "", banca: str = "") -> lis
             alt_pattern3 = r'\n([A-E]) (.+?)(?=\n[A-E] |\nEssa quest|\Z)'
             alternativas_matches = re.findall(alt_pattern3, bloco, re.DOTALL)
 
+        # Pattern Estratégia Concursos: letra sozinha numa linha, texto na(s) seguinte(s)
+        if len(alternativas_matches) < 4:
+            alt_pattern4 = r'\n([A-E])\n(.+?)(?=\n[A-E]\n|\nEssa quest|\Z)'
+            alternativas_matches = re.findall(alt_pattern4, bloco, re.DOTALL)
+
         if len(alternativas_matches) < 4:
             continue
 
@@ -492,6 +497,71 @@ def _parse_questoes_texto(texto: str, materia: str = "", banca: str = "") -> lis
             enunciado = bloco.split('\n')[0].strip()
 
         enunciado = re.sub(r'^\d+\s*[.):\-–]\s*', '', enunciado).strip()
+        # === LIMPEZA CABEÇALHO ESTRATÉGIA CONCURSOS ===
+        # Remove bloco de metadados: ano, banca, órgão, cargo, nível, tipo, tópico
+        # Padrão: "2024\n...\nFCC\n...\nQuestões oficiais\n...\n[número romano/dígitos soltos]\n"
+        # Estratégia: linhas curtas de metadata antes do enunciado real
+        enunciado_lines = enunciado.split('\n')
+        clean_lines = []
+        header_done = False
+        for line in enunciado_lines:
+            stripped = line.strip()
+            if header_done:
+                clean_lines.append(line)
+                continue
+            # Linhas que são cabeçalho (pular):
+            if not stripped:
+                continue
+            # Ano (4 dígitos soltos)
+            if re.match(r'^\d{4}$', stripped):
+                continue
+            # Números soltos (1-3 dígitos, romanos, letras soltas como "c", "b")
+            if re.match(r'^[IVXivx\d]{1,5}$', stripped):
+                continue
+            # Letra solta (gabarito indicado no cabeçalho)
+            if re.match(r'^[A-Ea-e]$', stripped):
+                continue
+            # Bancas conhecidas
+            if re.match(r'^(FCC|CESPE|CEBRASPE|VUNESP|FGV|FUNDATEC|IADES|IBFC|QUADRIX|CESPE/Cebraspe|CESGRANRIO)$', stripped, re.IGNORECASE):
+                continue
+            # "Questões oficiais" / "Questões inéditas"
+            if re.match(r'^Quest.es\s+(oficiais|in.ditas)', stripped, re.IGNORECASE):
+                continue
+            # "Nível Superior/Médio..."
+            if re.match(r'^N.vel\s+(Superior|M.dio|Fundamental)', stripped, re.IGNORECASE):
+                continue
+            # Tribunais, Órgãos (linhas curtas com nomes de órgãos)
+            if re.match(r'^Tribunais?\s*[-–]', stripped, re.IGNORECASE):
+                continue
+            # Linhas curtas (<130 chars) que parecem cargo/órgão/prova
+            # Heurística: contém nome de órgão/cargo e NÃO começa com artigo/preposição
+            if len(stripped) < 130 and re.search(r'(Tribunal|Técnico|Analista|Judiciar|Administrativ|Poder|União|Região|Oficial|Eleitoral|Trabalhist|Prefeitura|Município|Concurso|Auditor|Guarda|Procurador|Delegad|Saúde \(|Jurídica)', stripped):
+                # É cargo/órgão se NÃO começa com preposição/artigo/conector de frase
+                if not re.match(r'^(De |A |O |Os |As |No |Na |Nos |Nas |Em |Ao |Para |Com |Se |Que |É |São |Será |Segundo |Conforme |Acerca )', stripped):
+                    continue
+            # Linhas com "(Pref " ou "(TJ " ou "(TRF " etc — metadata de prova
+            if len(stripped) < 150 and re.search(r'\((?:Pref|TJ|TRF|TRT|TST|STF|STJ|TCU|TCE|CGM|SMF)\b', stripped):
+                if not re.match(r'^(De |A |O |Os |As |No |Na |Em |Ao |Para |Com |Se |Que |É )', stripped):
+                    continue
+            # "Essa questão possui comentário..."
+            if re.match(r'^Essa quest.o possui coment.rio', stripped, re.IGNORECASE):
+                continue
+            # Tópicos constitucionais curtos (metadados de classificação)
+            if len(stripped) < 80 and not re.search(r'[.?!:;,]', stripped) and not re.search(r'\b(é|são|será|deve|pode|compete|assinale|julgue|considere|acerca|quanto|segundo|conforme|nos termos|atenção|de acordo|a respeito|no que|sobre|em relação|atualmente|correto|incorreto|verdade|falso)\b', stripped, re.IGNORECASE):
+                # Provavelmente é metadado/tópico (ex: "Capacidade Eleitoral Ativa", "Do Estatuto da Magistratura")
+                # Mas só pula se estiver no início (antes de encontrar texto longo)
+                continue
+            # Se a linha começa com ":" (continuação de linha quebrada pelo PDF)
+            if stripped.startswith(':') and not header_done:
+                # Juntar com a próxima linha que tenha conteúdo real
+                clean_lines.append(line)
+                header_done = True
+                continue
+            # Se chegou aqui, é o início do enunciado real
+            header_done = True
+            clean_lines.append(line)
+        enunciado = '\n'.join(clean_lines).strip()
+        # Fallback regex antigo para outros formatos
         enunciado = re.sub(
             r'^(\d{4}\s+.*?(?:FCC|CESPE|CEBRASPE|VUNESP|FGV|FUNDATEC|IADES|IBFC|QUADRIX).*?\n(?:.*?\n){0,3})',
             '', enunciado, count=1, flags=re.DOTALL | re.IGNORECASE
