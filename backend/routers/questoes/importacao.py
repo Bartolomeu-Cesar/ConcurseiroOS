@@ -625,11 +625,56 @@ def _parse_questoes_texto(texto: str, materia: str = "", banca: str = "") -> lis
 
         resposta = gabarito.get(num, '')
 
+        # === EXTRAÇÃO DE TEXTO BASE ===
+        # Detectar texto base compartilhado (ex: "Leia o texto a seguir", "Considere o texto")
+        # Padrão 1: Marcador explícito + texto longo antes do enunciado curto
+        # Padrão 2: Enunciado > 500 chars com marcador de texto/leitura
+        texto_base = ''
+        marcadores_texto_base = [
+            r'(?:Leia|Considere|Com base no?|Analise|A partir do?)\s+(?:o\s+)?texto\s+(?:a seguir|abaixo|seguinte)',
+            r'(?:O texto|Texto)\s+(?:a seguir|abaixo|seguinte|para|I+)',
+            r'(?:Leia|Considere|Com base em)\s+(?:o\s+)?(?:trecho|excerto|fragmento)',
+            r'(?:TEXTO|Texto)\s+(?:I{1,3}|[1-9])',
+        ]
+        for marcador in marcadores_texto_base:
+            match = re.search(marcador, enunciado, re.IGNORECASE)
+            if match and len(enunciado) > 300:
+                # Encontrar onde o enunciado real começa (última frase interrogativa ou imperativa)
+                # Procurar de trás pra frente: "assinale", "é correto", "pode-se afirmar", "marque"
+                enunciado_markers = [
+                    r'[Aa]ssinale',
+                    r'[Éé] correto',
+                    r'[Pp]ode-se (?:afirmar|concluir|inferir)',
+                    r'[Mm]arque',
+                    r'[Jj]ulgue',
+                    r'[Éé] (?:CORRETO|INCORRETO|correto|incorreto)',
+                    r'[Dd]e acordo com o texto',
+                    r'[Ss]egundo o (?:texto|autor)',
+                    r'[Ii]nfere-se',
+                    r'[Dd]epreende-se',
+                ]
+                last_marker_pos = -1
+                for em in enunciado_markers:
+                    for em_match in re.finditer(em, enunciado):
+                        # Pegar o início da frase (buscar ponto/início anterior)
+                        pos = em_match.start()
+                        # Voltar até o ponto anterior
+                        frase_start = enunciado.rfind('. ', 0, pos)
+                        frase_start = frase_start + 2 if frase_start > 0 else 0
+                        if frase_start > last_marker_pos:
+                            last_marker_pos = frase_start
+
+                if last_marker_pos > 100:  # Precisa ter texto base substancial antes
+                    texto_base = enunciado[:last_marker_pos].strip()
+                    enunciado = enunciado[last_marker_pos:].strip()
+                break
+
         questoes.append({
             "numero": num,
             "materia": materia,
             "topico": detected_topico,
             "enunciado": enunciado,
+            "texto_base": texto_base,
             "alternativa_a": alts['A'],
             "alternativa_b": alts['B'],
             "alternativa_c": alts['C'],
@@ -726,14 +771,15 @@ async def importar_csv(
             conn.execute("""
                 INSERT INTO questoes (materia, topico, enunciado, alternativa_a, alternativa_b,
                     alternativa_c, alternativa_d, alternativa_e, resposta_correta, explicacao,
-                    dificuldade, banca, ano, created_at, user_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    dificuldade, banca, ano, texto_base, created_at, user_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 questao["materia"], questao["topico"], questao["enunciado"],
                 questao["alternativa_a"], questao["alternativa_b"],
                 questao["alternativa_c"], questao["alternativa_d"], questao["alternativa_e"],
                 questao["resposta_correta"], questao.get("explicacao", ""),
                 questao["dificuldade"], questao["banca"], questao.get("ano", ""),
+                questao.get("texto_base", ""),
                 today_str(), user_id,
             ))
             imported += 1

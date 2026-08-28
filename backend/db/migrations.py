@@ -377,6 +377,15 @@ def _m48_brain_dump_log(conn):
     log.info("Migration: created brain_dump_log table")
 
 
+def _m49_questoes_texto_base(conn):
+    """Add texto_base column to questoes for questions that share a base text."""
+    try:
+        conn.execute("ALTER TABLE questoes ADD COLUMN texto_base TEXT DEFAULT ''")
+        log.info("Migration: added texto_base column to questoes")
+    except Exception:
+        pass  # Column already exists
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -426,6 +435,7 @@ MIGRATIONS = [
     (46, _m46_error_analysis),
     (47, _m47_topic_dependencies),
     (48, _m48_brain_dump_log),
+    (49, _m49_questoes_texto_base),
 ]
 
 
