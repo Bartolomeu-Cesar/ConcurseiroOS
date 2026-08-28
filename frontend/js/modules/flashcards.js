@@ -266,6 +266,22 @@ export async function reviewFlashcard(quality) {
       window._adaptivePomo.recordAnswer(quality >= 3, tempoCard);
     }
 
+    // Elaborative Interrogation: prompt "Por quê?" após acerto (quality >= 3)
+    // Mostrar a cada 3 cards acertados para não sobrecarregar (não em todo card)
+    _elaborationAccertCount = (_elaborationAccertCount || 0) + (quality >= 3 ? 1 : 0);
+    const shouldElaborate = quality >= 3 && _elaborationAccertCount % 3 === 0 && card.pergunta;
+    if (shouldElaborate) {
+      _showElaborationPrompt(card);
+      return; // Pausa — o fluxo continua ao pular/salvar a elaboração
+    }
+
+    _advanceAfterReview();
+  } catch (e) { toast('Erro ao revisar', 'error'); }
+}
+
+let _elaborationAccertCount = 0;
+
+function _advanceAfterReview() {
     currentFlashIndex++;
     showCurrentFlashcard();
     loadAllFlashcards();
@@ -283,7 +299,70 @@ export async function reviewFlashcard(quality) {
       }).catch(() => {});
       _flashSessionSeconds = 0; // Reset para próximo bloco
     }
-  } catch (e) { toast('Erro ao revisar', 'error'); }
+}
+
+function _showElaborationPrompt(card) {
+  const q = document.getElementById('flash-question');
+  const a = document.getElementById('flash-answer');
+  const rb = document.getElementById('flash-reveal-btn');
+  const rv = document.getElementById('flash-review-btns');
+
+  // Esconder botões de review
+  rv.style.display = 'none';
+  rb.style.display = 'none';
+  a.style.display = 'none';
+
+  // Gerar prompt contextual
+  const prompts = [
+    `Por que "${card.resposta}" é a resposta correta?`,
+    `Explique COM SUAS PALAVRAS por que isso é verdade.`,
+    `Qual é a lógica/fundamento por trás dessa resposta?`,
+  ];
+  const prompt = prompts[Math.floor(Math.random() * prompts.length)];
+
+  q.innerHTML = `
+    <div style="text-align:center;margin-bottom:8px;">
+      <span style="font-size:1.3rem;">🤔</span>
+      <div style="font-size:0.85rem;font-weight:700;color:var(--accent);margin:4px 0;">Elaborative Interrogation</div>
+      <div style="font-size:0.72rem;color:var(--text-sub);margin-bottom:8px;">Explicar fortalece a memória em 10-40% (Dunlosky, 2013)</div>
+    </div>
+    <div style="background:var(--bg-surface);border-radius:8px;padding:10px;margin-bottom:10px;">
+      <div style="font-size:0.78rem;color:var(--text-sub);margin-bottom:4px;">📚 ${card.materia || 'Flashcard'}</div>
+      <div style="font-size:0.85rem;font-weight:600;color:var(--text);">${prompt}</div>
+    </div>
+    <textarea id="elaboration-input" placeholder="Escreva sua explicação... (opcional mas recomendado)"
+      style="width:100%;min-height:70px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text);font-size:0.82rem;font-family:inherit;resize:vertical;"></textarea>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button onclick="saveElaboration()" style="flex:1;background:var(--accent);color:var(--bg);border:none;border-radius:6px;padding:8px;font-size:0.8rem;font-weight:600;cursor:pointer;">💾 Salvar</button>
+      <button onclick="skipElaboration()" style="flex:1;background:var(--bg-surface);color:var(--text-sub);border:1px solid var(--border);border-radius:6px;padding:8px;font-size:0.8rem;cursor:pointer;">⏭ Pular</button>
+    </div>
+  `;
+}
+
+export function skipElaboration() {
+  _advanceAfterReview();
+}
+
+export async function saveElaboration() {
+  const input = document.getElementById('elaboration-input');
+  const texto = input ? input.value.trim() : '';
+  const card = flashcardsToday[currentFlashIndex];
+
+  if (texto && card) {
+    // Salvar no backend via endpoint existente
+    fetch('/api/study-intelligence/elaboration', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        flashcard_id: card.id,
+        prompt_tipo: 'elaborative_interrogation',
+        resposta_usuario: texto
+      })
+    }).catch(() => {});
+    toast('💡 Elaboração salva! Memória reforçada.', 'success', 2000);
+  }
+
+  _advanceAfterReview();
 }
 
 export async function addFlashcard() {
