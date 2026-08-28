@@ -3269,3 +3269,87 @@ def testing_boundaries(
         ),
         "explicacao": "Cards na 'zona ótima' (quality 2-3 / difficulty 0.3-0.7) são os que mais aprendem por sessão. Nem tão fáceis que desperdiçam tempo, nem tão difíceis que frustram.",
     }
+
+
+@router.get("/api/study-intelligence/temporal-landmark", summary="Temporal Landmarks — Fresh Start Effect",
+            description="""Detecta 'temporal landmarks' (datas especiais) e sugere metas ambiciosas.
+Evidência: Dai et al. (2014) — Segundas, 1° do mês, início de semestre e datas pessoais
+funcionam como 'fresh starts' que aumentam motivação e adesão a objetivos.""")
+def temporal_landmark(
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Verifica se hoje é um temporal landmark e sugere boost."""
+    from datetime import date
+    hoje = date.today()
+    dia_semana = hoje.weekday()  # 0=segunda
+    dia_mes = hoje.day
+
+    landmarks = []
+    boost_multiplier = 1.0
+
+    # Segunda-feira = fresh start semanal
+    if dia_semana == 0:
+        landmarks.append({"tipo": "weekly", "emoji": "🌅", "msg": "Nova semana! Fresh start perfeito para metas ambiciosas."})
+        boost_multiplier = 1.3
+
+    # 1° do mês = fresh start mensal
+    if dia_mes == 1:
+        landmarks.append({"tipo": "monthly", "emoji": "📅", "msg": "Novo mês! Hora de definir objetivos maiores."})
+        boost_multiplier = 1.5
+
+    # Dia 15 = meio do mês (mini fresh start)
+    if dia_mes == 15:
+        landmarks.append({"tipo": "mid_month", "emoji": "⚡", "msg": "Metade do mês! Sprint final para suas metas."})
+        boost_multiplier = 1.2
+
+    # Primeiro dia útil após feriado/fim de semana prolongado (segunda após domingo)
+    if dia_semana == 0 and dia_mes > 1:
+        landmarks.append({"tipo": "post_weekend", "emoji": "🚀", "msg": "Energia renovada! Aproveite o momentum."})
+
+    # Verificar streak milestone (múltiplos de 7)
+    try:
+        streak_row = conn.execute(
+            "SELECT streak_atual FROM user_streaks WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        if streak_row:
+            streak = streak_row[0] or 0
+            if streak > 0 and streak % 7 == 0:
+                landmarks.append({"tipo": "streak_milestone", "emoji": "🔥", "msg": f"Streak de {streak} dias! Você está imparável."})
+                boost_multiplier = max(boost_multiplier, 1.4)
+    except Exception:
+        pass
+
+    if not landmarks:
+        return {
+            "is_landmark": False,
+            "landmarks": [],
+            "boost_multiplier": 1.0,
+            "sugestao_meta": None,
+        }
+
+    # Buscar meta atual para sugerir boost
+    try:
+        meta_row = conn.execute(
+            "SELECT meta_flashcards, meta_questoes, meta_horas FROM metas_config WHERE user_id = ?",
+            (user_id,)
+        ).fetchone()
+        if meta_row:
+            flash_meta = meta_row[0] or 10
+            quest_meta = meta_row[1] or 10
+            sugestao = {
+                "flashcards": int(flash_meta * boost_multiplier),
+                "questoes": int(quest_meta * boost_multiplier),
+                "mensagem": f"🎯 Que tal {int(flash_meta * boost_multiplier)} flashcards e {int(quest_meta * boost_multiplier)} questões hoje?",
+            }
+        else:
+            sugestao = {"flashcards": 15, "questoes": 15, "mensagem": "🎯 Dia especial! Que tal 15 flashcards e 15 questões?"}
+    except Exception:
+        sugestao = None
+
+    return {
+        "is_landmark": True,
+        "landmarks": landmarks,
+        "boost_multiplier": boost_multiplier,
+        "sugestao_meta": sugestao,
+    }
