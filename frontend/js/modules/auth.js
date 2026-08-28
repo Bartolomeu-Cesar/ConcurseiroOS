@@ -158,11 +158,48 @@ export function showUpgradeModal() {
         </div>
       </div>
       <p style="text-align:center;font-size:0.72rem;color:#585b70;margin-top:12px;">Pagamento seguro • Cancele quando quiser • Satisfação garantida</p>
+      <div id="creditos-section" style="margin-top:16px;padding:16px;background:#1e1e2e;border:1px solid #89b4fa;border-radius:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <div>
+            <span style="font-size:1.1rem;">🎟️</span>
+            <strong style="color:#89b4fa;font-size:0.9rem;"> Créditos (Pague por Uso)</strong>
+          </div>
+          <span id="creditos-saldo-badge" style="background:#89b4fa;color:#1e1e2e;padding:2px 8px;border-radius:10px;font-size:0.72rem;font-weight:700;">...</span>
+        </div>
+        <p style="font-size:0.72rem;color:#9399b2;margin-bottom:10px;">1 crédito = 3 dias de Premium. Compre na quantidade que quiser, ative quando precisar. Créditos não expiram!</p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(90px, 1fr));gap:6px;margin-bottom:10px;">
+          <button onclick="comprarCreditos(1)" style="padding:8px 4px;background:#313244;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;cursor:pointer;font-size:0.7rem;text-align:center;">
+            <div style="font-weight:700;">1 créd</div><div style="color:#89b4fa;">R$4,90</div><div style="color:#585b70;font-size:0.6rem;">3 dias</div>
+          </button>
+          <button onclick="comprarCreditos(5)" style="padding:8px 4px;background:#313244;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;cursor:pointer;font-size:0.7rem;text-align:center;">
+            <div style="font-weight:700;">5 créd</div><div style="color:#89b4fa;">R$19,90</div><div style="color:#a6e3a1;font-size:0.6rem;">15d • -19%</div>
+          </button>
+          <button onclick="comprarCreditos(10)" style="padding:8px 4px;background:#313244;border:1px solid #f9e2af;border-radius:6px;color:#cdd6f4;cursor:pointer;font-size:0.7rem;text-align:center;">
+            <div style="font-weight:700;">10 créd</div><div style="color:#89b4fa;">R$34,90</div><div style="color:#a6e3a1;font-size:0.6rem;">30d • -29%</div>
+          </button>
+          <button onclick="comprarCreditos(20)" style="padding:8px 4px;background:#313244;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;cursor:pointer;font-size:0.7rem;text-align:center;">
+            <div style="font-weight:700;">20 créd</div><div style="color:#89b4fa;">R$59,90</div><div style="color:#a6e3a1;font-size:0.6rem;">60d • -39%</div>
+          </button>
+          <button onclick="comprarCreditos(50)" style="padding:8px 4px;background:#313244;border:1px solid #a6e3a1;border-radius:6px;color:#cdd6f4;cursor:pointer;font-size:0.7rem;text-align:center;">
+            <div style="font-weight:700;">50 créd</div><div style="color:#89b4fa;">R$119,90</div><div style="color:#a6e3a1;font-size:0.6rem;">150d • -51%</div>
+          </button>
+        </div>
+        <div id="creditos-ativar-section" style="display:none;padding:8px;background:#313244;border-radius:6px;margin-bottom:8px;">
+          <div style="font-size:0.75rem;color:#cdd6f4;margin-bottom:6px;">Ativar créditos:</div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <input id="creditos-ativar-input" type="number" min="1" value="10" style="width:60px;padding:6px;background:#1e1e2e;border:1px solid #45475a;border-radius:4px;color:#cdd6f4;font-size:0.82rem;">
+            <span style="font-size:0.7rem;color:#9399b2;">créditos =</span>
+            <span id="creditos-dias-preview" style="font-size:0.82rem;color:#a6e3a1;font-weight:600;">30 dias</span>
+            <button onclick="ativarCreditos()" style="padding:6px 12px;background:#89b4fa;color:#1e1e2e;border:none;border-radius:4px;font-size:0.75rem;font-weight:600;cursor:pointer;">Ativar</button>
+          </div>
+        </div>
+      </div>
       <button onclick="document.getElementById('upgrade-modal').remove()" style="display:block;width:100%;margin-top:12px;padding:10px;background:#45475a;color:#cdd6f4;border:none;border-radius:8px;cursor:pointer;">Fechar</button>
     </div>
   `;
   document.body.appendChild(overlay);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  _loadCreditosSaldo();
 }
 
 export async function doUpgrade(plano) {
@@ -300,3 +337,92 @@ export async function initAuth() {
     // Se falhar (offline), permitir acesso
   }
 }
+
+
+// ==================== SISTEMA DE CRÉDITOS (UI) ====================
+
+export async function comprarCreditos(quantidade) {
+  try {
+    const token = getToken();
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch('/api/auth/creditos/comprar', {
+      method: 'POST', headers,
+      body: JSON.stringify({ quantidade })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      if (typeof showToast === 'function') showToast(`✅ ${quantidade} crédito(s) adicionados! Saldo: ${data.saldo_posterior}`, 'success');
+      _loadCreditosSaldo();
+    } else {
+      if (typeof showToast === 'function') showToast(data.detail || 'Erro ao comprar créditos', 'error');
+    }
+  } catch(e) {
+    if (typeof showToast === 'function') showToast('Erro de conexão', 'error');
+  }
+}
+
+export async function ativarCreditos() {
+  const input = document.getElementById('creditos-ativar-input');
+  const creditos = parseInt(input?.value || '0');
+  if (creditos < 1) {
+    if (typeof showToast === 'function') showToast('Mínimo 1 crédito', 'warning');
+    return;
+  }
+
+  try {
+    const token = getToken();
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch('/api/auth/creditos/ativar', {
+      method: 'POST', headers,
+      body: JSON.stringify({ creditos })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      if (typeof showToast === 'function') showToast(data.mensagem, 'success');
+      _loadCreditosSaldo();
+    } else {
+      if (typeof showToast === 'function') showToast(data.detail || 'Erro ao ativar créditos', 'error');
+    }
+  } catch(e) {
+    if (typeof showToast === 'function') showToast('Erro de conexão', 'error');
+  }
+}
+
+async function _loadCreditosSaldo() {
+  try {
+    const token = getToken();
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch('/api/auth/creditos', { headers });
+    const data = await res.json();
+
+    const badge = document.getElementById('creditos-saldo-badge');
+    if (badge) badge.textContent = `${data.saldo} créditos (${data.dias_disponiveis} dias)`;
+
+    // Mostrar seção de ativar se tem saldo
+    const ativarSection = document.getElementById('creditos-ativar-section');
+    if (ativarSection) {
+      ativarSection.style.display = data.saldo > 0 ? 'block' : 'none';
+      const input = document.getElementById('creditos-ativar-input');
+      if (input) input.max = data.saldo;
+    }
+
+    // Preview de dias ao mudar input
+    const input = document.getElementById('creditos-ativar-input');
+    if (input) {
+      input.oninput = () => {
+        const dias = parseInt(input.value || '0') * (data.dias_por_credito || 3);
+        const preview = document.getElementById('creditos-dias-preview');
+        if (preview) preview.textContent = `${dias} dias`;
+      };
+    }
+  } catch(e) {}
+}
+
+// Carregar saldo quando modal abre (chamado pelo showUpgradeModal via event)
+export function loadCreditosSaldo() { _loadCreditosSaldo(); }
