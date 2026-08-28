@@ -209,12 +209,59 @@ function showCurrentFlashcard() {
   if (!_flashSessionStart) _flashSessionStart = Date.now();
 }
 
+function _segmentText(text) {
+  // Dividir em partes de ~60-80 chars nos limites de frase
+  const sentences = text.split(/(?<=[.;!?])\s+|(?<=\n)/);
+  const parts = [];
+  let current = '';
+  for (const s of sentences) {
+    if (current.length + s.length > 80 && current.length > 0) {
+      parts.push(current.trim());
+      current = s;
+    } else {
+      current += (current ? ' ' : '') + s;
+    }
+  }
+  if (current.trim()) parts.push(current.trim());
+  return parts.length > 1 ? parts : [text];
+}
+
+export function revealNextSegment() {
+  if (!window._segParts) return;
+  window._segCurrent++;
+  const parts = window._segParts;
+  const idx = window._segCurrent;
+  const answerEl = document.getElementById('flash-answer');
+  if (idx < parts.length) {
+    let html = parts.slice(0, idx + 1).map(p => `<div style="font-size:0.82rem;color:var(--text);margin-bottom:4px;">${p}</div>`).join('');
+    if (idx + 1 < parts.length) {
+      html += `<button id="seg-more-btn" onclick="revealNextSegment()" style="margin-top:4px;background:var(--bg-surface);border:1px solid var(--border);border-radius:6px;padding:4px 10px;color:var(--accent);font-size:0.72rem;cursor:pointer;">Parte ${idx + 2}/${parts.length} ▼</button>`;
+    }
+    answerEl.innerHTML = html;
+  }
+}
+
 export function revealAnswer() {
   // Record confidence level (metacognition)
   const confidence = _currentConfidence;
   _currentConfidence = 0; // Reset
 
-  document.getElementById('flash-answer').style.display = 'block';
+  // === COGNITIVE LOAD SEGMENTING (Mayer 2009) ===
+  // Respostas longas (>120 chars) são reveladas em partes para reduzir carga cognitiva
+  const answerEl = document.getElementById('flash-answer');
+  const card = flashcardsToday[currentFlashIndex];
+  if (!_examMode && card && card.resposta && card.resposta.length > 120) {
+    const parts = _segmentText(card.resposta);
+    let currentPart = 0;
+    answerEl.innerHTML = `<div style="font-size:0.82rem;color:var(--text);">${parts[0]}</div>`
+      + (parts.length > 1 ? `<button id="seg-more-btn" onclick="revealNextSegment()" style="margin-top:6px;background:var(--bg-surface);border:1px solid var(--border);border-radius:6px;padding:4px 10px;color:var(--accent);font-size:0.72rem;cursor:pointer;">Parte ${currentPart + 2}/${parts.length} ▼</button>` : '')
+      + `<div style="font-size:0.6rem;color:var(--text-sub);margin-top:4px;">Segmenting (Mayer, 2009): revelar em partes reduz cognitive overload</div>`;
+    answerEl.style.display = 'block';
+    window._segParts = parts;
+    window._segCurrent = 0;
+  } else {
+    answerEl.style.display = 'block';
+  }
   document.getElementById('flash-reveal-btn').style.display = 'none';
   document.getElementById('flash-confidence-area')?.remove();
   document.getElementById('flash-generation-area')?.remove();
