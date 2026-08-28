@@ -335,6 +335,14 @@ export async function reviewFlashcard(quality) {
       return; // Pausa — o fluxo continua ao pular/salvar a elaboração
     }
 
+    // === MICRO-BREAKS COGNITIVOS (Frontiers 2025) ===
+    // Pausa de 5s após cards difíceis (quality <= 2) para melhorar encoding
+    // Desativado no Modo Prova. Não aplica se já houve mnemonic ou hypercorrection.
+    if (!_examMode && quality <= 2 && currentFlashIndex < flashcardsToday.length - 1) {
+      _showMicroBreak(quality);
+      return;
+    }
+
     _advanceAfterReview();
   } catch (e) { toast('Erro ao revisar', 'error'); }
 }
@@ -360,6 +368,57 @@ function _advanceAfterReview() {
       }).catch(() => {});
       _flashSessionSeconds = 0; // Reset para próximo bloco
     }
+}
+
+function _showMicroBreak(quality) {
+  const q = document.getElementById('flash-question');
+  const a = document.getElementById('flash-answer');
+  const rb = document.getElementById('flash-reveal-btn');
+  const rv = document.getElementById('flash-review-btns');
+
+  if (a) a.style.display = 'none';
+  if (rb) rb.style.display = 'none';
+  if (rv) rv.style.display = 'none';
+
+  const msgs = [
+    '🧠 Respire... seu cérebro está processando.',
+    '💭 Pausa cognitiva — encoding em andamento...',
+    '🌊 Momento de consolidação. Respire fundo.',
+  ];
+  const msg = msgs[Math.floor(Math.random() * msgs.length)];
+
+  let countdown = 5;
+  q.innerHTML = `
+    <div style="text-align:center;padding:20px;">
+      <div style="font-size:2rem;margin-bottom:8px;animation:pulse 1.5s ease-in-out infinite;">🧘</div>
+      <div style="font-size:0.85rem;color:var(--text);margin-bottom:4px;">${msg}</div>
+      <div style="font-size:0.65rem;color:var(--text-sub);margin-bottom:12px;">Micro-break de ${countdown}s melhora consolidação (Frontiers 2025)</div>
+      <div id="microbreak-countdown" style="font-size:1.5rem;font-weight:800;color:var(--accent);">${countdown}</div>
+      <button onclick="skipMicroBreak()" style="margin-top:12px;background:none;border:none;color:var(--text-sub);font-size:0.7rem;cursor:pointer;text-decoration:underline;">Pular →</button>
+    </div>
+  `;
+
+  // Countdown auto-advance
+  const interval = setInterval(() => {
+    countdown--;
+    const el = document.getElementById('microbreak-countdown');
+    if (el) el.textContent = countdown;
+    if (countdown <= 0) {
+      clearInterval(interval);
+      _advanceAfterReview();
+    }
+  }, 1000);
+
+  // Guardar referência para poder cancelar se pular
+  window._microBreakInterval = interval;
+}
+
+export function skipMicroBreak() {
+  if (window._microBreakInterval) {
+    clearInterval(window._microBreakInterval);
+    window._microBreakInterval = null;
+  }
+  _advanceAfterReview();
 }
 
 function _showChunkPause(cardsDone, totalPendentes) {
