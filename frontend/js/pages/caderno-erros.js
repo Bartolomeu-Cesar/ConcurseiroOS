@@ -4,6 +4,7 @@ const API_BASE = '';
 let dadosCaderno = null;
 let revisadasHoje = new Set();
 let filtroMateria = '';
+let _cardTimers = {}; // Tempo de início por questão
 
 async function fetchCaderno() {
   try {
@@ -183,6 +184,9 @@ function renderRevisao(pendentes) {
       </div>`;
   }
   container.innerHTML = html;
+
+  // Iniciar timers para tracking de tempo real por questão
+  filtered.forEach(q => { if (!revisadasHoje.has(q.id)) _cardTimers[q.id] = Date.now(); });
 }
 
 window.toggleEnunciado = function(id, btn) {
@@ -282,10 +286,14 @@ function renderPadroes(padroes) {
 
 window.revisar = async function(questaoId, acertou) {
   try {
+    // Calcular tempo real gasto nesta questão
+    const startTime = _cardTimers[questaoId];
+    const tempoSegundos = startTime ? Math.round((Date.now() - startTime) / 1000) : 0;
+
     const res = await fetch(`${API_BASE}/api/questoes/erros/revisar/${questaoId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ acertou })
+      body: JSON.stringify({ acertou, tempo_segundos: tempoSegundos })
     });
     if (!res.ok) throw new Error('Erro ao registrar revisão');
     const data = await res.json();

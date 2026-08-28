@@ -244,9 +244,12 @@ def revisar_erro(id: int, body: RevisarErroRequest, conn=Depends(get_db_session)
         user_id,
     ))
 
-    # Registrar tempo de revisão (~2min por questão) + atualizar streak
+    # Registrar tempo de revisão (tempo real se enviado, senão ~2min por questão) + atualizar streak
     from utils import update_streak
-    horas_revisao = 2 / 60  # ~2 minutos por revisão de erro
+    if body.tempo_segundos and body.tempo_segundos > 0:
+        horas_revisao = min(body.tempo_segundos, 600) / 3600  # Cap em 10min (evita inflado)
+    else:
+        horas_revisao = 2 / 60  # Fallback: ~2 minutos por revisão
     materia = conn.execute("SELECT materia FROM questoes WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
     mat_nome = materia["materia"] if materia else "Caderno de Erros"
 
@@ -264,6 +267,7 @@ def revisar_erro(id: int, body: RevisarErroRequest, conn=Depends(get_db_session)
             (mat_nome, horas_revisao, hoje, user_id, dt.now().isoformat())
         )
     update_streak(conn, "questoes_resolvidas", user_id=user_id)
+    update_streak(conn, "horas_estudadas", horas_revisao, user_id=user_id)
 
     conn.commit()
 

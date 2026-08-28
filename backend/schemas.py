@@ -782,6 +782,7 @@ class RevisarErroRequest(BaseModel):
     """POST /api/questoes/erros/revisar/{id} body."""
     acertou: bool = False
     facilidade: int | None = None  # 1-4 mapping para FSRS ratings (opcional)
+    tempo_segundos: int | None = None  # Tempo real gasto na revisão (se frontend enviar)
 
 
 # ============================================================
