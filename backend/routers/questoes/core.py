@@ -222,6 +222,17 @@ def list_questoes_materias(conn=Depends(get_db_session), user_id: int = Depends(
     return [r[0] for r in rows]
 
 
+@router.get("/api/questoes/respondidas-hoje", summary="IDs das questões respondidas hoje",
+            description="Retorna IDs de questões já respondidas hoje (para evitar repetição no mesmo dia).")
+def questoes_respondidas_hoje(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    from utils import today_str
+    rows = conn.execute(
+        "SELECT DISTINCT questao_id FROM questoes_respostas WHERE user_id = ? AND data = ?",
+        (user_id, today_str())
+    ).fetchall()
+    return [r[0] for r in rows]
+
+
 @router.get("/api/questoes/{id}", response_model=QuestaoResponse, summary="Obter questão por ID",
             description="Retorna os dados completos de uma questão específica.",
             responses={404: {"description": "Questão não encontrada"}})

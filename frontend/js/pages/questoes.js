@@ -105,8 +105,16 @@ async function loadQuestoesResolver() {
   const status = document.getElementById('filtro-status').value;
   const dificuldade = document.getElementById('filtro-dificuldade').value;
 
-  // Manter set de questões já exibidas na sessão (evitar repetição)
-  if (!window._questoesExibidasSessao) window._questoesExibidasSessao = new Set();
+  // Buscar IDs já respondidos hoje (não repetir no mesmo dia)
+  if (!window._questoesRespondidasHoje) {
+    try {
+      const hoje = new Date().toISOString().split('T')[0];
+      const resp = await fetch(`/api/questoes/respondidas-hoje`).then(r => r.ok ? r.json() : []);
+      window._questoesRespondidasHoje = new Set(resp.map(r => r.questao_id || r.id || r));
+    } catch(e) {
+      window._questoesRespondidasHoje = new Set();
+    }
+  }
 
   // Se nenhum filtro ativo, usar seleção inteligente (prática deliberada)
   if (!materia && !banca && !status && !dificuldade) {
@@ -114,35 +122,44 @@ async function loadQuestoesResolver() {
       const smart = await fetch('/api/pratica-deliberada').then(r => r.json());
       const focoMaterias = (smart.materias_para_focar || []).map(m => m.materia);
       const naoEstudadas = smart.materias_nao_estudadas || [];
-      // Priorizar: matérias fracas > não estudadas > aleatório
       const prioridade = [...focoMaterias, ...naoEstudadas];
       if (prioridade.length > 0) {
-        // Buscar questões da matéria prioritária (primeira da lista)
         const materiaFoco = prioridade[0];
         questoesPool = await fetch(`/api/questoes?materia=${encodeURIComponent(materiaFoco)}`).then(r => r.json());
         if (questoesPool.length > 0) {
-          // Priorizar: erradas > nunca respondidas > resto — EXCLUIR já exibidas
-          const erradas = questoesPool.filter(q => q.ultimo_resultado === 0 && !window._questoesExibidasSessao.has(q.id));
-          const nuncaResp = questoesPool.filter(q => (q.ultimo_resultado === null || q.ultimo_resultado === undefined) && !window._questoesExibidasSessao.has(q.id));
-          const resto = questoesPool.filter(q => q.ultimo_resultado === 1 && !window._questoesExibidasSessao.has(q.id));
-          const ordenadas = [...erradas, ...nuncaResp, ...resto];
+          // Filtrar: excluir respondidas hoje
+          const disponiveis = questoesPool.filter(q => !window._questoesRespondidasHoje.has(q.id));
 
-          if (ordenadas.length > 0) {
-            window._questoesExibidasSessao.add(ordenadas[0].id);
-            showQuestao(ordenadas[0]);
+          if (disponiveis.length > 0) {
+            // Priorizar: nunca respondidas > erradas antigas > resto
+            const nuncaResp = disponiveis.filter(q => q.ultimo_resultado === null || q.ultimo_resultado === undefined);
+            const erradas = disponiveis.filter(q => q.ultimo_resultado === 0);
+            const resto = disponiveis.filter(q => q.ultimo_resultado === 1);
+            const ordenadas = [...nuncaResp, ...erradas, ...resto];
+            const escolhida = ordenadas[0];
+            window._questoesRespondidasHoje.add(escolhida.id);
+            showQuestao(escolhida);
             toast(`🎯 Prática deliberada: ${materiaFoco} (${smart.materias_para_focar[0]?.percentual || 0}% acerto)`, 'info', 4000);
             return;
           }
-          // Se todas já exibidas nesta sessão, resetar e pegar de outra matéria
-          window._questoesExibidasSessao.clear();
+          // Todas desta matéria já respondidas hoje → tentar próxima matéria
+          if (prioridade.length > 1) {
+            const materiaFoco2 = prioridade[1];
+            questoesPool = await fetch(`/api/questoes?materia=${encodeURIComponent(materiaFoco2)}`).then(r => r.json());
+            const disp2 = questoesPool.filter(q => !window._questoesRespondidasHoje.has(q.id));
+            if (disp2.length > 0) {
+              window._questoesRespondidasHoje.add(disp2[0].id);
+              showQuestao(disp2[0]);
+              toast(`🎯 Prática deliberada: ${materiaFoco2}`, 'info', 4000);
+              return;
+            }
+          }
         }
       }
-    } catch (e) {
-      // Fallback para seleção normal se API falhar
-    }
+    } catch (e) {}
   }
 
-  // Fallback: busca com filtros (comportamento original)
+  // Fallback: busca com filtros
   let url = '/api/questoes?';
   if (materia) url += `materia=${encodeURIComponent(materia)}&`;
   if (banca) url += `banca=${encodeURIComponent(banca)}&`;
@@ -158,16 +175,19 @@ async function loadQuestoesResolver() {
     return;
   }
 
-  // Priorizar: erradas > nunca respondidas > aleatório — excluir já exibidas
-  const erradas = questoesPool.filter(q => q.ultimo_resultado === 0 && !window._questoesExibidasSessao.has(q.id));
-  const nuncaResp = questoesPool.filter(q => (q.ultimo_resultado === null || q.ultimo_resultado === undefined) && !window._questoesExibidasSessao.has(q.id));
-  const resto = questoesPool.filter(q => q.ultimo_resultado === 1 && !window._questoesExibidasSessao.has(q.id));
-  const priorizada = [...erradas, ...nuncaResp, ...resto];
-  const escolhida = priorizada.length > 0 ? priorizada[0] : questoesPool.find(q => !window._questoesExibidasSessao.has(q.id)) || questoesPool[0];
-  if (escolhida) {
-    window._questoesExibidasSessao.add(escolhida.id);
-    showQuestao(escolhida);
+  // Excluir respondidas hoje + priorizar: nunca respondidas > erradas antigas > resto
+  const disponiveis = questoesPool.filter(q => !window._questoesRespondidasHoje.has(q.id));
+  if (disponiveis.length === 0) {
+    document.getElementById('resolver-area').innerHTML = '<p style="color:#a6e3a1;text-align:center;padding:20px;">🎉 Todas as questões disponíveis já foram respondidas hoje!<br><span style="font-size:0.82rem;color:#9399b2;">Volte amanhã ou adicione mais questões ao banco.</span></p>';
+    return;
   }
+  const nuncaResp = disponiveis.filter(q => q.ultimo_resultado === null || q.ultimo_resultado === undefined);
+  const erradas = disponiveis.filter(q => q.ultimo_resultado === 0);
+  const resto = disponiveis.filter(q => q.ultimo_resultado === 1);
+  const priorizada = [...nuncaResp, ...erradas, ...resto];
+  const escolhida = priorizada[0] || disponiveis[0];
+  window._questoesRespondidasHoje.add(escolhida.id);
+  showQuestao(escolhida);
 }
 window.loadQuestoesResolver = loadQuestoesResolver;
 
