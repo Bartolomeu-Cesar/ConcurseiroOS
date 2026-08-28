@@ -922,7 +922,7 @@ async function requestPushPermission() {
   if (result === 'granted') {
     try {
       const registration = await navigator.serviceWorker.ready;
-      const vapidKey = await fetch('/api/push/vapid-key').then(r => r.json()).then(d => d.key).catch(() => null);
+      const vapidKey = await fetch('/api/push/vapid-key').then(r => r.json()).then(d => d.vapid_public_key).catch(() => null);
       if (vapidKey) {
         const subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true, applicationServerKey: vapidKey
@@ -1966,9 +1966,16 @@ setTimeout(loadSiTechniquesAlerts, 1200);
 
 // Notification Preferences Modal
 window.showNotificationPrefs = async function() {
+  const _headers = () => {
+    const h = { 'Content-Type': 'application/json' };
+    const token = localStorage.getItem('auth_token');
+    if (token) h['Authorization'] = `Bearer ${token}`;
+    return h;
+  };
+
   try {
-    const prefs = await fetch('/api/push/preferences').then(r => r.json());
-    const status = await fetch('/api/push/status').then(r => r.json()).catch(() => ({ subscribed: false }));
+    const prefs = await fetch('/api/push/preferences', { headers: _headers() }).then(r => r.json());
+    const status = await fetch('/api/push/status', { headers: _headers() }).then(r => r.json()).catch(() => ({ subscribed: false }));
 
     const overlay = document.createElement('div');
     overlay.id = 'notif-prefs-overlay';
@@ -1982,7 +1989,7 @@ window.showNotificationPrefs = async function() {
 
         <div style="margin-bottom:16px;padding:10px;background:var(--bg);border-radius:8px;font-size:0.78rem;color:var(--text-sub);">
           Status: ${status.subscribed ? '✅ Push ativo' : '❌ Push inativo'}.
-          ${!status.subscribed ? '<button onclick="window._requestPushPermission()" style="margin-left:8px;background:var(--accent);color:#1e1e2e;border:none;border-radius:6px;padding:4px 10px;font-size:0.75rem;cursor:pointer;">Ativar</button>' : ''}
+          ${!status.subscribed ? '<button onclick="window.requestPushPermission()" style="margin-left:8px;background:var(--accent);color:#1e1e2e;border:none;border-radius:6px;padding:4px 10px;font-size:0.75rem;cursor:pointer;">Ativar</button>' : ''}
         </div>
 
         <div style="display:flex;flex-direction:column;gap:12px;">
@@ -2036,16 +2043,21 @@ window._saveNotifPrefs = async function() {
     quiet_hours_end: parseInt(document.getElementById('pref-quiet-end').value) || 7,
   };
 
+  const headers = { 'Content-Type': 'application/json' };
+  const token = localStorage.getItem('auth_token');
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
   try {
-    await fetch('/api/push/preferences', {
+    const res = await fetch('/api/push/preferences', {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(body),
     });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     document.getElementById('notif-prefs-overlay')?.remove();
     if (typeof _toastDash === 'function') _toastDash('✅ Preferências salvas!');
   } catch(e) {
-    if (typeof _toastDash === 'function') _toastDash('Erro ao salvar');
+    if (typeof _toastDash === 'function') _toastDash('Erro ao salvar: ' + e.message);
   }
 };
 
