@@ -122,9 +122,20 @@ function showCurrentFlashcard() {
     return;
   }
   const card = flashcardsToday[currentFlashIndex];
+  const isVariation = card._expanding_retrieval;
   const badge = card.materia ? `<span style="font-size:0.7rem;background:#45475a;color:#cba6f7;padding:2px 8px;border-radius:4px;margin-bottom:4px;display:inline-block;">📚 ${card.materia}</span><br>` : '';
-  q.innerHTML = badge + escapeHtml(card.pergunta);
-  a.textContent = card.resposta;
+
+  // Variação de Contexto: cards re-inseridos via expanding retrieval são mostrados INVERTIDOS
+  // (resposta como pista → lembrar a pergunta/conceito)
+  // Evidência: Smith et al. (1978) — Variar contexto de encoding melhora recall em 20-40%
+  if (isVariation) {
+    const variationBadge = `<span style="font-size:0.65rem;background:var(--peach);color:var(--bg);padding:2px 6px;border-radius:4px;margin-bottom:4px;display:inline-block;">🔄 Variação de Contexto</span><br>`;
+    q.innerHTML = badge + variationBadge + `<div style="font-size:0.72rem;color:var(--text-sub);margin-bottom:6px;">A resposta é a pista — lembre o conceito/pergunta original:</div>` + `<div style="font-weight:600;">${escapeHtml(card.resposta)}</div>`;
+    a.textContent = card.pergunta; // Inverte: mostra pergunta como "resposta"
+  } else {
+    q.innerHTML = badge + escapeHtml(card.pergunta);
+    a.textContent = card.resposta;
+  }
   a.style.display = 'none';
   rv.style.display = 'none';
 
