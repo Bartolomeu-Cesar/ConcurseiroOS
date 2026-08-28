@@ -299,17 +299,14 @@ def o_que_estudar_agora(conn=Depends(get_db_session), user_id: int = Depends(get
             "atividades_planejadas": [],
         }
 
-    # Distribuir atividades em turnos (proporcional)
-    # COGNITIVE LOAD: matérias mais difíceis → manhã (mais energia), revisão → noite (menos esforço)
+    # Distribuir atividades em turnos RESPEITANDO A ORDEM ORIGINAL
+    # Em vez de reordenar por tipo (que dessincroniza com o grid visual),
+    # dividir sequencialmente pela ordem planejada pelo usuário.
     total_ativs = len(atividades_hoje)
     por_turno = max(1, total_ativs // 3)
 
-    # Sort: tipo 'estudo' first (more demanding), then 'questoes', then 'revisao' (lighter)
-    tipo_peso = {"estudo": 0, "questoes": 1, "revisao": 2}
-    sorted_ativs = sorted(atividades_hoje, key=lambda a: tipo_peso.get(a["tipo"], 1))
-
     turnos_map = {"manha": [], "tarde": [], "noite": []}
-    for i, a in enumerate(sorted_ativs):
+    for i, a in enumerate(atividades_hoje):
         if i < por_turno:
             turnos_map["manha"].append(dict(a))
         elif i < por_turno * 2:
@@ -326,9 +323,11 @@ def o_que_estudar_agora(conn=Depends(get_db_session), user_id: int = Depends(get
     """, (today_str(), user_id)).fetchall()
     concluidas_set = set(f"{r['materia']}|{r['tipo']}" for r in concluidas)
 
-    # Encontrar próxima atividade não concluída
+    # Encontrar próxima atividade não concluída (pular pausas)
     sugestao = None
     for a in ativs_turno:
+        if a["tipo"] == "pausa":
+            continue  # Pausa não é sugestão de estudo
         key = f"{a['materia']}|{a['tipo']}"
         if key not in concluidas_set:
             sugestao = {
