@@ -713,4 +713,9 @@ def update_preferences(body: NotificationPreferences, conn=Depends(get_db_sessio
 @router.get("/api/push/vapid-key", summary="Obter VAPID public key")
 def get_vapid_key():
     """Retorna a VAPID public key para o frontend configurar o service worker."""
+    # Re-read from file to ensure freshness after key regeneration
+    if _VAPID_PUBLIC_KEY_FILE.exists():
+        fresh_key = _VAPID_PUBLIC_KEY_FILE.read_text().strip()
+        if fresh_key:
+            return {"vapid_public_key": fresh_key}
     return {"vapid_public_key": VAPID_PUBLIC_KEY}
