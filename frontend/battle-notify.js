@@ -13,29 +13,6 @@
   let _dismissed = sessionStorage.getItem('battle_dismissed') || '';
   let _notifying = false;
 
-  function checkBatalha() {
-    // Não fazer polling se não está logado
-    if (!localStorage.getItem('auth_token')) return;
-
-    fetch('/api/batalha/pendente')
-      .then(r => {
-        if (!r.ok) return null; // Ignore errors silently (401, 500)
-        return r.json();
-      })
-      .then(data => {
-        if (!data || !data.ativa) return;
-        if (_dismissed === data.codigo) return; // Já dispensou essa
-        if (_notifying) return;
-
-        if (data.status === 'em_andamento') {
-          showBattleNotification(data, 'em_andamento');
-        } else if (data.status === 'aguardando' && !data.is_creator) {
-          showBattleNotification(data, 'aguardando');
-        }
-      })
-      .catch(() => {});
-  }
-
   function showBattleNotification(data, status) {
     _notifying = true;
 
@@ -94,8 +71,57 @@
     sessionStorage.setItem('battle_dismissed', codigo);
   };
 
-  // Polling: verifica a cada 10 segundos
-  setInterval(checkBatalha, 10000);
-  // Check imediato após 2s (dá tempo do app carregar)
-  setTimeout(checkBatalha, 2000);
+  // ==================== POLLING ADAPTATIVO ====================
+  // Reduz carga/logs: pausa quando a aba está oculta e espaça o polling
+  // progressivamente quando não há batalha ativa (backoff).
+  const INTERVAL_BASE = 15000;   // 15s quando há atividade recente
+  const INTERVAL_MAX = 120000;   // até 2min quando ocioso
+  let _intervalAtual = INTERVAL_BASE;
+  let _vazios = 0;               // contagem de checks sem batalha
+  let _timer = null;
+
+  async function checkBatalhaAdaptativo() {
+    // Não faz polling se aba oculta ou deslogado
+    if (document.hidden || !localStorage.getItem('auth_token')) {
+      _agendarProximo();
+      return;
+    }
+    try {
+      const r = await fetch('/api/batalha/pendente');
+      if (r.ok) {
+        const data = await r.json();
+        if (data && data.ativa) {
+          _vazios = 0;
+          _intervalAtual = INTERVAL_BASE; // volta a checar rápido
+          if (_dismissed !== data.codigo && !_notifying) {
+            if (data.status === 'em_andamento') showBattleNotification(data, 'em_andamento');
+            else if (data.status === 'aguardando' && !data.is_creator) showBattleNotification(data, 'aguardando');
+          }
+        } else {
+          // Sem batalha: aumentar o intervalo progressivamente (backoff)
+          _vazios++;
+          if (_vazios >= 3) _intervalAtual = Math.min(_intervalAtual * 1.5, INTERVAL_MAX);
+        }
+      }
+    } catch (e) { /* silencioso */ }
+    _agendarProximo();
+  }
+
+  function _agendarProximo() {
+    clearTimeout(_timer);
+    _timer = setTimeout(checkBatalhaAdaptativo, _intervalAtual);
+  }
+
+  // Ao voltar para a aba, resetar para polling rápido e checar já
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      _vazios = 0;
+      _intervalAtual = INTERVAL_BASE;
+      clearTimeout(_timer);
+      checkBatalhaAdaptativo();
+    }
+  });
+
+  // Check inicial após 2s (dá tempo do app carregar)
+  setTimeout(checkBatalhaAdaptativo, 2000);
 })();
