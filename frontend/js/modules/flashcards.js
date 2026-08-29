@@ -883,6 +883,8 @@ function showSessaoFlashcard() {
   rb.onclick = function() {
     a.style.display = 'block'; rb.style.display = 'none';
     rv.style.display = 'flex';
+    // Auto-start global timer if not already running (igual ao fluxo de revisão SRS)
+    _autoStartTimerIfNeeded(card.materia ? `Flashcards: ${card.materia}` : 'Flashcards (Sessão)');
     rv.innerHTML = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;width:100%;">
       <button onclick="sessaoNext(0)" style="background:#f38ba8;color:#1e1e2e;border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">0•Esqueci</button>
       <button onclick="sessaoNext(1)" style="background:#f38ba8;color:#1e1e2e;border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">1•Errei</button>
