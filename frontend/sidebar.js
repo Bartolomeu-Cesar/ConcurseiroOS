@@ -364,13 +364,13 @@
     indicator.setAttribute('aria-live', 'polite');
     indicator.style.cssText = `
       position: fixed;
-      bottom: 16px;
+      bottom: 96px;
       right: 16px;
       padding: 10px 18px;
       border-radius: 8px;
       font-size: 13px;
       font-weight: 500;
-      z-index: 10000;
+      z-index: 99999;
       display: flex;
       align-items: center;
       gap: 8px;
