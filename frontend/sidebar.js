@@ -80,6 +80,7 @@
           <li><a href="/#edital" onclick="goSection('tab-edital', event)"><span class="nav-icon" aria-hidden="true">📋</span><span class="nav-label">Edital</span></a></li>
           <li><a href="/#ciclo" onclick="goSection('tab-ciclo', event)"><span class="nav-icon" aria-hidden="true">🔄</span><span class="nav-label">Ciclo</span></a></li>
           <li><a href="/vademecum.html" class="${activeClass('/vademecum')}"><span class="nav-icon" aria-hidden="true">⚖️</span><span class="nav-label">Vade Mecum</span></a></li>
+          <li><a href="/catalogo.html" class="${activeClass('/catalogo')}"><span class="nav-icon" aria-hidden="true">📚</span><span class="nav-label">Catálogo</span></a></li>
         </ul>
       </div>
 

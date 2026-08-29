@@ -516,6 +516,32 @@ def _m55_user_status(conn):
     log.info("Migration: created user_status table")
 
 
+def _m56_catalogo_itens(conn):
+    """Create catalogo_itens table for the public materials catalog.
+
+    Cada item aponta para um recurso na conta de um curador (origem_uid).
+    Estudantes importam → copia da conta do curador para a deles.
+    """
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS catalogo_itens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tipo TEXT NOT NULL,
+            titulo TEXT NOT NULL,
+            descricao TEXT DEFAULT '',
+            categoria TEXT DEFAULT 'Geral',
+            curador_uid INTEGER NOT NULL,
+            origem_uid INTEGER NOT NULL,
+            ref TEXT DEFAULT '',
+            downloads INTEGER DEFAULT 0,
+            ativo INTEGER DEFAULT 1,
+            publicado_em TEXT NOT NULL DEFAULT ''
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_catalogo_ativo ON catalogo_itens(ativo, categoria)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_catalogo_tipo ON catalogo_itens(tipo)")
+    log.info("Migration: created catalogo_itens table")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -572,6 +598,7 @@ MIGRATIONS = [
     (53, _m53_cadernos_questoes),
     (54, _m54_app_config),
     (55, _m55_user_status),
+    (56, _m56_catalogo_itens),
 ]
 
 

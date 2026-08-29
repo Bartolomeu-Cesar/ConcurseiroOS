@@ -35,6 +35,7 @@
       <button class="btn" onclick="loadUsers()">Buscar</button>
       <button class="btn secondary" onclick="openCreateModal()">+ Novo Usuário</button>
       <button class="btn" style="background:#cba6f7;" onclick="openShareModal()">🔗 Compartilhar Recursos</button>
+      <button class="btn" style="background:#94e2d5;" onclick="openCatalogoModal()">📚 Publicar no Catálogo</button>
     </div>
 
     <!-- Table -->
@@ -162,6 +163,46 @@
       <div class="modal-actions">
         <button class="btn danger small" onclick="closeShareModal()">Cancelar</button>
         <button class="btn" id="share-btn" onclick="fazerCompartilhamento()">🔗 Compartilhar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Publicar no Catálogo -->
+  <div class="modal-overlay" id="modal-catalogo" onclick="if(event.target===this)closeCatalogoModal()">
+    <div class="modal" style="max-width:520px;">
+      <h3 style="color:#94e2d5;">📚 Publicar Material no Catálogo</h3>
+      <p style="font-size:0.75rem;color:#9399b2;margin:0 0 12px;">Publica um recurso de um usuário no catálogo público. Estudantes poderão importá-lo para a conta deles.</p>
+
+      <label>Usuário de origem (dono do material)</label>
+      <select id="cat-origem" onchange="loadCatalogoRefs()"><option value="">— selecione —</option></select>
+
+      <label>Tipo de material</label>
+      <select id="cat-tipo" onchange="loadCatalogoRefs()">
+        <option value="edital">📋 Edital verticalizado</option>
+        <option value="caderno">📓 Caderno de questões</option>
+        <option value="vademecum">📜 Lei (Vade Mécum)</option>
+        <option value="deck_flashcards">🧠 Deck de flashcards (por matéria)</option>
+        <option value="deck_questoes">❓ Pacote de questões (por matéria)</option>
+        <option value="deck_sumulas">⚖️ Súmulas (todas)</option>
+      </select>
+
+      <label>Qual recurso (ref)</label>
+      <select id="cat-ref"><option value="">— selecione origem e tipo —</option></select>
+
+      <label>Título (exibido no catálogo)</label>
+      <input type="text" id="cat-titulo" placeholder="Ex: Edital TJ-SP 2026 — Analista">
+
+      <label>Descrição</label>
+      <input type="text" id="cat-descricao" placeholder="Breve descrição do material">
+
+      <label>Categoria</label>
+      <input type="text" id="cat-categoria" placeholder="Ex: Tribunais, Fiscal, Polícia..." value="Geral">
+
+      <div id="cat-result" style="font-size:0.75rem;margin-top:10px;"></div>
+
+      <div class="modal-actions">
+        <button class="btn danger small" onclick="closeCatalogoModal()">Cancelar</button>
+        <button class="btn" id="cat-btn" onclick="publicarCatalogo()">📚 Publicar</button>
       </div>
     </div>
   </div>
@@ -548,6 +589,81 @@
         document.getElementById('share-result').innerHTML = '<div style="color:#f38ba8;">Erro de conexão.</div>';
       } finally {
         btn.disabled = false; btn.textContent = '🔗 Compartilhar';
+      }
+    };
+
+    // ==================== PUBLICAR NO CATÁLOGO ====================
+    window.openCatalogoModal = async function() {
+      document.getElementById('cat-result').innerHTML = '';
+      document.getElementById('cat-titulo').value = '';
+      document.getElementById('cat-descricao').value = '';
+      document.getElementById('cat-categoria').value = 'Geral';
+      const origem = document.getElementById('cat-origem');
+      origem.innerHTML = '<option value="">— selecione —</option>';
+      try {
+        const users = await _fetchAllUsers();
+        users.forEach(u => {
+          origem.insertAdjacentHTML('beforeend', `<option value="${u.id}">${esc('#' + u.id + ' — ' + (u.nome || u.email))}</option>`);
+        });
+      } catch(e) {}
+      document.getElementById('cat-ref').innerHTML = '<option value="">— selecione origem e tipo —</option>';
+      document.getElementById('modal-catalogo').classList.add('open');
+    };
+
+    window.closeCatalogoModal = function() {
+      document.getElementById('modal-catalogo').classList.remove('open');
+    };
+
+    window.loadCatalogoRefs = async function() {
+      const origem = document.getElementById('cat-origem').value;
+      const tipo = document.getElementById('cat-tipo').value;
+      const refSel = document.getElementById('cat-ref');
+      if (!origem || !tipo) { refSel.innerHTML = '<option value="">— selecione origem e tipo —</option>'; return; }
+      refSel.innerHTML = '<option value="">carregando...</option>';
+      try {
+        const data = await fetch(`/api/catalogo/admin/refs?origem_uid=${origem}&tipo=${tipo}`).then(r => r.json());
+        const refs = data.refs || [];
+        if (!refs.length) {
+          refSel.innerHTML = '<option value="">nenhum recurso deste tipo</option>';
+          return;
+        }
+        refSel.innerHTML = refs.map(r => `<option value="${esc(r.ref)}">${esc(r.label)}</option>`).join('');
+      } catch(e) {
+        refSel.innerHTML = '<option value="">erro ao carregar</option>';
+      }
+    };
+
+    window.publicarCatalogo = async function() {
+      const origem_uid = parseInt(document.getElementById('cat-origem').value);
+      const tipo = document.getElementById('cat-tipo').value;
+      const refSel = document.getElementById('cat-ref');
+      const ref = refSel.value;
+      const titulo = document.getElementById('cat-titulo').value.trim();
+      const descricao = document.getElementById('cat-descricao').value.trim();
+      const categoria = document.getElementById('cat-categoria').value.trim() || 'Geral';
+
+      if (!origem_uid) { alert('Selecione o usuário de origem.'); return; }
+      if (tipo !== 'deck_sumulas' && !ref) { alert('Selecione o recurso a publicar.'); return; }
+      if (!titulo) { alert('Informe um título.'); return; }
+
+      const btn = document.getElementById('cat-btn');
+      btn.disabled = true; btn.textContent = '⏳ Publicando...';
+      try {
+        const res = await fetch('/api/catalogo/publicar', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ tipo, titulo, descricao, categoria, origem_uid, ref })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          document.getElementById('cat-result').innerHTML = '<div style="color:#a6e3a1;">✅ Publicado no catálogo!</div>';
+          setTimeout(closeCatalogoModal, 1200);
+        } else {
+          document.getElementById('cat-result').innerHTML = `<div style="color:#f38ba8;">${esc(data.detail || 'Erro.')}</div>`;
+        }
+      } catch(e) {
+        document.getElementById('cat-result').innerHTML = '<div style="color:#f38ba8;">Erro de conexão.</div>';
+      } finally {
+        btn.disabled = false; btn.textContent = '📚 Publicar';
       }
     };
 
