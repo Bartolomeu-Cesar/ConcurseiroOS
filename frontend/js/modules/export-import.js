@@ -1,28 +1,90 @@
 // ==================== EXPORT / IMPORT ====================
 import { toast } from './utils.js';
+import { getToken } from './auth.js';
 
-export function exportarEdital(formato) {
-  window.open(`/api/edital/exportar?formato=${formato}`, '_blank');
+/**
+ * Faz download autenticado de um endpoint que exige Authorization: Bearer.
+ *
+ * window.open()/navegação direta NÃO envia o header Authorization, resultando
+ * em 401 "Token não fornecido". Por isso buscamos via fetch (com o header) e
+ * disparamos o download a partir do Blob recebido.
+ */
+async function downloadAutenticado(url, fallbackFilename) {
+  const token = getToken();
+  const headers = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(url, { headers });
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('Sessão expirada. Faça login novamente.');
+    throw new Error(`Falha ao exportar (HTTP ${res.status})`);
+  }
+
+  // Extrai o nome do arquivo do Content-Disposition, se presente.
+  let filename = fallbackFilename;
+  const disp = res.headers.get('Content-Disposition') || '';
+  const match = disp.match(/filename="?([^"]+)"?/i);
+  if (match) filename = match[1];
+
+  const blob = await res.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = objectUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(objectUrl);
 }
 
-export function exportarCiclo(formato) {
-  window.open(`/api/ciclo/exportar?formato=${formato}`, '_blank');
+/**
+ * Envia um arquivo (multipart) para um endpoint autenticado de importação.
+ * fetch com FormData NÃO deve setar Content-Type manualmente (o browser
+ * define o boundary), mas o header Authorization precisa ser incluído.
+ */
+async function importarArquivo(url, file) {
+  const token = getToken();
+  const headers = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const res = await fetch(url, { method: 'POST', headers, body: formData });
+  return res.json();
 }
 
-export function exportarFlashcards(formato) {
-  window.open(`/api/flashcards/exportar?formato=${formato}`, '_blank');
+export async function exportarEdital(formato) {
+  try {
+    await downloadAutenticado(`/api/edital/exportar?formato=${formato}`, `edital.${formato}`);
+  } catch (e) {
+    toast(e.message || 'Erro ao exportar edital', 'error');
+  }
+}
+
+export async function exportarCiclo(formato) {
+  try {
+    await downloadAutenticado(`/api/ciclo/exportar?formato=${formato}`, `ciclo.${formato}`);
+  } catch (e) {
+    toast(e.message || 'Erro ao exportar ciclo', 'error');
+  }
+}
+
+export async function exportarFlashcards(formato) {
+  try {
+    await downloadAutenticado(`/api/flashcards/exportar?formato=${formato}`, `flashcards.${formato}`);
+  } catch (e) {
+    toast(e.message || 'Erro ao exportar flashcards', 'error');
+  }
 }
 
 export async function importarEditalFile(input) {
   const file = input.files?.[0];
   if (!file) return;
-  const formData = new FormData();
-  formData.append('file', file);
   try {
-    const res = await fetch('/api/edital/importar', { method: 'POST', body: formData });
-    const data = await res.json();
+    const data = await importarArquivo('/api/edital/importar', file);
     if (data.ok) { toast(`Importados ${data.importados} tópicos do edital!`, 'success'); window._loadEdital?.(); }
-    else { toast('Erro ao importar edital', 'error'); }
+    else { toast(data.detail || 'Erro ao importar edital', 'error'); }
   } catch (e) { toast('Erro ao importar edital', 'error'); }
   input.value = '';
 }
@@ -30,13 +92,10 @@ export async function importarEditalFile(input) {
 export async function importarCicloFile(input) {
   const file = input.files?.[0];
   if (!file) return;
-  const formData = new FormData();
-  formData.append('file', file);
   try {
-    const res = await fetch('/api/ciclo/importar', { method: 'POST', body: formData });
-    const data = await res.json();
+    const data = await importarArquivo('/api/ciclo/importar', file);
     if (data.ok) { toast(`Importadas ${data.importados} matérias no ciclo!`, 'success'); window._loadCiclo?.(); }
-    else { toast('Erro ao importar ciclo', 'error'); }
+    else { toast(data.detail || 'Erro ao importar ciclo', 'error'); }
   } catch (e) { toast('Erro ao importar ciclo', 'error'); }
   input.value = '';
 }
@@ -44,13 +103,10 @@ export async function importarCicloFile(input) {
 export async function importarFlashcardsFile(input) {
   const file = input.files?.[0];
   if (!file) return;
-  const formData = new FormData();
-  formData.append('file', file);
   try {
-    const res = await fetch('/api/flashcards/importar', { method: 'POST', body: formData });
-    const data = await res.json();
+    const data = await importarArquivo('/api/flashcards/importar', file);
     if (data.ok) { toast(`Importados ${data.importados} flashcards!`, 'success'); window._loadAllFlashcards?.(); window._loadFlashcardsToday?.(); }
-    else { toast('Erro ao importar flashcards', 'error'); }
+    else { toast(data.detail || 'Erro ao importar flashcards', 'error'); }
   } catch (e) { toast('Erro ao importar flashcards', 'error'); }
   input.value = '';
 }
