@@ -54,11 +54,17 @@ def _materias_do_ciclo(conn, user_id: int):
     return materias
 
 
-def _topicos_ordenados(conn, user_id: int, materias):
+def _topicos_ordenados(conn, user_id: int, materias, edital_nome: str = "", cargo: str = ""):
     """Ordena os tópicos do edital respeitando pré-requisitos (topic_dependencies).
 
     Considera SOMENTE as matérias do ciclo (parâmetro `materias`). Se `materias`
     estiver vazio, retorna [] — a trilha nunca inclui o edital inteiro.
+
+    Filtros opcionais `edital_nome`/`cargo`: quando informados, restringem a
+    trilha a um edital/cargo específico. Isso evita o problema de agregar o mesmo
+    tópico de matérias comuns (ex: Língua Portuguesa) que se repetem em dezenas de
+    cargos do mesmo concurso, inflando artificialmente o total de etapas.
+
     Fallback quando não há dependências: interleaving (round-robin) por matéria,
     preservando a ordem do edital dentro de cada matéria.
     """
@@ -67,10 +73,16 @@ def _topicos_ordenados(conn, user_id: int, materias):
     placeholders = ",".join("?" * len(materias))
     query = (
         "SELECT id, materia, topico, status FROM edital "
-        f"WHERE arquivado = 0 AND user_id = ? AND materia IN ({placeholders}) "
-        "ORDER BY materia, id"
+        f"WHERE arquivado = 0 AND user_id = ? AND materia IN ({placeholders})"
     )
     params = [user_id, *materias]
+    if edital_nome:
+        query += " AND edital_nome = ?"
+        params.append(edital_nome)
+    if cargo:
+        query += " AND cargo = ?"
+        params.append(cargo)
+    query += " ORDER BY materia, id"
 
     topicos = [dict(t) for t in conn.execute(query, params).fetchall()]
     if not topicos:
@@ -184,7 +196,7 @@ def gerar_trilha(
             detail="Monte seu ciclo de estudos primeiro. A trilha é gerada apenas com as matérias que você colocou no ciclo.",
         )
 
-    topicos = _topicos_ordenados(conn, user_id, materias)
+    topicos = _topicos_ordenados(conn, user_id, materias, edital_nome, cargo)
 
     if not topicos:
         raise HTTPException(

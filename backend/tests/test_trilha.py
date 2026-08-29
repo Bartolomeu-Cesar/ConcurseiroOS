@@ -477,3 +477,40 @@ def test_marcar_atividade_nao_trilha_nao_afeta(client):
     trilha = client.get("/api/trilha").json()
     crase = next(e for e in trilha["etapas"] if e["topico"] == "Crase")
     assert crase["status"] == "atual"  # permanece atual (não concluída)
+
+
+def test_gerar_filtra_por_cargo(client):
+    """A mesma matéria (Português) repetida em 2 cargos NÃO deve ser agregada:
+    gerar com ?cargo=X restringe a trilha aos tópicos daquele cargo."""
+    conn = _conn()
+    _add_ciclo(conn, "Português", 0)
+    # Cargo A: 2 tópicos de Português
+    conn.execute(
+        "INSERT INTO edital (edital_nome, cargo, materia, topico, status, arquivado, user_id) "
+        "VALUES ('PC-MA', 'Cargo A', 'Português', 'A - Crase', 'Não Iniciado', 0, 1)"
+    )
+    conn.execute(
+        "INSERT INTO edital (edital_nome, cargo, materia, topico, status, arquivado, user_id) "
+        "VALUES ('PC-MA', 'Cargo A', 'Português', 'A - Regência', 'Não Iniciado', 0, 1)"
+    )
+    # Cargo B: 3 tópicos de Português (mesma matéria, cargo diferente)
+    for t in ("B - Crase", "B - Regência", "B - Acentuação"):
+        conn.execute(
+            "INSERT INTO edital (edital_nome, cargo, materia, topico, status, arquivado, user_id) "
+            "VALUES ('PC-MA', 'Cargo B', 'Português', ?, 'Não Iniciado', 0, 1)",
+            (t,),
+        )
+    conn.commit()
+    conn.close()
+
+    # Sem filtro: agrega os 5 (comportamento legado, backward-compatible)
+    r_all = client.post("/api/trilha/gerar")
+    assert r_all.status_code == 200
+    assert r_all.json()["progresso"]["total_etapas"] == 5
+
+    # Com filtro por cargo: só os 2 tópicos do Cargo A
+    r_a = client.post("/api/trilha/gerar?cargo=Cargo A")
+    assert r_a.status_code == 200
+    assert r_a.json()["progresso"]["total_etapas"] == 2
+    topicos = {e["topico"] for e in r_a.json()["etapas"]}
+    assert topicos == {"A - Crase", "A - Regência"}
