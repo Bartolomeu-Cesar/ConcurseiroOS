@@ -111,3 +111,43 @@ class TestImports:
         r = client.post("/api/flashcards/importar", files={"file": ("flash.csv", csv_content, "text/csv")})
         assert r.status_code == 200
         assert r.json()["importados"] == 1
+
+    def test_importar_flashcards_csv_ponto_e_virgula(self, client):
+        # CSV estilo Excel pt-BR: separador ';', campos entre aspas,
+        # cabeçalho com inicial maiúscula e 3ª coluna de disciplina.
+        csv_content = (
+            '"Pergunta";"Resposta";"📚 Disciplina (Edital)"\n'
+            '"Capital do MA?";"São Luís";"Geografia do Maranhão"\n'
+            '"Ano da adesão do MA à independência?";"1823";"História do Maranhão"\n'
+        )
+        r = client.post(
+            "/api/flashcards/importar",
+            files={"file": ("historia e geografia do maranhao.csv", csv_content, "text/csv")},
+        )
+        assert r.status_code == 200
+        assert r.json()["importados"] == 2
+
+    def test_importar_flashcards_csv_vincula_materia(self, client):
+        # A coluna de disciplina deve virar a matéria do flashcard.
+        csv_content = (
+            'Pergunta;Resposta;Disciplina\n'
+            'Pergunta A;Resposta A;Geografia do Maranhão\n'
+        )
+        r = client.post(
+            "/api/flashcards/importar",
+            files={"file": ("cards.csv", csv_content, "text/csv")},
+        )
+        assert r.status_code == 200
+        assert r.json()["importados"] == 1
+        materias = client.get("/api/flashcards/materias").json()
+        assert any(m["materia"] == "Geografia do Maranhão" for m in materias)
+
+    def test_importar_flashcards_csv_com_bom(self, client):
+        # Arquivo salvo pelo Excel costuma vir com BOM UTF-8 no início.
+        csv_content = "\ufeffpergunta,resposta\nQ1,R1\n"
+        r = client.post(
+            "/api/flashcards/importar",
+            files={"file": ("bom.csv", csv_content, "text/csv")},
+        )
+        assert r.status_code == 200
+        assert r.json()["importados"] == 1

@@ -531,17 +531,49 @@ def exportar_flashcards(formato: str = "json", conn=Depends(get_db_session), use
 @router.post("/api/flashcards/importar", summary="Importar flashcards",
              description="Importa flashcards de JSON, CSV ou formato Anki (TSV)")
 def importar_flashcards(file: UploadFile = File(...), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
-    """Aceita JSON, CSV (colunas: pergunta, resposta) ou Anki TSV (pergunta<TAB>resposta)"""
+    """Aceita JSON, CSV (colunas: pergunta, resposta, [materia]) ou Anki TSV (pergunta<TAB>resposta)"""
     content = file.file.read()
-    text = content.decode("utf-8")
+    text = content.decode("utf-8-sig")  # utf-8-sig remove BOM se presente (Excel)
     items = []
 
-    filename = file.filename or ""
+    filename = (file.filename or "").lower()
+
+    def _pick(row: dict, *aliases: str) -> str:
+        """Busca valor numa linha de CSV por nome de coluna, case-insensitive e
+        tolerante a acentos/emojis (compara por substring normalizada)."""
+        norm = {}
+        for k, v in row.items():
+            if k is None:
+                continue
+            norm[k.lower().strip()] = v if v is not None else ""
+        # 1) match exato (case-insensitive)
+        for a in aliases:
+            if a in norm and norm[a].strip():
+                return norm[a].strip()
+        # 2) match por substring (ex: "📚 disciplina (edital)" contém "disciplina")
+        for a in aliases:
+            for k, v in norm.items():
+                if a in k and v.strip():
+                    return v.strip()
+        return ""
 
     if filename.endswith(".csv"):
-        reader = csv.DictReader(io.StringIO(text))
+        # Auto-detectar delimitador: CSVs pt-BR (Excel) usam ';', outros usam ','
+        sample = text[:2048]
+        try:
+            dialect = csv.Sniffer().sniff(sample, delimiters=";,\t")
+            delimiter = dialect.delimiter
+        except csv.Error:
+            # Fallback: se a primeira linha tem mais ';' que ',', usa ';'
+            first_line = text.splitlines()[0] if text.splitlines() else ""
+            delimiter = ";" if first_line.count(";") > first_line.count(",") else ","
+        reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
         for row in reader:
-            items.append({"pergunta": row.get("pergunta", ""), "resposta": row.get("resposta", "")})
+            items.append({
+                "pergunta": _pick(row, "pergunta", "front", "question"),
+                "resposta": _pick(row, "resposta", "back", "answer"),
+                "materia": _pick(row, "materia", "matéria", "disciplina", "subject"),
+            })
     elif filename.endswith(".txt") or filename.endswith(".tsv"):
         # Formato Anki: TSV (pergunta<TAB>resposta)
         for line in text.strip().split("\n"):
@@ -561,7 +593,11 @@ def importar_flashcards(file: UploadFile = File(...), conn=Depends(get_db_sessio
         try:
             data = json.loads(text)
             if isinstance(data, list):
-                items = [{"pergunta": d.get("pergunta", ""), "resposta": d.get("resposta", "")} for d in data]
+                items = [{
+                    "pergunta": d.get("pergunta", ""),
+                    "resposta": d.get("resposta", ""),
+                    "materia": d.get("materia", "") or d.get("disciplina", ""),
+                } for d in data]
             else:
                 raise HTTPException(status_code=400, detail="Formato inválido") from None
         except json.JSONDecodeError:
@@ -570,16 +606,17 @@ def importar_flashcards(file: UploadFile = File(...), conn=Depends(get_db_sessio
     count = 0
     max_por_dia = 20  # Limitar revisões por dia para não sobrecarregar
     for i, item in enumerate(items):
-        pergunta = item.get("pergunta", "").strip()
-        resposta = item.get("resposta", "").strip()
+        pergunta = sanitize_input((item.get("pergunta") or "").strip(), max_length=2000)
+        resposta = sanitize_input((item.get("resposta") or "").strip(), max_length=5000)
+        materia = sanitize_input((item.get("materia") or "").strip())
         if not pergunta:
             continue
         # Distribuir datas: primeiros 20 para hoje, próximos 20 para amanhã, etc.
         dia_offset = count // max_por_dia
         revisao_date = (date.today() + timedelta(days=dia_offset)).isoformat()
         conn.execute(
-            "INSERT INTO flashcards (pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, user_id) VALUES (?, ?, ?, 1, 2.5, 0, ?)",
-            (pergunta, resposta, revisao_date, user_id)
+            "INSERT INTO flashcards (pergunta, resposta, materia, proxima_revisao, intervalo_dias, easiness_factor, repetitions, user_id) VALUES (?, ?, ?, ?, 1, 2.5, 0, ?)",
+            (pergunta, resposta, materia, revisao_date, user_id)
         )
         count += 1
     conn.commit()
