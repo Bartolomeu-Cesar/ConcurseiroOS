@@ -720,6 +720,42 @@ class TestCompartilhamento:
 
 
 # ============================================================
+# UPGRADE DE PLANO (self-service admin vs usuário comum)
+# ============================================================
+
+class TestUpgradePlano:
+    def test_admin_upgrade_ilimitado_direto(self, client):
+        """Admin muda o próprio plano para ilimitado SEM pagamento (via /api/auth/upgrade)."""
+        token = _get_admin_token(client)
+        r = client.post("/api/auth/upgrade", headers=_auth_header(token), json={"plano": "ilimitado"})
+        assert r.status_code == 200
+        data = r.json()
+        assert data["ok"] is True
+        assert data["plano"] == "ilimitado"
+        assert data["expira"] == "vitalicio"
+
+    def test_admin_upgrade_premium_vitalicio(self, client):
+        """Admin ativa premium vitalício (sem expiração)."""
+        token = _get_admin_token(client)
+        r = client.post("/api/auth/upgrade", headers=_auth_header(token), json={"plano": "premium", "vitalicio": True})
+        assert r.status_code == 200
+        assert r.json()["expira"] == "vitalicio"
+
+    def test_usuario_comum_upgrade_bloqueado_403(self, client):
+        """Usuário comum não pode ativar premium/ilimitado direto (deve usar créditos)."""
+        token = _register_and_get_token(client, "up_comum@example.com", "Comum Up")
+        r = client.post("/api/auth/upgrade", headers=_auth_header(token), json={"plano": "ilimitado"})
+        assert r.status_code == 403
+
+    def test_downgrade_free_sempre_permitido(self, client):
+        """Downgrade para free é sempre permitido (mesmo usuário comum)."""
+        token = _register_and_get_token(client, "up_down@example.com", "Down Up")
+        r = client.post("/api/auth/upgrade", headers=_auth_header(token), json={"plano": "free"})
+        assert r.status_code == 200
+        assert r.json()["plano"] == "free"
+
+
+# ============================================================
 # CLEANUP
 # ============================================================
 

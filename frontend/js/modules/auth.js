@@ -513,13 +513,26 @@ async function _loadVitalicioStatus() {
   const container = document.getElementById('vitalicio-btn-container');
   if (!container) return;
 
+  // Admin ativa direto (sem pagamento) — pode gerenciar o próprio plano
+  const _user = getUser();
+  const _isAdmin = _user?.role === 'admin';
+  const btnVitalicio = _isAdmin
+    ? `<button onclick="doUpgrade('ilimitado')" style="width:100%;padding:10px;border:none;border-radius:6px;background:#a6e3a1;color:#1e1e2e;font-size:0.82rem;font-weight:600;cursor:pointer;">💎 Ativar Vitalício (admin)</button>`
+    : `<button onclick="comprarVitalicio()" style="width:100%;padding:10px;border:none;border-radius:6px;background:#a6e3a1;color:#1e1e2e;font-size:0.82rem;font-weight:600;cursor:pointer;">💎 Comprar Vitalício</button>`;
+
+  // Admin ignora a janela de venda
+  if (_isAdmin) {
+    container.innerHTML = btnVitalicio;
+    return;
+  }
+
   try {
     const res = await fetch('/api/auth/vitalicio-status');
     const data = await res.json();
 
     if (data.disponivel) {
       container.innerHTML = `
-        <button onclick="comprarVitalicio()" style="width:100%;padding:10px;border:none;border-radius:6px;background:#a6e3a1;color:#1e1e2e;font-size:0.82rem;font-weight:600;cursor:pointer;">💎 Comprar Vitalício</button>
+        ${btnVitalicio}
         ${data.dias_restantes != null ? `<div style="font-size:0.65rem;color:#f9e2af;margin-top:4px;text-align:center;">⏳ ${data.dias_restantes} dia(s) restantes!</div>` : ''}
       `;
     } else {
@@ -532,11 +545,15 @@ async function _loadVitalicioStatus() {
     }
   } catch(e) {
     // Erro de rede: permitir (fallback)
-    container.innerHTML = `<button onclick="comprarVitalicio()" style="width:100%;padding:10px;border:none;border-radius:6px;background:#a6e3a1;color:#1e1e2e;font-size:0.82rem;font-weight:600;cursor:pointer;">💎 Comprar Vitalício</button>`;
+    container.innerHTML = btnVitalicio;
   }
 }
 
 export async function comprarVitalicio() {
+  // Admin ativa direto sem pagamento
+  if (getUser()?.role === 'admin') {
+    return doUpgrade('ilimitado');
+  }
   try {
     const token = getToken();
     const headers = { 'Content-Type': 'application/json' };
@@ -550,6 +567,11 @@ export async function comprarVitalicio() {
     if (res.status === 403) {
       const _toast = window.toast || window.showToast;
       if (_toast) _toast(data.detail || 'Vitalício não disponível no momento.', 'warning');
+      return;
+    }
+    if (res.status === 503) {
+      const _toast = window.toast || window.showToast;
+      if (_toast) _toast('Pagamento indisponível no momento. Tente novamente mais tarde.', 'error');
       return;
     }
 
