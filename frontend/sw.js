@@ -1,5 +1,5 @@
 // ==================== ConcurseiroOS — Service Worker v6 ====================
-const CACHE_VERSION = 'v109';
+const CACHE_VERSION = 'v110';
 const CACHE_NAME = `concurseiro-${CACHE_VERSION}`;
 const CDN_CACHE = `concurseiro-cdn-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `concurseiro-runtime-${CACHE_VERSION}`;
@@ -222,7 +222,16 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // --- Static assets (CSS, JS, images, fonts, SVGs): Cache-first ---
+  // --- JS/CSS da própria app: Stale-while-revalidate ---
+  // cache-first prendia versões antigas de scripts (ex.: novas funções não
+  // apareciam ate trocar de CACHE_NAME). SWR serve rapido do cache mas busca a
+  // versao nova em background, entregando-a no proximo load.
+  if (/\.(css|js|mjs)$/i.test(url.pathname) && !url.pathname.startsWith('/pdfjs/')) {
+    event.respondWith(staleWhileRevalidate(request));
+    return;
+  }
+
+  // --- Demais assets estáticos imutáveis (imagens, fontes, PDF.js): Cache-first ---
   if (isStaticAsset(url.pathname)) {
     event.respondWith(cacheFirst(request, CACHE_NAME));
     return;
