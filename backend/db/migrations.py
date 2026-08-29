@@ -621,6 +621,17 @@ def _m58_trilha(conn):
     log.info("Migration: created trilha + trilha_etapas tables")
 
 
+def _m59_metas_cargo_alvo(conn):
+    """Cargo/edital alvo do usuário — usado pela trilha e demais features focadas
+    num único cargo, evitando agregar tópicos de todos os cargos do concurso."""
+    for col in ("edital_alvo", "cargo_alvo"):
+        try:
+            conn.execute(f"ALTER TABLE metas_config ADD COLUMN {col} TEXT DEFAULT ''")
+        except Exception:
+            pass  # coluna já existe
+    log.info("Migration: added edital_alvo/cargo_alvo to metas_config")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -680,6 +691,7 @@ MIGRATIONS = [
     (56, _m56_catalogo_itens),
     (57, _m57_catalogo_reputacao),
     (58, _m58_trilha),
+    (59, _m59_metas_cargo_alvo),
 ]
 
 

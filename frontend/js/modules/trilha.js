@@ -188,8 +188,91 @@ export function initTrilha() {
   }
 }
 
+// ============================================================
+// CARGO ALVO (opção 2): usuário define QUAL cargo está estudando.
+// A trilha passa a considerar apenas os tópicos desse edital/cargo,
+// em vez de agregar os mesmos tópicos de todos os cargos do concurso.
+// ============================================================
+
+export async function configurarCargoAlvo() {
+  let editais, atual;
+  try {
+    [editais, atual] = await Promise.all([
+      fetch('/api/edital/nomes', { headers: _authHeaders() }).then(r => r.json()),
+      fetch('/api/trilha/cargo-alvo', { headers: _authHeaders() }).then(r => r.json()),
+    ]);
+  } catch {
+    toast('Erro ao carregar seus editais.', 'error');
+    return;
+  }
+
+  // Monta lista plana de opções edital||cargo
+  const opcoes = [];
+  (editais || []).forEach(ed => {
+    (ed.cargos || []).forEach(c => {
+      opcoes.push({ edital: ed.concurso, cargo: c.cargo, total: c.total });
+    });
+  });
+
+  if (!opcoes.length) {
+    toast('Cadastre um edital antes de definir o cargo alvo.', 'warning');
+    return;
+  }
+
+  const atualKey = `${atual?.edital_alvo || ''}\x1f${atual?.cargo_alvo || ''}`;
+  const optionsHtml = [
+    `<option value="">— Todos os cargos (não filtrar) —</option>`,
+    ...opcoes.map(o => {
+      const key = `${o.edital}\x1f${o.cargo}`;
+      const label = `${escapeHtml(o.edital)}${o.cargo ? ' · ' + escapeHtml(o.cargo) : ''} (${o.total} tópicos)`;
+      return `<option value="${escapeHtml(key)}" ${key === atualKey ? 'selected' : ''}>${label}</option>`;
+    }),
+  ].join('');
+
+  // Modal próprio (regra do projeto: sem prompt/select nativo do browser)
+  const modal = document.createElement('div');
+  modal.id = 'cargo-alvo-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:100000;display:flex;align-items:center;justify-content:center;padding:16px;';
+  modal.innerHTML = `
+    <div style="background:var(--bg-surface,#313244);border-radius:12px;padding:20px;max-width:480px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,0.5);">
+      <h3 style="margin:0 0 8px;color:var(--text,#cdd6f4);font-size:1.05rem;">🎯 Cargo que estou estudando</h3>
+      <p style="font-size:0.8rem;color:var(--text-sub,#9399b2);margin:0 0 12px;">
+        A trilha e as recomendações vão focar apenas nos tópicos deste cargo.
+      </p>
+      <select id="cargo-alvo-select" style="width:100%;padding:10px;background:var(--bg,#1e1e2e);color:var(--text,#cdd6f4);border:1px solid var(--border,#45475a);border-radius:8px;font-size:0.85rem;margin-bottom:16px;">
+        ${optionsHtml}
+      </select>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button id="cargo-alvo-cancel" class="iobtn" style="background:var(--bg,#1e1e2e);">Cancelar</button>
+        <button id="cargo-alvo-save" class="iobtn">Salvar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+
+  const close = () => modal.remove();
+  modal.querySelector('#cargo-alvo-cancel').onclick = close;
+  modal.onclick = (e) => { if (e.target === modal) close(); };
+  modal.querySelector('#cargo-alvo-save').onclick = async () => {
+    const val = modal.querySelector('#cargo-alvo-select').value;
+    const [edital_alvo, cargo_alvo] = val ? val.split('\x1f') : ['', ''];
+    try {
+      const res = await fetch('/api/trilha/cargo-alvo', {
+        method: 'PUT', headers: _authHeaders(),
+        body: JSON.stringify({ edital_alvo, cargo_alvo }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { toast(data.detail || 'Erro ao salvar cargo alvo.', 'error'); return; }
+      close();
+      toast(cargo_alvo ? `🎯 Cargo alvo: ${cargo_alvo}` : 'Filtro de cargo removido.', 'success');
+    } catch {
+      toast('Erro de conexão ao salvar.', 'error');
+    }
+  };
+}
+
 // Expor para onclick inline (regra #4)
 window.loadTrilha = loadTrilha;
 window.gerarTrilha = gerarTrilha;
 window.concluirEtapaTrilha = concluirEtapaTrilha;
 window.sincronizarTrilhaCalendario = sincronizarTrilhaCalendario;
+window.configurarCargoAlvo = configurarCargoAlvo;

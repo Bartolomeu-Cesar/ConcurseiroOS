@@ -60,7 +60,7 @@ def _clean_and_override():
     app.dependency_overrides[get_db_session] = _override_db_session
     conn = _conn()
     # Limpa tabelas relevantes entre testes
-    for tbl in ("trilha_etapas", "trilha", "topic_dependencies", "ciclo_estudos", "edital", "calendario_personalizado"):
+    for tbl in ("trilha_etapas", "trilha", "topic_dependencies", "ciclo_estudos", "edital", "calendario_personalizado", "metas_config"):
         try:
             conn.execute(f"DELETE FROM {tbl}")
         except Exception:
@@ -513,4 +513,68 @@ def test_gerar_filtra_por_cargo(client):
     assert r_a.status_code == 200
     assert r_a.json()["progresso"]["total_etapas"] == 2
     topicos = {e["topico"] for e in r_a.json()["etapas"]}
+    assert topicos == {"A - Crase", "A - Regência"}
+
+
+def _seed_dois_cargos(conn):
+    """Português no ciclo + 2 tópicos no Cargo A e 3 no Cargo B."""
+    _add_ciclo(conn, "Português", 0)
+    conn.execute(
+        "INSERT INTO edital (edital_nome, cargo, materia, topico, status, arquivado, user_id) "
+        "VALUES ('PC-MA', 'Cargo A', 'Português', 'A - Crase', 'Não Iniciado', 0, 1)"
+    )
+    conn.execute(
+        "INSERT INTO edital (edital_nome, cargo, materia, topico, status, arquivado, user_id) "
+        "VALUES ('PC-MA', 'Cargo A', 'Português', 'A - Regência', 'Não Iniciado', 0, 1)"
+    )
+    for t in ("B - Crase", "B - Regência", "B - Acentuação"):
+        conn.execute(
+            "INSERT INTO edital (edital_nome, cargo, materia, topico, status, arquivado, user_id) "
+            "VALUES ('PC-MA', 'Cargo B', 'Português', ?, 'Não Iniciado', 0, 1)",
+            (t,),
+        )
+
+
+def test_cargo_alvo_default_vazio(client):
+    r = client.get("/api/trilha/cargo-alvo")
+    assert r.status_code == 200
+    assert r.json() == {"edital_alvo": "", "cargo_alvo": ""}
+
+
+def test_cargo_alvo_definir_e_ler(client):
+    conn = _conn()
+    _seed_dois_cargos(conn)
+    conn.commit()
+    conn.close()
+
+    r = client.put("/api/trilha/cargo-alvo", json={"edital_alvo": "PC-MA", "cargo_alvo": "Cargo A"})
+    assert r.status_code == 200
+    assert r.json()["cargo_alvo"] == "Cargo A"
+
+    r2 = client.get("/api/trilha/cargo-alvo")
+    assert r2.json() == {"edital_alvo": "PC-MA", "cargo_alvo": "Cargo A"}
+
+
+def test_cargo_alvo_inexistente_retorna_404(client):
+    conn = _conn()
+    _seed_dois_cargos(conn)
+    conn.commit()
+    conn.close()
+    r = client.put("/api/trilha/cargo-alvo", json={"edital_alvo": "PC-MA", "cargo_alvo": "Cargo Inexistente"})
+    assert r.status_code == 404
+
+
+def test_gerar_usa_cargo_alvo_salvo(client):
+    """Sem query params, a trilha deve usar o cargo alvo salvo (opção 2)."""
+    conn = _conn()
+    _seed_dois_cargos(conn)
+    conn.commit()
+    conn.close()
+
+    # Define alvo = Cargo A e gera SEM query params
+    client.put("/api/trilha/cargo-alvo", json={"edital_alvo": "PC-MA", "cargo_alvo": "Cargo A"})
+    r = client.post("/api/trilha/gerar")
+    assert r.status_code == 200
+    assert r.json()["progresso"]["total_etapas"] == 2
+    topicos = {e["topico"] for e in r.json()["etapas"]}
     assert topicos == {"A - Crase", "A - Regência"}

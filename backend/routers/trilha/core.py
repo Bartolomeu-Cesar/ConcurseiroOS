@@ -16,7 +16,7 @@ matérias quando não há dependências explícitas).
 """
 
 from deps import get_user_id
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from constants import XP_PER_TOPIC
 from database import get_db_session
@@ -33,8 +33,78 @@ NOMES_DIAS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domi
 
 
 # ============================================================
+# CARGO ALVO (opção 2): persiste o edital/cargo que o usuário está estudando
+# ============================================================
+
+
+@router.get("/cargo-alvo", summary="Obter cargo/edital alvo do usuário")
+def get_cargo_alvo(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Retorna o edital/cargo alvo salvo. Vazio = nenhum definido (trilha agrega
+    todos os cargos, comportamento legado)."""
+    edital_alvo, cargo_alvo = _cargo_alvo_salvo(conn, user_id)
+    return {"edital_alvo": edital_alvo, "cargo_alvo": cargo_alvo}
+
+
+@router.put("/cargo-alvo", summary="Definir cargo/edital alvo do usuário")
+def set_cargo_alvo(
+    body: dict = Body(...),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Define o edital/cargo alvo. Passe strings vazias para limpar.
+
+    Valida que o par (edital_nome, cargo) existe no edital do usuário quando
+    ambos são informados — evita salvar um alvo inexistente."""
+    from sanitize import sanitize_input
+
+    edital_alvo = sanitize_input((body.get("edital_alvo") or "").strip())
+    cargo_alvo = sanitize_input((body.get("cargo_alvo") or "").strip())
+
+    if edital_alvo and cargo_alvo:
+        existe = conn.execute(
+            "SELECT 1 FROM edital WHERE user_id = ? AND edital_nome = ? AND cargo = ? AND arquivado = 0 LIMIT 1",
+            (user_id, edital_alvo, cargo_alvo),
+        ).fetchone()
+        if not existe:
+            raise HTTPException(status_code=404, detail="Edital/cargo não encontrado no seu edital.")
+
+    # Garante que existe a linha de metas_config para o usuário
+    row = conn.execute("SELECT id FROM metas_config WHERE user_id = ?", (user_id,)).fetchone()
+    if row:
+        conn.execute(
+            "UPDATE metas_config SET edital_alvo = ?, cargo_alvo = ? WHERE user_id = ?",
+            (edital_alvo, cargo_alvo, user_id),
+        )
+    else:
+        conn.execute(
+            "INSERT INTO metas_config (edital_alvo, cargo_alvo, user_id) VALUES (?, ?, ?)",
+            (edital_alvo, cargo_alvo, user_id),
+        )
+    conn.commit()
+    log.info(f"Cargo alvo definido para user {user_id}: {edital_alvo!r} / {cargo_alvo!r}")
+    return {"ok": True, "edital_alvo": edital_alvo, "cargo_alvo": cargo_alvo}
+
+
+# ============================================================
 # ORDENAÇÃO DOS TÓPICOS (topological sort + interleaving)
 # ============================================================
+
+
+def _cargo_alvo_salvo(conn, user_id: int):
+    """Lê o edital/cargo alvo persistido em metas_config (opção 2).
+
+    Retorna (edital_alvo, cargo_alvo) — strings vazias se não configurado ou se
+    as colunas ainda não existem (bancos muito antigos)."""
+    try:
+        row = conn.execute(
+            "SELECT edital_alvo, cargo_alvo FROM metas_config WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+        if row:
+            return (row["edital_alvo"] or ""), (row["cargo_alvo"] or "")
+    except Exception:
+        pass
+    return "", ""
 
 
 def _materias_do_ciclo(conn, user_id: int):
@@ -184,6 +254,10 @@ def gerar_trilha(
     user_id: int = Depends(get_user_id),
 ):
     _ensure_tables(conn)
+
+    # Se não vier por query, usa o edital/cargo alvo salvo do usuário (opção 2).
+    if not edital_nome and not cargo:
+        edital_nome, cargo = _cargo_alvo_salvo(conn, user_id)
 
     materias = _materias_do_ciclo(conn, user_id)
 
