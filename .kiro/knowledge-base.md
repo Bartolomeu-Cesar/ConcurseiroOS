@@ -831,3 +831,97 @@ Final da sessão:
 
 - **Regra 7 reforçada:** "Commit + Push IMEDIATO" — sem exceções
 - **Regra 11 (nova):** "Técnicas Científicas de Estudo" — obrigatório considerar qual técnica se aplica ao implementar qualquer feature de estudo. Lista completa de 29 técnicas.
+
+---
+
+## 10. SESSÃO 29/08/2026 — Feature Trilha de Estudo + Bolinha de Status
+
+### 10.1 Bolinha de Status de Presença no Avatar
+
+**Feature:** O avatar no menu de perfil (`showProfileMenu` em `auth.js`) ganhou uma bolinha
+de status colorida no canto (mesmo padrão visual do widget de amigos em `presence.js`).
+- `presence.js`: `STATUS_META` (label/emoji/cor por status, espelha `STATUS_VALIDOS` do backend
+  em `routers/social/status.py`) + `getCurrentPresenceStatus()` exposto em `window` (usa override
+  manual ou inferência da página).
+- `auth.js`: wrapper `position:relative` no avatar + `<span>` com a cor do status; fallback seguro
+  se `window.getCurrentPresenceStatus` não existir (auth.js é importado em páginas sem presence.js).
+
+### 10.2 Feature Trilha de Estudo (roadmap longitudinal)
+
+Nova feature completa (Fases 1–4). **Diferente** da "trilha diária" (agenda do dia em
+`treinador/trilha.py`). A Trilha é um **percurso ordenado de etapas por tópico do edital**, com
+pré-requisitos e progresso persistente (bloqueada → atual → concluída).
+
+**Arquivos:**
+- Backend: `routers/trilha/` (package: `__init__.py`, `core.py`, `tables.py`), migration `_m58_trilha`
+  (tabelas `trilha` + `trilha_etapas`), espelhada em `db/tables.py` para DBs novos.
+- Frontend: `js/modules/trilha.js`, aba `#tab-trilha` em `index.html`, wiring em `app.js` +
+  `js/pages/index.js` + `sidebar.js`, estilos `.trilha-*` em `css/main.css`.
+
+**Endpoints:**
+| Método | Rota | Função |
+|--------|------|--------|
+| POST | `/api/trilha/gerar` | Gera/regenera a trilha a partir do ciclo ativo |
+| GET | `/api/trilha` | Trilha ativa + etapas + progresso |
+| POST | `/api/trilha/etapas/{id}/concluir` | Conclui etapa, desbloqueia próxima, +25 XP |
+| POST | `/api/trilha/sincronizar-calendario` | Agenda próximas etapas no calendário |
+
+**Regras de negócio (IMPORTANTE):**
+- **A Trilha considera APENAS as matérias do ciclo de estudos ativo** (`ciclo_estudos WHERE ativo=1`),
+  NUNCA o edital inteiro. Sem ciclo → `gerar` retorna 400 orientando montar o ciclo.
+  `_topicos_ordenados` retorna `[]` se `materias` vazio (blindagem contra varrer o edital todo).
+- **Ordem das etapas:** topological sort (Kahn) sobre `topic_dependencies` (Knowledge Graph);
+  sem dependências → interleaving (round-robin) por matéria preservando ordem do edital.
+- **Conclusão = single source of truth:** concluir etapa marca o tópico do edital como `'Concluído'`
+  + `mastery_updated_at`. Isso alimenta o XP semanal das Ligas (+25/tópico via `XP_PER_TOPIC`),
+  sem contador de XP próprio. Evita XP duplicado ao reconcluir (`_aplicar_conclusao_etapa` retorna 0).
+- **Integração Ciclo → Knowledge Graph → Trilha → Calendário** fecha o fluxo de planejamento.
+
+**Sincronização com calendário (Fase 4):**
+- `sincronizar-calendario` distribui as próximas N etapas pendentes (round-robin pelos dias úteis)
+  no `calendario_personalizado` como `tipo='trilha'`. **Idempotente:** remove só os itens `tipo='trilha'`
+  antigos, preserva as demais atividades. Params: `dias_semana` (1-7, def 6), `tempo_min` (def 60),
+  `max_etapas` (def 12).
+- **Conclusão automática:** marcar atividade `tipo='trilha'` no calendário conclui a etapa
+  correspondente (via `marcar_etapa_por_topico(conn, user_id, materia, topico)`, importado
+  lazy em `calendario/personalizado.py` para evitar import circular). `AtividadeConcluidaRequest`
+  ganhou campo opcional `topico` para casar a etapa; frontend envia `data-topico` no toggle.
+- Grid do calendário: atividades `tipo='trilha'` têm ícone 🧭 e classe `.cal-activity--trilha`
+  (borda de acento Catppuccin), definida inline em `dashboard.html`.
+
+**Técnicas científicas aplicadas:** Desirable Difficulty (ordem por pré-requisito),
+Progress Milestones (barra/marcos de etapa), Interleaving (round-robin entre matérias).
+
+**Testes:** `tests/test_trilha.py` (19 testes). Fixture limpa `trilha_etapas, trilha,
+topic_dependencies, ciclo_estudos, edital, calendario_personalizado, calendario_atividades,
+calendario_streaks`. Helper `_add_topico(..., no_ciclo=True)` já adiciona a matéria ao ciclo
+por padrão (reflete o uso real: trilha só considera o ciclo).
+
+### 10.3 Incidentes de Ambiente e Lições (CRÍTICO para o agente)
+
+Três erros de ambiente causaram retrabalho nesta sessão. Registrados para nunca repetir:
+
+1. **NUNCA usar `git stash` / `git stash pop` com trabalho não commitado.** O `stash pop`
+   reverteu silenciosamente várias mudanças não commitadas (source + testes), que tiveram de
+   ser reaplicadas. Para lint, rodar o linter direto nos arquivos — sem stash.
+
+2. **NUNCA construir comandos `rm` com variáveis potencialmente vazias.** Um
+   `rm -f "$TMPDB"*` com `$TMPDB` vazio (mktemp do BusyBox/WSL não aceita `--suffix`) virou
+   `rm -f *` e deletou arquivos Python de topo em `backend/`. Recuperados via `git checkout`
+   (eram rastreados). Sempre validar que a variável não é vazia antes; usar caminhos explícitos.
+
+3. **SQLite no WSL (`/mnt/c`) trava com processos uvicorn remanescentes.** Smoke tests que
+   sobem uvicorn em background e não são encerrados deixam handles nos arquivos `.db`, causando
+   `sqlite3.OperationalError: unable to open database file` em execuções seguintes. Sempre
+   `pkill -f uvicorn` após smoke tests. `rate_limit.db` é efêmero/não-rastreado (`.gitignore`) —
+   se corromper, basta apagar que o app recria.
+
+4. **`backend/progress.db` é o banco REAL e é rastreado pelo git.** Testes e o import do app
+   tocam nele. Após testes/smoke, restaurar com `git checkout -- backend/progress.db` para não
+   commitar diffs espúrios. Há um `progress.db` solto na RAIZ (não rastreado) que não deve ir ao
+   repo. Para backup de dados, usar `make backup` / `POST /api/backups` — não commitar o `.db`.
+
+### 10.4 Service Worker
+
+`CACHE_VERSION` avançou v95 → v99 nesta sessão (auth.js, trilha.js, dashboard/main.js são
+precacheados). Regra reforçada: incrementar a cada mudança em JS/CSS listado em `PRECACHE_URLS`.
