@@ -57,16 +57,20 @@ def _materias_do_ciclo(conn, user_id: int):
 def _topicos_ordenados(conn, user_id: int, materias):
     """Ordena os tópicos do edital respeitando pré-requisitos (topic_dependencies).
 
+    Considera SOMENTE as matérias do ciclo (parâmetro `materias`). Se `materias`
+    estiver vazio, retorna [] — a trilha nunca inclui o edital inteiro.
     Fallback quando não há dependências: interleaving (round-robin) por matéria,
     preservando a ordem do edital dentro de cada matéria.
     """
-    query = "SELECT id, materia, topico, status FROM edital WHERE arquivado = 0 AND user_id = ?"
-    params = [user_id]
-    if materias:
-        placeholders = ",".join("?" * len(materias))
-        query += f" AND materia IN ({placeholders})"
-        params.extend(materias)
-    query += " ORDER BY materia, id"
+    if not materias:
+        return []
+    placeholders = ",".join("?" * len(materias))
+    query = (
+        "SELECT id, materia, topico, status FROM edital "
+        f"WHERE arquivado = 0 AND user_id = ? AND materia IN ({placeholders}) "
+        "ORDER BY materia, id"
+    )
+    params = [user_id, *materias]
 
     topicos = [dict(t) for t in conn.execute(query, params).fetchall()]
     if not topicos:
@@ -170,12 +174,22 @@ def gerar_trilha(
     _ensure_tables(conn)
 
     materias = _materias_do_ciclo(conn, user_id)
+
+    # A trilha considera APENAS as matérias do ciclo de estudos (as que o usuário
+    # selecionou/colocou no ciclo) — nunca o edital inteiro. Sem ciclo ativo,
+    # não há o que ordenar.
+    if not materias:
+        raise HTTPException(
+            status_code=400,
+            detail="Monte seu ciclo de estudos primeiro. A trilha é gerada apenas com as matérias que você colocou no ciclo.",
+        )
+
     topicos = _topicos_ordenados(conn, user_id, materias)
 
     if not topicos:
         raise HTTPException(
             status_code=400,
-            detail="Nenhum tópico no edital para gerar a trilha. Adicione tópicos ao edital primeiro.",
+            detail="As matérias do seu ciclo não têm tópicos no edital. Adicione tópicos a essas matérias primeiro.",
         )
 
     agora = today_str()
@@ -279,13 +293,28 @@ def concluir_etapa(
         )
 
     trilha_id = etapa["trilha_id"]
+    xp_topico = _aplicar_conclusao_etapa(conn, etapa, user_id)
+    conn.commit()
+
+    resultado = _montar_trilha(conn, trilha_id, user_id)
+    resultado["xp_topico"] = xp_topico
+    return resultado
+
+
+def _aplicar_conclusao_etapa(conn, etapa, user_id: int) -> int:
+    """Lógica central de conclusão de uma etapa (sem commit).
+
+    Marca o tópico do edital como Concluído (fonte da verdade p/ XP nas Ligas),
+    marca a etapa como 'concluida' e desbloqueia a próxima ('atual').
+    Retorna o XP concedido (0 se já estava concluída).
+
+    Reutilizada pelo endpoint POST /concluir e pela conclusão automática via
+    calendário (marcar_etapa_por_topico).
+    """
     agora = today_str()
     xp_topico = 0
-
-    # Só concede XP se ainda não estava concluída (evita XP duplicado ao reconcluir)
     ja_concluida = etapa["status"] == "concluida"
 
-    # 1. Marca o tópico do edital como Concluído (fonte da verdade p/ XP e progresso)
     if etapa["topico_id"]:
         conn.execute(
             "UPDATE edital SET status = 'Concluído', mastery_updated_at = ? WHERE id = ? AND user_id = ?",
@@ -294,18 +323,16 @@ def concluir_etapa(
         if not ja_concluida:
             xp_topico = XP_PER_TOPICO
 
-    # 2. Marca a etapa como concluída
     conn.execute(
         "UPDATE trilha_etapas SET status = 'concluida', desbloqueada = 1 WHERE id = ? AND user_id = ?",
-        (etapa_id, user_id),
+        (etapa["id"], user_id),
     )
 
-    # 3. Desbloqueia a próxima etapa não-concluída da sequência → vira 'atual'
     proxima = conn.execute(
         """SELECT id FROM trilha_etapas
            WHERE trilha_id = ? AND user_id = ? AND ordem > ? AND status != 'concluida'
            ORDER BY ordem LIMIT 1""",
-        (trilha_id, user_id, etapa["ordem"]),
+        (etapa["trilha_id"], user_id, etapa["ordem"]),
     ).fetchone()
     if proxima:
         conn.execute(
@@ -313,13 +340,33 @@ def concluir_etapa(
             (proxima["id"], user_id),
         )
 
-    conn.execute("UPDATE trilha SET updated_at = ? WHERE id = ? AND user_id = ?", (agora, trilha_id, user_id))
-    conn.commit()
-    log.info(f"Trilha etapa concluída: etapa={etapa_id}, trilha={trilha_id}, xp={xp_topico}")
+    conn.execute("UPDATE trilha SET updated_at = ? WHERE id = ? AND user_id = ?", (agora, etapa["trilha_id"], user_id))
+    log.info(f"Trilha etapa concluída: etapa={etapa['id']}, trilha={etapa['trilha_id']}, xp={xp_topico}")
+    return xp_topico
 
-    resultado = _montar_trilha(conn, trilha_id, user_id)
-    resultado["xp_topico"] = xp_topico
-    return resultado
+
+def marcar_etapa_por_topico(conn, user_id: int, materia: str, topico: str) -> bool:
+    """Conclui automaticamente a etapa da trilha ativa que casa com (materia, topico).
+
+    Usada quando o usuário marca uma atividade de tipo='trilha' como concluída no
+    calendário. Idempotente e silenciosa (não levanta erro se não houver match).
+    Retorna True se alguma etapa foi concluída agora.
+    """
+    if not topico:
+        return False
+    _ensure_tables(conn)
+    etapa = conn.execute(
+        """SELECT e.id, e.trilha_id, e.ordem, e.topico_id, e.status
+           FROM trilha_etapas e
+           JOIN trilha t ON t.id = e.trilha_id AND t.ativo = 1
+           WHERE e.user_id = ? AND e.materia = ? AND e.topico = ? AND e.status != 'concluida'
+           ORDER BY e.ordem LIMIT 1""",
+        (user_id, materia, topico),
+    ).fetchone()
+    if not etapa:
+        return False
+    _aplicar_conclusao_etapa(conn, etapa, user_id)
+    return True
 
 
 # ============================================================

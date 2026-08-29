@@ -1,5 +1,4 @@
 """Package da Trilha de Estudo (roadmap longitudinal por tópicos)."""
+from .core import marcar_etapa_por_topico, router
 
-from .core import router
-
-__all__ = ["router"]
+__all__ = ["router", "marcar_etapa_por_topico"]

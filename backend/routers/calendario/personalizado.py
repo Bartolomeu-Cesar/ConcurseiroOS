@@ -103,9 +103,22 @@ def marcar_atividade_concluida(body: AtividadeConcluidaRequest, conn=Depends(get
     """, (data_str, dia_semana, materia, tipo, tempo_min, datetime.now().isoformat(), user_id))
 
     _update_calendario_streak(conn, data_str, body.total_atividades, user_id)
+
+    # Se for atividade da Trilha, conclui automaticamente a etapa correspondente
+    # (marca o tópico do edital como Concluído e desbloqueia a próxima etapa).
+    trilha_concluida = False
+    if tipo == "trilha":
+        try:
+            from routers.trilha import marcar_etapa_por_topico
+            trilha_concluida = marcar_etapa_por_topico(
+                conn, user_id, materia, sanitize_input(body.topico)
+            )
+        except Exception as e:  # pragma: no cover - defensivo
+            log.warning(f"Falha ao concluir etapa da trilha via calendário: {e}")
+
     conn.commit()
     log.info(f"Atividade concluída: {materia} ({tipo}) em {data_str}")
-    return {"ok": True}
+    return {"ok": True, "trilha_etapa_concluida": trilha_concluida}
 
 
 @router.delete("/api/calendario/atividade-concluida")

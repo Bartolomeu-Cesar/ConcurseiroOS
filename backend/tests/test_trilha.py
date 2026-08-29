@@ -77,12 +77,21 @@ def _conn():
     return c
 
 
-def _add_topico(conn, materia, topico, status="Não Iniciado"):
+def _add_topico(conn, materia, topico, status="Não Iniciado", no_ciclo=True):
     cur = conn.execute(
         "INSERT INTO edital (edital_nome, cargo, materia, topico, status, arquivado, user_id) "
         "VALUES ('Geral', '', ?, ?, ?, 0, 1)",
         (materia, topico, status),
     )
+    # Reflete o uso real: a trilha só considera matérias do ciclo de estudos.
+    # Por padrão, garante que a matéria do tópico esteja no ciclo ativo.
+    if no_ciclo:
+        existe = conn.execute(
+            "SELECT 1 FROM ciclo_estudos WHERE materia = ? AND ativo = 1 AND user_id = 1",
+            (materia,),
+        ).fetchone()
+        if not existe:
+            _add_ciclo(conn, materia, 0)
     return cur.lastrowid
 
 
@@ -98,10 +107,26 @@ def _add_ciclo(conn, materia, ordem=0):
 # ============================================================
 
 
-def test_gerar_sem_topicos_retorna_400(client):
+def test_gerar_sem_ciclo_retorna_400(client):
+    # Há tópicos no edital, mas nenhum ciclo ativo → a trilha não deve ser gerada
+    conn = _conn()
+    _add_topico(conn, "Português", "Crase", no_ciclo=False)
+    conn.commit()
+    conn.close()
     r = client.post("/api/trilha/gerar")
     assert r.status_code == 400
-    assert "Nenhum tópico" in r.json()["detail"]
+    assert "ciclo" in r.json()["detail"].lower()
+
+
+def test_gerar_ciclo_sem_topicos_retorna_400(client):
+    # Ciclo tem matéria que não possui tópicos no edital
+    conn = _conn()
+    _add_ciclo(conn, "Português", 0)
+    conn.commit()
+    conn.close()
+    r = client.post("/api/trilha/gerar")
+    assert r.status_code == 400
+    assert "tópico" in r.json()["detail"].lower()
 
 
 def test_get_sem_trilha_retorna_vazio(client):
@@ -140,9 +165,9 @@ def test_gerar_cria_etapas_ordenadas_com_atual(client):
 
 def test_filtra_por_ciclo_ativo(client):
     conn = _conn()
-    _add_topico(conn, "Português", "Crase")
-    _add_topico(conn, "Direito", "Princípios")
-    _add_topico(conn, "Informática", "Redes")  # fora do ciclo
+    _add_topico(conn, "Português", "Crase", no_ciclo=False)
+    _add_topico(conn, "Direito", "Princípios", no_ciclo=False)
+    _add_topico(conn, "Informática", "Redes", no_ciclo=False)  # fora do ciclo
     # Ciclo ativo só com Português e Direito
     _add_ciclo(conn, "Português", 0)
     _add_ciclo(conn, "Direito", 1)
@@ -401,3 +426,54 @@ def test_sincronizar_preserva_atividades_nao_trilha(client):
     # A atividade manual permanece; a de trilha foi criada
     assert manual == 1
     assert trilha == 1
+
+
+# ============================================================
+# FASE 4b — Conclusão automática da etapa via calendário
+# ============================================================
+
+def test_marcar_atividade_trilha_conclui_etapa(client):
+    conn = _conn()
+    _add_topico(conn, "Português", "Crase")
+    _add_topico(conn, "Português", "Regência")
+    conn.commit()
+    conn.close()
+    client.post("/api/trilha/gerar")
+
+    # Marca a atividade do calendário correspondente à etapa "Crase" como concluída
+    r = client.post("/api/calendario/atividade-concluida", json={
+        "data": "2026-08-28", "dia_semana": 0, "materia": "Português",
+        "tipo": "trilha", "tempo_min": 60, "total_atividades": 1, "topico": "Crase",
+    })
+    assert r.status_code == 200
+    assert r.json()["trilha_etapa_concluida"] is True
+
+    # A etapa "Crase" ficou concluída e "Regência" virou a atual
+    trilha = client.get("/api/trilha").json()
+    etapas = {e["topico"]: e for e in trilha["etapas"]}
+    assert etapas["Crase"]["status"] == "concluida"
+    assert etapas["Regência"]["status"] == "atual"
+    # E o tópico do edital foi marcado como Concluído
+    conn = _conn()
+    st = conn.execute("SELECT status FROM edital WHERE topico = 'Crase'").fetchone()[0]
+    conn.close()
+    assert st == "Concluído"
+
+
+def test_marcar_atividade_nao_trilha_nao_afeta(client):
+    conn = _conn()
+    _add_topico(conn, "Português", "Crase")
+    conn.commit()
+    conn.close()
+    client.post("/api/trilha/gerar")
+
+    r = client.post("/api/calendario/atividade-concluida", json={
+        "data": "2026-08-28", "dia_semana": 0, "materia": "Português",
+        "tipo": "estudo", "tempo_min": 60, "total_atividades": 1, "topico": "Crase",
+    })
+    assert r.status_code == 200
+    assert r.json().get("trilha_etapa_concluida") is False
+
+    trilha = client.get("/api/trilha").json()
+    crase = next(e for e in trilha["etapas"] if e["topico"] == "Crase")
+    assert crase["status"] == "atual"  # permanece atual (não concluída)

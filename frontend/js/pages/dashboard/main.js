@@ -518,7 +518,7 @@ async function loadCalendario() {
     // Simplified calendar render
     let html = '<div class="cal-grid">';
     const diasNomes = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
-    const icons = {revisao:'🧠', estudo:'📚', questoes:'❓', pausa:'☕', 'pre-test':'⚡', consolidacao:'📝', ensinar:'🎓'};
+    const icons = {revisao:'🧠', estudo:'📚', questoes:'❓', pausa:'☕', 'pre-test':'⚡', consolidacao:'📝', ensinar:'🎓', trilha:'🧭'};
     const _now = new Date();
     const hoje = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}-${String(_now.getDate()).padStart(2,'0')}`;
     const horaAtual = _now.getHours();
@@ -597,7 +597,7 @@ async function loadCalendario() {
           }
           const ativKey = `${dia.data}|${materia}|${ativ.tipo}`;
 
-          html += `<div class="cal-activity" data-key="${ativKey}" data-materia="${materia}" data-tipo="${ativ.tipo}" data-tempo="${ativ.tempo_min}" data-date="${dia.data}" data-diasemana="${dia.dia_semana}" data-total="${dia.atividades.length}">`;
+          html += `<div class="cal-activity${ativ.tipo === 'trilha' ? ' cal-activity--trilha' : ''}" data-key="${ativKey}" data-materia="${materia}" data-tipo="${ativ.tipo}" data-topico="${(detail || '').replace(/"/g,'&quot;')}" data-tempo="${ativ.tempo_min}" data-date="${dia.data}" data-diasemana="${dia.dia_semana}" data-total="${dia.atividades.length}">`;
           html += `<input type="checkbox" class="cal-check" data-key="${ativKey}" onchange="toggleAtivConcluida(this)" title="Marcar como concluída">`;
           html += `<span class="cal-activity-icon">${icon}</span>`;
           html += `<div class="cal-activity-info">`;
@@ -669,11 +669,20 @@ async function toggleAtivConcluida(checkbox) {
 
   if (checkbox.checked) {
     el.classList.add('concluida');
-    await fetch('/api/calendario/atividade-concluida', {
+    const res = await fetch('/api/calendario/atividade-concluida', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ data: dataStr, dia_semana: parseInt(el.dataset.diasemana), materia, tipo, tempo_min: parseInt(el.dataset.tempo), total_atividades: total })
+      body: JSON.stringify({ data: dataStr, dia_semana: parseInt(el.dataset.diasemana), materia, tipo, tempo_min: parseInt(el.dataset.tempo), total_atividades: total, topico: el.dataset.topico || '' })
     });
     concluidasHoje.add(key);
+    // Feedback quando a etapa da trilha é concluída automaticamente
+    if (tipo === 'trilha') {
+      try {
+        const data = await res.json();
+        if (data && data.trilha_etapa_concluida) {
+          toast('🧭 Etapa da trilha concluída! +25 XP', 'success');
+        }
+      } catch (_e) { /* silencioso */ }
+    }
   } else {
     el.classList.remove('concluida');
     await fetch('/api/calendario/atividade-concluida', {

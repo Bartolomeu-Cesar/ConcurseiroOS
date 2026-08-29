@@ -697,6 +697,7 @@ class AtividadeConcluidaRequest(BaseModel):
     tipo: str = "estudo"
     tempo_min: int = 0
     total_atividades: int = 0
+    topico: str = ""  # usado para casar com a etapa da trilha (tipo='trilha')
 
 
 class DesmarcarAtividadeRequest(BaseModel):

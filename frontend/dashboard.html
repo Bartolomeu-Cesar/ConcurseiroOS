@@ -357,6 +357,14 @@
       border-bottom: 1px solid var(--border);
     }
     .cal-activity:last-child { border-bottom: none; }
+    /* Atividades geradas pela Trilha: destaque com borda de acento */
+    .cal-activity--trilha {
+      border-left: 3px solid var(--accent, #cba6f7);
+      padding-left: 5px;
+      border-radius: 4px;
+      background: color-mix(in srgb, var(--accent, #cba6f7) 8%, transparent);
+    }
+    .cal-activity--trilha .cal-activity-materia { color: var(--accent, #cba6f7); }
     .cal-activity-icon { font-size: 0.85rem; min-width: 18px; }
     .cal-activity-info { flex: 1; min-width: 0; overflow: hidden; }
     .cal-activity-materia { font-weight: 600; color: var(--text); cursor: pointer; line-height: 1.3; }

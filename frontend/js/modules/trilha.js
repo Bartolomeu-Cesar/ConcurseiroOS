@@ -112,7 +112,8 @@ export async function gerarTrilha() {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       if (res.status === 400) {
-        toast('Adicione tópicos ao edital antes de gerar a trilha.', 'warning');
+        // Backend explica: "monte o ciclo" ou "matérias do ciclo sem tópicos"
+        toast(data.detail || 'Monte seu ciclo de estudos antes de gerar a trilha.', 'warning');
       } else {
         toast(data.detail || 'Erro ao gerar trilha.', 'error');
       }
