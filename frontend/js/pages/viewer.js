@@ -1,5 +1,6 @@
 // viewer.js — extracted from viewer.html inline script
 // ES module (strict mode by default)
+import { confirmModal, promptModal } from '../modules/utils.js';
 
 const API = '';
 const TIMER_LIMIT_KEY = 'leitor_timer_limit_min';
@@ -508,7 +509,7 @@ setInterval(() => {
 
 // --- Bookmarks ---
 async function addBookmark() {
-  const label = prompt('Label para o bookmark (opcional):') || '';
+  const label = await promptModal('Label para o bookmark (opcional):', { title: 'Novo Bookmark' }) || '';
   const cores = ['blue', 'green', 'yellow', 'red', 'purple'];
   const cor = cores[Math.floor(Math.random() * cores.length)];
   await fetch('/api/bookmarks', {
@@ -534,7 +535,7 @@ function closeFlashcardModal() {
 async function saveQuickFlashcard() {
   const pergunta = document.getElementById('fc-pergunta').value.trim();
   const resposta = document.getElementById('fc-resposta').value.trim();
-  if (!pergunta || !resposta) { alert('Preencha pergunta e resposta.'); return; }
+  if (!pergunta || !resposta) { showStudyToast('Preencha pergunta e resposta.'); return; }
 
   // Try to get materia from PDF name or edital link
   let materia = '';
@@ -580,8 +581,8 @@ finishTimer = function(showOverlay) {
   _origFinishTimer(showOverlay);
   if (pomodoroActive) {
     // After 25 min work, suggest 5 min break
-    setTimeout(() => {
-      if (confirm('🍅 Pomodoro completo! Fazer pausa de 5 min?')) {
+    setTimeout(async () => {
+      if (await confirmModal('Pomodoro', '🍅 Pomodoro completo! Fazer pausa de 5 min?', { type: 'success', confirmText: 'Pausar', cancelText: 'Continuar' })) {
         startTimer(5, 0);
         showStudyToast('☕ Pausa de 5 min. Relaxe!');
       } else {

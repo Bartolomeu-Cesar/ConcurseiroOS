@@ -1,5 +1,6 @@
 // treinador.js — Treinador/recomendações panel and study technique helpers
 import { getCSSVar, COLORS } from './helpers.js';
+import { toast } from '../../modules/utils.js';
 
 export async function loadTreinador() {
   try {
@@ -275,15 +276,15 @@ export async function sortearFeynman() {
 export async function salvarFeynman() {
   const texto = document.getElementById('feynman-texto').value.trim();
   const editalId = document.getElementById('feynman-topico').dataset.editalId;
-  if (!texto || !editalId) { alert('Sorteie um tópico e escreva sua explicação.'); return; }
+  if (!texto || !editalId) { toast('Sorteie um tópico e escreva sua explicação.', 'warning'); return; }
   try {
     await fetch(`/api/edital/${editalId}/feynman`, {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ edital_id: parseInt(editalId), explicacao: texto })
     });
-    alert('✅ Explicação Feynman salva com sucesso!');
+    toast('✅ Explicação Feynman salva com sucesso!', 'success');
     document.getElementById('feynman-texto').value = '';
-  } catch(e) { alert('Erro ao salvar'); }
+  } catch(e) { toast('Erro ao salvar', 'error'); }
 }
 
 export async function sortearElaboracao() {
@@ -306,7 +307,7 @@ export async function salvarElaboracao() {
   const f2 = document.getElementById('elab-frase2').value.trim();
   const f3 = document.getElementById('elab-frase3').value.trim();
   const editalId = document.getElementById('elab-topico-atual').dataset?.editalId;
-  if (!f1 || !f2 || !f3) { alert('Preencha as 3 frases!'); return; }
+  if (!f1 || !f2 || !f3) { toast('Preencha as 3 frases!', 'warning'); return; }
   const resumo = `1) ${f1}\n2) ${f2}\n3) ${f3}`;
   try {
     if (editalId) {
@@ -315,11 +316,11 @@ export async function salvarElaboracao() {
         body: JSON.stringify({ resumo, tipo: '3frases' })
       });
     }
-    alert('✅ Elaboração salva!');
+    toast('✅ Elaboração salva!', 'success');
     document.getElementById('elab-frase1').value = '';
     document.getElementById('elab-frase2').value = '';
     document.getElementById('elab-frase3').value = '';
-  } catch(e) { alert('Erro ao salvar'); }
+  } catch(e) { toast('Erro ao salvar', 'error'); }
 }
 
 let retrievalCard = null;
@@ -465,7 +466,7 @@ export async function iniciarMicroRevisao() {
   try {
     const data = await fetch('/api/micro-revisao?quantidade=5').then(r => r.json());
     microItems = data.items; microIdx = 0; microAcertos = 0;
-    if (!microItems.length) { alert('Sem conteúdo para revisão.'); return; }
+    if (!microItems.length) { toast('Sem conteúdo para revisão.', 'warning'); return; }
     document.getElementById('micro-revisao-box').style.display = 'none';
     const area = document.getElementById('micro-revisao-area');
     area.style.display = 'block';
@@ -488,7 +489,7 @@ export async function iniciarAutoavaliacao() {
   try {
     const data = await fetch('/api/autoavaliacao?quantidade=5').then(r => r.json());
     autoItems = data.items; autoIdx = 0; autoResultados = [];
-    if (!autoItems.length) { alert('Sem flashcards para avaliação.'); return; }
+    if (!autoItems.length) { toast('Sem flashcards para avaliação.', 'warning'); return; }
     document.getElementById('autoavaliacao-box').style.display = 'none';
     const area = document.getElementById('autoavaliacao-area');
     area.style.display = 'block';
@@ -533,7 +534,7 @@ export async function gerarDissertativa() {
   const materia = document.getElementById('dissert-materia').value;
   const url = materia ? `/api/questao-dissertativa?materia=${encodeURIComponent(materia)}` : '/api/questao-dissertativa';
   const data = await fetch(url).then(r => r.json());
-  if (!data.pergunta) { alert(data.message || 'Sem tópicos disponíveis.'); return; }
+  if (!data.pergunta) { toast(data.message || 'Sem tópicos disponíveis.', 'warning'); return; }
   dissertAtual = data;
   const area = document.getElementById('dissertativa-area');
   area.style.display = 'block';
@@ -541,9 +542,9 @@ export async function gerarDissertativa() {
 }
 export async function salvarDissertativa() {
   const resp = document.getElementById('dissert-resposta').value.trim();
-  if (!resp) { alert('Escreva sua resposta!'); return; }
+  if (!resp) { toast('Escreva sua resposta!', 'warning'); return; }
   await fetch('/api/questao-dissertativa/salvar', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({edital_id:dissertAtual.edital_id, resposta:resp, materia:dissertAtual.materia, confianca:parseInt(document.getElementById('dissert-conf').value)})});
-  alert('✅ Resposta salva!');
+  toast('✅ Resposta salva!', 'success');
   document.getElementById('dissertativa-area').style.display = 'none';
 }
 
@@ -564,12 +565,12 @@ export async function salvarCornell() {
   const dicas = document.getElementById('cornell-dicas').value.trim();
   const notas = document.getElementById('cornell-notas').value.trim();
   const resumo = document.getElementById('cornell-resumo').value.trim();
-  if (!notas && !resumo) { alert('Preencha as notas e/ou o resumo.'); return; }
+  if (!notas && !resumo) { toast('Preencha as notas e/ou o resumo.', 'warning'); return; }
   const texto = `[CORNELL NOTES]\nDicas: ${dicas}\nNotas: ${notas}\nResumo: ${resumo}`;
   if (cornellEditalId) {
     await fetch(`/api/edital/${cornellEditalId}/resumo`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({resumo:texto, tipo:'cornell'})});
   }
-  alert('✅ Cornell Note salva!');
+  toast('✅ Cornell Note salva!', 'success');
 }
 
 // Método Loci
@@ -579,7 +580,7 @@ export function testarLoci() {
     const v = document.getElementById(`loci-${i}`).value.trim();
     if (v) valores.push(v);
   }
-  if (valores.length === 0) { alert('Preencha pelo menos um local com um conceito.'); return; }
+  if (valores.length === 0) { toast('Preencha pelo menos um local com um conceito.', 'warning'); return; }
   const locais = ['🚪 Entrada','🛋️ Sala','🍳 Cozinha','🛏️ Quarto','🚿 Banheiro'];
   const teste = document.getElementById('loci-teste');
   teste.style.display = 'block';

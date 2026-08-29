@@ -38,6 +38,67 @@ export function confirmModal(title, message, { confirmText = 'Confirmar', cancel
   });
 }
 
+// ==================== MODAL DE AVISO (alert) ====================
+export function alertModal(message, { title = 'Aviso', type = 'info', icon = null, okText = 'OK' } = {}) {
+  return new Promise((resolve) => {
+    const colors = { warning: '#f9e2af', danger: '#f38ba8', info: '#89b4fa', success: '#a6e3a1' };
+    const icons = { warning: '⚠️', danger: '❌', info: 'ℹ️', success: '✅' };
+    const _icon = icon || icons[type] || 'ℹ️';
+    const overlay = document.createElement('div');
+    overlay.id = 'alert-modal-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:99999;display:flex;align-items:center;justify-content:center;animation:fadeIn 0.15s;';
+    overlay.innerHTML = `<div style="background:#313244;border-radius:16px;padding:28px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.5);border:1px solid #45475a;animation:scaleIn 0.15s;">
+      <div style="text-align:center;margin-bottom:16px;">
+        <div style="font-size:2.2rem;margin-bottom:8px;">${_icon}</div>
+        <h3 style="color:${colors[type]};margin-bottom:8px;font-size:1.1rem;">${escapeHtml(title)}</h3>
+        <p style="font-size:0.85rem;color:#cdd6f4;line-height:1.5;white-space:pre-line;">${escapeHtml(message)}</p>
+      </div>
+      <div style="display:flex;justify-content:center;">
+        <button id="am-ok" style="background:${colors[type]};color:#1e1e2e;border:none;border-radius:8px;padding:10px 24px;font-size:0.88rem;cursor:pointer;font-weight:700;min-width:120px;">${escapeHtml(okText)}</button>
+      </div>
+    </div>`;
+    document.body.appendChild(overlay);
+    const close = () => { overlay.remove(); resolve(true); };
+    overlay.querySelector('#am-ok').onclick = close;
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    overlay.querySelector('#am-ok').focus();
+  });
+}
+
+// ==================== MODAL DE ENTRADA (prompt) ====================
+export function promptModal(message, { title = 'Informe', defaultValue = '', placeholder = '', confirmText = 'Confirmar', cancelText = 'Cancelar', icon = '✏️', multiline = false } = {}) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.id = 'prompt-modal-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:99999;display:flex;align-items:center;justify-content:center;animation:fadeIn 0.15s;';
+    const field = multiline
+      ? `<textarea id="pm-input" placeholder="${escapeHtml(placeholder)}" style="width:100%;min-height:90px;padding:10px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.9rem;font-family:inherit;resize:vertical;">${escapeHtml(defaultValue)}</textarea>`
+      : `<input id="pm-input" type="text" value="${escapeHtml(defaultValue)}" placeholder="${escapeHtml(placeholder)}" style="width:100%;padding:10px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.9rem;">`;
+    overlay.innerHTML = `<div style="background:#313244;border-radius:16px;padding:28px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.5);border:1px solid #45475a;animation:scaleIn 0.15s;">
+      <div style="text-align:center;margin-bottom:14px;">
+        <div style="font-size:2rem;margin-bottom:6px;">${icon}</div>
+        <h3 style="color:#89b4fa;margin-bottom:8px;font-size:1.1rem;">${escapeHtml(title)}</h3>
+        ${message ? `<p style="font-size:0.85rem;color:#cdd6f4;line-height:1.5;margin-bottom:12px;">${escapeHtml(message)}</p>` : ''}
+      </div>
+      ${field}
+      <div style="display:flex;gap:10px;justify-content:center;margin-top:16px;">
+        <button id="pm-cancel" style="background:#45475a;color:#cdd6f4;border:none;border-radius:8px;padding:10px 20px;font-size:0.88rem;cursor:pointer;font-weight:500;min-width:100px;">${escapeHtml(cancelText)}</button>
+        <button id="pm-confirm" style="background:#89b4fa;color:#1e1e2e;border:none;border-radius:8px;padding:10px 20px;font-size:0.88rem;cursor:pointer;font-weight:700;min-width:100px;">${escapeHtml(confirmText)}</button>
+      </div>
+    </div>`;
+    document.body.appendChild(overlay);
+    const input = overlay.querySelector('#pm-input');
+    const doConfirm = () => { const v = input.value; overlay.remove(); resolve(v); };
+    const doCancel = () => { overlay.remove(); resolve(null); };
+    overlay.querySelector('#pm-confirm').onclick = doConfirm;
+    overlay.querySelector('#pm-cancel').onclick = doCancel;
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) doCancel(); });
+    if (!multiline) input.addEventListener('keydown', (e) => { if (e.key === 'Enter') doConfirm(); });
+    input.focus();
+    input.select?.();
+  });
+}
+
 // ==================== TOAST (re-exported from toast.js) ====================
 export { toast, removeToast } from './toast.js';
 

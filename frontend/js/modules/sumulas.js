@@ -1,5 +1,5 @@
 // ==================== TAB: SÚMULAS (SRS) ====================
-import { escapeHtml, toast, showLoading, showEmpty, api } from './utils.js';
+import { escapeHtml, toast, showLoading, showEmpty, api, confirmModal, promptModal } from './utils.js';
 
 let sumulasToday = [], currentSumulaIndex = 0;
 let sumulaSessao = [], sumulaSessaoIndex = 0;
@@ -205,7 +205,7 @@ export async function iniciarSessaoSumulas(mode) {
     const tribunais = await fetch('/api/sumulas/tribunais').then(r => r.json());
     if (tribunais.length === 0) { toast('Nenhuma súmula disponível', 'warning'); return; }
     // Usar primeiro tribunal como default ou pedir seleção
-    const escolha = prompt('Tribunal (STF, STJ, TST, TSE):');
+    const escolha = await promptModal('Tribunal (STF, STJ, TST, TSE):', { title: 'Sessão por Tribunal' });
     if (!escolha) return;
     sumulaSessao = await fetch(`/api/sumulas/aleatorio?tribunal=${encodeURIComponent(escolha)}&quantidade=15`).then(r => r.json());
     if (sumulaSessao.length === 0) { toast('Nenhuma súmula desse tribunal', 'warning'); return; }
@@ -220,7 +220,7 @@ export async function iniciarSessaoSumulas(mode) {
   if (mode === 'tema') {
     const temas = await fetch('/api/sumulas/temas').then(r => r.json());
     if (temas.length === 0) { toast('Nenhuma súmula com tema definido', 'warning'); return; }
-    const escolha = prompt('Tema: ' + temas.map(t => t.tema).join(', '));
+    const escolha = await promptModal('Tema: ' + temas.map(t => t.tema).join(', '), { title: 'Sessão por Tema' });
     if (!escolha) return;
     sumulaSessao = await fetch(`/api/sumulas/aleatorio?tema=${encodeURIComponent(escolha)}&quantidade=15`).then(r => r.json());
     if (sumulaSessao.length === 0) { toast('Nenhuma súmula nesse tema', 'warning'); return; }
@@ -243,7 +243,7 @@ export async function iniciarSessaoSumulas(mode) {
 }
 
 export async function deleteSumula(id) {
-  if (!confirm('Excluir esta súmula?')) return;
+  if (!await confirmModal('Excluir Súmula', 'Excluir esta súmula?', { type: 'danger', confirmText: 'Excluir' })) return;
   await api(`/api/sumulas/${id}`, { method: 'DELETE' });
   toast('Súmula excluída', 'success');
   loadAllSumulas();
@@ -255,10 +255,10 @@ export async function editSumula(id) {
   const all = await fetch('/api/sumulas').then(r => r.json());
   const s = all.find(x => x.id === id);
   if (!s) return;
-  const novoEnunciado = prompt('Editar enunciado:', s.enunciado);
+  const novoEnunciado = await promptModal('Editar enunciado:', { title: 'Editar Súmula', defaultValue: s.enunciado, multiline: true });
   if (novoEnunciado === null) return;
-  const novoTema = prompt('Tema:', s.tema || '');
-  const novaObs = prompt('Observação/Dica:', s.observacao || '');
+  const novoTema = await promptModal('Tema:', { title: 'Editar Súmula', defaultValue: s.tema || '' });
+  const novaObs = await promptModal('Observação/Dica:', { title: 'Editar Súmula', defaultValue: s.observacao || '' });
   await api(`/api/sumulas/${id}`, { method: 'PUT', body: {
     enunciado: novoEnunciado || s.enunciado,
     tema: novoTema || '',

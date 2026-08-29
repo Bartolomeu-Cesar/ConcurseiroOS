@@ -1,6 +1,6 @@
 // ==================== TAB 1: PDFs ====================
 import { state } from './state.js';
-import { escapeHtml, showLoading, showEmpty, toast } from './utils.js';
+import { escapeHtml, showLoading, showEmpty, toast, confirmModal, promptModal } from './utils.js';
 
 const API = '';
 const OPEN_KEY = 'folders_open';
@@ -358,7 +358,7 @@ export function toggleOrgMode() {
 }
 
 export async function criarPastaVirtual() {
-  const nome = prompt('Nome da nova pasta:');
+  const nome = await promptModal('Nome da nova pasta:', { title: 'Nova Pasta' });
   if (!nome || !nome.trim()) return;
   try {
     await fetch('/api/pdf/pastas', {
@@ -471,7 +471,7 @@ function _setupDropZone(zone, pastaId) {
 }
 
 async function _renomearPasta(id, nomeAtual) {
-  const novoNome = prompt('Novo nome:', nomeAtual);
+  const novoNome = await promptModal('Novo nome:', { title: 'Renomear Pasta', defaultValue: nomeAtual });
   if (!novoNome || novoNome.trim() === nomeAtual) return;
   await fetch(`/api/pdf/pastas/${id}`, {
     method: 'PUT',
@@ -483,7 +483,7 @@ async function _renomearPasta(id, nomeAtual) {
 }
 
 async function _excluirPasta(id) {
-  if (!confirm('Excluir pasta? (PDFs não serão deletados, voltam para raiz)')) return;
+  if (!await confirmModal('Excluir Pasta', 'Excluir pasta? (PDFs não serão deletados, voltam para raiz)', { type: 'danger', confirmText: 'Excluir' })) return;
   await fetch(`/api/pdf/pastas/${id}`, { method: 'DELETE' });
   toast('🗑 Pasta excluída', 'info');
   _loadOrganizacao();

@@ -1,5 +1,6 @@
 // social.js - Extracted from social.html inline scripts
 import { showToast } from '../modules/toast.js';
+import { confirmModal } from '../modules/utils.js';
 window.showToast = showToast;
 
 // ===== PRESENÇA SOCIAL (amigos ativos) =====
@@ -677,14 +678,14 @@ async function promoteMember(userId, newRole) {
       openGroupDetail(_currentGroupId);
     } else {
       const data = await res.json();
-      alert(data.detail || 'Erro ao alterar role.');
+      showToast(data.detail || 'Erro ao alterar role.', 'error');
     }
-  } catch(e) { alert('Erro de conexão.'); }
+  } catch(e) { showToast('Erro de conexão.', 'error'); }
 }
 window.promoteMember = promoteMember;
 
 async function removeMember(userId, nome) {
-  if (!confirm(`Remover ${nome} do grupo?`)) return;
+  if (!await confirmModal('Remover Membro', `Remover ${nome} do grupo?`, { type: 'danger', confirmText: 'Remover' })) return;
   try {
     const res = await fetch(`/api/social/groups/${_currentGroupId}/members/${userId}`, {method: 'DELETE'});
     if (res.ok) {
@@ -692,9 +693,9 @@ async function removeMember(userId, nome) {
       loadGroups();
     } else {
       const data = await res.json();
-      alert(data.detail || 'Erro ao remover.');
+      showToast(data.detail || 'Erro ao remover.', 'error');
     }
-  } catch(e) { alert('Erro de conexão.'); }
+  } catch(e) { showToast('Erro de conexão.', 'error'); }
 }
 window.removeMember = removeMember;
 

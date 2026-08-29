@@ -1,6 +1,7 @@
 // questoes.js — extracted from questoes.html inline scripts
 // ES module (strict mode by default)
 import { toast } from '../modules/toast.js';
+import { confirmModal, alertModal, promptModal } from '../modules/utils.js';
 import { handleAuthNav } from '../modules/auth.js';
 import { showQuestionXp } from '../modules/xp-notify.js';
 import { startFatigueSession, sendHeartbeat, hasActiveSession } from '../modules/fatigue-tracker.js';
@@ -303,7 +304,7 @@ window.selecionarAlternativa = selecionarAlternativa;
 async function confirmarResposta() {
   if (respondida) return;
   const selected = document.querySelector('.alternativa.selected');
-  if (!selected) { alert('Selecione uma alternativa.'); return; }
+  if (!selected) { toast('Selecione uma alternativa.', 'warning'); return; }
 
   const letra = selected.dataset.letter;
   const tempoSegundos = questaoStartTime ? Math.round((Date.now() - questaoStartTime) / 1000) : 0;
@@ -451,7 +452,7 @@ async function criarSimulado() {
   const qtd = parseInt(document.getElementById('sim-qtd').value) || 10;
 
   if (materiasSelecionadas.length === 0) {
-    alert('Selecione pelo menos uma disciplina!');
+    toast('Selecione pelo menos uma disciplina!', 'warning');
     return;
   }
 
@@ -469,7 +470,7 @@ async function criarSimulado() {
     }
   }
 
-  if (pool.length === 0) { alert('Nenhuma questão disponível para as disciplinas selecionadas.'); return; }
+  if (pool.length === 0) { toast('Nenhuma questão disponível para as disciplinas selecionadas.', 'warning'); return; }
 
   // Shufflar e pegar qtd
   pool = pool.sort(() => Math.random() - 0.5).slice(0, qtd);
@@ -602,7 +603,7 @@ async function finalizarSimulado() {
   }).then(r => r.json());
 
   document.getElementById('simulado-ativo-panel').style.display = 'none';
-  alert(`Simulado finalizado!\nNota: ${res.nota}%\nAcertos: ${res.acertos}/${res.total}`);
+  await alertModal(`Nota: ${res.nota}%\nAcertos: ${res.acertos}/${res.total}`, { title: 'Simulado finalizado!', type: 'success' });
   simAtivo = null;
   loadSimulados();
 }
@@ -626,7 +627,7 @@ async function loadSimulados() {
 }
 
 async function deleteSimulado(id) {
-  if (!confirm('Excluir este simulado?')) return;
+  if (!await confirmModal('Excluir simulado', 'Excluir este simulado?', { type: 'danger', confirmText: 'Excluir' })) return;
   await fetch(`/api/simulados/${id}`, { method: 'DELETE' });
   loadSimulados();
 }
@@ -904,7 +905,7 @@ async function cadastrarQuestao() {
   const resposta = document.getElementById('cad-resposta').value;
 
   if (!materia || !enunciado || !a || !b || !c || !d || !resposta) {
-    alert('Preencha todos os campos obrigatórios (*).');
+    toast('Preencha todos os campos obrigatórios (*).', 'warning');
     return;
   }
 
@@ -926,7 +927,7 @@ async function cadastrarQuestao() {
     })
   });
 
-  alert('Questão cadastrada com sucesso!');
+  toast('Questão cadastrada com sucesso!', 'success');
   // Limpar form
   ['cad-materia', 'cad-topico', 'cad-enunciado', 'cad-a', 'cad-b', 'cad-c', 'cad-d', 'cad-e', 'cad-explicacao'].forEach(id => {
     document.getElementById(id).value = '';
@@ -968,7 +969,7 @@ async function loadProvas() {
 }
 
 async function deleteProva(provaNome) {
-  if (!confirm(`Excluir a prova "${provaNome}" e TODAS as suas questões? Esta ação não pode ser desfeita.`)) return;
+  if (!await confirmModal('Excluir prova', `Excluir a prova "${provaNome}" e TODAS as suas questões? Esta ação não pode ser desfeita.`, { type: 'danger', confirmText: 'Excluir' })) return;
   try {
     const res = await fetch(`/api/questoes/provas/${encodeURIComponent(provaNome)}`, { method: 'DELETE' });
     const data = await res.json();
@@ -1025,7 +1026,7 @@ async function confirmarVincularProva(provaNome) {
   const custom = document.getElementById('vpm-materia-custom').value.trim();
   const materia = custom || select;
 
-  if (!materia) { alert('Selecione ou digite uma matéria.'); return; }
+  if (!materia) { toast('Selecione ou digite uma matéria.', 'warning'); return; }
 
   try {
     const res = await fetch('/api/questoes/vincular-lote', {
@@ -1143,7 +1144,7 @@ async function loadBanco() {
 window.loadBanco = loadBanco;
 
 async function deleteQuestao(id) {
-  if (!confirm('Excluir esta questão?')) return;
+  if (!await confirmModal('Excluir questão', 'Excluir esta questão?', { type: 'danger', confirmText: 'Excluir' })) return;
   await fetch(`/api/questoes/${id}`, { method: 'DELETE' });
   loadBanco();
   loadMaterias();
@@ -1153,7 +1154,7 @@ window.deleteQuestao = deleteQuestao;
 async function deleteAllSemGabarito() {
   const questoes = await fetch('/api/questoes?sem_gabarito=1&limit=9999').then(r => r.json());
   if (!questoes.length) { toast('Nenhuma questão sem gabarito.', 'info'); return; }
-  if (!confirm(`Excluir ${questoes.length} questão(ões) sem gabarito? Esta ação não pode ser desfeita.`)) return;
+  if (!await confirmModal('Excluir questões', `Excluir ${questoes.length} questão(ões) sem gabarito? Esta ação não pode ser desfeita.`, { type: 'danger', confirmText: 'Excluir' })) return;
 
   let deleted = 0;
   for (const q of questoes) {
@@ -1171,7 +1172,7 @@ async function deleteGroupSemGabarito(groupKey) {
   const group = window._semGabGroups?.[groupKey];
   if (!group || !group.length) { toast('Grupo não encontrado.', 'error'); return; }
   const ids = group.map(q => q.id);
-  if (!confirm(`Excluir ${ids.length} questão(ões) de "${groupKey}"? Esta ação não pode ser desfeita.`)) return;
+  if (!await confirmModal('Excluir questões', `Excluir ${ids.length} questão(ões) de "${groupKey}"? Esta ação não pode ser desfeita.`, { type: 'danger', confirmText: 'Excluir' })) return;
   let deleted = 0;
   for (const id of ids) {
     await fetch(`/api/questoes/${id}`, { method: 'DELETE' });
@@ -1188,7 +1189,7 @@ async function editQuestao(id) {
   // Buscar dados da questão
   const all = await fetch('/api/questoes?limit=9999').then(r => r.json());
   const q = all.find(x => x.id === id);
-  if (!q) { alert('Questão não encontrada'); return; }
+  if (!q) { toast('Questão não encontrada', 'error'); return; }
 
   // Buscar disciplinas do edital para o select
   let materias = [];
@@ -1286,13 +1287,13 @@ async function saveQuestaoEdit(id) {
     });
     if (res.ok) {
       document.getElementById('edit-questao-modal').remove();
-      alert('Questão atualizada!');
+      toast('Questão atualizada!', 'success');
       loadBanco();
     } else {
       const err = await res.json();
-      alert('Erro: ' + (err.detail || 'desconhecido'));
+      toast('Erro: ' + (err.detail || 'desconhecido'), 'error');
     }
-  } catch(e) { alert('Erro de conexão'); }
+  } catch(e) { toast('Erro de conexão', 'error'); }
 }
 window.saveQuestaoEdit = saveQuestaoEdit;
 
@@ -1363,14 +1364,14 @@ async function aplicarLote() {
   const materia = document.getElementById('lote-materia').value;
   const topico = document.getElementById('lote-topico').value.trim();
 
-  if (!materia && !topico) { alert('Informe pelo menos a disciplina ou tópico.'); return; }
+  if (!materia && !topico) { toast('Informe pelo menos a disciplina ou tópico.', 'warning'); return; }
 
   const filtro = {};
   if (tipo === 'sem_materia') {
     filtro.sem_materia = true;
   } else {
     const data = document.getElementById('lote-data').value;
-    if (!data) { alert('Selecione uma data de importação.'); return; }
+    if (!data) { toast('Selecione uma data de importação.', 'warning'); return; }
     filtro.created_at = data;
   }
   if (banca) filtro.banca = banca;
@@ -1387,14 +1388,14 @@ async function aplicarLote() {
     });
     const result = await res.json();
     if (result.ok) {
-      alert(`✅ ${result.atualizadas} questões atualizadas!`);
+      toast(`✅ ${result.atualizadas} questões atualizadas!`, 'success');
       loadBanco();
       loadMaterias();
       previewLote();
     } else {
-      alert('Erro: ' + (result.detail || 'desconhecido'));
+      toast('Erro: ' + (result.detail || 'desconhecido'), 'error');
     }
-  } catch(e) { alert('Erro de conexão'); }
+  } catch(e) { toast('Erro de conexão', 'error'); }
 }
 window.aplicarLote = aplicarLote;
 
@@ -1454,7 +1455,7 @@ async function executarImportCSV() {
   const fileInput = document.getElementById('csv-import-file');
   const file = fileInput.files[0];
   if (!file) {
-    alert('Selecione um arquivo CSV.');
+    toast('Selecione um arquivo CSV.', 'warning');
     return;
   }
 
@@ -1856,7 +1857,7 @@ async function removerDoCaderno(cadernoId, questaoId) {
 }
 
 async function excluirCaderno(id) {
-  if (!confirm('Excluir este caderno? As questões em si não serão apagadas.')) return;
+  if (!await confirmModal('Excluir caderno', 'Excluir este caderno? As questões em si não serão apagadas.', { type: 'danger', confirmText: 'Excluir' })) return;
   try {
     await fetch(`/api/cadernos/${id}`, { method: 'DELETE' });
     toast('Caderno excluído', 'success');

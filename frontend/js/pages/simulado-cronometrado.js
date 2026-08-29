@@ -1,5 +1,8 @@
 // simulado-cronometrado.js — ES module extracted from simulado-cronometrado.html
 
+import { confirmModal, alertModal, promptModal } from '../modules/utils.js';
+import { toast } from '../modules/toast.js';
+
 // ==================== STATE ====================
 let examState = {
   id: null,
@@ -73,14 +76,14 @@ window.iniciarSimulado = async function() {
 
     if (!res.ok) {
       const err = await res.json();
-      alert('Erro: ' + (err.detail || 'Não foi possível criar o simulado'));
+      toast('Erro: ' + (err.detail || 'Não foi possível criar o simulado'), 'error');
       return;
     }
 
     const data = await res.json();
     startExam(data);
   } catch (e) {
-    alert('Erro de conexão: ' + e.message);
+    toast('Erro de conexão: ' + e.message, 'error');
   }
 };
 
@@ -289,14 +292,14 @@ async function finalizarProva() {
 
     if (!res.ok) {
       const err = await res.json();
-      alert('Erro ao finalizar: ' + (err.detail || 'desconhecido'));
+      toast('Erro ao finalizar: ' + (err.detail || 'desconhecido'), 'error');
       return;
     }
 
     const data = await res.json();
     showResults(data);
   } catch (e) {
-    alert('Erro de conexão: ' + e.message);
+    toast('Erro de conexão: ' + e.message, 'error');
   }
 }
 
@@ -416,7 +419,7 @@ window.verGabarito = async function() {
     const data = await res.json();
     showGabarito(data.questoes);
   } catch (e) {
-    alert('Erro ao carregar gabarito: ' + e.message);
+    toast('Erro ao carregar gabarito: ' + e.message, 'error');
   }
 };
 

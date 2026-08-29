@@ -835,8 +835,8 @@ window.closeVideoPlayer = function(editalId) {
   }
 };
 
-window.removeVideoLink = function(editalId) {
-  if (!confirm('Remover vídeo vinculado?')) return;
+window.removeVideoLink = async function(editalId) {
+  if (!await confirmModal('Confirmar', 'Remover vídeo vinculado?', { type: 'danger', confirmText: 'Remover' })) return;
   fetch(`/api/edital/${editalId}/video`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },

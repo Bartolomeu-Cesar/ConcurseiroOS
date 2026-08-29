@@ -1,5 +1,8 @@
 // batalha.js — ES module extracted from batalha.html
 
+import { confirmModal, alertModal, promptModal } from '../modules/utils.js';
+import { toast } from '../modules/toast.js';
+
 const view = document.getElementById('battle-view');
 let state = { screen: 'menu', battle: null, timer: null, timeLeft: 0, selectedAnswer: null };
 
@@ -264,7 +267,7 @@ window.criarBatalha = async function() {
 
 window.entrarBatalha = async function() {
   const codigo = document.getElementById('join-code').value.trim().toUpperCase();
-  if (!codigo || codigo.length < 4) { alert('Informe um código válido.'); return; }
+  if (!codigo || codigo.length < 4) { toast('Informe um código válido.', 'warning'); return; }
   try {
     const res = await fetch('/api/batalha/entrar', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -277,9 +280,9 @@ window.entrarBatalha = async function() {
       else if (sala.status === 'finalizada') { const rk = await fetch(`/api/batalha/ranking/${codigo}`).then(r=>r.json()); showRanking(rk); }
       else showLobby(sala);
     } else {
-      alert(data.detail || 'Erro ao entrar.');
+      toast(data.detail || 'Erro ao entrar.', 'error');
     }
-  } catch(e) { alert('Erro de conexão.'); }
+  } catch(e) { toast('Erro de conexão.', 'error'); }
 };
 
 window.iniciarBatalha = async function() {
@@ -589,7 +592,7 @@ window.confirmarResposta = async function() {
       }
     }, 2000);
 
-  } catch(e) { alert('Erro ao enviar resposta.'); }
+  } catch(e) { toast('Erro ao enviar resposta.', 'error'); }
 };
 
 // Poll para esperar outros jogadores responderem
@@ -632,7 +635,7 @@ window.openBattle = async function(codigo) {
     if (sala.status === 'em_andamento') showQuestion(sala);
     else if (sala.status === 'finalizada') { const rk = await fetch(`/api/batalha/ranking/${codigo}`).then(r=>r.json()); showRanking(rk); }
     else showLobby(sala);
-  } catch(e) { alert('Erro ao abrir sala.'); }
+  } catch(e) { toast('Erro ao abrir sala.', 'error'); }
 };
 
 window.criarRevanche = async function(codigo) {
@@ -640,13 +643,13 @@ window.criarRevanche = async function(codigo) {
     const res = await fetch(`/api/batalha/revanche/${codigo}`, { method: 'POST' });
     const data = await res.json();
     if (res.ok) {
-      alert(`Revanche criada! Código: ${data.codigo}`);
+      await alertModal(`Revanche criada! Código: ${data.codigo}`, { type: 'success' });
       const sala = await fetch(`/api/batalha/sala/${data.codigo}`).then(r => r.json());
       showLobby(sala);
     } else {
-      alert(data.detail || 'Erro ao criar revanche.');
+      toast(data.detail || 'Erro ao criar revanche.', 'error');
     }
-  } catch(e) { alert('Erro.'); }
+  } catch(e) { toast('Erro.', 'error'); }
 };
 
 window.showReview = async function(codigo) {
@@ -674,7 +677,7 @@ window.showReview = async function(codigo) {
       `).join('')}
       <button class="btn-battle" onclick="showMenu()">🔙 Voltar</button>
     `;
-  } catch(e) { alert('Erro ao carregar revisão.'); }
+  } catch(e) { toast('Erro ao carregar revisão.', 'error'); }
 };
 
 // ========== HELPERS ==========

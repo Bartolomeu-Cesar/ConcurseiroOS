@@ -2,6 +2,7 @@
 // Importa todos os módulos e registra funções globais para onclick inline
 
 import { initOfflineListeners, escapeHtml, confirmModal, toast, removeToast, showLoading, showSpinner, showEmpty, api, undoableDelete, debounce, formatHours } from './modules/utils.js';
+import { alertModal, promptModal } from './modules/utils.js';
 import { switchTab, initTabs } from './modules/tabs.js';
 import { initShortcuts, goToEditalItem } from './modules/shortcuts.js';
 import { load, exportProgress, importProgress, uploadPdf, initPdfs, toggleOrgMode, criarPastaVirtual } from './modules/pdfs.js';
@@ -22,6 +23,7 @@ import { handleAuthNav, logout, isLoggedIn, getToken, getUser, getUserPlan, show
 Object.assign(window, {
   // Utils
   escapeHtml, confirmModal, toast, removeToast, showLoading, showSpinner, showEmpty, api, undoableDelete,
+  alertModal, promptModal,
   // Tabs
   switchTab,
   // Shortcuts

@@ -1,4 +1,5 @@
 // index.js - Extracted from index.html inline scripts
+import { alertModal } from '../modules/utils.js';
 
 // ===== Sidebar navigation =====
 function navigateTo(tabId, btn) {
@@ -238,16 +239,16 @@ function globalSearch(query) {
   if (!query.trim()) return;
   fetch(`/api/search?q=${encodeURIComponent(query)}`)
     .then(r => r.json())
-    .then(results => {
+    .then(async results => {
       if (results.length === 0) {
-        alert('Nenhum resultado encontrado.');
+        if (window.toast) window.toast('Nenhum resultado encontrado.', 'warning');
         return;
       }
-      // Show results in a simple alert for now (can be improved to a modal)
+      // Show results in a modal
       const text = results.slice(0, 10).map(r =>
         `[${r.source}] ${r.title || ''}: ${r.snippet || ''}`
       ).join('\n\n');
-      alert(`🔍 ${results.length} resultado(s):\n\n${text}`);
+      await alertModal(`🔍 ${results.length} resultado(s):\n\n${text}`, { title: 'Resultados da Busca', type: 'info' });
     });
 }
 window.globalSearch = globalSearch;

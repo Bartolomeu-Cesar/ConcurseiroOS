@@ -1,5 +1,8 @@
 // studyroom.js - Enhanced Study Room with goals, ambient sounds, stats, todos, pomodoro visuals, focus mode
 
+import { confirmModal, alertModal, promptModal } from '../modules/utils.js';
+import { toast } from '../modules/toast.js';
+
 const API = '/api/studyroom';
 const token = localStorage.getItem('auth_token');
 const headers = { 'Content-Type': 'application/json' };
@@ -65,7 +68,7 @@ async function criarSala() {
     modoFoco = tecnica === 'pomodoro';
     enterRoomView(data.codigo);
   } catch (e) {
-    alert('Erro ao criar sala: ' + e.message);
+    toast('Erro ao criar sala: ' + e.message, 'error');
   }
 }
 window.criarSala = criarSala;
@@ -77,13 +80,13 @@ window.criarSala = criarSala;
 async function entrarSala() {
   try {
     const codigo = document.getElementById('input-codigo').value.trim().toUpperCase();
-    if (!codigo) return alert('Digite o código da sala');
+    if (!codigo) { toast('Digite o código da sala', 'warning'); return; }
     const meta = document.getElementById('input-goal-entrar').value.trim() || '';
     await apiPost('/entrar', { codigo, meta });
     currentRoom = codigo;
     enterRoomView(codigo);
   } catch (e) {
-    alert('Erro: ' + e.message);
+    toast('Erro: ' + e.message, 'error');
   }
 }
 window.entrarSala = entrarSala;
@@ -315,7 +318,7 @@ async function enviarMsg() {
     await apiPost(`/chat/${currentRoom}`, { mensagem });
     pollRoom(); // refresh immediately
   } catch (e) {
-    alert('Erro: ' + e.message);
+    toast('Erro: ' + e.message, 'error');
   }
 }
 window.enviarMsg = enviarMsg;
@@ -1078,12 +1081,12 @@ async function submitCommitment() {
   if (!currentRoom) return;
   const commitment = document.getElementById('commitment-input').value.trim();
   const xp_stake = parseInt(document.getElementById('commitment-xp').value) || 50;
-  if (!commitment) return alert('Digite seu compromisso');
+  if (!commitment) { toast('Digite seu compromisso', 'warning'); return; }
   try {
     await apiPost(`/commitment/${currentRoom}`, { commitment, xp_stake });
     document.getElementById('commitment-input').value = '';
     loadCommitments();
-  } catch (e) { alert('Erro: ' + e.message); }
+  } catch (e) { toast('Erro: ' + e.message, 'error'); }
 }
 window.submitCommitment = submitCommitment;
 
@@ -1112,10 +1115,10 @@ async function resolveCommitment(cumprida) {
   if (!currentRoom) return;
   try {
     const data = await apiPost(`/commitment/${currentRoom}/resolve`, { cumprida });
-    if (data.xp_change > 0) alert(`🎉 +${data.xp_change} XP! Compromisso cumprido!`);
-    else alert(`😞 ${data.xp_change} XP. Tente cumprir na próxima!`);
+    if (data.xp_change > 0) await alertModal(`🎉 +${data.xp_change} XP! Compromisso cumprido!`, { type: 'success' });
+    else await alertModal(`😞 ${data.xp_change} XP. Tente cumprir na próxima!`, { type: 'warning' });
     loadCommitments();
-  } catch (e) { alert('Erro: ' + e.message); }
+  } catch (e) { toast('Erro: ' + e.message, 'error'); }
 }
 window.resolveCommitment = resolveCommitment;
 
@@ -1238,7 +1241,7 @@ async function startChallenge() {
     document.getElementById('challenge-section').classList.remove('hidden');
     updateBossHP();
     showChallengeQuestion();
-  } catch (e) { alert('Erro: ' + e.message); }
+  } catch (e) { toast('Erro: ' + e.message, 'error'); }
 }
 window.startChallenge = startChallenge;
 
@@ -1283,7 +1286,7 @@ async function answerChallenge(resposta) {
       document.getElementById('challenge-question').innerHTML = `<div style="text-align:center;color:${color};font-weight:700;font-size:0.9rem;">${msg}</div>`;
       setTimeout(showChallengeQuestion, 800);
     }
-  } catch (e) { alert('Erro: ' + e.message); }
+  } catch (e) { toast('Erro: ' + e.message, 'error'); }
 }
 window.answerChallenge = answerChallenge;
 
@@ -1296,7 +1299,7 @@ async function sendNudge(targetUserId) {
   try {
     await apiPost(`/nudge/${currentRoom}/${targetUserId}`, {});
     pollRoom();
-  } catch (e) { alert(e.message); }
+  } catch (e) { toast(e.message, 'error'); }
 }
 window.sendNudge = sendNudge;
 
@@ -1320,7 +1323,7 @@ async function submitDiscussion() {
     document.getElementById('disc-alt-d').value.trim(),
   ].filter(a => a);
   const resposta_correta = document.getElementById('disc-correta').value;
-  if (!enunciado) return alert('Digite o enunciado');
+  if (!enunciado) { toast('Digite o enunciado', 'warning'); return; }
   try {
     await apiPost(`/discussion/${currentRoom}/start`, { enunciado, alternativas, resposta_correta, materia });
     document.getElementById('new-discussion-form').classList.add('hidden');
@@ -1331,7 +1334,7 @@ async function submitDiscussion() {
     document.getElementById('disc-alt-c').value = '';
     document.getElementById('disc-alt-d').value = '';
     loadDiscussions();
-  } catch (e) { alert('Erro: ' + e.message); }
+  } catch (e) { toast('Erro: ' + e.message, 'error'); }
 }
 window.submitDiscussion = submitDiscussion;
 
@@ -1374,13 +1377,13 @@ async function loadDiscussions() {
 }
 
 async function respondDiscussion(discId) {
-  const resposta = prompt('Sua resposta (letra ou texto):');
+  const resposta = await promptModal('Sua resposta (letra ou texto):', { title: 'Responder' });
   if (!resposta) return;
-  const justificativa = prompt('Justifique sua resposta:') || '';
+  const justificativa = await promptModal('Justifique sua resposta:', { title: 'Justificativa', multiline: true }) || '';
   try {
     await apiPost(`/discussion/${currentRoom}/respond`, { discussion_id: discId, resposta, justificativa });
     loadDiscussions();
-  } catch (e) { alert('Erro: ' + e.message); }
+  } catch (e) { toast('Erro: ' + e.message, 'error'); }
 }
 window.respondDiscussion = respondDiscussion;
 
@@ -1388,7 +1391,7 @@ async function revealDiscussion(discId) {
   try {
     await apiPost(`/discussion/${currentRoom}/reveal`, { discussion_id: discId });
     loadDiscussions();
-  } catch (e) { alert('Erro: ' + e.message); }
+  } catch (e) { toast('Erro: ' + e.message, 'error'); }
 }
 window.revealDiscussion = revealDiscussion;
 
@@ -1400,7 +1403,7 @@ async function submitIntention() {
   if (!currentRoom) return;
   const intencao = document.getElementById('intention-input').value.trim();
   const como = document.getElementById('intention-how').value.trim();
-  if (!intencao) return alert('Defina sua intenção');
+  if (!intencao) { toast('Defina sua intenção', 'warning'); return; }
   try {
     await apiPost(`/intention/${currentRoom}`, { intencao, como_vou_estudar: como });
     document.getElementById('intention-form').classList.add('hidden');
@@ -1409,7 +1412,7 @@ async function submitIntention() {
         <div style="font-size:0.82rem;color:var(--text);font-weight:600;">🎯 ${escHtml(intencao)}</div>
         ${como ? `<div style="font-size:0.75rem;color:var(--text-sub);margin-top:4px;">📝 ${escHtml(como)}</div>` : ''}
       </div>`;
-  } catch (e) { alert('Erro: ' + e.message); }
+  } catch (e) { toast('Erro: ' + e.message, 'error'); }
 }
 window.submitIntention = submitIntention;
 

@@ -8,7 +8,7 @@
  *   <p slot="body">Tem certeza que deseja continuar?</p>
  *   <div slot="footer">
  *     <button onclick="this.closest('modal-dialog').close()">Cancelar</button>
- *     <button onclick="confirm()">Confirmar</button>
+ *     <button onclick="handleConfirm()">Confirmar</button>
  *   </div>
  * </modal-dialog>
  *

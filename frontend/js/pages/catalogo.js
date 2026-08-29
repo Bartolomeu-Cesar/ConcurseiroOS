@@ -1,5 +1,6 @@
 // ==================== CATÁLOGO PÚBLICO ====================
 import { showToast } from '../modules/toast.js';
+import { confirmModal, alertModal, promptModal } from '../modules/utils.js';
 window.showToast = showToast;
 
 function _headers() {
@@ -69,7 +70,7 @@ window.importarItem = async function(itemId, btn) {
     setTimeout(() => location.href = '/login.html', 1200);
     return;
   }
-  if (!confirm('Importar este material para a sua conta? Uma cópia será criada e você poderá estudá-la.')) return;
+  if (!await confirmModal('Importar material', 'Importar este material para a sua conta? Uma cópia será criada e você poderá estudá-la.', { type: 'info', confirmText: 'Importar' })) return;
 
   btn.disabled = true;
   const original = btn.textContent;

@@ -1,6 +1,7 @@
 // vademecum.js — Vade Mecum Digital page logic
 // ES module
 import { toast } from '../modules/toast.js';
+import { confirmModal } from '../modules/utils.js';
 import { handleAuthNav } from '../modules/auth.js';
 window.handleAuthNav = handleAuthNav;
 
@@ -198,7 +199,7 @@ async function salvarLei() {
 window.salvarLei = salvarLei;
 
 async function deletarLei(leiId, nome) {
-  if (!confirm(`Excluir "${nome}" e todos os seus artigos?`)) return;
+  if (!await confirmModal('Excluir lei', `Excluir "${nome}" e todos os seus artigos?`, { type: 'danger', confirmText: 'Excluir' })) return;
   try {
     const res = await fetch(`/api/vademecum/leis/${leiId}`, { method: 'DELETE' });
     if (!res.ok) throw new Error('Erro ao excluir');

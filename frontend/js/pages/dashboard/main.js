@@ -23,6 +23,7 @@ import { loadDesafioDiarioCard } from './desafio.js';
 import { handleAuthNav } from '../../modules/auth.js';
 import { renderCatStartCard } from '../../modules/cat-session.js';
 import { renderAnxietyCard } from '../../modules/anxiety-exposure.js';
+import { confirmModal, alertModal, toast } from '../../modules/utils.js';
 
 // ===== Dashboard Tab Navigation =====
 document.querySelectorAll('.dash-tab').forEach(tab => {
@@ -426,7 +427,7 @@ async function addPlanejadorItem() {
   const dia = parseInt(document.getElementById('plan-dia').value);
   const materia = document.getElementById('plan-materia').value.trim();
   const horas = parseFloat(document.getElementById('plan-horas').value) || 1.0;
-  if (!materia) { alert('Preencha a matéria!'); return; }
+  if (!materia) { toast('Preencha a matéria!', 'warning'); return; }
   await fetch('/api/planejador', {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({ dia_semana: dia, materia, horas })
@@ -441,7 +442,7 @@ async function removePlanejadorItem(id) {
 }
 
 async function limparPlanejador() {
-  if (!confirm('Limpar todo o planejador manual?')) return;
+  if (!await confirmModal('Confirmar', 'Limpar todo o planejador manual?', { type: 'danger', confirmText: 'Limpar' })) return;
   const items = await fetch('/api/planejador').then(r => r.json());
   for (const it of items) {
     await fetch(`/api/planejador/${it.id}`, { method: 'DELETE' });
@@ -449,9 +450,9 @@ async function limparPlanejador() {
   loadPlanejadorSemanal();
 }
 
-function regenerarPlanejador() {
+async function regenerarPlanejador() {
   if (planMode === 'manual') {
-    alert('O modo manual não regenera automaticamente. Mude para o modo Auto ou adicione matérias manualmente.');
+    await alertModal('O modo manual não regenera automaticamente. Mude para o modo Auto ou adicione matérias manualmente.', { type: 'info' });
     return;
   }
   loadPlanejadorSemanal();
@@ -684,7 +685,7 @@ async function toggleAtivConcluida(checkbox) {
 }
 
 async function regenerarCalendario() {
-  if (!confirm('Deseja regerar o calendário?')) return;
+  if (!await confirmModal('Confirmar', 'Deseja regerar o calendário?', { type: 'warning', confirmText: 'Regerar' })) return;
   try {
     await fetch('/api/calendario-personalizado', { method: 'DELETE' });
     calendarMode = 'auto';
@@ -694,11 +695,11 @@ async function regenerarCalendario() {
     const actionsEl = document.getElementById('cal-actions');
     if (actionsEl) actionsEl.style.display = 'none';
     await loadCalendario();
-  } catch(e) { alert('Erro ao regerar calendário: ' + e.message); }
+  } catch(e) { toast('Erro ao regerar calendário: ' + e.message, 'error'); }
 }
 
 async function regenerarInteligente() {
-  if (!confirm('🧠 Regenerar calendário usando análise inteligente?\n\nIsso irá apagar o calendário atual e criar um novo otimizado com base em:\n• Peso da banca\n• Caderno de erros\n• Performance por matéria\n• Dias sem estudar\n• Revisão espaçada\n• Tópicos pendentes')) return;
+  if (!await confirmModal('Regenerar calendário', '🧠 Regenerar calendário usando análise inteligente?\n\nIsso irá apagar o calendário atual e criar um novo otimizado com base em:\n• Peso da banca\n• Caderno de erros\n• Performance por matéria\n• Dias sem estudar\n• Revisão espaçada\n• Tópicos pendentes', { type: 'warning', confirmText: 'Regenerar' })) return;
   try {
     const horasSelect = document.getElementById('cal-horas-dia');
     const horas_dia = horasSelect ? parseFloat(horasSelect.value) : null;
@@ -715,11 +716,11 @@ async function regenerarInteligente() {
       const actionsEl = document.getElementById('cal-actions');
       if (actionsEl) actionsEl.style.display = 'none';
       await loadCalendario();
-      alert(`✅ ${data.message}\n\n📊 ${data.stats.total_materias} matérias · ${data.stats.horas_semana}h/semana`);
+      await alertModal(`✅ ${data.message}\n\n📊 ${data.stats.total_materias} matérias · ${data.stats.horas_semana}h/semana`, { type: 'success' });
     } else {
-      alert('⚠️ ' + (data.message || 'Erro ao gerar calendário inteligente'));
+      await alertModal('⚠️ ' + (data.message || 'Erro ao gerar calendário inteligente'), { type: 'warning' });
     }
-  } catch(e) { alert('Erro ao regenerar inteligente: ' + e.message); }
+  } catch(e) { toast('Erro ao regenerar inteligente: ' + e.message, 'error'); }
 }
 
 async function addCalendarioItem() {
@@ -746,7 +747,7 @@ async function removeCalItem(id) {
 async function salvarCalendario() { /* no-op, saved on action */ }
 
 async function limparCalendario() {
-  if (!confirm('Limpar todo o calendário personalizado?')) return;
+  if (!await confirmModal('Confirmar', 'Limpar todo o calendário personalizado?', { type: 'danger', confirmText: 'Limpar' })) return;
   await fetch('/api/calendario-personalizado', { method: 'DELETE' });
   loadCalendario();
 }
@@ -1106,14 +1107,14 @@ window.resetPlanejadorInteligente = async function() {
     if (data.ok) {
       await loadCalendario();
       if (typeof showToast === 'function') showToast('Planejador regenerado com inteligência!', 'success');
-      else alert('Planejador regenerado com inteligência!');
+      else toast('Planejador regenerado com inteligência!', 'success');
     } else {
       if (typeof showToast === 'function') showToast(data.message || 'Erro ao regenerar', 'error');
-      else alert('⚠️ ' + (data.message || 'Erro ao gerar calendário inteligente'));
+      else await alertModal('⚠️ ' + (data.message || 'Erro ao gerar calendário inteligente'), { type: 'warning' });
     }
   } catch(e) {
     if (typeof showToast === 'function') showToast('Erro: ' + e.message, 'error');
-    else alert('Erro ao regenerar inteligente: ' + e.message);
+    else toast('Erro ao regenerar inteligente: ' + e.message, 'error');
   }
 };
 window.addCalendarioItem = addCalendarioItem;
@@ -1129,7 +1130,7 @@ window.iniciarAtividadeAgora = function() {
   const s = window._calAgoraSugestao;
   if (!s || s.tipo === 'pausa') return;
   if (window.startTimerGlobal) window.startTimerGlobal(s.tempo_min || 25, s.materia || 'Estudo');
-  else alert(`Inicie ${s.tempo_min}min de ${s.materia} (${s.tipo})`);
+  else toast(`Inicie ${s.tempo_min}min de ${s.materia} (${s.tipo})`, 'info');
 };
 window.setPlanMode = setPlanMode;
 window.loadPlanejadorSemanal = loadPlanejadorSemanal;
@@ -1481,7 +1482,7 @@ document.addEventListener('click', function(e) {
     if (window.toast) {
       window.toast('📎 Nenhum PDF vinculado a este tópico. Vá em Edital → clique no tópico → "Vincular PDF" para associar um material.', 'warning', 5000);
     } else {
-      alert('📎 Nenhum PDF vinculado. Vincule um PDF ao tópico no Edital.');
+      toast('📎 Nenhum PDF vinculado. Vincule um PDF ao tópico no Edital.', 'warning');
     }
   }
 });
@@ -1837,7 +1838,7 @@ window._saveIntention = async function() {
   const materia = document.getElementById('intention-materia').value;
   const duracao = parseInt(document.getElementById('intention-duracao').value) || 30;
   const atividade = document.getElementById('intention-atividade').value;
-  if (!materia) { alert('Escolha uma matéria'); return; }
+  if (!materia) { _toastDash('Escolha uma matéria'); return; }
   try {
     await fetch('/api/study-intelligence/intention', {
       method: 'POST',
@@ -2946,14 +2947,14 @@ window._startBancaTraining = async function(banca) {
   try {
     const data = await fetch(`/api/study-intelligence/banca-training?banca=${encodeURIComponent(banca)}&quantidade=10`).then(r => r.ok ? r.json() : null);
     if (!data || !data.questao_ids || data.questao_ids.length === 0) {
-      _toastDash?.('Sem questões disponíveis para treino de banca') || alert('Sem questões disponíveis para treino de banca');
+      _toastDash?.('Sem questões disponíveis para treino de banca');
       return;
     }
     // Navigate to questoes page with banca training mode
     const ids = data.questao_ids.join(',');
     window.location.href = `questoes.html?modo=banca&banca=${encodeURIComponent(banca)}&ids=${ids}`;
   } catch(e) {
-    _toastDash?.('Erro ao iniciar treino de banca') || alert('Erro ao iniciar treino de banca');
+    _toastDash?.('Erro ao iniciar treino de banca');
   }
 };
 

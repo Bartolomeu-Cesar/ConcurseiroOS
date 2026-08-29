@@ -15,7 +15,7 @@ export async function carregarQuestoesDia() {
     const qtd = cfg.questoes_dia;
     const all = await fetch('/api/questoes?limit=200').then(r => r.json());
     const pool = Array.isArray(all) ? all : (all.items || []);
-    if (pool.length === 0) { alert('Nenhuma questão no banco. Adicione questões primeiro.'); return; }
+    if (pool.length === 0) { toast('Nenhuma questão no banco. Adicione questões primeiro.', 'warning'); return; }
     questoesDia = pool.sort(() => Math.random() - 0.5).slice(0, qtd);
     qDiaIdx = 0;
     qDiaAcertos = 0;

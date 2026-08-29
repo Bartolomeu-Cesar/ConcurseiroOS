@@ -56,6 +56,12 @@
 - **Truncamento de texto**: Nunca usar `white-space:nowrap` + `text-overflow:ellipsis` em elementos que têm expansão via JS (onclick). O truncamento deve ser controlado pelo JS (slice + data-full), não pelo CSS. CSS ellipsis só para labels fixos (ex: nome de matéria).
 - **Grids com muitas colunas**: Sempre adicionar `min-width:0` + `overflow:hidden` em items de CSS Grid/Flex para impedir que conteúdo longo quebre o layout. O container pai também precisa de `overflow:hidden`.
 - **Componentes reutilizáveis**: Menus, modais e dropdowns devem ter implementação única (ex: `showProfileMenu()` em `auth.js`). Nunca duplicar lógica de UI entre páginas — importar do módulo compartilhado.
+- **Modais em vez de diálogos nativos (OBRIGATÓRIO)**: NUNCA usar `confirm()`, `alert()` ou `prompt()` nativos do browser. Eles são visualmente pobres, não seguem o tema Catppuccin e bloqueiam a thread. Usar sempre os helpers de `modules/utils.js`:
+  - `await confirmModal(titulo, mensagem, {type, confirmText, cancelText})` → substitui `confirm()`. Retorna `Promise<boolean>`.
+  - `await alertModal(mensagem, {title, type, okText})` → substitui `alert()` de avisos/informações importantes. Retorna `Promise`.
+  - `await promptModal(mensagem, {title, defaultValue, placeholder, multiline})` → substitui `prompt()`. Retorna `Promise<string|null>` (null = cancelado).
+  - Para feedback rápido de sucesso/erro (não-bloqueante), preferir `toast('msg', 'tipo')` em vez de `alertModal`.
+  - Todos expostos em `window` via `app.js` para uso em `onclick` inline. Em páginas fora do app principal, importar de `modules/utils.js` ou `modules/toast.js`.
 
 ## Decisões Técnicas (por que assim)
 
