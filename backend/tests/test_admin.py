@@ -203,6 +203,40 @@ class TestListUsers:
         assert "validade" in r.json()
         assert "situacao" in r.json()["validade"]
 
+    def test_filtro_validade_expirando(self, client):
+        """GET /api/admin/users?filtro=expirando — só premium expirando em ≤7 dias."""
+        token = _get_admin_token(client)
+        from datetime import datetime, timezone, timedelta
+        conn = sqlite3.connect(_tmp_db.name, check_same_thread=False, timeout=10)
+        soon = (datetime.now(timezone.utc) + timedelta(days=3)).isoformat()
+        far = (datetime.now(timezone.utc) + timedelta(days=60)).isoformat()
+        conn.execute("INSERT INTO users (nome, email, plano, plano_expira, created_at) VALUES ('Soon', 'soon_f@t.com', 'premium', ?, '2026-01-01')", (soon,))
+        conn.execute("INSERT INTO users (nome, email, plano, plano_expira, created_at) VALUES ('Far', 'far_f@t.com', 'premium', ?, '2026-01-01')", (far,))
+        conn.commit(); conn.close()
+        r = client.get("/api/admin/users?filtro=expirando&limit=100", headers=_auth_header(token))
+        assert r.status_code == 200
+        emails = [u["email"] for u in r.json()["users"]]
+        assert "soon_f@t.com" in emails
+        assert "far_f@t.com" not in emails
+
+    def test_filtro_validade_vitalicio(self, client):
+        """GET /api/admin/users?filtro=vitalicio — só vitalícios/ilimitados."""
+        token = _get_admin_token(client)
+        conn = sqlite3.connect(_tmp_db.name, check_same_thread=False, timeout=10)
+        conn.execute("INSERT INTO users (nome, email, plano, plano_expira, created_at) VALUES ('Vit', 'vit_f@t.com', 'ilimitado', 'vitalicio', '2026-01-01')", ())
+        conn.commit(); conn.close()
+        r = client.get("/api/admin/users?filtro=vitalicio&limit=100", headers=_auth_header(token))
+        assert r.status_code == 200
+        for u in r.json()["users"]:
+            assert u["validade"]["situacao"] == "vitalicio"
+
+    def test_ordenar_expiracao(self, client):
+        """GET /api/admin/users?ordenar=expiracao não quebra e retorna 200."""
+        token = _get_admin_token(client)
+        r = client.get("/api/admin/users?ordenar=expiracao&limit=100", headers=_auth_header(token))
+        assert r.status_code == 200
+        assert "users" in r.json()
+
 
 # ============================================================
 # CRIAR USUÁRIO

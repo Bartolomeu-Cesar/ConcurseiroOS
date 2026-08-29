@@ -33,6 +33,18 @@
     <div class="toolbar">
       <input type="text" id="search-input" placeholder="🔍 Buscar por nome, email ou username..." onkeyup="if(event.key==='Enter')loadUsers()">
       <button class="btn" onclick="loadUsers()">Buscar</button>
+      <select id="filtro-validade" onchange="loadUsers(1)" style="background:var(--bg-surface,#313244);border:1px solid #45475a;border-radius:6px;padding:8px;color:#cdd6f4;font-size:0.82rem;">
+        <option value="">Todos os planos</option>
+        <option value="expirando">⚠️ Expirando (≤7d)</option>
+        <option value="expirado">❌ Expirados</option>
+        <option value="ativo">✅ Ativos (&gt;7d)</option>
+        <option value="vitalicio">♾️ Vitalícios</option>
+        <option value="free">Free</option>
+      </select>
+      <select id="ordenar-validade" onchange="loadUsers(1)" style="background:var(--bg-surface,#313244);border:1px solid #45475a;border-radius:6px;padding:8px;color:#cdd6f4;font-size:0.82rem;">
+        <option value="">Ordem: ID</option>
+        <option value="expiracao">Ordem: Expira antes</option>
+      </select>
       <button class="btn secondary" onclick="openCreateModal()">+ Novo Usuário</button>
       <button class="btn" style="background:#cba6f7;" onclick="openShareModal()">🔗 Compartilhar Recursos</button>
       <button class="btn" style="background:#94e2d5;" onclick="openCatalogoModal()">📚 Publicar no Catálogo</button>
@@ -288,6 +300,10 @@
       const search = document.getElementById('search-input').value.trim();
       const params = new URLSearchParams({page: currentPage, limit: perPage});
       if (search) params.set('search', search);
+      const filtro = document.getElementById('filtro-validade')?.value;
+      if (filtro) params.set('filtro', filtro);
+      const ordenar = document.getElementById('ordenar-validade')?.value;
+      if (ordenar) params.set('ordenar', ordenar);
 
       try {
         const data = await fetch('/api/admin/users?' + params).then(r => r.json());

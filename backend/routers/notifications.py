@@ -393,6 +393,7 @@ def check_triggers(conn=Depends(get_db_session)):
         "exam_approaching": 0,
         "challenge_expiring": 0,
         "inactivity": 0,
+        "plano_expirando": 0,
     }
 
     # Get all users with active subscriptions
@@ -604,6 +605,32 @@ def check_triggers(conn=Depends(get_db_session)):
                                 results["meta_diaria"] = results.get("meta_diaria", 0) + 1
                 except Exception:
                     pass
+
+        # --- 8. PLANO PREMIUM EXPIRANDO (≤7 dias) ---
+        if not _already_sent_today(conn, uid, "plano_expirando"):
+            try:
+                urow = conn.execute("SELECT plano, plano_expira FROM users WHERE id = ?", (uid,)).fetchone()
+                if urow and urow["plano"] == "premium":
+                    exp = (urow["plano_expira"] or "").strip()
+                    if exp and exp.lower() not in ("vitalicio", "vitalício", "lifetime"):
+                        try:
+                            dt = datetime.fromisoformat(exp)
+                            if dt.tzinfo is not None:
+                                dt = dt.replace(tzinfo=None)
+                            dias = (dt - now).days
+                        except (ValueError, TypeError):
+                            dias = None
+                        if dias is not None and 0 <= dias <= 7:
+                            if dias == 0:
+                                msg = "Seu Premium expira hoje! Renove com créditos para não perder o acesso aos recursos."
+                            else:
+                                msg = f"Seu Premium expira em {dias} dia(s). Renove com créditos para manter acesso ilimitado!"
+                            sent = _send_push_to_user(conn, uid, "⏳ Plano expirando", msg, "/", "plano_expirando")
+                            if sent > 0:
+                                _log_notification(conn, uid, "plano_expirando", "⏳ Plano expirando", msg)
+                                results["plano_expirando"] = results.get("plano_expirando", 0) + 1
+            except Exception:
+                pass
 
     return {"ok": True, "notifications_sent": results}
 

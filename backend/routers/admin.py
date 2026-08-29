@@ -75,30 +75,56 @@ def list_users(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     search: str = "",
+    filtro: str = "",   # '' | expirando | expirado | ativo | vitalicio | free
+    ordenar: str = "",  # '' | expiracao (mais próximos de expirar primeiro)
     conn=Depends(get_db_session),
     user_id: int = Depends(get_user_id)
 ):
-    """Lista todos os usuários com paginação e busca."""
+    """Lista usuários com paginação, busca, filtro por validade e ordenação."""
     _require_admin(user_id)
+    from datetime import datetime, timezone, timedelta
 
     offset = (page - 1) * limit
+    agora = datetime.now(timezone.utc)
+    agora_iso = agora.isoformat()
+    limite_7d = (agora + timedelta(days=7)).isoformat()
 
+    # Condições WHERE dinâmicas
+    conds = []
+    params = []
     if search:
-        total = conn.execute(
-            "SELECT COUNT(*) FROM users WHERE nome LIKE ? OR email LIKE ? OR username LIKE ?",
-            (f"%{search}%", f"%{search}%", f"%{search}%")
-        ).fetchone()[0]
-        rows = conn.execute("""
-            SELECT id, email, nome, username, avatar, plano, plano_expira, created_at, last_login, email_verified, role
-            FROM users WHERE nome LIKE ? OR email LIKE ? OR username LIKE ?
-            ORDER BY id LIMIT ? OFFSET ?
-        """, (f"%{search}%", f"%{search}%", f"%{search}%", limit, offset)).fetchall()
+        conds.append("(nome LIKE ? OR email LIKE ? OR username LIKE ?)")
+        params.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
+
+    if filtro == "expirando":
+        # Premium com data entre agora e +7 dias
+        conds.append("plano = 'premium' AND plano_expira != '' AND plano_expira NOT IN ('vitalicio','vitalício','lifetime') AND plano_expira >= ? AND plano_expira <= ?")
+        params.extend([agora_iso, limite_7d])
+    elif filtro == "expirado":
+        conds.append("plano = 'premium' AND plano_expira != '' AND plano_expira NOT IN ('vitalicio','vitalício','lifetime') AND plano_expira < ?")
+        params.append(agora_iso)
+    elif filtro == "ativo":
+        conds.append("plano = 'premium' AND plano_expira != '' AND plano_expira NOT IN ('vitalicio','vitalício','lifetime') AND plano_expira > ?")
+        params.append(limite_7d)
+    elif filtro == "vitalicio":
+        conds.append("(plano = 'ilimitado' OR (plano = 'premium' AND (plano_expira = '' OR plano_expira IN ('vitalicio','vitalício','lifetime'))))")
+    elif filtro == "free":
+        conds.append("plano IN ('free','guest')")
+
+    where = ("WHERE " + " AND ".join(conds)) if conds else ""
+
+    # Ordenação
+    if ordenar == "expiracao":
+        # Quem tem data de expiração real primeiro (mais próximo), vitalícios/free depois
+        order = "ORDER BY (plano = 'premium' AND plano_expira != '' AND plano_expira NOT IN ('vitalicio','vitalício','lifetime')) DESC, plano_expira ASC"
     else:
-        total = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-        rows = conn.execute("""
-            SELECT id, email, nome, username, avatar, plano, plano_expira, created_at, last_login, email_verified, role
-            FROM users ORDER BY id LIMIT ? OFFSET ?
-        """, (limit, offset)).fetchall()
+        order = "ORDER BY id"
+
+    total = conn.execute(f"SELECT COUNT(*) FROM users {where}", params).fetchone()[0]
+    rows = conn.execute(f"""
+        SELECT id, email, nome, username, avatar, plano, plano_expira, created_at, last_login, email_verified, role
+        FROM users {where} {order} LIMIT ? OFFSET ?
+    """, (*params, limit, offset)).fetchall()
 
     users = []
     for r in rows:
