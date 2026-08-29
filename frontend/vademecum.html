@@ -336,7 +336,20 @@
         <label for="importar-texto">Texto da Lei</label>
         <textarea id="importar-texto" placeholder="Art. 1º Texto do artigo...&#10;§ 1º Parágrafo...&#10;I - inciso..." style="min-height:200px;"></textarea>
       </div>
-      <button class="vm-form-submit" id="btn-importar" onclick="importarTexto()">🚀 Importar</button>
+      <button class="vm-form-submit" id="btn-importar" onclick="importarTexto()">🚀 Importar do texto</button>
+
+      <div style="display:flex;align-items:center;gap:8px;margin:16px 0 12px;color:var(--text-sub);font-size:0.78rem;">
+        <span style="flex:1;height:1px;background:var(--border,#45475a);"></span>ou<span style="flex:1;height:1px;background:var(--border,#45475a);"></span>
+      </div>
+      <p style="font-size:0.82rem;color:var(--text-sub);margin-bottom:8px;">
+        Importe de um PDF da lei. O texto é extraído e passa pelo mesmo parser.
+        <br><span style="font-size:0.72rem;">Obs.: PDFs digitalizados (imagem) não têm texto extraível — nesse caso, cole o texto.</span>
+      </p>
+      <div class="vm-form-row">
+        <label for="importar-pdf">Arquivo PDF</label>
+        <input type="file" id="importar-pdf" accept="application/pdf,.pdf">
+      </div>
+      <button class="vm-form-submit" id="btn-importar-pdf" onclick="importarPDF()">📄 Importar do PDF</button>
     </div>
   </div>
 

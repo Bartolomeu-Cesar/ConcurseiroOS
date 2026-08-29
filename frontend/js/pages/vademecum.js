@@ -215,6 +215,8 @@ window.deletarLei = deletarLei;
 function openModalImportar(leiId) {
   importLeiId = leiId;
   document.getElementById('importar-texto').value = '';
+  const pdfInput = document.getElementById('importar-pdf');
+  if (pdfInput) pdfInput.value = '';
   document.getElementById('modal-importar').classList.add('open');
   document.getElementById('importar-texto').focus();
 }
@@ -252,7 +254,7 @@ async function importarTexto() {
       throw new Error(err.detail || 'Erro ao importar');
     }
     const data = await res.json();
-    const count = data.importados || data.count || 'vários';
+    const count = data.artigos_importados ?? data.importados ?? 'vários';
     toast(`✅ ${count} artigos importados com sucesso!`, 'success');
     closeModalImportar();
     loadLeis();
@@ -260,9 +262,55 @@ async function importarTexto() {
     toast(err.message, 'error');
   } finally {
     btn.disabled = false;
-    btn.textContent = '🚀 Importar';
+    btn.textContent = '🚀 Importar do texto';
   }
 }
+
+async function importarPDF() {
+  const input = document.getElementById('importar-pdf');
+  const file = input.files?.[0];
+  if (!file) {
+    toast('Selecione um arquivo PDF.', 'warning');
+    return;
+  }
+  if (!importLeiId) {
+    toast('Lei não selecionada.', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('btn-importar-pdf');
+  btn.disabled = true;
+  btn.textContent = '⏳ Extraindo do PDF...';
+
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    // O auth-interceptor global injeta o header Authorization automaticamente.
+    const res = await fetch(`/api/vademecum/leis/${importLeiId}/importar-pdf`, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Erro ao importar do PDF');
+    }
+    const data = await res.json();
+    const count = data.artigos_importados ?? 0;
+    if (count === 0) {
+      toast('Nenhum artigo detectado no PDF. Verifique se o texto segue o padrão "Art. Nº ...".', 'warning');
+    } else {
+      toast(`✅ ${count} artigos importados do PDF!`, 'success');
+      closeModalImportar();
+      loadLeis();
+    }
+  } catch (err) {
+    toast(err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📄 Importar do PDF';
+  }
+}
+window.importarPDF = importarPDF;
 window.importarTexto = importarTexto;
 
 // ==================== DESTAQUES ====================

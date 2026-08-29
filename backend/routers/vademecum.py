@@ -1,7 +1,7 @@
 """Vade Mecum Digital — Leis indexadas com busca full-text, anotações e links com questões."""
 from datetime import datetime
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile
 
 from database import get_db_session
 from deps import get_user_id
@@ -147,23 +147,19 @@ def criar_artigo(
     return {"id": cur.lastrowid, "ok": True}
 
 
-@router.post("/leis/{lei_id}/importar-texto", summary="Importar lei a partir de texto",
-             description="Importa artigos automaticamente a partir de texto colado (detecta Art. X, §, incisos).")
-def importar_lei_texto(
-    lei_id: int,
-    texto: str = Body(..., embed=True),
-    conn=Depends(get_db_session),
-    user_id: int = Depends(get_user_id),
-):
-    """Parser que detecta artigos, parágrafos e incisos no texto."""
+def _parse_lei_texto(texto: str) -> list[dict]:
+    """Parser puro: detecta artigos, caput, parágrafos, incisos e capítulo/seção.
+
+    Reutilizado pelo import de texto colado E pelo import de PDF (após extração
+    do texto). Retorna lista de dicts prontos para inserir em vademecum_artigos.
+    """
     import re
-    _ensure_tables(conn)
 
     # Dividir por artigos
     art_pattern = r'(?:^|\n)\s*(Art\.?\s*\d+[º°]?[\-A-Z]?\.?)\s*[-–.]?\s*'
     partes = re.split(art_pattern, texto)
 
-    artigos_importados = 0
+    artigos: list[dict] = []
     capitulo_atual = ""
     secao_atual = ""
 
@@ -209,14 +205,98 @@ def importar_lei_texto(
         if not caput or len(caput) < 5:
             continue
 
+        artigos.append({
+            "numero": numero,
+            "caput": caput,
+            "paragrafos": '\n'.join(paragrafos),
+            "incisos": '\n'.join(incisos),
+            "capitulo": capitulo_atual,
+            "secao": secao_atual,
+        })
+
+    return artigos
+
+
+def _inserir_artigos(conn, lei_id: int, user_id: int, artigos: list[dict]) -> int:
+    """Insere artigos parseados na tabela. Retorna a quantidade inserida."""
+    count = 0
+    for a in artigos:
         conn.execute("""
             INSERT INTO vademecum_artigos (lei_id, user_id, numero, caput, paragrafos, incisos, capitulo, secao)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (lei_id, user_id, numero, caput, '\n'.join(paragrafos), '\n'.join(incisos), capitulo_atual, secao_atual))
-        artigos_importados += 1
-
+        """, (lei_id, user_id, a["numero"], a["caput"], a["paragrafos"], a["incisos"], a["capitulo"], a["secao"]))
+        count += 1
     conn.commit()
-    log.info(f"Vade mecum: {artigos_importados} artigos importados para lei {lei_id}")
+    return count
+
+
+@router.post("/leis/{lei_id}/importar-texto", summary="Importar lei a partir de texto",
+             description="Importa artigos automaticamente a partir de texto colado (detecta Art. X, §, incisos).")
+def importar_lei_texto(
+    lei_id: int,
+    texto: str = Body(..., embed=True),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Parser que detecta artigos, parágrafos e incisos no texto."""
+    _ensure_tables(conn)
+    artigos = _parse_lei_texto(texto)
+    artigos_importados = _inserir_artigos(conn, lei_id, user_id, artigos)
+    log.info(f"Vade mecum: {artigos_importados} artigos importados para lei {lei_id} (texto)")
+    return {"ok": True, "artigos_importados": artigos_importados}
+
+
+@router.post("/leis/{lei_id}/importar-pdf", summary="Importar lei a partir de PDF",
+             description="Extrai o texto de um PDF e importa os artigos usando o mesmo parser do texto colado.")
+async def importar_lei_pdf(
+    lei_id: int,
+    file: UploadFile = File(...),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Lê o PDF, extrai o texto e reaproveita o parser de artigos."""
+    import os
+    import tempfile
+
+    from pypdf import PdfReader
+
+    _ensure_tables(conn)
+
+    # Valida que a lei existe e pertence ao usuário
+    lei = conn.execute(
+        "SELECT id FROM vademecum_leis WHERE id = ? AND user_id = ?", (lei_id, user_id)
+    ).fetchone()
+    if not lei:
+        raise HTTPException(status_code=404, detail="Lei não encontrada.")
+
+    filename = (file.filename or "").lower()
+    if not filename.endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Envie um arquivo .pdf")
+
+    content = await file.read()
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+    tmp.write(content)
+    tmp.close()
+    try:
+        reader = PdfReader(tmp.name)
+        texto = "\n".join((page.extract_text() or "") for page in reader.pages)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Não foi possível ler o PDF: {e}") from e
+    finally:
+        try:
+            os.unlink(tmp.name)
+        except OSError:
+            pass
+
+    if not texto.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="PDF sem texto extraível (pode ser digitalizado/imagem). Cole o texto manualmente.",
+        )
+
+    artigos = _parse_lei_texto(texto)
+    artigos_importados = _inserir_artigos(conn, lei_id, user_id, artigos)
+    log.info(f"Vade mecum: {artigos_importados} artigos importados para lei {lei_id} (pdf)")
     return {"ok": True, "artigos_importados": artigos_importados}
 
 
