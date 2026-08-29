@@ -1691,12 +1691,71 @@ async function loadSimuladoPendente() {
   } catch(e) {}
 }
 
+// Modal de seleção de disciplinas do simulado. Resolve com a lista escolhida
+// (array de materias) ou null se cancelado. Sem matérias → retorna [] (todas).
+function _escolherMateriasSimulado(materias) {
+  return new Promise((resolve) => {
+    if (!materias || materias.length === 0) { resolve([]); return; }
+
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(30,30,46,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;animation:fadeIn 0.2s ease;';
+    overlay.innerHTML = `
+      <div style="background:var(--bg-surface,#313244);border:1px solid var(--border,#45475a);border-radius:16px;padding:22px;max-width:420px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+        <h3 style="color:var(--text);margin:0 0 4px;font-size:1rem;">⚡ Gerar Simulado</h3>
+        <p style="color:var(--text-sub);font-size:0.8rem;margin:0 0 12px;">Escolha as disciplinas (padrão: todas, proporcional ao edital).</p>
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <button id="sim-todas" style="flex:1;background:var(--bg,#1e1e2e);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px;font-size:0.75rem;cursor:pointer;">Todas</button>
+          <button id="sim-nenhuma" style="flex:1;background:var(--bg,#1e1e2e);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px;font-size:0.75rem;cursor:pointer;">Limpar</button>
+        </div>
+        <div id="sim-materias" style="max-height:260px;overflow-y:auto;margin-bottom:16px;display:flex;flex-direction:column;gap:4px;">
+          ${materias.map((m, i) => `
+            <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg,#1e1e2e);border-radius:8px;cursor:pointer;font-size:0.82rem;color:var(--text);">
+              <input type="checkbox" class="sim-mat-chk" value="${m.replace(/"/g,'&quot;')}" checked style="width:16px;height:16px;">
+              <span>${m}</span>
+            </label>`).join('')}
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;">
+          <button id="sim-cancel" style="background:var(--bg,#1e1e2e);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 16px;font-size:0.82rem;cursor:pointer;">Cancelar</button>
+          <button id="sim-ok" style="background:var(--accent,#cba6f7);color:#1e1e2e;border:none;border-radius:8px;padding:8px 16px;font-weight:700;font-size:0.82rem;cursor:pointer;">Gerar</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    const chks = () => Array.from(overlay.querySelectorAll('.sim-mat-chk'));
+    overlay.querySelector('#sim-todas').onclick = () => chks().forEach(c => { c.checked = true; });
+    overlay.querySelector('#sim-nenhuma').onclick = () => chks().forEach(c => { c.checked = false; });
+    const close = (val) => { overlay.remove(); resolve(val); };
+    overlay.querySelector('#sim-cancel').onclick = () => close(null);
+    overlay.onclick = (e) => { if (e.target === overlay) close(null); };
+    overlay.querySelector('#sim-ok').onclick = () => {
+      const sel = chks().filter(c => c.checked).map(c => c.value);
+      if (sel.length === 0) { _toastDash('Selecione pelo menos uma disciplina.'); return; }
+      close(sel);
+    };
+  });
+}
+
 window.gerarSimuladoAutomatico = async function() {
+  // Primeiro deixa o usuário escolher as disciplinas (uma, várias ou todas).
+  let materiasCiclo = [];
   try {
+    const ciclo = await fetch('/api/ciclo').then(r => r.json());
+    materiasCiclo = [...new Set((ciclo || []).filter(c => c.ativo).map(c => c.materia).filter(Boolean))];
+  } catch (e) { /* segue sem seletor se falhar */ }
+
+  const materiasEscolhidas = await _escolherMateriasSimulado(materiasCiclo);
+  if (materiasEscolhidas === null) return; // cancelou
+
+  try {
+    const body = { total_questoes: 40, tempo_limite_min: 120 };
+    // Se selecionou um subconjunto (não todas), envia o filtro
+    if (materiasEscolhidas.length && materiasEscolhidas.length < materiasCiclo.length) {
+      body.materias = materiasEscolhidas;
+    }
     const res = await fetch('/api/simulado/auto-gerar', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ total_questoes: 40, tempo_limite_min: 120 })
+      body: JSON.stringify(body)
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));

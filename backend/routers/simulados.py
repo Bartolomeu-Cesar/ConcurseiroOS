@@ -848,17 +848,20 @@ def simulado_pendente(conn=Depends(get_db_session), user_id: int = Depends(get_u
 def auto_gerar_simulado(
     total_questoes: int = Body(40, embed=True),
     tempo_limite_min: int = Body(120, embed=True),
+    materias: list[str] = Body(None, embed=True),
     conn=Depends(get_db_session),
     user_id: int = Depends(get_user_id)
 ):
     """Gera simulado automático com proporção do edital.
 
     Lógica:
-    1. Calcula peso de cada matéria (tópicos no edital do ciclo ativo)
-    2. Distribui questões proporcionalmente
-    3. Mínimo 2 questões por matéria presente
-    4. Mistura dificuldades: 30% fácil, 50% médio, 20% difícil
-    5. Tempo proporcional à prova real
+    1. Matérias: as selecionadas pelo usuário (parâmetro `materias`) ou, se vazio,
+       todas as do ciclo ativo (comportamento padrão multidisciplinar).
+    2. Calcula peso de cada matéria (tópicos no edital)
+    3. Distribui questões proporcionalmente
+    4. Mínimo 2 questões por matéria presente
+    5. Mistura dificuldades: 30% fácil, 50% médio, 20% difícil
+    6. Tempo proporcional à prova real
     """
     import json
 
@@ -870,6 +873,17 @@ def auto_gerar_simulado(
         raise HTTPException(status_code=400, detail="Adicione matérias ao ciclo primeiro.")
 
     ciclo_mats = [m["materia"] for m in ciclo_materias]
+
+    # Se o usuário escolheu matérias específicas, restringe à interseção com o ciclo
+    if materias:
+        selecionadas = {m.strip() for m in materias if m and m.strip()}
+        filtradas = [m for m in ciclo_mats if m in selecionadas]
+        if not filtradas:
+            raise HTTPException(
+                status_code=400,
+                detail="As matérias selecionadas não estão no seu ciclo ativo.",
+            )
+        ciclo_mats = filtradas
 
     # Calcular peso por matéria (tópicos no edital)
     pesos = {}
