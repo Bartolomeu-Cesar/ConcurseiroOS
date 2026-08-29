@@ -24,10 +24,10 @@ router = APIRouter(prefix="", tags=["Flashcards"])
 @router.get("/api/flashcards", summary="Listar flashcards", description="Lista todos os flashcards com paginação opcional e filtro por matéria")
 def list_flashcards(materia: str = "", page: int | None = Query(None), limit: int = 50, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     if materia:
-        query = "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia FROM flashcards WHERE materia = ? AND user_id = ?"
+        query = "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia, stability, fsrs_state FROM flashcards WHERE materia = ? AND user_id = ?"
         params = (materia, user_id)
     else:
-        query = "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia FROM flashcards WHERE user_id = ?"
+        query = "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia, stability, fsrs_state FROM flashcards WHERE user_id = ?"
         params = (user_id,)
     return sql_paginate(conn, query, params, page, limit)
 

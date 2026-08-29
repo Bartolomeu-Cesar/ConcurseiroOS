@@ -89,6 +89,28 @@ class TestSM2Flashcards:
         # SM-2 fields should be present
         assert "easiness_factor" in items[0]
         assert "repetitions" in items[0]
+        # FSRS fields must be exposed for the Leitner box visualization
+        assert "stability" in items[0]
+        assert "fsrs_state" in items[0]
+
+    def test_list_flashcards_reflects_leitner_progression(self, client):
+        """Após reviews positivos, a stability exposta na listagem deve subir,
+        permitindo que o card 'suba de caixa' no Sistema Leitner do frontend."""
+        r = client.post("/api/flashcards", json={
+            "pergunta": "Leitner progression?",
+            "resposta": "Sim, deve subir"
+        })
+        fid = r.json()["id"]
+
+        # Vários reviews com nota alta aumentam a stability
+        for _ in range(3):
+            client.post(f"/api/flashcards/{fid}/review-fsrs", json={"quality": 5})
+
+        items = client.get("/api/flashcards").json()
+        card = next(c for c in items if c["id"] == fid)
+        assert card["stability"] is not None and card["stability"] > 0
+        # fsrs_state deve ter saído de 'Novo' (0)
+        assert (card["fsrs_state"] or 0) >= 1
 
     def test_review_sm2_quality_5(self, client):
         """quality=5 (perfeito): reps=0->1, interval=1"""
