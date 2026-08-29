@@ -49,14 +49,23 @@ function showProfileMenu() {
   const user = getUser();
   const plan = getUserPlan();
   const planInfo = PLAN_LABELS[plan] || PLAN_LABELS.free;
+  // Status de presença do próprio usuário (mesmo padrão visual do widget de amigos).
+  // Usa window.getCurrentPresenceStatus (presence.js) com fallback seguro se ausente.
+  const pres = (typeof window.getCurrentPresenceStatus === 'function')
+    ? window.getCurrentPresenceStatus()
+    : { status: 'estudando', label: 'Estudando', emoji: '📖', cor: '#a6e3a1' };
   const menu = document.createElement('div');
   menu.id = 'profile-menu';
   menu.style.cssText = 'position:fixed;top:50px;right:16px;background:#313244;border:1px solid #45475a;border-radius:12px;padding:16px;z-index:9999;min-width:240px;box-shadow:0 8px 24px rgba(0,0,0,0.4);';
   menu.innerHTML = `
     <div style="text-align:center;margin-bottom:12px;">
-      <div style="font-size:2rem;margin-bottom:4px;">${user?.avatar || '👤'}</div>
+      <div style="position:relative;display:inline-block;font-size:2rem;margin-bottom:4px;line-height:1;">
+        ${user?.avatar || '👤'}
+        <span title="${pres.emoji} ${pres.label}" style="position:absolute;bottom:0;right:-2px;width:14px;height:14px;border-radius:50%;background:${pres.cor};border:2px solid #313244;box-shadow:0 0 0 1px rgba(0,0,0,0.2);"></span>
+      </div>
       <div style="font-weight:600;color:#cdd6f4;">${user?.nome || 'Estudante'}</div>
-      <div style="font-size:0.75rem;color:#9399b2;margin-bottom:6px;">${user?.email || ''}</div>
+      <div style="font-size:0.75rem;color:#9399b2;margin-bottom:4px;">${user?.email || ''}</div>
+      <div style="font-size:0.72rem;color:#9399b2;margin-bottom:6px;">${pres.emoji} ${pres.label}</div>
       <span style="display:inline-block;padding:2px 10px;border-radius:12px;font-size:0.72rem;font-weight:600;background:${planInfo.cor}22;color:${planInfo.cor};border:1px solid ${planInfo.cor}55;">
         ${planInfo.icon} ${planInfo.nome}
       </span>

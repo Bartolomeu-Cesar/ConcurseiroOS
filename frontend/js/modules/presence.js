@@ -11,6 +11,33 @@ let _presenceDetalhe = '';
 let _presenceInterval = null;
 const HEARTBEAT_MS = 90 * 1000; // 90s
 
+// Mapa de apresentação dos status (espelha STATUS_VALIDOS do backend).
+// `cor` é usada na bolinha de status sobre o avatar.
+export const STATUS_META = {
+  estudando: { label: 'Estudando', emoji: '📖', cor: '#a6e3a1' },
+  focado: { label: 'Em foco (Pomodoro)', emoji: '🎯', cor: '#f38ba8' },
+  revisando: { label: 'Revisando', emoji: '🔁', cor: '#cba6f7' },
+  questoes: { label: 'Resolvendo questões', emoji: '✍️', cor: '#89b4fa' },
+  simulado: { label: 'Fazendo simulado', emoji: '⏱️', cor: '#fab387' },
+  lendo: { label: 'Lendo PDF', emoji: '📄', cor: '#94e2d5' },
+  descansando: { label: 'Descansando', emoji: '☕', cor: '#f9e2af' },
+  offline: { label: 'Offline', emoji: '💤', cor: '#6c7086' },
+};
+
+/**
+ * Retorna o status de presença atual do usuário (o mesmo enviado no heartbeat):
+ * o override manual quando definido, ou o inferido da página.
+ * @returns {{status:string, label:string, emoji:string, cor:string}}
+ */
+export function getCurrentPresenceStatus() {
+  const status = _presenceStatus && _presenceStatus !== 'auto'
+    ? _presenceStatus
+    : _inferStatus().status;
+  const meta = STATUS_META[status] || STATUS_META.estudando;
+  return { status, ...meta };
+}
+window.getCurrentPresenceStatus = getCurrentPresenceStatus;
+
 /** Infere o status a partir da URL/página atual. */
 function _inferStatus() {
   const path = (location.pathname || '').toLowerCase();
