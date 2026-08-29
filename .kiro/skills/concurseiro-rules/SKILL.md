@@ -28,7 +28,7 @@
 - `ai_tutor.py`: NÃO modularizar — testes usam patch direto em `routers.ai_tutor.call_llm_sync`.
 - `_get_ai_config()`: user_id=1 hardcoded. Multi-user precisará refatorar.
 - SW: Após deploy, orientar unregister: `navigator.serviceWorker.getRegistrations().then(r => r.forEach(sw => sw.unregister())).then(() => location.reload())`
-- `progress.db` no git: é o banco real. Cuidado com conflitos no pull (usar `git checkout -- backend/progress.db` se necessário).
+- `progress.db` no git: é o banco REAL e versionado para sincronizar dados entre estações (projeto multi-contribuidor). Dados reais novos (inseridos pelo uso do app, fora de testes) DEVEM ser commitados/pushados em commit dedicado `chore: atualizar progress.db (...)`, SEPARADO do commit de código. Diffs gerados por testes/smoke são espúrios → descartar com `git checkout -- backend/progress.db` antes de commitar código. Fluxo: commit/push do código primeiro (restaurando o .db se testes o tocaram), depois commit/push separado do progress.db se houver dados reais. `progress.db` na RAIZ não é rastreado e não vai ao repo. Cuidado com conflitos no pull.
 
 ## Performance & Banco de Dados
 

@@ -916,10 +916,21 @@ Três erros de ambiente causaram retrabalho nesta sessão. Registrados para nunc
    `pkill -f uvicorn` após smoke tests. `rate_limit.db` é efêmero/não-rastreado (`.gitignore`) —
    se corromper, basta apagar que o app recria.
 
-4. **`backend/progress.db` é o banco REAL e é rastreado pelo git.** Testes e o import do app
-   tocam nele. Após testes/smoke, restaurar com `git checkout -- backend/progress.db` para não
-   commitar diffs espúrios. Há um `progress.db` solto na RAIZ (não rastreado) que não deve ir ao
-   repo. Para backup de dados, usar `make backup` / `POST /api/backups` — não commitar o `.db`.
+4. **`backend/progress.db` é o banco REAL e é rastreado pelo git — dados reais novos DEVEM
+   ser commitados para sincronizar entre estações.** O projeto tem múltiplos contribuidores
+   que trabalham em estações diferentes e usam o `progress.db` versionado para levar os dados
+   (flashcards, questões, edital, sessões, config) de uma máquina para outra.
+   - **Dados reais inseridos pelo uso do app** (fora de testes) → commitar o `progress.db` com
+     um commit dedicado `chore: atualizar progress.db (<descrição do que foi adicionado>)` e
+     fazer push. Nunca misturar o `.db` no mesmo commit de alterações de código-fonte.
+   - **Diffs espúrios gerados por testes/smoke** (a suite e o import do app tocam no banco) →
+     descartar com `git checkout -- backend/progress.db` ANTES de commitar código, para não
+     poluir o commit de código com alterações incidentais do banco.
+   - Regra de ouro do fluxo: primeiro faça o commit/push do CÓDIGO (restaurando o `.db` se os
+     testes o alteraram); depois, se houver dados reais a sincronizar, faça um commit/push
+     SEPARADO do `progress.db`.
+   - Há um `progress.db` solto na RAIZ (não rastreado, `.dockerignore`) que NÃO deve ir ao repo.
+   - `make backup` / `POST /api/backups` continuam disponíveis para snapshots com timestamp.
 
 ### 10.4 Service Worker
 
