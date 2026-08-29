@@ -23,20 +23,46 @@ _JWT_SECRET_FILE = _BACKEND_DIR / ".jwt_secret"
 
 
 def _get_jwt_secret() -> str:
-    """Obtém JWT_SECRET de forma persistente.
+    """Obtém JWT_SECRET de forma persistente, garantindo força mínima.
 
-    1. Se env var JWT_SECRET está definida, usa ela
-    2. Se arquivo .jwt_secret existe, lê dele
-    3. Senão, gera um novo secret e salva no arquivo
+    Ordem de resolução:
+    1. Se env var JWT_SECRET está definida, usa ela.
+    2. Se arquivo .jwt_secret existe, lê dele.
+    3. Senão, gera um novo secret e salva no arquivo.
+
+    Segurança (RFC 7518 §3.2): HMAC-SHA256 exige chave de no mínimo 32 bytes.
+    - Segredo vindo de ENV com < 32 bytes: respeitamos a escolha do operador
+      (não sobrescrevemos config externa), mas emitimos um aviso claro.
+    - Segredo de ARQUIVO com < 32 bytes (legado): regeneramos para 32 bytes,
+      eliminando a fraqueza. Isso invalida tokens antigos uma única vez.
     """
+    import logging
+    log = logging.getLogger("settings")
+    MIN_BYTES = 32
+
     env_secret = os.environ.get("JWT_SECRET")
     if env_secret:
+        if len(env_secret.encode()) < MIN_BYTES:
+            log.warning(
+                "JWT_SECRET (via env) tem %d bytes — abaixo do mínimo de %d recomendado "
+                "para HMAC-SHA256 (RFC 7518 §3.2). Use um segredo mais longo (ex.: "
+                "`python -c \"import secrets; print(secrets.token_hex(32))\"`).",
+                len(env_secret.encode()), MIN_BYTES,
+            )
         return env_secret
 
     if _JWT_SECRET_FILE.exists():
-        return _JWT_SECRET_FILE.read_text().strip()
+        file_secret = _JWT_SECRET_FILE.read_text().strip()
+        if file_secret and len(file_secret.encode()) >= MIN_BYTES:
+            return file_secret
+        # Arquivo legado com segredo curto/fraco → regenera para 32 bytes
+        log.warning(
+            "Arquivo .jwt_secret tinha %d bytes (< %d). Regenerando um segredo forte; "
+            "sessões existentes serão invalidadas uma vez.",
+            len(file_secret.encode()) if file_secret else 0, MIN_BYTES,
+        )
 
-    # Gerar novo secret e persistir
+    # Gerar novo secret forte e persistir (token_hex(32) -> 64 chars/bytes)
     new_secret = secrets.token_hex(32)
     try:
         _JWT_SECRET_FILE.write_text(new_secret)
