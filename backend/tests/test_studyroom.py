@@ -535,6 +535,50 @@ class TestHeartbeatESair:
         r = client.post("/api/studyroom/sair/ZZZZZZ")
         assert r.status_code == 404
 
+    def test_tempo_em_pausa_nao_e_contabilizado(self, client):
+        """Tempo passado em 'pausando' não conta como estudo.
+
+        Fluxo da pausa automática do pomodoro: focando -> pausando (contabiliza
+        o foco) -> permanece em pausa -> pausando -> focando (NÃO contabiliza a
+        pausa). Ao voltar a focar, o ultimo_checkin é resetado, então o tempo de
+        pausa é descartado.
+        """
+        r = client.post("/api/studyroom/criar", json={"titulo": "Sala Pausa"})
+        codigo = r.json()["codigo"]
+        room_id = r.json()["id"]
+
+        # Simular 1h de foco e mudar para pausando (deve contabilizar ~1h)
+        past = (datetime.now() - timedelta(hours=1)).isoformat()
+        conn = sqlite3.connect(_tmp_db.name)
+        conn.execute(
+            "UPDATE study_room_participants SET ultimo_checkin = ?, status = 'focando' WHERE room_id = ? AND user_id = 1",
+            (past, room_id),
+        )
+        conn.commit()
+        conn.close()
+
+        antes = _horas_hoje_studyroom()
+        r = client.post(f"/api/studyroom/status/{codigo}", json={"status": "pausando"})
+        assert r.status_code == 200
+        apos_foco = _horas_hoje_studyroom()
+        assert apos_foco - antes >= 0.9  # foco contabilizado
+
+        # Simular 1h em pausa: recuar o ultimo_checkin mas manter status 'pausando'
+        past_pausa = (datetime.now() - timedelta(hours=1)).isoformat()
+        conn = sqlite3.connect(_tmp_db.name)
+        conn.execute(
+            "UPDATE study_room_participants SET ultimo_checkin = ? WHERE room_id = ? AND user_id = 1",
+            (past_pausa, room_id),
+        )
+        conn.commit()
+        conn.close()
+
+        # Voltar a focar: NÃO deve contabilizar a hora de pausa
+        r = client.post(f"/api/studyroom/status/{codigo}", json={"status": "focando"})
+        assert r.status_code == 200
+        apos_pausa = _horas_hoje_studyroom()
+        assert abs(apos_pausa - apos_foco) < 0.01  # pausa não creditou nada
+
 
 # ============================================================
 # POST /api/studyroom/chat/{codigo} — Enviar mensagem

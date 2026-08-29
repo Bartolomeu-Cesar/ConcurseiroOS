@@ -17,6 +17,7 @@ let pomodoroPhase = 'focus'; // 'focus' or 'break'
 let pomodoroCycle = 1;
 const TOTAL_CYCLES = 4;
 let myStatus = 'focando';
+let manualPause = false; // true quando o usuário clicou em "Pausando" (congela o timer)
 let modoFoco = false;
 let roomTecnica = 'pomodoro';
 
@@ -102,6 +103,7 @@ function enterRoomView(codigo) {
   document.getElementById('room-code').textContent = codigo;
   currentRoom = codigo;
   myStatus = 'focando';
+  manualPause = false;
   pomodoroCycle = 1;
   elaborationShownCycle = 0;
   breakCardsLoaded = false;
@@ -378,9 +380,15 @@ window.enviarMsg = enviarMsg;
 // STATUS
 // ============================================================
 
-async function setStatus(status) {
+async function setStatus(status, isAuto = false) {
   if (!currentRoom) return;
   myStatus = status;
+  // Pausa manual (usuário clicou em Pausando/Ausente) congela o timer.
+  // A pausa automática do pomodoro (isAuto=true) mantém o timer correndo
+  // para completar o ciclo de foco/pausa.
+  if (!isAuto) {
+    manualPause = (status === 'pausando' || status === 'ausente');
+  }
   updateStatusButtons();
   try {
     await apiPost(`/status/${currentRoom}`, { status });
@@ -419,7 +427,9 @@ function stopPomodoro() {
 }
 
 function tickPomodoro() {
-  if (myStatus === 'ausente') return; // don't tick when absent
+  // Congela o timer em pausa manual (clique em Pausando) ou quando ausente.
+  // A pausa automática do pomodoro NÃO seta manualPause, então o ciclo continua.
+  if (myStatus === 'ausente' || manualPause) return;
 
   pomodoroSeconds++;
 
@@ -433,7 +443,8 @@ function tickPomodoro() {
       document.getElementById('timer-phase').className = 'timer-phase focus';
       updateFocusMode();
       hideBreakCards();
-      if (myStatus === 'pausando') setStatus('focando');
+      // Fim da pausa automática: retoma o foco no backend (reseta o check-in)
+      if (myStatus === 'pausando') setStatus('focando', true);
     }
   } else {
     if (pomodoroPhase !== 'break') {
@@ -442,6 +453,11 @@ function tickPomodoro() {
       document.getElementById('timer-phase').className = 'timer-phase break';
       updateFocusMode();
       showBreakCards();
+      // Pausa automática do pomodoro: encerra o período de foco no backend
+      // (contabiliza o tempo focado até aqui) e para de contar durante a pausa.
+      // isAuto=true para não congelar o timer (o ciclo precisa completar).
+      // Só altera se estava focando — respeita quem definiu 'ausente' manualmente.
+      if (myStatus === 'focando') setStatus('pausando', true);
       // Play beep notification
       playBeep();
       // Notify
