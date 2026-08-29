@@ -984,6 +984,12 @@ def auto_gerar_simulado(
     """
     import json
 
+    # Validação de sanidade dos parâmetros configuráveis
+    if total_questoes < 5 or total_questoes > 200:
+        raise HTTPException(status_code=400, detail="Número de questões deve estar entre 5 e 200.")
+    if tempo_limite_min < 5 or tempo_limite_min > 600:
+        raise HTTPException(status_code=400, detail="Tempo limite deve estar entre 5 e 600 minutos.")
+
     # Matérias do ciclo ativo com peso pelo edital
     ciclo_materias = conn.execute(
         "SELECT DISTINCT materia FROM ciclo_estudos WHERE ativo = 1 AND user_id = ?", (user_id,)

@@ -1768,25 +1768,33 @@ async function loadSimuladoPendente() {
 // (array de materias) ou null se cancelado. Sem matérias → retorna [] (todas).
 function _escolherMateriasSimulado(materias) {
   return new Promise((resolve) => {
-    if (!materias || materias.length === 0) { resolve([]); return; }
-
     const overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(30,30,46,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;animation:fadeIn 0.2s ease;';
+    const temMaterias = materias && materias.length > 0;
     overlay.innerHTML = `
-      <div style="background:var(--bg-surface,#313244);border:1px solid var(--border,#45475a);border-radius:16px;padding:22px;max-width:420px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+      <div style="background:var(--bg-surface,#313244);border:1px solid var(--border,#45475a);border-radius:16px;padding:22px;max-width:420px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.5);max-height:90vh;overflow-y:auto;">
         <h3 style="color:var(--text);margin:0 0 4px;font-size:1rem;">⚡ Gerar Simulado</h3>
-        <p style="color:var(--text-sub);font-size:0.8rem;margin:0 0 12px;">Escolha as disciplinas (padrão: todas, proporcional ao edital).</p>
+        <p style="color:var(--text-sub);font-size:0.8rem;margin:0 0 12px;">Configure o simulado. ${temMaterias ? 'Disciplinas: padrão todas, proporcional ao edital.' : ''}</p>
+        <div style="display:flex;gap:8px;margin-bottom:12px;">
+          <label style="flex:1;font-size:0.78rem;color:var(--text);">❓ Nº de questões
+            <input type="number" id="sim-total-q" min="5" max="200" step="1" value="40" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;">
+          </label>
+          <label style="flex:1;font-size:0.78rem;color:var(--text);">⏱ Tempo (min)
+            <input type="number" id="sim-tempo" min="5" max="600" step="5" value="120" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;">
+          </label>
+        </div>
+        ${temMaterias ? `
         <div style="display:flex;gap:8px;margin-bottom:8px;">
           <button id="sim-todas" style="flex:1;background:var(--bg,#1e1e2e);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px;font-size:0.75rem;cursor:pointer;">Todas</button>
           <button id="sim-nenhuma" style="flex:1;background:var(--bg,#1e1e2e);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px;font-size:0.75rem;cursor:pointer;">Limpar</button>
         </div>
-        <div id="sim-materias" style="max-height:260px;overflow-y:auto;margin-bottom:16px;display:flex;flex-direction:column;gap:4px;">
+        <div id="sim-materias" style="max-height:220px;overflow-y:auto;margin-bottom:16px;display:flex;flex-direction:column;gap:4px;">
           ${materias.map((m, i) => `
             <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg,#1e1e2e);border-radius:8px;cursor:pointer;font-size:0.82rem;color:var(--text);">
               <input type="checkbox" class="sim-mat-chk" value="${m.replace(/"/g,'&quot;')}" checked style="width:16px;height:16px;">
               <span>${m}</span>
             </label>`).join('')}
-        </div>
+        </div>` : '<div style="margin-bottom:8px;"></div>'}
         <div style="display:flex;gap:8px;justify-content:flex-end;">
           <button id="sim-cancel" style="background:var(--bg,#1e1e2e);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 16px;font-size:0.82rem;cursor:pointer;">Cancelar</button>
           <button id="sim-ok" style="background:var(--accent,#cba6f7);color:#1e1e2e;border:none;border-radius:8px;padding:8px 16px;font-weight:700;font-size:0.82rem;cursor:pointer;">Gerar</button>
@@ -1794,16 +1802,29 @@ function _escolherMateriasSimulado(materias) {
       </div>`;
     document.body.appendChild(overlay);
 
+    const lerConfig = () => {
+      let totalQ = parseInt(overlay.querySelector('#sim-total-q').value) || 40;
+      let tempo = parseInt(overlay.querySelector('#sim-tempo').value) || 120;
+      totalQ = Math.min(200, Math.max(5, totalQ));
+      tempo = Math.min(600, Math.max(5, tempo));
+      return { total_questoes: totalQ, tempo_limite_min: tempo };
+    };
     const chks = () => Array.from(overlay.querySelectorAll('.sim-mat-chk'));
-    overlay.querySelector('#sim-todas').onclick = () => chks().forEach(c => { c.checked = true; });
-    overlay.querySelector('#sim-nenhuma').onclick = () => chks().forEach(c => { c.checked = false; });
+    if (temMaterias) {
+      overlay.querySelector('#sim-todas').onclick = () => chks().forEach(c => { c.checked = true; });
+      overlay.querySelector('#sim-nenhuma').onclick = () => chks().forEach(c => { c.checked = false; });
+    }
     const close = (val) => { overlay.remove(); resolve(val); };
     overlay.querySelector('#sim-cancel').onclick = () => close(null);
     overlay.onclick = (e) => { if (e.target === overlay) close(null); };
     overlay.querySelector('#sim-ok').onclick = () => {
-      const sel = chks().filter(c => c.checked).map(c => c.value);
-      if (sel.length === 0) { _toastDash('Selecione pelo menos uma disciplina.'); return; }
-      close(sel);
+      const cfg = lerConfig();
+      let sel = [];
+      if (temMaterias) {
+        sel = chks().filter(c => c.checked).map(c => c.value);
+        if (sel.length === 0) { _toastDash('Selecione pelo menos uma disciplina.'); return; }
+      }
+      close({ materias: sel, ...cfg });
     };
   });
 }
@@ -1816,11 +1837,15 @@ window.gerarSimuladoAutomatico = async function() {
     materiasCiclo = [...new Set((ciclo || []).filter(c => c.ativo).map(c => c.materia).filter(Boolean))];
   } catch (e) { /* segue sem seletor se falhar */ }
 
-  const materiasEscolhidas = await _escolherMateriasSimulado(materiasCiclo);
-  if (materiasEscolhidas === null) return; // cancelou
+  const escolha = await _escolherMateriasSimulado(materiasCiclo);
+  if (escolha === null) return; // cancelou
+  const materiasEscolhidas = escolha.materias || [];
 
   try {
-    const body = { total_questoes: 40, tempo_limite_min: 120 };
+    const body = {
+      total_questoes: escolha.total_questoes || 40,
+      tempo_limite_min: escolha.tempo_limite_min || 120,
+    };
     // Se selecionou um subconjunto (não todas), envia o filtro
     if (materiasEscolhidas.length && materiasEscolhidas.length < materiasCiclo.length) {
       body.materias = materiasEscolhidas;

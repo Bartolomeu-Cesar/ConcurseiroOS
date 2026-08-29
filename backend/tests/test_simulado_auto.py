@@ -105,3 +105,34 @@ def test_auto_gerar_materia_fora_do_ciclo_retorna_400(client):
         "total_questoes": 8, "tempo_limite_min": 60, "materias": ["Direito Penal"]
     })
     assert r.status_code == 400
+
+
+def test_auto_gerar_respeita_tempo_configurado(client):
+    """O tempo_limite_min enviado deve ser refletido no simulado gerado."""
+    r = client.post("/api/simulado/auto-gerar", json={"total_questoes": 10, "tempo_limite_min": 90})
+    assert r.status_code == 200
+    assert r.json()["tempo_limite_min"] == 90
+
+
+def test_auto_gerar_respeita_total_questoes_configurado(client):
+    """O total_questoes configurado deve ser respeitado (ou o máximo disponível)."""
+    r = client.post("/api/simulado/auto-gerar", json={"total_questoes": 6, "tempo_limite_min": 30})
+    assert r.status_code == 200
+    # Não pode gerar mais do que o solicitado
+    assert r.json()["total_questoes"] <= 6
+
+
+def test_auto_gerar_rejeita_total_questoes_invalido(client):
+    """Número de questões fora do intervalo 5-200 é rejeitado."""
+    r = client.post("/api/simulado/auto-gerar", json={"total_questoes": 1, "tempo_limite_min": 60})
+    assert r.status_code == 400
+    r = client.post("/api/simulado/auto-gerar", json={"total_questoes": 500, "tempo_limite_min": 60})
+    assert r.status_code == 400
+
+
+def test_auto_gerar_rejeita_tempo_invalido(client):
+    """Tempo fora do intervalo 5-600 é rejeitado."""
+    r = client.post("/api/simulado/auto-gerar", json={"total_questoes": 10, "tempo_limite_min": 1})
+    assert r.status_code == 400
+    r = client.post("/api/simulado/auto-gerar", json={"total_questoes": 10, "tempo_limite_min": 999})
+    assert r.status_code == 400
