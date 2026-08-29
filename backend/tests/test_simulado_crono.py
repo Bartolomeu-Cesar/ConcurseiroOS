@@ -504,6 +504,57 @@ class TestHeartbeatSimulado:
         assert 0.9 <= adicionado <= 1.1
 
 
+class TestEstatisticasSimulado:
+    def test_estatisticas_apos_finalizar(self, client, setup_questoes):
+        # Cria, responde tudo certo (gabarito é 'A') e finaliza
+        r = client.post("/api/simulados/cronometrado", json={
+            "titulo": "Simulado Stats", "tempo_total_min": 60, "questoes_total": 4,
+            "materias": [], "dificuldade_mix": {"facil": 2, "medio": 1, "dificil": 1},
+        })
+        data = r.json()
+        sim_id = data["id"]
+        questoes = data["questoes"]
+        respostas = [{"questao_id": q["id"], "resposta": "A", "tempo_seg": 30} for q in questoes]
+        client.post(f"/api/simulados/cronometrado/{sim_id}/finalizar",
+                    json={"respostas": respostas, "tempo_total_seg": 120})
+
+        st = client.get(f"/api/simulados/{sim_id}/estatisticas").json()
+        assert st["total_questoes"] == len(questoes)
+        assert st["acertos"] == len(questoes)  # tudo 'A' = tudo certo
+        assert st["erros"] == 0
+        assert st["em_branco"] == 0
+        assert st["pct_acerto"] == 100.0
+        assert st["tempo_gasto_seg"] == 120
+        assert isinstance(st["por_materia"], list) and len(st["por_materia"]) >= 1
+        # cada matéria com 100% de acerto
+        for m in st["por_materia"]:
+            assert m["pct"] == 100.0
+
+    def test_estatisticas_com_erros_e_branco(self, client, setup_questoes):
+        r = client.post("/api/simulados/cronometrado", json={
+            "titulo": "Simulado Stats 2", "tempo_total_min": 60, "questoes_total": 4,
+            "materias": [], "dificuldade_mix": {"facil": 2, "medio": 1, "dificil": 1},
+        })
+        data = r.json()
+        sim_id = data["id"]
+        questoes = data["questoes"]
+        # 1 certo (A), 1 errado (B), resto em branco
+        respostas = []
+        for i, q in enumerate(questoes):
+            letra = "A" if i == 0 else ("B" if i == 1 else "")
+            respostas.append({"questao_id": q["id"], "resposta": letra, "tempo_seg": 20})
+        client.post(f"/api/simulados/cronometrado/{sim_id}/finalizar",
+                    json={"respostas": respostas, "tempo_total_seg": 80})
+
+        st = client.get(f"/api/simulados/{sim_id}/estatisticas").json()
+        assert st["acertos"] == 1
+        assert st["erros"] == 1
+        assert st["em_branco"] == len(questoes) - 2
+
+    def test_estatisticas_simulado_inexistente_404(self, client):
+        assert client.get("/api/simulados/999999/estatisticas").status_code == 404
+
+
 # ============================================================
 # CLEANUP
 # ============================================================

@@ -333,6 +333,63 @@ def get_simulado(id: int, conn=Depends(get_db_session), user_id: int = Depends(g
     return {"simulado": dict(sim), "questoes": [dict(q) for q in questoes]}
 
 
+@router.get("/api/simulados/{id}/estatisticas", summary="Estatísticas de um simulado",
+            description="Consolida desempenho de um simulado finalizado: nota, acertos/erros/branco, tempo e desempenho por matéria.")
+def estatisticas_simulado(id: int, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    sim = conn.execute("SELECT * FROM simulados WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
+    if not sim:
+        raise HTTPException(status_code=404, detail="Simulado não encontrado")
+
+    linhas = conn.execute("""
+        SELECT sq.resposta_usuario, sq.acertou, q.materia
+        FROM simulado_questoes sq
+        JOIN questoes q ON q.id = sq.questao_id
+        WHERE sq.simulado_id = ? AND sq.user_id = ?
+    """, (id, user_id)).fetchall()
+
+    total = len(linhas)
+    acertos = sum(1 for r in linhas if r["acertou"] == 1)
+    # "em branco" = sem resposta registrada
+    em_branco = sum(1 for r in linhas if not (r["resposta_usuario"] or "").strip())
+    erros = total - acertos - em_branco
+    respondidas = acertos + erros
+
+    # Desempenho por matéria
+    por_materia = {}
+    for r in linhas:
+        mat = r["materia"] or "Sem matéria"
+        d = por_materia.setdefault(mat, {"materia": mat, "total": 0, "acertos": 0})
+        d["total"] += 1
+        if r["acertou"] == 1:
+            d["acertos"] += 1
+    por_materia_list = []
+    for d in sorted(por_materia.values(), key=lambda x: x["materia"]):
+        d["pct"] = round(d["acertos"] / d["total"] * 100, 1) if d["total"] else 0.0
+        por_materia_list.append(d)
+
+    tempo_seg = sim["tempo_gasto_seg"] or 0
+    tempo_medio = round(tempo_seg / respondidas, 1) if respondidas > 0 else 0.0
+
+    return {
+        "id": sim["id"],
+        "titulo": sim["titulo"],
+        "status": sim["status"],
+        "nota": sim["nota"],
+        "total_questoes": total,
+        "acertos": acertos,
+        "erros": erros,
+        "em_branco": em_branco,
+        "pct_acerto": round(acertos / total * 100, 1) if total else 0.0,
+        "pct_acerto_respondidas": round(acertos / respondidas * 100, 1) if respondidas else 0.0,
+        "tempo_gasto_seg": tempo_seg,
+        "tempo_gasto_min": round(tempo_seg / 60, 1),
+        "tempo_medio_por_questao_seg": tempo_medio,
+        "por_materia": por_materia_list,
+        "melhor_materia": max(por_materia_list, key=lambda x: x["pct"])["materia"] if por_materia_list else None,
+        "pior_materia": min(por_materia_list, key=lambda x: x["pct"])["materia"] if por_materia_list else None,
+    }
+
+
 @router.post("/api/simulados")
 def create_simulado(body: SimuladoCreate, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     from plans import enforce_plan_limit

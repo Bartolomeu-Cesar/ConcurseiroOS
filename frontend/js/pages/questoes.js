@@ -620,11 +620,49 @@ async function loadSimulados() {
     <div class="sim-card">
       <span class="sim-title">${s.titulo}</span>
       <span class="sim-status ${s.status}">${s.status}</span>
-      ${s.status === 'finalizado' ? `<span class="sim-nota">${s.nota}%</span>` : `<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 10px;" onclick="iniciarSimulado(${s.id})">Continuar</button>`}
+      ${s.status === 'finalizado'
+        ? `<span class="sim-nota">${s.nota}%</span>
+           <button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px;" onclick="toggleEstatisticasSimulado(${s.id})" aria-label="Ver estatísticas">📊 Estatísticas</button>`
+        : `<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 10px;" onclick="iniciarSimulado(${s.id})">Continuar</button>`}
       <button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 8px;" onclick="deleteSimulado(${s.id})" aria-label="Excluir simulado">🗑</button>
     </div>
+    <div id="sim-stats-${s.id}" style="display:none;margin:-4px 0 10px;padding:12px;background:var(--bg,#1e1e2e);border:1px solid var(--border,#45475a);border-radius:8px;"></div>
   `).join('');
 }
+
+window.toggleEstatisticasSimulado = async function(id) {
+  const box = document.getElementById(`sim-stats-${id}`);
+  if (!box) return;
+  if (box.style.display === 'block') { box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  box.innerHTML = '<span style="color:#9399b2;font-size:0.8rem;">Carregando estatísticas...</span>';
+  try {
+    const st = await fetch(`/api/simulados/${id}/estatisticas`).then(r => r.json());
+    const cor = st.pct_acerto >= 70 ? '#a6e3a1' : st.pct_acerto >= 50 ? '#f9e2af' : '#f38ba8';
+    const mats = (st.por_materia || []).map(m => {
+      const mc = m.pct >= 70 ? '#a6e3a1' : m.pct >= 50 ? '#f9e2af' : '#f38ba8';
+      return `<div style="display:flex;align-items:center;gap:8px;margin:3px 0;font-size:0.78rem;">
+        <span style="flex:1;color:var(--text,#cdd6f4);">${m.materia}</span>
+        <div style="flex:1;height:6px;background:#45475a;border-radius:3px;overflow:hidden;"><div style="height:100%;width:${m.pct}%;background:${mc};"></div></div>
+        <span style="width:80px;text-align:right;color:${mc};font-weight:600;">${m.acertos}/${m.total} (${m.pct}%)</span>
+      </div>`;
+    }).join('');
+    box.innerHTML = `
+      <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:10px;font-size:0.8rem;">
+        <span style="color:${cor};font-weight:700;font-size:1.1rem;">${st.pct_acerto}%</span>
+        <span style="color:#a6e3a1;">✅ ${st.acertos} acertos</span>
+        <span style="color:#f38ba8;">❌ ${st.erros} erros</span>
+        <span style="color:#9399b2;">⬜ ${st.em_branco} em branco</span>
+        <span style="color:#89b4fa;">⏱ ${st.tempo_gasto_min}min (${st.tempo_medio_por_questao_seg}s/questão)</span>
+      </div>
+      ${st.melhor_materia ? `<div style="font-size:0.75rem;color:#9399b2;margin-bottom:8px;">🏆 Melhor: <b style="color:#a6e3a1;">${st.melhor_materia}</b> · 📉 Focar em: <b style="color:#f38ba8;">${st.pior_materia}</b></div>` : ''}
+      <div style="font-size:0.72rem;color:var(--accent,#cba6f7);font-weight:600;margin-bottom:4px;">Desempenho por matéria</div>
+      ${mats || '<span style="color:#9399b2;font-size:0.78rem;">Sem dados por matéria.</span>'}
+    `;
+  } catch (e) {
+    box.innerHTML = '<span style="color:#f38ba8;font-size:0.8rem;">Erro ao carregar estatísticas.</span>';
+  }
+};
 
 async function deleteSimulado(id) {
   if (!await confirmModal('Excluir simulado', 'Excluir este simulado?', { type: 'danger', confirmText: 'Excluir' })) return;
