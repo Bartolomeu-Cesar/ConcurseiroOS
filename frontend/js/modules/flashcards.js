@@ -874,6 +874,13 @@ function showSessaoFlashcard() {
     return;
   }
   const card = flashSessao[flashSessaoIndex];
+  // Limpar resíduos do fluxo de Revisão SRS (campo de escrever resposta,
+  // slider de confiança, hint de produção). Sem isso, o texto digitado
+  // permanecia visível ao trocar de card na sessão por disciplina/aleatória.
+  document.getElementById('flash-genmode-toggle')?.remove();
+  document.getElementById('flash-generation-area')?.remove();
+  document.getElementById('flash-confidence-area')?.remove();
+  document.getElementById('production-hint')?.remove();
   const badge = card.materia ? `<span style="font-size:0.7rem;background:#45475a;color:#cba6f7;padding:2px 8px;border-radius:4px;margin-bottom:6px;display:inline-block;">📚 ${card.materia}</span><br>` : '';
   q.innerHTML = badge + `<span>${flashSessaoIndex + 1}/${flashSessao.length}</span> — ${escapeHtml(card.pergunta)}`;
   a.textContent = card.resposta;
@@ -899,7 +906,27 @@ function showSessaoFlashcard() {
 export async function sessaoNext(quality) {
   const card = flashSessao[flashSessaoIndex];
   if (card && card.id) {
-    try { await api(`/api/flashcards/${card.id}/review-fsrs`, { method: 'POST', body: { quality } }); } catch(e) {}
+    try {
+      const data = await api(`/api/flashcards/${card.id}/review-fsrs`, { method: 'POST', body: { quality } });
+      // Feedback de calibração da próxima revisão (igual ao fluxo de Revisão SRS)
+      if (data && data.intervalo_dias != null) {
+        const intervalLabel = data.intervalo_dias >= 30
+          ? `${Math.round(data.intervalo_dias / 30)}m`
+          : `${data.intervalo_dias}d`;
+        const stateNames = ['Novo', 'Aprendendo', 'Revisão', 'Reaprendendo'];
+        const stateLabel = stateNames[data.fsrs_state] || '';
+        const msgs = [
+          'Esqueceu — amanhã',
+          'Errou — amanhã',
+          'Quase — amanhã',
+          `Difícil — +${intervalLabel}`,
+          `Bom — +${intervalLabel}`,
+          `Fácil — +${intervalLabel}`,
+        ];
+        const suffix = stateLabel ? ` [${stateLabel}]` : '';
+        toast(`${msgs[quality] || ''}${suffix}`, quality >= 3 ? 'success' : 'warning', 3000);
+      }
+    } catch(e) {}
   }
   flashSessaoIndex++;
   showSessaoFlashcard();
