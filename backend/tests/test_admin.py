@@ -522,6 +522,125 @@ class TestMonetizacao:
 
 
 # ============================================================
+# COMPARTILHAMENTO DE RECURSOS
+# ============================================================
+
+class TestCompartilhamento:
+    def _criar_user(self, client, token, email, nome):
+        return client.post("/api/admin/users", headers=_auth_header(token),
+                          json={"email": email, "nome": nome, "username": email.split("@")[0], "plano": "free"}).json()["id"]
+
+    def _seed_recursos(self, origem_uid):
+        """Insere questão, flashcard, súmula e caderno para o user origem direto no DB."""
+        conn = sqlite3.connect(_tmp_db.name, check_same_thread=False, timeout=10)
+        conn.row_factory = sqlite3.Row
+        now = datetime.now().isoformat()
+        # Questão
+        cur = conn.execute("""
+            INSERT INTO questoes (materia, topico, enunciado, alternativa_a, alternativa_b, alternativa_c, alternativa_d, alternativa_e, resposta_correta, created_at, user_id)
+            VALUES ('Dir', 'T1', 'Q?', 'a', 'b', 'c', 'd', '', 'A', ?, ?)
+        """, (now, origem_uid))
+        qid = cur.lastrowid
+        # Flashcard
+        conn.execute("INSERT INTO flashcards (pergunta, resposta, proxima_revisao, user_id) VALUES ('P', 'R', ?, ?)", (now, origem_uid))
+        # Súmula
+        conn.execute("INSERT INTO sumulas (tribunal, numero, enunciado, proxima_revisao, user_id) VALUES ('STF', 1, 'Enun', ?, ?)", (now, origem_uid))
+        # Caderno + associação
+        cur2 = conn.execute("INSERT INTO cadernos (nome, descricao, created_at, user_id) VALUES ('Cad', '', ?, ?)", (now, origem_uid))
+        cad_id = cur2.lastrowid
+        try:
+            conn.execute("INSERT INTO cadernos_questoes (caderno_id, questao_id, ordem, added_at) VALUES (?, ?, 0, ?)", (cad_id, qid, now))
+        except Exception:
+            pass
+        conn.commit()
+        conn.close()
+
+    def test_contar_recursos(self, client):
+        token = _get_admin_token(client)
+        uid = self._criar_user(client, token, "origem_r@example.com", "Origem R")
+        self._seed_recursos(uid)
+        r = client.get(f"/api/admin/users/{uid}/recursos", headers=_auth_header(token))
+        assert r.status_code == 200
+        rec = r.json()["recursos"]
+        assert rec["questoes"] >= 1
+        assert rec["flashcards"] >= 1
+        assert rec["sumulas"] >= 1
+        assert rec["cadernos"] >= 1
+
+    def test_compartilhar_copia_recursos(self, client):
+        token = _get_admin_token(client)
+        origem = self._criar_user(client, token, "origem_c@example.com", "Origem C")
+        destino = self._criar_user(client, token, "destino_c@example.com", "Destino C")
+        self._seed_recursos(origem)
+
+        r = client.post("/api/admin/compartilhar", headers=_auth_header(token), json={
+            "origem_uid": origem,
+            "destino_uids": [destino],
+            "recursos": ["questoes", "flashcards", "sumulas", "cadernos"]
+        })
+        assert r.status_code == 200
+        copiados = r.json()["resultado"][str(destino)]["copiados"]
+        assert copiados["questoes"] >= 1
+        assert copiados["flashcards"] >= 1
+        assert copiados["sumulas"] >= 1
+        assert copiados["cadernos"] >= 1
+
+        # Verificar que o destino agora tem os recursos
+        rc = client.get(f"/api/admin/users/{destino}/recursos", headers=_auth_header(token)).json()["recursos"]
+        assert rc["questoes"] >= 1
+        assert rc["flashcards"] >= 1
+        assert rc["cadernos"] >= 1
+
+    def test_compartilhar_multiplos_destinos(self, client):
+        token = _get_admin_token(client)
+        origem = self._criar_user(client, token, "origem_m@example.com", "Origem M")
+        d1 = self._criar_user(client, token, "dest_m1@example.com", "D1")
+        d2 = self._criar_user(client, token, "dest_m2@example.com", "D2")
+        self._seed_recursos(origem)
+        r = client.post("/api/admin/compartilhar", headers=_auth_header(token), json={
+            "origem_uid": origem, "destino_uids": [d1, d2], "recursos": ["flashcards"]
+        })
+        assert r.status_code == 200
+        assert r.json()["resultado"][str(d1)]["copiados"]["flashcards"] >= 1
+        assert r.json()["resultado"][str(d2)]["copiados"]["flashcards"] >= 1
+
+    def test_compartilhar_mesmo_usuario_erro(self, client):
+        token = _get_admin_token(client)
+        uid = self._criar_user(client, token, "self_share@example.com", "Self")
+        r = client.post("/api/admin/compartilhar", headers=_auth_header(token), json={
+            "origem_uid": uid, "destino_uids": [uid], "recursos": ["flashcards"]
+        })
+        assert r.status_code == 200
+        assert "erro" in r.json()["resultado"][str(uid)]
+
+    def test_compartilhar_recurso_invalido_400(self, client):
+        token = _get_admin_token(client)
+        r = client.post("/api/admin/compartilhar", headers=_auth_header(token), json={
+            "origem_uid": 1, "destino_uids": [2], "recursos": ["xyz"]
+        })
+        assert r.status_code == 400
+
+    def test_compartilhar_sem_destino_400(self, client):
+        token = _get_admin_token(client)
+        r = client.post("/api/admin/compartilhar", headers=_auth_header(token), json={
+            "origem_uid": 1, "destino_uids": [], "recursos": ["flashcards"]
+        })
+        assert r.status_code == 400
+
+    def test_compartilhar_non_admin_403(self, client):
+        token = _register_and_get_token(client, "na_share@example.com", "NA Share")
+        r = client.post("/api/admin/compartilhar", headers=_auth_header(token), json={
+            "origem_uid": 1, "destino_uids": [2], "recursos": ["flashcards"]
+        })
+        assert r.status_code == 403
+
+    def test_contar_recursos_non_admin_403(self, client):
+        token = _register_and_get_token(client, "na_count@example.com", "NA Count")
+        r = client.get("/api/admin/users/1/recursos", headers=_auth_header(token))
+        assert r.status_code == 403
+
+
+# ============================================================
 # CLEANUP
 # ============================================================
 

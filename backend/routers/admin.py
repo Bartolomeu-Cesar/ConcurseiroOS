@@ -590,3 +590,212 @@ def ativar_plano_premio(
 
     else:
         raise HTTPException(status_code=400, detail="tipo deve ser 'premium' ou 'vitalicio'")
+
+
+# ============================================================
+# COMPARTILHAMENTO DE RECURSOS ENTRE USUÁRIOS
+# ============================================================
+
+# Recursos suportados e como resetar progresso/SRS ao copiar para o destino.
+# Cada recurso copia as linhas do user origem, atribuindo user_id do destino.
+_RECURSOS_COMPARTILHAVEIS = {"pdfs", "questoes", "flashcards", "sumulas", "cadernos"}
+
+
+def _tabela_colunas(conn, tabela: str) -> list:
+    """Retorna a lista de colunas de uma tabela."""
+    return [r[1] for r in conn.execute(f"PRAGMA table_info({tabela})").fetchall()]
+
+
+def _copiar_linhas(conn, tabela: str, origem_uid: int, destino_uid: int, resets: dict) -> int:
+    """Copia todas as linhas de `tabela` do user origem para o destino.
+
+    - Ignora a coluna 'id' (auto-increment gera novo).
+    - Define user_id = destino_uid.
+    - Aplica valores de `resets` (ex: proxima_revisao=hoje, repetitions=0).
+    Retorna a quantidade de linhas copiadas.
+    """
+    cols = _tabela_colunas(conn, tabela)
+    if "user_id" not in cols:
+        return 0
+
+    # Colunas a inserir (todas menos 'id')
+    insert_cols = [c for c in cols if c != "id"]
+    rows = conn.execute(f"SELECT {', '.join(insert_cols)} FROM {tabela} WHERE user_id = ?", (origem_uid,)).fetchall()
+
+    copiadas = 0
+    placeholders = ", ".join("?" for _ in insert_cols)
+    for row in rows:
+        valores = []
+        for c in insert_cols:
+            if c == "user_id":
+                valores.append(destino_uid)
+            elif c in resets:
+                valores.append(resets[c])
+            else:
+                valores.append(row[c])
+        conn.execute(f"INSERT INTO {tabela} ({', '.join(insert_cols)}) VALUES ({placeholders})", valores)
+        copiadas += 1
+    return copiadas
+
+
+def _copiar_cadernos(conn, origem_uid: int, destino_uid: int) -> int:
+    """Copia cadernos e suas questões associadas, mapeando questao_id copiadas.
+
+    Requer que as questões já tenham sido copiadas nesta mesma operação — mas
+    para robustez, copia também as questões referenciadas se ainda não existirem
+    no destino (por conteúdo). Aqui usamos uma cópia independente: cria novas
+    questões para o caderno e as associa.
+    """
+    from utils import today_str
+    now = today_str()
+
+    caderno_cols = _tabela_colunas(conn, "cadernos")
+    cadernos = conn.execute("SELECT * FROM cadernos WHERE user_id = ?", (origem_uid,)).fetchall()
+    total = 0
+
+    tem_cadernos_questoes = bool(conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='cadernos_questoes'"
+    ).fetchone())
+
+    q_cols = _tabela_colunas(conn, "questoes")
+    q_insert_cols = [c for c in q_cols if c != "id"]
+
+    for cad in cadernos:
+        # Criar novo caderno para o destino
+        insert_cols = [c for c in caderno_cols if c != "id"]
+        valores = []
+        for c in insert_cols:
+            valores.append(destino_uid if c == "user_id" else cad[c])
+        placeholders = ", ".join("?" for _ in insert_cols)
+        cur = conn.execute(f"INSERT INTO cadernos ({', '.join(insert_cols)}) VALUES ({placeholders})", valores)
+        novo_caderno_id = cur.lastrowid
+        total += 1
+
+        if not tem_cadernos_questoes:
+            continue
+
+        # Copiar questões do caderno como novas questões do destino
+        assoc = conn.execute(
+            "SELECT questao_id, ordem FROM cadernos_questoes WHERE caderno_id = ?", (cad["id"],)
+        ).fetchall()
+        for a in assoc:
+            q = conn.execute("SELECT * FROM questoes WHERE id = ?", (a["questao_id"],)).fetchone()
+            if not q:
+                continue
+            qvals = []
+            for c in q_insert_cols:
+                qvals.append(destino_uid if c == "user_id" else q[c])
+            qph = ", ".join("?" for _ in q_insert_cols)
+            qcur = conn.execute(f"INSERT INTO questoes ({', '.join(q_insert_cols)}) VALUES ({qph})", qvals)
+            nova_questao_id = qcur.lastrowid
+            conn.execute(
+                "INSERT INTO cadernos_questoes (caderno_id, questao_id, ordem, added_at) VALUES (?, ?, ?, ?)",
+                (novo_caderno_id, nova_questao_id, a["ordem"], now)
+            )
+    return total
+
+
+def _contar_recursos(conn, uid: int) -> dict:
+    """Conta os recursos compartilháveis de um usuário."""
+    def _count(tabela, where="user_id = ?"):
+        try:
+            return conn.execute(f"SELECT COUNT(*) FROM {tabela} WHERE {where}", (uid,)).fetchone()[0]
+        except Exception:
+            return 0
+    return {
+        "pdfs": _count("progress"),
+        "questoes": _count("questoes"),
+        "flashcards": _count("flashcards"),
+        "sumulas": _count("sumulas"),
+        "cadernos": _count("cadernos"),
+    }
+
+
+@router.get("/users/{uid}/recursos", summary="Contagem de recursos de um usuário")
+def contar_recursos_usuario(uid: int, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Retorna quantos PDFs, questões, flashcards, súmulas e cadernos o usuário possui."""
+    _require_admin(user_id)
+    user = conn.execute("SELECT id, nome, email FROM users WHERE id = ?", (uid,)).fetchone()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+    return {"user": dict(user), "recursos": _contar_recursos(conn, uid)}
+
+
+@router.post("/compartilhar", summary="Copiar recursos de um usuário para outro(s)")
+def compartilhar_recursos(
+    body: dict,
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Copia recursos de um usuário de origem para um ou mais usuários de destino.
+
+    body: {
+        origem_uid: int,
+        destino_uids: [int, ...],
+        recursos: ["pdfs", "questoes", "flashcards", "sumulas", "cadernos"]
+    }
+
+    A cópia é independente: cada destino recebe uma cópia própria (pode editar
+    sem afetar a origem). Progresso de leitura e SRS são resetados no destino.
+    """
+    _require_admin(user_id)
+    from utils import today_str
+
+    origem_uid = body.get("origem_uid")
+    destino_uids = body.get("destino_uids", [])
+    recursos = body.get("recursos", [])
+
+    if not origem_uid:
+        raise HTTPException(status_code=400, detail="origem_uid é obrigatório.")
+    if not destino_uids or not isinstance(destino_uids, list):
+        raise HTTPException(status_code=400, detail="destino_uids deve ser lista não-vazia.")
+    if not recursos or not isinstance(recursos, list):
+        raise HTTPException(status_code=400, detail="recursos deve ser lista não-vazia.")
+
+    recursos_invalidos = set(recursos) - _RECURSOS_COMPARTILHAVEIS
+    if recursos_invalidos:
+        raise HTTPException(status_code=400, detail=f"Recursos inválidos: {list(recursos_invalidos)}. Válidos: {list(_RECURSOS_COMPARTILHAVEIS)}")
+
+    # Validar origem
+    origem = conn.execute("SELECT id FROM users WHERE id = ?", (origem_uid,)).fetchone()
+    if not origem:
+        raise HTTPException(status_code=404, detail="Usuário de origem não encontrado.")
+
+    hoje = today_str()
+    resultado = {}
+
+    for destino_uid in destino_uids:
+        if destino_uid == origem_uid:
+            resultado[str(destino_uid)] = {"erro": "Origem e destino são o mesmo usuário."}
+            continue
+        destino = conn.execute("SELECT id FROM users WHERE id = ?", (destino_uid,)).fetchone()
+        if not destino:
+            resultado[str(destino_uid)] = {"erro": "Usuário destino não encontrado."}
+            continue
+
+        copiados = {}
+
+        if "questoes" in recursos:
+            copiados["questoes"] = _copiar_linhas(conn, "questoes", origem_uid, destino_uid, {})
+        if "flashcards" in recursos:
+            copiados["flashcards"] = _copiar_linhas(conn, "flashcards", origem_uid, destino_uid, {
+                "proxima_revisao": hoje, "intervalo_dias": 1, "easiness_factor": 2.5,
+                "repetitions": 0, "stability": 0, "difficulty": 0, "fsrs_state": 0,
+            })
+        if "sumulas" in recursos:
+            copiados["sumulas"] = _copiar_linhas(conn, "sumulas", origem_uid, destino_uid, {
+                "proxima_revisao": hoje, "intervalo_dias": 1, "easiness_factor": 2.5,
+                "repetitions": 0, "stability": 0, "difficulty_sumulas": 0, "fsrs_state": 0,
+            })
+        if "pdfs" in recursos:
+            copiados["pdfs"] = _copiar_linhas(conn, "progress", origem_uid, destino_uid, {
+                "current_page": 1, "last_read_at": "",
+            })
+        if "cadernos" in recursos:
+            copiados["cadernos"] = _copiar_cadernos(conn, origem_uid, destino_uid)
+
+        resultado[str(destino_uid)] = {"copiados": copiados}
+
+    conn.commit()
+    log.info(f"[admin] Compartilhamento: origem={origem_uid} destinos={destino_uids} recursos={recursos}")
+    return {"ok": True, "origem_uid": origem_uid, "resultado": resultado}

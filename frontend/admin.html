@@ -34,6 +34,7 @@
       <input type="text" id="search-input" placeholder="🔍 Buscar por nome, email ou username..." onkeyup="if(event.key==='Enter')loadUsers()">
       <button class="btn" onclick="loadUsers()">Buscar</button>
       <button class="btn secondary" onclick="openCreateModal()">+ Novo Usuário</button>
+      <button class="btn" style="background:#cba6f7;" onclick="openShareModal()">🔗 Compartilhar Recursos</button>
     </div>
 
     <!-- Table -->
@@ -125,6 +126,39 @@
 
       <div class="modal-actions">
         <button class="btn danger small" onclick="closeMoneyModal()">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Compartilhar Recursos -->
+  <div class="modal-overlay" id="modal-share" onclick="if(event.target===this)closeShareModal()">
+    <div class="modal" style="max-width:520px;">
+      <h3 style="color:#cba6f7;">🔗 Compartilhar Recursos entre Usuários</h3>
+      <p style="font-size:0.75rem;color:#9399b2;margin:0 0 12px;">Copia recursos de um usuário de origem para um ou mais destinos. Cada destino recebe uma cópia própria (SRS e progresso resetados).</p>
+
+      <label>Usuário de origem</label>
+      <select id="share-origem" onchange="loadRecursosOrigem()">
+        <option value="">— selecione —</option>
+      </select>
+      <div id="share-recursos-count" style="font-size:0.72rem;color:#a6e3a1;margin:4px 0 12px;"></div>
+
+      <label>Recursos a copiar</label>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin:6px 0 14px;">
+        <label style="font-size:0.8rem;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" class="share-rec" value="pdfs" checked> 📄 PDFs</label>
+        <label style="font-size:0.8rem;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" class="share-rec" value="questoes" checked> ❓ Questões</label>
+        <label style="font-size:0.8rem;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" class="share-rec" value="flashcards" checked> 🧠 Flashcards</label>
+        <label style="font-size:0.8rem;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" class="share-rec" value="sumulas" checked> ⚖️ Súmulas</label>
+        <label style="font-size:0.8rem;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" class="share-rec" value="cadernos" checked> 📓 Cadernos</label>
+      </div>
+
+      <label>Usuários de destino (segure Ctrl para vários)</label>
+      <select id="share-destinos" multiple size="6" style="width:100%;padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;"></select>
+
+      <div id="share-result" style="font-size:0.75rem;margin-top:10px;"></div>
+
+      <div class="modal-actions">
+        <button class="btn danger small" onclick="closeShareModal()">Cancelar</button>
+        <button class="btn" id="share-btn" onclick="fazerCompartilhamento()">🔗 Compartilhar</button>
       </div>
     </div>
   </div>
@@ -421,6 +455,97 @@
         if (res.ok) { alert(`✅ Créditos: ${data.saldo_anterior} → ${data.saldo_posterior}`); closeMoneyModal(); }
         else alert(data.detail || 'Erro.');
       } catch(e) { alert('Erro de conexão.'); }
+    };
+
+    // ==================== COMPARTILHAMENTO ====================
+    async function _fetchAllUsers() {
+      // Busca todos os usuários (paginando) para popular selects
+      let all = [], page = 1;
+      while (true) {
+        const data = await fetch(`/api/admin/users?page=${page}&limit=100`).then(r => r.json());
+        if (!data.users || !data.users.length) break;
+        all = all.concat(data.users);
+        if (page >= (data.pages || 1)) break;
+        page++;
+      }
+      return all;
+    }
+
+    window.openShareModal = async function() {
+      document.getElementById('share-result').innerHTML = '';
+      document.getElementById('share-recursos-count').textContent = '';
+      const origem = document.getElementById('share-origem');
+      const destinos = document.getElementById('share-destinos');
+      origem.innerHTML = '<option value="">— selecione —</option>';
+      destinos.innerHTML = '';
+      try {
+        const users = await _fetchAllUsers();
+        users.forEach(u => {
+          const label = `#${u.id} — ${u.nome || u.email} (${u.plano_nome})`;
+          origem.insertAdjacentHTML('beforeend', `<option value="${u.id}">${esc(label)}</option>`);
+          destinos.insertAdjacentHTML('beforeend', `<option value="${u.id}">${esc(label)}</option>`);
+        });
+      } catch(e) {}
+      document.getElementById('modal-share').classList.add('open');
+    };
+
+    window.closeShareModal = function() {
+      document.getElementById('modal-share').classList.remove('open');
+    };
+
+    window.loadRecursosOrigem = async function() {
+      const uid = document.getElementById('share-origem').value;
+      const el = document.getElementById('share-recursos-count');
+      if (!uid) { el.textContent = ''; return; }
+      try {
+        const data = await fetch(`/api/admin/users/${uid}/recursos`).then(r => r.json());
+        const r = data.recursos || {};
+        el.textContent = `Disponível: 📄 ${r.pdfs} PDFs · ❓ ${r.questoes} questões · 🧠 ${r.flashcards} flashcards · ⚖️ ${r.sumulas} súmulas · 📓 ${r.cadernos} cadernos`;
+      } catch(e) { el.textContent = ''; }
+    };
+
+    window.fazerCompartilhamento = async function() {
+      const origem_uid = parseInt(document.getElementById('share-origem').value);
+      if (!origem_uid) { alert('Selecione o usuário de origem.'); return; }
+
+      const destino_uids = Array.from(document.getElementById('share-destinos').selectedOptions)
+        .map(o => parseInt(o.value)).filter(v => v !== origem_uid);
+      if (!destino_uids.length) { alert('Selecione ao menos um destino diferente da origem.'); return; }
+
+      const recursos = Array.from(document.querySelectorAll('.share-rec:checked')).map(c => c.value);
+      if (!recursos.length) { alert('Marque ao menos um recurso.'); return; }
+
+      if (!confirm(`Copiar [${recursos.join(', ')}] do usuário #${origem_uid} para ${destino_uids.length} destino(s)?`)) return;
+
+      const btn = document.getElementById('share-btn');
+      btn.disabled = true; btn.textContent = '⏳ Copiando...';
+      try {
+        const res = await fetch('/api/admin/compartilhar', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ origem_uid, destino_uids, recursos })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          let html = '<div style="color:#a6e3a1;font-weight:600;">✅ Compartilhamento concluído!</div>';
+          for (const [uid, info] of Object.entries(data.resultado)) {
+            if (info.erro) {
+              html += `<div style="color:#f38ba8;">#${uid}: ${esc(info.erro)}</div>`;
+            } else {
+              const c = info.copiados || {};
+              const parts = Object.entries(c).map(([k,v]) => `${k}: ${v}`).join(', ');
+              html += `<div style="color:#cdd6f4;">#${uid}: ${esc(parts)}</div>`;
+            }
+          }
+          document.getElementById('share-result').innerHTML = html;
+          loadStats();
+        } else {
+          document.getElementById('share-result').innerHTML = `<div style="color:#f38ba8;">${esc(data.detail || 'Erro.')}</div>`;
+        }
+      } catch(e) {
+        document.getElementById('share-result').innerHTML = '<div style="color:#f38ba8;">Erro de conexão.</div>';
+      } finally {
+        btn.disabled = false; btn.textContent = '🔗 Compartilhar';
+      }
     };
 
     // Init
