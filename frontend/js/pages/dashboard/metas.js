@@ -41,15 +41,27 @@ export async function loadMetaDetails() {
     const horasEl = document.getElementById('meta-detail-horas');
     if (horasEl) {
       if (resumo.sessoes && resumo.sessoes.length > 0) {
+        // Formata o tempo de forma legível: "Xh Ymin", "Xh" ou "Ymin".
+        // Sessões curtas (ex: 2min de questões) não devem aparecer como "0h".
+        const fmtDur = (horas) => {
+          const totalMin = Math.round((horas || 0) * 60);
+          if (totalMin < 1) return '<1min';
+          const h = Math.floor(totalMin / 60);
+          const m = totalMin % 60;
+          if (h === 0) return `${m}min`;
+          if (m === 0) return `${h}h`;
+          return `${h}h ${m}min`;
+        };
+        const totalHoras = resumo.sessoes.reduce((a, s) => a + (s.horas || 0), 0);
         horasEl.innerHTML = `
           <div style="font-weight:600;color:var(--text);margin-bottom:6px;">📚 Sessões de hoje:</div>
           ${resumo.sessoes.map(s => `
             <div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border);">
               <span>${s.materia}</span>
-              <span style="color:var(--blue);font-weight:600;">${s.horas}h</span>
+              <span style="color:var(--blue);font-weight:600;">${fmtDur(s.horas)}</span>
             </div>
           `).join('')}
-          <div style="margin-top:8px;font-size:0.75rem;color:var(--text-muted);">Total: ${resumo.sessoes.reduce((a,s) => a + s.horas, 0).toFixed(1)}h em ${resumo.sessoes.length} matéria(s)</div>
+          <div style="margin-top:8px;font-size:0.75rem;color:var(--text-muted);">Total: ${fmtDur(totalHoras)} em ${resumo.sessoes.length} matéria(s)</div>
         `;
       } else {
         horasEl.innerHTML = '<div style="color:var(--text-muted);font-style:italic;">Nenhuma sessão registrada hoje. Inicie um timer ou registre estudo manual.</div>';

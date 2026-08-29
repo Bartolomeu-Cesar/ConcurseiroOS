@@ -74,7 +74,10 @@ def resumo_diario(conn=Depends(get_db_session), user_id: int = Depends(get_user_
         "horas": hoje["horas_estudadas"] if hoje else 0,
         "questoes": hoje["questoes_resolvidas"] if hoje else 0,
         "flashcards": hoje["flashcards_revisados"] if hoje else 0,
-        "sessoes": [{"materia": r[0], "horas": round(r[1], 1)} for r in sessoes],
+        "sessoes": [
+            {"materia": r[0], "horas": round(r[1], 2), "minutos": round((r[1] or 0) * 60)}
+            for r in sessoes
+        ],
         "questoes_detalhes": [{"materia": r[0], "total": r[1], "acertos": r[2] or 0} for r in q_hoje],
         "sugestao_amanha": [r[0] for r in menos_estudada],
         "mensagem": "Continue assim! Amanhã foque nas matérias sugeridas." if hoje else "Você não estudou hoje. Começar é o mais difícil!"

@@ -490,6 +490,31 @@ class TestDashboard:
         assert r.status_code == 200
         assert "data" in r.json()
 
+    def test_resumo_diario_sessao_curta_nao_vira_zero(self, client):
+        """Sessão curta (ex: 2min de questões) não deve aparecer como 0h.
+
+        Regressão: o backend arredondava horas para 1 casa (round(x, 1)),
+        transformando 0.035h em 0.0. Agora mantém 2 casas e expõe 'minutos'.
+        """
+        from utils import today_str
+        hoje = today_str()
+        conn = sqlite3.connect(_tmp_db.name)
+        # 0.035h ≈ 2min
+        conn.execute(
+            "INSERT INTO sessoes_estudo (materia, horas, data, tipo, user_id) VALUES (?, ?, ?, 'questoes', 1)",
+            ("Direito Constitucional Teste Curta", 0.035, hoje),
+        )
+        conn.commit()
+        conn.close()
+
+        r = client.get("/api/resumo-diario")
+        assert r.status_code == 200
+        sessoes = r.json()["sessoes"]
+        alvo = next((s for s in sessoes if s["materia"] == "Direito Constitucional Teste Curta"), None)
+        assert alvo is not None, "sessão curta não apareceu no resumo"
+        assert alvo["horas"] > 0, "horas foi arredondada para 0 (regressão)"
+        assert alvo["minutos"] == 2, f"minutos esperado 2, veio {alvo['minutos']}"
+
     def test_pratica_deliberada(self, client):
         r = client.get("/api/pratica-deliberada")
         assert r.status_code == 200
