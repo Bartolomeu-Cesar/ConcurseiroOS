@@ -43,6 +43,7 @@ window.closeSidebar = closeSidebar;
   const hash = window.location.hash.replace('#', '');
   const hashTabMap = {
     'ciclo': 'tab-ciclo',
+    'trilha': 'tab-trilha',
     'edital': 'tab-edital',
     'flashcards': 'tab-flashcards',
     'sumulas': 'tab-sumulas',
@@ -307,6 +308,7 @@ window.navigateTo = function(tabId, btn) {
   _origNav(tabId, btn);
   if (tabId === 'tab-ciclo') { loadCicloOntem(); }
   if (tabId === 'tab-videos') { loadVideosList(); }
+  if (tabId === 'tab-trilha' && typeof window.loadTrilha === 'function') { window.loadTrilha(); }
 };
 
 // Auto-load ciclo ontem if tab-ciclo is currently visible

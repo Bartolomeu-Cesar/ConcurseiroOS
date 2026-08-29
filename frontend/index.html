@@ -82,7 +82,7 @@
   <script>
     (function() {
       var hash = window.location.hash.replace('#', '');
-      var map = {'ciclo':'tab-ciclo','edital':'tab-edital','flashcards':'tab-flashcards','sumulas':'tab-sumulas','pdfs':'tab-pdfs','videos':'tab-videos'};
+      var map = {'ciclo':'tab-ciclo','trilha':'tab-trilha','edital':'tab-edital','flashcards':'tab-flashcards','sumulas':'tab-sumulas','pdfs':'tab-pdfs','videos':'tab-videos'};
       // Only activate from hash (cross-page navigation) or fresh localStorage redirect
       var target = null;
       if (hash && map[hash]) {
@@ -279,6 +279,22 @@
         <input type="number" id="ciclo-horas-input" placeholder="Horas alvo" value="2" min="0.5" step="0.5" style="max-width:100px;">
         <button onclick="addCiclo()">Adicionar</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Tab: Trilha (roadmap de estudo) -->
+  <div id="tab-trilha" class="tab-content" role="tabpanel">
+    <div class="panel">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+        <h2 style="margin:0;">🧭 Trilha de Estudo</h2>
+        <button class="iobtn" onclick="gerarTrilha()" title="Gerar/regenerar a trilha a partir do ciclo e do edital">🚀 Gerar / Atualizar</button>
+      </div>
+      <p style="font-size:0.85rem;color:var(--text-sub);margin-bottom:12px;">
+        Seu caminho ideal, etapa por etapa. A ordem respeita os pré-requisitos do mapa de dependências
+        e prioriza as matérias do seu ciclo. Conclua a etapa atual para desbloquear a próxima.
+      </p>
+      <div id="trilha-progresso" class="trilha-progresso"></div>
+      <div id="trilha-roadmap" class="trilha-roadmap" style="margin-top:14px;"></div>
     </div>
   </div>
 

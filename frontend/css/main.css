@@ -1352,3 +1352,75 @@ body.focus-mode .panel { margin-bottom: 8px; }
   border-color: var(--accent);
   font-weight: 600;
 }
+
+/* ==================== TRILHA DE ESTUDO (ROADMAP) ==================== */
+.trilha-progresso { display: flex; flex-direction: column; gap: 6px; }
+.trilha-progress-head {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 0.82rem; color: var(--text-sub); font-weight: 600;
+}
+.trilha-progress-bar {
+  height: 10px; background: var(--bg-elevated); border-radius: 6px; overflow: hidden;
+}
+.trilha-progress-fill {
+  height: 100%; background: var(--green); border-radius: 6px;
+  transition: width 0.4s ease-out;
+}
+.trilha-progress-atual {
+  font-size: 0.8rem; color: var(--text-sub); margin-top: 2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.trilha-progress-atual strong { color: var(--text); }
+
+.trilha-roadmap { display: flex; flex-direction: column; gap: 0; overflow: hidden; }
+
+.trilha-etapa {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 10px 4px; position: relative; min-width: 0;
+}
+/* Linha conectora vertical entre marcadores (roadmap) */
+.trilha-etapa::before {
+  content: ""; position: absolute; left: 17px; top: 34px; bottom: -4px;
+  width: 2px; background: var(--border);
+}
+.trilha-etapa:last-child::before { display: none; }
+
+.trilha-etapa-marker {
+  flex: 0 0 auto; width: 36px; height: 36px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg-elevated); border: 2px solid var(--marker-cor, var(--border));
+  color: var(--text); font-weight: 700; font-size: 0.85rem; z-index: 1;
+}
+.trilha-etapa--concluida .trilha-etapa-marker { background: var(--marker-cor); color: var(--bg); }
+.trilha-etapa--atual .trilha-etapa-marker {
+  background: var(--marker-cor); color: var(--bg);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+.trilha-etapa--bloqueada { opacity: 0.6; }
+
+.trilha-etapa-body { flex: 1 1 auto; min-width: 0; overflow: hidden; }
+.trilha-etapa-materia {
+  font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.03em;
+  color: var(--text-sub); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.trilha-etapa-topico {
+  font-size: 0.95rem; font-weight: 600; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.trilha-etapa-razao { font-size: 0.75rem; color: var(--text-sub); margin-top: 2px; }
+
+.trilha-etapa-acao { flex: 0 0 auto; display: flex; align-items: center; }
+.trilha-btn-concluir {
+  background: var(--green); color: var(--bg); border: none; border-radius: 8px;
+  padding: 6px 12px; font-size: 0.8rem; font-weight: 600; cursor: pointer;
+  white-space: nowrap; transition: opacity 0.15s;
+}
+.trilha-btn-concluir:hover { opacity: 0.88; }
+.trilha-btn-concluir:disabled { opacity: 0.5; cursor: default; }
+.trilha-etapa-done { color: var(--green); font-weight: 700; font-size: 1rem; }
+.trilha-etapa-lock { color: var(--text-sub); font-size: 1rem; }
+
+@media (max-width: 480px) {
+  .trilha-etapa-razao { display: none; }
+  .trilha-btn-concluir { padding: 6px 10px; }
+}
