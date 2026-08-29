@@ -48,12 +48,13 @@
             <th>Email</th>
             <th>Role</th>
             <th>Plano</th>
+            <th>Validade</th>
             <th>Criado</th>
             <th>Ações</th>
           </tr>
         </thead>
         <tbody id="users-tbody">
-          <tr><td colspan="7" style="text-align:center;color:#9399b2;padding:20px;">Carregando...</td></tr>
+          <tr><td colspan="8" style="text-align:center;color:#9399b2;padding:20px;">Carregando...</td></tr>
         </tbody>
       </table>
     </div>
@@ -294,11 +295,12 @@
 
         const tbody = document.getElementById('users-tbody');
         if (!data.users.length) {
-          tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#9399b2;">Nenhum usuário encontrado</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#9399b2;">Nenhum usuário encontrado</td></tr>';
           document.getElementById('pagination').innerHTML = '';
           return;
         }
 
+        const validadeCor = { vitalicio: '#a6e3a1', ativo: '#a6e3a1', expira_em_breve: '#f9e2af', expirado: '#f38ba8', sem_plano: '#6c7086' };
         tbody.innerHTML = data.users.map(u => `
           <tr>
             <td style="color:#9399b2;">#${u.id}</td>
@@ -306,6 +308,7 @@
             <td style="font-size:0.78rem;">${esc(u.email)}</td>
             <td><span class="badge ${u.role === 'admin' ? 'badge-premium' : 'badge-free'}">${u.role === 'admin' ? '👑 Admin' : '👤 Usuário'}</span></td>
             <td><span class="badge badge-${u.plano}">${u.plano_nome}</span></td>
+            <td style="font-size:0.72rem;color:${validadeCor[u.validade?.situacao] || '#9399b2'};">${esc(u.validade?.label || '—')}</td>
             <td style="font-size:0.75rem;color:#9399b2;">${formatDate(u.created_at)}</td>
             <td>
               <button class="btn small secondary" onclick="editUser(${u.id})">✏️</button>
@@ -324,7 +327,7 @@
         pagHtml += `<button ${currentPage >= data.pages ? 'disabled' : ''} onclick="loadUsers(${currentPage+1})">▶</button>`;
         document.getElementById('pagination').innerHTML = pagHtml;
       } catch(e) {
-        document.getElementById('users-tbody').innerHTML = '<tr><td colspan="7" style="color:#f38ba8;text-align:center;">Erro ao carregar usuários</td></tr>';
+        document.getElementById('users-tbody').innerHTML = '<tr><td colspan="8" style="color:#f38ba8;text-align:center;">Erro ao carregar usuários</td></tr>';
       }
     };
 

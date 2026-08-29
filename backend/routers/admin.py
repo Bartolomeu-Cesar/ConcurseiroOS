@@ -25,6 +25,47 @@ def _require_admin(user_id: int):
             raise HTTPException(status_code=403, detail="Acesso restrito ao administrador.")
 
 
+def _validade_plano(plano: str, plano_expira: str) -> dict:
+    """Calcula o status de validade do plano de um usuário.
+
+    Retorna: {situacao, dias_restantes, expira_em, label}
+    - situacao: 'vitalicio' | 'ativo' | 'expira_em_breve' | 'expirado' | 'sem_plano'
+    """
+    from datetime import datetime, timezone
+
+    if plano in ("free", "guest") or not plano:
+        return {"situacao": "sem_plano", "dias_restantes": None, "expira_em": "", "label": "—"}
+
+    exp = (plano_expira or "").strip()
+    # Vitalício: ilimitado, ou premium com marcador vitalício, ou premium sem data
+    if plano == "ilimitado" or exp.lower() in ("vitalicio", "vitalício", "lifetime"):
+        return {"situacao": "vitalicio", "dias_restantes": None, "expira_em": "", "label": "♾️ Vitalício"}
+    if plano == "premium" and not exp:
+        return {"situacao": "vitalicio", "dias_restantes": None, "expira_em": "", "label": "♾️ Vitalício"}
+
+    # Premium com data de expiração
+    try:
+        dt = datetime.fromisoformat(exp)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+    except (ValueError, TypeError):
+        return {"situacao": "ativo", "dias_restantes": None, "expira_em": exp, "label": "Ativo"}
+
+    agora = datetime.now(timezone.utc)
+    delta_dias = (dt - agora).days
+    expira_fmt = dt.strftime("%d/%m/%Y")
+
+    if delta_dias < 0:
+        return {"situacao": "expirado", "dias_restantes": delta_dias, "expira_em": expira_fmt,
+                "label": f"❌ Expirado em {expira_fmt}"}
+    elif delta_dias <= 7:
+        return {"situacao": "expira_em_breve", "dias_restantes": delta_dias, "expira_em": expira_fmt,
+                "label": f"⚠️ {delta_dias}d restantes (até {expira_fmt})"}
+    else:
+        return {"situacao": "ativo", "dias_restantes": delta_dias, "expira_em": expira_fmt,
+                "label": f"✅ {delta_dias}d restantes (até {expira_fmt})"}
+
+
 # ============================================================
 # LISTAR USUÁRIOS
 # ============================================================
@@ -70,6 +111,7 @@ def list_users(
             "plano": r["plano"],
             "plano_nome": PLANS.get(r["plano"], {}).get("nome", r["plano"]),
             "plano_expira": r["plano_expira"],
+            "validade": _validade_plano(r["plano"], r["plano_expira"]),
             "role": r["role"] or "user",
             "created_at": r["created_at"],
             "last_login": r["last_login"],
@@ -138,6 +180,7 @@ def get_user_detail(
         "user": dict(user),
         "stats": stats,
         "plano_info": PLANS.get(user["plano"], {}),
+        "validade": _validade_plano(user["plano"], user["plano_expira"]),
     }
 
 

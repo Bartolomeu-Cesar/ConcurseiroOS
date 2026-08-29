@@ -174,6 +174,35 @@ class TestListUsers:
         data = r.json()
         assert data["total"] >= 1
 
+    def test_list_users_inclui_validade(self, client):
+        """GET /api/admin/users — cada usuário traz o objeto validade do plano."""
+        token = _get_admin_token(client)
+        # Criar um premium com expiração em 30 dias e um expirado
+        from datetime import datetime, timezone, timedelta
+        conn = sqlite3.connect(_tmp_db.name, check_same_thread=False, timeout=10)
+        fut = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        past = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
+        conn.execute("INSERT INTO users (nome, email, plano, plano_expira, created_at) VALUES ('Ativo', 'ativo_val@t.com', 'premium', ?, '2026-01-01')", (fut,))
+        conn.execute("INSERT INTO users (nome, email, plano, plano_expira, created_at) VALUES ('Expirado', 'exp_val@t.com', 'premium', ?, '2026-01-01')", (past,))
+        conn.commit(); conn.close()
+
+        r = client.get("/api/admin/users?limit=100", headers=_auth_header(token))
+        assert r.status_code == 200
+        users = {u["email"]: u for u in r.json()["users"]}
+        assert "validade" in users["ativo_val@t.com"]
+        assert users["ativo_val@t.com"]["validade"]["situacao"] == "ativo"
+        assert users["ativo_val@t.com"]["validade"]["dias_restantes"] >= 28
+        assert users["exp_val@t.com"]["validade"]["situacao"] == "expirado"
+
+    def test_user_detail_inclui_validade(self, client):
+        """GET /api/admin/users/{id} — detalhe traz validade."""
+        token = _get_admin_token(client)
+        # admin (id 1) — plano depende do estado; só checar que a chave existe
+        r = client.get("/api/admin/users/1", headers=_auth_header(token))
+        assert r.status_code == 200
+        assert "validade" in r.json()
+        assert "situacao" in r.json()["validade"]
+
 
 # ============================================================
 # CRIAR USUÁRIO
