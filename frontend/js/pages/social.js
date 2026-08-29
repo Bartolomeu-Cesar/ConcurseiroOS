@@ -1,6 +1,7 @@
 // social.js - Extracted from social.html inline scripts
 import { showToast } from '../modules/toast.js';
 import { confirmModal } from '../modules/utils.js';
+import { renderMarkdown } from '../modules/markdown.js';
 window.showToast = showToast;
 
 // ===== PRESENÇA SOCIAL (amigos ativos) =====
@@ -370,7 +371,7 @@ async function sendChat() {
     removeTypingIndicator();
 
     const reply = data.resposta || data.detail || 'Sem resposta';
-    messages.innerHTML += `<div class="chat-msg ai">${escapeHtml(reply)}<div class="msg-time">${getTimeStr()}</div></div>`;
+    messages.innerHTML += `<div class="chat-msg ai md-content">${renderMarkdown(reply)}<div class="msg-time">${getTimeStr()}</div></div>`;
   } catch (e) {
     removeTypingIndicator();
     messages.innerHTML += `<div class="chat-msg ai" style="border-left:3px solid #f38ba8;">Erro: ${e.message}<div class="msg-time">${getTimeStr()}</div></div>`;

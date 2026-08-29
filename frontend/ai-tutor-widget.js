@@ -26,6 +26,18 @@
     return d.innerHTML;
   }
 
+  // Renderiza markdown de forma segura. Usa window.renderMarkdown (módulo) se
+  // disponível; senão aplica um fallback mínimo (negrito/itálico/quebras).
+  function renderMd(text) {
+    if (typeof window.renderMarkdown === 'function') return window.renderMarkdown(text);
+    let t = escapeHtml(String(text || ''));
+    t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+         .replace(/(^|[^*])\*([^*\n]+)\*([^*]|$)/g, '$1<em>$2</em>$3')
+         .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+         .replace(/\n/g, '<br>');
+    return t;
+  }
+
   function timeStr() {
     return new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   }
@@ -219,7 +231,7 @@
       return;
     }
     container.innerHTML = history.map(m =>
-      `<div class="ai-msg ${m.role}">${escapeHtml(m.text)}<div class="ai-msg-time">${m.time || ''}</div></div>`
+      `<div class="ai-msg ${m.role}${m.role === 'ai' ? ' md-content' : ''}">${m.role === 'ai' ? renderMd(m.text) : escapeHtml(m.text)}<div class="ai-msg-time">${m.time || ''}</div></div>`
     ).join('');
     container.scrollTop = container.scrollHeight;
   }
@@ -265,7 +277,7 @@
 
       const reply = data.resposta || data.detail || 'Sem resposta disponível. Verifique a configuração do provider de IA.';
       const replyTime = timeStr();
-      container.innerHTML += `<div class="ai-msg ai">${escapeHtml(reply)}<div class="ai-msg-time">${replyTime}</div></div>`;
+      container.innerHTML += `<div class="ai-msg ai md-content">${renderMd(reply)}<div class="ai-msg-time">${replyTime}</div></div>`;
 
       history.push({ role: 'ai', text: reply, time: replyTime });
     } catch (e) {

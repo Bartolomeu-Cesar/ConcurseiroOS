@@ -1129,6 +1129,42 @@ body.light-theme .zone-promo { background: #40a02b; color: #eff1f5; }
 body.light-theme .zone-demo { background: #d20f39; color: #eff1f5; }
 body.light-theme .chat-msg.user { background: #1e66f5; color: #eff1f5; }
 body.light-theme .chat-msg.ai { background: #dce0e8; color: #4c4f69; }
+
+/* ==================== MARKDOWN RENDERIZADO (AI Tutor) ==================== */
+.md-content { line-height: 1.55; }
+.md-content .md-h1, .md-content .md-h2, .md-content .md-h3,
+.md-content .md-h4, .md-content .md-h5, .md-content .md-h6 {
+  margin: 10px 0 6px; font-weight: 700; line-height: 1.3;
+}
+.md-content .md-h1 { font-size: 1.15rem; color: var(--mauve, #cba6f7); }
+.md-content .md-h2 { font-size: 1.08rem; color: var(--blue, #89b4fa); }
+.md-content .md-h3 { font-size: 1rem; color: var(--teal, #94e2d5); }
+.md-content .md-h4, .md-content .md-h5, .md-content .md-h6 { font-size: 0.92rem; }
+.md-content .md-p { margin: 6px 0; }
+.md-content .md-ul, .md-content .md-ol { margin: 6px 0 6px 4px; padding-left: 20px; }
+.md-content .md-ul li, .md-content .md-ol li { margin: 3px 0; }
+.md-content strong { font-weight: 700; color: var(--yellow, #f9e2af); }
+.md-content em { font-style: italic; }
+.md-content .md-code {
+  background: rgba(0,0,0,0.25); padding: 1px 5px; border-radius: 4px;
+  font-family: 'Fira Code', monospace; font-size: 0.85em;
+}
+.md-content .md-pre {
+  background: rgba(0,0,0,0.3); padding: 10px 12px; border-radius: 8px;
+  overflow-x: auto; margin: 8px 0;
+}
+.md-content .md-pre code { font-family: 'Fira Code', monospace; font-size: 0.82em; white-space: pre; }
+.md-content .md-quote {
+  border-left: 3px solid var(--mauve, #cba6f7); padding: 4px 12px; margin: 8px 0;
+  background: rgba(203,166,247,0.08); color: var(--text-sub, #9399b2); border-radius: 0 6px 6px 0;
+}
+.md-content .md-hr { border: none; border-top: 1px solid var(--border, #45475a); margin: 10px 0; }
+.md-content a { color: var(--blue, #89b4fa); text-decoration: underline; }
+.md-content > *:first-child { margin-top: 0; }
+.md-content > *:last-child { margin-bottom: 0; }
+body.light-theme .md-content .md-code,
+body.light-theme .md-content .md-pre { background: rgba(0,0,0,0.06); }
+body.light-theme .md-content strong { color: #d20f39; }
 body.light-theme .typing-indicator { background: #dce0e8; }
 body.light-theme .friend-item, body.light-theme .group-item { background: #dce0e8; }
 body.light-theme .friend-item:hover, body.light-theme .group-item:hover { background: #ccd0da; }
