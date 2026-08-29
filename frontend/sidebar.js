@@ -383,8 +383,21 @@
     return indicator;
   }
 
-  function updateStatus(online, pending = 0) {
-    const el = createIndicator();
+  function forceSyncNow() {
+    const btn = document.getElementById('force-sync-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Sincronizando...'; }
+    const token = localStorage.getItem('auth_token');
+    const sw = navigator.serviceWorker?.controller;
+    if (!sw) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Sincronizar agora'; }
+      return;
+    }
+    // Envia o token ATUAL para o SW reprocessar a fila (resolve itens
+    // enfileirados sem login que estavam sendo recusados com 401).
+    sw.postMessage({ type: 'FORCE_SYNC', token });
+  }
+
+  function updateStatus(online, pending = 0) {    const el = createIndicator();
     if (!online) {
       el.style.background = '#ff6b35';
       el.style.color = '#fff';
@@ -395,10 +408,13 @@
     } else if (pending > 0) {
       el.style.background = '#f59e0b';
       el.style.color = '#fff';
-      el.innerHTML = `<span>🔄</span><span>Sincronizando... ${pending} pendente${pending > 1 ? 's' : ''}</span>`;
+      el.innerHTML = `<span>🔄</span><span>Sincronizando... ${pending} pendente${pending > 1 ? 's' : ''}</span>`
+        + `<button id="force-sync-btn" title="Tentar sincronizar agora" style="margin-left:6px;background:rgba(255,255,255,0.25);border:none;color:#fff;border-radius:6px;padding:3px 8px;font-size:12px;font-weight:600;cursor:pointer;">Sincronizar agora</button>`;
       el.style.display = 'flex';
       el.style.opacity = '1';
       el.style.transform = 'translateY(0)';
+      const btn = el.querySelector('#force-sync-btn');
+      if (btn) btn.onclick = forceSyncNow;
     } else {
       // Online with nothing pending — hide after brief "synced" message
       el.style.background = '#10b981';
@@ -444,10 +460,12 @@
 
   // Listen for SW sync messages
   navigator.serviceWorker?.addEventListener('message', (event) => {
-    if (event.data?.type === 'SYNC_COMPLETE') {
-      updateStatus(true, event.data.pending);
-      if (event.data.replayed > 0) {
-        showSyncToast(event.data.replayed);
+    if (event.data?.type === 'SYNC_COMPLETE' || event.data?.type === 'FORCE_SYNC_DONE') {
+      const { replayed = 0, discarded = 0, pending = 0 } = event.data;
+      updateStatus(navigator.onLine, pending);
+      if (replayed > 0) showSyncToast(replayed);
+      if (discarded > 0 && typeof window.toast === 'function') {
+        window.toast(`${discarded} ação(ões) pendente(s) foram descartadas (rejeitadas pelo servidor — ex: sessão expirada).`, 'warning', 5000);
       }
     }
     if (event.data?.type === 'PENDING_COUNT') {
@@ -459,6 +477,11 @@
   if (!navigator.onLine) updateStatus(false);
   // Ask SW for pending count
   navigator.serviceWorker?.controller?.postMessage({ type: 'GET_PENDING_COUNT' });
+  // Se online e logado, tenta reprocessar a fila com o token atual — resolve
+  // itens que foram enfileirados antes do login (evita ficarem presos por 401).
+  if (navigator.onLine && localStorage.getItem('auth_token')) {
+    setTimeout(forceSyncNow, 1500);
+  }
 })();
 
 // Load battle notification system (global)

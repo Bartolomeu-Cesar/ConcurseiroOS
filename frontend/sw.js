@@ -1,5 +1,5 @@
 // ==================== ConcurseiroOS — Service Worker v6 ====================
-const CACHE_VERSION = 'v103';
+const CACHE_VERSION = 'v104';
 const CACHE_NAME = `concurseiro-${CACHE_VERSION}`;
 const CDN_CACHE = `concurseiro-cdn-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `concurseiro-runtime-${CACHE_VERSION}`;
@@ -101,7 +101,7 @@ async function queueMutation(request) {
   });
 }
 
-async function replayFailedRequests() {
+async function replayFailedRequests(authToken) {
   const db = await openOfflineDB();
   const tx = db.transaction(STORE_NAME, 'readonly');
   const store = tx.objectStore(STORE_NAME);
@@ -112,20 +112,41 @@ async function replayFailedRequests() {
   });
 
   let replayed = 0;
+  let discarded = 0;
+  let remaining = 0;
   for (const item of items) {
+    // Re-injeta o token ATUAL (o header salvo pode estar ausente/expirado se a
+    // ação foi enfileirada sem login). Sem isso, o servidor recusa com 401 e o
+    // item ficaria preso para sempre.
+    const headers = { ...(item.headers || {}) };
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
+      delete headers['authorization']; // evita header duplicado em minúsculo
+    }
     try {
       const response = await fetch(item.url, {
         method: item.method,
-        headers: item.headers,
+        headers,
         body: item.method !== 'GET' ? item.body : undefined
       });
       if (response.ok) {
         const delTx = db.transaction(STORE_NAME, 'readwrite');
         delTx.objectStore(STORE_NAME).delete(item.id);
         replayed++;
+      } else if (response.status >= 400 && response.status < 500) {
+        // Erro de cliente (401/403/404/422...): reenviar de novo nunca vai
+        // resolver — descarta o item para não travar a fila indefinidamente.
+        const delTx = db.transaction(STORE_NAME, 'readwrite');
+        delTx.objectStore(STORE_NAME).delete(item.id);
+        discarded++;
+        console.warn(`[SW] Descartada mutation ${item.method} ${item.url} — HTTP ${response.status}`);
+      } else {
+        // 5xx: erro temporário do servidor — mantém na fila para nova tentativa.
+        remaining++;
       }
     } catch (e) {
-      // Still offline, stop
+      // Erro de rede: ainda offline, para o loop e mantém o restante na fila.
+      remaining += 1;
       break;
     }
   }
@@ -133,10 +154,16 @@ async function replayFailedRequests() {
   // Notify clients
   const clients = await self.clients.matchAll();
   clients.forEach(client => {
-    client.postMessage({ type: 'SYNC_COMPLETE', replayed, pending: items.length - replayed });
+    client.postMessage({
+      type: 'SYNC_COMPLETE',
+      replayed,
+      discarded,
+      pending: Math.max(0, items.length - replayed - discarded)
+    });
   });
 
-  console.log(`[SW] Replayed ${replayed}/${items.length} queued mutations`);
+  console.log(`[SW] Replay: ${replayed} enviadas, ${discarded} descartadas (4xx), ${items.length - replayed - discarded} pendentes`);
+  return { replayed, discarded, pending: items.length - replayed - discarded };
 }
 
 // ===== INSTALL: precache app shell =====
@@ -406,6 +433,14 @@ self.addEventListener('message', (event) => {
         req.onsuccess = () => {
           event.source.postMessage({ type: 'PENDING_COUNT', count: req.result });
         };
+      });
+      break;
+
+    case 'FORCE_SYNC':
+      // Disparado pelo botão "Sincronizar agora" — reenvia a fila usando o
+      // token atual do cliente (resolve itens enfileirados sem login).
+      replayFailedRequests(event.data?.token).then(result => {
+        event.source.postMessage({ type: 'FORCE_SYNC_DONE', ...result });
       });
       break;
 
