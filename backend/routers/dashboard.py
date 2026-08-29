@@ -52,7 +52,12 @@ def get_dashboard(conn=Depends(get_db_session), user_id: int = Depends(get_user_
     horas_estudo = round(
         horas_tipo_map.get("edital", 0) + horas_tipo_map.get("ciclo", 0) + horas_tipo_map.get("timer", 0), 1
     )
-    horas_questoes = round(horas_tipo_map.get("questoes", 0) + horas_tipo_map.get("simulado", 0), 1)
+    # Revisão do caderno de erros é atividade de questões → soma em horas_questoes
+    horas_questoes = round(
+        horas_tipo_map.get("questoes", 0)
+        + horas_tipo_map.get("simulado", 0)
+        + horas_tipo_map.get("caderno_erros", 0), 1
+    )
 
     # Progresso do edital — prioriza o CARGO ALVO explícito do usuário; se não
     # houver, cai na heurística de melhor overlap com o ciclo ativo.

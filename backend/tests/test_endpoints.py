@@ -458,6 +458,28 @@ class TestDashboard:
         assert "edital" in data
         assert "questoes" in data
 
+    def test_dashboard_horas_questoes_inclui_caderno_erros(self, client):
+        """O tempo do caderno de erros deve entrar em horas_questoes."""
+        from datetime import date
+
+        from routers.dashboard import _invalidate_dashboard_cache
+
+        conn = sqlite3.connect(_tmp_db.name, timeout=10)
+        hoje = date.today().isoformat()
+        # Baseline de horas_questoes antes de inserir o caderno de erros
+        _invalidate_dashboard_cache(1)
+        base = client.get("/api/dashboard").json()["horas_questoes"]
+
+        # Adiciona 0.5h de caderno de erros
+        conn.execute("INSERT INTO sessoes_estudo (materia, horas, data, tipo, user_id) VALUES ('X', 0.5, ?, 'caderno_erros', 1)", (hoje,))
+        conn.commit()
+        conn.close()
+
+        _invalidate_dashboard_cache(1)
+        data = client.get("/api/dashboard").json()
+        # horas_questoes deve ter aumentado ~0.5 com o caderno de erros
+        assert data["horas_questoes"] >= base + 0.4
+
     def test_relatorio_semanal(self, client):
         r = client.get("/api/relatorio-semanal")
         assert r.status_code == 200

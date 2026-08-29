@@ -220,7 +220,17 @@ function renderCards(dash, streaks) {
     <div class="card">
       <span class="card-label">Questões Resolvidas</span>
       <span class="card-value green">${dash.questoes.total}</span>
-      <span class="card-sub">${dash.questoes.percentual}% acerto · Hoje: ${dash.questoes.hoje || 0}q (${dash.questoes.percentual_hoje || 0}%)</span>
+      <span class="card-sub">${dash.questoes.percentual}% acerto geral</span>
+      ${(() => {
+        const hj = dash.questoes.hoje || 0;
+        const pct = dash.questoes.percentual_hoje || 0;
+        const cor = hj === 0 ? '#9399b2' : (pct >= 70 ? '#a6e3a1' : pct >= 50 ? '#f9e2af' : '#f38ba8');
+        const emoji = hj === 0 ? '📝' : (pct >= 70 ? '🎯' : pct >= 50 ? '💪' : '⚠️');
+        const label = hj === 0 ? 'Nenhuma questão hoje' : `Hoje: ${hj}q · ${pct}% de acerto`;
+        return `<div class="card-today-badge" style="margin-top:8px;display:inline-flex;align-items:center;gap:6px;background:${cor}22;border:1px solid ${cor};color:${cor};border-radius:999px;padding:4px 12px;font-size:0.82rem;font-weight:700;">
+          <span>${emoji}</span><span>${label}</span>
+        </div>`;
+      })()}
     </div>
     <div class="card">
       <span class="card-label">Edital Concluído</span>
@@ -235,7 +245,7 @@ function renderCards(dash, streaks) {
     <div class="card">
       <span class="card-label">Hoje</span>
       <span class="card-value">${((h)=>{const hrs=Math.floor(h);const mins=Math.round((h-hrs)*60);if(hrs===0)return mins+'min';if(mins===0)return hrs+'h';return hrs+'h '+mins+'min';})(streaks.hoje.horas_estudadas||0)}</span>
-      <span class="card-sub">${streaks.hoje.questoes_resolvidas || 0}q · ${streaks.hoje.flashcards_revisados || 0}fc</span>
+      <span class="card-sub">${streaks.hoje.questoes_resolvidas || 0}q${dash.questoes.hoje ? ` (${dash.questoes.percentual_hoje || 0}%)` : ''} · ${streaks.hoje.flashcards_revisados || 0}fc</span>
     </div>
   `;
 }
