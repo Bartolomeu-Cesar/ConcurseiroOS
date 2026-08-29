@@ -436,6 +436,51 @@ class TestStreaksMetas:
         })
         assert r.status_code == 200
 
+    def test_meta_semanal_override_manual(self, client):
+        """Override manual sobrescreve a meta semanal automática por métrica."""
+        # Define override manual só para horas e questões (flashcards fica automático)
+        r = client.put("/api/metas/adaptativa/override", json={
+            "horas": 25, "questoes": 300, "flashcards": 0
+        })
+        assert r.status_code == 200
+        assert r.json()["manual_ativo"] is True
+
+        # GET override reflete os valores
+        r = client.get("/api/metas/adaptativa/override")
+        assert r.status_code == 200
+        ov = r.json()
+        assert ov["horas"] == 25
+        assert ov["questoes"] == 300
+        assert ov["flashcards"] == 0
+
+        # A meta adaptativa usa os valores manuais e marca a origem
+        r = client.get("/api/metas/adaptativa")
+        assert r.status_code == 200
+        m = r.json()["meta_semana"]
+        assert m["horas"] == 25
+        assert m["questoes"] == 300
+        assert m["origem"]["horas"] == "manual"
+        assert m["origem"]["questoes"] == "manual"
+        assert m["origem"]["flashcards"] == "automatico"
+        assert m["manual_ativo"] is True
+
+    def test_meta_semanal_override_voltar_automatico(self, client):
+        """Enviar 0 em todos os campos volta a meta ao modo automático."""
+        client.put("/api/metas/adaptativa/override", json={"horas": 10, "questoes": 100, "flashcards": 50})
+        r = client.put("/api/metas/adaptativa/override", json={"horas": 0, "questoes": 0, "flashcards": 0})
+        assert r.status_code == 200
+        assert r.json()["manual_ativo"] is False
+
+        r = client.get("/api/metas/adaptativa")
+        m = r.json()["meta_semana"]
+        assert m["manual_ativo"] is False
+        assert m["origem"]["horas"] == "automatico"
+
+    def test_meta_semanal_override_rejeita_valor_invalido(self, client):
+        """Horas acima de 168 (semana) são rejeitadas."""
+        r = client.put("/api/metas/adaptativa/override", json={"horas": 200})
+        assert r.status_code == 400
+
     def test_gamification(self, client):
         r = client.get("/api/gamification")
         assert r.status_code == 200

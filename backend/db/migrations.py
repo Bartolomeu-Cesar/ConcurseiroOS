@@ -642,6 +642,19 @@ def _m60_simulados_tempo_registrado(conn):
     log.info("Migration: added tempo_registrado_seg to simulados")
 
 
+def _m61_metas_semanais_manuais(conn):
+    """Override manual da Meta da Semana. Valor 0 = usar cálculo automático
+    (derivado do desempenho). > 0 = valor fixo definido pelo usuário."""
+    for col in ("meta_semanal_horas", "meta_semanal_questoes", "meta_semanal_flashcards"):
+        try:
+            default = "0.0" if col == "meta_semanal_horas" else "0"
+            tipo = "REAL" if col == "meta_semanal_horas" else "INTEGER"
+            conn.execute(f"ALTER TABLE metas_config ADD COLUMN {col} {tipo} DEFAULT {default}")
+        except Exception:
+            pass  # coluna já existe
+    log.info("Migration: added meta_semanal_horas/questoes/flashcards to metas_config")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -703,6 +716,7 @@ MIGRATIONS = [
     (58, _m58_trilha),
     (59, _m59_metas_cargo_alvo),
     (60, _m60_simulados_tempo_registrado),
+    (61, _m61_metas_semanais_manuais),
 ]
 
 

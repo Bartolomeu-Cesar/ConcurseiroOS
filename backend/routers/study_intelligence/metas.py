@@ -1,7 +1,7 @@
 """Metas adaptativas e detecção de platô."""
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Body, Depends
 
 from database import get_db_session
 from deps import get_user_id
@@ -91,6 +91,34 @@ def meta_adaptativa(conn=Depends(get_db_session), user_id: int = Depends(get_use
     meta_questoes = max(MIN_QUESTOES_SEMANA, int(questoes_semana_passada * FATOR_PROGRESSAO))
     meta_flashcards = max(MIN_FLASHCARDS_SEMANA, int(flashcards_semana_passada * FATOR_PROGRESSAO))
 
+    # === Override manual (opcional) ===
+    # Se o usuário definiu metas semanais fixas (> 0) em metas_config, elas têm
+    # prioridade sobre o cálculo automático. Valor 0/ausente = mantém automático.
+    origem = {"horas": "automatico", "questoes": "automatico", "flashcards": "automatico"}
+    try:
+        cfg = conn.execute(
+            "SELECT meta_semanal_horas, meta_semanal_questoes, meta_semanal_flashcards "
+            "FROM metas_config WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+    except Exception:
+        cfg = None  # colunas ainda não migradas
+    if cfg:
+        keys = cfg.keys() if hasattr(cfg, "keys") else []
+        mh = cfg["meta_semanal_horas"] if "meta_semanal_horas" in keys else 0
+        mq = cfg["meta_semanal_questoes"] if "meta_semanal_questoes" in keys else 0
+        mf = cfg["meta_semanal_flashcards"] if "meta_semanal_flashcards" in keys else 0
+        if mh and mh > 0:
+            meta_horas = round(float(mh), 1)
+            origem["horas"] = "manual"
+        if mq and mq > 0:
+            meta_questoes = int(mq)
+            origem["questoes"] = "manual"
+        if mf and mf > 0:
+            meta_flashcards = int(mf)
+            origem["flashcards"] = "manual"
+    manual_ativo = any(v == "manual" for v in origem.values())
+
     # === Projeção até a prova ===
     dias_prova = None
     semanas_restantes = None
@@ -167,6 +195,8 @@ def meta_adaptativa(conn=Depends(get_db_session), user_id: int = Depends(get_use
             "horas": meta_horas,
             "questoes": meta_questoes,
             "flashcards": meta_flashcards,
+            "origem": origem,
+            "manual_ativo": manual_ativo,
         },
         "progresso_semana": {
             "horas": round(horas_esta_semana, 2),
@@ -194,6 +224,83 @@ def meta_adaptativa(conn=Depends(get_db_session), user_id: int = Depends(get_use
         "mensagem": mensagem,
         "fator_progressao": FATOR_PROGRESSAO,
         "burnout_risk": burnout_risk,
+    }
+
+
+@router.get("/api/metas/adaptativa/override", summary="Ler override manual da meta semanal",
+            description="Retorna os valores fixos definidos manualmente para a meta da semana (0 = automático).")
+def get_meta_override(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Valores manuais da meta semanal. 0/ausente significa cálculo automático."""
+    horas = questoes = flashcards = 0
+    try:
+        row = conn.execute(
+            "SELECT meta_semanal_horas, meta_semanal_questoes, meta_semanal_flashcards "
+            "FROM metas_config WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+        if row:
+            keys = row.keys()
+            horas = row["meta_semanal_horas"] if "meta_semanal_horas" in keys else 0
+            questoes = row["meta_semanal_questoes"] if "meta_semanal_questoes" in keys else 0
+            flashcards = row["meta_semanal_flashcards"] if "meta_semanal_flashcards" in keys else 0
+    except Exception:
+        pass  # colunas ainda não migradas
+    manual_ativo = bool((horas or 0) > 0 or (questoes or 0) > 0 or (flashcards or 0) > 0)
+    return {
+        "horas": round(float(horas or 0), 1),
+        "questoes": int(questoes or 0),
+        "flashcards": int(flashcards or 0),
+        "manual_ativo": manual_ativo,
+    }
+
+
+@router.put("/api/metas/adaptativa/override", summary="Definir/limpar override manual da meta semanal",
+            description="Define metas semanais fixas (horas/questões/flashcards). Enviar 0 em um campo volta esse campo ao automático. Body: {horas, questoes, flashcards}.")
+def set_meta_override(body: dict = Body(...), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Salva o override manual. Cada campo com 0 (ou ausente) volta ao automático.
+
+    Validação: horas 0-168 (máx. horas numa semana), questões 0-10000,
+    flashcards 0-10000. Valores negativos são rejeitados.
+    """
+    def _num(v, default=0):
+        try:
+            return max(0, float(v))
+        except (TypeError, ValueError):
+            return default
+
+    horas = round(_num(body.get("horas", 0)), 1)
+    questoes = int(_num(body.get("questoes", 0)))
+    flashcards = int(_num(body.get("flashcards", 0)))
+
+    from fastapi import HTTPException
+    if horas > 168:
+        raise HTTPException(status_code=400, detail="Horas semanais não podem exceder 168")
+    if questoes > 10000 or flashcards > 10000:
+        raise HTTPException(status_code=400, detail="Valor muito alto para questões/flashcards")
+
+    # Garante que existe uma linha de config para o usuário
+    existing = conn.execute("SELECT id FROM metas_config WHERE user_id = ?", (user_id,)).fetchone()
+    if not existing:
+        conn.execute(
+            "INSERT INTO metas_config (meta_horas, meta_questoes, meta_flashcards, meta_paginas, user_id) "
+            "VALUES (3.0, 30, 10, 20, ?)",
+            (user_id,),
+        )
+
+    conn.execute(
+        "UPDATE metas_config SET meta_semanal_horas = ?, meta_semanal_questoes = ?, "
+        "meta_semanal_flashcards = ? WHERE user_id = ?",
+        (horas, questoes, flashcards, user_id),
+    )
+    conn.commit()
+
+    manual_ativo = bool(horas > 0 or questoes > 0 or flashcards > 0)
+    return {
+        "ok": True,
+        "horas": horas,
+        "questoes": questoes,
+        "flashcards": flashcards,
+        "manual_ativo": manual_ativo,
     }
 
 

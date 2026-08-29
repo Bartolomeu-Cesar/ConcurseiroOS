@@ -1584,23 +1584,30 @@ async function loadMetaAdaptativa() {
     const m = data.meta_semana;
     const p = data.progresso_semana;
     const proj = data.projecao;
+    const manualAtivo = m.manual_ativo;
 
     content.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;">
+        <span style="font-size:0.7rem;padding:2px 8px;border-radius:999px;font-weight:700;background:${manualAtivo ? 'rgba(203,166,247,0.18)' : 'rgba(166,227,161,0.15)'};color:${manualAtivo ? 'var(--accent)' : 'var(--green)'};">
+          ${manualAtivo ? '✏️ Meta manual' : '🤖 Meta automática'}
+        </span>
+        <button onclick="window.showMetaSemanalConfig()" style="background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:0.72rem;cursor:pointer;">⚙️ Configurar</button>
+      </div>
       <div style="margin-bottom:10px;font-size:0.85rem;color:var(--text);font-weight:600;">${data.mensagem}</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;">
         <div style="text-align:center;padding:8px;background:var(--bg);border-radius:8px;">
           <div style="font-size:1.1rem;font-weight:700;color:${p.pct_horas >= 100 ? 'var(--green)' : p.pct_horas >= 70 ? 'var(--blue)' : 'var(--text)'};">${p.horas}/${m.horas}h</div>
-          <div style="font-size:0.68rem;color:var(--text-sub);">Horas</div>
+          <div style="font-size:0.68rem;color:var(--text-sub);">Horas${m.origem && m.origem.horas === 'manual' ? ' ✏️' : ''}</div>
           <div style="height:3px;background:var(--border);border-radius:2px;margin-top:4px;"><div style="height:100%;width:${p.pct_horas}%;background:var(--blue);border-radius:2px;"></div></div>
         </div>
         <div style="text-align:center;padding:8px;background:var(--bg);border-radius:8px;">
           <div style="font-size:1.1rem;font-weight:700;color:${p.pct_questoes >= 100 ? 'var(--green)' : p.pct_questoes >= 70 ? 'var(--blue)' : 'var(--text)'};">${p.questoes}/${m.questoes}</div>
-          <div style="font-size:0.68rem;color:var(--text-sub);">Questões</div>
+          <div style="font-size:0.68rem;color:var(--text-sub);">Questões${m.origem && m.origem.questoes === 'manual' ? ' ✏️' : ''}</div>
           <div style="height:3px;background:var(--border);border-radius:2px;margin-top:4px;"><div style="height:100%;width:${p.pct_questoes}%;background:var(--accent);border-radius:2px;"></div></div>
         </div>
         <div style="text-align:center;padding:8px;background:var(--bg);border-radius:8px;">
           <div style="font-size:1.1rem;font-weight:700;color:${p.pct_flashcards >= 100 ? 'var(--green)' : p.pct_flashcards >= 70 ? 'var(--blue)' : 'var(--text)'};">${p.flashcards}/${m.flashcards}</div>
-          <div style="font-size:0.68rem;color:var(--text-sub);">Flashcards</div>
+          <div style="font-size:0.68rem;color:var(--text-sub);">Flashcards${m.origem && m.origem.flashcards === 'manual' ? ' ✏️' : ''}</div>
           <div style="height:3px;background:var(--border);border-radius:2px;margin-top:4px;"><div style="height:100%;width:${p.pct_flashcards}%;background:var(--green);border-radius:2px;"></div></div>
         </div>
       </div>
@@ -1615,6 +1622,72 @@ async function loadMetaAdaptativa() {
     `;
   } catch(e) {}
 }
+
+// Modal para sobrescrever manualmente a Meta da Semana (ou voltar ao automático)
+window.showMetaSemanalConfig = async function() {
+  let atual = { horas: 0, questoes: 0, flashcards: 0, manual_ativo: false };
+  try {
+    const r = await fetch('/api/metas/adaptativa/override');
+    if (r.ok) atual = await r.json();
+  } catch(e) {}
+
+  const overlay = document.createElement('div');
+  overlay.id = 'meta-semanal-config-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(30,30,46,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  overlay.innerHTML = `
+    <div style="background:var(--bg-surface);border:1px solid var(--border);border-radius:16px;padding:22px;max-width:400px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+      <h3 style="color:var(--text);margin:0 0 4px;font-size:1rem;">🎯 Meta da Semana (manual)</h3>
+      <p style="color:var(--text-sub);font-size:0.78rem;margin:0 0 14px;">Defina valores fixos para sobrescrever a meta automática. Deixe <strong>0</strong> em um campo para mantê-lo automático (derivado do seu desempenho).</p>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <label style="font-size:0.8rem;color:var(--text);">⏱ Horas por semana
+          <input type="number" id="ms-horas" min="0" max="168" step="0.5" value="${atual.horas || 0}" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;">
+        </label>
+        <label style="font-size:0.8rem;color:var(--text);">❓ Questões por semana
+          <input type="number" id="ms-questoes" min="0" max="10000" step="1" value="${atual.questoes || 0}" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;">
+        </label>
+        <label style="font-size:0.8rem;color:var(--text);">🧠 Flashcards por semana
+          <input type="number" id="ms-flashcards" min="0" max="10000" step="1" value="${atual.flashcards || 0}" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;">
+        </label>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:16px;">
+        <button onclick="window.limparMetaSemanal()" style="flex:1;padding:10px;background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:0.82rem;">🤖 Voltar ao automático</button>
+        <button onclick="window.salvarMetaSemanal()" style="flex:1;padding:10px;background:var(--accent);color:#1e1e2e;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:0.82rem;">💾 Salvar</button>
+      </div>
+    </div>`;
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  document.body.appendChild(overlay);
+};
+
+window.salvarMetaSemanal = async function() {
+  const horas = parseFloat(document.getElementById('ms-horas').value) || 0;
+  const questoes = parseInt(document.getElementById('ms-questoes').value) || 0;
+  const flashcards = parseInt(document.getElementById('ms-flashcards').value) || 0;
+  try {
+    const r = await fetch('/api/metas/adaptativa/override', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ horas, questoes, flashcards })
+    });
+    if (!r.ok) { const e = await r.json().catch(() => ({})); toast(e.detail || 'Erro ao salvar', 'error'); return; }
+    document.getElementById('meta-semanal-config-overlay')?.remove();
+    toast('Meta da semana atualizada!', 'success');
+    loadMetaAdaptativa();
+  } catch(e) { toast('Erro ao salvar meta', 'error'); }
+};
+
+window.limparMetaSemanal = async function() {
+  try {
+    const r = await fetch('/api/metas/adaptativa/override', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ horas: 0, questoes: 0, flashcards: 0 })
+    });
+    if (!r.ok) { toast('Erro ao limpar', 'error'); return; }
+    document.getElementById('meta-semanal-config-overlay')?.remove();
+    toast('Meta voltou ao modo automático', 'success');
+    loadMetaAdaptativa();
+  } catch(e) { toast('Erro ao limpar meta', 'error'); }
+};
 
 // ===== DETECÇÃO DE PLATÔ =====
 async function loadPlatoDetection() {
