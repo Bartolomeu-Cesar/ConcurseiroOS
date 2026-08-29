@@ -93,3 +93,7 @@ initUI();
 // Cross-module integrations (sidebar reativa, mastery auto-update, desafios, etc.)
 import { initIntegrations } from './modules/integrations.js';
 initIntegrations();
+
+// Presença social: heartbeat automático (só se logado)
+import { startPresence } from './modules/presence.js';
+if (isLoggedIn()) startPresence();

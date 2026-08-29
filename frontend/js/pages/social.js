@@ -2,6 +2,23 @@
 import { showToast } from '../modules/toast.js';
 window.showToast = showToast;
 
+// ===== PRESENÇA SOCIAL (amigos ativos) =====
+import { startPresence, renderFriendsPresence, getPresenceResumo } from '../modules/presence.js';
+
+async function _loadPresenceWidget() {
+  await renderFriendsPresence('friends-presence');
+  const resumo = await getPresenceResumo();
+  const el = document.getElementById('presence-resumo');
+  if (el && resumo && resumo.mensagem) el.textContent = resumo.mensagem;
+}
+
+// Iniciar heartbeat + widget ao carregar a página social
+if (localStorage.getItem('auth_token')) {
+  startPresence();
+  _loadPresenceWidget();
+  setInterval(_loadPresenceWidget, 60 * 1000); // Atualiza o widget a cada 60s
+}
+
 // ===== TAB SWITCHING =====
 function switchTab(tab) {
   document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));

@@ -501,6 +501,21 @@ def _m54_app_config(conn):
     log.info("Migration: created app_config table")
 
 
+def _m55_user_status(conn):
+    """Create user_status table for social presence (o que cada usuário está fazendo)."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS user_status (
+            user_id INTEGER PRIMARY KEY,
+            status TEXT NOT NULL DEFAULT 'offline',
+            materia TEXT DEFAULT '',
+            detalhe TEXT DEFAULT '',
+            atualizado_em TEXT NOT NULL DEFAULT ''
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_user_status_atualizado ON user_status(atualizado_em)")
+    log.info("Migration: created user_status table")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -556,6 +571,7 @@ MIGRATIONS = [
     (52, _m52_pdf_organizacao_virtual),
     (53, _m53_cadernos_questoes),
     (54, _m54_app_config),
+    (55, _m55_user_status),
 ]
 
 
