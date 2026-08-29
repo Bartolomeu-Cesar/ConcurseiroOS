@@ -352,20 +352,77 @@ def check_and_expire_plan(conn, user_id: int, user: dict) -> str:
 # ==================== JANELA DE VENDA DO VITALÍCIO ====================
 
 
+def get_app_config(chave: str, default: str = "") -> str:
+    """Lê um valor de configuração dinâmica da tabela app_config.
+
+    Fallback para env var (settings) se a chave não existe no banco.
+    """
+    try:
+        from database import get_db
+        with get_db() as conn:
+            row = conn.execute("SELECT valor FROM app_config WHERE chave = ?", (chave,)).fetchone()
+            if row and row[0] not in (None, ""):
+                return row[0]
+    except Exception:
+        pass
+    return default
+
+
+def set_app_config(conn, chave: str, valor: str):
+    """Grava/atualiza um valor de configuração dinâmica."""
+    from datetime import datetime as _dt, timezone as _tz
+    conn.execute("""
+        INSERT INTO app_config (chave, valor, updated_at) VALUES (?, ?, ?)
+        ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor, updated_at = excluded.updated_at
+    """, (chave, valor, _dt.now(_tz.utc).isoformat()))
+    conn.commit()
+
+
+def _get_vitalicio_window():
+    """Retorna (inicio_str, fim_str) da janela — banco tem prioridade sobre env."""
+    from settings import settings
+    inicio = get_app_config("vitalicio_venda_inicio", settings.VITALICIO_VENDA_INICIO)
+    fim = get_app_config("vitalicio_venda_fim", settings.VITALICIO_VENDA_FIM)
+    return inicio, fim
+
+
+def get_vitalicio_preco() -> float:
+    """Preço do plano Vitalício (configurável via app_config, default R$97)."""
+    try:
+        return float(get_app_config("vitalicio_preco", "97.00"))
+    except (ValueError, TypeError):
+        return 97.00
+
+
+def get_creditos_precos() -> dict:
+    """Tabela de preços dos créditos (configurável via app_config JSON, fallback CREDIT_CONFIG)."""
+    import json
+    raw = get_app_config("creditos_precos", "")
+    if raw:
+        try:
+            parsed = json.loads(raw)
+            # Chaves devem ser int
+            return {int(k): float(v) for k, v in parsed.items()}
+        except (ValueError, TypeError, json.JSONDecodeError):
+            pass
+    return CREDIT_CONFIG["precos"]
+
+
 def is_vitalicio_disponivel() -> dict:
     """Verifica se o plano Vitalício está disponível para compra.
+
+    A janela pode ser configurada dinamicamente via app_config (admin) ou
+    via env vars (VITALICIO_VENDA_INICIO / VITALICIO_VENDA_FIM).
 
     Retorna dict com:
     - disponivel: bool
     - motivo: str (mensagem para o usuário)
-    - inicio: str (data de início da próxima/atual janela)
-    - fim: str (data de fim da próxima/atual janela)
+    - inicio: str (data de início da janela)
+    - fim: str (data de fim da janela)
     """
-    from settings import settings
     from datetime import date
 
-    inicio_str = settings.VITALICIO_VENDA_INICIO
-    fim_str = settings.VITALICIO_VENDA_FIM
+    inicio_str, fim_str = _get_vitalicio_window()
 
     # Se não configurado, sempre disponível (modo dev)
     if not inicio_str or not fim_str:

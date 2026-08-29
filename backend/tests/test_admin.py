@@ -389,6 +389,139 @@ class TestAdminStats:
 
 
 # ============================================================
+# MONETIZAÇÃO
+# ============================================================
+
+class TestMonetizacao:
+    def test_get_monetizacao_admin(self, client):
+        """GET /api/admin/monetizacao — retorna config de vitalício e créditos."""
+        token = _get_admin_token(client)
+        r = client.get("/api/admin/monetizacao", headers=_auth_header(token))
+        assert r.status_code == 200
+        data = r.json()
+        assert "vitalicio" in data
+        assert "creditos" in data
+        assert "preco" in data["vitalicio"]
+        assert "status" in data["vitalicio"]
+        assert "precos" in data["creditos"]
+
+    def test_get_monetizacao_non_admin_403(self, client):
+        """GET /api/admin/monetizacao — non-admin recebe 403."""
+        token = _register_and_get_token(client, "nonadmin_mon@example.com", "NA Mon")
+        r = client.get("/api/admin/monetizacao", headers=_auth_header(token))
+        assert r.status_code == 403
+
+    def test_update_janela_vitalicio(self, client):
+        """PUT /api/admin/monetizacao — salva janela e afeta disponibilidade."""
+        token = _get_admin_token(client)
+        # Definir janela no passado → vitalício indisponível
+        r = client.put("/api/admin/monetizacao", headers=_auth_header(token), json={
+            "vitalicio_venda_inicio": "2020-01-01",
+            "vitalicio_venda_fim": "2020-01-07",
+        })
+        assert r.status_code == 200
+        # Verificar via status
+        r2 = client.get("/api/auth/vitalicio-status")
+        assert r2.status_code == 200
+        assert r2.json()["disponivel"] is False
+
+    def test_update_janela_vitalicio_disponivel(self, client):
+        """PUT janela cobrindo hoje → vitalício disponível."""
+        token = _get_admin_token(client)
+        from datetime import date, timedelta as _td
+        ontem = (date.today() - _td(days=1)).isoformat()
+        amanha = (date.today() + _td(days=1)).isoformat()
+        r = client.put("/api/admin/monetizacao", headers=_auth_header(token), json={
+            "vitalicio_venda_inicio": ontem,
+            "vitalicio_venda_fim": amanha,
+        })
+        assert r.status_code == 200
+        r2 = client.get("/api/auth/vitalicio-status")
+        assert r2.json()["disponivel"] is True
+
+    def test_update_preco_vitalicio(self, client):
+        """PUT preço do vitalício persiste."""
+        token = _get_admin_token(client)
+        r = client.put("/api/admin/monetizacao", headers=_auth_header(token), json={"vitalicio_preco": 129.90})
+        assert r.status_code == 200
+        r2 = client.get("/api/admin/monetizacao", headers=_auth_header(token))
+        assert abs(r2.json()["vitalicio"]["preco"] - 129.90) < 0.01
+
+    def test_update_precos_creditos(self, client):
+        """PUT preços de créditos persiste."""
+        token = _get_admin_token(client)
+        r = client.put("/api/admin/monetizacao", headers=_auth_header(token), json={
+            "creditos_precos": {"1": 5.90, "10": 39.90}
+        })
+        assert r.status_code == 200
+        r2 = client.get("/api/admin/monetizacao", headers=_auth_header(token))
+        precos = r2.json()["creditos"]["precos"]
+        assert abs(float(precos["1"]) - 5.90) < 0.01
+
+    def test_update_janela_invalida_400(self, client):
+        """PUT janela com data inválida retorna 400."""
+        token = _get_admin_token(client)
+        r = client.put("/api/admin/monetizacao", headers=_auth_header(token), json={
+            "vitalicio_venda_inicio": "not-a-date"
+        })
+        assert r.status_code == 400
+
+    def test_dar_creditos_brinde(self, client):
+        """POST /api/admin/users/{uid}/creditos — adiciona créditos."""
+        token = _get_admin_token(client)
+        # Criar user alvo
+        uid = client.post("/api/admin/users", headers=_auth_header(token),
+                          json={"email": "brinde@example.com", "nome": "Brinde", "username": "brinde", "plano": "free"}).json()["id"]
+        r = client.post(f"/api/admin/users/{uid}/creditos", headers=_auth_header(token),
+                       json={"quantidade": 15, "motivo": "Teste"})
+        assert r.status_code == 200
+        data = r.json()
+        assert data["saldo_posterior"] == data["saldo_anterior"] + 15
+
+    def test_dar_creditos_zero_400(self, client):
+        """POST créditos com quantidade zero retorna 400."""
+        token = _get_admin_token(client)
+        r = client.post("/api/admin/users/1/creditos", headers=_auth_header(token), json={"quantidade": 0})
+        assert r.status_code == 400
+
+    def test_ativar_premium_premio(self, client):
+        """POST /api/admin/users/{uid}/ativar-plano — Premium por N dias."""
+        token = _get_admin_token(client)
+        uid = client.post("/api/admin/users", headers=_auth_header(token),
+                          json={"email": "premio@example.com", "nome": "Premio", "username": "premio", "plano": "free"}).json()["id"]
+        r = client.post(f"/api/admin/users/{uid}/ativar-plano", headers=_auth_header(token),
+                       json={"tipo": "premium", "dias": 60})
+        assert r.status_code == 200
+        assert r.json()["plano"] == "premium"
+        assert r.json()["dias"] == 60
+
+    def test_ativar_vitalicio_premio(self, client):
+        """POST ativar-plano vitalício → plano ilimitado."""
+        token = _get_admin_token(client)
+        uid = client.post("/api/admin/users", headers=_auth_header(token),
+                          json={"email": "vit@example.com", "nome": "Vit", "username": "vit", "plano": "free"}).json()["id"]
+        r = client.post(f"/api/admin/users/{uid}/ativar-plano", headers=_auth_header(token),
+                       json={"tipo": "vitalicio"})
+        assert r.status_code == 200
+        assert r.json()["plano"] == "ilimitado"
+        assert r.json()["expira"] == "vitalicio"
+
+    def test_ativar_plano_tipo_invalido_400(self, client):
+        """POST ativar-plano com tipo inválido retorna 400."""
+        token = _get_admin_token(client)
+        r = client.post("/api/admin/users/1/ativar-plano", headers=_auth_header(token), json={"tipo": "xyz"})
+        assert r.status_code == 400
+
+    def test_monetizacao_non_admin_bloqueado(self, client):
+        """Endpoints de monetização bloqueiam non-admin."""
+        token = _register_and_get_token(client, "namon2@example.com", "NA Mon2")
+        r1 = client.post("/api/admin/users/1/creditos", headers=_auth_header(token), json={"quantidade": 5})
+        r2 = client.post("/api/admin/users/1/ativar-plano", headers=_auth_header(token), json={"tipo": "premium", "dias": 30})
+        assert r1.status_code == 403
+        assert r2.status_code == 403
+
+
+# ============================================================
 # CLEANUP
 # ============================================================
 

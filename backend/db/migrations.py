@@ -489,6 +489,18 @@ def _m53_cadernos_questoes(conn):
     log.info("Migration: upgraded cadernos + created cadernos_questoes table")
 
 
+def _m54_app_config(conn):
+    """Create app_config table for dynamic runtime configuration (editable by admin)."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS app_config (
+            chave TEXT PRIMARY KEY,
+            valor TEXT NOT NULL DEFAULT '',
+            updated_at TEXT NOT NULL DEFAULT ''
+        )
+    """)
+    log.info("Migration: created app_config table")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -543,6 +555,7 @@ MIGRATIONS = [
     (51, _m51_pagamentos),
     (52, _m52_pdf_organizacao_virtual),
     (53, _m53_cadernos_questoes),
+    (54, _m54_app_config),
 ]
 
 

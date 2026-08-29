@@ -380,3 +380,213 @@ def global_stats(
         "total_respostas": total_respostas,
         "total_horas_estudo": round(total_horas, 1),
     }
+
+
+# ============================================================
+# MONETIZAÇÃO — CONFIGURAÇÃO DINÂMICA
+# ============================================================
+
+@router.get("/monetizacao", summary="Ler configuração de monetização")
+def get_monetizacao(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Retorna a configuração atual de monetização (janela vitalício, preços)."""
+    _require_admin(user_id)
+    from plans import _get_vitalicio_window, get_vitalicio_preco, get_creditos_precos, is_vitalicio_disponivel
+
+    inicio, fim = _get_vitalicio_window()
+    return {
+        "vitalicio": {
+            "venda_inicio": inicio,
+            "venda_fim": fim,
+            "preco": get_vitalicio_preco(),
+            "status": is_vitalicio_disponivel(),
+        },
+        "creditos": {
+            "precos": get_creditos_precos(),
+        },
+    }
+
+
+@router.put("/monetizacao", summary="Atualizar configuração de monetização")
+def update_monetizacao(
+    body: dict,
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Atualiza janela de venda do vitalício, preço e preços de créditos.
+
+    body: {
+        vitalicio_venda_inicio: "YYYY-MM-DD" (opcional),
+        vitalicio_venda_fim: "YYYY-MM-DD" (opcional),
+        vitalicio_preco: float (opcional),
+        creditos_precos: {"1": 4.9, "5": 19.9, ...} (opcional)
+    }
+    """
+    _require_admin(user_id)
+    from plans import set_app_config
+    from datetime import date
+    import json
+
+    updated = []
+
+    if "vitalicio_venda_inicio" in body:
+        val = str(body["vitalicio_venda_inicio"]).strip()
+        if val:
+            try:
+                date.fromisoformat(val)  # Valida formato
+            except ValueError:
+                raise HTTPException(status_code=400, detail="vitalicio_venda_inicio deve ser YYYY-MM-DD")
+        set_app_config(conn, "vitalicio_venda_inicio", val)
+        updated.append("vitalicio_venda_inicio")
+
+    if "vitalicio_venda_fim" in body:
+        val = str(body["vitalicio_venda_fim"]).strip()
+        if val:
+            try:
+                date.fromisoformat(val)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="vitalicio_venda_fim deve ser YYYY-MM-DD")
+        set_app_config(conn, "vitalicio_venda_fim", val)
+        updated.append("vitalicio_venda_fim")
+
+    if "vitalicio_preco" in body:
+        try:
+            preco = float(body["vitalicio_preco"])
+            if preco < 0:
+                raise ValueError()
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="vitalicio_preco deve ser número positivo")
+        set_app_config(conn, "vitalicio_preco", str(preco))
+        updated.append("vitalicio_preco")
+
+    if "creditos_precos" in body:
+        precos = body["creditos_precos"]
+        if not isinstance(precos, dict):
+            raise HTTPException(status_code=400, detail="creditos_precos deve ser objeto {qtd: preco}")
+        # Validar
+        try:
+            {int(k): float(v) for k, v in precos.items()}
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="creditos_precos: chaves int e valores float")
+        set_app_config(conn, "creditos_precos", json.dumps(precos))
+        updated.append("creditos_precos")
+
+    if not updated:
+        raise HTTPException(status_code=400, detail="Nenhum campo válido para atualizar.")
+
+    log.info(f"[admin] Monetização atualizada: {updated}")
+    return {"ok": True, "updated": updated}
+
+
+# ============================================================
+# CRÉDITOS — BRINDE / AJUSTE MANUAL
+# ============================================================
+
+@router.post("/users/{uid}/creditos", summary="Adicionar créditos de brinde a um usuário")
+def add_creditos_brinde(
+    uid: int,
+    body: dict,
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Adiciona (ou remove, se negativo) créditos ao saldo de um usuário como brinde.
+
+    body: {quantidade: int, motivo: str (opcional)}
+    """
+    _require_admin(user_id)
+
+    quantidade = body.get("quantidade", 0)
+    motivo = (body.get("motivo") or "Brinde do administrador").strip()
+
+    if not isinstance(quantidade, int) or quantidade == 0:
+        raise HTTPException(status_code=400, detail="quantidade deve ser inteiro diferente de zero")
+
+    user = conn.execute("SELECT creditos_saldo FROM users WHERE id = ?", (uid,)).fetchone()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+
+    saldo_anterior = user[0] or 0
+    saldo_posterior = max(0, saldo_anterior + quantidade)
+
+    conn.execute("UPDATE users SET creditos_saldo = ? WHERE id = ?", (saldo_posterior, uid))
+
+    # Registrar no histórico
+    try:
+        conn.execute("""
+            INSERT INTO creditos_historico (user_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, created_at)
+            VALUES (?, 'brinde_admin', ?, ?, ?, ?, ?)
+        """, (uid, quantidade, saldo_anterior, saldo_posterior, motivo, datetime.now().isoformat()))
+    except Exception:
+        pass
+
+    conn.commit()
+    log.info(f"[admin] Créditos brinde: user={uid} {quantidade:+d} (saldo {saldo_anterior}→{saldo_posterior}) motivo={motivo}")
+    return {"ok": True, "saldo_anterior": saldo_anterior, "saldo_posterior": saldo_posterior, "quantidade": quantidade}
+
+
+# ============================================================
+# ATIVAÇÃO RÁPIDA DE PLANO (PRÊMIO)
+# ============================================================
+
+@router.post("/users/{uid}/ativar-plano", summary="Ativar Premium ou Vitalício como prêmio")
+def ativar_plano_premio(
+    uid: int,
+    body: dict,
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Ativa Premium (por N dias) ou Vitalício para um usuário, gratuitamente.
+
+    body: {
+        tipo: "premium" | "vitalicio",
+        dias: int (obrigatório se tipo=premium; ignorado se vitalicio)
+    }
+    """
+    _require_admin(user_id)
+    from datetime import timedelta
+
+    tipo = body.get("tipo", "")
+    user = conn.execute("SELECT id, plano, plano_expira FROM users WHERE id = ?", (uid,)).fetchone()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+
+    if tipo == "vitalicio":
+        conn.execute(
+            "UPDATE users SET plano = 'ilimitado', plano_expira = 'vitalicio' WHERE id = ?",
+            (uid,)
+        )
+        conn.commit()
+        log.info(f"[admin] Vitalício ativado como prêmio: user={uid}")
+        return {"ok": True, "plano": "ilimitado", "expira": "vitalicio"}
+
+    elif tipo == "premium":
+        dias = body.get("dias", 30)
+        try:
+            dias = int(dias)
+            if dias < 1:
+                raise ValueError()
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="dias deve ser inteiro positivo")
+
+        # Estender se já tem premium ativo, senão partir de agora
+        plano_atual = user["plano"] or "free"
+        plano_expira = user["plano_expira"] or ""
+        base = datetime.now()
+        if plano_atual == "premium" and plano_expira and plano_expira not in ("vitalicio", "vitalício", "lifetime"):
+            try:
+                exp = datetime.fromisoformat(plano_expira)
+                if exp > base:
+                    base = exp
+            except (ValueError, TypeError):
+                pass
+        nova_expira = (base + timedelta(days=dias)).isoformat()
+
+        conn.execute(
+            "UPDATE users SET plano = 'premium', plano_expira = ? WHERE id = ?",
+            (nova_expira, uid)
+        )
+        conn.commit()
+        log.info(f"[admin] Premium {dias}d ativado como prêmio: user={uid} expira={nova_expira}")
+        return {"ok": True, "plano": "premium", "expira": nova_expira, "dias": dias}
+
+    else:
+        raise HTTPException(status_code=400, detail="tipo deve ser 'premium' ou 'vitalicio'")

@@ -68,8 +68,9 @@ def criar_pix(
     if creditos < 1:
         raise HTTPException(status_code=400, detail="Mínimo 1 crédito")
 
-    # Calcular valor
-    precos = CREDIT_CONFIG["precos"]
+    # Calcular valor (preços configuráveis via admin)
+    from plans import get_creditos_precos
+    precos = get_creditos_precos()
     if creditos in precos:
         valor = precos[creditos]
     else:
@@ -154,7 +155,7 @@ def criar_pix_vitalicio(
     Verifica se a janela de venda está aberta antes de permitir a compra.
     body: {email: str (opcional)}
     """
-    from plans import is_vitalicio_disponivel, PLANS
+    from plans import is_vitalicio_disponivel, PLANS, get_vitalicio_preco
 
     # Verificar janela de venda
     janela = is_vitalicio_disponivel()
@@ -167,7 +168,7 @@ def criar_pix_vitalicio(
         raise HTTPException(status_code=400, detail="Você já possui o plano Vitalício!")
 
     email = body.get("email", "")
-    valor = 97.00  # Preço fixo do vitalício
+    valor = get_vitalicio_preco()  # Preço configurável (default R$97)
 
     # Criar pagamento no Mercado Pago
     sdk = _get_mp_sdk()

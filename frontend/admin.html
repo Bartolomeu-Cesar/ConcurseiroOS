@@ -57,6 +57,76 @@
     </div>
 
     <div class="pagination" id="pagination"></div>
+
+    <!-- Monetização -->
+    <div style="margin-top:32px;padding:20px;background:#181825;border:1px solid #45475a;border-radius:12px;">
+      <h2 style="color:#f9e2af;margin:0 0 16px;font-size:1.1rem;">💰 Monetização</h2>
+
+      <!-- Janela do Vitalício -->
+      <div style="margin-bottom:20px;">
+        <h3 style="color:#a6e3a1;font-size:0.9rem;margin:0 0 8px;">💎 Plano Vitalício</h3>
+        <div id="vitalicio-status-badge" style="font-size:0.78rem;margin-bottom:10px;color:#9399b2;">Carregando...</div>
+        <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:end;">
+          <div>
+            <label style="font-size:0.72rem;color:#9399b2;display:block;margin-bottom:2px;">Início da venda</label>
+            <input type="date" id="vit-inicio" style="padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;">
+          </div>
+          <div>
+            <label style="font-size:0.72rem;color:#9399b2;display:block;margin-bottom:2px;">Fim da venda</label>
+            <input type="date" id="vit-fim" style="padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;">
+          </div>
+          <div>
+            <label style="font-size:0.72rem;color:#9399b2;display:block;margin-bottom:2px;">Preço (R$)</label>
+            <input type="number" id="vit-preco" step="0.01" min="0" style="width:90px;padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;">
+          </div>
+          <button class="btn" onclick="salvarVitalicio()">💾 Salvar Janela</button>
+          <button class="btn danger small" onclick="limparVitalicio()" title="Limpar janela = sempre disponível">Limpar</button>
+        </div>
+      </div>
+
+      <!-- Preços dos Créditos -->
+      <div>
+        <h3 style="color:#89b4fa;font-size:0.9rem;margin:0 0 8px;">🎟️ Preços dos Créditos</h3>
+        <div id="creditos-precos-list" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px;"></div>
+        <button class="btn secondary small" onclick="salvarCreditosPrecos()">💾 Salvar Preços</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Gerenciar Monetização do Usuário -->
+  <div class="modal-overlay" id="modal-money" onclick="if(event.target===this)closeMoneyModal()">
+    <div class="modal">
+      <h3 id="money-title">Gerenciar Usuário</h3>
+      <input type="hidden" id="money-uid">
+
+      <div style="margin-bottom:16px;padding:12px;background:#1e1e2e;border-radius:8px;">
+        <h4 style="color:#a6e3a1;font-size:0.82rem;margin:0 0 8px;">🎁 Ativar plano como prêmio</h4>
+        <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;">
+          <div>
+            <label style="font-size:0.7rem;color:#9399b2;display:block;">Premium por N dias</label>
+            <input type="number" id="premio-dias" value="30" min="1" style="width:70px;padding:6px;background:#313244;border:1px solid #45475a;border-radius:4px;color:#cdd6f4;">
+          </div>
+          <button class="btn small" onclick="ativarPremio('premium')">👑 Ativar Premium</button>
+          <button class="btn small" style="background:#a6e3a1;" onclick="ativarPremio('vitalicio')">💎 Ativar Vitalício</button>
+        </div>
+      </div>
+
+      <div style="margin-bottom:16px;padding:12px;background:#1e1e2e;border-radius:8px;">
+        <h4 style="color:#89b4fa;font-size:0.82rem;margin:0 0 8px;">🎟️ Créditos de brinde</h4>
+        <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;">
+          <div>
+            <label style="font-size:0.7rem;color:#9399b2;display:block;">Quantidade (+/−)</label>
+            <input type="number" id="brinde-qtd" value="10" style="width:70px;padding:6px;background:#313244;border:1px solid #45475a;border-radius:4px;color:#cdd6f4;">
+          </div>
+          <input type="text" id="brinde-motivo" placeholder="Motivo (opcional)" style="flex:1;min-width:120px;padding:6px;background:#313244;border:1px solid #45475a;border-radius:4px;color:#cdd6f4;">
+          <button class="btn small secondary" onclick="darBrinde()">🎁 Dar Créditos</button>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn danger small" onclick="closeMoneyModal()">Fechar</button>
+      </div>
+    </div>
   </div>
 
   <!-- Modal: Criar/Editar Usuário -->
@@ -140,6 +210,7 @@
             <td style="font-size:0.75rem;color:#9399b2;">${formatDate(u.created_at)}</td>
             <td>
               <button class="btn small secondary" onclick="editUser(${u.id})">✏️</button>
+              <button class="btn small" onclick="openMoneyModal(${u.id}, '${esc(u.nome)}')" title="Gerenciar plano/créditos">💰</button>
               ${u.id !== 1 ? '<button class="btn small danger" onclick="deleteUser(' + u.id + ',\'' + esc(u.nome) + '\')">🗑</button>' : ''}
             </td>
           </tr>
@@ -247,9 +318,115 @@
       try { return new Date(str).toLocaleDateString('pt-BR'); } catch(e) { return str.split('T')[0]; }
     }
 
+    // ==================== MONETIZAÇÃO ====================
+    let _creditosPrecos = {};
+
+    async function loadMonetizacao() {
+      try {
+        const data = await fetch('/api/admin/monetizacao').then(r => r.json());
+        if (data.detail) return;
+
+        // Vitalício
+        document.getElementById('vit-inicio').value = data.vitalicio.venda_inicio || '';
+        document.getElementById('vit-fim').value = data.vitalicio.venda_fim || '';
+        document.getElementById('vit-preco').value = data.vitalicio.preco || 97;
+        const st = data.vitalicio.status || {};
+        const badge = document.getElementById('vitalicio-status-badge');
+        badge.textContent = st.motivo || '';
+        badge.style.color = st.disponivel ? '#a6e3a1' : '#f38ba8';
+
+        // Créditos
+        _creditosPrecos = data.creditos.precos || {};
+        const list = document.getElementById('creditos-precos-list');
+        list.innerHTML = Object.entries(_creditosPrecos).sort((a,b) => a[0]-b[0]).map(([qtd, preco]) => `
+          <div style="display:flex;flex-direction:column;gap:2px;">
+            <label style="font-size:0.68rem;color:#9399b2;">${qtd} créd.</label>
+            <input type="number" step="0.01" min="0" value="${preco}" data-qtd="${qtd}" class="credito-preco-input" style="width:80px;padding:6px;background:#1e1e2e;border:1px solid #45475a;border-radius:4px;color:#cdd6f4;">
+          </div>
+        `).join('');
+      } catch(e) {}
+    }
+
+    window.salvarVitalicio = async function() {
+      const body = {
+        vitalicio_venda_inicio: document.getElementById('vit-inicio').value,
+        vitalicio_venda_fim: document.getElementById('vit-fim').value,
+        vitalicio_preco: parseFloat(document.getElementById('vit-preco').value) || 97,
+      };
+      try {
+        const res = await fetch('/api/admin/monetizacao', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+        const data = await res.json();
+        if (res.ok) { alert('✅ Janela do Vitalício salva!'); loadMonetizacao(); }
+        else alert(data.detail || 'Erro ao salvar.');
+      } catch(e) { alert('Erro de conexão.'); }
+    };
+
+    window.limparVitalicio = async function() {
+      if (!confirm('Limpar a janela = Vitalício SEMPRE disponível. Confirmar?')) return;
+      try {
+        const res = await fetch('/api/admin/monetizacao', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({vitalicio_venda_inicio:'', vitalicio_venda_fim:''})});
+        if (res.ok) { alert('Janela limpa — Vitalício sempre disponível.'); loadMonetizacao(); }
+      } catch(e) { alert('Erro.'); }
+    };
+
+    window.salvarCreditosPrecos = async function() {
+      const precos = {};
+      document.querySelectorAll('.credito-preco-input').forEach(inp => {
+        precos[inp.dataset.qtd] = parseFloat(inp.value) || 0;
+      });
+      try {
+        const res = await fetch('/api/admin/monetizacao', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({creditos_precos: precos})});
+        const data = await res.json();
+        if (res.ok) { alert('✅ Preços dos créditos salvos!'); loadMonetizacao(); }
+        else alert(data.detail || 'Erro ao salvar.');
+      } catch(e) { alert('Erro de conexão.'); }
+    };
+
+    // Modal de monetização do usuário
+    window.openMoneyModal = function(uid, nome) {
+      document.getElementById('money-title').textContent = `Gerenciar: ${nome} (#${uid})`;
+      document.getElementById('money-uid').value = uid;
+      document.getElementById('premio-dias').value = 30;
+      document.getElementById('brinde-qtd').value = 10;
+      document.getElementById('brinde-motivo').value = '';
+      document.getElementById('modal-money').classList.add('open');
+    };
+
+    window.closeMoneyModal = function() {
+      document.getElementById('modal-money').classList.remove('open');
+    };
+
+    window.ativarPremio = async function(tipo) {
+      const uid = document.getElementById('money-uid').value;
+      const body = { tipo };
+      if (tipo === 'premium') body.dias = parseInt(document.getElementById('premio-dias').value) || 30;
+      const label = tipo === 'vitalicio' ? 'Vitalício' : `Premium por ${body.dias} dias`;
+      if (!confirm(`Ativar ${label} para este usuário (grátis, como prêmio)?`)) return;
+      try {
+        const res = await fetch(`/api/admin/users/${uid}/ativar-plano`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+        const data = await res.json();
+        if (res.ok) { alert(`✅ ${label} ativado!`); closeMoneyModal(); loadUsers(); loadStats(); }
+        else alert(data.detail || 'Erro.');
+      } catch(e) { alert('Erro de conexão.'); }
+    };
+
+    window.darBrinde = async function() {
+      const uid = document.getElementById('money-uid').value;
+      const quantidade = parseInt(document.getElementById('brinde-qtd').value) || 0;
+      const motivo = document.getElementById('brinde-motivo').value.trim();
+      if (quantidade === 0) { alert('Quantidade deve ser diferente de zero.'); return; }
+      try {
+        const res = await fetch(`/api/admin/users/${uid}/creditos`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({quantidade, motivo})});
+        const data = await res.json();
+        if (res.ok) { alert(`✅ Créditos: ${data.saldo_anterior} → ${data.saldo_posterior}`); closeMoneyModal(); }
+        else alert(data.detail || 'Erro.');
+      } catch(e) { alert('Erro de conexão.'); }
+    };
+
     // Init
     loadStats();
     loadUsers();
+    loadMonetizacao();
   })();
   </script>
 </body>
