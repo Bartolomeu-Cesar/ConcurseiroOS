@@ -326,12 +326,12 @@ function truncate(text, max) {
 function showToast(msg) {
   const toast = document.createElement('div');
   toast.style.cssText = `
-    position: fixed; bottom: 24px; right: 24px;
+    position: fixed; bottom: 96px; right: 24px;
     padding: 12px 20px; border-radius: 10px;
     background: var(--ce-card); color: var(--ce-text);
     font-size: 0.85rem; font-weight: 600;
     box-shadow: 0 4px 16px rgba(0,0,0,0.3);
-    z-index: 9999; animation: fadeIn 0.3s ease;
+    z-index: 99999; animation: fadeIn 0.3s ease;
   `;
   toast.textContent = msg;
   document.body.appendChild(toast);

@@ -1410,7 +1410,7 @@ function initDragDrop() {
 // ===== AGENDA DO DIA (Micro-planning) =====
 function _toastDash(msg) {
   const t = document.createElement('div');
-  t.style.cssText = 'position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:10px;background:var(--bg-surface,#313244);color:var(--text,#cdd6f4);font-size:0.85rem;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,0.3);z-index:9999;animation:fadeIn 0.3s ease;';
+  t.style.cssText = 'position:fixed;bottom:96px;right:24px;padding:12px 20px;border-radius:10px;background:var(--bg-surface,#313244);color:var(--text,#cdd6f4);font-size:0.85rem;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,0.3);z-index:99999;animation:fadeIn 0.3s ease;';
   t.textContent = msg;
   document.body.appendChild(t);
   setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity 0.3s'; setTimeout(() => t.remove(), 300); }, 3000);

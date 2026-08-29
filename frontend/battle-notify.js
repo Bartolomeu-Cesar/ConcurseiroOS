@@ -27,7 +27,7 @@
     const el = document.createElement('div');
     el.id = 'battle-global-notify';
     el.style.cssText = `
-      position: fixed; bottom: 20px; right: 20px; z-index: 99999;
+      position: fixed; bottom: 96px; right: 20px; z-index: 99999;
       background: #313244; border: 2px solid ${isStarted ? '#a6e3a1' : '#f9e2af'};
       border-radius: 14px; padding: 16px 20px; max-width: 360px;
       box-shadow: 0 8px 32px rgba(0,0,0,0.5);
