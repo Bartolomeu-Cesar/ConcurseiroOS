@@ -116,6 +116,33 @@ def check_rate_limit(identifier: str, endpoint_type: str, limit: int) -> tuple[b
         conn.close()
 
 
+# Endpoints de auth SENSÍVEIS (anti brute-force). Os demais /api/auth/* são
+# leituras de app e usam o limite geral.
+_AUTH_SENSITIVE = (
+    "/api/auth/login",
+    "/api/auth/register",
+    "/api/auth/verify-code",
+    "/api/auth/refresh",
+)
+
+
+def classify_endpoint(path: str) -> tuple[str, int]:
+    """Determina (endpoint_type, limite) para um path de API. Função pura.
+
+    - AI Tutor → limite de IA.
+    - Auth sensível (login/registro/código/refresh) → limite estrito.
+    - Demais /api/auth/* (status, me, planos, créditos...) → limite geral.
+    - Resto → limite geral.
+    """
+    if path.startswith("/api/ai-tutor") or path.startswith("/api/v1/ai-tutor"):
+        return "ai_tutor", settings.RATE_LIMIT_AI
+    if path.startswith("/api/auth"):
+        if path in _AUTH_SENSITIVE:
+            return "auth", settings.RATE_LIMIT_AUTH
+        return "general", settings.RATE_LIMIT_GENERAL
+    return "general", settings.RATE_LIMIT_GENERAL
+
+
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """IP-based rate limiting with SQLite storage (multi-worker safe)."""
 
@@ -148,20 +175,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if client_ip == "testclient":
             return await call_next(request)
 
-        # Determine endpoint type and limit
-        if path.startswith("/api/ai-tutor") or path.startswith("/api/v1/ai-tutor"):
-            # AI Tutor: rate limit by user, not IP
-            endpoint_type = "ai_tutor"
-            limit = settings.RATE_LIMIT_AI
-            # Try to get user identifier from Authorization header
+        # Determine endpoint type and limit (lógica centralizada em classify_endpoint)
+        endpoint_type, limit = classify_endpoint(path)
+        if endpoint_type == "ai_tutor":
+            # AI Tutor: rate limit por usuário (não por IP)
             identifier = _extract_user_identifier(request) or client_ip
-        elif path.startswith("/api/auth"):
-            endpoint_type = "auth"
-            limit = settings.RATE_LIMIT_AUTH
-            identifier = client_ip
         else:
-            endpoint_type = "general"
-            limit = settings.RATE_LIMIT_GENERAL
             identifier = client_ip
 
         # Check rate limit
