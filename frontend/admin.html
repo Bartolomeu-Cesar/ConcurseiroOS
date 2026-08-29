@@ -93,6 +93,13 @@
         <button class="btn secondary small" onclick="salvarCreditosPrecos()">💾 Salvar Preços</button>
       </div>
     </div>
+
+    <!-- Moderação do Catálogo -->
+    <div style="margin-top:24px;padding:20px;background:#181825;border:1px solid #45475a;border-radius:12px;">
+      <h2 style="color:#94e2d5;margin:0 0 16px;font-size:1.1rem;">📚 Moderação do Catálogo</h2>
+      <h3 style="color:#f9e2af;font-size:0.9rem;margin:0 0 8px;">⏳ Materiais pendentes de aprovação</h3>
+      <div id="pendentes-list" style="font-size:0.85rem;color:#9399b2;">Carregando...</div>
+    </div>
   </div>
 
   <!-- Modal: Gerenciar Monetização do Usuário -->
@@ -122,6 +129,14 @@
           </div>
           <input type="text" id="brinde-motivo" placeholder="Motivo (opcional)" style="flex:1;min-width:120px;padding:6px;background:#313244;border:1px solid #45475a;border-radius:4px;color:#cdd6f4;">
           <button class="btn small secondary" onclick="darBrinde()">🎁 Dar Créditos</button>
+        </div>
+      </div>
+
+      <div style="margin-bottom:16px;padding:12px;background:#1e1e2e;border-radius:8px;">
+        <h4 style="color:#94e2d5;font-size:0.82rem;margin:0 0 8px;">✔️ Selo de curador verificado</h4>
+        <div style="display:flex;gap:8px;">
+          <button class="btn small" style="background:#89b4fa;" onclick="verificarCurador(true)">✔️ Verificar</button>
+          <button class="btn small danger" onclick="verificarCurador(false)">Remover selo</button>
         </div>
       </div>
 
@@ -667,10 +682,55 @@
       }
     };
 
+    // ==================== MODERAÇÃO DO CATÁLOGO ====================
+    window.verificarCurador = async function(verificado) {
+      const uid = document.getElementById('money-uid').value;
+      try {
+        const res = await fetch(`/api/catalogo/curador/${uid}/verificar`, {
+          method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ verificado })
+        });
+        const data = await res.json();
+        if (res.ok) alert(verificado ? '✔️ Curador verificado!' : 'Selo removido.');
+        else alert(data.detail || 'Erro.');
+      } catch(e) { alert('Erro de conexão.'); }
+    };
+
+    async function loadPendentes() {
+      const el = document.getElementById('pendentes-list');
+      if (!el) return;
+      try {
+        const data = await fetch('/api/catalogo/admin/pendentes').then(r => r.json());
+        const itens = data.itens || [];
+        if (!itens.length) { el.innerHTML = '<span style="color:#a6e3a1;">✓ Nenhum material pendente.</span>'; return; }
+        el.innerHTML = itens.map(it => `
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #313244;">
+            <div>
+              <strong style="color:#cdd6f4;">${esc(it.titulo)}</strong>
+              <span style="color:#9399b2;font-size:0.75rem;"> · ${esc(it.tipo)} · por ${esc(it.curador_nome || '?')} · ${esc(it.categoria)}</span>
+            </div>
+            <div style="display:flex;gap:6px;flex-shrink:0;">
+              <button class="btn small" onclick="moderarItem(${it.id}, 'aprovar')">✓ Aprovar</button>
+              <button class="btn small danger" onclick="moderarItem(${it.id}, 'rejeitar')">✗ Rejeitar</button>
+            </div>
+          </div>`).join('');
+      } catch(e) { el.innerHTML = '<span style="color:#f38ba8;">Erro ao carregar pendentes.</span>'; }
+    }
+
+    window.moderarItem = async function(itemId, acao) {
+      try {
+        const res = await fetch(`/api/catalogo/${itemId}/moderar`, {
+          method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ acao })
+        });
+        if (res.ok) { loadPendentes(); }
+        else { const d = await res.json(); alert(d.detail || 'Erro.'); }
+      } catch(e) { alert('Erro de conexão.'); }
+    };
+
     // Init
     loadStats();
     loadUsers();
     loadMonetizacao();
+    loadPendentes();
   })();
   </script>
 </body>

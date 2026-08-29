@@ -268,6 +268,151 @@ class TestRemover:
         assert r.status_code == 403
 
 
+class TestAvaliacoes:
+    def _publicar(self, client):
+        _seed_curador(1)
+        token = _admin_token()
+        return client.post("/api/catalogo/publicar", headers=_h(token), json={
+            "tipo": "deck_flashcards", "titulo": "Deck Aval", "origem_uid": 1, "ref": "Direito"
+        }).json()["id"]
+
+    def test_avaliar_e_media(self, client):
+        item_id = self._publicar(client)
+        _criar_estudante(70, "est70@test.com")
+        _criar_estudante(71, "est71@test.com")
+        r1 = client.post(f"/api/catalogo/{item_id}/avaliar", headers=_h(_token(70, "est70@test.com")), json={"nota": 5, "comentario": "Ótimo!"})
+        assert r1.status_code == 200
+        r2 = client.post(f"/api/catalogo/{item_id}/avaliar", headers=_h(_token(71, "est71@test.com")), json={"nota": 3})
+        assert r2.status_code == 200
+        # Média deve ser 4.0
+        assert abs(r2.json()["media_estrelas"] - 4.0) < 0.01
+        assert r2.json()["total_avaliacoes"] == 2
+
+    def test_avaliar_upsert(self, client):
+        item_id = self._publicar(client)
+        _criar_estudante(72, "est72@test.com")
+        tok = _token(72, "est72@test.com")
+        client.post(f"/api/catalogo/{item_id}/avaliar", headers=_h(tok), json={"nota": 1})
+        r = client.post(f"/api/catalogo/{item_id}/avaliar", headers=_h(tok), json={"nota": 5})
+        # Upsert: continua 1 avaliação, nota atualizada
+        assert r.json()["total_avaliacoes"] == 1
+        assert abs(r.json()["media_estrelas"] - 5.0) < 0.01
+
+    def test_avaliar_nota_invalida_400(self, client):
+        item_id = self._publicar(client)
+        _criar_estudante(73, "est73@test.com")
+        r = client.post(f"/api/catalogo/{item_id}/avaliar", headers=_h(_token(73, "est73@test.com")), json={"nota": 9})
+        assert r.status_code == 400
+
+    def test_nao_avaliar_proprio(self, client):
+        item_id = self._publicar(client)  # curador = admin (id 1)
+        r = client.post(f"/api/catalogo/{item_id}/avaliar", headers=_h(_admin_token()), json={"nota": 5})
+        assert r.status_code == 400
+
+    def test_listar_avaliacoes(self, client):
+        item_id = self._publicar(client)
+        _criar_estudante(74, "est74@test.com")
+        client.post(f"/api/catalogo/{item_id}/avaliar", headers=_h(_token(74, "est74@test.com")), json={"nota": 4, "comentario": "Bom"})
+        r = client.get(f"/api/catalogo/{item_id}/avaliacoes", headers=_h(_token(74, "est74@test.com")))
+        assert r.status_code == 200
+        assert r.json()["total_avaliacoes"] >= 1
+        assert r.json()["minha_avaliacao"]["nota"] == 4
+
+
+class TestPublicacaoPremium:
+    def _criar_premium(self, uid, email):
+        conn = _conn()
+        conn.execute("""
+            INSERT OR IGNORE INTO users (id, nome, username, email, password_hash, plano, role, created_at)
+            VALUES (?, ?, ?, ?, 'hash', 'premium', 'user', '2026-01-01')
+        """, (uid, f"Premium {uid}", f"prem{uid}", email))
+        # Dar um recurso para publicar
+        conn.execute("INSERT INTO flashcards (pergunta, resposta, proxima_revisao, materia, user_id) VALUES ('P', 'R', '2026-01-01', 'MatPrem', ?)", (uid,))
+        conn.commit()
+        conn.close()
+
+    def test_premium_publica_pendente(self, client):
+        self._criar_premium(80, "prem80@test.com")
+        tok = _token(80, "prem80@test.com")
+        r = client.post("/api/catalogo/publicar", headers=_h(tok), json={
+            "tipo": "deck_flashcards", "titulo": "Meu Deck", "origem_uid": 0, "ref": "MatPrem"
+        })
+        assert r.status_code == 200
+        assert r.json()["status"] == "pendente"
+        # Não deve aparecer na listagem pública (só aprovados)
+        lst = client.get("/api/catalogo", headers=_h(tok)).json()
+        assert "Meu Deck" not in [i["titulo"] for i in lst["itens"]]
+
+    def test_free_nao_publica_403(self, client):
+        _criar_estudante(81, "est81@test.com")  # free
+        r = client.post("/api/catalogo/publicar", headers=_h(_token(81, "est81@test.com")), json={
+            "tipo": "deck_flashcards", "titulo": "X", "origem_uid": 0, "ref": "Y"
+        })
+        assert r.status_code == 403
+
+    def test_premium_verificado_publica_aprovado(self, client):
+        self._criar_premium(82, "prem82@test.com")
+        # Admin verifica o curador
+        client.post("/api/catalogo/curador/82/verificar", headers=_h(_admin_token()), json={"verificado": True})
+        tok = _token(82, "prem82@test.com")
+        r = client.post("/api/catalogo/publicar", headers=_h(tok), json={
+            "tipo": "deck_flashcards", "titulo": "Deck Verificado", "origem_uid": 0, "ref": "MatPrem"
+        })
+        assert r.status_code == 200
+        assert r.json()["status"] == "aprovado"
+
+    def test_meus_materiais(self, client):
+        self._criar_premium(83, "prem83@test.com")
+        tok = _token(83, "prem83@test.com")
+        client.post("/api/catalogo/publicar", headers=_h(tok), json={
+            "tipo": "deck_flashcards", "titulo": "Meu Material", "origem_uid": 0, "ref": "MatPrem"
+        })
+        r = client.get("/api/catalogo/meus", headers=_h(tok))
+        assert r.status_code == 200
+        assert "Meu Material" in [i["titulo"] for i in r.json()["itens"]]
+
+
+class TestModeracao:
+    def test_verificar_curador(self, client):
+        _criar_estudante(90, "est90@test.com")
+        r = client.post("/api/catalogo/curador/90/verificar", headers=_h(_admin_token()), json={"verificado": True})
+        assert r.status_code == 200
+        assert r.json()["curador_verificado"] is True
+
+    def test_verificar_non_admin_403(self, client):
+        _criar_estudante(91, "est91@test.com")
+        r = client.post("/api/catalogo/curador/1/verificar", headers=_h(_token(91, "est91@test.com")), json={"verificado": True})
+        assert r.status_code == 403
+
+    def test_moderar_aprovar(self, client):
+        # Premium publica pendente
+        conn = _conn()
+        conn.execute("INSERT OR IGNORE INTO users (id, nome, username, email, password_hash, plano, role, created_at) VALUES (92, 'P92', 'p92', 'p92@t.com', 'h', 'premium', 'user', '2026-01-01')")
+        conn.execute("INSERT INTO questoes (materia, topico, enunciado, alternativa_a, alternativa_b, alternativa_c, alternativa_d, alternativa_e, resposta_correta, created_at, user_id) VALUES ('ModMat', 'T', 'Q', 'a','b','c','d','', 'A', '2026-01-01', 92)")
+        conn.commit(); conn.close()
+        pub = client.post("/api/catalogo/publicar", headers=_h(_token(92, "p92@t.com")), json={
+            "tipo": "deck_questoes", "titulo": "Pendente Q", "origem_uid": 0, "ref": "ModMat"
+        }).json()
+        item_id = pub["id"]
+        # Aparece em pendentes
+        pend = client.get("/api/catalogo/admin/pendentes", headers=_h(_admin_token())).json()
+        assert item_id in [i["id"] for i in pend["itens"]]
+        # Admin aprova
+        r = client.post(f"/api/catalogo/{item_id}/moderar", headers=_h(_admin_token()), json={"acao": "aprovar"})
+        assert r.status_code == 200
+        # Agora aparece na listagem pública
+        lst = client.get("/api/catalogo", headers=_h(_admin_token())).json()
+        assert "Pendente Q" in [i["titulo"] for i in lst["itens"]]
+
+    def test_moderar_acao_invalida_400(self, client):
+        _seed_curador(1)
+        pub = client.post("/api/catalogo/publicar", headers=_h(_admin_token()), json={
+            "tipo": "deck_flashcards", "titulo": "X", "origem_uid": 1, "ref": "Direito"
+        }).json()
+        r = client.post(f"/api/catalogo/{pub['id']}/moderar", headers=_h(_admin_token()), json={"acao": "xyz"})
+        assert r.status_code == 400
+
+
 def teardown_module():
     try:
         os.unlink(_tmp_db.name)

@@ -542,6 +542,41 @@ def _m56_catalogo_itens(conn):
     log.info("Migration: created catalogo_itens table")
 
 
+def _m57_catalogo_reputacao(conn):
+    """Avaliações (estrelas) nos materiais + selo verificado + moderação.
+
+    - catalogo_avaliacoes: nota 1-5 + comentário por usuário/item (upsert).
+    - users.curador_verificado: selo de curador confiável (admin concede).
+    - catalogo_itens.status: 'aprovado' (default) ou 'pendente' (premium não-verificado).
+    """
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS catalogo_avaliacoes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            item_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            nota INTEGER NOT NULL,
+            comentario TEXT DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT ''
+        )
+    """)
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_catalogo_aval_unique ON catalogo_avaliacoes(item_id, user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_catalogo_aval_item ON catalogo_avaliacoes(item_id)")
+
+    # Selo de curador verificado
+    try:
+        conn.execute("ALTER TABLE users ADD COLUMN curador_verificado INTEGER DEFAULT 0")
+    except Exception:
+        pass
+
+    # Status de moderação do item do catálogo
+    try:
+        conn.execute("ALTER TABLE catalogo_itens ADD COLUMN status TEXT DEFAULT 'aprovado'")
+    except Exception:
+        pass
+
+    log.info("Migration: created catalogo_avaliacoes + curador_verificado + item status")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -599,6 +634,7 @@ MIGRATIONS = [
     (54, _m54_app_config),
     (55, _m55_user_status),
     (56, _m56_catalogo_itens),
+    (57, _m57_catalogo_reputacao),
 ]
 
 
