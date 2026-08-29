@@ -604,13 +604,35 @@ def importar_flashcards(file: UploadFile = File(...), conn=Depends(get_db_sessio
             raise HTTPException(status_code=400, detail="Arquivo JSON inválido") from None
 
     count = 0
+    duplicados = 0
     max_por_dia = 20  # Limitar revisões por dia para não sobrecarregar
+
+    def _dedup_key(pergunta: str, resposta: str) -> str:
+        """Chave de deduplicação: pergunta+resposta normalizadas (trim + lower + espaços colapsados)."""
+        import re
+        p = re.sub(r"\s+", " ", pergunta).strip().lower()
+        r = re.sub(r"\s+", " ", resposta).strip().lower()
+        return f"{p}\x1f{r}"
+
+    # Chaves já existentes no banco (por usuário) para evitar duplicidade em re-imports
+    seen: set[str] = set()
+    for row in conn.execute(
+        "SELECT pergunta, resposta FROM flashcards WHERE user_id = ?", (user_id,)
+    ).fetchall():
+        seen.add(_dedup_key(row[0] or "", row[1] or ""))
+
     for i, item in enumerate(items):
         pergunta = sanitize_input((item.get("pergunta") or "").strip(), max_length=2000)
         resposta = sanitize_input((item.get("resposta") or "").strip(), max_length=5000)
         materia = sanitize_input((item.get("materia") or "").strip())
         if not pergunta:
             continue
+        # Deduplicação: pula se já existe (no banco) ou repetido dentro do próprio arquivo
+        key = _dedup_key(pergunta, resposta)
+        if key in seen:
+            duplicados += 1
+            continue
+        seen.add(key)
         # Distribuir datas: primeiros 20 para hoje, próximos 20 para amanhã, etc.
         dia_offset = count // max_por_dia
         revisao_date = (date.today() + timedelta(days=dia_offset)).isoformat()
@@ -621,8 +643,8 @@ def importar_flashcards(file: UploadFile = File(...), conn=Depends(get_db_sessio
         count += 1
     conn.commit()
     dias_distribuidos = (count // max_por_dia) + 1
-    log.info(f"Flashcards imported: {count} items distributed over {dias_distribuidos} days")
-    return {"ok": True, "importados": count, "distribuidos_em_dias": dias_distribuidos}
+    log.info(f"Flashcards imported: {count} items ({duplicados} duplicates skipped) distributed over {dias_distribuidos} days")
+    return {"ok": True, "importados": count, "duplicados_ignorados": duplicados, "distribuidos_em_dias": dias_distribuidos}
 
 
 # ============================================================

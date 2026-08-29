@@ -105,7 +105,14 @@ export async function importarFlashcardsFile(input) {
   if (!file) return;
   try {
     const data = await importarArquivo('/api/flashcards/importar', file);
-    if (data.ok) { toast(`Importados ${data.importados} flashcards!`, 'success'); window._loadAllFlashcards?.(); window._loadFlashcardsToday?.(); }
+    if (data.ok) {
+      const dup = data.duplicados_ignorados || 0;
+      const msg = dup > 0
+        ? `Importados ${data.importados} flashcards (${dup} duplicado${dup > 1 ? 's' : ''} ignorado${dup > 1 ? 's' : ''})`
+        : `Importados ${data.importados} flashcards!`;
+      toast(msg, 'success');
+      window._loadAllFlashcards?.(); window._loadFlashcardsToday?.();
+    }
     else { toast(data.detail || 'Erro ao importar flashcards', 'error'); }
   } catch (e) { toast('Erro ao importar flashcards', 'error'); }
   input.value = '';

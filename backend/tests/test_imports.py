@@ -151,3 +151,48 @@ class TestImports:
         )
         assert r.status_code == 200
         assert r.json()["importados"] == 1
+
+    def test_importar_flashcards_dedup_segundo_import(self, client):
+        """Reimportar o mesmo arquivo não deve duplicar: 2º import ignora tudo."""
+        csv_content = (
+            "pergunta,resposta\n"
+            "Dedup Q1 unica,Dedup R1\n"
+            "Dedup Q2 unica,Dedup R2\n"
+        )
+        r1 = client.post("/api/flashcards/importar", files={"file": ("dedup.csv", csv_content, "text/csv")})
+        assert r1.status_code == 200
+        assert r1.json()["importados"] == 2
+        assert r1.json()["duplicados_ignorados"] == 0
+
+        r2 = client.post("/api/flashcards/importar", files={"file": ("dedup.csv", csv_content, "text/csv")})
+        assert r2.status_code == 200
+        assert r2.json()["importados"] == 0
+        assert r2.json()["duplicados_ignorados"] == 2
+
+    def test_importar_flashcards_dedup_intra_arquivo(self, client):
+        """Linhas repetidas dentro do mesmo arquivo são inseridas apenas uma vez."""
+        csv_content = (
+            "pergunta,resposta\n"
+            "Intra Q unica,Intra R\n"
+            "Intra Q unica,Intra R\n"
+            "Intra Q unica,Intra R\n"
+        )
+        r = client.post("/api/flashcards/importar", files={"file": ("intra.csv", csv_content, "text/csv")})
+        assert r.status_code == 200
+        assert r.json()["importados"] == 1
+        assert r.json()["duplicados_ignorados"] == 2
+
+    def test_importar_flashcards_dedup_normalizado(self, client):
+        """Diferenças de caixa/espaços não criam duplicata (comparação normalizada)."""
+        r1 = client.post(
+            "/api/flashcards/importar",
+            files={"file": ("n1.csv", "pergunta,resposta\nNorm Question,Norm Answer\n", "text/csv")},
+        )
+        assert r1.json()["importados"] == 1
+        # Mesma pergunta/resposta com caixa e espaços diferentes
+        r2 = client.post(
+            "/api/flashcards/importar",
+            files={"file": ("n2.csv", "pergunta,resposta\n  norm   QUESTION ,  NORM answer\n", "text/csv")},
+        )
+        assert r2.json()["importados"] == 0
+        assert r2.json()["duplicados_ignorados"] == 1
