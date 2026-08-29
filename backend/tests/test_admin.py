@@ -531,7 +531,7 @@ class TestCompartilhamento:
                           json={"email": email, "nome": nome, "username": email.split("@")[0], "plano": "free"}).json()["id"]
 
     def _seed_recursos(self, origem_uid):
-        """Insere questão, flashcard, súmula e caderno para o user origem direto no DB."""
+        """Insere questão, flashcard, súmula, caderno, edital, vademecum e planejador para o user origem."""
         conn = sqlite3.connect(_tmp_db.name, check_same_thread=False, timeout=10)
         conn.row_factory = sqlite3.Row
         now = datetime.now().isoformat()
@@ -552,6 +552,55 @@ class TestCompartilhamento:
             conn.execute("INSERT INTO cadernos_questoes (caderno_id, questao_id, ordem, added_at) VALUES (?, ?, 0, ?)", (cad_id, qid, now))
         except Exception:
             pass
+        # Edital verticalizado + info + resumo + nota
+        cur3 = conn.execute("""
+            INSERT INTO edital (edital_nome, cargo, materia, topico, status, user_id)
+            VALUES ('TJ 2026', 'Analista', 'Dir Const', 'Princípios', 'Concluído', ?)
+        """, (origem_uid,))
+        edital_id = cur3.lastrowid
+        try:
+            conn.execute("INSERT INTO edital_info (edital_nome, cargo, orgao, user_id) VALUES ('TJ 2026', 'Analista', 'TJ', ?)", (origem_uid,))
+        except Exception:
+            pass
+        try:
+            conn.execute("INSERT INTO resumos (edital_id, resumo, tipo, created_at, user_id) VALUES (?, 'Resumo X', 'texto', ?, ?)", (edital_id, now, origem_uid))
+        except Exception:
+            pass
+        try:
+            conn.execute("INSERT INTO notas_topico (edital_id, conteudo, created_at, user_id) VALUES (?, 'Nota Y', ?, ?)", (edital_id, now, origem_uid))
+        except Exception:
+            pass
+        # Vade mécum: lei + artigo
+        try:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS vademecum_leis (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL DEFAULT 1,
+                    nome TEXT NOT NULL, sigla TEXT DEFAULT '', numero TEXT DEFAULT '',
+                    data_publicacao TEXT DEFAULT '', ementa TEXT DEFAULT '', created_at TEXT NOT NULL
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS vademecum_artigos (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT, lei_id INTEGER NOT NULL,
+                    user_id INTEGER NOT NULL DEFAULT 1, numero TEXT NOT NULL, caput TEXT NOT NULL,
+                    paragrafos TEXT DEFAULT '', incisos TEXT DEFAULT '', alineas TEXT DEFAULT '',
+                    capitulo TEXT DEFAULT '', secao TEXT DEFAULT '', destacado INTEGER DEFAULT 0, anotacao TEXT DEFAULT ''
+                )
+            """)
+            curl = conn.execute("INSERT INTO vademecum_leis (nome, sigla, created_at, user_id) VALUES ('CF', 'CF88', ?, ?)", (now, origem_uid))
+            lei_id = curl.lastrowid
+            conn.execute("INSERT INTO vademecum_artigos (lei_id, user_id, numero, caput) VALUES (?, ?, '5', 'Todos são iguais')", (lei_id, origem_uid))
+        except Exception:
+            pass
+        # Planejador
+        try:
+            conn.execute("INSERT INTO planejador_semanal (dia_semana, materia, horas, user_id) VALUES ('seg', 'Dir', 2, ?)", (origem_uid,))
+        except Exception:
+            pass
+        try:
+            conn.execute("INSERT INTO calendario_personalizado (dia_semana, materia, topicos, tempo_min, tipo, ordem, user_id) VALUES ('seg', 'Dir', 'T1', 60, 'estudo', 0, ?)", (origem_uid,))
+        except Exception:
+            pass
         conn.commit()
         conn.close()
 
@@ -566,6 +615,9 @@ class TestCompartilhamento:
         assert rec["flashcards"] >= 1
         assert rec["sumulas"] >= 1
         assert rec["cadernos"] >= 1
+        assert rec["editais"] >= 1
+        assert rec["vademecum"] >= 1
+        assert rec["planejador"] >= 1
 
     def test_compartilhar_copia_recursos(self, client):
         token = _get_admin_token(client)
@@ -576,7 +628,7 @@ class TestCompartilhamento:
         r = client.post("/api/admin/compartilhar", headers=_auth_header(token), json={
             "origem_uid": origem,
             "destino_uids": [destino],
-            "recursos": ["questoes", "flashcards", "sumulas", "cadernos"]
+            "recursos": ["questoes", "flashcards", "sumulas", "cadernos", "editais", "vademecum", "planejador"]
         })
         assert r.status_code == 200
         copiados = r.json()["resultado"][str(destino)]["copiados"]
@@ -584,12 +636,39 @@ class TestCompartilhamento:
         assert copiados["flashcards"] >= 1
         assert copiados["sumulas"] >= 1
         assert copiados["cadernos"] >= 1
+        assert copiados["editais"] >= 1
+        assert copiados["vademecum"] >= 1
+        assert copiados["planejador"] >= 1
 
         # Verificar que o destino agora tem os recursos
         rc = client.get(f"/api/admin/users/{destino}/recursos", headers=_auth_header(token)).json()["recursos"]
         assert rc["questoes"] >= 1
         assert rc["flashcards"] >= 1
         assert rc["cadernos"] >= 1
+        assert rc["editais"] >= 1
+        assert rc["vademecum"] >= 1
+        assert rc["planejador"] >= 1
+
+    def test_compartilhar_editais_com_dependentes(self, client):
+        """Editais copiam edital_info, resumos e notas remapeando edital_id."""
+        token = _get_admin_token(client)
+        origem = self._criar_user(client, token, "origem_ed@example.com", "Origem Ed")
+        destino = self._criar_user(client, token, "destino_ed@example.com", "Destino Ed")
+        self._seed_recursos(origem)
+        r = client.post("/api/admin/compartilhar", headers=_auth_header(token), json={
+            "origem_uid": origem, "destino_uids": [destino], "recursos": ["editais"]
+        })
+        assert r.status_code == 200
+        assert r.json()["resultado"][str(destino)]["copiados"]["editais"] >= 1
+        # Verificar resumos/notas copiados com novo edital_id
+        conn = sqlite3.connect(_tmp_db.name, check_same_thread=False, timeout=10)
+        conn.row_factory = sqlite3.Row
+        resumos = conn.execute("SELECT r.edital_id FROM resumos r WHERE r.user_id = ?", (destino,)).fetchall()
+        editais_ids = [row["id"] for row in conn.execute("SELECT id FROM edital WHERE user_id = ?", (destino,)).fetchall()]
+        conn.close()
+        # Se houve resumo, seu edital_id deve apontar para um edital do destino
+        for rr in resumos:
+            assert rr["edital_id"] in editais_ids
 
     def test_compartilhar_multiplos_destinos(self, client):
         token = _get_admin_token(client)

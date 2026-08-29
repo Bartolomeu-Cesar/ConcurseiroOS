@@ -149,6 +149,9 @@
         <label style="font-size:0.8rem;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" class="share-rec" value="flashcards" checked> 🧠 Flashcards</label>
         <label style="font-size:0.8rem;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" class="share-rec" value="sumulas" checked> ⚖️ Súmulas</label>
         <label style="font-size:0.8rem;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" class="share-rec" value="cadernos" checked> 📓 Cadernos</label>
+        <label style="font-size:0.8rem;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" class="share-rec" value="editais" checked> 📋 Editais</label>
+        <label style="font-size:0.8rem;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" class="share-rec" value="vademecum" checked> 📜 Vade Mécum</label>
+        <label style="font-size:0.8rem;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" class="share-rec" value="planejador" checked> 🗓️ Planejador</label>
       </div>
 
       <label>Usuários de destino (segure Ctrl para vários)</label>
@@ -500,7 +503,7 @@
       try {
         const data = await fetch(`/api/admin/users/${uid}/recursos`).then(r => r.json());
         const r = data.recursos || {};
-        el.textContent = `Disponível: 📄 ${r.pdfs} PDFs · ❓ ${r.questoes} questões · 🧠 ${r.flashcards} flashcards · ⚖️ ${r.sumulas} súmulas · 📓 ${r.cadernos} cadernos`;
+        el.textContent = `Disponível: 📄 ${r.pdfs} PDFs · ❓ ${r.questoes} questões · 🧠 ${r.flashcards} flashcards · ⚖️ ${r.sumulas} súmulas · 📓 ${r.cadernos} cadernos · 📋 ${r.editais} editais · 📜 ${r.vademecum} leis · 🗓️ ${r.planejador} itens de plano`;
       } catch(e) { el.textContent = ''; }
     };
 

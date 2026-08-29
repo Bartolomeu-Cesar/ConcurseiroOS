@@ -598,7 +598,7 @@ def ativar_plano_premio(
 
 # Recursos suportados e como resetar progresso/SRS ao copiar para o destino.
 # Cada recurso copia as linhas do user origem, atribuindo user_id do destino.
-_RECURSOS_COMPARTILHAVEIS = {"pdfs", "questoes", "flashcards", "sumulas", "cadernos"}
+_RECURSOS_COMPARTILHAVEIS = {"pdfs", "questoes", "flashcards", "sumulas", "cadernos", "editais", "vademecum", "planejador"}
 
 
 def _tabela_colunas(conn, tabela: str) -> list:
@@ -695,6 +695,132 @@ def _copiar_cadernos(conn, origem_uid: int, destino_uid: int) -> int:
     return total
 
 
+def _copiar_editais(conn, origem_uid: int, destino_uid: int) -> int:
+    """Copia editais verticalizados (edital), dados do concurso (edital_info),
+    resumos e notas de tópico, resetando o progresso de estudo do destino.
+
+    Mapeia o id antigo→novo de cada tópico do edital para reconstruir os
+    vínculos de resumos/notas (que referenciam edital_id).
+    Retorna o número de tópicos de edital copiados.
+    """
+    from utils import today_str
+    now = today_str()
+
+    edital_cols = _tabela_colunas(conn, "edital")
+    if "user_id" not in edital_cols:
+        return 0
+    insert_cols = [c for c in edital_cols if c != "id"]
+
+    # Resets de progresso/SRS/mastery ao copiar
+    resets = {
+        "status": "Não Iniciado", "horas_estudadas": 0,
+        "proxima_revisao": "", "intervalo_revisao": 0,
+        "easiness_factor_edital": 2.5, "repetitions_edital": 0,
+        "stability_edital": 0, "difficulty_edital": 0, "fsrs_state_edital": 0,
+        "mastery_level": 0, "mastery_updated_at": "", "arquivado": 0,
+    }
+    # Filtrar resets para colunas que existem
+    resets = {k: v for k, v in resets.items() if k in insert_cols}
+
+    rows = conn.execute(f"SELECT * FROM edital WHERE user_id = ?", (origem_uid,)).fetchall()
+    id_map = {}  # edital_id antigo → novo
+    placeholders = ", ".join("?" for _ in insert_cols)
+    for row in rows:
+        valores = []
+        for c in insert_cols:
+            if c == "user_id":
+                valores.append(destino_uid)
+            elif c in resets:
+                valores.append(resets[c])
+            else:
+                valores.append(row[c])
+        cur = conn.execute(f"INSERT INTO edital ({', '.join(insert_cols)}) VALUES ({placeholders})", valores)
+        id_map[row["id"]] = cur.lastrowid
+
+    # edital_info (dados do concurso) — cópia direta
+    try:
+        _copiar_linhas(conn, "edital_info", origem_uid, destino_uid, {})
+    except Exception:
+        pass
+
+    # resumos e notas_topico referenciam edital_id → remapear
+    for tabela in ("resumos", "notas_topico"):
+        try:
+            cols = _tabela_colunas(conn, tabela)
+            if "user_id" not in cols or "edital_id" not in cols:
+                continue
+            icols = [c for c in cols if c != "id"]
+            deps = conn.execute(f"SELECT * FROM {tabela} WHERE user_id = ?", (origem_uid,)).fetchall()
+            ph = ", ".join("?" for _ in icols)
+            for d in deps:
+                novo_edital_id = id_map.get(d["edital_id"])
+                if not novo_edital_id:
+                    continue
+                vals = []
+                for c in icols:
+                    if c == "user_id":
+                        vals.append(destino_uid)
+                    elif c == "edital_id":
+                        vals.append(novo_edital_id)
+                    elif c == "created_at":
+                        vals.append(now)
+                    else:
+                        vals.append(d[c])
+                conn.execute(f"INSERT INTO {tabela} ({', '.join(icols)}) VALUES ({ph})", vals)
+        except Exception:
+            pass
+
+    return len(rows)
+
+
+def _copiar_vademecum(conn, origem_uid: int, destino_uid: int) -> int:
+    """Copia leis do vade mécum (vademecum_leis) e seus artigos (vademecum_artigos),
+    mapeando lei_id antigo→novo. Retorna o número de leis copiadas.
+    """
+    try:
+        lei_cols = _tabela_colunas(conn, "vademecum_leis")
+    except Exception:
+        return 0
+    if "user_id" not in lei_cols:
+        return 0
+
+    lei_icols = [c for c in lei_cols if c != "id"]
+    leis = conn.execute("SELECT * FROM vademecum_leis WHERE user_id = ?", (origem_uid,)).fetchall()
+    id_map = {}
+    ph = ", ".join("?" for _ in lei_icols)
+    for lei in leis:
+        vals = [destino_uid if c == "user_id" else lei[c] for c in lei_icols]
+        cur = conn.execute(f"INSERT INTO vademecum_leis ({', '.join(lei_icols)}) VALUES ({ph})", vals)
+        id_map[lei["id"]] = cur.lastrowid
+
+    # Artigos
+    try:
+        art_cols = _tabela_colunas(conn, "vademecum_artigos")
+        if "lei_id" in art_cols:
+            art_icols = [c for c in art_cols if c != "id"]
+            aph = ", ".join("?" for _ in art_icols)
+            for lei_antiga, lei_nova in id_map.items():
+                artigos = conn.execute("SELECT * FROM vademecum_artigos WHERE lei_id = ?", (lei_antiga,)).fetchall()
+                for art in artigos:
+                    vals = []
+                    for c in art_icols:
+                        if c == "user_id":
+                            vals.append(destino_uid)
+                        elif c == "lei_id":
+                            vals.append(lei_nova)
+                        elif c == "destacado":
+                            vals.append(0)
+                        elif c == "anotacao":
+                            vals.append("")
+                        else:
+                            vals.append(art[c])
+                    conn.execute(f"INSERT INTO vademecum_artigos ({', '.join(art_icols)}) VALUES ({aph})", vals)
+    except Exception:
+        pass
+
+    return len(leis)
+
+
 def _contar_recursos(conn, uid: int) -> dict:
     """Conta os recursos compartilháveis de um usuário."""
     def _count(tabela, where="user_id = ?"):
@@ -702,12 +828,22 @@ def _contar_recursos(conn, uid: int) -> dict:
             return conn.execute(f"SELECT COUNT(*) FROM {tabela} WHERE {where}", (uid,)).fetchone()[0]
         except Exception:
             return 0
+    # Editais: contar por edital_nome distinto (não por tópico)
+    try:
+        editais = conn.execute(
+            "SELECT COUNT(DISTINCT edital_nome) FROM edital WHERE user_id = ?", (uid,)
+        ).fetchone()[0]
+    except Exception:
+        editais = 0
     return {
         "pdfs": _count("progress"),
         "questoes": _count("questoes"),
         "flashcards": _count("flashcards"),
         "sumulas": _count("sumulas"),
         "cadernos": _count("cadernos"),
+        "editais": editais,
+        "vademecum": _count("vademecum_leis"),
+        "planejador": _count("planejador_semanal") + _count("calendario_personalizado"),
     }
 
 
@@ -793,6 +929,14 @@ def compartilhar_recursos(
             })
         if "cadernos" in recursos:
             copiados["cadernos"] = _copiar_cadernos(conn, origem_uid, destino_uid)
+        if "editais" in recursos:
+            copiados["editais"] = _copiar_editais(conn, origem_uid, destino_uid)
+        if "vademecum" in recursos:
+            copiados["vademecum"] = _copiar_vademecum(conn, origem_uid, destino_uid)
+        if "planejador" in recursos:
+            p1 = _copiar_linhas(conn, "planejador_semanal", origem_uid, destino_uid, {})
+            p2 = _copiar_linhas(conn, "calendario_personalizado", origem_uid, destino_uid, {})
+            copiados["planejador"] = p1 + p2
 
         resultado[str(destino_uid)] = {"copiados": copiados}
 
