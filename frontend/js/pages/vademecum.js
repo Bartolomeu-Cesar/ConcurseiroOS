@@ -279,8 +279,12 @@ async function importarPDF() {
   }
 
   const btn = document.getElementById('btn-importar-pdf');
+  const progress = document.getElementById('vm-import-progress');
+  const progressLabel = document.getElementById('vm-import-progress-label');
   btn.disabled = true;
   btn.textContent = '⏳ Extraindo do PDF...';
+  if (progress) progress.style.display = 'block';
+  if (progressLabel) progressLabel.textContent = `Processando “${file.name}”…`;
 
   try {
     const formData = new FormData();
@@ -290,24 +294,30 @@ async function importarPDF() {
       method: 'POST',
       body: formData,
     });
+    if (res.status === 401) {
+      // Token expirado/inválido — o interceptor global pode redirecionar; avisa antes.
+      throw new Error('Sessão expirada. Faça login novamente e tente de novo.');
+    }
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || 'Erro ao importar do PDF');
+      throw new Error(err.detail || `Erro ao importar do PDF (HTTP ${res.status})`);
     }
     const data = await res.json();
     const count = data.artigos_importados ?? 0;
     if (count === 0) {
-      toast('Nenhum artigo detectado no PDF. Verifique se o texto segue o padrão "Art. Nº ...".', 'warning');
+      toast('Nenhum artigo detectado no PDF. Verifique se o texto segue o padrão "Art. Nº ...".', 'warning', 6000);
     } else {
       toast(`✅ ${count} artigos importados do PDF!`, 'success');
       closeModalImportar();
       loadLeis();
     }
   } catch (err) {
-    toast(err.message, 'error');
+    console.error('[vademecum] importarPDF falhou:', err);
+    toast(err.message || 'Falha ao importar o PDF.', 'error', 6000);
   } finally {
     btn.disabled = false;
     btn.textContent = '📄 Importar do PDF';
+    if (progress) progress.style.display = 'none';
   }
 }
 window.importarPDF = importarPDF;

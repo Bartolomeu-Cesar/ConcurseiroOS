@@ -131,6 +131,11 @@
     }
     .vm-detail-paragrafos p, .vm-detail-incisos p { margin: 4px 0; }
     .vm-detail-section-label { font-size: 0.75rem; font-weight: 700; color: var(--accent); margin-bottom: 4px; text-transform: uppercase; }
+    @keyframes vmIndeterminate {
+      0% { margin-left: -30%; width: 30%; }
+      50% { width: 45%; }
+      100% { margin-left: 100%; width: 30%; }
+    }
 
     .vm-detail-anotacao {
       width: 100%; min-height: 80px; padding: 10px; border-radius: 8px;
@@ -350,6 +355,13 @@
         <input type="file" id="importar-pdf" accept="application/pdf,.pdf">
       </div>
       <button class="vm-form-submit" id="btn-importar-pdf" onclick="importarPDF()">📄 Importar do PDF</button>
+
+      <div id="vm-import-progress" style="display:none;margin-top:12px;">
+        <div style="font-size:0.78rem;color:var(--text-sub,#9399b2);margin-bottom:6px;" id="vm-import-progress-label">Processando…</div>
+        <div style="height:6px;background:var(--border,#45475a);border-radius:4px;overflow:hidden;">
+          <div id="vm-import-progress-bar" style="height:100%;width:30%;background:var(--accent,#cba6f7);border-radius:4px;animation:vmIndeterminate 1.2s ease-in-out infinite;"></div>
+        </div>
+      </div>
     </div>
   </div>
 
