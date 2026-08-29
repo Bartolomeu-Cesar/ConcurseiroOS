@@ -257,6 +257,12 @@
   <script src="/auth-interceptor.js"></script>
   <script src="/timer-global.js"></script>
   <script src="/sidebar.js"></script>
+  <script type="module">
+    // Expõe os helpers de modal/toast no window para o script inline usar (regra: nunca confirm/alert/prompt nativos)
+    import { confirmModal, alertModal, promptModal } from '/js/modules/utils.js';
+    import { toast } from '/js/modules/toast.js';
+    Object.assign(window, { confirmModal, alertModal, promptModal, toast });
+  </script>
   <script>
   (function() {
     let currentPage = 1;
@@ -284,7 +290,7 @@
 
       try {
         const data = await fetch('/api/admin/users?' + params).then(r => r.json());
-        if (data.detail) { alert(data.detail); return; }
+        if (data.detail) { toast(data.detail, 'error'); return; }
 
         const tbody = document.getElementById('users-tbody');
         if (!data.users.length) {
@@ -349,7 +355,7 @@
         document.getElementById('field-role').value = u.role || 'user';
         document.getElementById('field-password').value = '';
         document.getElementById('modal-user').classList.add('open');
-      } catch(e) { alert('Erro ao carregar usuário.'); }
+      } catch(e) { toast('Erro ao carregar usuário.', 'error'); }
     };
 
     // Save user (create or update)
@@ -365,7 +371,7 @@
       const pw = document.getElementById('field-password').value;
       if (pw) body.password = pw;
 
-      if (!body.email) { alert('Email é obrigatório.'); return; }
+      if (!body.email) { toast('Email é obrigatório.', 'warning'); return; }
 
       try {
         let res;
@@ -380,14 +386,14 @@
           loadUsers();
           loadStats();
         } else {
-          alert(data.detail || 'Erro ao salvar.');
+          toast(data.detail || 'Erro ao salvar.', 'error');
         }
-      } catch(e) { alert('Erro de conexão.'); }
+      } catch(e) { toast('Erro de conexão.', 'error'); }
     };
 
     // Delete user
     window.deleteUser = async function(uid, nome) {
-      if (!confirm(`⚠️ EXCLUIR "${nome}" (ID ${uid})?\n\nIsso remove TODOS os dados deste usuário permanentemente!`)) return;
+      if (!await confirmModal('Excluir usuário', `⚠️ EXCLUIR "${nome}" (ID ${uid})? Isso remove TODOS os dados deste usuário permanentemente!`, { type: 'danger', confirmText: 'Excluir' })) return;
       try {
         const res = await fetch(`/api/admin/users/${uid}`, {method: 'DELETE'});
         const data = await res.json();
@@ -395,9 +401,9 @@
           loadUsers();
           loadStats();
         } else {
-          alert(data.detail || 'Erro ao excluir.');
+          toast(data.detail || 'Erro ao excluir.', 'error');
         }
-      } catch(e) { alert('Erro.'); }
+      } catch(e) { toast('Erro.', 'error'); }
     };
 
     window.closeModal = function() {
@@ -449,17 +455,17 @@
       try {
         const res = await fetch('/api/admin/monetizacao', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
         const data = await res.json();
-        if (res.ok) { alert('✅ Janela do Vitalício salva!'); loadMonetizacao(); }
-        else alert(data.detail || 'Erro ao salvar.');
-      } catch(e) { alert('Erro de conexão.'); }
+        if (res.ok) { toast('✅ Janela do Vitalício salva!', 'success'); loadMonetizacao(); }
+        else toast(data.detail || 'Erro ao salvar.', 'error');
+      } catch(e) { toast('Erro de conexão.', 'error'); }
     };
 
     window.limparVitalicio = async function() {
-      if (!confirm('Limpar a janela = Vitalício SEMPRE disponível. Confirmar?')) return;
+      if (!await confirmModal('Limpar janela', 'Limpar a janela = Vitalício SEMPRE disponível. Confirmar?', { type: 'warning', confirmText: 'Limpar' })) return;
       try {
         const res = await fetch('/api/admin/monetizacao', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({vitalicio_venda_inicio:'', vitalicio_venda_fim:''})});
-        if (res.ok) { alert('Janela limpa — Vitalício sempre disponível.'); loadMonetizacao(); }
-      } catch(e) { alert('Erro.'); }
+        if (res.ok) { toast('Janela limpa — Vitalício sempre disponível.', 'success'); loadMonetizacao(); }
+      } catch(e) { toast('Erro.', 'error'); }
     };
 
     window.salvarCreditosPrecos = async function() {
@@ -470,9 +476,9 @@
       try {
         const res = await fetch('/api/admin/monetizacao', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({creditos_precos: precos})});
         const data = await res.json();
-        if (res.ok) { alert('✅ Preços dos créditos salvos!'); loadMonetizacao(); }
-        else alert(data.detail || 'Erro ao salvar.');
-      } catch(e) { alert('Erro de conexão.'); }
+        if (res.ok) { toast('✅ Preços dos créditos salvos!', 'success'); loadMonetizacao(); }
+        else toast(data.detail || 'Erro ao salvar.', 'error');
+      } catch(e) { toast('Erro de conexão.', 'error'); }
     };
 
     // Modal de monetização do usuário
@@ -494,26 +500,26 @@
       const body = { tipo };
       if (tipo === 'premium') body.dias = parseInt(document.getElementById('premio-dias').value) || 30;
       const label = tipo === 'vitalicio' ? 'Vitalício' : `Premium por ${body.dias} dias`;
-      if (!confirm(`Ativar ${label} para este usuário (grátis, como prêmio)?`)) return;
+      if (!await confirmModal('Ativar plano', `Ativar ${label} para este usuário (grátis, como prêmio)?`, { type: 'warning', confirmText: 'Ativar' })) return;
       try {
         const res = await fetch(`/api/admin/users/${uid}/ativar-plano`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
         const data = await res.json();
-        if (res.ok) { alert(`✅ ${label} ativado!`); closeMoneyModal(); loadUsers(); loadStats(); }
-        else alert(data.detail || 'Erro.');
-      } catch(e) { alert('Erro de conexão.'); }
+        if (res.ok) { toast(`✅ ${label} ativado!`, 'success'); closeMoneyModal(); loadUsers(); loadStats(); }
+        else toast(data.detail || 'Erro.', 'error');
+      } catch(e) { toast('Erro de conexão.', 'error'); }
     };
 
     window.darBrinde = async function() {
       const uid = document.getElementById('money-uid').value;
       const quantidade = parseInt(document.getElementById('brinde-qtd').value) || 0;
       const motivo = document.getElementById('brinde-motivo').value.trim();
-      if (quantidade === 0) { alert('Quantidade deve ser diferente de zero.'); return; }
+      if (quantidade === 0) { toast('Quantidade deve ser diferente de zero.', 'warning'); return; }
       try {
         const res = await fetch(`/api/admin/users/${uid}/creditos`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({quantidade, motivo})});
         const data = await res.json();
-        if (res.ok) { alert(`✅ Créditos: ${data.saldo_anterior} → ${data.saldo_posterior}`); closeMoneyModal(); }
-        else alert(data.detail || 'Erro.');
-      } catch(e) { alert('Erro de conexão.'); }
+        if (res.ok) { toast(`✅ Créditos: ${data.saldo_anterior} → ${data.saldo_posterior}`, 'success'); closeMoneyModal(); }
+        else toast(data.detail || 'Erro.', 'error');
+      } catch(e) { toast('Erro de conexão.', 'error'); }
     };
 
     // ==================== COMPARTILHAMENTO ====================
@@ -565,16 +571,16 @@
 
     window.fazerCompartilhamento = async function() {
       const origem_uid = parseInt(document.getElementById('share-origem').value);
-      if (!origem_uid) { alert('Selecione o usuário de origem.'); return; }
+      if (!origem_uid) { toast('Selecione o usuário de origem.', 'warning'); return; }
 
       const destino_uids = Array.from(document.getElementById('share-destinos').selectedOptions)
         .map(o => parseInt(o.value)).filter(v => v !== origem_uid);
-      if (!destino_uids.length) { alert('Selecione ao menos um destino diferente da origem.'); return; }
+      if (!destino_uids.length) { toast('Selecione ao menos um destino diferente da origem.', 'warning'); return; }
 
       const recursos = Array.from(document.querySelectorAll('.share-rec:checked')).map(c => c.value);
-      if (!recursos.length) { alert('Marque ao menos um recurso.'); return; }
+      if (!recursos.length) { toast('Marque ao menos um recurso.', 'warning'); return; }
 
-      if (!confirm(`Copiar [${recursos.join(', ')}] do usuário #${origem_uid} para ${destino_uids.length} destino(s)?`)) return;
+      if (!await confirmModal('Compartilhar recursos', `Copiar [${recursos.join(', ')}] do usuário #${origem_uid} para ${destino_uids.length} destino(s)?`, { type: 'info', confirmText: 'Compartilhar' })) return;
 
       const btn = document.getElementById('share-btn');
       btn.disabled = true; btn.textContent = '⏳ Copiando...';
@@ -657,9 +663,9 @@
       const descricao = document.getElementById('cat-descricao').value.trim();
       const categoria = document.getElementById('cat-categoria').value.trim() || 'Geral';
 
-      if (!origem_uid) { alert('Selecione o usuário de origem.'); return; }
-      if (tipo !== 'deck_sumulas' && !ref) { alert('Selecione o recurso a publicar.'); return; }
-      if (!titulo) { alert('Informe um título.'); return; }
+      if (!origem_uid) { toast('Selecione o usuário de origem.', 'warning'); return; }
+      if (tipo !== 'deck_sumulas' && !ref) { toast('Selecione o recurso a publicar.', 'warning'); return; }
+      if (!titulo) { toast('Informe um título.', 'warning'); return; }
 
       const btn = document.getElementById('cat-btn');
       btn.disabled = true; btn.textContent = '⏳ Publicando...';
@@ -690,9 +696,9 @@
           method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ verificado })
         });
         const data = await res.json();
-        if (res.ok) alert(verificado ? '✔️ Curador verificado!' : 'Selo removido.');
-        else alert(data.detail || 'Erro.');
-      } catch(e) { alert('Erro de conexão.'); }
+        if (res.ok) toast(verificado ? '✔️ Curador verificado!' : 'Selo removido.', 'success');
+        else toast(data.detail || 'Erro.', 'error');
+      } catch(e) { toast('Erro de conexão.', 'error'); }
     };
 
     async function loadPendentes() {
@@ -722,8 +728,8 @@
           method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ acao })
         });
         if (res.ok) { loadPendentes(); }
-        else { const d = await res.json(); alert(d.detail || 'Erro.'); }
-      } catch(e) { alert('Erro de conexão.'); }
+        else { const d = await res.json(); toast(d.detail || 'Erro.', 'error'); }
+      } catch(e) { toast('Erro de conexão.', 'error'); }
     };
 
     // Init

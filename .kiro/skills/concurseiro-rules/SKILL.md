@@ -62,6 +62,7 @@
   - `await promptModal(mensagem, {title, defaultValue, placeholder, multiline})` → substitui `prompt()`. Retorna `Promise<string|null>` (null = cancelado).
   - Para feedback rápido de sucesso/erro (não-bloqueante), preferir `toast('msg', 'tipo')` em vez de `alertModal`.
   - Todos expostos em `window` via `app.js` para uso em `onclick` inline. Em páginas fora do app principal, importar de `modules/utils.js` ou `modules/toast.js`.
+  - Páginas com `<script>` clássico (não-módulo), como `admin.html`: adicionar um `<script type="module">` que importa os helpers e faz `Object.assign(window, { confirmModal, alertModal, promptModal, toast })` ANTES do script inline. Funções que usam `await confirmModal/promptModal` devem ser `async`.
 
 ## Decisões Técnicas (por que assim)
 
