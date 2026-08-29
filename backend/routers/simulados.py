@@ -19,6 +19,91 @@ from utils import today_str, update_streak
 router = APIRouter(prefix="", tags=["Simulados"])
 
 
+def _registrar_tempo_simulado(conn, user_id: int, sim_id: int, tempo_total_seg: int, materias: list[str] | None = None) -> float:
+    """Registra o tempo de um simulado como sessão de estudo de forma INCREMENTAL.
+
+    Grava apenas o delta (tempo_total_seg - tempo já registrado antes), para que
+    heartbeats periódicos e a finalização não contem o tempo em dobro. Funciona
+    também para simulados abandonados (o último heartbeat persiste o parcial).
+
+    Retorna as horas efetivamente adicionadas nesta chamada (delta em horas).
+    """
+    if not tempo_total_seg or tempo_total_seg <= 0:
+        return 0.0
+
+    # Quanto já foi registrado (coluna pode não existir em bancos muito antigos)
+    try:
+        row = conn.execute(
+            "SELECT COALESCE(tempo_registrado_seg, 0) FROM simulados WHERE id = ? AND user_id = ?",
+            (sim_id, user_id),
+        ).fetchone()
+    except Exception:
+        row = None
+    ja_registrado = (row[0] if row else 0) or 0
+
+    delta_seg = tempo_total_seg - ja_registrado
+    if delta_seg <= 0:
+        return 0.0  # nada novo a registrar (idempotente)
+
+    horas = delta_seg / 3600
+    mats = [m for m in (materias or []) if m] or ["Simulado"]
+    horas_por_mat = horas / len(mats)
+    for mat in mats:
+        existing = conn.execute(
+            "SELECT id FROM sessoes_estudo WHERE data = ? AND materia = ? AND tipo = 'simulado' AND user_id = ?",
+            (today_str(), mat, user_id),
+        ).fetchone()
+        if existing:
+            conn.execute(
+                "UPDATE sessoes_estudo SET horas = horas + ? WHERE id = ? AND user_id = ?",
+                (horas_por_mat, existing[0], user_id),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO sessoes_estudo (materia, horas, data, tipo, user_id) VALUES (?, ?, ?, 'simulado', ?)",
+                (mat, horas_por_mat, today_str(), user_id),
+            )
+
+    # Marca o tempo já registrado (evita dupla contagem em chamadas futuras)
+    try:
+        conn.execute(
+            "UPDATE simulados SET tempo_registrado_seg = ? WHERE id = ? AND user_id = ?",
+            (tempo_total_seg, sim_id, user_id),
+        )
+    except Exception:
+        pass
+    update_streak(conn, "horas_estudadas", horas, user_id=user_id)
+    return horas
+
+
+@router.post("/api/simulados/cronometrado/{id}/heartbeat", summary="Registrar tempo parcial do simulado",
+             description="Registra incrementalmente o tempo decorrido no simulado (para abandono/parcial), sem dupla contagem.")
+def heartbeat_simulado_cronometrado(
+    id: int,
+    tempo_total_seg: int = Body(..., embed=True),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    sim = conn.execute("SELECT status FROM simulados WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
+    if not sim:
+        raise HTTPException(status_code=404, detail="Simulado não encontrado")
+    # Não registra mais tempo se já foi finalizado
+    if sim[0] == "finalizado":
+        return {"ok": True, "ignorado": "simulado já finalizado"}
+
+    # Matérias do simulado (para distribuir as horas)
+    mats = [r[0] for r in conn.execute(
+        """SELECT DISTINCT q.materia FROM simulado_questoes sq
+           JOIN questoes q ON q.id = sq.questao_id
+           WHERE sq.simulado_id = ? AND sq.user_id = ? AND q.materia IS NOT NULL AND q.materia != ''""",
+        (id, user_id),
+    ).fetchall()]
+
+    horas = _registrar_tempo_simulado(conn, user_id, id, tempo_total_seg, mats)
+    conn.commit()
+    return {"ok": True, "horas_adicionadas": round(horas, 4)}
+
+
 # ============================================================
 # SELEÇÃO INTELIGENTE DE QUESTÕES (reutilizável)
 # ============================================================
@@ -691,33 +776,10 @@ def finalizar_simulado_cronometrado(
         WHERE id = ? AND user_id = ?
     """, (nota_bruta, total_acertos, body.tempo_total_seg, datetime.now().isoformat(), id, user_id))
 
-    # Registrar tempo como sessão de estudo
+    # Registrar tempo como sessão de estudo (incremental — soma só o delta ainda
+    # não registrado por heartbeats anteriores, evitando dupla contagem)
     if body.tempo_total_seg > 0:
-        horas = body.tempo_total_seg / 3600
-        materias_list = list(por_materia.keys())
-        if materias_list:
-            horas_por_mat = horas / len(materias_list)
-            for mat in materias_list:
-                existing = conn.execute(
-                    "SELECT id FROM sessoes_estudo WHERE data = ? AND materia = ? AND tipo = 'simulado' AND user_id = ?",
-                    (today_str(), mat, user_id),
-                ).fetchone()
-                if existing:
-                    conn.execute(
-                        "UPDATE sessoes_estudo SET horas = horas + ? WHERE id = ? AND user_id = ?",
-                        (horas_por_mat, existing[0], user_id),
-                    )
-                else:
-                    conn.execute(
-                        "INSERT INTO sessoes_estudo (materia, horas, data, tipo, user_id) VALUES (?, ?, ?, 'simulado', ?)",
-                        (mat, horas_por_mat, today_str(), user_id),
-                    )
-        else:
-            conn.execute(
-                "INSERT INTO sessoes_estudo (materia, horas, data, tipo, user_id) VALUES (?, ?, ?, 'simulado', ?)",
-                ("Simulado", horas, today_str(), user_id),
-            )
-        update_streak(conn, "horas_estudadas", horas, user_id=user_id)
+        _registrar_tempo_simulado(conn, user_id, id, body.tempo_total_seg, list(por_materia.keys()))
 
     conn.commit()
 

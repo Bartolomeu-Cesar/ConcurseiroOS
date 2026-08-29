@@ -435,6 +435,76 @@ class TestFluxoCompleto:
 
 
 # ============================================================
+# HEARTBEAT — tempo parcial / abandono / registro incremental
+# ============================================================
+
+def _horas_simulado_hoje(user_id=1):
+    from datetime import date
+    c = sqlite3.connect(_tmp_db.name, timeout=10)
+    try:
+        row = c.execute(
+            "SELECT COALESCE(SUM(horas),0) FROM sessoes_estudo WHERE tipo='simulado' AND data=? AND user_id=?",
+            (date.today().isoformat(), user_id),
+        ).fetchone()
+        return round(row[0], 4)
+    finally:
+        c.close()
+
+
+class TestHeartbeatSimulado:
+    def _criar(self, client):
+        r = client.post("/api/simulados/cronometrado", json={
+            "titulo": "Simulado HB",
+            "tempo_total_min": 120,
+            "questoes_total": 5,
+            "materias": [],
+            "dificuldade_mix": {"facil": 2, "medio": 2, "dificil": 1},
+        })
+        assert r.status_code == 200
+        return r.json()["id"]
+
+    def test_heartbeat_registra_tempo_parcial(self, client, setup_questoes):
+        base = _horas_simulado_hoje()
+        sim_id = self._criar(client)
+        # 1h de simulado (abandonado, sem finalizar)
+        r = client.post(f"/api/simulados/cronometrado/{sim_id}/heartbeat", json={"tempo_total_seg": 3600})
+        assert r.status_code == 200
+        assert _horas_simulado_hoje() >= base + 0.9  # ~1h adicionada
+
+    def test_heartbeat_incremental_sem_dupla_contagem(self, client, setup_questoes):
+        base = _horas_simulado_hoje()
+        sim_id = self._criar(client)
+        # Primeiro heartbeat: 1800s (0.5h)
+        client.post(f"/api/simulados/cronometrado/{sim_id}/heartbeat", json={"tempo_total_seg": 1800})
+        # Segundo heartbeat: 3600s TOTAL (não +3600; deve somar só o delta de +0.5h)
+        client.post(f"/api/simulados/cronometrado/{sim_id}/heartbeat", json={"tempo_total_seg": 3600})
+        # Total adicionado deve ser ~1h (0.5 + 0.5), não 1.5h
+        adicionado = _horas_simulado_hoje() - base
+        assert 0.9 <= adicionado <= 1.1
+
+    def test_finalizar_apos_heartbeat_nao_duplica(self, client, setup_questoes):
+        base = _horas_simulado_hoje()
+        # Criar via endpoint e pegar questões
+        r = client.post("/api/simulados/cronometrado", json={
+            "titulo": "Simulado HB Final", "tempo_total_min": 120, "questoes_total": 3,
+            "materias": [], "dificuldade_mix": {"facil": 1, "medio": 1, "dificil": 1},
+        })
+        data = r.json()
+        sim_id = data["id"]
+        questoes = data["questoes"]
+        # Heartbeat de 1800s (0.5h)
+        client.post(f"/api/simulados/cronometrado/{sim_id}/heartbeat", json={"tempo_total_seg": 1800})
+        # Finalizar com tempo TOTAL de 3600s → deve somar só +0.5h (delta)
+        respostas = [{"questao_id": q["id"], "resposta": "A", "tempo_seg": 100} for q in questoes]
+        rf = client.post(f"/api/simulados/cronometrado/{sim_id}/finalizar",
+                         json={"respostas": respostas, "tempo_total_seg": 3600})
+        assert rf.status_code == 200
+        adicionado = _horas_simulado_hoje() - base
+        # Total do simulado = 1h (0.5 heartbeat + 0.5 finalizar), sem duplicar para 1.5h
+        assert 0.9 <= adicionado <= 1.1
+
+
+# ============================================================
 # CLEANUP
 # ============================================================
 

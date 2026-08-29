@@ -14,6 +14,7 @@ let examState = {
   startTime: null,
   questionStartTime: null,
   timerInterval: null,
+  heartbeatInterval: null,
   tempoTotalMin: 240,
 };
 
@@ -108,11 +109,64 @@ function startExam(data) {
   clearInterval(examState.timerInterval);
   examState.timerInterval = setInterval(updateTimer, 1000);
 
+  // Heartbeat: registra o tempo parcial periodicamente (para simulados
+  // abandonados/parciais) e ao sair da página. Sem dupla contagem (delta no backend).
+  _startHeartbeat();
+
   // Build navigator grid
   buildNavGrid();
 
   // Show first question
   showQuestion(0);
+}
+
+// ==================== HEARTBEAT (tempo parcial / abandono) ====================
+function _elapsedSeg() {
+  return examState.startTime ? Math.floor((Date.now() - examState.startTime) / 1000) : 0;
+}
+
+function _sendHeartbeat(useBeacon = false) {
+  if (!examState.id) return;
+  const tempo = _elapsedSeg();
+  if (tempo <= 0) return;
+  const url = `/api/simulados/cronometrado/${examState.id}/heartbeat`;
+  const payload = JSON.stringify({ tempo_total_seg: tempo });
+  // Ao sair da página, sendBeacon é mais confiável (sobrevive ao unload).
+  if (useBeacon && navigator.sendBeacon) {
+    try {
+      navigator.sendBeacon(url, new Blob([payload], { type: 'application/json' }));
+      return;
+    } catch (e) { /* cai no fetch abaixo */ }
+  }
+  // fetch normal (o auth-interceptor injeta o token). keepalive ajuda no unload.
+  fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: payload,
+    keepalive: true,
+  }).catch(() => {});
+}
+
+function _onVisibility() {
+  if (document.visibilityState === 'hidden') _sendHeartbeat(true);
+}
+function _onPageHide() { _sendHeartbeat(true); }
+
+function _startHeartbeat() {
+  _stopHeartbeat();
+  // Registro incremental a cada 30s enquanto a prova está ativa
+  examState.heartbeatInterval = setInterval(() => _sendHeartbeat(false), 30000);
+  document.addEventListener('visibilitychange', _onVisibility);
+  window.addEventListener('pagehide', _onPageHide);
+}
+
+function _stopHeartbeat() {
+  if (examState.heartbeatInterval) {
+    clearInterval(examState.heartbeatInterval);
+    examState.heartbeatInterval = null;
+  }
+  document.removeEventListener('visibilitychange', _onVisibility);
+  window.removeEventListener('pagehide', _onPageHide);
 }
 
 // ==================== TIMER ====================
@@ -270,6 +324,7 @@ window.finalizarProva = finalizarProva;
 async function finalizarProva() {
   window.hideSubmitModal();
   clearInterval(examState.timerInterval);
+  _stopHeartbeat();
 
   // Save time for current question
   saveQuestionTime();

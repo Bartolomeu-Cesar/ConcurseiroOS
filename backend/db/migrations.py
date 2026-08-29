@@ -632,6 +632,16 @@ def _m59_metas_cargo_alvo(conn):
     log.info("Migration: added edital_alvo/cargo_alvo to metas_config")
 
 
+def _m60_simulados_tempo_registrado(conn):
+    """Rastreia quanto tempo do simulado já virou sessão de estudo, para permitir
+    registro incremental (heartbeat) e de simulados abandonados sem dupla contagem."""
+    try:
+        conn.execute("ALTER TABLE simulados ADD COLUMN tempo_registrado_seg INTEGER DEFAULT 0")
+    except Exception:
+        pass  # coluna já existe
+    log.info("Migration: added tempo_registrado_seg to simulados")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -692,6 +702,7 @@ MIGRATIONS = [
     (57, _m57_catalogo_reputacao),
     (58, _m58_trilha),
     (59, _m59_metas_cargo_alvo),
+    (60, _m60_simulados_tempo_registrado),
 ]
 
 
