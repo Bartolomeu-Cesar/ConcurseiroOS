@@ -202,11 +202,16 @@ def register(body: RegisterRequest, conn=Depends(get_db_session)):
 
     # Criar usuário
     now = datetime.now(timezone.utc).isoformat()
+    # O primeiro usuário do sistema vira admin automaticamente (bootstrap do dono)
+    total_users = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    role = "admin" if total_users == 0 else "user"
     conn.execute(
-        "INSERT INTO users (email, nome, created_at) VALUES (?, ?, ?)",
-        (email, nome, now)
+        "INSERT INTO users (email, nome, role, created_at) VALUES (?, ?, ?, ?)",
+        (email, nome, role, now)
     )
     conn.commit()
+    if role == "admin":
+        log.info(f"Primeiro usuário registrado ({email}) promovido a admin.")
 
     # Gerar e enviar código
     code = _generate_code()

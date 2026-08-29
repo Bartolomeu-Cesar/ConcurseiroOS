@@ -337,6 +337,29 @@ export async function initAuth() {
   } catch(e) {
     // Se falhar (offline), permitir acesso
   }
+
+  // Sincronizar dados do usuário (role/plano) com o backend — evita localStorage defasado
+  // (ex: admin muda plano/role → reflete sem precisar relogar)
+  if (isLoggedIn()) {
+    try {
+      const token = getToken();
+      const meRes = await fetch('/api/auth/me', { headers: { 'Authorization': `Bearer ${token}` } });
+      if (meRes.ok) {
+        const me = await meRes.json();
+        const user = getUser() || {};
+        // Atualizar campos que podem mudar server-side
+        user.plano = me.plano ?? user.plano;
+        user.role = me.role ?? user.role;
+        user.nome = me.nome ?? user.nome;
+        user.avatar = me.avatar ?? user.avatar;
+        user.plano_expira = me.plano_expira ?? user.plano_expira;
+        localStorage.setItem('auth_user', JSON.stringify(user));
+        updateAuthUI();
+        // Se o link/menu de admin depende de role, re-renderizar sidebar se disponível
+        if (window.renderSidebar) { try { window.renderSidebar(); } catch(e) {} }
+      }
+    } catch(e) { /* offline: mantém cache local */ }
+  }
 }
 
 
