@@ -600,4 +600,12 @@ def _montar_trilha(conn, trilha_id: int, user_id: int) -> dict:
         "concluida": total > 0 and concluidas == total,
     }
 
+    # Retrieval Practice (Roediger & Karpicke, 2006): sugere recuperação ativa
+    # da etapa atual — recuperar da memória fixa mais que reler.
+    if atual:
+        from study_techniques import retrieval_practice_prompt
+        progresso["retrieval_practice"] = retrieval_practice_prompt(
+            atual.get("materia", ""), atual.get("topico", "")
+        )
+
     return {"trilha": dict(cab), "etapas": etapas, "progresso": progresso}

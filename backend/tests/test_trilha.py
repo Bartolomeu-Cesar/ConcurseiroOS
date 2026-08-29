@@ -578,3 +578,21 @@ def test_gerar_usa_cargo_alvo_salvo(client):
     assert r.json()["progresso"]["total_etapas"] == 2
     topicos = {e["topico"] for e in r.json()["etapas"]}
     assert topicos == {"A - Crase", "A - Regência"}
+
+
+def test_trilha_expoe_retrieval_practice_na_etapa_atual(client):
+    """A resposta da trilha deve trazer a sugestão de Retrieval Practice
+    referente à etapa atual (técnica central reutilizável)."""
+    conn = _conn()
+    _add_topico(conn, "Português", "Crase")
+    _add_topico(conn, "Português", "Regência")
+    conn.commit()
+    conn.close()
+
+    client.post("/api/trilha/gerar")
+    data = client.get("/api/trilha").json()
+    rp = data["progresso"].get("retrieval_practice")
+    assert rp is not None
+    assert rp["tecnica"] == "retrieval_practice"
+    # A etapa atual é a primeira não-concluída (Crase)
+    assert "Crase" in rp["mensagem"]

@@ -53,6 +53,15 @@ function renderTrilha(data) {
     const atualTxt = progresso.etapa_atual
       ? `${escapeHtml(progresso.etapa_atual.materia)} · ${escapeHtml(progresso.etapa_atual.topico)}`
       : (progresso.concluida ? '🎉 Trilha concluída!' : '—');
+    const rp = progresso.retrieval_practice;
+    const rpHtml = rp ? `
+      <div class="trilha-retrieval" style="margin-top:8px;padding:10px 12px;background:var(--bg,#1e1e2e);border:1px solid var(--border,#45475a);border-radius:8px;">
+        <div style="font-size:0.8rem;font-weight:600;color:var(--accent,#cba6f7);margin-bottom:4px;">${rp.titulo || '🎯 Recuperação ativa'}</div>
+        <div style="font-size:0.75rem;color:var(--text-sub,#9399b2);margin-bottom:6px;">${escapeHtml(rp.mensagem || '')}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          ${(rp.acoes || []).map(a => `<span style="font-size:0.7rem;background:var(--bg-surface,#313244);color:var(--text,#cdd6f4);border-radius:6px;padding:3px 8px;">${escapeHtml(a.label)}</span>`).join('')}
+        </div>
+      </div>` : '';
     progressoBox.innerHTML = `
       <div class="trilha-progress-head">
         <span>${progresso.concluidas}/${progresso.total_etapas} etapas</span>
@@ -60,6 +69,7 @@ function renderTrilha(data) {
       </div>
       <div class="trilha-progress-bar"><div class="trilha-progress-fill" style="width:${pct}%;"></div></div>
       <div class="trilha-progress-atual">📍 Agora: <strong>${atualTxt}</strong></div>
+      ${rpHtml}
     `;
   }
 

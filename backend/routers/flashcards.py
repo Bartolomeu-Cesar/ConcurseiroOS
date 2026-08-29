@@ -279,26 +279,10 @@ def review_flashcard_fsrs(id: int, body: FlashcardReviewSM2, conn=Depends(get_db
     # Call FSRS algorithm
     output = review_card(card, rating, desired_retention=desired_retention)
 
-    # === LAG EFFECT (Exam-Aware Spacing) ===
-    # Cepeda et al. (2006): O intervalo ótimo depende de quando o aluno precisa
-    # lembrar. Se a prova é em 30 dias, intervalos longos (ex: 45d) são inúteis.
-    # Fator de compressão: min(1.0, dias_ate_prova / (output.interval * 2))
-    # Só comprime se intervalo > dias restantes * 0.7 (não atrapalha spacing normal)
-    from services import get_dias_ate_prova
-    adjusted_interval = output.interval
-    try:
-        dias_ate_prova = get_dias_ate_prova(conn, user_id)
-        if dias_ate_prova and dias_ate_prova > 0 and adjusted_interval > 1:
-            # Se o intervalo ultrapassa 70% do tempo restante, comprimir
-            max_interval = max(1, int(dias_ate_prova * 0.7))
-            if adjusted_interval > max_interval:
-                adjusted_interval = max_interval
-            # Compressão suave adicional para provas próximas (< 60 dias)
-            if dias_ate_prova <= 60 and adjusted_interval > 3:
-                fator = max(0.5, dias_ate_prova / 90)  # Quanto mais perto, mais comprimi
-                adjusted_interval = max(1, int(adjusted_interval * fator))
-    except Exception:
-        pass  # Se não tiver data da prova, usa intervalo FSRS puro
+    # === LAG EFFECT (Exam-Aware Spacing) — centralizado em study_techniques ===
+    # Cepeda et al. (2006): comprime o intervalo conforme a proximidade da prova.
+    from study_techniques import apply_lag_effect
+    adjusted_interval = apply_lag_effect(conn, user_id, output.interval)
 
     proxima = (date.today() + timedelta(days=adjusted_interval)).isoformat()
     new_reps = reps + 1
