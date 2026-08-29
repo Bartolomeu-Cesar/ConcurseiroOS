@@ -577,6 +577,50 @@ def _m57_catalogo_reputacao(conn):
     log.info("Migration: created catalogo_avaliacoes + curador_verificado + item status")
 
 
+def _m58_trilha(conn):
+    """Trilha de estudo (roadmap): sequência ordenada de etapas por tópico do edital.
+
+    - trilha: cabeçalho (uma trilha ativa por edital/usuário).
+    - trilha_etapas: etapas ordenadas, cada uma referenciando um tópico do edital,
+      com estado de progresso longitudinal (bloqueada/atual/concluída) e o
+      pré-requisito (etapa anterior na ordem topológica do knowledge graph).
+    """
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS trilha (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL DEFAULT 1,
+            nome TEXT NOT NULL DEFAULT 'Minha Trilha',
+            edital_nome TEXT DEFAULT '',
+            cargo TEXT DEFAULT '',
+            ativo INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS trilha_etapas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            trilha_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL DEFAULT 1,
+            ordem INTEGER NOT NULL DEFAULT 0,
+            topico_id INTEGER,
+            materia TEXT NOT NULL DEFAULT '',
+            topico TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'bloqueada',
+            desbloqueada INTEGER NOT NULL DEFAULT 0,
+            prerequisito_etapa_id INTEGER,
+            razao TEXT DEFAULT '',
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (trilha_id) REFERENCES trilha(id),
+            FOREIGN KEY (topico_id) REFERENCES edital(id)
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_trilha_user ON trilha(user_id, ativo)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_trilha_etapas_trilha ON trilha_etapas(trilha_id, ordem)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_trilha_etapas_user ON trilha_etapas(user_id)")
+    log.info("Migration: created trilha + trilha_etapas tables")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -635,6 +679,7 @@ MIGRATIONS = [
     (55, _m55_user_status),
     (56, _m56_catalogo_itens),
     (57, _m57_catalogo_reputacao),
+    (58, _m58_trilha),
 ]
 
 

@@ -16,7 +16,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from routers import (
     adaptive, analytics, auth, bookmarks, cadernos, calendario, ciclo, dashboard,
     desafios, edital, error_analysis, fatigue, feynman, flashcards, generation, knowledge_graph, milestones, misc, notas, notifications, pagamentos, pdf,
-    planejador, questoes, simulados, spacing, streaks, sumulas, treinador,
+    planejador, questoes, simulados, spacing, streaks, sumulas, treinador, trilha,
     leagues, ai_tutor, social, batalha, admin, studyroom, study_intelligence, sidebar, vademecum, catalogo
 )
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -96,6 +96,10 @@ tags_metadata = [
     {
         "name": "Planejador",
         "description": "Planejador semanal de matérias e horas de estudo.",
+    },
+    {
+        "name": "Trilha",
+        "description": "Trilha de estudo (roadmap): sequência ordenada de etapas por tópico do edital, com pré-requisitos e progresso longitudinal. Integra ciclo, knowledge graph e edital.",
     },
     {
         "name": "Bookmarks",
@@ -339,6 +343,7 @@ app.include_router(analytics.router)
 app.include_router(treinador.router)
 app.include_router(calendario.router)
 app.include_router(planejador.router)
+app.include_router(trilha.router)
 app.include_router(bookmarks.router)
 app.include_router(notas.router)
 app.include_router(cadernos.router)
