@@ -452,6 +452,120 @@ def global_stats(
 
 
 # ============================================================
+# MÉTRICAS DE NEGÓCIO (RECEITA / ASSINATURAS)
+# ============================================================
+
+@router.get("/metricas", summary="Métricas de receita e assinaturas")
+def metricas_negocio(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Dashboard de negócio: receita, assinaturas ativas/expirando, conversão e timeline."""
+    _require_admin(user_id)
+    from datetime import datetime, timezone, timedelta
+
+    agora = datetime.now(timezone.utc)
+    agora_iso = agora.isoformat()
+    limite_7d = (agora + timedelta(days=7)).isoformat()
+
+    def _receita(where_extra="", params=()):
+        try:
+            row = conn.execute(
+                f"SELECT COALESCE(SUM(valor), 0) FROM pagamentos WHERE status = 'approved' {where_extra}", params
+            ).fetchone()
+            return round(row[0] or 0, 2)
+        except Exception:
+            return 0.0
+
+    # Receita total, mês atual e mês anterior
+    inicio_mes = agora.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    inicio_mes_iso = inicio_mes.isoformat()
+    # Primeiro dia do mês anterior
+    fim_mes_ant = inicio_mes - timedelta(seconds=1)
+    inicio_mes_ant = fim_mes_ant.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    inicio_mes_ant_iso = inicio_mes_ant.isoformat()
+
+    receita_total = _receita()
+    receita_mes = _receita("AND created_at >= ?", (inicio_mes_iso,))
+    receita_mes_ant = _receita("AND created_at >= ? AND created_at < ?", (inicio_mes_ant_iso, inicio_mes_iso))
+    variacao_pct = round(((receita_mes - receita_mes_ant) / receita_mes_ant * 100), 1) if receita_mes_ant > 0 else (100.0 if receita_mes > 0 else 0.0)
+
+    # Contagem de pagamentos aprovados
+    try:
+        total_pagamentos = conn.execute("SELECT COUNT(*) FROM pagamentos WHERE status = 'approved'").fetchone()[0]
+        ticket_medio = round(receita_total / total_pagamentos, 2) if total_pagamentos > 0 else 0.0
+    except Exception:
+        total_pagamentos, ticket_medio = 0, 0.0
+
+    # Assinaturas por situação
+    total_users = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    vitalicios = conn.execute(
+        "SELECT COUNT(*) FROM users WHERE plano = 'ilimitado' OR (plano = 'premium' AND (plano_expira = '' OR plano_expira IN ('vitalicio','vitalício','lifetime')))"
+    ).fetchone()[0]
+    premium_ativos = conn.execute(
+        "SELECT COUNT(*) FROM users WHERE plano = 'premium' AND plano_expira != '' AND plano_expira NOT IN ('vitalicio','vitalício','lifetime') AND plano_expira > ?",
+        (agora_iso,)
+    ).fetchone()[0]
+    expirando_7d = conn.execute(
+        "SELECT COUNT(*) FROM users WHERE plano = 'premium' AND plano_expira != '' AND plano_expira NOT IN ('vitalicio','vitalício','lifetime') AND plano_expira >= ? AND plano_expira <= ?",
+        (agora_iso, limite_7d)
+    ).fetchone()[0]
+    expirados = conn.execute(
+        "SELECT COUNT(*) FROM users WHERE plano = 'premium' AND plano_expira != '' AND plano_expira NOT IN ('vitalicio','vitalício','lifetime') AND plano_expira < ?",
+        (agora_iso,)
+    ).fetchone()[0]
+    free_count = conn.execute("SELECT COUNT(*) FROM users WHERE plano IN ('free','guest') OR plano IS NULL").fetchone()[0]
+
+    # Assinantes pagantes = premium ativos + vitalícios
+    pagantes = premium_ativos + vitalicios
+    conversao_pct = round(pagantes / total_users * 100, 1) if total_users > 0 else 0.0
+
+    # Timeline: receita dos últimos 6 meses
+    timeline = []
+    ref = inicio_mes
+    meses_pt = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
+    periodos = []
+    for i in range(5, -1, -1):
+        # calcular início de cada mês retroativo
+        y = ref.year
+        m = ref.month - i
+        while m <= 0:
+            m += 12
+            y -= 1
+        ini = datetime(y, m, 1, tzinfo=timezone.utc)
+        # fim = início do mês seguinte
+        if m == 12:
+            fim = datetime(y + 1, 1, 1, tzinfo=timezone.utc)
+        else:
+            fim = datetime(y, m + 1, 1, tzinfo=timezone.utc)
+        periodos.append((ini, fim, f"{meses_pt[m-1]}/{str(y)[2:]}"))
+    for ini, fim, label in periodos:
+        val = _receita("AND created_at >= ? AND created_at < ?", (ini.isoformat(), fim.isoformat()))
+        timeline.append({"mes": label, "receita": val})
+
+    return {
+        "receita": {
+            "total": receita_total,
+            "mes_atual": receita_mes,
+            "mes_anterior": receita_mes_ant,
+            "variacao_pct": variacao_pct,
+            "ticket_medio": ticket_medio,
+            "total_pagamentos": total_pagamentos,
+        },
+        "assinaturas": {
+            "premium_ativos": premium_ativos,
+            "vitalicios": vitalicios,
+            "pagantes": pagantes,
+            "expirando_7d": expirando_7d,
+            "expirados": expirados,
+            "free": free_count,
+        },
+        "conversao": {
+            "total_users": total_users,
+            "conversao_pct": conversao_pct,
+        },
+        "timeline": timeline,
+    }
+
+
+# ============================================================
 # MONETIZAÇÃO — CONFIGURAÇÃO DINÂMICA
 # ============================================================
 

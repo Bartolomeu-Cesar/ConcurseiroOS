@@ -29,6 +29,30 @@
       <div class="stat-card"><div class="stat-value" id="st-respostas">—</div><div class="stat-label">Respostas</div></div>
     </div>
 
+    <!-- Métricas de Negócio -->
+    <div style="margin:8px 0 20px;padding:20px;background:#181825;border:1px solid #45475a;border-radius:12px;">
+      <h2 style="color:#a6e3a1;margin:0 0 16px;font-size:1.1rem;">💵 Métricas de Negócio</h2>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px;">
+        <div class="stat-card" style="border-left:3px solid #a6e3a1;"><div class="stat-value" id="m-receita-total" style="font-size:1.3rem;">—</div><div class="stat-label">Receita total</div></div>
+        <div class="stat-card" style="border-left:3px solid #89b4fa;"><div class="stat-value" id="m-receita-mes" style="font-size:1.3rem;">—</div><div class="stat-label">Receita do mês <span id="m-variacao" style="font-size:0.7rem;"></span></div></div>
+        <div class="stat-card" style="border-left:3px solid #f9e2af;"><div class="stat-value" id="m-ticket" style="font-size:1.3rem;">—</div><div class="stat-label">Ticket médio</div></div>
+        <div class="stat-card" style="border-left:3px solid #cba6f7;"><div class="stat-value" id="m-pagantes" style="font-size:1.3rem;">—</div><div class="stat-label">Assinantes pagantes</div></div>
+        <div class="stat-card" style="border-left:3px solid #94e2d5;"><div class="stat-value" id="m-conversao" style="font-size:1.3rem;">—</div><div class="stat-label">Conversão</div></div>
+        <div class="stat-card" style="border-left:3px solid #f38ba8;"><div class="stat-value" id="m-expirando" style="font-size:1.3rem;">—</div><div class="stat-label">Expirando (7d)</div></div>
+      </div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:0.78rem;color:#9399b2;margin-bottom:16px;">
+        <span>👑 Premium ativos: <strong id="m-premium" style="color:#cdd6f4;">—</strong></span>
+        <span>♾️ Vitalícios: <strong id="m-vitalicios" style="color:#cdd6f4;">—</strong></span>
+        <span>❌ Expirados: <strong id="m-expirados" style="color:#cdd6f4;">—</strong></span>
+        <span>🆓 Free: <strong id="m-free" style="color:#cdd6f4;">—</strong></span>
+        <span>🧾 Pagamentos: <strong id="m-total-pag" style="color:#cdd6f4;">—</strong></span>
+      </div>
+      <div>
+        <div style="font-size:0.82rem;color:#a6e3a1;font-weight:600;margin-bottom:8px;">📈 Receita (últimos 6 meses)</div>
+        <div id="m-timeline" style="display:flex;align-items:flex-end;gap:8px;height:120px;padding:8px;background:#1e1e2e;border-radius:8px;"></div>
+      </div>
+    </div>
+
     <!-- Toolbar -->
     <div class="toolbar">
       <input type="text" id="search-input" placeholder="🔍 Buscar por nome, email ou username..." onkeyup="if(event.key==='Enter')loadUsers()">
@@ -751,11 +775,57 @@
       } catch(e) { toast('Erro de conexão.', 'error'); }
     };
 
+    // ==================== MÉTRICAS DE NEGÓCIO ====================
+    function fmtBRL(v) {
+      return 'R$ ' + (v || 0).toFixed(2).replace('.', ',');
+    }
+
+    async function loadMetricas() {
+      try {
+        const d = await fetch('/api/admin/metricas').then(r => r.json());
+        if (d.detail) return;
+        const rec = d.receita, ass = d.assinaturas, conv = d.conversao;
+
+        document.getElementById('m-receita-total').textContent = fmtBRL(rec.total);
+        document.getElementById('m-receita-mes').textContent = fmtBRL(rec.mes_atual);
+        document.getElementById('m-ticket').textContent = fmtBRL(rec.ticket_medio);
+        document.getElementById('m-pagantes').textContent = ass.pagantes;
+        document.getElementById('m-conversao').textContent = conv.conversao_pct + '%';
+        document.getElementById('m-expirando').textContent = ass.expirando_7d;
+
+        const varEl = document.getElementById('m-variacao');
+        if (rec.variacao_pct > 0) { varEl.textContent = `▲ ${rec.variacao_pct}%`; varEl.style.color = '#a6e3a1'; }
+        else if (rec.variacao_pct < 0) { varEl.textContent = `▼ ${Math.abs(rec.variacao_pct)}%`; varEl.style.color = '#f38ba8'; }
+        else { varEl.textContent = ''; }
+
+        document.getElementById('m-premium').textContent = ass.premium_ativos;
+        document.getElementById('m-vitalicios').textContent = ass.vitalicios;
+        document.getElementById('m-expirados').textContent = ass.expirados;
+        document.getElementById('m-free').textContent = ass.free;
+        document.getElementById('m-total-pag').textContent = rec.total_pagamentos;
+
+        // Gráfico de barras da timeline
+        const tl = d.timeline || [];
+        const maxVal = Math.max(1, ...tl.map(t => t.receita));
+        const cont = document.getElementById('m-timeline');
+        cont.innerHTML = tl.map(t => {
+          const h = Math.round((t.receita / maxVal) * 90);
+          return `
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:4px;">
+              <div style="font-size:0.62rem;color:#9399b2;">${t.receita > 0 ? 'R$' + t.receita.toFixed(0) : ''}</div>
+              <div title="${fmtBRL(t.receita)}" style="width:70%;height:${h}px;min-height:2px;background:linear-gradient(180deg,#a6e3a1,#89b4fa);border-radius:4px 4px 0 0;"></div>
+              <div style="font-size:0.65rem;color:#cdd6f4;">${t.mes}</div>
+            </div>`;
+        }).join('');
+      } catch(e) {}
+    }
+
     // Init
     loadStats();
     loadUsers();
     loadMonetizacao();
     loadPendentes();
+    loadMetricas();
   })();
   </script>
 </body>

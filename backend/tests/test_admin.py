@@ -819,6 +819,55 @@ class TestUpgradePlano:
 
 
 # ============================================================
+# MÉTRICAS DE NEGÓCIO
+# ============================================================
+
+class TestMetricas:
+    def test_metricas_estrutura(self, client):
+        """GET /api/admin/metricas retorna a estrutura esperada."""
+        token = _get_admin_token(client)
+        r = client.get("/api/admin/metricas", headers=_auth_header(token))
+        assert r.status_code == 200
+        data = r.json()
+        assert "receita" in data
+        assert "assinaturas" in data
+        assert "conversao" in data
+        assert "timeline" in data
+        assert len(data["timeline"]) == 6  # 6 meses
+
+    def test_metricas_receita_soma_aprovados(self, client):
+        """Receita soma apenas pagamentos com status approved."""
+        token = _get_admin_token(client)
+        from datetime import datetime, timezone
+        conn = sqlite3.connect(_tmp_db.name, check_same_thread=False, timeout=10)
+        now = datetime.now(timezone.utc).isoformat()
+        # 2 aprovados (97 + 34.90) e 1 pendente (não conta)
+        conn.execute("INSERT INTO pagamentos (user_id, payment_id, tipo, creditos, valor, status, created_at) VALUES (1, 'p1', 'pix_vitalicio', 0, 97.0, 'approved', ?)", (now,))
+        conn.execute("INSERT INTO pagamentos (user_id, payment_id, tipo, creditos, valor, status, created_at) VALUES (1, 'p2', 'pix_creditos', 10, 34.90, 'approved', ?)", (now,))
+        conn.execute("INSERT INTO pagamentos (user_id, payment_id, tipo, creditos, valor, status, created_at) VALUES (1, 'p3', 'pix_creditos', 5, 19.90, 'pending', ?)", (now,))
+        conn.commit(); conn.close()
+        r = client.get("/api/admin/metricas", headers=_auth_header(token))
+        rec = r.json()["receita"]
+        assert abs(rec["total"] - 131.90) < 0.01  # 97 + 34.90, pendente excluído
+        assert rec["total_pagamentos"] == 2
+        assert abs(rec["ticket_medio"] - 65.95) < 0.01
+
+    def test_metricas_conversao(self, client):
+        """Conversão = pagantes / total_users."""
+        token = _get_admin_token(client)
+        r = client.get("/api/admin/metricas", headers=_auth_header(token))
+        conv = r.json()["conversao"]
+        assert "total_users" in conv
+        assert "conversao_pct" in conv
+        assert conv["total_users"] >= 1
+
+    def test_metricas_non_admin_403(self, client):
+        token = _register_and_get_token(client, "na_metr@example.com", "NA Metr")
+        r = client.get("/api/admin/metricas", headers=_auth_header(token))
+        assert r.status_code == 403
+
+
+# ============================================================
 # CLEANUP
 # ============================================================
 
