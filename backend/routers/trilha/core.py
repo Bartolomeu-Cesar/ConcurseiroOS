@@ -82,6 +82,12 @@ def set_cargo_alvo(
         )
     conn.commit()
     log.info(f"Cargo alvo definido para user {user_id}: {edital_alvo!r} / {cargo_alvo!r}")
+    # Mudar o alvo afeta o progresso do edital no dashboard — invalida o cache TTL.
+    try:
+        from routers.dashboard import _invalidate_dashboard_cache
+        _invalidate_dashboard_cache(user_id)
+    except Exception:
+        pass
     return {"ok": True, "edital_alvo": edital_alvo, "cargo_alvo": cargo_alvo}
 
 
@@ -91,20 +97,9 @@ def set_cargo_alvo(
 
 
 def _cargo_alvo_salvo(conn, user_id: int):
-    """Lê o edital/cargo alvo persistido em metas_config (opção 2).
-
-    Retorna (edital_alvo, cargo_alvo) — strings vazias se não configurado ou se
-    as colunas ainda não existem (bancos muito antigos)."""
-    try:
-        row = conn.execute(
-            "SELECT edital_alvo, cargo_alvo FROM metas_config WHERE user_id = ?",
-            (user_id,),
-        ).fetchone()
-        if row:
-            return (row["edital_alvo"] or ""), (row["cargo_alvo"] or "")
-    except Exception:
-        pass
-    return "", ""
+    """Lê o edital/cargo alvo persistido (delegado ao service central)."""
+    from services import get_cargo_alvo
+    return get_cargo_alvo(conn, user_id)
 
 
 def _materias_do_ciclo(conn, user_id: int):

@@ -23,11 +23,13 @@ def sugestao_rapida(conn=Depends(get_db_session), user_id: int = Depends(get_use
     if fraca:
         return {"materia": fraca[0], "motivo": f"Menor acerto ({fraca[2]}%)", "tempo_min": 25}
 
-    # Fallback: matéria com menos horas estudadas
-    menos_estudada = conn.execute("""
-        SELECT materia FROM edital WHERE status != 'Concluído' AND arquivado = 0 AND user_id = ?
+    # Fallback: matéria com menos horas estudadas (respeita cargo alvo)
+    from services import edital_alvo_filter
+    f_sql, f_params = edital_alvo_filter(conn, user_id)
+    menos_estudada = conn.execute(f"""
+        SELECT materia FROM edital WHERE status != 'Concluído' AND arquivado = 0 AND user_id = ?{f_sql}
         GROUP BY materia ORDER BY SUM(horas_estudadas) ASC LIMIT 1
-    """, (user_id,)).fetchone()
+    """, (user_id, *f_params)).fetchone()
 
     if menos_estudada:
         return {"materia": menos_estudada[0], "motivo": "Menos estudada", "tempo_min": 25}

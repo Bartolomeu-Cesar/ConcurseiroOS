@@ -191,14 +191,16 @@ def _get_forgetting_risk(conn, user_id: int, limit: int = 10) -> list:
 
     # Tópicos do edital com baixa stability
     try:
-        topicos = conn.execute("""
+        from services import edital_alvo_filter
+        f_sql, f_params = edital_alvo_filter(conn, user_id)
+        topicos = conn.execute(f"""
             SELECT id, materia, topico, stability_edital, proxima_revisao,
                    julianday(?) - julianday(proxima_revisao) as dias_atraso
             FROM edital
-            WHERE proxima_revisao != '' AND proxima_revisao <= ? AND user_id = ? AND arquivado = 0
+            WHERE proxima_revisao != '' AND proxima_revisao <= ? AND user_id = ? AND arquivado = 0{f_sql}
             ORDER BY stability_edital ASC
             LIMIT ?
-        """, (hoje, hoje, user_id, limit)).fetchall()
+        """, (hoje, hoje, user_id, *f_params, limit)).fetchall()
 
         for t in topicos:
             stability = t["stability_edital"] or 1.0

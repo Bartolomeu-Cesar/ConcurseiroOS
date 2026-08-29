@@ -54,12 +54,29 @@ def get_dashboard(conn=Depends(get_db_session), user_id: int = Depends(get_user_
     )
     horas_questoes = round(horas_tipo_map.get("questoes", 0) + horas_tipo_map.get("simulado", 0), 1)
 
-    # Progresso do edital — somente tópicos do edital/cargo do ciclo ativo
-    # Estratégia: encontrar o edital/cargo cujas matérias melhor correspondem ao ciclo
-    has_ciclo = conn.execute(
-        "SELECT COUNT(*) FROM ciclo_estudos WHERE ativo = 1 AND user_id = ?", (user_id,)
-    ).fetchone()[0]
-    if has_ciclo:
+    # Progresso do edital — prioriza o CARGO ALVO explícito do usuário; se não
+    # houver, cai na heurística de melhor overlap com o ciclo ativo.
+    from services import get_cargo_alvo
+    edital_alvo, cargo_alvo = get_cargo_alvo(conn, user_id)
+
+    if edital_alvo or cargo_alvo:
+        # Filtro explícito pelo cargo alvo definido pelo usuário
+        cond = ""
+        params = [user_id]
+        if edital_alvo:
+            cond += " AND edital_nome = ?"
+            params.append(edital_alvo)
+        if cargo_alvo:
+            cond += " AND cargo = ?"
+            params.append(cargo_alvo)
+        edital_total = conn.execute(
+            f"SELECT COUNT(*) FROM edital WHERE arquivado = 0 AND user_id = ?{cond}", tuple(params)
+        ).fetchone()[0]
+        edital_concluido = conn.execute(
+            f"SELECT COUNT(*) FROM edital WHERE status = 'Concluído' AND arquivado = 0 AND user_id = ?{cond}", tuple(params)
+        ).fetchone()[0]
+        has_ciclo = True  # já resolvido pelo alvo, pula a heurística abaixo
+    elif conn.execute("SELECT COUNT(*) FROM ciclo_estudos WHERE ativo = 1 AND user_id = ?", (user_id,)).fetchone()[0]:
         # Matérias do ciclo
         materias_ciclo = [r[0] for r in conn.execute(
             "SELECT materia FROM ciclo_estudos WHERE ativo = 1 AND user_id = ?", (user_id,)

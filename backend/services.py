@@ -79,6 +79,50 @@ def get_dias_ate_prova(conn, user_id: int) -> int | None:
     return menor_dias
 
 
+def get_cargo_alvo(conn, user_id: int) -> tuple[str, str]:
+    """Edital/cargo alvo persistido pelo usuário (metas_config).
+
+    Retorna (edital_alvo, cargo_alvo) — strings vazias se não configurado ou se
+    as colunas ainda não existem. Centraliza a leitura para dashboard, treinador,
+    recomendações e trilha respeitarem o mesmo alvo.
+    """
+    try:
+        row = conn.execute(
+            "SELECT edital_alvo, cargo_alvo FROM metas_config WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+        if row:
+            # Suporta acesso por índice (sqlite3.Row) ou tupla
+            edital_alvo = row["edital_alvo"] if hasattr(row, "keys") else row[0]
+            cargo_alvo = row["cargo_alvo"] if hasattr(row, "keys") else row[1]
+            return (edital_alvo or ""), (cargo_alvo or "")
+    except Exception:
+        pass
+    return "", ""
+
+
+def edital_alvo_filter(conn, user_id: int) -> tuple[str, list]:
+    """Devolve (sql_extra, params) para restringir consultas de `edital` ao cargo
+    alvo do usuário, quando definido.
+
+    Uso:
+        f_sql, f_params = edital_alvo_filter(conn, user_id)
+        conn.execute(f"SELECT ... FROM edital WHERE user_id = ? {f_sql}", (user_id, *f_params))
+
+    Se não houver alvo definido, retorna ("", []) — nenhuma restrição extra.
+    """
+    edital_alvo, cargo_alvo = get_cargo_alvo(conn, user_id)
+    sql = ""
+    params: list = []
+    if edital_alvo:
+        sql += " AND edital_nome = ?"
+        params.append(edital_alvo)
+    if cargo_alvo:
+        sql += " AND cargo = ?"
+        params.append(cargo_alvo)
+    return sql, params
+
+
 def get_horas_estudadas(conn, user_id: int, periodo_dias: int = None) -> float:
     """Total de horas estudadas (opcionalmente nos últimos N dias).
 

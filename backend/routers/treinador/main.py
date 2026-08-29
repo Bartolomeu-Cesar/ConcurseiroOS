@@ -34,6 +34,10 @@ router = APIRouter(prefix="", tags=["Treinador Inteligente"])
             description="Retorna recomendações personalizadas de estudo usando 8 camadas de inteligência: análise de erros, ritmo adaptativo, curva de esquecimento (FSRS), distribuição por banca, detecção de platô, micro-metas, horário ótimo e sprint mode.")
 def treinador_inteligente(edital_nome: str = "", cargo: str = "", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Treinador com 8 camadas de inteligência: erros, ritmo, FSRS, banca, platô, micro-metas, horário, sprint."""
+    # Se não vier por query, respeita o cargo/edital alvo definido pelo usuário.
+    if not edital_nome and not cargo:
+        from services import get_cargo_alvo
+        edital_nome, cargo = get_cargo_alvo(conn, user_id)
     desempenho = _get_performance_by_subject(conn, user_id)
     ultima_sessao = _get_last_session_by_subject(conn, user_id)
     pending = _get_pending_reviews(conn, user_id)
