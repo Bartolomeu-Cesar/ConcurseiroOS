@@ -323,6 +323,44 @@ class TestQuestoes:
         r = client.delete(f"/api/questoes/{qid}")
         assert r.status_code == 200
 
+    def test_vincular_lote_por_prova_origem(self, client):
+        """Vincular matéria em lote por prova_origem deve atualizar todas as
+        questões daquela prova (reproduz o botão '📚 Vincular' das provas)."""
+        # Insere 3 questões da mesma prova, todas SEM matéria (como importação sem disciplina)
+        conn = sqlite3.connect(_tmp_db.name)
+        for i in range(3):
+            conn.execute(
+                "INSERT INTO questoes (materia, topico, enunciado, alternativa_a, alternativa_b, "
+                "alternativa_c, alternativa_d, resposta_correta, prova_origem, created_at, user_id) "
+                "VALUES ('', '', ?, 'A', 'B', 'C', 'D', 'A', 'Prova Lote Teste', '2026-08-29', 1)",
+                (f"Questao lote {i}",),
+            )
+        conn.commit()
+        conn.close()
+
+        # Chama o endpoint exatamente como o frontend faz
+        r = client.put("/api/questoes/vincular-lote", json={
+            "filtro": {"prova_origem": "Prova Lote Teste"},
+            "atualizar": {"materia": "Direito Constitucional"},
+        })
+        assert r.status_code == 200, r.text
+        assert r.json()["ok"] is True
+        assert r.json()["atualizadas"] == 3, f"esperava 3, veio {r.json()['atualizadas']}"
+
+        # Confirma no banco que todas ficaram com a matéria
+        conn = sqlite3.connect(_tmp_db.name)
+        restantes = conn.execute(
+            "SELECT COUNT(*) FROM questoes WHERE prova_origem = 'Prova Lote Teste' "
+            "AND (materia IS NULL OR materia = '')"
+        ).fetchone()[0]
+        com_mat = conn.execute(
+            "SELECT COUNT(*) FROM questoes WHERE prova_origem = 'Prova Lote Teste' "
+            "AND materia = 'Direito Constitucional'"
+        ).fetchone()[0]
+        conn.close()
+        assert restantes == 0, "ainda há questões sem matéria após vincular"
+        assert com_mat == 3
+
 
 # ============================================================
 # SIMULADOS

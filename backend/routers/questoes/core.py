@@ -490,37 +490,41 @@ def vincular_questoes_lote(body: QuestionLinkBatch, conn=Depends(get_db_session)
     if not atualizar:
         raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
 
+    # Monta os parâmetros do WHERE separadamente dos do SET.
+    # IMPORTANTE: na query final o SET vem ANTES do WHERE, então os params do
+    # SET precisam preceder os do WHERE (bug anterior: ordem trocada zerava o UPDATE).
     where = "WHERE user_id = ?"
-    params = [user_id]
+    where_params = [user_id]
     if filtro.created_at:
         where += " AND created_at = ?"
-        params.append(filtro.created_at)
+        where_params.append(filtro.created_at)
     if filtro.sem_materia:
         where += " AND (materia IS NULL OR materia = '')"
     elif filtro.materia_atual:
         where += " AND materia = ?"
-        params.append(filtro.materia_atual)
+        where_params.append(filtro.materia_atual)
     elif filtro.materia_atual == "":
         where += " AND (materia IS NULL OR materia = '')"
     if filtro.banca:
         where += " AND banca = ?"
-        params.append(filtro.banca)
+        where_params.append(filtro.banca)
     if filtro.prova_origem:
         where += " AND prova_origem = ?"
-        params.append(filtro.prova_origem)
+        where_params.append(filtro.prova_origem)
 
     campos_permitidos = ["materia", "topico", "banca", "dificuldade"]
     sets = []
+    set_params = []
     for campo in campos_permitidos:
         if campo in atualizar:
             sets.append(f"{campo} = ?")
-            params.append(atualizar[campo])
+            set_params.append(atualizar[campo])
 
     if not sets:
         raise HTTPException(status_code=400, detail="Nenhum campo válido para atualizar")
 
     query = f"UPDATE questoes SET {', '.join(sets)} {where}"
-    result = conn.execute(query, params)
+    result = conn.execute(query, set_params + where_params)
     conn.commit()
     count = result.rowcount
     log.info(f"Questões atualizadas em lote: {count} (filtro={filtro}, atualizar={atualizar})")
