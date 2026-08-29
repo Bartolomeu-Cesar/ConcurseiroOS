@@ -154,6 +154,31 @@ function _authHeaders() {
   return h;
 }
 
+export async function sincronizarTrilhaCalendario() {
+  const temTrilha = document.querySelector('.trilha-etapa');
+  if (!temTrilha) {
+    toast('Gere uma trilha antes de agendar no calendário.', 'warning');
+    return;
+  }
+  const ok = await confirmModal(
+    'Agendar no calendário?',
+    'As próximas etapas pendentes da trilha serão distribuídas pelos dias úteis do seu calendário (60 min cada). Agendamentos anteriores da trilha serão substituídos; suas outras atividades permanecem.',
+    { type: 'info', confirmText: 'Agendar', cancelText: 'Cancelar' }
+  );
+  if (!ok) return;
+  try {
+    const res = await fetch('/api/trilha/sincronizar-calendario', { method: 'POST', headers: _authHeaders() });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast(data.detail || 'Erro ao agendar no calendário.', 'error');
+      return;
+    }
+    toast(`📅 ${data.agendadas} etapa(s) agendadas no calendário!`, 'success');
+  } catch {
+    toast('Erro de conexão ao agendar no calendário.', 'error');
+  }
+}
+
 export function initTrilha() {
   // Carrega se a aba já estiver ativa no load
   const tab = document.getElementById('tab-trilha');
@@ -166,3 +191,4 @@ export function initTrilha() {
 window.loadTrilha = loadTrilha;
 window.gerarTrilha = gerarTrilha;
 window.concluirEtapaTrilha = concluirEtapaTrilha;
+window.sincronizarTrilhaCalendario = sincronizarTrilhaCalendario;

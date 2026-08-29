@@ -29,6 +29,7 @@ router = APIRouter(prefix="/api/trilha", tags=["Trilha"])
 
 STATUS_CONCLUIDO = "Concluído"
 XP_PER_TOPICO = XP_PER_TOPIC  # +25 XP por tópico concluído (via Ligas)
+NOMES_DIAS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
 
 
 # ============================================================
@@ -319,6 +320,95 @@ def concluir_etapa(
     resultado = _montar_trilha(conn, trilha_id, user_id)
     resultado["xp_topico"] = xp_topico
     return resultado
+
+
+# ============================================================
+# SINCRONIZAÇÃO COM O CALENDÁRIO
+# ============================================================
+
+
+@router.post(
+    "/sincronizar-calendario",
+    summary="Agendar próximas etapas no calendário",
+    description="""Distribui as próximas etapas pendentes da trilha (na ordem) pelos dias úteis
+do calendário personalizado, como atividades do tipo 'trilha'.
+
+- Idempotente: remove as atividades de tipo 'trilha' anteriores antes de recriar (não mexe nas
+  demais atividades do calendário do usuário).
+- `dias_semana`: quantos dias da semana usar (1..7, começando na segunda). Padrão 6 (seg-sáb).
+- `tempo_min`: minutos alocados por etapa/atividade. Padrão 60.
+- `max_etapas`: quantas etapas pendentes agendar. Padrão 12.
+
+Retorna um resumo por dia.""",
+)
+def sincronizar_calendario(
+    dias_semana: int = Query(6, ge=1, le=7),
+    tempo_min: int = Query(60, ge=5, le=480),
+    max_etapas: int = Query(12, ge=1, le=60),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    _ensure_tables(conn)
+
+    trilha = conn.execute(
+        "SELECT id FROM trilha WHERE user_id = ? AND ativo = 1 ORDER BY id DESC LIMIT 1",
+        (user_id,),
+    ).fetchone()
+    if not trilha:
+        raise HTTPException(
+            status_code=404,
+            detail="Nenhuma trilha ativa. Gere a trilha antes de sincronizar com o calendário.",
+        )
+
+    # Próximas etapas pendentes (na ordem da trilha)
+    etapas = conn.execute(
+        """SELECT materia, topico FROM trilha_etapas
+           WHERE trilha_id = ? AND user_id = ? AND status != 'concluida'
+           ORDER BY ordem LIMIT ?""",
+        (trilha["id"], user_id, max_etapas),
+    ).fetchall()
+
+    if not etapas:
+        raise HTTPException(
+            status_code=400,
+            detail="Não há etapas pendentes na trilha para agendar.",
+        )
+
+    # Idempotência: remove só as atividades de trilha anteriores (preserva as demais)
+    conn.execute(
+        "DELETE FROM calendario_personalizado WHERE user_id = ? AND tipo = 'trilha'",
+        (user_id,),
+    )
+
+    # Distribui as etapas em round-robin pelos dias úteis
+    agendadas = 0
+    ordem_por_dia = {d: 0 for d in range(dias_semana)}
+    for i, e in enumerate(etapas):
+        dia = i % dias_semana
+        conn.execute(
+            """INSERT INTO calendario_personalizado
+               (dia_semana, materia, topicos, tempo_min, tipo, ordem, user_id)
+               VALUES (?, ?, ?, ?, 'trilha', ?, ?)""",
+            (dia, e["materia"], e["topico"], tempo_min, ordem_por_dia[dia], user_id),
+        )
+        ordem_por_dia[dia] += 1
+        agendadas += 1
+
+    conn.commit()
+    log.info(f"Trilha sincronizada ao calendário: {agendadas} etapas em {dias_semana} dias (trilha={trilha['id']})")
+
+    resumo = []
+    for d in range(dias_semana):
+        itens = [e["topico"] for i, e in enumerate(etapas) if i % dias_semana == d]
+        resumo.append({"dia_semana": d, "nome": NOMES_DIAS[d], "atividades": len(itens), "topicos": itens})
+
+    return {
+        "ok": True,
+        "agendadas": agendadas,
+        "dias_semana": dias_semana,
+        "tempo_min": tempo_min,
+        "dias": resumo,
+    }
 
 
 # ============================================================

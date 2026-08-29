@@ -60,7 +60,7 @@ def _clean_and_override():
     app.dependency_overrides[get_db_session] = _override_db_session
     conn = _conn()
     # Limpa tabelas relevantes entre testes
-    for tbl in ("trilha_etapas", "trilha", "topic_dependencies", "ciclo_estudos", "edital"):
+    for tbl in ("trilha_etapas", "trilha", "topic_dependencies", "ciclo_estudos", "edital", "calendario_personalizado"):
         try:
             conn.execute(f"DELETE FROM {tbl}")
         except Exception:
@@ -315,3 +315,89 @@ def test_reconcluir_etapa_nao_duplica_xp(client):
     # Reconcluir a mesma etapa (agora 'concluida') não concede XP de novo
     r2 = client.post(f"/api/trilha/etapas/{atual['id']}/concluir").json()
     assert r2["xp_topico"] == 0
+
+
+# ============================================================
+# FASE 4 — Sincronizar com o calendário
+# ============================================================
+
+def test_sincronizar_sem_trilha_retorna_404(client):
+    r = client.post("/api/trilha/sincronizar-calendario")
+    assert r.status_code == 404
+
+
+def test_sincronizar_distribui_etapas_pendentes(client):
+    conn = _conn()
+    for i in range(4):
+        _add_topico(conn, "Português", f"Tópico {i}")
+    conn.commit()
+    conn.close()
+    client.post("/api/trilha/gerar")
+
+    r = client.post("/api/trilha/sincronizar-calendario?dias_semana=2&tempo_min=45")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["ok"] is True
+    assert data["agendadas"] == 4
+    assert data["dias_semana"] == 2
+
+    # Confere no calendário: 4 itens tipo='trilha', tempo 45
+    conn = _conn()
+    rows = conn.execute(
+        "SELECT dia_semana, materia, topicos, tempo_min, tipo FROM calendario_personalizado WHERE user_id = 1 AND tipo = 'trilha' ORDER BY dia_semana, ordem"
+    ).fetchall()
+    conn.close()
+    assert len(rows) == 4
+    assert all(r["tipo"] == "trilha" for r in rows)
+    assert all(r["tempo_min"] == 45 for r in rows)
+    # Round-robin em 2 dias → 2 por dia
+    dias = [r["dia_semana"] for r in rows]
+    assert dias.count(0) == 2
+    assert dias.count(1) == 2
+
+
+def test_sincronizar_e_idempotente(client):
+    conn = _conn()
+    _add_topico(conn, "Português", "Crase")
+    _add_topico(conn, "Direito", "Princípios")
+    conn.commit()
+    conn.close()
+    client.post("/api/trilha/gerar")
+
+    client.post("/api/trilha/sincronizar-calendario")
+    client.post("/api/trilha/sincronizar-calendario")
+
+    conn = _conn()
+    total = conn.execute(
+        "SELECT COUNT(*) FROM calendario_personalizado WHERE user_id = 1 AND tipo = 'trilha'"
+    ).fetchone()[0]
+    conn.close()
+    # Rodar 2x não duplica (idempotente)
+    assert total == 2
+
+
+def test_sincronizar_preserva_atividades_nao_trilha(client):
+    conn = _conn()
+    _add_topico(conn, "Português", "Crase")
+    # Atividade manual pré-existente (tipo != 'trilha')
+    conn.execute(
+        "INSERT INTO calendario_personalizado (dia_semana, materia, topicos, tempo_min, tipo, ordem, user_id) "
+        "VALUES (0, 'Redação', '', 60, 'estudo', 0, 1)"
+    )
+    conn.commit()
+    conn.close()
+    client.post("/api/trilha/gerar")
+
+    client.post("/api/trilha/sincronizar-calendario")
+
+    conn = _conn()
+    manual = conn.execute(
+        "SELECT COUNT(*) FROM calendario_personalizado WHERE user_id = 1 AND tipo = 'estudo'"
+    ).fetchone()[0]
+    trilha = conn.execute(
+        "SELECT COUNT(*) FROM calendario_personalizado WHERE user_id = 1 AND tipo = 'trilha'"
+    ).fetchone()[0]
+    conn.close()
+    # A atividade manual permanece; a de trilha foi criada
+    assert manual == 1
+    assert trilha == 1

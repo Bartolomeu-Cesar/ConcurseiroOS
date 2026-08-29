@@ -287,7 +287,10 @@
     <div class="panel">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
         <h2 style="margin:0;">🧭 Trilha de Estudo</h2>
-        <button class="iobtn" onclick="gerarTrilha()" title="Gerar/regenerar a trilha a partir do ciclo e do edital">🚀 Gerar / Atualizar</button>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="iobtn" onclick="sincronizarTrilhaCalendario()" title="Agendar as próximas etapas no calendário">📅 Agendar no calendário</button>
+          <button class="iobtn" onclick="gerarTrilha()" title="Gerar/regenerar a trilha a partir do ciclo e do edital">🚀 Gerar / Atualizar</button>
+        </div>
       </div>
       <p style="font-size:0.85rem;color:var(--text-sub);margin-bottom:12px;">
         Seu caminho ideal, etapa por etapa. A ordem respeita os pré-requisitos do mapa de dependências
