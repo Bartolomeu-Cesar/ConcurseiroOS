@@ -18,6 +18,7 @@ matérias quando não há dependências explícitas).
 from deps import get_user_id
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from constants import XP_PER_TOPIC
 from database import get_db_session
 from logger import log
 from utils import today_str
@@ -27,6 +28,7 @@ from .tables import _ensure_tables
 router = APIRouter(prefix="/api/trilha", tags=["Trilha"])
 
 STATUS_CONCLUIDO = "Concluído"
+XP_PER_TOPICO = XP_PER_TOPIC  # +25 XP por tópico concluído (via Ligas)
 
 
 # ============================================================
@@ -236,6 +238,87 @@ def gerar_trilha(
     log.info(f"Trilha gerada: id={trilha_id}, {total} etapas ({concluidas} concluídas), materias_ciclo={len(materias)}")
 
     return _montar_trilha(conn, trilha_id, user_id)
+
+
+# ============================================================
+# PROGRESSO (concluir etapa)
+# ============================================================
+
+
+@router.post(
+    "/etapas/{etapa_id}/concluir",
+    summary="Concluir etapa da trilha",
+    description="""Marca uma etapa como concluída. Regras:
+
+- A etapa precisa estar desbloqueada ('atual' ou já 'concluida'); etapas 'bloqueada' são rejeitadas (409).
+- O tópico do edital correspondente é marcado como 'Concluído' (single source of truth):
+  isso alimenta o XP semanal das Ligas (+25 XP/tópico) e o progresso do edital.
+- A próxima etapa da sequência é desbloqueada e vira a 'atual'.
+
+Retorna a trilha atualizada + o XP concedido pelo tópico.""",
+)
+def concluir_etapa(
+    etapa_id: int,
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    _ensure_tables(conn)
+
+    etapa = conn.execute(
+        "SELECT id, trilha_id, ordem, topico_id, status, desbloqueada FROM trilha_etapas WHERE id = ? AND user_id = ?",
+        (etapa_id, user_id),
+    ).fetchone()
+    if not etapa:
+        raise HTTPException(status_code=404, detail="Etapa da trilha não encontrada.")
+
+    if etapa["status"] == "bloqueada" or not etapa["desbloqueada"]:
+        raise HTTPException(
+            status_code=409,
+            detail="Etapa bloqueada. Conclua a etapa anterior antes de avançar.",
+        )
+
+    trilha_id = etapa["trilha_id"]
+    agora = today_str()
+    xp_topico = 0
+
+    # Só concede XP se ainda não estava concluída (evita XP duplicado ao reconcluir)
+    ja_concluida = etapa["status"] == "concluida"
+
+    # 1. Marca o tópico do edital como Concluído (fonte da verdade p/ XP e progresso)
+    if etapa["topico_id"]:
+        conn.execute(
+            "UPDATE edital SET status = 'Concluído', mastery_updated_at = ? WHERE id = ? AND user_id = ?",
+            (agora, etapa["topico_id"], user_id),
+        )
+        if not ja_concluida:
+            xp_topico = XP_PER_TOPICO
+
+    # 2. Marca a etapa como concluída
+    conn.execute(
+        "UPDATE trilha_etapas SET status = 'concluida', desbloqueada = 1 WHERE id = ? AND user_id = ?",
+        (etapa_id, user_id),
+    )
+
+    # 3. Desbloqueia a próxima etapa não-concluída da sequência → vira 'atual'
+    proxima = conn.execute(
+        """SELECT id FROM trilha_etapas
+           WHERE trilha_id = ? AND user_id = ? AND ordem > ? AND status != 'concluida'
+           ORDER BY ordem LIMIT 1""",
+        (trilha_id, user_id, etapa["ordem"]),
+    ).fetchone()
+    if proxima:
+        conn.execute(
+            "UPDATE trilha_etapas SET status = 'atual', desbloqueada = 1 WHERE id = ? AND user_id = ?",
+            (proxima["id"], user_id),
+        )
+
+    conn.execute("UPDATE trilha SET updated_at = ? WHERE id = ? AND user_id = ?", (agora, trilha_id, user_id))
+    conn.commit()
+    log.info(f"Trilha etapa concluída: etapa={etapa_id}, trilha={trilha_id}, xp={xp_topico}")
+
+    resultado = _montar_trilha(conn, trilha_id, user_id)
+    resultado["xp_topico"] = xp_topico
+    return resultado
 
 
 # ============================================================

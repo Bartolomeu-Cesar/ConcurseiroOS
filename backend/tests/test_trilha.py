@@ -218,3 +218,100 @@ def test_regenerar_desativa_trilha_anterior(client):
     ativas = conn.execute("SELECT COUNT(*) FROM trilha WHERE ativo = 1 AND user_id = 1").fetchone()[0]
     conn.close()
     assert ativas == 1
+
+
+# ============================================================
+# FASE 2 — Concluir etapa
+# ============================================================
+
+def _etapas_ordenadas(payload):
+    return sorted(payload["etapas"], key=lambda e: e["ordem"])
+
+
+def test_concluir_etapa_marca_topico_e_desbloqueia_proxima(client):
+    conn = _conn()
+    id_t1 = _add_topico(conn, "Português", "Crase")
+    _add_topico(conn, "Português", "Regência")
+    conn.commit()
+    conn.close()
+
+    gerar = client.post("/api/trilha/gerar").json()
+    etapas = _etapas_ordenadas(gerar)
+    etapa_atual = etapas[0]
+    assert etapa_atual["status"] == "atual"
+
+    r = client.post(f"/api/trilha/etapas/{etapa_atual['id']}/concluir")
+    assert r.status_code == 200
+    data = r.json()
+
+    # XP concedido pelo tópico
+    assert data["xp_topico"] == 25
+
+    novas = _etapas_ordenadas(data)
+    assert novas[0]["status"] == "concluida"
+    # Próxima etapa vira 'atual' e desbloqueada
+    assert novas[1]["status"] == "atual"
+    assert novas[1]["desbloqueada"] == 1
+    assert data["progresso"]["concluidas"] == 1
+
+    # O tópico do edital foi marcado como Concluído (single source of truth)
+    conn = _conn()
+    status_edital = conn.execute("SELECT status FROM edital WHERE id = ?", (id_t1,)).fetchone()[0]
+    conn.close()
+    assert status_edital == "Concluído"
+
+
+def test_concluir_etapa_bloqueada_retorna_409(client):
+    conn = _conn()
+    _add_topico(conn, "Português", "Crase")
+    _add_topico(conn, "Português", "Regência")
+    conn.commit()
+    conn.close()
+
+    gerar = client.post("/api/trilha/gerar").json()
+    etapas = _etapas_ordenadas(gerar)
+    bloqueada = etapas[1]
+    assert bloqueada["status"] == "bloqueada"
+
+    r = client.post(f"/api/trilha/etapas/{bloqueada['id']}/concluir")
+    assert r.status_code == 409
+    assert "bloqueada" in r.json()["detail"].lower()
+
+
+def test_concluir_etapa_inexistente_retorna_404(client):
+    r = client.post("/api/trilha/etapas/999999/concluir")
+    assert r.status_code == 404
+
+
+def test_concluir_todas_marca_trilha_completa(client):
+    conn = _conn()
+    _add_topico(conn, "Português", "Crase")
+    _add_topico(conn, "Direito", "Princípios")
+    conn.commit()
+    conn.close()
+
+    data = client.post("/api/trilha/gerar").json()
+    # Conclui em cadeia sempre a etapa 'atual'
+    for _ in range(2):
+        atual = next(e for e in data["etapas"] if e["status"] == "atual")
+        data = client.post(f"/api/trilha/etapas/{atual['id']}/concluir").json()
+
+    assert data["progresso"]["concluidas"] == 2
+    assert data["progresso"]["concluida"] is True
+    assert data["progresso"]["etapa_atual"] is None
+
+
+def test_reconcluir_etapa_nao_duplica_xp(client):
+    conn = _conn()
+    _add_topico(conn, "Português", "Crase")
+    conn.commit()
+    conn.close()
+
+    data = client.post("/api/trilha/gerar").json()
+    atual = next(e for e in data["etapas"] if e["status"] == "atual")
+
+    r1 = client.post(f"/api/trilha/etapas/{atual['id']}/concluir").json()
+    assert r1["xp_topico"] == 25
+    # Reconcluir a mesma etapa (agora 'concluida') não concede XP de novo
+    r2 = client.post(f"/api/trilha/etapas/{atual['id']}/concluir").json()
+    assert r2["xp_topico"] == 0
