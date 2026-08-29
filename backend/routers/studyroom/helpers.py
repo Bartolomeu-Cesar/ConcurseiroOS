@@ -94,3 +94,53 @@ def award_focus_xp(conn, user_id: int, tempo_foco_seg: int):
 
     xp_gained = int(20 * horas)
     return xp_gained
+
+
+def flush_focus_time(conn, user_id: int, room_id: int):
+    """Consolida o tempo de foco pendente de um participante.
+
+    Se o participante está com status 'focando', calcula o tempo decorrido
+    desde o último check-in, acumula em `tempo_estudado_seg`, registra em
+    `sessoes_estudo`/`streaks` via `award_focus_xp` e reseta `ultimo_checkin`
+    para agora (mantendo o participante em foco).
+
+    É idempotente: chamar em sequência sem tempo decorrido não credita nada
+    (tempo_extra <= 0 → award_focus_xp retorna 0). Serve tanto para heartbeat
+    periódico (não perde tempo se a aba fechar) quanto para a saída da sala.
+
+    Retorna dict com tempo_extra (seg), xp_gained e tempo_estudado total.
+    """
+    participant = conn.execute(
+        "SELECT id, status, ultimo_checkin, tempo_estudado_seg "
+        "FROM study_room_participants WHERE room_id = ? AND user_id = ?",
+        (room_id, user_id),
+    ).fetchone()
+    if not participant:
+        return {"tempo_extra": 0, "xp_gained": 0, "tempo_estudado": 0}
+
+    now = datetime.now()
+    tempo_extra = 0
+    if participant["status"] == "focando" and participant["ultimo_checkin"]:
+        try:
+            last = datetime.fromisoformat(participant["ultimo_checkin"])
+            tempo_extra = int((now - last).total_seconds())
+        except (ValueError, TypeError):
+            tempo_extra = 0
+
+    tempo_extra = max(0, tempo_extra)
+    novo_tempo = (participant["tempo_estudado_seg"] or 0) + tempo_extra
+
+    xp_gained = 0
+    if tempo_extra > 0:
+        xp_gained = award_focus_xp(conn, user_id, tempo_extra)
+
+    # Reseta o check-in para agora, mantendo o status atual. Assim o próximo
+    # flush contabiliza apenas o tempo a partir de agora (sem dupla contagem).
+    conn.execute(
+        "UPDATE study_room_participants SET tempo_estudado_seg = ?, ultimo_checkin = ? "
+        "WHERE room_id = ? AND user_id = ?",
+        (novo_tempo, now.isoformat(), room_id, user_id),
+    )
+    conn.commit()
+
+    return {"tempo_extra": tempo_extra, "xp_gained": xp_gained, "tempo_estudado": novo_tempo}

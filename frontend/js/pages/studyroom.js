@@ -10,6 +10,7 @@ if (token) headers['Authorization'] = `Bearer ${token}`;
 
 let currentRoom = null;
 let pollInterval = null;
+let heartbeatInterval = null;
 let pomodoroTimer = null;
 let pomodoroSeconds = 0;
 let pomodoroPhase = 'focus'; // 'focus' or 'break'
@@ -107,6 +108,7 @@ function enterRoomView(codigo) {
   srSessionMetrics = { flashcards: 0, questoes: 0, sumulas: 0, acertos: 0 };
   updateStatusButtons();
   startPolling();
+  startHeartbeat();
   startPomodoro();
   loadTodos();
   loadCommitments();
@@ -119,17 +121,18 @@ function enterRoomView(codigo) {
 }
 
 function sairSala() {
-  // Registrar tempo focado antes de sair (muda status para 'ausente' que aciona award_focus_xp no backend)
+  // Consolida o tempo focado antes de sair via endpoint dedicado /sair,
+  // que faz o flush final do tempo e marca 'ausente'.
   if (currentRoom) {
-    fetch(`/api/studyroom/status/${currentRoom}`, {
+    fetch(`/api/studyroom/sair/${currentRoom}`, {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'ausente' })
     }).catch(() => {});
   }
   // Show session summary before leaving
   showSessionSummary();
   stopPolling();
+  stopHeartbeat();
   stopPomodoro();
   stopAmbient();
   currentRoom = null;
@@ -140,6 +143,54 @@ function sairSala() {
   loadMinhasSalas();
 }
 window.sairSala = sairSala;
+
+// ============================================================
+// HEARTBEAT — consolida tempo focado periodicamente
+// ============================================================
+
+// A cada intervalo, faz flush incremental do tempo focado para
+// sessoes_estudo/streaks. Assim, mesmo que a aba feche sem chamar sairSala(),
+// perde-se no máximo um intervalo em vez de toda a sessão.
+const HEARTBEAT_INTERVAL_MS = 60000; // 60s
+
+function startHeartbeat() {
+  stopHeartbeat();
+  heartbeatInterval = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
+}
+
+function stopHeartbeat() {
+  if (heartbeatInterval) clearInterval(heartbeatInterval);
+  heartbeatInterval = null;
+}
+
+function sendHeartbeat() {
+  if (!currentRoom) return;
+  fetch(`/api/studyroom/heartbeat/${currentRoom}`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+  }).catch(() => {});
+}
+
+// Ao fechar/atualizar a aba ou navegar para fora, consolida o tempo focado.
+// Usa fetch com keepalive: diferente de sendBeacon, o keepalive permite enviar
+// o header Authorization (necessário quando AUTH_ENABLED=true) e a requisição
+// não é cancelada quando a página é descarregada.
+function flushOnUnload() {
+  if (!currentRoom) return;
+  try {
+    fetch(`/api/studyroom/heartbeat/${currentRoom}`, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      keepalive: true,
+    }).catch(() => {});
+  } catch (_e) { /* ignore */ }
+}
+
+window.addEventListener('beforeunload', flushOnUnload);
+// visibilitychange: ao esconder a aba (mobile/switch), consolida também
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') flushOnUnload();
+});
 
 function copiarCodigo() {
   navigator.clipboard.writeText(currentRoom).then(() => {

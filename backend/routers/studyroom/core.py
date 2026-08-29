@@ -7,7 +7,7 @@ from database import get_db_session
 from deps import get_user_id
 from logger import log
 
-from .helpers import award_focus_xp, generate_code, get_user_name, is_focus_cycle
+from .helpers import award_focus_xp, flush_focus_time, generate_code, get_user_name, is_focus_cycle
 from .tables import ensure_studyroom_tables, run_studyroom_migrations
 
 router = APIRouter(prefix="/api/studyroom", tags=["Study Room"])
@@ -275,6 +275,85 @@ def atualizar_status(
     result = {"ok": True, "status": status, "tempo_estudado": novo_tempo}
     if xp_gained > 0:
         result["xp_gained"] = xp_gained
+    return result
+
+
+@router.post("/heartbeat/{codigo}")
+def heartbeat(
+    codigo: str,
+    user_id: int = Depends(get_user_id),
+    conn=Depends(get_db_session),
+):
+    """Consolida periodicamente o tempo de foco sem alterar o status.
+
+    Chamado pelo frontend em intervalos regulares enquanto o usuário está na
+    sala. Garante que o tempo focado seja registrado em `sessoes_estudo`/
+    `streaks` de forma incremental — assim, se o usuário fechar a aba sem
+    clicar em "Sair", perde no máximo um intervalo de heartbeat em vez de toda
+    a sessão.
+    """
+    ensure_studyroom_tables(conn)
+    run_studyroom_migrations(conn)
+
+    room = conn.execute("SELECT id FROM study_rooms WHERE codigo = ?", (codigo.upper(),)).fetchone()
+    if not room:
+        raise HTTPException(status_code=404, detail="Sala não encontrada")
+
+    participant = conn.execute(
+        "SELECT id FROM study_room_participants WHERE room_id = ? AND user_id = ?",
+        (room["id"], user_id)
+    ).fetchone()
+    if not participant:
+        raise HTTPException(status_code=404, detail="Você não está nesta sala")
+
+    flushed = flush_focus_time(conn, user_id, room["id"])
+
+    result = {"ok": True, "tempo_estudado": flushed["tempo_estudado"]}
+    if flushed["xp_gained"] > 0:
+        result["xp_gained"] = flushed["xp_gained"]
+    return result
+
+
+@router.post("/sair/{codigo}")
+def sair_sala(
+    codigo: str,
+    user_id: int = Depends(get_user_id),
+    conn=Depends(get_db_session),
+):
+    """Sai da sala consolidando o tempo de foco pendente.
+
+    Diferente de `POST /status` com 'ausente', este endpoint sempre faz o
+    flush final do tempo focado (mesmo que uma transição de status anterior
+    já tenha ocorrido) e então marca o participante como 'ausente'. É o
+    endpoint correto para o botão "Sair" e para o beforeunload da aba.
+    """
+    ensure_studyroom_tables(conn)
+    run_studyroom_migrations(conn)
+
+    room = conn.execute("SELECT id FROM study_rooms WHERE codigo = ?", (codigo.upper(),)).fetchone()
+    if not room:
+        raise HTTPException(status_code=404, detail="Sala não encontrada")
+
+    participant = conn.execute(
+        "SELECT id FROM study_room_participants WHERE room_id = ? AND user_id = ?",
+        (room["id"], user_id)
+    ).fetchone()
+    if not participant:
+        raise HTTPException(status_code=404, detail="Você não está nesta sala")
+
+    # Flush final do tempo focado pendente (se estava 'focando')
+    flushed = flush_focus_time(conn, user_id, room["id"])
+
+    # Marca como ausente
+    conn.execute(
+        "UPDATE study_room_participants SET status = 'ausente' WHERE room_id = ? AND user_id = ?",
+        (room["id"], user_id)
+    )
+    conn.commit()
+
+    result = {"ok": True, "status": "ausente", "tempo_estudado": flushed["tempo_estudado"]}
+    if flushed["xp_gained"] > 0:
+        result["xp_gained"] = flushed["xp_gained"]
     return result
 
 

@@ -411,6 +411,132 @@ class TestAtualizarStatus:
 
 
 # ============================================================
+# POST /api/studyroom/heartbeat/{codigo} — Consolida tempo focado
+# POST /api/studyroom/sair/{codigo} — Sai da sala com flush final
+# ============================================================
+
+
+def _horas_hoje_studyroom(user_id=1):
+    """Soma horas registradas hoje em sessoes_estudo (tipo studyroom)."""
+    hoje = datetime.now().strftime("%Y-%m-%d")
+    conn = sqlite3.connect(_tmp_db.name)
+    row = conn.execute(
+        "SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE data = ? AND tipo = 'studyroom' AND user_id = ?",
+        (hoje, user_id),
+    ).fetchone()
+    conn.close()
+    return row[0]
+
+
+class TestHeartbeatESair:
+    def test_heartbeat_registra_tempo_em_sessoes_estudo(self, client):
+        """Heartbeat consolida o tempo focado em sessoes_estudo (aparece no dashboard)."""
+        r = client.post("/api/studyroom/criar", json={"titulo": "Sala Heartbeat"})
+        codigo = r.json()["codigo"]
+        room_id = r.json()["id"]
+
+        antes = _horas_hoje_studyroom()
+
+        # Simular 1h de foco desde o último check-in
+        past = (datetime.now() - timedelta(hours=1)).isoformat()
+        conn = sqlite3.connect(_tmp_db.name)
+        conn.execute(
+            "UPDATE study_room_participants SET ultimo_checkin = ?, status = 'focando' WHERE room_id = ? AND user_id = 1",
+            (past, room_id),
+        )
+        conn.commit()
+        conn.close()
+
+        r = client.post(f"/api/studyroom/heartbeat/{codigo}")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["ok"] is True
+        assert data["tempo_estudado"] >= 3500
+
+        # O tempo deve ter sido gravado em sessoes_estudo (fonte do dashboard)
+        depois = _horas_hoje_studyroom()
+        assert depois - antes >= 0.9  # ~1h creditada
+
+    def test_heartbeat_mantem_focando_e_nao_conta_duplicado(self, client):
+        """Após heartbeat, o participante continua focando e o check-in é resetado
+        (chamadas seguidas sem tempo decorrido não creditam nada)."""
+        r = client.post("/api/studyroom/criar", json={"titulo": "Sala HB Idem"})
+        codigo = r.json()["codigo"]
+        room_id = r.json()["id"]
+
+        past = (datetime.now() - timedelta(minutes=30)).isoformat()
+        conn = sqlite3.connect(_tmp_db.name)
+        conn.execute(
+            "UPDATE study_room_participants SET ultimo_checkin = ?, status = 'focando' WHERE room_id = ? AND user_id = 1",
+            (past, room_id),
+        )
+        conn.commit()
+        conn.close()
+
+        client.post(f"/api/studyroom/heartbeat/{codigo}")
+        meio = _horas_hoje_studyroom()
+
+        # Segundo heartbeat imediato: sem tempo decorrido → não credita
+        r2 = client.post(f"/api/studyroom/heartbeat/{codigo}")
+        assert r2.status_code == 200
+        fim = _horas_hoje_studyroom()
+        assert abs(fim - meio) < 0.01  # nada creditado a mais
+
+        # Status permanece 'focando'
+        conn = sqlite3.connect(_tmp_db.name)
+        status = conn.execute(
+            "SELECT status FROM study_room_participants WHERE room_id = ? AND user_id = 1", (room_id,)
+        ).fetchone()[0]
+        conn.close()
+        assert status == "focando"
+
+    def test_sair_faz_flush_final_e_marca_ausente(self, client):
+        """POST /sair consolida o tempo pendente e marca o participante como ausente."""
+        r = client.post("/api/studyroom/criar", json={"titulo": "Sala Sair"})
+        codigo = r.json()["codigo"]
+        room_id = r.json()["id"]
+
+        antes = _horas_hoje_studyroom()
+
+        past = (datetime.now() - timedelta(hours=1)).isoformat()
+        conn = sqlite3.connect(_tmp_db.name)
+        conn.execute(
+            "UPDATE study_room_participants SET ultimo_checkin = ?, status = 'focando' WHERE room_id = ? AND user_id = 1",
+            (past, room_id),
+        )
+        conn.commit()
+        conn.close()
+
+        r = client.post(f"/api/studyroom/sair/{codigo}")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["ok"] is True
+        assert data["status"] == "ausente"
+        assert data["tempo_estudado"] >= 3500
+
+        depois = _horas_hoje_studyroom()
+        assert depois - antes >= 0.9
+
+        # Status persistido como ausente
+        conn = sqlite3.connect(_tmp_db.name)
+        status = conn.execute(
+            "SELECT status FROM study_room_participants WHERE room_id = ? AND user_id = 1", (room_id,)
+        ).fetchone()[0]
+        conn.close()
+        assert status == "ausente"
+
+    def test_heartbeat_sala_inexistente_404(self, client):
+        """Heartbeat em sala inexistente retorna 404."""
+        r = client.post("/api/studyroom/heartbeat/ZZZZZZ")
+        assert r.status_code == 404
+
+    def test_sair_sala_inexistente_404(self, client):
+        """Sair de sala inexistente retorna 404."""
+        r = client.post("/api/studyroom/sair/ZZZZZZ")
+        assert r.status_code == 404
+
+
+# ============================================================
 # POST /api/studyroom/chat/{codigo} — Enviar mensagem
 # ============================================================
 
