@@ -1770,7 +1770,11 @@ function _escolherMateriasSimulado(materias) {
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(30,30,46,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;animation:fadeIn 0.2s ease;';
-    const temMaterias = materias && materias.length > 0;
+    // Aceita tanto lista de strings quanto de objetos {materia, questoes_com_gabarito}.
+    const mats = (materias || []).map(m =>
+      typeof m === 'string' ? { materia: m, questoes_com_gabarito: null } : m
+    ).filter(m => m && m.materia);
+    const temMaterias = mats.length > 0;
     overlay.innerHTML = `
       <div style="background:var(--bg-surface,#313244);border:1px solid var(--border,#45475a);border-radius:16px;padding:22px;max-width:420px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.5);max-height:90vh;overflow-y:auto;">
         <h3 style="color:var(--text);margin:0 0 4px;font-size:1rem;">⚡ Gerar Simulado</h3>
@@ -1789,11 +1793,16 @@ function _escolherMateriasSimulado(materias) {
           <button id="sim-nenhuma" style="flex:1;background:var(--bg,#1e1e2e);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px;font-size:0.75rem;cursor:pointer;">Limpar</button>
         </div>
         <div id="sim-materias" style="max-height:220px;overflow-y:auto;margin-bottom:16px;display:flex;flex-direction:column;gap:4px;">
-          ${materias.map((m, i) => `
+          ${mats.map((m) => {
+            const nome = m.materia;
+            const n = m.questoes_com_gabarito;
+            const label = (n === null || n === undefined) ? nome : `${nome} (${n})`;
+            return `
             <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg,#1e1e2e);border-radius:8px;cursor:pointer;font-size:0.82rem;color:var(--text);">
-              <input type="checkbox" class="sim-mat-chk" value="${m.replace(/"/g,'&quot;')}" checked style="width:16px;height:16px;">
-              <span>${m}</span>
-            </label>`).join('')}
+              <input type="checkbox" class="sim-mat-chk" value="${nome.replace(/"/g,'&quot;')}" checked style="width:16px;height:16px;">
+              <span>${label}</span>
+            </label>`;
+          }).join('')}
         </div>` : '<div style="margin-bottom:8px;"></div>'}
         <div style="display:flex;gap:8px;justify-content:flex-end;">
           <button id="sim-cancel" style="background:var(--bg,#1e1e2e);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 16px;font-size:0.82rem;cursor:pointer;">Cancelar</button>
@@ -1832,11 +1841,12 @@ function _escolherMateriasSimulado(materias) {
 window.gerarSimuladoAutomatico = async function() {
   // Primeiro deixa o usuário escolher as disciplinas (uma, várias ou todas).
   // Só aparecem matérias ELEGÍVEIS: com no mínimo 3 questões com gabarito.
-  let materiasCiclo = [];
+  let materiasElegiveis = [];  // [{materia, questoes_com_gabarito}]
   try {
     const resp = await fetch('/api/simulado/materias-elegiveis').then(r => r.json());
-    materiasCiclo = (resp.materias || []).map(m => m.materia).filter(Boolean);
+    materiasElegiveis = (resp.materias || []).filter(m => m && m.materia);
   } catch (e) { /* segue sem seletor se falhar */ }
+  const materiasCiclo = materiasElegiveis.map(m => m.materia);
 
   if (materiasCiclo.length === 0) {
     await alertModal(
@@ -1846,7 +1856,7 @@ window.gerarSimuladoAutomatico = async function() {
     return;
   }
 
-  const escolha = await _escolherMateriasSimulado(materiasCiclo);
+  const escolha = await _escolherMateriasSimulado(materiasElegiveis);
   if (escolha === null) return; // cancelou
   const materiasEscolhidas = escolha.materias || [];
 
