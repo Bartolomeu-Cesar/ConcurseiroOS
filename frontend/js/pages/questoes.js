@@ -8,6 +8,18 @@ import { startFatigueSession, sendHeartbeat, hasActiveSession } from '../modules
 import { emit } from '../modules/event-bus.js';
 window.handleAuthNav = handleAuthNav;
 
+// Renderiza o bloco de "texto de apoio" (texto base compartilhado por questões
+// de interpretação, ex: Português). Retorna '' se a questão não tiver texto base.
+function textoBaseHtml(q) {
+  const tb = (q && q.texto_base ? String(q.texto_base) : '').trim();
+  if (!tb) return '';
+  return `
+    <div class="questao-texto-base" style="background:var(--bg,#1e1e2e);border:1px solid var(--border,#45475a);border-left:3px solid var(--accent,#cba6f7);border-radius:8px;padding:12px 14px;margin-bottom:12px;max-height:280px;overflow-y:auto;">
+      <div style="font-size:0.72rem;color:var(--accent,#cba6f7);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">📄 Texto de apoio</div>
+      <div style="font-size:0.85rem;line-height:1.6;color:var(--text,#cdd6f4);white-space:pre-wrap;">${tb.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+    </div>`;
+}
+
 // Tab navigation
 document.querySelectorAll('.qtab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -245,6 +257,7 @@ function showQuestao(q) {
         <span>${q.dificuldade}</span>
         <span id="questao-timer" style="margin-left:auto;font-family:monospace;font-size:0.85rem;color:#89b4fa;font-weight:600;">⏱ 0:00</span>
       </div>
+      ${textoBaseHtml(q)}
       <div class="questao-enunciado">${isCertoErrado ? '<span style="color:#89b4fa;font-weight:600;">Julgue o item:</span> ' : ''}${q.enunciado}</div>
       <div class="questao-alternativas">
         ${altsHtml}
@@ -549,6 +562,7 @@ function showSimQuestao() {
   document.getElementById('sim-questao-area').innerHTML = `
     <div class="questao-card">
       <div class="questao-meta"><span>${q.materia}</span></div>
+      ${textoBaseHtml(q)}
       <div class="questao-enunciado">${isCertoErrado ? '<span style="color:#89b4fa;font-weight:600;">Julgue o item:</span> ' : ''}${q.enunciado}</div>
       <div class="questao-alternativas">
         ${altsHtml}

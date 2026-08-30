@@ -330,6 +330,7 @@ class QuestaoResponse(BaseModel):
     materia: str
     topico: str
     enunciado: str
+    texto_base: str = ""
     alternativa_a: str
     alternativa_b: str
     alternativa_c: str

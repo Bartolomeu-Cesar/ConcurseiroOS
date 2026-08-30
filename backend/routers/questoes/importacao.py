@@ -17,6 +17,79 @@ router = APIRouter()
 
 
 # ============================================================
+# HELPER — EXTRAÇÃO DE TEXTO BASE (texto de apoio compartilhado)
+# ============================================================
+
+# Marcadores que indicam a presença de um texto base antes do enunciado.
+_MARCADORES_TEXTO_BASE = [
+    r'(?:Leia|Considere|Com base no?|Analise|A partir do?|baseie-se no?)\s+(?:o\s+)?(?:texto|trecho|excerto|fragmento)\s+(?:a seguir|abaixo|seguinte|apresentado)',
+    r'(?:O texto|Texto)\s+(?:a seguir|abaixo|seguinte|para|I+)',
+    r'(?:Leia|Considere|Com base em|baseie-se)\s+(?:o\s+)?(?:trecho|excerto|fragmento)',
+    r'(?:TEXTO|Texto)\s+(?:I{1,3}|[1-9])',
+    r'(?:Atenção|ATENÇÃO)\s*:?\s*(?:Para responder|para responder).*?(?:texto|trecho)\s+(?:abaixo|a seguir)',
+]
+
+# Marcadores que indicam o INÍCIO do enunciado real (comando da questão).
+_MARCADORES_ENUNCIADO = [
+    r'[Aa]ssinale\s', r'[Éé]\s+correto\s', r'[Pp]ode-se\s+(?:afirmar|concluir|inferir)',
+    r'[Mm]arque\s', r'[Jj]ulgue\s', r'[Éé]\s+(?:CORRETO|INCORRETO|correto|incorreto)',
+    r'[Dd]e acordo com o (?:texto|autor)', r'[Ss]egundo o (?:texto|autor)',
+    r'[Ii]nfere-se', r'[Dd]epreende-se', r'[Aa] alternativa\s', r'[Aa] exclusão\s',
+    r'[Oo] emprego\s', r'[Oo] segmento\s', r'[Aa] substituição\s', r'[Oo] termo\s',
+    r'[Aa] expressão\s', r'[Oo] sentido\s', r'[Aa] frase\s', r'[Nn]o texto,?\s',
+    r'[Nn]o contexto', r'[Cc]onsiderando.se o (?:texto|contexto|trecho)',
+    r'[Cc]onsidere as\s', r'[Cc]onsidere o\s', r'[Aa] passagem\s', r'[Oo] pronome\s',
+    r'[Aa] conjunção\s', r'[Oo] conectivo\s', r'[Éé] adequad[ao]\s',
+    r'[Ee]stá corret[ao]\s', r'[Ee]m relação ao texto',
+]
+
+
+def _extrair_texto_base(enunciado: str) -> tuple[str, str]:
+    """Separa um enunciado longo em (texto_base, enunciado_real).
+
+    Questões de interpretação (comum em Português) compartilham um texto de
+    apoio. Quando o enunciado traz um marcador de texto base e é suficientemente
+    longo, tenta-se separar o texto de apoio do comando da questão.
+
+    Retorna (texto_base, enunciado). Se não detectar, texto_base = '' e o
+    enunciado é devolvido inalterado.
+    """
+    if not enunciado or len(enunciado) <= 300:
+        return "", enunciado
+
+    tem_marcador = any(re.search(m, enunciado, re.IGNORECASE) for m in _MARCADORES_TEXTO_BASE)
+    if not tem_marcador:
+        return "", enunciado
+
+    # Buscar a última ocorrência de um marcador de enunciado (o comando real).
+    last_marker_pos = -1
+    for em in _MARCADORES_ENUNCIADO:
+        for em_match in re.finditer(em, enunciado):
+            pos = em_match.start()
+            frase_start = enunciado.rfind('. ', 0, pos)
+            if frase_start < 0:
+                frase_start = enunciado.rfind('.) ', 0, pos)
+            frase_start = frase_start + 2 if frase_start > 0 else pos
+            if frase_start > last_marker_pos and frase_start > 100:
+                last_marker_pos = frase_start
+
+    if last_marker_pos > 100:
+        return enunciado[:last_marker_pos].strip(), enunciado[last_marker_pos:].strip()
+
+    # Fallback: texto muito longo → separar pela última frase curta (o comando).
+    if len(enunciado) > 500:
+        last_period = -1
+        for m in re.finditer(r'\.\s+[A-Z]', enunciado):
+            remaining = len(enunciado) - m.start()
+            if 30 < remaining < 250:
+                last_period = m.start() + 1
+        if last_period > 200:
+            return enunciado[:last_period].strip(), enunciado[last_period:].strip()
+
+    return "", enunciado
+
+
+# ============================================================
 # HELPER FUNCTIONS — CSV
 # ============================================================
 
@@ -276,11 +349,14 @@ def _parse_qconcursos(texto: str, materia_override: str = "") -> list:
 
         resposta = gabarito.get(quest_num, '')
 
+        texto_base, enunciado = _extrair_texto_base(enunciado)
+
         questoes.append({
             "numero": quest_num,
             "materia": materia_override or "",
             "topico": "",
             "enunciado": enunciado,
+            "texto_base": texto_base,
             "alternativa_a": alts['A'],
             "alternativa_b": alts['B'],
             "alternativa_c": alts['C'],
@@ -625,85 +701,8 @@ def _parse_questoes_texto(texto: str, materia: str = "", banca: str = "") -> lis
 
         resposta = gabarito.get(num, '')
 
-        # === EXTRAÇÃO DE TEXTO BASE ===
-        # Detectar texto base compartilhado (ex: "Leia o texto a seguir", "Considere o texto")
-        # Padrão 1: Marcador explícito + texto longo antes do enunciado curto
-        # Padrão 2: Enunciado > 500 chars com marcador de texto/leitura
-        texto_base = ''
-        marcadores_texto_base = [
-            r'(?:Leia|Considere|Com base no?|Analise|A partir do?|baseie-se no?)\s+(?:o\s+)?(?:texto|trecho|excerto|fragmento)\s+(?:a seguir|abaixo|seguinte|apresentado)',
-            r'(?:O texto|Texto)\s+(?:a seguir|abaixo|seguinte|para|I+)',
-            r'(?:Leia|Considere|Com base em|baseie-se)\s+(?:o\s+)?(?:trecho|excerto|fragmento)',
-            r'(?:TEXTO|Texto)\s+(?:I{1,3}|[1-9])',
-            r'(?:Atenção|ATENÇÃO)\s*:?\s*(?:Para responder|para responder).*?(?:texto|trecho)\s+(?:abaixo|a seguir)',
-        ]
-        for marcador in marcadores_texto_base:
-            match = re.search(marcador, enunciado, re.IGNORECASE)
-            if match and len(enunciado) > 300:
-                # Estratégia: buscar a ÚLTIMA frase interrogativa/imperativa (= enunciado real)
-                # O enunciado real geralmente é a última frase antes das alternativas
-                enunciado_markers = [
-                    r'[Aa]ssinale\s',
-                    r'[Éé]\s+correto\s',
-                    r'[Pp]ode-se\s+(?:afirmar|concluir|inferir)',
-                    r'[Mm]arque\s',
-                    r'[Jj]ulgue\s',
-                    r'[Éé]\s+(?:CORRETO|INCORRETO|correto|incorreto)',
-                    r'[Dd]e acordo com o (?:texto|autor)',
-                    r'[Ss]egundo o (?:texto|autor)',
-                    r'[Ii]nfere-se',
-                    r'[Dd]epreende-se',
-                    r'[Aa] alternativa\s',
-                    r'[Aa] exclusão\s',
-                    r'[Oo] emprego\s',
-                    r'[Oo] segmento\s',
-                    r'[Aa] substituição\s',
-                    r'[Oo] termo\s',
-                    r'[Aa] expressão\s',
-                    r'[Oo] sentido\s',
-                    r'[Aa] frase\s',
-                    r'[Nn]o texto,?\s',
-                    r'[Nn]o contexto',
-                    r'[Cc]onsiderando.se o (?:texto|contexto|trecho)',
-                    r'[Cc]onsidere as\s',
-                    r'[Cc]onsidere o\s',
-                    r'[Aa] passagem\s',
-                    r'[Oo] pronome\s',
-                    r'[Aa] conjunção\s',
-                    r'[Oo] conectivo\s',
-                    r'[Éé] adequad[ao]\s',
-                    r'[Ee]stá corret[ao]\s',
-                    r'[Ee]m relação ao texto',
-                ]
-                # Buscar a última ocorrência de qualquer marcador de enunciado
-                last_marker_pos = -1
-                for em in enunciado_markers:
-                    for em_match in re.finditer(em, enunciado):
-                        pos = em_match.start()
-                        # Voltar até o início da frase (ponto anterior ou início)
-                        frase_start = enunciado.rfind('. ', 0, pos)
-                        if frase_start < 0:
-                            frase_start = enunciado.rfind('.) ', 0, pos)
-                        frase_start = frase_start + 2 if frase_start > 0 else pos
-                        if frase_start > last_marker_pos and frase_start > 100:
-                            last_marker_pos = frase_start
-
-                if last_marker_pos > 100:  # Precisa ter texto base substancial antes
-                    texto_base = enunciado[:last_marker_pos].strip()
-                    enunciado = enunciado[last_marker_pos:].strip()
-                elif len(enunciado) > 500:
-                    # Fallback: se não achou marcador de enunciado mas texto é longo,
-                    # tentar separar pela última frase (após último ponto com > 100 chars restantes)
-                    last_period = -1
-                    for m in re.finditer(r'\.\s+[A-Z]', enunciado):
-                        # Se restam < 200 chars após este ponto, é provavelmente o enunciado
-                        remaining = len(enunciado) - m.start()
-                        if 30 < remaining < 250:
-                            last_period = m.start() + 1
-                    if last_period > 200:
-                        texto_base = enunciado[:last_period].strip()
-                        enunciado = enunciado[last_period:].strip()
-                break
+        # Extrai texto base compartilhado (texto de apoio) do enunciado.
+        texto_base, enunciado = _extrair_texto_base(enunciado)
 
         questoes.append({
             "numero": num,
@@ -935,11 +934,11 @@ async def importar_questoes_pdf(
 
             conn.execute("""
                 INSERT INTO questoes (materia, topico, enunciado, alternativa_a, alternativa_b,
-                    alternativa_c, alternativa_d, alternativa_e, resposta_correta, explicacao, dificuldade, banca, prova_origem, created_at, user_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    alternativa_c, alternativa_d, alternativa_e, resposta_correta, explicacao, dificuldade, banca, prova_origem, texto_base, created_at, user_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (q["materia"], q["topico"], q["enunciado"], q["alternativa_a"], q["alternativa_b"],
                   q["alternativa_c"], q["alternativa_d"], q["alternativa_e"], q["resposta_correta"],
-                  q["explicacao"], q["dificuldade"], q["banca"], nome_prova, today_str(), user_id))
+                  q["explicacao"], q["dificuldade"], q["banca"], nome_prova, q.get("texto_base", ""), today_str(), user_id))
             count += 1
 
         conn.commit()
@@ -1197,14 +1196,14 @@ async def importar_questoes_url(
 
             conn.execute("""
                 INSERT INTO questoes (enunciado, alternativa_a, alternativa_b, alternativa_c, alternativa_d, alternativa_e,
-                                     resposta_correta, materia, banca, dificuldade, prova_origem, user_id, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                     resposta_correta, materia, banca, dificuldade, prova_origem, texto_base, user_id, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 enunciado,
                 q.get("alternativa_a", ""), q.get("alternativa_b", ""),
                 q.get("alternativa_c", ""), q.get("alternativa_d", ""), q.get("alternativa_e", ""),
                 resp_correta, mat, banca, q.get("dificuldade", "Médio"),
-                nome_prova, user_id, today_str()
+                nome_prova, q.get("texto_base", ""), user_id, today_str()
             ))
             count += 1
 
