@@ -56,6 +56,12 @@
     }
     #ai-tutor-fab:hover { transform: scale(1.1); box-shadow: 0 6px 24px rgba(203,166,247,0.5); }
     #ai-tutor-fab.open { animation: none; transform: rotate(45deg) scale(1.05); }
+    /* Estado oculto temporário: some do caminho para liberar cliques em botões atrás */
+    #ai-tutor-fab.hidden-temp {
+      opacity: 0; transform: scale(0.4) translateY(10px);
+      pointer-events: none; animation: none;
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
     @keyframes ai-fab-pulse {
       0%, 100% { box-shadow: 0 4px 16px rgba(203,166,247,0.4); }
       50% { box-shadow: 0 4px 24px rgba(203,166,247,0.6); }
@@ -157,7 +163,7 @@
   const fab = document.createElement('button');
   fab.id = 'ai-tutor-fab';
   fab.innerHTML = '🤖';
-  fab.title = 'AI Tutor — Tire dúvidas a qualquer momento';
+  fab.title = 'AI Tutor — clique para abrir · duplo clique (ou segurar) para ocultar por alguns segundos';
   fab.setAttribute('aria-label', 'Abrir AI Tutor');
 
   // Create panel
@@ -194,7 +200,38 @@
   }
 
   function setupEvents() {
-    fab.addEventListener('click', toggleAITutor);
+    // Distingue clique simples (abrir chat) de duplo clique (ocultar), e evita
+    // que um long-press dispare o clique de abrir. Um único handler de clique
+    // com debounce curto resolve o single-vs-double de forma robusta.
+    let clickTimer = null;
+    let suppressClick = false;
+
+    fab.addEventListener('click', () => {
+      if (suppressClick) { suppressClick = false; return; }
+      if (clickTimer) return; // já há um clique pendente (será tratado como parte do dblclick)
+      clickTimer = setTimeout(() => { clickTimer = null; toggleAITutor(); }, 220);
+    });
+
+    fab.addEventListener('dblclick', (e) => {
+      e.preventDefault();
+      if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
+      hideFabTemporarily();
+    });
+
+    // Long-press (mobile): segurar ~600ms oculta o FAB.
+    let pressTimer = null;
+    const startPress = () => {
+      pressTimer = setTimeout(() => {
+        pressTimer = null;
+        suppressClick = true; // impede que o clique subsequente abra o chat
+        if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
+        hideFabTemporarily();
+      }, 600);
+    };
+    const cancelPress = () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } };
+    fab.addEventListener('touchstart', startPress, { passive: true });
+    fab.addEventListener('touchend', cancelPress);
+    fab.addEventListener('touchmove', cancelPress);
 
     const input = document.getElementById('ai-widget-input');
     const sendBtn = document.getElementById('ai-widget-send');
@@ -211,6 +248,20 @@
       }
     });
   }
+
+  // Oculta o botão flutuante por alguns segundos e o traz de volta automaticamente.
+  // Se o painel do chat estiver aberto, fecha primeiro. Duração padrão: 5s.
+  let hideTimer = null;
+  window.hideAITutorFab = function(seconds = 5) {
+    if (panel.classList.contains('show')) toggleAITutor();
+    fab.classList.add('hidden-temp');
+    if (hideTimer) clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => {
+      fab.classList.remove('hidden-temp');
+      hideTimer = null;
+    }, Math.max(1, seconds) * 1000);
+  };
+  function hideFabTemporarily() { window.hideAITutorFab(5); }
 
   window.toggleAITutor = function() {
     const isOpen = panel.classList.toggle('show');
