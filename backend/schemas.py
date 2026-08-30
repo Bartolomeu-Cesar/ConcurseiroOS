@@ -344,8 +344,11 @@ class QuestaoResponse(BaseModel):
 
 
 class QuestaoRespostaResponse(BaseModel):
-    acertou: bool
-    resposta_correta: str
+    acertou: bool | None = None
+    resposta_correta: str = ""
+    sem_gabarito: bool = False
+    mensagem: str | None = None
+    alerta: dict | None = None
 
 
 class OkResponse(BaseModel):

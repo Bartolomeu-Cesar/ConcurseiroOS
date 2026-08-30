@@ -334,6 +334,12 @@ async function confirmarResposta() {
   }
   const res = await resp.json();
 
+  // Questão sem gabarito cadastrado: não penaliza o usuário. Informa e permite seguir.
+  if (res.sem_gabarito) {
+    toast(res.mensagem || 'Questão sem gabarito cadastrado — não é possível corrigir.', 'warning', 5000);
+    return;
+  }
+
   respondida = true;
 
   // XP real-time feedback

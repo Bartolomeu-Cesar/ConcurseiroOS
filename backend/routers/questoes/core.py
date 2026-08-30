@@ -397,7 +397,20 @@ def responder_questao(id: int, body: QuestaoResposta, conn=Depends(get_db_sessio
     questao = conn.execute("SELECT resposta_correta, materia FROM questoes WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
     if not questao:
         raise HTTPException(status_code=404, detail="Questão não encontrada")
-    acertou = 1 if body.resposta.upper() == questao[0].upper() else 0
+
+    gabarito = (questao[0] or "").strip().upper()
+    # Sem gabarito cadastrado: NÃO registrar resposta nem contabilizar como erro.
+    # Antes, a comparação com string vazia marcava SEMPRE "errou", independente da
+    # alternativa escolhida. Retorna sinal explícito para o frontend avisar.
+    if not gabarito:
+        return {
+            "acertou": None,
+            "sem_gabarito": True,
+            "resposta_correta": "",
+            "mensagem": "Esta questão está sem gabarito cadastrado, então não é possível corrigir. Importe o gabarito para respondê-la.",
+        }
+
+    acertou = 1 if body.resposta.upper() == gabarito else 0
     conn.execute("""
         INSERT INTO questoes_respostas (questao_id, resposta_usuario, acertou, tempo_segundos, confianca, data, user_id)
         VALUES (?, ?, ?, ?, ?, ?, ?)
