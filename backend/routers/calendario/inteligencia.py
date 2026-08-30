@@ -282,8 +282,17 @@ def o_que_estudar_agora(conn=Depends(get_db_session), user_id: int = Depends(get
     planejador_mats = set(r["materia"] for r in planejador_materias)
     personalizado_mats = set(a["materia"] for a in atividades_hoje if a["materia"] and a["tipo"] not in ("pre-test", "revisao", "pausa", "consolidacao"))
 
-    # Se personalizado não tem NENHUMA matéria do planejador → desatualizado, usar planejador
-    if planejador_mats and personalizado_mats and not planejador_mats.intersection(personalizado_mats):
+    # Personalizado é considerado DESATUALIZADO em relação ao planejador quando:
+    #  (a) tem matérias de estudo, mas NENHUMA coincide com o planejador; ou
+    #  (b) NÃO tem nenhuma matéria de estudo (só revisão/pausa — resíduo antigo),
+    #      enquanto o planejador tem matérias definidas para o dia.
+    # Em ambos os casos o grid visual (que usa o planejador) mostraria matérias
+    # diferentes da sugestão "Agora" — então geramos as atividades do planejador.
+    personalizado_desatualizado = bool(planejador_mats) and (
+        (personalizado_mats and not planejador_mats.intersection(personalizado_mats))
+        or not personalizado_mats
+    )
+    if personalizado_desatualizado:
         # Calendário personalizado desatualizado — gerar atividades do planejador
         atividades_hoje = []
         plan_items = conn.execute("""

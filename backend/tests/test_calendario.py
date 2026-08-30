@@ -397,6 +397,43 @@ class TestOQueEstudarAgora:
         assert "total" in data["progresso_dia"]
         assert data["progresso_dia"]["total"] == 3
 
+    def test_agora_usa_planejador_quando_personalizado_so_tem_revisao(self, client):
+        """Regressão: se o calendário personalizado do dia só tem revisão/pausa
+        (resíduo antigo) mas o planejador tem matérias reais, o 'Agora' deve
+        seguir o planejador — não sugerir a matéria antiga de revisão.
+
+        Reproduz o caso do domingo: personalizado=[Revisão, Direito Constitucional
+        (tipo revisao)] enquanto o planejador tem Língua Portuguesa/Informática.
+        """
+        from datetime import date
+        hoje_dia = date.today().weekday()
+
+        # Personalizado do dia: só revisão (matéria de estudo real = nenhuma)
+        client.post("/api/calendario-personalizado/salvar-completo", json=[
+            {"dia_semana": hoje_dia, "materia": "Revisão", "topicos": "", "tempo_min": 15, "tipo": "revisao", "ordem": 0},
+            {"dia_semana": hoje_dia, "materia": "Direito Constitucional", "topicos": "", "tempo_min": 30, "tipo": "revisao", "ordem": 1},
+        ])
+
+        # Planejador do dia: matérias reais diferentes
+        c = sqlite3.connect(_tmp_db.name, timeout=10)
+        try:
+            c.execute("DELETE FROM planejador_semanal WHERE user_id = 1 AND dia_semana = ?", (hoje_dia,))
+            c.execute("INSERT INTO planejador_semanal (dia_semana, materia, horas, user_id) VALUES (?, 'Língua Portuguesa', 1.0, 1)", (hoje_dia,))
+            c.execute("INSERT INTO planejador_semanal (dia_semana, materia, horas, user_id) VALUES (?, 'Informática', 1.0, 1)", (hoje_dia,))
+            c.commit()
+        finally:
+            c.close()
+
+        r = client.get("/api/calendario/agora")
+        assert r.status_code == 200
+        data = r.json()
+        # A sugestão NÃO pode ser a matéria antiga de revisão do personalizado
+        materias_planejadas = {a["materia"] for a in data.get("atividades_planejadas", [])}
+        if data.get("sugestao"):
+            assert data["sugestao"]["materia"] != "Direito Constitucional"
+        # As atividades planejadas devem refletir o planejador (Português/Informática)
+        assert materias_planejadas <= {"Língua Portuguesa", "Informática"} or not materias_planejadas
+
 
 # ============================================================
 # PROGRESSO SEMANAL
