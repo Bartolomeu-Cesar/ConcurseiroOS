@@ -254,12 +254,12 @@ def _parse_pares_num_letra(bloco: str) -> dict:
         A
         2
         D
-    Ignora anulações (X) e valores fora de A–E.
+    Aceita 'X' como marcação de questão ANULADA.
     """
     gab = {}
 
     # 1) Tentar pares na mesma linha (cobre a maioria dos formatos tabulares).
-    for num, letra in re.findall(r'(\d{1,3})\s*[-–.):|]?\s*([A-Ea-e])(?:\s|$)', bloco):
+    for num, letra in re.findall(r'(\d{1,3})\s*[-–.):|]?\s*([A-Ea-eXx])(?:\s|$)', bloco):
         gab[int(num)] = letra.upper()
 
     # 2) Layout em linhas alternadas: sequência [num, letra, num, letra, ...].
@@ -269,7 +269,7 @@ def _parse_pares_num_letra(bloco: str) -> dict:
         alt = {}
         while i < len(tokens) - 1:
             a, b = tokens[i], tokens[i + 1]
-            if a.isdigit() and len(b) == 1 and b.upper() in 'ABCDE':
+            if a.isdigit() and len(b) == 1 and b.upper() in 'ABCDEX':
                 alt[int(a)] = b.upper()
                 i += 2
             else:
@@ -432,6 +432,50 @@ def _aplicar_gabarito_map(questoes: list, gabarito: dict) -> list:
                 _set(q, letra)
 
     return questoes
+
+
+def _aplicar_gabarito_em_prova(conn, user_id: int, prova_origem: str, gabarito: dict) -> dict:
+    """Aplica um gabarito {numero: letra} nas questões JÁ IMPORTADAS de uma prova.
+
+    As questões são associadas por ORDEM (a 1ª questão da prova recebe o
+    gabarito[1], a 2ª o gabarito[2], etc.), que é a convenção usada na
+    importação. Converte C/E → A/B para questões certo/errado e trata anulação
+    (X). Retorna contagens. Não faz commit (responsabilidade do chamador).
+    """
+    questoes_prova = conn.execute(
+        "SELECT id, alternativa_a, alternativa_b, alternativa_c FROM questoes "
+        "WHERE user_id = ? AND prova_origem = ? ORDER BY id",
+        (user_id, prova_origem),
+    ).fetchall()
+
+    if not questoes_prova:
+        return {"aplicadas": 0, "anuladas": 0, "total_questoes_prova": 0}
+
+    aplicadas = 0
+    anuladas = 0
+    for i, row in enumerate(questoes_prova):
+        qid = row[0]
+        num = i + 1
+        if num not in gabarito:
+            continue
+        gab = gabarito[num]
+        # Certo/errado quando só há 2 alternativas (A/B) preenchidas
+        eh_ce = bool(row[1]) and bool(row[2]) is False and bool(row[3]) is False
+        if gab == "X":
+            conn.execute(
+                "UPDATE questoes SET explicacao = '⚠️ QUESTÃO ANULADA', resposta_correta = '' WHERE id = ?",
+                (qid,),
+            )
+            anuladas += 1
+        elif gab in ("C", "E") and eh_ce:
+            resposta = "A" if gab == "C" else "B"
+            conn.execute("UPDATE questoes SET resposta_correta = ? WHERE id = ?", (resposta, qid))
+            aplicadas += 1
+        elif gab in ("A", "B", "C", "D", "E"):
+            conn.execute("UPDATE questoes SET resposta_correta = ? WHERE id = ?", (gab, qid))
+            aplicadas += 1
+
+    return {"aplicadas": aplicadas, "anuladas": anuladas, "total_questoes_prova": len(questoes_prova)}
 
 
 # ============================================================
@@ -1457,6 +1501,70 @@ async def aplicar_gabarito_pdf(
             os.unlink(tmp_path)
         except OSError:
             pass
+
+
+@router.post("/api/questoes/aplicar-gabarito-texto",
+             summary="Aplicar gabarito colado em texto plano",
+             description="Recebe o gabarito como texto (ex.: '1 A 2 D 3 E ...' em uma ou várias linhas) "
+                         "e aplica nas questões de uma prova escolhida.")
+def aplicar_gabarito_texto(
+    gabarito_texto: str = Body(..., embed=True),
+    prova_origem: str = Body(..., embed=True),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    texto = (gabarito_texto or "").strip()
+    if not texto:
+        raise HTTPException(status_code=400, detail="Cole o gabarito no campo de texto.")
+    if not prova_origem or not prova_origem.strip():
+        raise HTTPException(status_code=400, detail="Selecione a prova de destino do gabarito.")
+    prova_origem = prova_origem.strip()
+
+    # O texto colado É o gabarito puro. Tenta primeiro o parser de pares
+    # (entende 'N letra' na mesma linha/múltiplos por linha/linhas alternadas,
+    # incluindo X de anulação). Cai para _parse_gabarito (rótulos/grade) se preciso.
+    gabarito = _parse_pares_num_letra(texto)
+    if len(gabarito) < 1:
+        gabarito = _parse_gabarito(texto)
+    if len(gabarito) < 1:
+        # Fallback amplo: qualquer par número→letra (inclui X de anulação)
+        for num, resp in re.findall(r'(\d{1,3})\s*[.\-–):|]?\s*([A-Ea-eXx])(?:\s|$)', texto):
+            gabarito[int(num)] = resp.upper()
+
+    if not gabarito:
+        raise HTTPException(
+            status_code=400,
+            detail="Não foi possível interpretar o gabarito. Use o formato 'número letra' (ex.: 1 A 2 B 3 C).",
+        )
+
+    # Confirma que a prova existe para o usuário
+    existe = conn.execute(
+        "SELECT COUNT(*) FROM questoes WHERE user_id = ? AND prova_origem = ?",
+        (user_id, prova_origem),
+    ).fetchone()[0]
+    if not existe:
+        raise HTTPException(status_code=404, detail=f"Nenhuma questão encontrada para a prova '{prova_origem}'.")
+
+    resultado = _aplicar_gabarito_em_prova(conn, user_id, prova_origem, gabarito)
+    conn.commit()
+
+    log.info(
+        f"Gabarito-texto aplicado: prova={prova_origem!r} aplicadas={resultado['aplicadas']} "
+        f"anuladas={resultado['anuladas']} (entradas no gabarito={len(gabarito)})"
+    )
+
+    aplicadas = resultado["aplicadas"]
+    anuladas = resultado["anuladas"]
+    return {
+        "ok": True,
+        "prova": prova_origem,
+        "aplicadas": aplicadas,
+        "anuladas": anuladas,
+        "total_gabarito": len(gabarito),
+        "total_questoes_prova": resultado["total_questoes_prova"],
+        "mensagem": f"Gabarito aplicado em '{prova_origem}'! {aplicadas} respostas."
+        + (f" {anuladas} anuladas." if anuladas else ""),
+    }
 
 
 # ============================================================

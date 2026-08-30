@@ -952,6 +952,111 @@ async function aplicarGabaritoPDF() {
 }
 window.aplicarGabaritoPDF = aplicarGabaritoPDF;
 
+// ==================== APLICAR GABARITO COLADO (TEXTO PLANO) ====================
+async function aplicarGabaritoTexto() {
+  // Buscar provas importadas para seleção
+  let provasRes = [];
+  try {
+    provasRes = await fetch('/api/questoes/provas').then(r => r.json());
+  } catch (e) { provasRes = []; }
+
+  let options = '';
+  if (provasRes.length > 0) {
+    options = provasRes.map(p => {
+      const status = p.sem_gabarito > 0 ? `⚠️ ${p.sem_gabarito} sem gab` : '✅';
+      return `<option value="${p.prova}">${p.prova} (${p.total_questoes}q — ${status})</option>`;
+    }).join('');
+  }
+  options += '<option value="__manual__">✏️ Digitar nome da prova...</option>';
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(30,30,46,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:#313244;border:1px solid #45475a;border-radius:16px;padding:24px;max-width:520px;width:92%;">
+      <h3 style="color:#cdd6f4;margin:0 0 12px;">📋 Aplicar Gabarito (colar texto)</h3>
+      <p style="color:#a6adc8;font-size:0.82rem;margin:0 0 8px;">1. Escolha a prova de destino:</p>
+      <select id="gabt-prova-select" style="width:100%;padding:10px;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:8px;font-size:0.85rem;margin-bottom:8px;box-sizing:border-box;">
+        ${options}
+      </select>
+      <input id="gabt-prova-manual" type="text" placeholder="Nome da prova (ex: STM 2025 CG1)" style="display:none;width:100%;padding:10px;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:8px;font-size:0.85rem;margin-bottom:12px;box-sizing:border-box;">
+      <p style="color:#a6adc8;font-size:0.82rem;margin:12px 0 8px;">2. Cole o gabarito (ex.: <code style="color:#89b4fa;">1 A 2 D 3 E 4 C ...</code>):</p>
+      <textarea id="gabt-texto" rows="7" placeholder="Respostas:\n1 A 2 D 3 E 4 C 5 B 6 B ...\n14 C 15 B 16 B ..." style="width:100%;padding:10px;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:8px;font-size:0.82rem;font-family:monospace;margin-bottom:16px;box-sizing:border-box;resize:vertical;"></textarea>
+      <div style="display:flex;gap:8px;">
+        <button id="gabt-cancel" style="flex:1;padding:10px;background:#45475a;color:#cdd6f4;border:none;border-radius:8px;cursor:pointer;font-weight:600;">Cancelar</button>
+        <button id="gabt-confirm" style="flex:1;padding:10px;background:#a6e3a1;color:#1e1e2e;border:none;border-radius:8px;cursor:pointer;font-weight:700;">Aplicar Gabarito</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const selectEl = overlay.querySelector('#gabt-prova-select');
+  const manualEl = overlay.querySelector('#gabt-prova-manual');
+  selectEl.addEventListener('change', () => {
+    manualEl.style.display = selectEl.value === '__manual__' ? 'block' : 'none';
+  });
+  if (provasRes.length === 0) {
+    selectEl.value = '__manual__';
+    manualEl.style.display = 'block';
+  }
+
+  const escolha = await new Promise(resolve => {
+    overlay.querySelector('#gabt-cancel').onclick = () => { overlay.remove(); resolve(null); };
+    overlay.querySelector('#gabt-confirm').onclick = () => {
+      const prova = selectEl.value === '__manual__' ? manualEl.value.trim() : selectEl.value;
+      const texto = overlay.querySelector('#gabt-texto').value.trim();
+      overlay.remove();
+      resolve({ prova, texto });
+    };
+    overlay.onclick = (e) => { if (e.target === overlay) { overlay.remove(); resolve(null); } };
+  });
+
+  if (!escolha) return;
+  if (!escolha.prova) { toast('Selecione ou informe a prova de destino.', 'warning'); return; }
+  if (!escolha.texto) { toast('Cole o gabarito no campo de texto.', 'warning'); return; }
+
+  const statusEl = document.getElementById('pdf-import-status');
+  if (statusEl) {
+    statusEl.style.display = 'block';
+    statusEl.style.background = '#45475a';
+    statusEl.style.color = '#cdd6f4';
+    statusEl.innerHTML = `⏳ Aplicando gabarito colado em "${escolha.prova}"...`;
+  }
+
+  try {
+    const res = await fetch('/api/questoes/aplicar-gabarito-texto', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gabarito_texto: escolha.texto, prova_origem: escolha.prova }),
+    });
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      if (statusEl) {
+        statusEl.style.background = '#1e3a2e';
+        statusEl.style.color = '#a6e3a1';
+        statusEl.innerHTML = `✅ ${data.mensagem}<br><small>Prova: ${data.prova} | Aplicadas: ${data.aplicadas} | Anuladas: ${data.anuladas || 0} | Gabarito lido: ${data.total_gabarito}</small>`;
+      }
+      toast(`✅ ${data.aplicadas} respostas aplicadas.`, 'success');
+      if (typeof loadBanco === 'function') loadBanco();
+    } else {
+      const msg = data.detail || data.erro || 'Erro ao aplicar gabarito.';
+      if (statusEl) {
+        statusEl.style.background = '#3a1e1e';
+        statusEl.style.color = '#f38ba8';
+        statusEl.innerHTML = `❌ ${msg}`;
+      }
+      toast('❌ ' + msg, 'error');
+    }
+  } catch (e) {
+    if (statusEl) {
+      statusEl.style.background = '#3a1e1e';
+      statusEl.style.color = '#f38ba8';
+      statusEl.innerHTML = '❌ Erro de conexão.';
+    }
+    toast('❌ Erro de conexão.', 'error');
+  }
+}
+window.aplicarGabaritoTexto = aplicarGabaritoTexto;
+
 // ==================== CADASTRAR ====================
 async function cadastrarQuestao() {
   const materia = document.getElementById('cad-materia').value.trim();
