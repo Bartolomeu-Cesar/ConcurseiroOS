@@ -1,11 +1,8 @@
 import random
 from datetime import date, datetime
 
-from fastapi import APIRouter, Body, Depends, HTTPException
-
-from database import get_db_session
 from deps import get_user_id
-from logger import log
+from fastapi import APIRouter, Body, Depends, HTTPException
 from schemas import (
     SimuladoCreate,
     SimuladoCronometradoCreate,
@@ -14,6 +11,9 @@ from schemas import (
     SimuladoProvaReal,
     SimuladoResponder,
 )
+
+from database import get_db_session
+from logger import log
 from utils import today_str, update_streak
 
 router = APIRouter(prefix="", tags=["Simulados"])
@@ -982,7 +982,6 @@ def auto_gerar_simulado(
     5. Mistura dificuldades: 30% fácil, 50% médio, 20% difícil
     6. Tempo proporcional à prova real
     """
-    import json
 
     # Validação de sanidade dos parâmetros configuráveis
     if total_questoes < 5 or total_questoes > 200:
@@ -1092,7 +1091,35 @@ def auto_gerar_simulado(
         distribuicao_real[mat] = len(ids_mat)
 
     if not questao_ids:
-        raise HTTPException(status_code=400, detail="Sem questões suficientes. Adicione mais questões ao banco.")
+        # Diagnóstico: quantas questões COM gabarito existem por matéria selecionada.
+        # Questões sem `resposta_correta` (ex.: importadas com parsing incompleto) não
+        # podem ser corrigidas, por isso são ignoradas na geração do simulado.
+        sem_gabarito = []
+        for mat in ciclo_mats:
+            total_mat = conn.execute(
+                "SELECT COUNT(*) FROM questoes WHERE materia = ? AND user_id = ?",
+                (mat, user_id),
+            ).fetchone()[0]
+            com_gab = conn.execute(
+                """SELECT COUNT(*) FROM questoes WHERE materia = ? AND user_id = ?
+                   AND resposta_correta IS NOT NULL AND resposta_correta != ''""",
+                (mat, user_id),
+            ).fetchone()[0]
+            if com_gab == 0:
+                if total_mat > 0:
+                    sem_gabarito.append(f"{mat} ({total_mat} sem gabarito)")
+                else:
+                    sem_gabarito.append(mat)
+
+        if sem_gabarito:
+            detalhe = (
+                "Nenhuma questão com gabarito nas matérias selecionadas: "
+                + ", ".join(sem_gabarito)
+                + ". Importe questões com resposta correta ou escolha outra matéria."
+            )
+        else:
+            detalhe = "Sem questões suficientes. Adicione mais questões ao banco."
+        raise HTTPException(status_code=400, detail=detalhe)
 
     # Embaralhar ordem (simula prova real)
     import random

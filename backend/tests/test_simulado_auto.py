@@ -1,4 +1,5 @@
 """Testes do simulado automático (/api/simulado/auto-gerar) com filtro de matérias."""
+
 import os
 import sqlite3
 import sys
@@ -54,16 +55,30 @@ def _seed():
             except Exception:
                 pass
         # Ciclo com 2 matérias
-        c.execute("INSERT INTO ciclo_estudos (materia, horas_alvo, ordem, ativo, user_id) VALUES ('Português', 1, 0, 1, 1)")
-        c.execute("INSERT INTO ciclo_estudos (materia, horas_alvo, ordem, ativo, user_id) VALUES ('Informática', 1, 1, 1, 1)")
+        c.execute(
+            "INSERT INTO ciclo_estudos (materia, horas_alvo, ordem, ativo, user_id) VALUES ('Português', 1, 0, 1, 1)"
+        )
+        c.execute(
+            "INSERT INTO ciclo_estudos (materia, horas_alvo, ordem, ativo, user_id) VALUES ('Informática', 1, 1, 1, 1)"
+        )
         # Tópicos no edital (peso)
         for i in range(5):
-            c.execute("INSERT INTO edital (materia, topico, arquivado, user_id) VALUES ('Português', ?, 0, 1)", (f"P{i}",))
-            c.execute("INSERT INTO edital (materia, topico, arquivado, user_id) VALUES ('Informática', ?, 0, 1)", (f"I{i}",))
+            c.execute(
+                "INSERT INTO edital (materia, topico, arquivado, user_id) VALUES ('Português', ?, 0, 1)", (f"P{i}",)
+            )
+            c.execute(
+                "INSERT INTO edital (materia, topico, arquivado, user_id) VALUES ('Informática', ?, 0, 1)", (f"I{i}",)
+            )
         # Questões com gabarito
         for i in range(15):
-            c.execute("INSERT INTO questoes (enunciado, alternativa_a, alternativa_b, alternativa_c, alternativa_d, resposta_correta, materia, dificuldade, created_at, user_id) VALUES (?, 'a', 'b', 'c', 'd', 'A', 'Português', 'Médio', '2026-01-01', 1)", (f"PQ{i}",))
-            c.execute("INSERT INTO questoes (enunciado, alternativa_a, alternativa_b, alternativa_c, alternativa_d, resposta_correta, materia, dificuldade, created_at, user_id) VALUES (?, 'a', 'b', 'c', 'd', 'A', 'Informática', 'Médio', '2026-01-01', 1)", (f"IQ{i}",))
+            c.execute(
+                "INSERT INTO questoes (enunciado, alternativa_a, alternativa_b, alternativa_c, alternativa_d, resposta_correta, materia, dificuldade, created_at, user_id) VALUES (?, 'a', 'b', 'c', 'd', 'A', 'Português', 'Médio', '2026-01-01', 1)",
+                (f"PQ{i}",),
+            )
+            c.execute(
+                "INSERT INTO questoes (enunciado, alternativa_a, alternativa_b, alternativa_c, alternativa_d, resposta_correta, materia, dificuldade, created_at, user_id) VALUES (?, 'a', 'b', 'c', 'd', 'A', 'Informática', 'Médio', '2026-01-01', 1)",
+                (f"IQ{i}",),
+            )
         c.commit()
     finally:
         c.close()
@@ -91,9 +106,9 @@ def test_auto_gerar_multidisciplinar_por_padrao(client):
 
 
 def test_auto_gerar_filtra_uma_materia(client):
-    r = client.post("/api/simulado/auto-gerar", json={
-        "total_questoes": 8, "tempo_limite_min": 60, "materias": ["Português"]
-    })
+    r = client.post(
+        "/api/simulado/auto-gerar", json={"total_questoes": 8, "tempo_limite_min": 60, "materias": ["Português"]}
+    )
     assert r.status_code == 200
     data = r.json()
     materias_distribuicao = {d["materia"] for d in data["distribuicao"]}
@@ -101,9 +116,9 @@ def test_auto_gerar_filtra_uma_materia(client):
 
 
 def test_auto_gerar_materia_fora_do_ciclo_retorna_400(client):
-    r = client.post("/api/simulado/auto-gerar", json={
-        "total_questoes": 8, "tempo_limite_min": 60, "materias": ["Direito Penal"]
-    })
+    r = client.post(
+        "/api/simulado/auto-gerar", json={"total_questoes": 8, "tempo_limite_min": 60, "materias": ["Direito Penal"]}
+    )
     assert r.status_code == 400
 
 
@@ -136,3 +151,29 @@ def test_auto_gerar_rejeita_tempo_invalido(client):
     assert r.status_code == 400
     r = client.post("/api/simulado/auto-gerar", json={"total_questoes": 10, "tempo_limite_min": 999})
     assert r.status_code == 400
+
+
+def test_auto_gerar_materia_sem_gabarito_retorna_erro_especifico(client):
+    """Matéria no ciclo cujas questões não têm resposta_correta → 400 com mensagem
+    específica citando a matéria (reproduz o caso das questões importadas sem gabarito)."""
+    # Substitui as questões de Informática por questões SEM gabarito
+    c = sqlite3.connect(_tmp_db.name, timeout=10)
+    try:
+        c.execute("DELETE FROM questoes WHERE materia = 'Informática'")
+        for i in range(10):
+            c.execute(
+                "INSERT INTO questoes (enunciado, alternativa_a, alternativa_b, alternativa_c, alternativa_d, resposta_correta, materia, dificuldade, created_at, user_id) "
+                "VALUES (?, 'Certo.', 'Errado.', '', '', '', 'Informática', 'Médio', '2026-01-01', 1)",
+                (f"SEMGAB{i}",),
+            )
+        c.commit()
+    finally:
+        c.close()
+
+    r = client.post(
+        "/api/simulado/auto-gerar", json={"total_questoes": 8, "tempo_limite_min": 60, "materias": ["Informática"]}
+    )
+    assert r.status_code == 400
+    detail = r.json()["detail"]
+    assert "Informática" in detail
+    assert "gabarito" in detail.lower()

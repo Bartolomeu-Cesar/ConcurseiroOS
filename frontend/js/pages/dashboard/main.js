@@ -1857,7 +1857,10 @@ window.gerarSimuladoAutomatico = async function() {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      _toastDash('Erro: ' + (err.detail || 'Não foi possível gerar'));
+      await alertModal(err.detail || 'Não foi possível gerar o simulado.', {
+        title: 'Simulado não gerado',
+        type: 'warning',
+      });
       return;
     }
     const data = await res.json();
@@ -1887,7 +1890,10 @@ window.gerarSimuladoAutomatico = async function() {
     overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
     document.body.appendChild(overlay);
   } catch(e) {
-    _toastDash('Erro ao gerar simulado: ' + e.message);
+    await alertModal('Erro ao gerar simulado: ' + e.message, {
+      title: 'Erro',
+      type: 'error',
+    });
   }
 };
 
