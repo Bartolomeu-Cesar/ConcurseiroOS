@@ -514,10 +514,12 @@ def _limpar_ocr_estrategia(txt: str) -> str:
 def _is_estrategia_format(texto: str) -> bool:
     """Detecta o formato do Estratégia Concursos.
 
-    Marcadores: várias 'Questão N' em linha própria + rodapé recorrente
-    'Essa questão possui comentário do professor no site'.
+    Marcadores: várias 'Questão N' + rodapé recorrente
+    'Essa questão possui comentário do professor no site'. Tolerante ao texto
+    achatado (sem quebras de linha ao redor de 'Questão N'), pois o extractor
+    de PDF pode juntar linhas dependendo do ambiente.
     """
-    questoes = len(re.findall(r'\nQuest[ãa]o\s+\d+\n', texto))
+    questoes = len(re.findall(r'Quest[ãa]o\s+\d+', texto))
     rodapes = len(re.findall(r'Essa quest[ãa]o possui coment[áa]rio', texto))
     return questoes >= 2 and rodapes >= 2
 
@@ -539,7 +541,9 @@ def _parse_estrategia(texto: str, materia: str = "", banca: str = "") -> list:
     questoes = []
 
     # Divide em blocos por "Questão N" (mantendo o número)
-    marcadores = list(re.finditer(r'\nQuest[ãa]o\s+(\d+)\n', texto))
+    # Split tolerante: aceita 'Questão N' com quebra de linha OU achatado
+    # (extractores diferentes podem ou não preservar as quebras).
+    marcadores = list(re.finditer(r'(?:^|\n|\s)Quest[ãa]o\s+(\d+)(?=\s|\n)', texto))
     if not marcadores:
         return []
 
@@ -549,10 +553,15 @@ def _parse_estrategia(texto: str, materia: str = "", banca: str = "") -> list:
         num = int(m.group(1))
         ini = m.end()
         fim = marcadores[i + 1].start() if i + 1 < len(marcadores) else len(texto)
-        bloco = texto[ini:fim]
+        bloco_raw = texto[ini:fim]
+
+        # Só considera bloco de questão real se contiver o rodapé de comentário
+        # (evita falsos positivos de 'Questão N' citada dentro de um enunciado).
+        if not re.search(r'Essa quest[ãa]o possui coment[áa]rio', bloco_raw):
+            continue
 
         # Corta o rodapé de comentário e o id numérico que o segue
-        bloco = re.split(r'Essa quest[ãa]o possui coment[áa]rio', bloco)[0].strip()
+        bloco = re.split(r'Essa quest[ãa]o possui coment[áa]rio', bloco_raw)[0].strip()
         if len(bloco) < 20:
             continue
 
@@ -648,6 +657,16 @@ def _parse_estrategia(texto: str, materia: str = "", banca: str = "") -> list:
         # Fallback do enunciado se ficou vazio
         if not enunciado:
             enunciado = _limpar_ocr_estrategia(re.sub(r'\s*\n\s*', ' ', cabeca).strip())[:1500]
+
+        # Limpeza de metadados achatados no início do enunciado (quando o
+        # extractor junta tudo numa linha): anos repetidos, "Questões oficiais",
+        # sequências de cargos/órgãos "(Poder Judiciário da União)".
+        enunciado = re.sub(r'^(?:\s*20\d{2}\s*)+', '', enunciado)  # anos repetidos
+        enunciado = re.sub(r'\b20\d{2}(?:\s+20\d{2})+\s*', '', enunciado)  # sequência de anos
+        enunciado = re.sub(r'\bQuest[õo]es\s+(?:oficiais|in[ée]ditas)\b', '', enunciado)
+        # Remove blocos de cargo/órgão achatados repetidos
+        enunciado = re.sub(r'(?:Analista Judiciário[^.?!]*?\(Poder Judiciário da União\)\s*)+', '', enunciado)
+        enunciado = re.sub(r'\s{2,}', ' ', enunciado).strip()
 
         if len(enunciado) < 5:
             continue

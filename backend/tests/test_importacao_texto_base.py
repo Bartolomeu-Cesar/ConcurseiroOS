@@ -121,6 +121,19 @@ class TestParseEstrategia:
         assert _limpar_ocr_estrategia("Esse vou &cando resume") == "Esse vou ficando resume"
         assert "final" in _limpar_ocr_estrategia("resignação &nal de quem")
 
+    def test_robusto_a_texto_achatado(self):
+        """Detecta e parseia mesmo quando o extractor achata os metadados numa
+        linha (ex: '2024 2024 ... Questão N' sem quebras), como ocorre em alguns
+        ambientes de extração de PDF."""
+        import re
+        achatado = re.sub(r"\n(?=\d{4}\n)", " ", _ESTRATEGIA_SAMPLE)  # junta anos
+        achatado = re.sub(r"\n2024", " 2024", achatado)
+        assert _is_estrategia_format(achatado) is True
+        qs = _parse_estrategia(achatado, materia="Informática")
+        assert len(qs) == 2
+        # enunciado não deve começar com ano/metadado
+        assert not re.match(r"^\s*20\d{2}", qs[0]["enunciado"])
+
 
 class TestExtrairTextoBase:
     def test_sem_texto_base_enunciado_curto(self):
