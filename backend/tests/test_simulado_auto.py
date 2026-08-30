@@ -154,8 +154,8 @@ def test_auto_gerar_rejeita_tempo_invalido(client):
 
 
 def test_auto_gerar_materia_sem_gabarito_retorna_erro_especifico(client):
-    """Matéria no ciclo cujas questões não têm resposta_correta → 400 com mensagem
-    específica citando a matéria (reproduz o caso das questões importadas sem gabarito)."""
+    """Matéria no ciclo cujas questões não têm gabarito não é elegível (< 3 com
+    gabarito). Selecionando só ela → 400 informando que falta gabarito."""
     # Substitui as questões de Informática por questões SEM gabarito
     c = sqlite3.connect(_tmp_db.name, timeout=10)
     try:
@@ -175,5 +175,53 @@ def test_auto_gerar_materia_sem_gabarito_retorna_erro_especifico(client):
     )
     assert r.status_code == 400
     detail = r.json()["detail"]
-    assert "Informática" in detail
     assert "gabarito" in detail.lower()
+
+
+def test_materia_com_menos_de_3_gabaritos_nao_entra_no_simulado(client):
+    """Matéria com < 3 questões com gabarito é excluída do simulado automático."""
+    c = sqlite3.connect(_tmp_db.name, timeout=10)
+    try:
+        # Informática fica com apenas 2 questões COM gabarito (abaixo do mínimo)
+        c.execute("DELETE FROM questoes WHERE materia = 'Informática'")
+        for i in range(2):
+            c.execute(
+                "INSERT INTO questoes (enunciado, alternativa_a, alternativa_b, alternativa_c, alternativa_d, resposta_correta, materia, dificuldade, created_at, user_id) "
+                "VALUES (?, 'a','b','c','d','A', 'Informática', 'Médio', '2026-01-01', 1)",
+                (f"INFO{i}",),
+            )
+        c.commit()
+    finally:
+        c.close()
+
+    r = client.post("/api/simulado/auto-gerar", json={"total_questoes": 10, "tempo_limite_min": 60})
+    assert r.status_code == 200
+    materias = {d["materia"] for d in r.json()["distribuicao"]}
+    assert "Informática" not in materias  # excluída (só 2 com gabarito)
+    assert "Português" in materias  # continua (15 com gabarito)
+
+
+def test_materias_elegiveis_endpoint(client):
+    """GET /api/simulado/materias-elegiveis lista só matérias com >= 3 gabaritos."""
+    # Restaura estado: garante Português com gabarito e Informática abaixo do mínimo
+    c = sqlite3.connect(_tmp_db.name, timeout=10)
+    try:
+        c.execute("DELETE FROM questoes WHERE materia = 'Informática'")
+        c.execute(
+            "INSERT INTO questoes (enunciado, alternativa_a, alternativa_b, alternativa_c, alternativa_d, resposta_correta, materia, dificuldade, created_at, user_id) "
+            "VALUES ('so uma','a','b','c','d','A','Informática','Médio','2026-01-01',1)"
+        )
+        c.commit()
+    finally:
+        c.close()
+
+    r = client.get("/api/simulado/materias-elegiveis")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["minimo_questoes"] == 3
+    materias = {m["materia"] for m in data["materias"]}
+    assert "Português" in materias
+    assert "Informática" not in materias  # só 1 questão com gabarito
+    # a contagem reportada bate com o filtro
+    for m in data["materias"]:
+        assert m["questoes_com_gabarito"] >= 3

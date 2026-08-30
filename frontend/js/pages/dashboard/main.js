@@ -1831,11 +1831,20 @@ function _escolherMateriasSimulado(materias) {
 
 window.gerarSimuladoAutomatico = async function() {
   // Primeiro deixa o usuário escolher as disciplinas (uma, várias ou todas).
+  // Só aparecem matérias ELEGÍVEIS: com no mínimo 3 questões com gabarito.
   let materiasCiclo = [];
   try {
-    const ciclo = await fetch('/api/ciclo').then(r => r.json());
-    materiasCiclo = [...new Set((ciclo || []).filter(c => c.ativo).map(c => c.materia).filter(Boolean))];
+    const resp = await fetch('/api/simulado/materias-elegiveis').then(r => r.json());
+    materiasCiclo = (resp.materias || []).map(m => m.materia).filter(Boolean);
   } catch (e) { /* segue sem seletor se falhar */ }
+
+  if (materiasCiclo.length === 0) {
+    await alertModal(
+      'Nenhuma disciplina do seu ciclo tem ao menos 3 questões com gabarito. Importe questões com resposta correta para gerar o simulado.',
+      { title: 'Simulado do dia', type: 'warning' }
+    );
+    return;
+  }
 
   const escolha = await _escolherMateriasSimulado(materiasCiclo);
   if (escolha === null) return; // cancelou

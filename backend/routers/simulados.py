@@ -962,6 +962,52 @@ def simulado_pendente(conn=Depends(get_db_session), user_id: int = Depends(get_u
     }
 
 
+# Mínimo de questões COM GABARITO para uma matéria entrar no simulado automático.
+MIN_QUESTOES_COM_GABARITO = 3
+
+
+def _contar_questoes_com_gabarito(conn, user_id: int, materia: str) -> int:
+    """Conta questões de uma matéria que têm gabarito (corrigíveis)."""
+    return conn.execute(
+        "SELECT COUNT(*) FROM questoes WHERE materia = ? AND user_id = ? "
+        "AND resposta_correta IS NOT NULL AND resposta_correta != ''",
+        (materia, user_id),
+    ).fetchone()[0]
+
+
+def _materias_elegiveis_simulado(conn, user_id: int) -> list[dict]:
+    """Matérias do ciclo ativo com >= MIN_QUESTOES_COM_GABARITO questões com gabarito.
+
+    Retorna lista de {materia, questoes_com_gabarito}, ordenada por matéria.
+    """
+    ciclo = conn.execute(
+        "SELECT DISTINCT materia FROM ciclo_estudos WHERE ativo = 1 AND user_id = ?",
+        (user_id,),
+    ).fetchall()
+    elegiveis = []
+    for row in ciclo:
+        mat = row["materia"]
+        if not mat:
+            continue
+        com_gab = _contar_questoes_com_gabarito(conn, user_id, mat)
+        if com_gab >= MIN_QUESTOES_COM_GABARITO:
+            elegiveis.append({"materia": mat, "questoes_com_gabarito": com_gab})
+    elegiveis.sort(key=lambda x: x["materia"])
+    return elegiveis
+
+
+@router.get("/api/simulado/materias-elegiveis",
+            summary="Matérias elegíveis para o simulado do dia",
+            description="Retorna apenas as matérias do ciclo ativo com no mínimo 3 questões com gabarito.")
+def materias_elegiveis_simulado(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    elegiveis = _materias_elegiveis_simulado(conn, user_id)
+    return {
+        "minimo_questoes": MIN_QUESTOES_COM_GABARITO,
+        "materias": elegiveis,
+        "total": len(elegiveis),
+    }
+
+
 @router.post("/api/simulado/auto-gerar", summary="Gerar simulado automático proporcional ao edital",
              description="Gera simulado com distribuição de questões proporcional ao peso de cada matéria no edital. Tempo real de prova.")
 def auto_gerar_simulado(
@@ -1008,6 +1054,25 @@ def auto_gerar_simulado(
                 detail="As matérias selecionadas não estão no seu ciclo ativo.",
             )
         ciclo_mats = filtradas
+
+    # Só entram no simulado matérias com no MÍNIMO 3 questões COM GABARITO.
+    # Matérias sem gabarito suficiente não podem compor um simulado corrigível,
+    # então são silenciosamente ignoradas (não aparecem para o usuário).
+    elegiveis = [
+        m for m in ciclo_mats
+        if _contar_questoes_com_gabarito(conn, user_id, m) >= MIN_QUESTOES_COM_GABARITO
+    ]
+
+    if not elegiveis:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Nenhuma matéria do seu ciclo tem ao menos {MIN_QUESTOES_COM_GABARITO} "
+                "questões com gabarito. Importe questões com resposta correta para gerar o simulado."
+            ),
+        )
+
+    ciclo_mats = elegiveis
 
     # Calcular peso por matéria (tópicos no edital)
     pesos = {}
