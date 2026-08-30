@@ -246,6 +246,9 @@ def _parse_gabarito(texto: str) -> dict:
         r'[Qq](?:uestão)?\s*(\d+)\s*[-–.):]\s*([A-Ea-e])',
         r'(\d+)\s*\|\s*([A-Ea-e])',
         r'(\d+)\s+([A-Ea-e])\s',
+        # "Questão 1: Letra A" / "1 - Letra A" / "1. Resposta: B" (palavra antes da letra)
+        r'[Qq](?:uestão)?\s*(\d+)\s*[-–.):]?\s*(?:Letra|Resposta(?:\s+correta)?|Gabarito|Alternativa)\s*:?\s*([A-Ea-e])\b',
+        r'(\d+)\s*[-–.):]\s*(?:Letra|Resposta(?:\s+correta)?|Gabarito|Alternativa)\s*:?\s*([A-Ea-e])\b',
     ]
 
     for pattern in patterns:
@@ -256,6 +259,19 @@ def _parse_gabarito(texto: str) -> dict:
             if len(gabarito) >= 3:
                 break
 
+    # Gabarito rotulado por questão SEM número explícito (ordem sequencial):
+    # "Resposta correta: A", "Gabarito: B", "Resposta: C" — comum em exports de
+    # sites (QConcursos) onde cada questão traz seu gabarito logo abaixo.
+    if len(gabarito) < 3:
+        inline = re.findall(
+            r'(?:Resposta\s+correta|Resposta|Gabarito|Alternativa\s+correta)\s*:?\s*([A-Ea-e])\b',
+            texto,
+            re.IGNORECASE,
+        )
+        if len(inline) >= 3:
+            for idx, letra in enumerate(inline, start=1):
+                gabarito[idx] = letra.upper()
+
     if len(gabarito) < 3:
         short_lines = [l.strip() for l in texto.split('\n') if 3 <= len(l.strip()) <= 15]
         for line in short_lines:
@@ -264,6 +280,81 @@ def _parse_gabarito(texto: str) -> dict:
                 gabarito[int(m.group(1))] = m.group(2).upper()
 
     return gabarito
+
+
+def _aplicar_gabarito_no_texto(questoes: list, texto: str) -> list:
+    """Preenche `resposta_correta` das questões sem gabarito usando o gabarito
+    presente no PRÓPRIO texto do PDF (grade final, rótulos por questão, etc.).
+
+    É idempotente e não-destrutivo: só toca em questões cujo `resposta_correta`
+    está vazio. Isso permite que TODOS os parsers (inclusive o do Estratégia,
+    que não lê gabarito) aproveitem um gabarito quando ele existe no PDF.
+
+    Estratégia de mapeamento:
+    1. Por `numero` da questão (quando o parser preencheu e o número existe no gabarito).
+    2. Fallback por ORDEM: se nenhum número casar, associa o i-ésimo gabarito à
+       i-ésima questão (comum quando a numeração do gabarito reinicia ou difere).
+    """
+    if not questoes:
+        return questoes
+
+    faltando = [q for q in questoes if not q.get("resposta_correta")]
+    if not faltando:
+        return questoes
+
+    gabarito = _parse_gabarito(texto)
+    if not gabarito:
+        return questoes
+
+    return _aplicar_gabarito_map(questoes, gabarito)
+
+
+def _aplicar_gabarito_externo(questoes: list, gabarito: dict) -> list:
+    """Aplica um gabarito vindo de ARQUIVO SEPARADO (PDF/txt só com respostas)
+    às questões já parseadas. Mapeia por número e, se nada casar, por ordem.
+
+    Reutiliza a mesma lógica de conversão C/E → A/B do gabarito embutido.
+    """
+    if not questoes or not gabarito:
+        return questoes
+    return _aplicar_gabarito_map(questoes, gabarito)
+
+
+def _aplicar_gabarito_map(questoes: list, gabarito: dict) -> list:
+    """Núcleo compartilhado: preenche respostas vazias a partir de um dict
+    {numero: letra}, por número e com fallback por ordem. Não-destrutivo."""
+    def _set(q, letra):
+        letra = letra.upper()
+        if letra == "X":
+            return
+        if q.get("tipo") == "certo_errado":
+            if letra == "C":
+                q["resposta_correta"] = "A"
+            elif letra == "E":
+                q["resposta_correta"] = "B"
+            elif letra in ("A", "B"):
+                q["resposta_correta"] = letra
+        elif letra in ("A", "B", "C", "D", "E"):
+            q["resposta_correta"] = letra
+
+    casou_por_numero = 0
+    for q in questoes:
+        if q.get("resposta_correta"):
+            continue
+        num = q.get("numero", 0)
+        if num in gabarito:
+            _set(q, gabarito[num])
+            if q.get("resposta_correta"):
+                casou_por_numero += 1
+
+    ainda_faltando = [q for q in questoes if not q.get("resposta_correta")]
+    if casou_por_numero == 0 and ainda_faltando:
+        gab_ordenado = [gabarito[k] for k in sorted(gabarito)]
+        if len(gab_ordenado) >= len(ainda_faltando):
+            for q, letra in zip(ainda_faltando, gab_ordenado, strict=False):
+                _set(q, letra)
+
+    return questoes
 
 
 # ============================================================
@@ -723,13 +814,16 @@ def _parse_estrategia(texto: str, materia: str = "", banca: str = "") -> list:
 def _parse_questoes_texto(texto: str, materia: str = "", banca: str = "") -> list:
     """Analisa texto extraído e separa em questões individuais."""
     if re.search(r'Ano:\s*\d{4}\s*Banca:', texto):
-        return _parse_qconcursos(texto, materia_override=materia)
+        questoes = _parse_qconcursos(texto, materia_override=materia)
+        return _aplicar_gabarito_no_texto(questoes, texto)
 
     if _is_estrategia_format(texto):
-        return _parse_estrategia(texto, materia=materia, banca=banca)
+        questoes = _parse_estrategia(texto, materia=materia, banca=banca)
+        return _aplicar_gabarito_no_texto(questoes, texto)
 
     if _is_cespe_format(texto):
-        return _parse_cespe_cebraspe(texto, materia=materia, banca=banca or "CESPE")
+        questoes = _parse_cespe_cebraspe(texto, materia=materia, banca=banca or "CESPE")
+        return _aplicar_gabarito_no_texto(questoes, texto)
 
     questoes = []
     gab_markers = ['GABARITO', 'Gabarito', 'RESPOSTAS', 'Respostas', 'CARTÃO RESPOSTA']
@@ -1109,14 +1203,7 @@ async def importar_questoes_pdf(
         questoes = _parse_questoes_texto(texto, materia=materia, banca=banca)
 
         if gabarito_externo and questoes:
-            for q in questoes:
-                num = q.get("numero", 0)
-                if num in gabarito_externo and not q.get("resposta_correta"):
-                    gab = gabarito_externo[num]
-                    if gab in ('C', 'E') and q.get("tipo") == "certo_errado":
-                        q["resposta_correta"] = "A" if gab == "C" else "B"
-                    elif gab in ('A', 'B', 'C', 'D', 'E'):
-                        q["resposta_correta"] = gab
+            _aplicar_gabarito_externo(questoes, gabarito_externo)
 
         if not questoes:
             return {
@@ -1383,14 +1470,7 @@ async def importar_questoes_url(
         questoes_raw = _parse_questoes_texto(texto, materia=materia, banca=banca)
 
         if gabarito_externo and questoes_raw:
-            for q in questoes_raw:
-                num = q.get("numero", 0)
-                if num in gabarito_externo and not q.get("resposta_correta"):
-                    gab = gabarito_externo[num]
-                    if gab in ('C', 'E') and q.get("tipo") == "certo_errado":
-                        q["resposta_correta"] = "A" if gab == "C" else "B"
-                    elif gab in ('A', 'B', 'C', 'D', 'E'):
-                        q["resposta_correta"] = gab
+            _aplicar_gabarito_externo(questoes_raw, gabarito_externo)
 
         if not questoes_raw:
             raise HTTPException(status_code=400, detail="Nenhuma questão encontrada no PDF. Verifique se o formato é suportado.")
@@ -1593,9 +1673,11 @@ def preview_importacao(
             questoes_preview = _parse_cespe_certo_errado(texto, materia, gabarito)
             formato_detectado = "cespe_ce"
 
-        # Se CESPE não encontrou suficiente, tentar genérico
+        # Se CESPE não encontrou suficiente, tentar o dispatcher genérico
+        # (múltipla escolha / Estratégia / QConcursos), que já aplica o
+        # gabarito embutido no próprio texto quando presente.
         if len(questoes_preview) < 5:
-            questoes_preview = _parse_generic(texto, materia)
+            questoes_preview = _parse_questoes_texto(texto, materia=materia, banca=banca)
             formato_detectado = "multipla_escolha"
 
         # Aplicar gabarito se disponível
@@ -1622,7 +1704,8 @@ def preview_importacao(
             elif fmt == "gran":
                 q = _parse_csv_gran(row)
             else:
-                q = _parse_csv_generic(row)
+                # Formato de CSV não reconhecido: não há parser genérico.
+                q = None
             if q:
                 questoes_preview.append(q)
         formato_detectado = f"csv_{fmt}"
