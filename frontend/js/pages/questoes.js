@@ -30,6 +30,40 @@ document.querySelectorAll('.qtab-btn').forEach(btn => {
   });
 });
 
+// Ativa uma tab por id (ex.: 'tab-simulados'), sincronizando botões e conteúdo.
+function ativarQTab(tabId) {
+  const btn = document.querySelector(`.qtab-btn[data-tab="${tabId}"]`);
+  const content = document.getElementById(tabId);
+  if (!btn || !content) return false;
+  document.querySelectorAll('.qtab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.qtab-content').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  content.classList.add('active');
+  return true;
+}
+
+// Deep-link: /questoes.html#simulado-<id> → abre a tab de simulados e inicia o
+// simulado temporizado direto (vindo do "Iniciar Agora" do simulado do dia).
+async function _processarHashSimulado() {
+  const m = (window.location.hash || '').match(/^#simulado-(\d+)$/);
+  if (!m) return;
+  const simId = parseInt(m[1], 10);
+  ativarQTab('tab-simulados');
+  // Limpa o hash para não reiniciar ao recarregar/navegar por tabs.
+  history.replaceState(null, '', window.location.pathname + window.location.search);
+  try {
+    await iniciarSimulado(simId);
+  } catch (e) {
+    toast('Não foi possível iniciar o simulado.', 'error');
+  }
+}
+
+// Módulos ES podem executar após o DOMContentLoaded já ter disparado.
+// Se o DOM já estiver pronto, processa o deep-link imediatamente.
+if (document.readyState !== 'loading') {
+  _processarHashSimulado();
+}
+
 // State
 let questoesPool = [];
 let currentQuestao = null;
@@ -1835,6 +1869,8 @@ async function loadGenStats() {
 // Carregar stats ao abrir a tab
 document.addEventListener('DOMContentLoaded', () => {
   loadGenStats();
+  // Deep-link do simulado do dia (#simulado-<id>)
+  _processarHashSimulado();
   // Popular filtro de matérias na tab geração
   const genSelect = document.getElementById('gen-filtro-materia');
   const mainSelect = document.getElementById('filtro-materia');
