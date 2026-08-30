@@ -608,6 +608,19 @@ def _parse_estrategia(texto: str, materia: str = "", banca: str = "") -> list:
                     texto_base = _limpar_ocr_estrategia(' '.join(linhas[:-1]))
                 else:
                     enunciado = _limpar_ocr_estrategia(corpo)
+
+            # Enunciados costumam quebrar em várias linhas curtas no PDF, e a
+            # separação acima pode capturar só o final (ex: "texto:"). Se o
+            # enunciado ficou curto, reconstrói pegando o comando após a última
+            # citação de fonte "(Autor. Fonte)".
+            if len(enunciado) < 40:
+                fontes = list(re.finditer(r'\([^()]*\.[^()]*\d{4}[^()]*\)|\([^()]{0,60}(?:Adaptado|adaptado|com adapta)[^()]*\)', corpo))
+                if fontes:
+                    resto = corpo[fontes[-1].end():].strip(' \n:*')
+                    resto = re.sub(r'\s*\n\s*', ' ', resto).strip()
+                    if len(resto) > len(enunciado):
+                        texto_base = _limpar_ocr_estrategia(corpo[:fontes[-1].end()].strip())
+                        enunciado = _limpar_ocr_estrategia(resto)
         else:
             # Sem texto base: enunciado = últimas linhas do cabeçalho após metadados.
             # Pula linhas de metadata (curtas, sem pontuação de frase) do topo.
