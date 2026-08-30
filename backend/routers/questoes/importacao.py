@@ -219,6 +219,50 @@ def _extrair_texto_pdf(file_path: str) -> str:
     return texto
 
 
+def _extrair_texto_pdf_intervalo(file_path: str, pagina_inicial: int = 1, pagina_final: int | None = None) -> tuple[str, int]:
+    """Extrai o texto de um INTERVALO de páginas do PDF (1-indexado, inclusivo).
+
+    Retorna (texto, total_paginas). Se `pagina_final` for None, vai até o fim.
+    Necessário para IA: PDFs de matéria têm centenas de milhares de tokens e não
+    cabem no contexto do LLM — então extraímos só o trecho pedido.
+
+    Faz fallback pdfplumber → pypdf. OCR por página não é aplicado aqui (custo);
+    se o intervalo não tiver texto selecionável, retorna string vazia.
+    """
+    ini = max(1, pagina_inicial)
+    partes = []
+    total = 0
+
+    try:
+        import pdfplumber
+        with pdfplumber.open(file_path) as pdf:
+            total = len(pdf.pages)
+            fim = min(pagina_final or total, total)
+            for idx in range(ini - 1, fim):
+                page_text = pdf.pages[idx].extract_text() or ""
+                partes.append(page_text)
+        texto = "\n".join(partes)
+        if texto.strip():
+            return texto, total
+    except ImportError:
+        pass
+    except Exception:
+        pass
+
+    # Fallback pypdf
+    from pypdf import PdfReader
+    reader = PdfReader(file_path)
+    total = len(reader.pages)
+    fim = min(pagina_final or total, total)
+    partes = []
+    for idx in range(ini - 1, fim):
+        try:
+            partes.append(reader.pages[idx].extract_text() or "")
+        except Exception:
+            partes.append("")
+    return "\n".join(partes), total
+
+
 def _extrair_bloco_respostas(texto: str) -> str:
     """Isola o trecho do gabarito a partir do último rótulo de respostas.
 

@@ -78,6 +78,18 @@ COMO RESPONDER:
 - Termine com um macete curto ou um "resumão" de 1 linha quando fizer sentido.
 - Cite legislação/súmulas quando relevante, de forma objetiva.
 - Tom: professor experiente, acessível e objetivo. No máximo 1 emoji por resposta.""",
+
+    "resumo_pdf": """Você é um professor especialista em concursos públicos que cria resumos de estudo a partir de material didático.
+
+A partir do TRECHO de material fornecido, produza um resumo em Markdown otimizado para memorização, seguindo técnicas científicas de estudo:
+- Comece com um `## Resumo` de 2-4 linhas com a ideia central.
+- Liste os **conceitos-chave** em tópicos, cada um com uma explicação curta (1-2 linhas).
+- Destaque em **negrito** os termos que mais caem em prova.
+- Quando houver classificações/listas, use estrutura clara (numeração ou marcadores).
+- Cite artigos de lei/súmulas com `código` inline quando aparecerem no trecho.
+- Termine com `> Macete:` — uma regra de ouro ou mnemônico curto para fixar.
+- Seja fiel ao conteúdo do trecho; NÃO invente informação que não esteja nele.
+- Se o trecho for questões de prova (e não teoria), resuma os PONTOS TEÓRICOS cobrados, não as questões em si.""",
 }
 
 # ---------------------------------------------------------------------------
@@ -120,6 +132,16 @@ class GenerateQuestionsRequest(BaseModel):
 class AIChatRequest(BaseModel):
     mensagem: str
     contexto: str = ""
+
+
+class AnalisarPdfRequest(BaseModel):
+    pdf_path: str
+    acao: str = Field(default="resumo")  # resumo | flashcards | questoes
+    pagina_inicial: int = Field(default=1, ge=1)
+    pagina_final: int | None = Field(default=None, ge=1)
+    materia: str = ""
+    quantidade: int = Field(default=5, ge=1, le=20)
+    salvar: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -1200,3 +1222,127 @@ def test_ai_config_endpoint(
         return {"ok": False, "error": e.detail if isinstance(e.detail, str) else str(e.detail)}
     except Exception as e:
         return {"ok": False, "error": str(e)[:100]}
+
+
+# ---------------------------------------------------------------------------
+# Análise de PDF pela IA — resumo / flashcards / questões a partir de um trecho
+# ---------------------------------------------------------------------------
+
+# Limite de caracteres do trecho enviado ao LLM (~1 token ≈ 4 chars).
+# ~24k chars ≈ 6k tokens de entrada, seguro para modelos de 8k+ contexto.
+_MAX_CHARS_TRECHO_PDF = 24000
+
+
+def _resolver_pdf_path(pdf_path: str) -> str:
+    """Resolve o caminho do PDF dentro do PDF_ROOT com proteção anti-traversal.
+
+    Aceita tanto o path relativo da árvore ('Matéria/arquivo.pdf') quanto com
+    prefixo '/pdf/'. Levanta HTTPException se inválido ou fora da raiz.
+    """
+    from pathlib import Path
+
+    from routers import pdf as pdf_module
+
+    root = pdf_module.PDF_ROOT
+    if not root:
+        raise HTTPException(status_code=503, detail="Diretório de PDFs não configurado.")
+
+    rel = (pdf_path or "").strip()
+    if rel.startswith("/pdf/"):
+        rel = rel[len("/pdf/"):]
+    rel = rel.lstrip("/")
+
+    if ".." in rel or not rel:
+        raise HTTPException(status_code=400, detail="Caminho de PDF inválido.")
+
+    full = Path(root) / rel
+    try:
+        full.relative_to(Path(root))
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Acesso negado ao PDF.") from None
+
+    resolved = full.resolve()
+    if not resolved.exists() or resolved.suffix.lower() != ".pdf":
+        raise HTTPException(status_code=404, detail="PDF não encontrado.")
+    return str(resolved)
+
+
+@router.post("/api/ai/analisar-pdf")
+def analisar_pdf(
+    body: AnalisarPdfRequest,
+    db=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Gera resumo / flashcards / questões a partir de um trecho de um PDF.
+
+    Fase 1a: implementa a ação 'resumo'. Ações 'flashcards' e 'questoes' serão
+    adicionadas nas fases seguintes.
+    """
+    budget = _check_budget(db, user_id)
+
+    acao = (body.acao or "resumo").strip().lower()
+    if acao not in ("resumo", "flashcards", "questoes"):
+        raise HTTPException(status_code=422, detail="Ação inválida. Use: resumo, flashcards ou questoes.")
+
+    if body.pagina_final is not None and body.pagina_final < body.pagina_inicial:
+        raise HTTPException(status_code=422, detail="Página final deve ser >= página inicial.")
+
+    caminho = _resolver_pdf_path(body.pdf_path)
+
+    # Extrai apenas o intervalo de páginas pedido (PDFs de matéria são enormes).
+    from routers.questoes.importacao import _extrair_texto_pdf_intervalo
+
+    try:
+        texto, total_paginas = _extrair_texto_pdf_intervalo(
+            caminho, body.pagina_inicial, body.pagina_final
+        )
+    except Exception as e:
+        log.error(f"[AI] Erro ao extrair PDF {body.pdf_path}: {e}")
+        raise HTTPException(status_code=400, detail="Não foi possível extrair texto do PDF.") from None
+
+    texto = (texto or "").strip()
+    if len(texto) < 50:
+        raise HTTPException(
+            status_code=400,
+            detail="Trecho sem texto suficiente. O PDF pode ser escaneado (sem texto selecionável) ou o intervalo de páginas está vazio.",
+        )
+
+    truncado = len(texto) > _MAX_CHARS_TRECHO_PDF
+    trecho = texto[:_MAX_CHARS_TRECHO_PDF]
+
+    nome_pdf = body.pdf_path.split("/")[-1].replace(".pdf", "")
+    contexto_paginas = f"páginas {body.pagina_inicial}" + (
+        f"–{body.pagina_final}" if body.pagina_final else " em diante"
+    )
+
+    if acao == "resumo":
+        user_message = (
+            f"Material: {nome_pdf} ({contexto_paginas})."
+            + (f" Matéria: {body.materia}." if body.materia else "")
+            + "\n\nTRECHO:\n"
+            + trecho
+        )
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPTS["resumo_pdf"]},
+            {"role": "user", "content": user_message},
+        ]
+        log.info(f"[AI] analisar-pdf resumo user={user_id} pdf={nome_pdf[:40]} {contexto_paginas}")
+        text, tokens = call_llm_sync(messages, max_tokens=1500)
+        _record_usage(db, user_id, tokens, "resumo_pdf", f"{nome_pdf} {contexto_paginas}", text[:500])
+
+        updated_usage = _get_daily_usage(db, user_id)
+        return {
+            "ok": True,
+            "acao": "resumo",
+            "resumo": text,
+            "resposta": text,
+            "pdf": nome_pdf,
+            "paginas": {"inicial": body.pagina_inicial, "final": body.pagina_final, "total": total_paginas},
+            "trecho_truncado": truncado,
+            "tokens_usados": tokens,
+            "uso_diario": updated_usage,
+            "budget": budget,
+        }
+
+    # Fases 1b/1c: flashcards e questoes (ainda não implementadas aqui)
+    raise HTTPException(status_code=501, detail=f"Ação '{acao}' ainda não implementada.")
