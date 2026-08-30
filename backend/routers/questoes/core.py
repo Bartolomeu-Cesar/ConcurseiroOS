@@ -63,9 +63,11 @@ def _embaralhar_alternativas(questao: dict, user_id: int) -> dict:
         questao[f"alternativa_{nova_letra.lower()}"] = texto_original
         mapeamento[nova_letra] = letra_original
 
-    # Limpar alternativas extras se houver
+    # Limpar alternativas extras se houver (usa a lista completa de letras,
+    # pois `novas_letras` foi truncada ao número de alternativas reais).
+    todas_letras = ['A', 'B', 'C', 'D', 'E']
     for i in range(len(letras_originais), 5):
-        questao[f"alternativa_{novas_letras[i].lower() if i < 5 else 'e'}"] = ""
+        questao[f"alternativa_{todas_letras[i].lower()}"] = ""
 
     # Atualizar resposta_correta para a nova posição
     resp_original = questao.get("resposta_correta", "").upper()
