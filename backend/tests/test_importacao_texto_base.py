@@ -134,6 +134,20 @@ class TestParseEstrategia:
         # enunciado não deve começar com ano/metadado
         assert not re.match(r"^\s*20\d{2}", qs[0]["enunciado"])
 
+    def test_robusto_a_alternativas_achatadas(self):
+        """Quando o extractor achata TUDO (alternativas na mesma linha, sem
+        quebra antes da letra), o parser ainda separa as alternativas."""
+        import re
+        # colapsa todas as quebras exceto antes de 'Questão N' e do rodapé
+        severo = re.sub(r"\n(?!Quest[ãa]o \d|Essa quest)", " ", _ESTRATEGIA_SAMPLE)
+        qs = _parse_estrategia(severo, materia="Língua Portuguesa")
+        assert len(qs) == 2
+        q1 = qs[0]
+        # múltipla escolha: ao menos 4 alternativas separadas e distintas
+        preenchidas = [q1[f"alternativa_{c}"] for c in "abcde" if q1[f"alternativa_{c}"]]
+        assert len(preenchidas) >= 4
+        assert q1["alternativa_a"] != q1["alternativa_b"]
+
 
 class TestExtrairTextoBase:
     def test_sem_texto_base_enunciado_curto(self):

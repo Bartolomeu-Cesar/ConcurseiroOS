@@ -549,6 +549,13 @@ def _parse_estrategia(texto: str, materia: str = "", banca: str = "") -> list:
 
     bancas_conhecidas = r'FCC|CESPE|CEBRASPE|CESPE/Cebraspe|VUNESP|FGV|FUNDATEC|IADES|IBFC|QUADRIX|CESGRANRIO|FUNDEP|AOCP|COMPERVE|IBADE|IDECAN|CONSULPLAN|INSTITUTO ACESSO|SELECON|AVANÇA SP|Instituto AOCP'
 
+    # Detecta se o documento veio "achatado" (extractor juntou linhas): quando há
+    # poucas alternativas no formato '\n[A-E]\n' em relação ao número de questões,
+    # ativa o modo de parsing tolerante a alternativas na mesma linha.
+    n_questoes = len(marcadores)
+    n_alt_linha = len(re.findall(r'\n[A-E]\n', texto))
+    doc_achatado = n_alt_linha < (n_questoes * 2)  # esperado ~4-5 alt por questão
+
     for i, m in enumerate(marcadores):
         num = int(m.group(1))
         ini = m.end()
@@ -565,8 +572,25 @@ def _parse_estrategia(texto: str, materia: str = "", banca: str = "") -> list:
         if len(bloco) < 20:
             continue
 
-        # === Alternativas: letra sozinha numa linha, texto na(s) seguinte(s) ===
+        # === Alternativas ===
+        # Modo normal: letra sozinha numa linha. Modo achatado: letra + espaço.
         alt_matches = re.findall(r'(?:^|\n)([A-E])\n(.+?)(?=\n[A-E]\n|\Z)', bloco, re.DOTALL)
+        alt_achatado = False
+
+        if len(alt_matches) < 4 and doc_achatado:
+            # Texto achatado: alternativas no formato " A <texto> B <texto> ..."
+            # Ancora numa progressão A->E (ou A/B) para evitar falsos positivos.
+            seq = re.findall(r'(?:^|(?<=\s))([A-E])\s+(.+?)(?=\s+[A-E]\s+|\Z)', bloco, re.DOTALL)
+            esperado = ['A', 'B', 'C', 'D', 'E']
+            coletado = []
+            idx = 0
+            for letra, txt in seq:
+                if idx < len(esperado) and letra == esperado[idx]:
+                    coletado.append((letra, txt))
+                    idx += 1
+            if len(coletado) >= 2:
+                alt_matches = coletado
+                alt_achatado = True
 
         alts = {'A': '', 'B': '', 'C': '', 'D': '', 'E': ''}
         for letra, txt_alt in alt_matches[:5]:
@@ -584,8 +608,12 @@ def _parse_estrategia(texto: str, materia: str = "", banca: str = "") -> list:
             continue
 
         # Início da primeira alternativa = fim do enunciado
-        primeira_alt = re.search(r'(?:^|\n)A\n', bloco)
-        cabeca = bloco[:primeira_alt.start()] if primeira_alt else bloco
+        if alt_achatado and alts['A']:
+            pa = re.search(r'(?:^|\s)A\s+' + re.escape(alts['A'][:15]), bloco)
+            cabeca = bloco[:pa.start()] if pa else bloco
+        else:
+            primeira_alt = re.search(r'(?:^|\n)A\n', bloco)
+            cabeca = bloco[:primeira_alt.start()] if primeira_alt else bloco
 
         # === Metadados do cabeçalho (banca, ano, tópico) ===
         detected_banca = ''
