@@ -502,10 +502,171 @@ def _parse_cespe_cebraspe(texto: str, materia: str = "", banca: str = "CESPE") -
     return questoes
 
 
+def _limpar_ocr_estrategia(txt: str) -> str:
+    """Corrige artefatos comuns de OCR do Estratégia (ligadura 'fi' vira '&')."""
+    if not txt:
+        return txt
+    # '&' colado a letra (ex: '&cando'->'ficando', '&nal'->'final') = ligadura fi/fl
+    txt = re.sub(r'&(?=[a-záàâãéêíóôõúç])', 'fi', txt)
+    return txt
+
+
+def _is_estrategia_format(texto: str) -> bool:
+    """Detecta o formato do Estratégia Concursos.
+
+    Marcadores: várias 'Questão N' em linha própria + rodapé recorrente
+    'Essa questão possui comentário do professor no site'.
+    """
+    questoes = len(re.findall(r'\nQuest[ãa]o\s+\d+\n', texto))
+    rodapes = len(re.findall(r'Essa quest[ãa]o possui coment[áa]rio', texto))
+    return questoes >= 2 and rodapes >= 2
+
+
+def _parse_estrategia(texto: str, materia: str = "", banca: str = "") -> list:
+    """Parser dedicado ao formato Estratégia Concursos.
+
+    Estrutura de cada questão:
+        Questão N
+        <ano> / <nível> / <banca> / <cargo> / <órgão> / <metadados> / <tópicos>
+        [Atenção: Para responder... baseie-se no texto abaixo.]
+        [<texto de apoio>]
+        <enunciado real>
+        A\n<alt A>  B\n<alt B> ... E\n<alt E>
+        Essa questão possui comentário do professor no site
+
+    O PDF não traz gabarito (fica no site), então resposta_correta fica vazia.
+    """
+    questoes = []
+
+    # Divide em blocos por "Questão N" (mantendo o número)
+    marcadores = list(re.finditer(r'\nQuest[ãa]o\s+(\d+)\n', texto))
+    if not marcadores:
+        return []
+
+    bancas_conhecidas = r'FCC|CESPE|CEBRASPE|CESPE/Cebraspe|VUNESP|FGV|FUNDATEC|IADES|IBFC|QUADRIX|CESGRANRIO|FUNDEP|AOCP|COMPERVE|IBADE|IDECAN|CONSULPLAN|INSTITUTO ACESSO|SELECON|AVANÇA SP|Instituto AOCP'
+
+    for i, m in enumerate(marcadores):
+        num = int(m.group(1))
+        ini = m.end()
+        fim = marcadores[i + 1].start() if i + 1 < len(marcadores) else len(texto)
+        bloco = texto[ini:fim]
+
+        # Corta o rodapé de comentário e o id numérico que o segue
+        bloco = re.split(r'Essa quest[ãa]o possui coment[áa]rio', bloco)[0].strip()
+        if len(bloco) < 20:
+            continue
+
+        # === Alternativas: letra sozinha numa linha, texto na(s) seguinte(s) ===
+        alt_matches = re.findall(r'(?:^|\n)([A-E])\n(.+?)(?=\n[A-E]\n|\Z)', bloco, re.DOTALL)
+
+        alts = {'A': '', 'B': '', 'C': '', 'D': '', 'E': ''}
+        for letra, txt_alt in alt_matches[:5]:
+            alts[letra] = _limpar_ocr_estrategia(re.sub(r'\s*\n\s*', ' ', txt_alt).strip())
+
+        # Detecta questão Certo/Errado (2 alternativas 'Certo'/'Errado')
+        eh_certo_errado = (
+            len(alt_matches) == 2
+            and re.match(r'^\s*Certo', alts.get('A', ''), re.IGNORECASE)
+            and re.match(r'^\s*Errado', alts.get('B', ''), re.IGNORECASE)
+        )
+
+        # Aceita se tiver >=4 alternativas (múltipla escolha) OU for certo/errado
+        if len(alt_matches) < 4 and not eh_certo_errado:
+            continue
+
+        # Início da primeira alternativa = fim do enunciado
+        primeira_alt = re.search(r'(?:^|\n)A\n', bloco)
+        cabeca = bloco[:primeira_alt.start()] if primeira_alt else bloco
+
+        # === Metadados do cabeçalho (banca, ano, tópico) ===
+        detected_banca = ''
+        bm = re.search(rf'(?:^|\n)\s*({bancas_conhecidas})\s*(?:\n|$)', cabeca, re.IGNORECASE)
+        if bm:
+            detected_banca = bm.group(1).strip()
+
+        # === Texto base + enunciado ===
+        texto_base = ''
+        enunciado = ''
+        # Marcador de texto base do Estratégia
+        mb = re.search(r'baseie-se no texto|Para responder.*?(?:texto|trecho)|Leia o texto|Considere o texto|Com base no texto|Texto\s+CB\w+|(?:^|\n)Texto\s+(?:I{1,3}|\d)\b', cabeca, re.IGNORECASE)
+        if mb:
+            # tudo após o marcador é texto de apoio + enunciado
+            corpo = cabeca[mb.end():]
+            # remove residuos do marcador ("abaixo.", "a seguir.", ":", etc.)
+            corpo = re.sub(r'^\s*(?:abaixo|a seguir|seguinte|apresentado)?\s*[.:]?\s*', '', corpo).strip()
+            # O enunciado real é a última "frase de comando" antes das alternativas.
+            tb, enun = _extrair_texto_base(corpo)
+            if tb:
+                texto_base = _limpar_ocr_estrategia(tb)
+                enunciado = _limpar_ocr_estrategia(enun)
+            else:
+                # Não separou: heurística — última linha não-vazia é o enunciado,
+                # o resto é texto de apoio.
+                linhas = [ln.strip() for ln in corpo.split('\n') if ln.strip()]
+                if len(linhas) >= 2:
+                    enunciado = _limpar_ocr_estrategia(linhas[-1])
+                    texto_base = _limpar_ocr_estrategia(' '.join(linhas[:-1]))
+                else:
+                    enunciado = _limpar_ocr_estrategia(corpo)
+        else:
+            # Sem texto base: enunciado = últimas linhas do cabeçalho após metadados.
+            # Pula linhas de metadata (curtas, sem pontuação de frase) do topo.
+            linhas = cabeca.split('\n')
+            corpo_linhas = []
+            comecou = False
+            for ln in linhas:
+                s = ln.strip()
+                if not s:
+                    continue
+                if not comecou:
+                    # metadados típicos: ano, banca, nível, órgão, tópicos curtos
+                    if re.match(r'^\d{4}$', s) or re.match(rf'^({bancas_conhecidas})$', s, re.IGNORECASE):
+                        continue
+                    if re.match(r'^N[íi]vel\s', s) or re.match(r'^Quest[õo]es\s+(oficiais|in[ée]ditas)', s, re.IGNORECASE):
+                        continue
+                    if len(s) < 80 and not re.search(r'[.?!:;]', s):
+                        continue  # tópico/cargo/órgão curto sem pontuação
+                    if len(s) < 130 and re.search(r'(Tribunal|Técnico|Analista|Judiciári|Poder|União|Região|Oficial|Prefeitura|Município|Auditor|Procurador)', s) and not re.match(r'^(De |A |O |No |Na |Em |Assinale|Considere|Julgue|Marque|Quanto|Segundo|Acerca|Sobre|Com )', s):
+                        continue
+                    comecou = True
+                corpo_linhas.append(s)
+            enunciado = _limpar_ocr_estrategia(' '.join(corpo_linhas).strip())
+
+        # Fallback do enunciado se ficou vazio
+        if not enunciado:
+            enunciado = _limpar_ocr_estrategia(re.sub(r'\s*\n\s*', ' ', cabeca).strip())[:1500]
+
+        if len(enunciado) < 5:
+            continue
+
+        questoes.append({
+            "numero": num,
+            "materia": materia,
+            "topico": "",
+            "enunciado": enunciado,
+            "texto_base": texto_base,
+            "alternativa_a": alts['A'],
+            "alternativa_b": alts['B'],
+            "alternativa_c": alts['C'],
+            "alternativa_d": alts['D'],
+            "alternativa_e": alts['E'],
+            "resposta_correta": "",  # gabarito não está no PDF do Estratégia
+            "explicacao": "",
+            "dificuldade": "Médio",
+            "banca": detected_banca or banca,
+            "tipo": "certo_errado" if eh_certo_errado else "multipla",
+        })
+
+    return questoes
+
+
 def _parse_questoes_texto(texto: str, materia: str = "", banca: str = "") -> list:
     """Analisa texto extraído e separa em questões individuais."""
     if re.search(r'Ano:\s*\d{4}\s*Banca:', texto):
         return _parse_qconcursos(texto, materia_override=materia)
+
+    if _is_estrategia_format(texto):
+        return _parse_estrategia(texto, materia=materia, banca=banca)
 
     if _is_cespe_format(texto):
         return _parse_cespe_cebraspe(texto, materia=materia, banca=banca or "CESPE")
