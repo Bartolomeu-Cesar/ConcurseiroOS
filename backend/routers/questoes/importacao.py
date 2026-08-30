@@ -219,9 +219,86 @@ def _extrair_texto_pdf(file_path: str) -> str:
     return texto
 
 
+def _extrair_bloco_respostas(texto: str) -> str:
+    """Isola o trecho do gabarito a partir do último rótulo de respostas.
+
+    Procura marcadores como 'Respostas:', 'Gabarito', 'GABARITO OFICIAL' e
+    devolve o texto a partir da ÚLTIMA ocorrência (o gabarito costuma ficar no
+    final do documento). Retorna '' se não encontrar.
+    """
+    marcadores = [
+        r'Respostas\s*:',
+        r'Gabarito\s+Oficial',
+        r'GABARITO\s+OFICIAL',
+        r'GABARITO',
+        r'Gabarito\s*:',
+        r'Gabarito',
+    ]
+    melhor_pos = -1
+    for m in marcadores:
+        for match in re.finditer(m, texto, re.IGNORECASE):
+            if match.end() > melhor_pos:
+                melhor_pos = match.end()
+    if melhor_pos < 0:
+        return ""
+    return texto[melhor_pos:]
+
+
+def _parse_pares_num_letra(bloco: str) -> dict:
+    """Extrai pares número→letra de um bloco de gabarito.
+
+    Suporta os layouts do Estratégia/QConcursos:
+    - Mesma linha: '1 A', '1-A', '1: A', '1) A', '1 | A'
+    - Linhas alternadas: número numa linha, letra na próxima
+        1
+        A
+        2
+        D
+    Ignora anulações (X) e valores fora de A–E.
+    """
+    gab = {}
+
+    # 1) Tentar pares na mesma linha (cobre a maioria dos formatos tabulares).
+    for num, letra in re.findall(r'(\d{1,3})\s*[-–.):|]?\s*([A-Ea-e])(?:\s|$)', bloco):
+        gab[int(num)] = letra.upper()
+
+    # 2) Layout em linhas alternadas: sequência [num, letra, num, letra, ...].
+    if len(gab) < 3:
+        tokens = [t.strip() for t in bloco.split('\n') if t.strip()]
+        i = 0
+        alt = {}
+        while i < len(tokens) - 1:
+            a, b = tokens[i], tokens[i + 1]
+            if a.isdigit() and len(b) == 1 and b.upper() in 'ABCDE':
+                alt[int(a)] = b.upper()
+                i += 2
+            else:
+                i += 1
+        if len(alt) > len(gab):
+            gab = alt
+
+    return gab
+
+
 def _parse_gabarito(texto: str) -> dict:
     """Extrai gabarito do texto (grid CESPE, padrões tradicionais, etc)."""
     gabarito = {}
+
+    # PRIORIDADE 1 — Bloco de respostas rotulado ("Respostas:" / "Gabarito:").
+    # Formatos do Estratégia/QConcursos colocam o gabarito ao final numa seção
+    # com pares número→letra, frequentemente em LINHAS ALTERNADAS:
+    #     Respostas:
+    #     1
+    #     A
+    #     2
+    #     D
+    # Extrair só desse bloco evita capturar ruído do corpo das questões
+    # (números soltos, letras de alternativas) que poluíam o gabarito.
+    bloco_gab = _extrair_bloco_respostas(texto)
+    if bloco_gab:
+        pares = _parse_pares_num_letra(bloco_gab)
+        if len(pares) >= 3:
+            return pares
 
     lines = [l.strip() for l in texto.split('\n') if l.strip()]
     for i in range(len(lines) - 1):
@@ -231,7 +308,7 @@ def _parse_gabarito(texto: str) -> dict:
             all_nums = all(n.isdigit() for n in nums)
             all_answers = all(a.upper() in ('A', 'B', 'C', 'D', 'E', 'X', '0') for a in answers)
             if all_nums and all_answers:
-                for num_str, ans in zip(nums, answers):
+                for num_str, ans in zip(nums, answers, strict=False):
                     num = int(num_str)
                     a = ans.upper()
                     if num == 0 or a in ('0', 'X'):

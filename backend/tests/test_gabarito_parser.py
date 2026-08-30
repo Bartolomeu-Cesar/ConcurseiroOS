@@ -61,6 +61,39 @@ class TestParseGabaritoFormatos:
         g = _parse_gabarito("Resposta: A\nResposta: B\nResposta: E\nResposta: D")
         assert g == {1: "A", 2: "B", 3: "E", 4: "D"}
 
+    def test_bloco_respostas_linhas_alternadas_estrategia(self):
+        """Formato do Estratégia: seção 'Respostas:' com número e letra em
+        linhas separadas (num\\nletra\\nnum\\nletra...)."""
+        texto = (
+            "...corpo das questões com A B C D E e números soltos 1 2 3...\n"
+            "Essa questão possui comentário do professor no site\n"
+            "4001505070\n"
+            "Respostas:\n"
+            "1\nA\n2\nD\n3\nE\n4\nC\n5\nB\n6\nB\n7\nA\n8\nA\n"
+        )
+        g = _parse_gabarito(texto)
+        assert g[1] == "A"
+        assert g[2] == "D"
+        assert g[3] == "E"
+        assert g[4] == "C"
+        assert g[5] == "B"
+        assert g[8] == "A"
+        assert len(g) == 8
+
+    def test_bloco_respostas_ignora_ruido_do_corpo(self):
+        """Números e letras soltos no corpo NÃO devem poluir o gabarito quando
+        existe uma seção 'Respostas:' explícita."""
+        texto = (
+            "Questão 1\nA\ntexto alternativa\nB\noutro texto\n"
+            "Respostas:\n1\nC\n2\nD\n3\nE\n4\nA\n"
+        )
+        g = _parse_gabarito(texto)
+        # deve refletir o bloco Respostas, não o corpo
+        assert g[1] == "C"
+        assert g[2] == "D"
+        assert g[3] == "E"
+        assert g[4] == "A"
+
 
 class TestAplicarGabaritoNoTexto:
     def test_estrategia_com_gabarito_no_final(self):
