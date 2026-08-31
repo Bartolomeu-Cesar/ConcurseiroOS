@@ -1309,6 +1309,47 @@ function _renderBlocoRevisao(b, idx, total) {
   </div>`;
 }
 
+// --- Capturar texto selecionado no PDF ---
+// Lê o texto atualmente selecionado dentro do iframe do PDF.js (mesma origem).
+function _getSelecaoIframe() {
+  const frame = document.getElementById('pdf-frame');
+  try {
+    const sel = frame && frame.contentWindow && frame.contentWindow.getSelection
+      ? frame.contentWindow.getSelection().toString()
+      : '';
+    if (sel && sel.trim()) return sel.trim();
+  } catch (e) { /* cross-origin improvável (PDF.js é self-hosted em /pdfjs) */ }
+  // Fallback: seleção na janela principal.
+  try {
+    const s = window.getSelection ? window.getSelection().toString() : '';
+    return (s || '').trim();
+  } catch (e) { return ''; }
+}
+
+// Captura o texto selecionado no PDF e salva como bloco de texto no caderno.
+async function capturarSelecaoTexto() {
+  const texto = _getSelecaoIframe();
+  if (!texto) {
+    showStudyToast('✍️ Selecione um trecho de texto no PDF primeiro.');
+    return;
+  }
+  // Normaliza quebras de linha artificiais do PDF (uma frase quebrada em várias linhas).
+  const limpo = texto.replace(/\s*\n\s*/g, ' ').replace(/\s{2,}/g, ' ').trim();
+  const titulo = await promptModal('Título (opcional):', { title: '✍️ Capturar seleção', placeholder: 'Ex: Art. 5º, inciso X' });
+  if (titulo === null) return; // cancelou
+  const res = await fetch('/api/revisao', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pdf_path: path, tipo: 'texto', titulo: titulo.trim(), conteudo: limpo, pagina: currentPage }),
+  });
+  if (res.ok) {
+    showStudyToast('✍️ Trecho capturado no caderno!');
+    if (!revisaoVisible) toggleRevisaoPanel(); else loadRevisao();
+  } else {
+    const err = await res.json().catch(() => ({}));
+    showStudyToast('⚠️ ' + (err.detail || 'Erro ao capturar trecho.'));
+  }
+}
+
 // --- Nota de texto ---
 async function adicionarNotaRevisao() {
   const texto = await promptModal('Escreva o resumo/nota para o caderno de revisão:', { title: '📝 Nota de revisão', multiline: true });
@@ -2077,3 +2118,4 @@ window.fecharGerarRevisaoIA = fecharGerarRevisaoIA;
 window.gerarRevisaoIA = gerarRevisaoIA;
 window.setBlocoTag = setBlocoTag;
 window.setRevFsTagFiltro = setRevFsTagFiltro;
+window.capturarSelecaoTexto = capturarSelecaoTexto;
