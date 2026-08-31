@@ -821,6 +821,68 @@ class TestAITutorGenerateFlashcards:
         r = client.post("/api/ai/generate-flashcards", json={"quantidade": 5})
         assert r.status_code == 422
 
+    @patch("routers.ai_tutor.call_llm_sync")
+    def test_generate_flashcards_salvar_persiste(self, mock_llm):
+        """Regressão: salvar=true deve persistir na tabela flashcards (antes
+        falhava por inserir created_at inexistente)."""
+        _cleanup_table("flashcards")
+        mock_llm.return_value = (
+            '[{"pergunta": "P-SALVAR-1", "resposta": "R1"}, {"pergunta": "P-SALVAR-2", "resposta": "R2"}]',
+            200,
+        )
+        r = client.post("/api/ai/generate-flashcards", json={
+            "topico": "Tópico X", "quantidade": 2, "materia": "MatSalvar", "salvar": True,
+        })
+        assert r.status_code == 200
+        db = _get_db()
+        try:
+            n = db.execute(
+                "SELECT COUNT(*) FROM flashcards WHERE materia = 'MatSalvar' AND pergunta IN ('P-SALVAR-1','P-SALVAR-2')"
+            ).fetchone()[0]
+            # proxima_revisao deve estar preenchida (entra no FSRS)
+            pr = db.execute(
+                "SELECT proxima_revisao FROM flashcards WHERE pergunta = 'P-SALVAR-1'"
+            ).fetchone()
+        finally:
+            db.close()
+        assert n == 2
+        assert pr and pr[0]
+
+
+class TestAITutorGenerateQuestions:
+    """Tests for POST /api/ai/generate-questions (salvar)."""
+
+    def setup_method(self):
+        _cleanup_table("ai_conversations")
+        _cleanup_table("ai_usage")
+
+    @patch("routers.ai_tutor.call_llm_sync")
+    def test_generate_questions_salvar_persiste(self, mock_llm):
+        """Regressão: salvar=true deve persistir em questoes (antes falhava por
+        inserir a coluna 'origem' inexistente)."""
+        _cleanup_table("questoes")
+        mock_llm.return_value = (
+            '[{"enunciado": "Enunciado de teste suficientemente longo?",'
+            ' "alternativa_a": "A", "alternativa_b": "B", "alternativa_c": "C",'
+            ' "alternativa_d": "D", "alternativa_e": "E", "resposta_correta": "B",'
+            ' "explicacao": "porque sim"}]',
+            300,
+        )
+        r = client.post("/api/ai/generate-questions", json={
+            "topico": "Redes", "quantidade": 1, "materia": "Informática", "salvar": True,
+        })
+        assert r.status_code == 200
+        db = _get_db()
+        try:
+            rows = db.execute(
+                "SELECT materia, resposta_correta, prova_origem FROM questoes WHERE materia = 'Informática'"
+            ).fetchall()
+        finally:
+            db.close()
+        assert len(rows) == 1
+        assert rows[0][1] == "B"
+        assert rows[0][2].startswith("IA:")
+
 
 # ============================================================
 # INTEGRATION / STATE CHANGE TESTS

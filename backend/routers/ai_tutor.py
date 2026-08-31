@@ -749,16 +749,22 @@ def generate_flashcards(
     # Optionally save flashcards to database
     if body.salvar and flashcards:
         for fc in flashcards:
+            if not isinstance(fc, dict):
+                continue
+            pergunta = (fc.get("pergunta") or "").strip()
+            resposta = (fc.get("resposta") or "").strip()
+            if not pergunta or not resposta:
+                continue
             try:
                 db.execute(
-                    """INSERT INTO flashcards (user_id, pergunta, resposta, materia, created_at)
+                    """INSERT INTO flashcards (pergunta, resposta, proxima_revisao, materia, user_id)
                        VALUES (?, ?, ?, ?, ?)""",
                     (
-                        user_id,
-                        fc.get("pergunta", ""),
-                        fc.get("resposta", ""),
+                        pergunta,
+                        resposta,
+                        _get_today_str(),
                         body.materia or body.topico,
-                        datetime.now().isoformat(),
+                        user_id,
                     ),
                 )
             except Exception as e:
@@ -876,26 +882,35 @@ def generate_questions(
 
     # Optionally save questions to database
     if body.salvar and questoes:
+        materia_q = body.materia or body.topico
         for q in questoes:
+            if not isinstance(q, dict):
+                continue
+            enunciado = (q.get("enunciado") or "").strip()
+            if len(enunciado) < 10:
+                continue
             try:
                 db.execute(
-                    """INSERT INTO questoes (user_id, enunciado, alternativa_a, alternativa_b,
-                       alternativa_c, alternativa_d, alternativa_e, resposta_correta,
-                       explicacao, materia, origem, created_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    """INSERT INTO questoes (materia, topico, enunciado, alternativa_a, alternativa_b,
+                        alternativa_c, alternativa_d, alternativa_e, resposta_correta, explicacao,
+                        dificuldade, banca, prova_origem, created_at, user_id)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
+                        materia_q,
+                        "",
+                        enunciado,
+                        (q.get("alternativa_a") or "").strip(),
+                        (q.get("alternativa_b") or "").strip(),
+                        (q.get("alternativa_c") or "").strip(),
+                        (q.get("alternativa_d") or "").strip(),
+                        (q.get("alternativa_e") or "").strip(),
+                        (q.get("resposta_correta") or "").strip().upper(),
+                        (q.get("explicacao") or "").strip(),
+                        "Médio",
+                        "IA",
+                        f"IA: {body.topico}"[:200],
+                        _get_today_str(),
                         user_id,
-                        q.get("enunciado", ""),
-                        q.get("alternativa_a", ""),
-                        q.get("alternativa_b", ""),
-                        q.get("alternativa_c", ""),
-                        q.get("alternativa_d", ""),
-                        q.get("alternativa_e", ""),
-                        q.get("resposta_correta", ""),
-                        q.get("explicacao", ""),
-                        body.materia or body.topico,
-                        "ai_generated",
-                        datetime.now().isoformat(),
                     ),
                 )
             except Exception as e:
