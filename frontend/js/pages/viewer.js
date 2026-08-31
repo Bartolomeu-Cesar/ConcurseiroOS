@@ -539,7 +539,9 @@ setInterval(() => {
 
 // --- Bookmarks ---
 async function addBookmark() {
-  const label = await promptModal('Label para o bookmark (opcional):', { title: 'Novo Bookmark' }) || '';
+  const label = await promptModal('Label para o bookmark (opcional):', { title: 'Novo Bookmark' });
+  // null = usuário cancelou → não criar bookmark. String vazia = confirmou sem label.
+  if (label === null) return;
   const cores = ['blue', 'green', 'yellow', 'red', 'purple'];
   const cor = cores[Math.floor(Math.random() * cores.length)];
   await fetch('/api/bookmarks', {
