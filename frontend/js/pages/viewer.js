@@ -1183,6 +1183,14 @@ function toggleRevisaoPanel() {
   revisaoVisible = !revisaoVisible;
   const panel = document.getElementById('revisao-panel');
   panel.style.display = revisaoVisible ? 'flex' : 'none';
+  // Empurra o PDF para a esquerda pela largura do painel (380px) para que ele
+  // não fique coberto. O #viewer é flex e o iframe tem flex:1, então reduzir a
+  // área via padding-right encolhe o PDF em vez de sobrepô-lo.
+  const viewer = document.getElementById('viewer');
+  if (viewer) {
+    viewer.style.transition = 'padding-right 0.25s ease';
+    viewer.style.paddingRight = revisaoVisible ? '380px' : '';
+  }
   if (revisaoVisible) loadRevisao();
 }
 
