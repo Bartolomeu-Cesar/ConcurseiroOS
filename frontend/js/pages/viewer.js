@@ -1191,6 +1191,7 @@ const _REV_TAGS = {
   revisar: { label: '🔁 Revisar', cor: 'var(--mauve,#cba6f7)' },
 };
 let _revFsTagFiltro = ''; // filtro de tag ativo na tela cheia ('' = todas)
+let _revFsBusca = '';     // termo de busca ativo na tela cheia
 let _cropState = null; // { startX, startY } durante o arraste
 
 // ---------- Gerenciador central de painéis laterais (lado direito) ----------
@@ -1261,8 +1262,16 @@ function _togglePainelDireita(nome, onOpen) {
 }
 
 function toggleRevisaoPanel() {
-  _togglePainelDireita('revisao', loadRevisao);
+  _togglePainelDireita('revisao', () => {
+    _revBusca = '';
+    const bInput = document.getElementById('revisao-busca');
+    if (bInput) bInput.value = '';
+    loadRevisao();
+  });
 }
+
+let _revBlocos = [];        // cache dos blocos do painel p/ busca sem refetch
+let _revBusca = '';         // termo de busca do painel
 
 async function loadRevisao() {
   const body = document.getElementById('revisao-body');
@@ -1270,14 +1279,37 @@ async function loadRevisao() {
   try {
     const blocos = await fetch(`/api/revisao/${encodePath(path)}`).then(r => r.json());
     if (!Array.isArray(blocos) || blocos.length === 0) {
+      _revBlocos = [];
       body.innerHTML = `<div style="color:var(--text-sub,#585b70);font-size:0.85rem;text-align:center;padding:24px 12px;line-height:1.6;">
         Nenhum bloco ainda.<br><br>Use <strong>✂️ Recortar página</strong> para capturar uma parte importante do PDF, ou <strong>📝 Nota de texto</strong> para escrever um resumo.</div>`;
       return;
     }
-    body.innerHTML = blocos.map((b, i) => _renderBlocoRevisao(b, i, blocos.length)).join('');
+    _revBlocos = blocos;
+    _renderRevisaoLista();
   } catch (e) {
     body.innerHTML = '<div style="color:var(--red,#f38ba8);font-size:0.85rem;">Erro ao carregar caderno.</div>';
   }
+}
+
+// Filtra blocos por título/conteúdo (case-insensitive) e re-renderiza a lista.
+function _renderRevisaoLista() {
+  const body = document.getElementById('revisao-body');
+  if (!body) return;
+  const termo = _revBusca.trim().toLowerCase();
+  const visiveis = termo
+    ? _revBlocos.filter(b => `${b.titulo || ''} ${b.conteudo || ''}`.toLowerCase().includes(termo))
+    : _revBlocos;
+  if (visiveis.length === 0) {
+    body.innerHTML = `<div style="color:var(--text-sub,#585b70);font-size:0.85rem;text-align:center;padding:24px 12px;">Nenhum bloco corresponde a “${_escHtml(_revBusca)}”.</div>`;
+    return;
+  }
+  body.innerHTML = visiveis.map((b, i) => _renderBlocoRevisao(b, i, visiveis.length)).join('');
+}
+
+// Handler do campo de busca do painel.
+function filtrarRevisao(termo) {
+  _revBusca = termo || '';
+  _renderRevisaoLista();
 }
 
 function _renderBlocoRevisao(b, idx, total) {
@@ -1752,6 +1784,9 @@ async function abrirRevisaoTelaCheia() {
   // Sempre abre em modo leitura normal (recall desligado) para estado previsível.
   _revFsRecall = false;
   _revFsTagFiltro = '';
+  _revFsBusca = '';
+  const _fsBuscaInput = document.getElementById('rev-fs-busca');
+  if (_fsBuscaInput) _fsBuscaInput.value = '';
   const rbtn = document.getElementById('rev-fs-recall-btn');
   if (rbtn) { rbtn.style.background = 'var(--bg-elevated,#45475a)'; rbtn.style.color = 'var(--peach,#fab387)'; }
   body.innerHTML = '<div style="text-align:center;color:var(--text-sub,#9399b2);padding:40px;">Carregando revisão...</div>';
@@ -1787,9 +1822,14 @@ function _renderRevFsDoc() {
         ${tagsPresentes.map(t => chip(t, (_REV_TAGS[t] || {}).label || t, (_REV_TAGS[t] || {}).cor || 'var(--text-sub,#9399b2)')).join('')}
       </div>`
     : '';
-  const visiveis = _revFsTagFiltro
-    ? _revFsBlocos.filter(b => (b.tag || '') === _revFsTagFiltro)
-    : _revFsBlocos;
+  const visiveis = _revFsBlocos.filter(b => {
+    if (_revFsTagFiltro && (b.tag || '') !== _revFsTagFiltro) return false;
+    if (_revFsBusca) {
+      const termo = _revFsBusca.trim().toLowerCase();
+      if (termo && !`${b.titulo || ''} ${b.conteudo || ''}`.toLowerCase().includes(termo)) return false;
+    }
+    return true;
+  });
   body.innerHTML = `<div id="rev-fs-doc" style="margin:0 auto;">
     ${_revFsRecall ? `<div style="max-width:840px;margin:0 auto 18px;padding:10px 14px;background:rgba(250,179,135,0.12);border:1px solid var(--peach,#fab387);border-radius:8px;font-size:0.85rem;color:var(--peach,#fab387);text-align:center;">🎯 Modo Recall ativo — tente lembrar o conteúdo antes de clicar para revelar.</div>` : ''}
     ${filtros}
@@ -1801,6 +1841,13 @@ function _renderRevFsDoc() {
 // Aplica filtro de tag na tela cheia.
 function setRevFsTagFiltro(tag) {
   _revFsTagFiltro = tag || '';
+  _renderRevFsDoc();
+}
+
+// Aplica busca por termo na tela cheia. O input fica no header (fora de
+// #rev-fs-body), então não é destruído pelo re-render — sem perda de foco.
+function setRevFsBusca(termo) {
+  _revFsBusca = termo || '';
   _renderRevFsDoc();
 }
 
@@ -2119,3 +2166,5 @@ window.gerarRevisaoIA = gerarRevisaoIA;
 window.setBlocoTag = setBlocoTag;
 window.setRevFsTagFiltro = setRevFsTagFiltro;
 window.capturarSelecaoTexto = capturarSelecaoTexto;
+window.filtrarRevisao = filtrarRevisao;
+window.setRevFsBusca = setRevFsBusca;
