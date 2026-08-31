@@ -1,5 +1,6 @@
 // metas.js — Metas section (renderMetas, loadMetaDetails, toggleMetaDetail)
 import { COLORS } from './helpers.js';
+import { confirmModal, toast, escapeHtml } from '../../modules/utils.js';
 
 export function renderMetas(data) {
   const container = document.getElementById('metas-container');
@@ -56,9 +57,10 @@ export async function loadMetaDetails() {
         horasEl.innerHTML = `
           <div style="font-weight:600;color:var(--text);margin-bottom:6px;">📚 Sessões de hoje:</div>
           ${resumo.sessoes.map(s => `
-            <div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border);">
-              <span>${s.materia}</span>
-              <span style="color:var(--blue);font-weight:600;">${fmtDur(s.horas)}</span>
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0;border-bottom:1px solid var(--border);">
+              <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(s.materia)}</span>
+              <span style="color:var(--blue);font-weight:600;white-space:nowrap;">${fmtDur(s.horas)}</span>
+              <button onclick="event.stopPropagation();excluirSessaoHoje('${encodeURIComponent(s.materia)}')" title="Excluir o tempo de hoje desta matéria (ex: timer esquecido)" style="background:none;border:none;color:var(--red,#f38ba8);cursor:pointer;font-size:0.85rem;padding:0 2px;line-height:1;">🗑</button>
             </div>
           `).join('')}
           <div style="margin-top:8px;font-size:0.75rem;color:var(--text-muted);">Total: ${fmtDur(totalHoras)} em ${resumo.sessoes.length} matéria(s)</div>
@@ -157,6 +159,41 @@ export function toggleMetaDetail(id) {
 
 // Assign to window for HTML onclick
 window.toggleMetaDetail = toggleMetaDetail;
+
+// Recarrega o card de Metas (barra de horas/questões/flashcards) do backend.
+export async function reloadMetasCard() {
+  try {
+    const metas = await fetch('/api/metas').then(r => r.json());
+    renderMetas(metas);
+    // Reabre o detalhe de horas para o usuário ver o resultado.
+    const el = document.getElementById('meta-detail-horas');
+    if (el) el.style.display = 'block';
+  } catch (e) { /* silencioso */ }
+}
+window.reloadMetasCard = reloadMetasCard;
+
+// Excluir o tempo de estudo de HOJE de uma matéria (ex: timer esquecido rodando).
+window.excluirSessaoHoje = async function(materiaEnc) {
+  const materia = decodeURIComponent(materiaEnc);
+  const ok = await confirmModal(
+    'Excluir tempo de hoje',
+    `Remover TODO o tempo de estudo de hoje de “${materia}”? Use isto se o cronômetro ficou rodando sem você estar estudando de fato. Esta ação não pode ser desfeita.`,
+    { type: 'danger', confirmText: 'Excluir', cancelText: 'Cancelar' }
+  );
+  if (!ok) return;
+  try {
+    const res = await fetch(`/api/sessoes-estudo/hoje?materia=${encodeURIComponent(materia)}`, { method: 'DELETE' });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      toast(`🗑 ${data.horas_removidas || 0}h removida(s) de ${materia}.`, 'success');
+      reloadMetasCard();
+    } else {
+      toast(data.detail || 'Erro ao excluir o tempo.', 'error');
+    }
+  } catch (e) {
+    toast('Erro de conexão ao excluir.', 'error');
+  }
+};
 
 // Navegar para a página principal e iniciar revisão de flashcards por matéria
 window._startFlashByMateria = function(materia) {

@@ -598,6 +598,43 @@ class TestDashboard:
         assert alvo["horas"] > 0, "horas foi arredondada para 0 (regressão)"
         assert alvo["minutos"] == 2, f"minutos esperado 2, veio {alvo['minutos']}"
 
+    def test_excluir_sessao_hoje(self, client):
+        """Excluir o tempo de hoje de uma matéria remove as sessões e desconta o streak."""
+        from utils import today_str
+        hoje = today_str()
+        # Registra 1.5h de leitura via endpoint (atualiza streak também)
+        client.post("/api/sessoes-estudo/registrar", json={
+            "materia": "PDF Timer Esquecido", "horas": 1.5, "tipo": "leitura",
+        })
+        # Confirma que aparece no resumo
+        sessoes = client.get("/api/resumo-diario").json()["sessoes"]
+        assert any(s["materia"] == "PDF Timer Esquecido" for s in sessoes)
+
+        # Exclui
+        r = client.delete("/api/sessoes-estudo/hoje", params={"materia": "PDF Timer Esquecido"})
+        assert r.status_code == 200, r.text
+        data = r.json()
+        assert data["ok"] is True
+        assert data["horas_removidas"] == 1.5
+
+        # Não aparece mais
+        sessoes2 = client.get("/api/resumo-diario").json()["sessoes"]
+        assert not any(s["materia"] == "PDF Timer Esquecido" for s in sessoes2)
+
+        # Verifica que o streak foi descontado (não ficou negativo)
+        conn = sqlite3.connect(_tmp_db.name)
+        h = conn.execute("SELECT horas_estudadas FROM streaks WHERE data = ? AND user_id = 1", (hoje,)).fetchone()
+        conn.close()
+        assert h is None or h[0] >= 0
+
+    def test_excluir_sessao_hoje_inexistente_404(self, client):
+        r = client.delete("/api/sessoes-estudo/hoje", params={"materia": "Materia Que Nao Existe XYZ"})
+        assert r.status_code == 404
+
+    def test_excluir_sessao_hoje_sem_materia_400(self, client):
+        r = client.delete("/api/sessoes-estudo/hoje", params={"materia": ""})
+        assert r.status_code in (400, 422)
+
     def test_pratica_deliberada(self, client):
         r = client.get("/api/pratica-deliberada")
         assert r.status_code == 200

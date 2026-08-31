@@ -435,6 +435,51 @@ def registrar_sessao_estudo(body: SessaoEstudoRegistrar, conn=Depends(get_db_ses
     return {"ok": True, "horas": horas}
 
 
+@router.delete("/api/sessoes-estudo/hoje", summary="Excluir sessões de estudo de hoje de uma matéria")
+def excluir_sessao_estudo_hoje(
+    materia: str = Query(..., description="Matéria/arquivo cujas sessões de HOJE serão removidas"),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Remove as sessões de estudo de HOJE de uma matéria (ex: timer esquecido
+    rodando sem estudo real) e desconta as horas do streak do dia.
+
+    Só afeta o dia atual e a matéria informada, do próprio usuário.
+    """
+    materia = (materia or "").strip()
+    if not materia:
+        raise HTTPException(status_code=400, detail="Matéria é obrigatória.")
+
+    hoje = today_str()
+    total = conn.execute(
+        "SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE data = ? AND materia = ? AND user_id = ?",
+        (hoje, materia, user_id),
+    ).fetchone()[0] or 0
+
+    if total <= 0:
+        # Nada para hoje nessa matéria — verifica se ao menos existem linhas (horas 0).
+        existe = conn.execute(
+            "SELECT 1 FROM sessoes_estudo WHERE data = ? AND materia = ? AND user_id = ? LIMIT 1",
+            (hoje, materia, user_id),
+        ).fetchone()
+        if not existe:
+            raise HTTPException(status_code=404, detail="Nenhuma sessão de hoje encontrada para esta matéria.")
+
+    deletadas = conn.execute(
+        "DELETE FROM sessoes_estudo WHERE data = ? AND materia = ? AND user_id = ?",
+        (hoje, materia, user_id),
+    ).rowcount
+
+    # Desconta do streak do dia, sem deixar negativo.
+    conn.execute(
+        "UPDATE streaks SET horas_estudadas = MAX(0, horas_estudadas - ?) WHERE data = ? AND user_id = ?",
+        (total, hoje, user_id),
+    )
+    conn.commit()
+    log.info(f"Sessões removidas: {deletadas} linha(s), -{total:.2f}h ({materia}) user={user_id}")
+    return {"ok": True, "materia": materia, "sessoes_removidas": deletadas, "horas_removidas": round(total, 2)}
+
+
 # ============================================================
 # CONQUISTAS DIÁRIAS (DAILY CHALLENGE)
 # ============================================================
