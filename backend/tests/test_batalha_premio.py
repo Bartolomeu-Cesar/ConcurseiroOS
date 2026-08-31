@@ -163,3 +163,20 @@ def test_sem_premio_se_nao_finalizada():
 
     premio = client.get("/api/batalha/ranking/PREMIOE").json()["premio"]
     assert premio is None
+
+
+def test_premio_deterministico_por_batalha():
+    """O índice do prêmio é derivado do battle_id (determinístico): apagar e
+    reconsultar sem premio_idx persistido produz o MESMO prêmio."""
+    cod = _criar_batalha_finalizada("PREMIOF")
+    p1 = client.get(f"/api/batalha/ranking/{cod}").json()["premio"]
+
+    # Zera o premio_idx e consulta de novo — deve reconvergir para o mesmo.
+    conn = sqlite3.connect(_tmp_db.name)
+    conn.execute("UPDATE battles SET premio_idx = -1 WHERE codigo = ?", (cod,))
+    conn.commit()
+    conn.close()
+
+    p2 = client.get(f"/api/batalha/ranking/{cod}").json()["premio"]
+    assert p1["texto"] == p2["texto"]
+    assert p1["emoji"] == p2["emoji"]

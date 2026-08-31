@@ -113,11 +113,15 @@ BATTLE_PRIZES = [
 
 
 def get_or_assign_prize_idx(conn, battle):
-    """Sorteia (uma única vez) e persiste o índice do prêmio da batalha.
+    """Retorna o índice do prêmio da batalha, fixo e consistente.
 
-    Garante que o prêmio seja o MESMO para todos os participantes e em todas as
-    visitas à sala. Retorna o índice na lista BATTLE_PRIZES, ou None se a
-    coluna não puder ser lida.
+    Estratégia à prova de condição de corrida e de cache:
+    1. Se já há um premio_idx válido persistido, usa-o.
+    2. Caso contrário, deriva um índice DETERMINÍSTICO a partir do battle_id
+       (mesma batalha → sempre o mesmo prêmio, mesmo sem persistência) e o grava
+       de forma atômica (UPDATE condicional a premio_idx ainda não definido).
+    3. Relê o valor efetivamente persistido, garantindo que consultas simultâneas
+       de participantes diferentes convirjam para o MESMO prêmio.
     """
     try:
         idx = battle["premio_idx"]
@@ -126,11 +130,26 @@ def get_or_assign_prize_idx(conn, battle):
     except (KeyError, IndexError, TypeError):
         idx = -1
 
-    if idx is None or idx < 0 or idx >= len(BATTLE_PRIZES):
-        idx = random.randint(0, len(BATTLE_PRIZES) - 1)
-        conn.execute("UPDATE battles SET premio_idx = ? WHERE id = ?", (idx, battle["id"]))
-        conn.commit()
-    return idx
+    if 0 <= idx < len(BATTLE_PRIZES):
+        return idx
+
+    # Índice determinístico pela batalha (não usa random global → sem corrida).
+    battle_id = battle["id"]
+    novo_idx = (battle_id * 2654435761) % len(BATTLE_PRIZES)
+
+    # Grava só se ainda não definido (atômico entre requests concorrentes).
+    conn.execute(
+        "UPDATE battles SET premio_idx = ? WHERE id = ? AND (premio_idx IS NULL OR premio_idx < 0)",
+        (novo_idx, battle_id),
+    )
+    conn.commit()
+
+    # Relê o valor persistido (pode ter sido gravado por outro request antes).
+    row = conn.execute("SELECT premio_idx FROM battles WHERE id = ?", (battle_id,)).fetchone()
+    persistido = row["premio_idx"] if row else novo_idx
+    if persistido is None or not (0 <= persistido < len(BATTLE_PRIZES)):
+        persistido = novo_idx
+    return persistido
 
 
 def _generate_code():
