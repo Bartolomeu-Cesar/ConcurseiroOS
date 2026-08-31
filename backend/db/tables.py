@@ -3,6 +3,19 @@
 
 def _create_tables(conn):
     """Cria todas as tabelas do sistema."""
+    # Log de auditoria de ações administrativas
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS admin_audit (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            admin_id INTEGER NOT NULL,
+            acao TEXT NOT NULL,
+            alvo_tipo TEXT DEFAULT '',
+            alvo_id TEXT DEFAULT '',
+            detalhe TEXT DEFAULT '',
+            created_at TEXT NOT NULL
+        )
+    """)
+
     # Tabela de progresso de PDFs
     conn.execute("""
         CREATE TABLE IF NOT EXISTS progress (

@@ -25,6 +25,29 @@ def _require_admin(user_id: int):
             raise HTTPException(status_code=403, detail="Acesso restrito ao administrador.")
 
 
+def _audit(conn, admin_id: int, acao: str, alvo_tipo: str = "", alvo_id="", detalhe=""):
+    """Registra uma ação administrativa no log de auditoria.
+
+    Nunca deve quebrar o fluxo principal: erros são silenciados (best-effort).
+    `detalhe` pode ser dict/list (serializado em JSON) ou texto.
+    """
+    import json as _json
+    from datetime import datetime, timezone
+    try:
+        if isinstance(detalhe, (dict, list)):
+            detalhe = _json.dumps(detalhe, ensure_ascii=False)
+        conn.execute(
+            "INSERT INTO admin_audit (admin_id, acao, alvo_tipo, alvo_id, detalhe, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (admin_id, acao, alvo_tipo or "", str(alvo_id) if alvo_id is not None else "",
+             detalhe or "", datetime.now(timezone.utc).isoformat())
+        )
+        # Commit best-effort: se o chamador já vai commitar, não atrapalha.
+        conn.commit()
+    except Exception as e:
+        log.warning(f"[admin_audit] falha ao registrar '{acao}': {e}")
+
+
 def _validade_plano(plano: str, plano_expira: str) -> dict:
     """Calcula o status de validade do plano de um usuário.
 
@@ -258,6 +281,7 @@ def create_user(
 
     conn.commit()
     log.info(f"[admin] User created: id={new_id} email={email} plano={plano}")
+    _audit(conn, user_id, "user.create", "user", new_id, {"email": email, "nome": nome, "plano": plano})
     return {"ok": True, "id": new_id, "email": email, "nome": nome, "plano": plano}
 
 
@@ -326,6 +350,7 @@ def update_user(
     conn.commit()
 
     log.info(f"[admin] User updated: id={uid} fields={list(sent_fields)}")
+    _audit(conn, user_id, "user.update", "user", uid, {"fields": list(sent_fields)})
     return {"ok": True, "updated_fields": list(sent_fields)}
 
 
@@ -384,6 +409,8 @@ def delete_user(
     conn.commit()
 
     log.info(f"[admin] User DELETED: id={uid} email={user['email']}")
+    _audit(conn, user_id, "user.delete", "user", uid,
+           {"email": user["email"], "nome": user["nome"], "deleted_counts": deleted_counts})
     return {"ok": True, "deleted_user": {"id": uid, "nome": user["nome"], "email": user["email"]}}
 
 
@@ -408,13 +435,54 @@ def change_plan(
     conn.commit()
 
     log.info(f"[admin] Plan changed: user={uid} → {body.plano} (expires={body.plano_expira})")
+    _audit(conn, user_id, "user.plano", "user", uid, {"plano": body.plano, "expira": body.plano_expira})
     return {"ok": True, "plano": body.plano, "plano_nome": PLANS[body.plano]["nome"], "plano_expira": body.plano_expira}
+
+
+# ============================================================
+# LOG DE AUDITORIA
+# ============================================================
+
+@router.get("/auditoria", summary="Log de auditoria de ações do admin")
+def listar_auditoria(
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=200),
+    acao: str = Query("", description="Filtrar por ação (prefixo, ex: 'user.')"),
+    admin_id: int = Query(0, description="Filtrar por admin"),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Lista as ações administrativas registradas, mais recentes primeiro.
+
+    Enriquece cada linha com o nome/email do admin que executou a ação.
+    """
+    _require_admin(user_id)
+    from utils import sql_paginate
+
+    where = []
+    params: list = []
+    if acao.strip():
+        where.append("a.acao LIKE ?")
+        params.append(acao.strip() + "%")
+    if admin_id:
+        where.append("a.admin_id = ?")
+        params.append(admin_id)
+    where_sql = ("WHERE " + " AND ".join(where)) if where else ""
+
+    query = f"""
+        SELECT a.id, a.admin_id, u.nome AS admin_nome, u.email AS admin_email,
+               a.acao, a.alvo_tipo, a.alvo_id, a.detalhe, a.created_at
+        FROM admin_audit a
+        LEFT JOIN users u ON u.id = a.admin_id
+        {where_sql}
+        ORDER BY a.id DESC
+    """
+    return sql_paginate(conn, query, tuple(params), page=page, limit=limit)
 
 
 # ============================================================
 # ESTATÍSTICAS GLOBAIS
 # ============================================================
-
 @router.get("/stats", summary="Estatísticas globais do sistema")
 def global_stats(
     conn=Depends(get_db_session),
@@ -703,6 +771,8 @@ def add_creditos_brinde(
 
     conn.commit()
     log.info(f"[admin] Créditos brinde: user={uid} {quantidade:+d} (saldo {saldo_anterior}→{saldo_posterior}) motivo={motivo}")
+    _audit(conn, user_id, "user.creditos", "user", uid,
+           {"quantidade": quantidade, "saldo_anterior": saldo_anterior, "saldo_posterior": saldo_posterior, "motivo": motivo})
     return {"ok": True, "saldo_anterior": saldo_anterior, "saldo_posterior": saldo_posterior, "quantidade": quantidade}
 
 
@@ -739,6 +809,7 @@ def ativar_plano_premio(
         )
         conn.commit()
         log.info(f"[admin] Vitalício ativado como prêmio: user={uid}")
+        _audit(conn, user_id, "user.ativar_plano", "user", uid, {"tipo": "vitalicio"})
         return {"ok": True, "plano": "ilimitado", "expira": "vitalicio"}
 
     elif tipo == "premium":
@@ -769,6 +840,7 @@ def ativar_plano_premio(
         )
         conn.commit()
         log.info(f"[admin] Premium {dias}d ativado como prêmio: user={uid} expira={nova_expira}")
+        _audit(conn, user_id, "user.ativar_plano", "user", uid, {"tipo": "premium", "dias": dias, "expira": nova_expira})
         return {"ok": True, "plano": "premium", "expira": nova_expira, "dias": dias}
 
     else:
@@ -1125,4 +1197,6 @@ def compartilhar_recursos(
 
     conn.commit()
     log.info(f"[admin] Compartilhamento: origem={origem_uid} destinos={destino_uids} recursos={recursos}")
+    _audit(conn, user_id, "recursos.compartilhar", "user", origem_uid,
+           {"destinos": destino_uids, "recursos": recursos})
     return {"ok": True, "origem_uid": origem_uid, "resultado": resultado}

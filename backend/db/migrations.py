@@ -860,6 +860,31 @@ def _m68_pdf_ownership(conn):
             log.warning(f"Migration 68: falha ao recriar progress: {e}")
 
 
+def _m69_admin_audit(conn):
+    """Log de auditoria de ações administrativas.
+
+    Registra quem (admin_id) fez qual ação (acao) sobre qual alvo (alvo_tipo/
+    alvo_id), com detalhe livre (JSON ou texto) e timestamp. Usado para
+    rastreabilidade de ações sensíveis (alterar plano, créditos, excluir
+    usuário, definir dono de PDF, publicar no catálogo, etc.).
+    """
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS admin_audit (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            admin_id INTEGER NOT NULL,
+            acao TEXT NOT NULL,
+            alvo_tipo TEXT DEFAULT '',
+            alvo_id TEXT DEFAULT '',
+            detalhe TEXT DEFAULT '',
+            created_at TEXT NOT NULL
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_admin_audit_created ON admin_audit(created_at DESC)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_admin_audit_admin ON admin_audit(admin_id, created_at DESC)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_admin_audit_acao ON admin_audit(acao, created_at DESC)")
+    log.info("Migration: created admin_audit table")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -929,6 +954,7 @@ MIGRATIONS = [
     (66, _m66_destaques_estilo),
     (67, _m67_destaques_comentario),
     (68, _m68_pdf_ownership),
+    (69, _m69_admin_audit),
 ]
 
 

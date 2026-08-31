@@ -17,6 +17,9 @@ def _create_indexes(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_pdf_owner_owner ON pdf_owner(owner_id)")
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_pdf_compart_unique ON pdf_compartilhamentos(pdf_path, shared_with_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_pdf_compart_shared ON pdf_compartilhamentos(shared_with_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_admin_audit_created ON admin_audit(created_at DESC)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_admin_audit_admin ON admin_audit(admin_id, created_at DESC)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_admin_audit_acao ON admin_audit(acao, created_at DESC)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_edital_materia ON edital(materia)")
 
     # Índices compostos para queries frequentes do dashboard

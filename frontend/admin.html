@@ -137,6 +137,28 @@
       <h3 style="color:#f9e2af;font-size:0.9rem;margin:0 0 8px;">⏳ Materiais pendentes de aprovação</h3>
       <div id="pendentes-list" style="font-size:0.85rem;color:#9399b2;">Carregando...</div>
     </div>
+
+    <!-- Log de Auditoria -->
+    <div style="margin-top:24px;padding:20px;background:#181825;border:1px solid #45475a;border-radius:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+        <h2 style="color:#f38ba8;margin:0;font-size:1.1rem;">📝 Log de Auditoria</h2>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <select id="audit-filtro-acao" onchange="loadAuditoria(1)" style="background:#313244;border:1px solid #45475a;border-radius:6px;padding:6px;color:#cdd6f4;font-size:0.78rem;">
+            <option value="">Todas as ações</option>
+            <option value="user.">Usuários</option>
+            <option value="user.delete">Exclusões</option>
+            <option value="user.plano">Alteração de plano</option>
+            <option value="user.creditos">Créditos</option>
+            <option value="user.ativar_plano">Ativação de plano</option>
+            <option value="recursos.compartilhar">Compartilhamento</option>
+            <option value="pdf.">PDFs</option>
+          </select>
+          <button class="btn small secondary" onclick="loadAuditoria(1)">🔄 Atualizar</button>
+        </div>
+      </div>
+      <div id="audit-list" style="font-size:0.82rem;color:#9399b2;">Carregando...</div>
+      <div id="audit-pagination" style="display:flex;gap:6px;justify-content:center;margin-top:12px;"></div>
+    </div>
   </div>
 
   <!-- Modal: Gerenciar Monetização do Usuário -->
@@ -820,12 +842,67 @@
       } catch(e) {}
     }
 
+    // ==================== LOG DE AUDITORIA ====================
+    let _auditPage = 1;
+    const _AUDIT_ACOES = {
+      'user.create': '➕ Criou usuário', 'user.update': '✏️ Editou usuário',
+      'user.delete': '🗑️ Excluiu usuário', 'user.plano': '💳 Alterou plano',
+      'user.creditos': '🎟️ Créditos', 'user.ativar_plano': '👑 Ativou plano',
+      'recursos.compartilhar': '🔗 Compartilhou recursos', 'pdf.definir_dono': '📄 Definiu dono de PDF',
+    };
+    function _acaoLabel(a) { return _AUDIT_ACOES[a] || a; }
+
+    window.loadAuditoria = async function(page) {
+      if (page) _auditPage = page;
+      const acao = document.getElementById('audit-filtro-acao')?.value || '';
+      const el = document.getElementById('audit-list');
+      const pag = document.getElementById('audit-pagination');
+      if (!el) return;
+      const params = new URLSearchParams({ page: _auditPage, limit: 15 });
+      if (acao) params.set('acao', acao);
+      try {
+        const data = await fetch('/api/admin/auditoria?' + params).then(r => r.json());
+        if (data.detail) { el.innerHTML = `<span style="color:#f38ba8;">${esc(data.detail)}</span>`; return; }
+        const items = data.items || [];
+        if (!items.length) { el.innerHTML = '<span style="color:#a6e3a1;">Nenhum registro.</span>'; pag.innerHTML = ''; return; }
+        el.innerHTML = items.map(it => {
+          const quando = it.created_at ? new Date(it.created_at).toLocaleString('pt-BR') : '';
+          const quem = esc(it.admin_nome || ('#' + it.admin_id));
+          const alvo = it.alvo_id ? ` · ${esc(it.alvo_tipo || 'alvo')} #${esc(String(it.alvo_id))}` : '';
+          let det = '';
+          try { det = it.detalhe ? esc(JSON.stringify(JSON.parse(it.detalhe))) : ''; }
+          catch { det = esc(it.detalhe || ''); }
+          return `
+            <div style="display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid #313244;">
+              <div style="min-width:0;">
+                <strong style="color:#cdd6f4;">${_acaoLabel(it.acao)}</strong>
+                <span style="color:#9399b2;">por ${quem}${alvo}</span>
+                ${det ? `<div style="font-size:0.72rem;color:#6c7086;overflow:hidden;text-overflow:ellipsis;">${det}</div>` : ''}
+              </div>
+              <span style="font-size:0.72rem;color:#9399b2;white-space:nowrap;flex-shrink:0;">${esc(quando)}</span>
+            </div>`;
+        }).join('');
+        // Paginação
+        const pages = data.pages || 1;
+        let ph = '';
+        if (pages > 1) {
+          if (_auditPage > 1) ph += `<button class="btn small secondary" onclick="loadAuditoria(${_auditPage - 1})">‹</button>`;
+          ph += `<span style="align-self:center;color:#9399b2;font-size:0.78rem;">${_auditPage}/${pages}</span>`;
+          if (_auditPage < pages) ph += `<button class="btn small secondary" onclick="loadAuditoria(${_auditPage + 1})">›</button>`;
+        }
+        pag.innerHTML = ph;
+      } catch(e) {
+        el.innerHTML = '<span style="color:#f38ba8;">Erro ao carregar auditoria.</span>';
+      }
+    };
+
     // Init
     loadStats();
     loadUsers();
     loadMonetizacao();
     loadPendentes();
     loadMetricas();
+    loadAuditoria();
   })();
   </script>
 </body>

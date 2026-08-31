@@ -759,6 +759,15 @@ def definir_dono(
         "DELETE FROM pdf_compartilhamentos WHERE pdf_path = ? AND shared_with_id = ?",
         (pdf_path, novo_dono[0])
     )
+    # Auditoria (best-effort)
+    try:
+        conn.execute(
+            "INSERT INTO admin_audit (admin_id, acao, alvo_tipo, alvo_id, detalhe, created_at) "
+            "VALUES (?, 'pdf.definir_dono', 'pdf', ?, ?, ?)",
+            (user_id, pdf_path, f'{{"novo_dono": {novo_dono[0]}}}', now)
+        )
+    except Exception:
+        pass
     conn.commit()
     return {
         "ok": True,
