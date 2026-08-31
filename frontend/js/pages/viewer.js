@@ -2260,6 +2260,12 @@ let _destaques = [];          // cache de todos os destaques do PDF
 let _selPendente = null;      // { pagina, rects:[{x,y,w,h}], texto } da seleção atual
 let _destaquesVisible = false;
 let _destaqueEstilo = 'highlight'; // estilo atual escolhido na barra
+let _destFiltroCor = '';   // filtro de cor ativo no painel ('' = todas)
+let _destBusca = '';       // termo de busca no painel
+// Significado semântico das cores (legenda + rótulo no painel).
+const _DESTAQUE_SIGNIFICADO = {
+  yellow: 'Importante', green: 'Entendido', blue: 'Dúvida', pink: 'Decorar', orange: 'Revisar',
+};
 
 // Define o estilo de marcação atual e destaca o botão ativo na barra.
 function setDestaqueEstilo(estilo) {
@@ -2368,6 +2374,7 @@ async function criarDestaque(cor) {
       _destaques.push({ id: data.id, pdf_path: path, pagina: sel.pagina, cor, texto: sel.texto, rects: JSON.stringify(sel.rects), estilo, comentario: '' });
       _renderDestaquesPagina(sel.pagina);
       showStudyToast('🖍️ Marcação salva!');
+      _atualizarBadgeDestaques();
       const doc = _pdfDoc();
       if (doc && doc.getSelection) doc.getSelection().removeAllRanges();
     } else {
@@ -2386,6 +2393,7 @@ async function carregarDestaques() {
     if (!Array.isArray(_destaques)) _destaques = [];
   } catch (e) { _destaques = []; }
   _reaplicarTodosDestaques();
+  _atualizarBadgeDestaques();
 }
 
 // Desenha os overlays de destaque de uma página específica dentro da div.page.
@@ -2456,6 +2464,7 @@ async function excluirDestaque(id) {
   _destaques = _destaques.filter(d => d.id !== id);
   if (rem) _renderDestaquesPagina(rem.pagina);
   if (_destaquesVisible) _renderPainelDestaques();
+  _atualizarBadgeDestaques();
   showStudyToast('Destaque removido.');
 }
 
@@ -2557,30 +2566,127 @@ function _renderPainelDestaques() {
       Nenhum destaque ainda.<br><br>Selecione um trecho de texto no PDF e escolha uma cor na barra que aparece.</div>`;
     return;
   }
-  const ordenados = [..._destaques].sort((a, b) => a.pagina - b.pagina || a.id - b.id);
   const _ESTILO_ICONE = { highlight: '🖍️', underline: 'S̲', strike: 'S̶', box: '▢' };
-  body.innerHTML = ordenados.map(d => {
-    const cor = _DESTAQUE_CORES[d.cor] || _DESTAQUE_CORES.yellow;
-    const txt = (d.texto && d.texto.trim()) ? _escHtml(d.texto.trim()) : '(sem texto)';
-    const icone = _ESTILO_ICONE[d.estilo || 'highlight'] || '🖍️';
-    const temComentario = d.comentario && d.comentario.trim();
-    const comentarioHtml = temComentario
-      ? `<div style="margin-top:6px;padding:6px 8px;background:var(--bg-elevated,#45475a);border-radius:6px;font-size:0.75rem;color:var(--text-sub,#a6adc8);">💬 ${_escHtml(d.comentario.trim())}</div>`
-      : '';
-    return `<div style="background:var(--bg,#1e1e2e);border-left:4px solid ${cor};border-radius:8px;padding:10px 12px;margin-bottom:8px;">
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
-        <span title="Estilo" style="font-size:0.8rem;">${icone}</span>
-        <span style="font-size:0.7rem;color:var(--blue,#89b4fa);cursor:pointer;" onclick="goToPage(${d.pagina})" title="Ir para a página">p.${d.pagina}</span>
-        <span style="flex:1;"></span>
-        <button onclick="destaqueParaFlashcard(${d.id})" title="Criar flashcard (revisão espaçada)" style="background:none;border:none;color:var(--mauve,#cba6f7);cursor:pointer;font-size:0.78rem;">🧠</button>
-        <button onclick="destaqueParaRevisao(${d.id})" title="Enviar ao Caderno de Revisão" style="background:none;border:none;color:var(--teal,#94e2d5);cursor:pointer;font-size:0.78rem;">📑</button>
-        <button onclick="comentarDestaque(${d.id})" title="${temComentario ? 'Editar comentário' : 'Adicionar comentário'}" style="background:none;border:none;color:${temComentario ? 'var(--green,#a6e3a1)' : 'var(--text-sub,#9399b2)'};cursor:pointer;font-size:0.78rem;">💬</button>
-        <button onclick="excluirDestaque(${d.id})" title="Remover" style="background:none;border:none;color:var(--red,#f38ba8);cursor:pointer;font-size:0.78rem;">🗑</button>
-      </div>
-      <div style="font-size:0.82rem;color:var(--text,#cdd6f4);line-height:1.5;cursor:pointer;" onclick="goToPage(${d.pagina})">${txt}</div>
-      ${comentarioHtml}
-    </div>`;
-  }).join('');
+
+  // #8 Legenda semântica das cores.
+  const legenda = `<div style="display:flex;flex-wrap:wrap;gap:6px 10px;padding:8px 4px;margin-bottom:8px;border-bottom:1px solid var(--border);font-size:0.68rem;color:var(--text-sub,#9399b2);">
+    ${Object.entries(_DESTAQUE_SIGNIFICADO).map(([k, v]) => `<span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:50%;background:${_DESTAQUE_CORES_SOLIDAS[k]};display:inline-block;"></span>${v}</span>`).join('')}
+  </div>`;
+
+  // #4 Chips de filtro por cor (só as presentes) + "Todas".
+  const coresPresentes = [...new Set(_destaques.map(d => d.cor))];
+  const chip = (val, label, bg) => `<button onclick="setDestFiltroCor('${val}')" style="background:${_destFiltroCor === val ? (bg || 'var(--accent)') : 'var(--bg-elevated,#45475a)'};color:${_destFiltroCor === val ? '#1e1e2e' : 'var(--text,#cdd6f4)'};border:1px solid ${bg || 'var(--border)'};border-radius:999px;padding:2px 10px;font-size:0.7rem;cursor:pointer;font-weight:600;">${label}</button>`;
+  const filtros = `<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;">
+    ${chip('', 'Todas', null)}
+    ${coresPresentes.map(c => chip(c, _DESTAQUE_SIGNIFICADO[c] || c, _DESTAQUE_CORES_SOLIDAS[c])).join('')}
+  </div>`;
+
+  // #4 Campo de busca.
+  const busca = `<input type="text" id="destaques-busca" oninput="filtrarDestaques(this.value)" value="${_escHtml(_destBusca)}" placeholder="🔍 Buscar no texto/comentário..." style="width:100%;padding:6px 10px;margin-bottom:8px;background:var(--bg-surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.78rem;outline:none;">`;
+
+  // #6 Botões de limpeza.
+  const limpar = `<div style="display:flex;gap:6px;margin-bottom:10px;">
+    <button onclick="limparDestaquesPagina()" title="Remover destaques da página atual" style="flex:1;background:var(--bg-elevated,#45475a);color:var(--text,#cdd6f4);border:1px solid var(--border);border-radius:6px;padding:5px;font-size:0.72rem;cursor:pointer;">🧽 Limpar página</button>
+    <button onclick="limparTodosDestaques()" title="Remover TODOS os destaques deste PDF" style="flex:1;background:var(--bg-elevated,#45475a);color:var(--red,#f38ba8);border:1px solid var(--border);border-radius:6px;padding:5px;font-size:0.72rem;cursor:pointer;">🗑 Limpar todos</button>
+  </div>`;
+
+  // Filtragem (cor + busca) e ordenação.
+  const termo = _destBusca.trim().toLowerCase();
+  const ordenados = [..._destaques]
+    .filter(d => !_destFiltroCor || d.cor === _destFiltroCor)
+    .filter(d => !termo || `${d.texto || ''} ${d.comentario || ''}`.toLowerCase().includes(termo))
+    .sort((a, b) => a.pagina - b.pagina || a.id - b.id);
+
+  const itens = ordenados.length === 0
+    ? `<div style="color:var(--text-sub,#585b70);font-size:0.82rem;text-align:center;padding:20px;">Nenhum destaque para este filtro/busca.</div>`
+    : ordenados.map(d => {
+      const cor = _DESTAQUE_CORES[d.cor] || _DESTAQUE_CORES.yellow;
+      const txt = (d.texto && d.texto.trim()) ? _escHtml(d.texto.trim()) : '(sem texto)';
+      const icone = _ESTILO_ICONE[d.estilo || 'highlight'] || '🖍️';
+      const temComentario = d.comentario && d.comentario.trim();
+      const comentarioHtml = temComentario
+        ? `<div style="margin-top:6px;padding:6px 8px;background:var(--bg-elevated,#45475a);border-radius:6px;font-size:0.75rem;color:var(--text-sub,#a6adc8);">💬 ${_escHtml(d.comentario.trim())}</div>`
+        : '';
+      return `<div style="background:var(--bg,#1e1e2e);border-left:4px solid ${cor};border-radius:8px;padding:10px 12px;margin-bottom:8px;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+          <span title="Estilo" style="font-size:0.8rem;">${icone}</span>
+          <span style="font-size:0.7rem;color:var(--blue,#89b4fa);cursor:pointer;" onclick="goToPage(${d.pagina})" title="Ir para a página">p.${d.pagina}</span>
+          <span style="flex:1;"></span>
+          <button onclick="copiarDestaque(${d.id})" title="Copiar texto" style="background:none;border:none;color:var(--text-sub,#9399b2);cursor:pointer;font-size:0.78rem;">📋</button>
+          <button onclick="destaqueParaFlashcard(${d.id})" title="Criar flashcard (revisão espaçada)" style="background:none;border:none;color:var(--mauve,#cba6f7);cursor:pointer;font-size:0.78rem;">🧠</button>
+          <button onclick="destaqueParaRevisao(${d.id})" title="Enviar ao Caderno de Revisão" style="background:none;border:none;color:var(--teal,#94e2d5);cursor:pointer;font-size:0.78rem;">📑</button>
+          <button onclick="comentarDestaque(${d.id})" title="${temComentario ? 'Editar comentário' : 'Adicionar comentário'}" style="background:none;border:none;color:${temComentario ? 'var(--green,#a6e3a1)' : 'var(--text-sub,#9399b2)'};cursor:pointer;font-size:0.78rem;">💬</button>
+          <button onclick="excluirDestaque(${d.id})" title="Remover" style="background:none;border:none;color:var(--red,#f38ba8);cursor:pointer;font-size:0.78rem;">🗑</button>
+        </div>
+        <div style="font-size:0.82rem;color:var(--text,#cdd6f4);line-height:1.5;cursor:pointer;" onclick="goToPage(${d.pagina})">${txt}</div>
+        ${comentarioHtml}
+      </div>`;
+    }).join('');
+
+  body.innerHTML = legenda + filtros + busca + limpar + itens;
+}
+
+// #4 filtro por cor
+function setDestFiltroCor(cor) { _destFiltroCor = cor || ''; _renderPainelDestaques(); }
+// #4 busca por texto/comentário
+function filtrarDestaques(termo) { _destBusca = termo || ''; _renderPainelDestaques(); }
+
+// #7 copiar o texto do destaque
+async function copiarDestaque(id) {
+  const d = _destaques.find(x => x.id === id);
+  if (!d || !d.texto) { showStudyToast('Nada para copiar.'); return; }
+  try {
+    await navigator.clipboard.writeText(d.texto);
+    showStudyToast('📋 Texto copiado!');
+  } catch (e) {
+    showStudyToast('⚠️ Não foi possível copiar (permissão do navegador).');
+  }
+}
+
+// #6 remover em lote (página atual)
+async function limparDestaquesPagina() {
+  const daPagina = _destaques.filter(d => d.pagina === currentPage);
+  if (daPagina.length === 0) { showStudyToast(`Nenhum destaque na página ${currentPage}.`); return; }
+  if (!(await confirmModal('Limpar página', `Remover os ${daPagina.length} destaque(s) da página ${currentPage}?`, { type: 'danger', confirmText: 'Limpar' }))) return;
+  await Promise.all(daPagina.map(d => fetch(`/api/destaques/${d.id}`, { method: 'DELETE' }).catch(() => {})));
+  _destaques = _destaques.filter(d => d.pagina !== currentPage);
+  _renderDestaquesPagina(currentPage);
+  _renderPainelDestaques();
+  _atualizarBadgeDestaques();
+  showStudyToast('🧽 Destaques da página removidos.');
+}
+
+// #6 remover em lote (todos do PDF)
+async function limparTodosDestaques() {
+  if (_destaques.length === 0) { showStudyToast('Não há destaques.'); return; }
+  if (!(await confirmModal('Limpar todos', `Remover TODOS os ${_destaques.length} destaques deste PDF? Não pode ser desfeito.`, { type: 'danger', confirmText: 'Limpar tudo' }))) return;
+  const paginas = [...new Set(_destaques.map(d => d.pagina))];
+  await Promise.all(_destaques.map(d => fetch(`/api/destaques/${d.id}`, { method: 'DELETE' }).catch(() => {})));
+  _destaques = [];
+  paginas.forEach(p => _renderDestaquesPagina(p));
+  _renderPainelDestaques();
+  _atualizarBadgeDestaques();
+  showStudyToast('🗑 Todos os destaques removidos.');
+}
+
+// #5 badge com o total de destaques no botão da toolbar
+function _atualizarBadgeDestaques() {
+  const badge = document.getElementById('destaques-badge');
+  if (!badge) return;
+  const n = _destaques.length;
+  badge.textContent = n;
+  badge.style.display = n > 0 ? 'inline-block' : 'none';
+}
+
+// #5 navegar entre destaques (ordenados por página) — vai à página do destaque
+let _destNavIndex = -1;
+function navegarDestaque(dir) {
+  if (_destaques.length === 0) { showStudyToast('Nenhum destaque.'); return; }
+  const ord = [..._destaques].sort((a, b) => a.pagina - b.pagina || a.id - b.id);
+  _destNavIndex = (_destNavIndex + dir + ord.length) % ord.length;
+  const alvo = ord[_destNavIndex];
+  goToPage(alvo.pagina);
+  showStudyToast(`Destaque ${_destNavIndex + 1}/${ord.length} — página ${alvo.pagina}`);
 }
 
 // Liga os eventos de seleção no iframe (chamado após o PDF.js carregar).
@@ -2639,6 +2745,12 @@ window.comentarDestaque = comentarDestaque;
 window.destaqueParaFlashcard = destaqueParaFlashcard;
 window.destaqueParaRevisao = destaqueParaRevisao;
 window.exportarDestaquesMd = exportarDestaquesMd;
+window.setDestFiltroCor = setDestFiltroCor;
+window.filtrarDestaques = filtrarDestaques;
+window.copiarDestaque = copiarDestaque;
+window.limparDestaquesPagina = limparDestaquesPagina;
+window.limparTodosDestaques = limparTodosDestaques;
+window.navegarDestaque = navegarDestaque;
 window.addBookmark = addBookmark;
 window.toggleBookmarksPanel = toggleBookmarksPanel;
 window.loadBookmarksPanel = loadBookmarksPanel;
