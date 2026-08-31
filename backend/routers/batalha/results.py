@@ -2,12 +2,12 @@
 import json
 from datetime import datetime
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from deps import get_user_id
+from fastapi import APIRouter, Depends, HTTPException
 
 from database import get_db_session
-from deps import get_user_id
 
-from .helpers import _ensure_battle_tables, _generate_code
+from .helpers import BATTLE_PRIZES, _ensure_battle_tables, _generate_code, get_or_assign_prize_idx
 
 router = APIRouter(prefix="/api/batalha", tags=["Batalha de Questões"])
 
@@ -73,6 +73,30 @@ def ranking_batalha(
 
     vencedor = ranking[0] if ranking else None
 
+    # Prêmio surpresa fixo (1v1): sorteado UMA vez no servidor e persistido.
+    # Assim os dois participantes veem SEMPRE o mesmo prêmio, com papéis fixos:
+    # o vencedor recebe, o perdedor paga.
+    premio = None
+    if len(ranking) == 2 and battle["status"] == "finalizada":
+        idx = get_or_assign_prize_idx(conn, battle)
+        base = BATTLE_PRIZES[idx]
+        vencedor_r = ranking[0]
+        perdedor_r = ranking[1]
+        premio = {
+            "emoji": base["emoji"],
+            "texto": base["texto"],
+            "quem_paga_id": perdedor_r["user_id"],
+            "quem_paga_nome": perdedor_r["nome"],
+            "quem_recebe_id": vencedor_r["user_id"],
+            "quem_recebe_nome": vencedor_r["nome"],
+            # Papel do usuário que está consultando: 'paga' | 'recebe' | 'espectador'
+            "meu_papel": (
+                "paga" if user_id == perdedor_r["user_id"]
+                else "recebe" if user_id == vencedor_r["user_id"]
+                else "espectador"
+            ),
+        }
+
     return {
         "titulo": battle["titulo"],
         "codigo": battle["codigo"],
@@ -81,6 +105,7 @@ def ranking_batalha(
         "materias": json.loads(battle["materias"]),
         "ranking": ranking,
         "vencedor": vencedor,
+        "premio": premio,
         "rounds": rounds_detail,
     }
 

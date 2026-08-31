@@ -144,20 +144,30 @@ function showRanking(data) {
   const ranking = data.ranking || [];
   const top3 = ranking.slice(0, 3);
 
-  // Prêmio surpresa para batalhas 1v1
+  // Prêmio surpresa FIXO (1v1) — vem do backend, igual para os dois participantes
+  // e persistente em toda visita. O papel (paga/recebe) é definido pelo servidor.
   let premioHtml = '';
-  if (ranking.length === 2) {
-    const vencedor = ranking[0];
-    const perdedor = ranking[1];
-    const premio = getRandomPrize(vencedor.nome);
+  const premio = data.premio;
+  if (premio && premio.texto) {
+    let titulo, detalhe;
+    if (premio.meu_papel === 'paga') {
+      titulo = `${premio.quem_paga_nome}, você deve entregar a ${premio.quem_recebe_nome}:`;
+      detalhe = 'Valide a entrega com o vencedor! 🤝';
+    } else if (premio.meu_papel === 'recebe') {
+      titulo = `${premio.quem_recebe_nome}, você venceu! ${premio.quem_paga_nome} deve lhe entregar:`;
+      detalhe = 'Combine a entrega com quem perdeu! 🤝';
+    } else {
+      titulo = `${premio.quem_paga_nome} deve entregar a ${premio.quem_recebe_nome}:`;
+      detalhe = 'Prêmio da batalha 🤝';
+    }
     premioHtml = `
       <div style="background:linear-gradient(135deg, var(--bg), var(--bg-surface));border:2px solid var(--yellow);border-radius:14px;padding:20px;margin:16px 0;text-align:center;">
         <div style="font-size:1.3rem;margin-bottom:8px;">🎁 Prêmio Surpresa!</div>
-        <div style="color:var(--yellow);font-size:0.95rem;font-weight:600;margin-bottom:6px;">${perdedor.nome}, você deve:</div>
+        <div style="color:var(--yellow);font-size:0.95rem;font-weight:600;margin-bottom:6px;">${titulo}</div>
         <div style="color:var(--text);font-size:1.1rem;padding:12px;background:var(--bg-elevated);border-radius:10px;margin:8px 0;">
-          ${premio.emoji} ${premio.texto}
+          ${premio.emoji} ${premio.texto} para ${premio.quem_recebe_nome}!
         </div>
-        <div style="font-size:0.75rem;color:var(--text-sub);margin-top:8px;">Valide a entrega com o vencedor! 🤝</div>
+        <div style="font-size:0.75rem;color:var(--text-sub);margin-top:8px;">${detalhe}</div>
       </div>
     `;
   }
@@ -202,32 +212,6 @@ function showRanking(data) {
       ${premioHtml}
     </div>
   `;
-}
-
-function getRandomPrize(vencedorNome) {
-  const premios = [
-    { emoji: '🧆', texto: `Envie um cento de salgados para ${vencedorNome}!` },
-    { emoji: '🌯', texto: `Pague uma shawarma para ${vencedorNome}!` },
-    { emoji: '🍨', texto: `Um açaí de 500ml para ${vencedorNome}!` },
-    { emoji: '💸', texto: `PIX de R$10 para ${vencedorNome}!` },
-    { emoji: '🍕', texto: `Uma pizza para ${vencedorNome}!` },
-    { emoji: '☕', texto: `Um café especial para ${vencedorNome}!` },
-    { emoji: '🍫', texto: `Uma caixa de bombons para ${vencedorNome}!` },
-    { emoji: '🥤', texto: `Um milkshake para ${vencedorNome}!` },
-    { emoji: '🍔', texto: `Um hambúrguer artesanal para ${vencedorNome}!` },
-    { emoji: '🧋', texto: `Um bubble tea para ${vencedorNome}!` },
-    { emoji: '🎂', texto: `Um pedaço de bolo para ${vencedorNome}!` },
-    { emoji: '🌮', texto: `Tacos mexicanos para ${vencedorNome}!` },
-    { emoji: '🍩', texto: `Uma dúzia de donuts para ${vencedorNome}!` },
-    { emoji: '📚', texto: `Um livro à escolha de ${vencedorNome}!` },
-    { emoji: '🎬', texto: `Um ingresso de cinema para ${vencedorNome}!` },
-    { emoji: '🥊', texto: `30 minutos de massagem para ${vencedorNome}!` },
-    { emoji: '🧃', texto: `Um suco natural para ${vencedorNome}!` },
-    { emoji: '🍿', texto: `Um balde de pipoca gourmet para ${vencedorNome}!` },
-    { emoji: '🥐', texto: `Um croissant com café para ${vencedorNome}!` },
-    { emoji: '💰', texto: `PIX de R$5 para ${vencedorNome}!` },
-  ];
-  return premios[Math.floor(Math.random() * premios.length)];
 }
 
 // ========== ACTIONS ==========

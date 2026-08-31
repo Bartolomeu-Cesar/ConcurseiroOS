@@ -74,7 +74,63 @@ def _ensure_battle_tables(conn):
             conn.execute("ALTER TABLE battles ADD COLUMN coautores TEXT DEFAULT '[]'")
         except Exception:
             pass
+    # Migration: add premio_idx (índice do prêmio fixo da batalha, -1 = não sorteado)
+    try:
+        conn.execute("SELECT premio_idx FROM battles LIMIT 1")
+    except Exception:
+        try:
+            conn.execute("ALTER TABLE battles ADD COLUMN premio_idx INTEGER DEFAULT -1")
+        except Exception:
+            pass
     conn.commit()
+
+
+# Lista fixa de prêmios (fonte única da verdade — antes ficava no frontend com
+# Math.random, o que fazia cada participante ver um prêmio diferente a cada visita).
+# NÃO reordenar/remover itens: o índice é persistido em battles.premio_idx.
+BATTLE_PRIZES = [
+    {"emoji": "🧆", "texto": "Envie um cento de salgados"},
+    {"emoji": "🌯", "texto": "Pague uma shawarma"},
+    {"emoji": "🍨", "texto": "Um açaí de 500ml"},
+    {"emoji": "💸", "texto": "PIX de R$10"},
+    {"emoji": "🍕", "texto": "Uma pizza"},
+    {"emoji": "☕", "texto": "Um café especial"},
+    {"emoji": "🍫", "texto": "Uma caixa de bombons"},
+    {"emoji": "🥤", "texto": "Um milkshake"},
+    {"emoji": "🍔", "texto": "Um hambúrguer artesanal"},
+    {"emoji": "🧋", "texto": "Um bubble tea"},
+    {"emoji": "🎂", "texto": "Um pedaço de bolo"},
+    {"emoji": "🌮", "texto": "Tacos mexicanos"},
+    {"emoji": "🍩", "texto": "Uma dúzia de donuts"},
+    {"emoji": "📚", "texto": "Um livro à escolha"},
+    {"emoji": "🎬", "texto": "Um ingresso de cinema"},
+    {"emoji": "💆", "texto": "30 minutos de massagem"},
+    {"emoji": "🧃", "texto": "Um suco natural"},
+    {"emoji": "🍿", "texto": "Um balde de pipoca gourmet"},
+    {"emoji": "🥐", "texto": "Um croissant com café"},
+    {"emoji": "💰", "texto": "PIX de R$5"},
+]
+
+
+def get_or_assign_prize_idx(conn, battle):
+    """Sorteia (uma única vez) e persiste o índice do prêmio da batalha.
+
+    Garante que o prêmio seja o MESMO para todos os participantes e em todas as
+    visitas à sala. Retorna o índice na lista BATTLE_PRIZES, ou None se a
+    coluna não puder ser lida.
+    """
+    try:
+        idx = battle["premio_idx"]
+        if idx is None:
+            idx = -1
+    except (KeyError, IndexError, TypeError):
+        idx = -1
+
+    if idx is None or idx < 0 or idx >= len(BATTLE_PRIZES):
+        idx = random.randint(0, len(BATTLE_PRIZES) - 1)
+        conn.execute("UPDATE battles SET premio_idx = ? WHERE id = ?", (idx, battle["id"]))
+        conn.commit()
+    return idx
 
 
 def _generate_code():
