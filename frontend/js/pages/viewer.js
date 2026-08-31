@@ -1813,29 +1813,32 @@ async function abrirRevisaoTelaCheia() {
 function _renderRevFsDoc() {
   const body = document.getElementById('rev-fs-body');
   if (!body) return;
-  // Chips de filtro por tag: mostra as tags presentes nos blocos + "Todas".
-  const tagsPresentes = [...new Set(_revFsBlocos.map(b => b.tag || '').filter(Boolean))];
-  const chip = (val, label, cor) => `<button onclick="setRevFsTagFiltro('${val}')" style="background:${_revFsTagFiltro === val ? cor : 'var(--bg-elevated,#45475a)'};color:${_revFsTagFiltro === val ? 'var(--bg,#1e1e2e)' : cor};border:1px solid ${cor};border-radius:999px;padding:3px 12px;font-size:0.75rem;cursor:pointer;font-weight:600;">${label}</button>`;
-  const filtros = tagsPresentes.length > 0
-    ? `<div style="max-width:840px;margin:0 auto 16px;display:flex;gap:6px;flex-wrap:wrap;justify-content:center;">
-        ${chip('', 'Todas', 'var(--text-sub,#9399b2)')}
-        ${tagsPresentes.map(t => chip(t, (_REV_TAGS[t] || {}).label || t, (_REV_TAGS[t] || {}).cor || 'var(--text-sub,#9399b2)')).join('')}
-      </div>`
-    : '';
-  const visiveis = _revFsBlocos.filter(b => {
-    if (_revFsTagFiltro && (b.tag || '') !== _revFsTagFiltro) return false;
-    if (_revFsBusca) {
-      const termo = _revFsBusca.trim().toLowerCase();
+  try {
+    // Chips de filtro por tag: mostra as tags presentes nos blocos + "Todas".
+    const tagsPresentes = [...new Set(_revFsBlocos.map(b => b.tag || '').filter(Boolean))];
+    const chip = (val, label, cor) => `<button onclick="setRevFsTagFiltro('${val}')" style="background:${_revFsTagFiltro === val ? cor : 'var(--bg-elevated,#45475a)'};color:${_revFsTagFiltro === val ? 'var(--bg,#1e1e2e)' : cor};border:1px solid ${cor};border-radius:999px;padding:3px 12px;font-size:0.75rem;cursor:pointer;font-weight:600;">${label}</button>`;
+    const filtros = tagsPresentes.length > 0
+      ? `<div style="max-width:840px;margin:0 auto 16px;display:flex;gap:6px;flex-wrap:wrap;justify-content:center;">
+          ${chip('', 'Todas', 'var(--text-sub,#9399b2)')}
+          ${tagsPresentes.map(t => chip(t, (_REV_TAGS[t] || {}).label || t, (_REV_TAGS[t] || {}).cor || 'var(--text-sub,#9399b2)')).join('')}
+        </div>`
+      : '';
+    const termo = (_revFsBusca || '').trim().toLowerCase();
+    const visiveis = _revFsBlocos.filter(b => {
+      if (_revFsTagFiltro && (b.tag || '') !== _revFsTagFiltro) return false;
       if (termo && !`${b.titulo || ''} ${b.conteudo || ''}`.toLowerCase().includes(termo)) return false;
-    }
-    return true;
-  });
-  body.innerHTML = `<div id="rev-fs-doc" style="margin:0 auto;">
-    ${_revFsRecall ? `<div style="max-width:840px;margin:0 auto 18px;padding:10px 14px;background:rgba(250,179,135,0.12);border:1px solid var(--peach,#fab387);border-radius:8px;font-size:0.85rem;color:var(--peach,#fab387);text-align:center;">🎯 Modo Recall ativo — tente lembrar o conteúdo antes de clicar para revelar.</div>` : ''}
-    ${filtros}
-    ${visiveis.length ? visiveis.map((b, i) => _renderBlocoFullscreen(b, i)).join('') : '<div style="text-align:center;color:var(--text-sub,#9399b2);padding:40px;">Nenhum bloco com esta categoria.</div>'}
-  </div>`;
-  applyRevFsZoom();
+      return true;
+    });
+    body.innerHTML = `<div id="rev-fs-doc" style="margin:0 auto;">
+      ${_revFsRecall ? `<div style="max-width:840px;margin:0 auto 18px;padding:10px 14px;background:rgba(250,179,135,0.12);border:1px solid var(--peach,#fab387);border-radius:8px;font-size:0.85rem;color:var(--peach,#fab387);text-align:center;">🎯 Modo Recall ativo — tente lembrar o conteúdo antes de clicar para revelar.</div>` : ''}
+      ${filtros}
+      ${visiveis.length ? visiveis.map((b, i) => _renderBlocoFullscreen(b, i)).join('') : '<div style="text-align:center;color:var(--text-sub,#9399b2);padding:40px;">Nenhum bloco corresponde ao filtro/busca.</div>'}
+    </div>`;
+    applyRevFsZoom();
+  } catch (e) {
+    body.innerHTML = `<div style="text-align:center;color:var(--red,#f38ba8);padding:40px;">Erro ao renderizar a revisão: ${_escHtml(e && e.message ? e.message : String(e))}</div>`;
+    console.error('[revisão tela cheia] erro ao renderizar:', e);
+  }
 }
 
 // Aplica filtro de tag na tela cheia.
