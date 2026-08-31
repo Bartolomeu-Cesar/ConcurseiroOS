@@ -441,6 +441,97 @@ def change_plan(
 
 
 # ============================================================
+# CURADORIA DO BANCO DE QUESTÕES
+# ============================================================
+
+@router.get("/curadoria/problematicas", summary="Questões com baixa taxa de acerto")
+def curadoria_problematicas(
+    min_respostas: int = Query(5, ge=1),
+    max_taxa: float = Query(0.4, ge=0.0, le=1.0),
+    limit: int = Query(50, ge=1, le=200),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Lista questões com muitas respostas e baixa taxa de acerto (candidatas a revisão).
+
+    - min_respostas: mínimo de respostas para considerar.
+    - max_taxa: taxa de acerto máxima (0.4 = 40%).
+    """
+    _require_admin(user_id)
+    rows = conn.execute("""
+        SELECT q.id, q.materia, q.enunciado,
+               COUNT(r.id) AS total_respostas,
+               SUM(CASE WHEN r.acertou = 1 THEN 1 ELSE 0 END) AS acertos
+        FROM questoes q
+        JOIN questoes_respostas r ON r.questao_id = q.id
+        GROUP BY q.id
+        HAVING COUNT(r.id) >= ?
+        ORDER BY (1.0 * SUM(CASE WHEN r.acertou = 1 THEN 1 ELSE 0 END) / COUNT(r.id)) ASC
+        LIMIT ?
+    """, (min_respostas, limit)).fetchall()
+
+    itens = []
+    for r in rows:
+        total = r["total_respostas"]
+        acertos = r["acertos"] or 0
+        taxa = acertos / total if total else 0
+        if taxa <= max_taxa:
+            enun = r["enunciado"] or ""
+            itens.append({
+                "id": r["id"],
+                "materia": r["materia"],
+                "enunciado": enun[:180] + ("…" if len(enun) > 180 else ""),
+                "total_respostas": total,
+                "acertos": acertos,
+                "taxa_acerto": round(taxa * 100, 1),
+            })
+    return {"itens": itens, "total": len(itens)}
+
+
+@router.get("/curadoria/duplicatas", summary="Questões com enunciado duplicado")
+def curadoria_duplicatas(
+    limit: int = Query(50, ge=1, le=200),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Agrupa questões com enunciado idêntico (possíveis duplicatas)."""
+    _require_admin(user_id)
+    grupos = conn.execute("""
+        SELECT enunciado, COUNT(*) AS qtd, GROUP_CONCAT(id) AS ids
+        FROM questoes
+        WHERE TRIM(enunciado) != ''
+        GROUP BY enunciado
+        HAVING COUNT(*) > 1
+        ORDER BY qtd DESC
+        LIMIT ?
+    """, (limit,)).fetchall()
+
+    itens = [{
+        "enunciado": (g["enunciado"] or "")[:180] + ("…" if len(g["enunciado"] or "") > 180 else ""),
+        "qtd": g["qtd"],
+        "ids": [int(x) for x in (g["ids"] or "").split(",") if x],
+    } for g in grupos]
+    return {"itens": itens, "total": len(itens)}
+
+
+@router.delete("/curadoria/questao/{qid}", summary="Excluir uma questão (curadoria)")
+def curadoria_excluir_questao(qid: int, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Exclui uma questão e suas respostas. Ação de curadoria, auditada."""
+    _require_admin(user_id)
+    q = conn.execute("SELECT id, materia FROM questoes WHERE id = ?", (qid,)).fetchone()
+    if not q:
+        raise HTTPException(status_code=404, detail="Questão não encontrada.")
+    materia = q["materia"] if not isinstance(q, tuple) else q[1]
+
+    conn.execute("DELETE FROM questoes_respostas WHERE questao_id = ?", (qid,))
+    conn.execute("DELETE FROM questoes WHERE id = ?", (qid,))
+    conn.commit()
+    _audit(conn, user_id, "questao.excluir", "questao", qid, {"materia": materia})
+    log.info(f"[admin] Curadoria: questão {qid} excluída")
+    return {"ok": True, "deleted": qid}
+
+
+# ============================================================
 # RELATÓRIOS EXPORTÁVEIS (CSV)
 # ============================================================
 
