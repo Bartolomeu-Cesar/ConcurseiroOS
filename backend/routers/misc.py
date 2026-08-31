@@ -221,6 +221,13 @@ class RestoreRequest(BaseModel):
     filename: str
 
 
+@router.get("/api/config/flags", summary="Feature flags públicas", tags=["Sistema"])
+def public_flags():
+    """Estado público das feature flags (para o frontend adaptar a UI)."""
+    from plans import get_all_flags
+    return get_all_flags()
+
+
 @router.get("/api/backups", summary="Listar backups", tags=["Sistema"])
 def get_backups(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Lista todos os backups disponíveis com tamanho e data."""

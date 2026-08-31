@@ -195,6 +195,12 @@ def register(body: RegisterRequest, conn=Depends(get_db_session)):
     email = body.email.strip().lower()
     nome = sanitize_input(body.nome.strip(), max_length=100)
 
+    # Feature flag: bloquear registro se desligado (exceto bootstrap do 1º usuário)
+    from plans import is_feature_enabled
+    total_users_flag = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    if total_users_flag > 0 and not is_feature_enabled("registro"):
+        raise HTTPException(status_code=403, detail="Registro de novos usuários está temporariamente desativado.")
+
     # Verificar se já existe
     existing = conn.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
     if existing:

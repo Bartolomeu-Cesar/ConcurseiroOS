@@ -481,6 +481,49 @@ def listar_auditoria(
 
 
 # ============================================================
+# FEATURE FLAGS / KILL SWITCH
+# ============================================================
+
+@router.get("/flags", summary="Listar feature flags")
+def listar_flags(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Retorna o estado atual das feature flags conhecidas + metadados."""
+    _require_admin(user_id)
+    from plans import FEATURE_FLAGS, get_all_flags
+    estados = get_all_flags()
+    return {
+        "flags": [
+            {
+                "chave": k,
+                "ativo": estados.get(k, meta["default"]),
+                "label": meta["label"],
+                "desc": meta["desc"],
+            }
+            for k, meta in FEATURE_FLAGS.items()
+        ]
+    }
+
+
+@router.put("/flags/{flag}", summary="Ligar/desligar uma feature flag")
+def atualizar_flag(
+    flag: str,
+    body: dict,
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Liga ou desliga uma feature flag. body: {ativo: bool}"""
+    _require_admin(user_id)
+    from plans import FEATURE_FLAGS, set_feature_flag
+
+    if flag not in FEATURE_FLAGS:
+        raise HTTPException(status_code=404, detail=f"Flag desconhecida. Válidas: {list(FEATURE_FLAGS.keys())}")
+    ativo = bool(body.get("ativo", False))
+    set_feature_flag(conn, flag, ativo)
+    _audit(conn, user_id, "flag.set", "flag", flag, {"ativo": ativo})
+    log.info(f"[admin] Feature flag '{flag}' → {'ON' if ativo else 'OFF'}")
+    return {"ok": True, "flag": flag, "ativo": ativo}
+
+
+# ============================================================
 # IMPERSONATION (ENTRAR COMO USUÁRIO)
 # ============================================================
 

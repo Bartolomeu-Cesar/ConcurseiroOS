@@ -1348,6 +1348,10 @@ def analisar_pdf(
     Fase 1a: implementa a ação 'resumo'. Ações 'flashcards' e 'questoes' serão
     adicionadas nas fases seguintes.
     """
+    from plans import is_feature_enabled
+    if not is_feature_enabled("ai_tutor"):
+        raise HTTPException(status_code=503, detail="Recurso de IA temporariamente desativado pelo administrador.")
+
     budget = _check_budget(db, user_id)
 
     acao = (body.acao or "resumo").strip().lower()

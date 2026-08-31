@@ -378,6 +378,41 @@ def set_app_config(conn, chave: str, valor: str):
     conn.commit()
 
 
+# ============================================================
+# FEATURE FLAGS / KILL SWITCH
+# ============================================================
+
+# Flags conhecidas e seus defaults (ligadas por padrão, exceto manutenção).
+FEATURE_FLAGS = {
+    "ai_tutor": {"default": True, "label": "Tutor IA", "desc": "Habilita o tutor de IA e análise de PDF."},
+    "batalhas": {"default": True, "label": "Batalhas PvP", "desc": "Habilita o modo batalha entre usuários."},
+    "registro": {"default": True, "label": "Registro de novos usuários", "desc": "Permite criar novas contas."},
+    "manutencao": {"default": False, "label": "Modo manutenção", "desc": "Exibe aviso e bloqueia ações sensíveis."},
+}
+
+_FLAG_PREFIX = "flag."
+
+
+def is_feature_enabled(flag: str) -> bool:
+    """Retorna se uma feature flag está ligada (lê de app_config, com default)."""
+    meta = FEATURE_FLAGS.get(flag)
+    default = meta["default"] if meta else True
+    val = get_app_config(_FLAG_PREFIX + flag, "")
+    if val == "":
+        return default
+    return val == "1"
+
+
+def get_all_flags() -> dict:
+    """Retorna o estado atual de todas as flags conhecidas."""
+    return {flag: is_feature_enabled(flag) for flag in FEATURE_FLAGS}
+
+
+def set_feature_flag(conn, flag: str, enabled: bool):
+    """Grava o estado de uma feature flag."""
+    set_app_config(conn, _FLAG_PREFIX + flag, "1" if enabled else "0")
+
+
 def _get_vitalicio_window():
     """Retorna (inicio_str, fim_str) da janela — banco tem prioridade sobre env."""
     from settings import settings

@@ -2265,6 +2265,19 @@ window.dispensarAnuncio = async function(id) {
   if (cont && !cont.children.length) cont.remove();
 };
 
+// Banner de modo manutenção (feature flag global)
+(async function maintenanceBanner() {
+  try {
+    const flags = await fetch('/api/config/flags').then(r => r.ok ? r.json() : null);
+    if (!flags || !flags.manutencao) return;
+    const bar = document.createElement('div');
+    bar.id = 'maintenance-banner';
+    bar.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:99998;background:#f38ba8;color:#1e1e2e;padding:8px 14px;text-align:center;font-size:0.85rem;font-weight:600;box-shadow:0 -2px 8px rgba(0,0,0,0.3);';
+    bar.textContent = '🛠️ Sistema em manutenção — algumas funções podem estar indisponíveis.';
+    document.body.appendChild(bar);
+  } catch(e) {}
+})();
+
 // Banner de impersonation (admin navegando como usuário)
 (function impersonationBanner() {
   let imp;
