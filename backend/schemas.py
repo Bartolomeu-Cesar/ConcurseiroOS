@@ -880,3 +880,12 @@ class RevisaoBlocoUpdate(BaseModel):
     ordem: int | None = None
     oclusoes: str | None = Field(default=None, max_length=10000)
     tag: str | None = Field(default=None, max_length=20)
+
+
+class DestaqueCreate(BaseModel):
+    pdf_path: str
+    pagina: int = 1
+    cor: str = Field(default="yellow", max_length=20)
+    texto: str = Field(default="", max_length=5000)
+    # JSON com a lista de retângulos da seleção, coords relativas 0-1 à página.
+    rects: str = Field(default="[]", max_length=20000)

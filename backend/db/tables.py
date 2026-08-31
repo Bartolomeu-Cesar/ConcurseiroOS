@@ -320,6 +320,20 @@ def _create_tables(conn):
         )
     """)
 
+    # Camada de destaques (marca-texto) persistentes por página do PDF
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS destaques_pdf (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL DEFAULT 1,
+            pdf_path TEXT NOT NULL,
+            pagina INTEGER NOT NULL DEFAULT 1,
+            cor TEXT NOT NULL DEFAULT 'yellow',
+            texto TEXT DEFAULT '',
+            rects TEXT NOT NULL DEFAULT '[]',
+            created_at TEXT NOT NULL
+        )
+    """)
+
     # Calendário personalizado
     conn.execute("""
         CREATE TABLE IF NOT EXISTS calendario_personalizado (

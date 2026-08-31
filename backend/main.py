@@ -17,7 +17,7 @@ from routers import (
     adaptive, analytics, auth, bookmarks, cadernos, calendario, ciclo, dashboard,
     desafios, edital, error_analysis, fatigue, feynman, flashcards, generation, knowledge_graph, milestones, misc, notas, notifications, pagamentos, pdf,
     planejador, questoes, simulados, spacing, streaks, sumulas, treinador, trilha,
-    leagues, ai_tutor, social, batalha, admin, studyroom, study_intelligence, sidebar, vademecum, catalogo, revisao
+    leagues, ai_tutor, social, batalha, admin, studyroom, study_intelligence, sidebar, vademecum, catalogo, revisao, destaques
 )
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
@@ -347,6 +347,7 @@ app.include_router(trilha.router)
 app.include_router(bookmarks.router)
 app.include_router(notas.router)
 app.include_router(revisao.router)
+app.include_router(destaques.router)
 app.include_router(cadernos.router)
 app.include_router(feynman.router)
 app.include_router(desafios.router)

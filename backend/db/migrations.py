@@ -700,6 +700,29 @@ def _m64_revisao_tag(conn):
         pass  # coluna já existe
 
 
+def _m65_destaques_pdf(conn):
+    """Camada própria de destaques (marca-texto) persistentes por página do PDF.
+
+    rects: JSON com os retângulos da seleção em coords relativas 0-1 à página
+    (uma seleção de texto pode gerar vários retângulos, ex: várias linhas).
+    texto: o trecho destacado (para listar/buscar/exportar)."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS destaques_pdf (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL DEFAULT 1,
+            pdf_path TEXT NOT NULL,
+            pagina INTEGER NOT NULL DEFAULT 1,
+            cor TEXT NOT NULL DEFAULT 'yellow',
+            texto TEXT DEFAULT '',
+            rects TEXT NOT NULL DEFAULT '[]',
+            created_at TEXT NOT NULL
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_destaques_user_pdf ON destaques_pdf(user_id, pdf_path)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_destaques_user_pdf_pag ON destaques_pdf(user_id, pdf_path, pagina)")
+    log.info("Migration: created destaques_pdf table")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -765,6 +788,7 @@ MIGRATIONS = [
     (62, _m62_revisao_oclusoes),
     (63, _m63_revisao_agenda),
     (64, _m64_revisao_tag),
+    (65, _m65_destaques_pdf),
 ]
 
 
