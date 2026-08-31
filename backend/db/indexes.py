@@ -11,6 +11,7 @@ def _create_indexes(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_questoes_respostas_questao_id ON questoes_respostas(questao_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_notas_pdf_path ON notas_pdf(pdf_path)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_bookmarks_pdf_path ON bookmarks_pdf(pdf_path)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_revisao_blocos_user_pdf ON revisao_blocos(user_id, pdf_path, ordem)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_edital_materia ON edital(materia)")
 
     # Índices compostos para queries frequentes do dashboard

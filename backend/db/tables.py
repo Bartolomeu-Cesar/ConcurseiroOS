@@ -285,6 +285,24 @@ def _create_tables(conn):
         )
     """)
 
+    # Caderno de Revisão por PDF — blocos capturados do PDF original
+    # (Distributed Summary + Dual Coding + Cognitive Load Segmenting)
+    # tipo: 'recorte' (imagem da página) | 'resumo_ia' | 'texto' | 'nota'
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS revisao_blocos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL DEFAULT 1,
+            pdf_path TEXT NOT NULL,
+            tipo TEXT NOT NULL DEFAULT 'recorte',
+            titulo TEXT DEFAULT '',
+            conteudo TEXT DEFAULT '',
+            imagem_data TEXT DEFAULT '',
+            pagina INTEGER DEFAULT 1,
+            ordem INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL
+        )
+    """)
+
     # Calendário personalizado
     conn.execute("""
         CREATE TABLE IF NOT EXISTS calendario_personalizado (

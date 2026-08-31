@@ -850,3 +850,27 @@ class ResponderAdaptativaRequest(BaseModel):
     questao_id: int
     resposta: str
     tempo_ms: int = 0
+
+
+# ============================================================
+# Caderno de Revisão por PDF
+# ============================================================
+
+# Limite do payload base64 de um recorte de imagem (~2 MB de imagem).
+# base64 adiciona ~33% de overhead, então ~2 MB de PNG ≈ ~2.7 MB de string.
+_MAX_IMAGEM_DATA_CHARS = 2_800_000
+
+
+class RevisaoBlocoCreate(BaseModel):
+    pdf_path: str
+    tipo: str = Field(default="recorte")  # recorte | resumo_ia | texto | nota
+    titulo: str = Field(default="", max_length=300)
+    conteudo: str = Field(default="", max_length=20000)
+    imagem_data: str = Field(default="", max_length=_MAX_IMAGEM_DATA_CHARS)
+    pagina: int = 1
+
+
+class RevisaoBlocoUpdate(BaseModel):
+    titulo: str | None = Field(default=None, max_length=300)
+    conteudo: str | None = Field(default=None, max_length=20000)
+    ordem: int | None = None
