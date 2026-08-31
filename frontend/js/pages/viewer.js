@@ -1281,6 +1281,7 @@ const _PAINEIS_DIREITA = {
   revisao: { el: 'revisao-panel', largura: 380 },
   bookmarks: { el: 'bookmarks-panel', largura: 340 },
   summary: { el: 'summary-panel', largura: 320 },
+  destaques: { el: 'destaques-panel', largura: 340 },
 };
 let _painelAtivo = null; // 'revisao' | 'bookmarks' | 'summary' | 'questoes' | null
 
@@ -1303,6 +1304,7 @@ function _fecharPaineisFixed(exceto) {
   if (exceto !== 'revisao') revisaoVisible = false;
   if (exceto !== 'bookmarks') bookmarksVisible = false;
   if (exceto !== 'summary') summaryVisible = false;
+  if (exceto !== 'destaques') _destaquesVisible = false;
 }
 
 // Abre/fecha um painel fixed garantindo exclusão mútua. Retorna true se ficou
@@ -1326,6 +1328,7 @@ function _togglePainelDireita(nome, onOpen) {
     if (nome === 'revisao') revisaoVisible = true;
     else if (nome === 'bookmarks') bookmarksVisible = true;
     else if (nome === 'summary') summaryVisible = true;
+    else if (nome === 'destaques') _destaquesVisible = true;
     if (typeof onOpen === 'function') onOpen();
   } else {
     el.style.display = 'none';
@@ -1334,6 +1337,7 @@ function _togglePainelDireita(nome, onOpen) {
     if (nome === 'revisao') revisaoVisible = false;
     else if (nome === 'bookmarks') bookmarksVisible = false;
     else if (nome === 'summary') summaryVisible = false;
+    else if (nome === 'destaques') _destaquesVisible = false;
   }
   return vaiAbrir;
 }
@@ -2450,12 +2454,7 @@ async function excluirDestaque(id) {
 
 // --- Painel lateral de destaques ---
 function toggleDestaquesPanel() {
-  _destaquesVisible = !_destaquesVisible;
-  const panel = document.getElementById('destaques-panel');
-  panel.style.display = _destaquesVisible ? 'flex' : 'none';
-  const viewer = document.getElementById('viewer');
-  if (viewer) { viewer.style.transition = 'padding-right 0.25s ease'; viewer.style.paddingRight = _destaquesVisible ? '340px' : ''; }
-  if (_destaquesVisible) _renderPainelDestaques();
+  _togglePainelDireita('destaques', _renderPainelDestaques);
 }
 
 function _renderPainelDestaques() {
