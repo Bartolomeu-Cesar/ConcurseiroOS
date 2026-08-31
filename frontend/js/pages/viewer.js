@@ -1032,6 +1032,310 @@ setInterval(() => {
   }
 }, 1000);
 
+// ========== CADERNO DE REVISÃO (recortes de PDF + notas) ==========
+let revisaoVisible = false;
+let _cropState = null; // { startX, startY } durante o arraste
+
+function toggleRevisaoPanel() {
+  revisaoVisible = !revisaoVisible;
+  const panel = document.getElementById('revisao-panel');
+  panel.style.display = revisaoVisible ? 'flex' : 'none';
+  if (revisaoVisible) loadRevisao();
+}
+
+async function loadRevisao() {
+  const body = document.getElementById('revisao-body');
+  try {
+    const blocos = await fetch(`/api/revisao/${encodePath(path)}`).then(r => r.json());
+    if (!Array.isArray(blocos) || blocos.length === 0) {
+      body.innerHTML = `<div style="color:var(--text-sub,#585b70);font-size:0.85rem;text-align:center;padding:24px 12px;line-height:1.6;">
+        Nenhum bloco ainda.<br><br>Use <strong>✂️ Recortar página</strong> para capturar uma parte importante do PDF, ou <strong>📝 Nota de texto</strong> para escrever um resumo.</div>`;
+      return;
+    }
+    body.innerHTML = blocos.map((b, i) => _renderBlocoRevisao(b, i, blocos.length)).join('');
+  } catch (e) {
+    body.innerHTML = '<div style="color:var(--red,#f38ba8);font-size:0.85rem;">Erro ao carregar caderno.</div>';
+  }
+}
+
+function _renderBlocoRevisao(b, idx, total) {
+  const titulo = b.titulo ? `<div style="font-weight:600;color:var(--teal,#94e2d5);font-size:0.85rem;margin-bottom:6px;">${_escHtml(b.titulo)}</div>` : '';
+  const img = (b.tipo === 'recorte' && b.imagem_data)
+    ? `<img src="${b.imagem_data}" alt="Recorte p.${b.pagina}" style="max-width:100%;border-radius:6px;display:block;margin-bottom:6px;border:1px solid var(--border,#45475a);">`
+    : '';
+  const conteudo = b.conteudo
+    ? `<div style="font-size:0.82rem;color:var(--text,#cdd6f4);line-height:1.5;white-space:pre-wrap;margin-bottom:6px;">${_escHtml(b.conteudo)}</div>`
+    : '';
+  return `<div style="background:var(--bg,#1e1e2e);border-radius:10px;padding:12px;margin-bottom:10px;" data-id="${b.id}">
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+      <span style="font-size:0.7rem;color:var(--blue,#89b4fa);cursor:pointer;" onclick="goToPage(${b.pagina})" title="Ir para a página">p.${b.pagina}</span>
+      <span style="flex:1;"></span>
+      <button onclick="moverBlocoRevisao(${b.id}, -1)" ${idx === 0 ? 'disabled' : ''} title="Subir" style="background:none;border:none;color:${idx === 0 ? 'var(--border,#45475a)' : 'var(--text-sub,#9399b2)'};cursor:pointer;font-size:0.8rem;">▲</button>
+      <button onclick="moverBlocoRevisao(${b.id}, 1)" ${idx === total - 1 ? 'disabled' : ''} title="Descer" style="background:none;border:none;color:${idx === total - 1 ? 'var(--border,#45475a)' : 'var(--text-sub,#9399b2)'};cursor:pointer;font-size:0.8rem;">▼</button>
+      <button onclick="editarBlocoRevisao(${b.id})" title="Editar título/comentário" style="background:none;border:none;color:var(--yellow,#f9e2af);cursor:pointer;font-size:0.78rem;">✏️</button>
+      <button onclick="excluirBlocoRevisao(${b.id})" title="Excluir" style="background:none;border:none;color:var(--red,#f38ba8);cursor:pointer;font-size:0.78rem;">🗑</button>
+    </div>
+    ${titulo}${img}${conteudo}
+  </div>`;
+}
+
+// --- Nota de texto ---
+async function adicionarNotaRevisao() {
+  const texto = await promptModal('Escreva o resumo/nota para o caderno de revisão:', { title: '📝 Nota de revisão', multiline: true });
+  if (!texto || !texto.trim()) return;
+  const titulo = await promptModal('Título (opcional):', { title: 'Título da nota' });
+  await fetch('/api/revisao', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pdf_path: path, tipo: 'texto', titulo: (titulo || '').trim(), conteudo: texto.trim(), pagina: currentPage }),
+  });
+  showStudyToast('📑 Nota adicionada ao caderno!');
+  loadRevisao();
+}
+
+// --- Recorte de imagem da página ---
+function _getPageCanvas() {
+  // Obtém o canvas da página atual renderizada dentro do iframe do PDF.js.
+  const frame = document.getElementById('pdf-frame');
+  try {
+    const app = frame.contentWindow?.PDFViewerApplication;
+    if (!app || !app.pdfViewer) return null;
+    const pageView = app.pdfViewer.getPageView(currentPage - 1);
+    if (!pageView) return null;
+    // PDF.js expõe o canvas renderizado em pageView.canvas.
+    const canvas = pageView.canvas || (pageView.div && pageView.div.querySelector('canvas'));
+    return canvas || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function iniciarRecorte() {
+  const canvas = _getPageCanvas();
+  if (!canvas) {
+    showStudyToast('⚠️ Página ainda renderizando. Role até a página e tente de novo.');
+    return;
+  }
+  const overlay = document.getElementById('crop-overlay');
+  overlay.style.display = 'block';
+  document.getElementById('crop-rect').style.display = 'none';
+  _cropState = null;
+}
+
+function cancelarRecorte() {
+  document.getElementById('crop-overlay').style.display = 'none';
+  document.getElementById('crop-rect').style.display = 'none';
+  _cropState = null;
+}
+
+(function _setupCropEvents() {
+  const overlay = document.getElementById('crop-overlay');
+  const rect = document.getElementById('crop-rect');
+  if (!overlay) return;
+
+  overlay.addEventListener('mousedown', (e) => {
+    if (e.target.closest('#crop-hint')) return;
+    _cropState = { startX: e.clientX, startY: e.clientY };
+    rect.style.left = e.clientX + 'px';
+    rect.style.top = e.clientY + 'px';
+    rect.style.width = '0px';
+    rect.style.height = '0px';
+    rect.style.display = 'block';
+  });
+
+  overlay.addEventListener('mousemove', (e) => {
+    if (!_cropState) return;
+    const x = Math.min(e.clientX, _cropState.startX);
+    const y = Math.min(e.clientY, _cropState.startY);
+    const w = Math.abs(e.clientX - _cropState.startX);
+    const h = Math.abs(e.clientY - _cropState.startY);
+    rect.style.left = x + 'px';
+    rect.style.top = y + 'px';
+    rect.style.width = w + 'px';
+    rect.style.height = h + 'px';
+  });
+
+  overlay.addEventListener('mouseup', (e) => {
+    if (!_cropState) return;
+    const x = Math.min(e.clientX, _cropState.startX);
+    const y = Math.min(e.clientY, _cropState.startY);
+    const w = Math.abs(e.clientX - _cropState.startX);
+    const h = Math.abs(e.clientY - _cropState.startY);
+    _cropState = null;
+    overlay.style.display = 'none';
+    rect.style.display = 'none';
+    if (w < 8 || h < 8) { showStudyToast('Seleção muito pequena.'); return; }
+    _processarRecorte(x, y, w, h);
+  });
+})();
+
+function _processarRecorte(vx, vy, vw, vh) {
+  const frame = document.getElementById('pdf-frame');
+  const canvas = _getPageCanvas();
+  if (!canvas) { showStudyToast('⚠️ Não foi possível acessar a página.'); return; }
+
+  // Retângulo do iframe na viewport da janela principal.
+  const frameRect = frame.getBoundingClientRect();
+  // Retângulo do canvas relativo ao documento do iframe → soma o offset do iframe.
+  const canvasRect = canvas.getBoundingClientRect(); // relativo ao iframe
+
+  // Coordenadas da seleção relativas ao canvas (em CSS px).
+  const relX = vx - frameRect.left - canvasRect.left;
+  const relY = vy - frameRect.top - canvasRect.top;
+
+  // Escala entre pixels reais do canvas e o tamanho CSS exibido.
+  const scaleX = canvas.width / canvasRect.width;
+  const scaleY = canvas.height / canvasRect.height;
+
+  // Interseção com a área visível do canvas.
+  const sx = Math.max(0, relX) * scaleX;
+  const sy = Math.max(0, relY) * scaleY;
+  const sw = Math.min(vw, canvasRect.width - Math.max(0, relX)) * scaleX;
+  const sh = Math.min(vh, canvasRect.height - Math.max(0, relY)) * scaleY;
+
+  if (sw < 4 || sh < 4) {
+    showStudyToast('⚠️ Selecione uma área sobre o conteúdo do PDF.');
+    return;
+  }
+
+  const out = document.createElement('canvas');
+  out.width = Math.round(sw);
+  out.height = Math.round(sh);
+  const ctx = out.getContext('2d');
+  // Fundo branco (PDF pode ter transparência).
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, out.width, out.height);
+  try {
+    ctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, out.width, out.height);
+  } catch (e) {
+    showStudyToast('⚠️ Erro ao recortar (canvas protegido).');
+    return;
+  }
+
+  let dataUrl;
+  try {
+    dataUrl = out.toDataURL('image/png');
+  } catch (e) {
+    showStudyToast('⚠️ Não foi possível gerar a imagem.');
+    return;
+  }
+
+  // Abre modal de confirmação com preview.
+  document.getElementById('crop-preview').src = dataUrl;
+  document.getElementById('crop-titulo').value = '';
+  document.getElementById('crop-comentario').value = '';
+  document.getElementById('crop-confirm').style.display = 'flex';
+  document.getElementById('crop-confirm').dataset.img = dataUrl;
+}
+
+function descartarRecorte() {
+  const modal = document.getElementById('crop-confirm');
+  modal.style.display = 'none';
+  modal.dataset.img = '';
+}
+
+async function salvarRecorte() {
+  const modal = document.getElementById('crop-confirm');
+  const dataUrl = modal.dataset.img;
+  if (!dataUrl) { descartarRecorte(); return; }
+  const titulo = document.getElementById('crop-titulo').value.trim();
+  const comentario = document.getElementById('crop-comentario').value.trim();
+
+  const res = await fetch('/api/revisao', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      pdf_path: path, tipo: 'recorte',
+      titulo, conteudo: comentario, imagem_data: dataUrl, pagina: currentPage,
+    }),
+  });
+  if (res.ok) {
+    showStudyToast('📑 Recorte salvo no caderno!');
+    modal.style.display = 'none';
+    modal.dataset.img = '';
+    if (!revisaoVisible) toggleRevisaoPanel(); else loadRevisao();
+  } else {
+    const err = await res.json().catch(() => ({}));
+    showStudyToast('⚠️ ' + (err.detail || 'Erro ao salvar recorte.'));
+  }
+}
+
+// --- Editar / mover / excluir blocos ---
+async function editarBlocoRevisao(id) {
+  const blocos = await fetch(`/api/revisao/${encodePath(path)}`).then(r => r.json());
+  const b = blocos.find(x => x.id === id);
+  if (!b) return;
+  const titulo = await promptModal('Título:', { title: 'Editar bloco', defaultValue: b.titulo || '' });
+  if (titulo === null) return;
+  const conteudo = await promptModal('Comentário / texto:', { title: 'Editar bloco', defaultValue: b.conteudo || '', multiline: true });
+  await fetch(`/api/revisao/${id}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ titulo: titulo.trim(), conteudo: (conteudo || '').trim() }),
+  });
+  loadRevisao();
+}
+
+async function moverBlocoRevisao(id, dir) {
+  const blocos = await fetch(`/api/revisao/${encodePath(path)}`).then(r => r.json());
+  const idx = blocos.findIndex(x => x.id === id);
+  if (idx === -1) return;
+  const alvo = idx + dir;
+  if (alvo < 0 || alvo >= blocos.length) return;
+  // Troca as ordens dos dois blocos.
+  const a = blocos[idx], b = blocos[alvo];
+  await Promise.all([
+    fetch(`/api/revisao/${a.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ordem: b.ordem }) }),
+    fetch(`/api/revisao/${b.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ordem: a.ordem }) }),
+  ]);
+  loadRevisao();
+}
+
+async function excluirBlocoRevisao(id) {
+  if (!(await confirmModal('Excluir bloco', 'Remover este bloco do caderno de revisão?', { type: 'danger', confirmText: 'Excluir' }))) return;
+  await fetch(`/api/revisao/${id}`, { method: 'DELETE' });
+  loadRevisao();
+}
+
+// --- Export ---
+function exportRevisaoMd() {
+  window.open(`/api/revisao/${encodePath(path)}/export`, '_blank');
+}
+
+async function imprimirRevisao() {
+  const blocos = await fetch(`/api/revisao/${encodePath(path)}`).then(r => r.json());
+  if (!Array.isArray(blocos) || blocos.length === 0) { showStudyToast('Caderno vazio.'); return; }
+  const nome = name;
+  const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Revisão — ${_escHtml(nome)}</title>
+    <style>
+      body{font-family:system-ui,Arial,sans-serif;color:#1a1a1a;max-width:800px;margin:24px auto;padding:0 16px;line-height:1.5;}
+      h1{font-size:1.4rem;border-bottom:2px solid #333;padding-bottom:8px;}
+      .bloco{margin:18px 0;padding-bottom:14px;border-bottom:1px solid #ddd;page-break-inside:avoid;}
+      .bloco h2{font-size:1.05rem;margin:0 0 6px;color:#111;}
+      .pag{font-size:0.75rem;color:#777;margin-bottom:6px;}
+      img{max-width:100%;border:1px solid #ccc;border-radius:4px;display:block;margin:6px 0;}
+      p{white-space:pre-wrap;margin:6px 0;font-size:0.92rem;}
+      @media print{body{margin:0;}}
+    </style></head><body>
+    <h1>📑 Caderno de Revisão — ${_escHtml(nome)}</h1>
+    ${blocos.map(b => `<div class="bloco">
+      ${b.titulo ? `<h2>${_escHtml(b.titulo)}</h2>` : ''}
+      <div class="pag">Página ${b.pagina}</div>
+      ${(b.tipo === 'recorte' && b.imagem_data) ? `<img src="${b.imagem_data}" alt="Recorte p.${b.pagina}">` : ''}
+      ${b.conteudo ? `<p>${_escHtml(b.conteudo)}</p>` : ''}
+    </div>`).join('')}
+    <script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script>
+    </body></html>`;
+  const w = window.open('', '_blank');
+  if (!w) { showStudyToast('Permita pop-ups para imprimir.'); return; }
+  w.document.write(html);
+  w.document.close();
+}
+
+// Atalho de teclado C para o caderno + Esc para cancelar recorte
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (e.key === 'c' || e.key === 'C') toggleRevisaoPanel();
+  if (e.key === 'Escape' && document.getElementById('crop-overlay').style.display === 'block') cancelarRecorte();
+});
+
 // === Window assignments for HTML onclick/onchange handlers ===
 window.toggleNotePanel = toggleNotePanel;
 window.addBookmark = addBookmark;
@@ -1054,3 +1358,14 @@ window.abrirGerarIA = abrirGerarIA;
 window.selectSideAlt = selectSideAlt;
 window.loadSidePanelQuestions = loadSidePanelQuestions;
 window.goToPage = goToPage;
+window.toggleRevisaoPanel = toggleRevisaoPanel;
+window.iniciarRecorte = iniciarRecorte;
+window.cancelarRecorte = cancelarRecorte;
+window.descartarRecorte = descartarRecorte;
+window.salvarRecorte = salvarRecorte;
+window.adicionarNotaRevisao = adicionarNotaRevisao;
+window.editarBlocoRevisao = editarBlocoRevisao;
+window.moverBlocoRevisao = moverBlocoRevisao;
+window.excluirBlocoRevisao = excluirBlocoRevisao;
+window.exportRevisaoMd = exportRevisaoMd;
+window.imprimirRevisao = imprimirRevisao;

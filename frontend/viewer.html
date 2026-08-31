@@ -88,6 +88,7 @@
       <button onclick="toggleActiveRecall()" id="btn-recall" title="Active Recall [R]" style="background:var(--bg-elevated);border:none;color:#94e2d5;border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🔒</button>
       <button onclick="askAIAboutPage()" title="Perguntar à IA sobre esta página [A]" style="background:var(--bg-elevated);border:none;color:var(--peach);border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🤖</button>
       <button onclick="abrirGerarIA()" title="Gerar resumo/flashcards/questões deste PDF com IA" style="background:var(--bg-elevated);border:none;color:var(--mauve,#cba6f7);border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">✨ IA</button>
+      <button onclick="toggleRevisaoPanel()" title="Caderno de Revisão [C]" style="background:var(--bg-elevated);border:none;color:var(--teal,#94e2d5);border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">📑 Revisão</button>
       <select id="study-technique" onchange="setStudyTechnique(this.value)" title="Técnica de estudo" style="background:var(--bg-elevated);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:3px 6px;font-size:0.75rem;cursor:pointer;">
         <option value="livre">📖 Livre</option>
         <option value="sq3r">📐 SQ3R</option>
@@ -173,6 +174,45 @@
       <button onclick="toggleStudySummary()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:1.1rem;">✕</button>
     </div>
     <div id="summary-body" style="flex:1;overflow-y:auto;padding:12px;"></div>
+  </div>
+
+  <!-- Caderno de Revisão Panel -->
+  <div id="revisao-panel" style="display:none;position:fixed;top:44px;right:0;width:380px;bottom:0;background:var(--bg-surface);border-left:1px solid var(--border);z-index:100;flex-direction:column;overflow:hidden;">
+    <div style="padding:10px 14px;background:var(--bg);display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);">
+      <h3 style="font-size:0.9rem;color:var(--teal,#94e2d5);flex:1;margin:0;">📑 Caderno de Revisão</h3>
+      <button onclick="exportRevisaoMd()" title="Exportar Markdown" style="background:var(--bg-elevated);border:none;color:var(--blue);border-radius:6px;padding:4px 8px;font-size:0.75rem;cursor:pointer;">⬇ MD</button>
+      <button onclick="imprimirRevisao()" title="Imprimir / Salvar PDF" style="background:var(--bg-elevated);border:none;color:var(--green);border-radius:6px;padding:4px 8px;font-size:0.75rem;cursor:pointer;">🖨 PDF</button>
+      <button onclick="toggleRevisaoPanel()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:1.1rem;">✕</button>
+    </div>
+    <div style="padding:10px 14px;background:var(--bg);border-bottom:1px solid var(--border);display:flex;gap:6px;flex-wrap:wrap;">
+      <button onclick="iniciarRecorte()" style="flex:1;min-width:110px;background:var(--teal,#94e2d5);color:var(--bg,#1e1e2e);border:none;border-radius:6px;padding:7px;font-weight:600;font-size:0.8rem;cursor:pointer;">✂️ Recortar página</button>
+      <button onclick="adicionarNotaRevisao()" style="flex:1;min-width:110px;background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:7px;font-size:0.8rem;cursor:pointer;">📝 Nota de texto</button>
+    </div>
+    <div id="revisao-body" style="flex:1;overflow-y:auto;padding:12px;">
+      <div style="color:var(--text-sub);font-size:0.85rem;text-align:center;padding:20px;">Carregando...</div>
+    </div>
+  </div>
+
+  <!-- Overlay de Recorte (seleção de região sobre o PDF) -->
+  <div id="crop-overlay" style="display:none;position:fixed;inset:0;z-index:500;cursor:crosshair;background:rgba(0,0,0,0.15);">
+    <div id="crop-hint" style="position:fixed;top:52px;left:50%;transform:translateX(-50%);background:var(--bg-surface,#313244);color:var(--text,#cdd6f4);border:1px solid var(--teal,#94e2d5);border-radius:8px;padding:8px 16px;font-size:0.82rem;box-shadow:0 4px 12px rgba(0,0,0,0.4);">✂️ Arraste para selecionar a área do PDF. <span style="color:var(--red);cursor:pointer;" onclick="cancelarRecorte()">Cancelar (Esc)</span></div>
+    <div id="crop-rect" style="position:fixed;border:2px dashed var(--teal,#94e2d5);background:rgba(148,226,213,0.15);display:none;pointer-events:none;"></div>
+  </div>
+
+  <!-- Modal de confirmação do recorte (preview + título opcional) -->
+  <div id="crop-confirm" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:999;align-items:center;justify-content:center;padding:16px;">
+    <div style="background:var(--bg-surface,#313244);border:1px solid var(--border,#45475a);border-radius:14px;padding:20px;max-width:460px;width:100%;max-height:92vh;overflow-y:auto;">
+      <h3 style="color:var(--teal,#94e2d5);margin:0 0 12px;font-size:1rem;">✂️ Novo recorte</h3>
+      <div style="text-align:center;margin-bottom:12px;background:var(--bg,#1e1e2e);border-radius:8px;padding:8px;">
+        <img id="crop-preview" alt="Prévia do recorte" style="max-width:100%;max-height:280px;border-radius:6px;">
+      </div>
+      <input type="text" id="crop-titulo" placeholder="Título (opcional) — ex: Art. 5º CF" style="width:100%;padding:9px;margin-bottom:8px;border-radius:8px;border:1px solid var(--border,#45475a);background:var(--bg,#1e1e2e);color:var(--text,#cdd6f4);font-size:0.85rem;outline:none;">
+      <textarea id="crop-comentario" placeholder="Comentário / explicação (opcional)..." style="width:100%;height:64px;padding:9px;margin-bottom:12px;border-radius:8px;border:1px solid var(--border,#45475a);background:var(--bg,#1e1e2e);color:var(--text,#cdd6f4);font-size:0.82rem;resize:none;outline:none;"></textarea>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button onclick="descartarRecorte()" style="background:var(--bg,#1e1e2e);border:1px solid var(--border,#45475a);color:var(--text,#cdd6f4);border-radius:8px;padding:8px 16px;font-size:0.82rem;cursor:pointer;">Descartar</button>
+        <button onclick="salvarRecorte()" style="background:var(--teal,#94e2d5);color:#1e1e2e;border:none;border-radius:8px;padding:8px 18px;font-weight:700;font-size:0.82rem;cursor:pointer;">Salvar no caderno</button>
+      </div>
+    </div>
   </div>
   </div>
 
