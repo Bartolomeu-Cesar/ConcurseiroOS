@@ -23,7 +23,7 @@ import { loadDesafioDiarioCard } from './desafio.js';
 import { handleAuthNav } from '../../modules/auth.js';
 import { renderCatStartCard } from '../../modules/cat-session.js';
 import { renderAnxietyCard } from '../../modules/anxiety-exposure.js';
-import { confirmModal, alertModal, toast } from '../../modules/utils.js';
+import { confirmModal, alertModal, toast, escapeHtml } from '../../modules/utils.js';
 
 // ===== Dashboard Tab Navigation =====
 document.querySelectorAll('.dash-tab').forEach(tab => {
@@ -1730,6 +1730,33 @@ async function loadPlatoDetection() {
 // Auto-load
 loadMetaAdaptativa();
 loadPlatoDetection();
+loadCadernosRevisar();
+
+// ===== CADERNOS PARA REVISAR HOJE (Spaced Practice) =====
+async function loadCadernosRevisar() {
+  try {
+    const res = await fetch('/api/revisao-agenda/hoje');
+    if (!res.ok) return;
+    const data = await res.json();
+    const card = document.getElementById('cadernos-revisar-card');
+    const content = document.getElementById('cadernos-revisar-content');
+    if (!card || !content) return;
+    if (!data.cadernos || data.cadernos.length === 0) { card.style.display = 'none'; return; }
+    card.style.display = 'block';
+    content.innerHTML = `
+      <div style="font-size:0.8rem;color:var(--text-sub);margin-bottom:10px;">${data.total} caderno${data.total > 1 ? 's' : ''} agendado${data.total > 1 ? 's' : ''} para revisão hoje. Revisar em intervalos crescentes fixa o conteúdo na memória de longo prazo.</div>
+      ${data.cadernos.map(c => `
+        <div style="display:flex;align-items:center;gap:10px;background:var(--bg);border-radius:8px;padding:10px 12px;margin-bottom:8px;border-left:3px solid var(--peach,#fab387);">
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:0.88rem;color:var(--text);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📑 ${escapeHtml(c.nome)}</div>
+            <div style="font-size:0.72rem;color:var(--text-sub);">${c.blocos} bloco${c.blocos !== 1 ? 's' : ''} • agendado p/ ${c.proxima_revisao}</div>
+          </div>
+          <a href="/viewer.html?path=${encodeURIComponent(c.pdf_path)}" style="background:var(--peach,#fab387);color:var(--bg);border:none;border-radius:6px;padding:6px 12px;font-size:0.78rem;font-weight:600;text-decoration:none;white-space:nowrap;">Revisar →</a>
+        </div>
+      `).join('')}
+    `;
+  } catch(e) {}
+}
 
 
 // ===== SIMULADO PERIÓDICO AUTOMÁTICO =====

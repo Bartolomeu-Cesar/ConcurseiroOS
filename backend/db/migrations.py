@@ -668,6 +668,28 @@ def _m62_revisao_oclusoes(conn):
         pass  # coluna já existe
 
 
+def _m63_revisao_agenda(conn):
+    """Agendamento espaçado do caderno de revisão (Spaced Practice no nível do
+    caderno = pdf_path). Cada linha guarda quando o caderno de um PDF deve ser
+    revisado novamente e o intervalo atual (expande a cada revisão concluída)."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS revisao_agenda (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL DEFAULT 1,
+            pdf_path TEXT NOT NULL,
+            proxima_revisao TEXT NOT NULL,
+            intervalo_dias INTEGER NOT NULL DEFAULT 1,
+            revisoes_count INTEGER NOT NULL DEFAULT 0,
+            ultima_revisao TEXT DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT DEFAULT ''
+        )
+    """)
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_revisao_agenda_user_pdf ON revisao_agenda(user_id, pdf_path)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_revisao_agenda_proxima ON revisao_agenda(user_id, proxima_revisao)")
+    log.info("Migration: created revisao_agenda table")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -731,6 +753,7 @@ MIGRATIONS = [
     (60, _m60_simulados_tempo_registrado),
     (61, _m61_metas_semanais_manuais),
     (62, _m62_revisao_oclusoes),
+    (63, _m63_revisao_agenda),
 ]
 
 

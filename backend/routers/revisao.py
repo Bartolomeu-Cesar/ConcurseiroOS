@@ -78,6 +78,154 @@ def _validar_oclusoes(raw: str) -> str:
     return json.dumps(limpo, separators=(",", ":")) if limpo else ""
 
 
+# ============================================================
+# AGENDAMENTO ESPAÇADO DO CADERNO (Spaced Practice por PDF)
+# ============================================================
+# Escada de intervalos (dias) que expande a cada revisão concluída.
+_ESCADA_INTERVALOS = [1, 3, 7, 15, 30, 60]
+
+
+def _proximo_intervalo(atual: int) -> int:
+    """Retorna o próximo intervalo da escada a partir do atual."""
+    for iv in _ESCADA_INTERVALOS:
+        if iv > atual:
+            return iv
+    return _ESCADA_INTERVALOS[-1]
+
+
+def _agenda_to_dict(row) -> dict:
+    return {
+        "pdf_path": row["pdf_path"],
+        "proxima_revisao": row["proxima_revisao"],
+        "intervalo_dias": row["intervalo_dias"],
+        "revisoes_count": row["revisoes_count"],
+        "ultima_revisao": row["ultima_revisao"] if "ultima_revisao" in row.keys() else "",
+    }
+
+
+@router.get("/api/revisao-agenda/hoje", summary="Cadernos de revisão para revisar hoje")
+def agenda_hoje(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Lista cadernos cujo agendamento venceu (proxima_revisao <= hoje).
+
+    Usado pelo dashboard para lembrar o aluno de revisar (Spaced Practice)."""
+    from utils import today_str
+
+    hoje = today_str()
+    rows = conn.execute(
+        """SELECT a.*, (SELECT COUNT(*) FROM revisao_blocos b
+                        WHERE b.pdf_path = a.pdf_path AND b.user_id = a.user_id) AS blocos
+           FROM revisao_agenda a
+           WHERE a.user_id = ? AND a.proxima_revisao <= ?
+           ORDER BY a.proxima_revisao""",
+        (user_id, hoje),
+    ).fetchall()
+    itens = []
+    for r in rows:
+        d = _agenda_to_dict(r)
+        d["blocos"] = r["blocos"]
+        d["nome"] = r["pdf_path"].split("/")[-1].replace(".pdf", "").replace("_", " ")
+        itens.append(d)
+    return {"hoje": hoje, "total": len(itens), "cadernos": itens}
+
+
+@router.get("/api/revisao-agenda/{pdf_path:path}", summary="Ler agendamento do caderno de um PDF")
+def get_agenda(pdf_path: str, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    if ".." in pdf_path:
+        raise HTTPException(status_code=400, detail="Caminho inválido")
+    row = conn.execute(
+        "SELECT * FROM revisao_agenda WHERE pdf_path = ? AND user_id = ?", (pdf_path, user_id)
+    ).fetchone()
+    if not row:
+        return {"agendado": False}
+    d = _agenda_to_dict(row)
+    d["agendado"] = True
+    return d
+
+
+@router.post("/api/revisao-agenda", summary="Agendar/reprogramar revisão do caderno")
+def set_agenda(body: dict, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Agenda a próxima revisão do caderno. Body: {pdf_path, dias?}.
+
+    Se `dias` for informado (>0), usa esse intervalo; senão inicia em 1 dia.
+    Idempotente por (user_id, pdf_path) — regrava se já existir."""
+    from datetime import date, timedelta
+
+    pdf_path = (body.get("pdf_path") or "").strip()
+    if not pdf_path or ".." in pdf_path:
+        raise HTTPException(status_code=400, detail="pdf_path inválido")
+    try:
+        dias = int(body.get("dias") or 0)
+    except (TypeError, ValueError):
+        dias = 0
+    if dias <= 0:
+        dias = _ESCADA_INTERVALOS[0]
+    dias = max(1, min(365, dias))
+
+    proxima = (date.today() + timedelta(days=dias)).isoformat()
+    agora = datetime.now().isoformat()
+    existing = conn.execute(
+        "SELECT id FROM revisao_agenda WHERE pdf_path = ? AND user_id = ?", (pdf_path, user_id)
+    ).fetchone()
+    if existing:
+        conn.execute(
+            "UPDATE revisao_agenda SET proxima_revisao = ?, intervalo_dias = ?, updated_at = ? WHERE id = ?",
+            (proxima, dias, agora, existing[0]),
+        )
+    else:
+        conn.execute(
+            """INSERT INTO revisao_agenda (user_id, pdf_path, proxima_revisao, intervalo_dias, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (user_id, pdf_path, proxima, dias, agora, agora),
+        )
+    conn.commit()
+    return {"ok": True, "proxima_revisao": proxima, "intervalo_dias": dias}
+
+
+@router.post("/api/revisao-agenda/{pdf_path:path}/revisado", summary="Marcar caderno como revisado (expande intervalo)")
+def marcar_revisado(pdf_path: str, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Registra que o caderno foi revisado: expande o intervalo (escada) e
+    agenda a próxima revisão. Cria a agenda se ainda não existir."""
+    from datetime import date, timedelta
+
+    if ".." in pdf_path:
+        raise HTTPException(status_code=400, detail="Caminho inválido")
+    agora = datetime.now().isoformat()
+    hoje = date.today()
+    row = conn.execute(
+        "SELECT * FROM revisao_agenda WHERE pdf_path = ? AND user_id = ?", (pdf_path, user_id)
+    ).fetchone()
+    if row:
+        novo_intervalo = _proximo_intervalo(row["intervalo_dias"])
+        count = row["revisoes_count"] + 1
+        proxima = (hoje + timedelta(days=novo_intervalo)).isoformat()
+        conn.execute(
+            """UPDATE revisao_agenda SET proxima_revisao = ?, intervalo_dias = ?,
+               revisoes_count = ?, ultima_revisao = ?, updated_at = ? WHERE id = ?""",
+            (proxima, novo_intervalo, count, hoje.isoformat(), agora, row["id"]),
+        )
+    else:
+        novo_intervalo = _proximo_intervalo(_ESCADA_INTERVALOS[0])
+        count = 1
+        proxima = (hoje + timedelta(days=novo_intervalo)).isoformat()
+        conn.execute(
+            """INSERT INTO revisao_agenda (user_id, pdf_path, proxima_revisao, intervalo_dias,
+               revisoes_count, ultima_revisao, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (user_id, pdf_path, proxima, novo_intervalo, count, hoje.isoformat(), agora, agora),
+        )
+    conn.commit()
+    return {"ok": True, "proxima_revisao": proxima, "intervalo_dias": novo_intervalo, "revisoes_count": count}
+
+
+@router.delete("/api/revisao-agenda/{pdf_path:path}", response_model=OkResponse, summary="Cancelar agendamento do caderno")
+def delete_agenda(pdf_path: str, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    if ".." in pdf_path:
+        raise HTTPException(status_code=400, detail="Caminho inválido")
+    conn.execute("DELETE FROM revisao_agenda WHERE pdf_path = ? AND user_id = ?", (pdf_path, user_id))
+    conn.commit()
+    return {"ok": True}
+
+
 @router.get("/api/revisao/{pdf_path:path}/export", summary="Exportar caderno de revisão (Markdown)")
 def export_revisao(pdf_path: str, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Exporta o caderno de revisão de um PDF como Markdown.

@@ -1256,6 +1256,7 @@ function toggleRevisaoPanel() {
 
 async function loadRevisao() {
   const body = document.getElementById('revisao-body');
+  _loadAgendaStatus();
   try {
     const blocos = await fetch(`/api/revisao/${encodePath(path)}`).then(r => r.json());
     if (!Array.isArray(blocos) || blocos.length === 0) {
@@ -1525,10 +1526,88 @@ async function blocoParaFlashcard(id) {
   }
 }
 
-// --- Leitura da revisão em tela cheia (modo apostila) ---
-let _revFsZoom = 1.0;
-let _revFsRecall = false;   // Modo Recall (Retrieval Practice): oculta conteúdo
-let _revFsBlocos = [];      // cache dos blocos carregados p/ re-render sem refetch
+// --- Agendamento espaçado do caderno (Spaced Practice) ---
+// Atualiza a linha de status do painel com a próxima revisão agendada.
+async function _loadAgendaStatus() {
+  const el = document.getElementById('revisao-agenda-status');
+  if (!el) return;
+  try {
+    const a = await fetch(`/api/revisao-agenda/${encodePath(path)}`).then(r => r.json());
+    if (a && a.agendado) {
+      const hoje = new Date().toISOString().slice(0, 10);
+      const venceu = a.proxima_revisao <= hoje;
+      el.style.display = 'block';
+      el.innerHTML = venceu
+        ? `🔔 Revisão pendente (agendada p/ ${a.proxima_revisao}). <span style="text-decoration:underline;cursor:pointer;" onclick="marcarCadernoRevisado()">Marcar como revisado</span>`
+        : `📅 Próxima revisão: <strong>${a.proxima_revisao}</strong> (a cada ${a.intervalo_dias}d). <span style="text-decoration:underline;cursor:pointer;" onclick="marcarCadernoRevisado()">Revisei hoje</span>`;
+    } else {
+      el.style.display = 'none';
+    }
+  } catch (e) { /* silencioso */ }
+}
+
+// Abre um mini-modal com opções de intervalo (sem diálogo nativo).
+function abrirAgendaRevisao() {
+  let modal = document.getElementById('agenda-revisao-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'agenda-revisao-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1002;display:flex;align-items:center;justify-content:center;padding:16px;';
+    document.body.appendChild(modal);
+  }
+  const opcoes = [1, 3, 7, 15, 30].map(d =>
+    `<button onclick="agendarCaderno(${d})" style="background:var(--bg-elevated,#45475a);color:var(--text,#cdd6f4);border:1px solid var(--border,#45475a);border-radius:8px;padding:10px;font-size:0.85rem;cursor:pointer;">Em ${d} dia${d > 1 ? 's' : ''}</button>`
+  ).join('');
+  modal.innerHTML = `
+    <div style="background:var(--bg-surface,#313244);border:1px solid var(--border,#45475a);border-radius:14px;padding:22px;max-width:380px;width:100%;">
+      <h3 style="color:var(--peach,#fab387);margin:0 0 6px;font-size:1rem;">📅 Agendar revisão do caderno</h3>
+      <p style="font-size:0.8rem;color:var(--text-sub,#a6adc8);margin:0 0 14px;">Spaced Practice: escolha quando revisar este caderno de novo. A cada revisão concluída, o intervalo aumenta automaticamente.</p>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px;">${opcoes}</div>
+      <div style="display:flex;justify-content:space-between;gap:8px;">
+        <button onclick="cancelarAgendaCaderno()" title="Remover agendamento" style="background:var(--bg,#1e1e2e);border:1px solid var(--border,#45475a);color:var(--red,#f38ba8);border-radius:8px;padding:8px 14px;font-size:0.8rem;cursor:pointer;">🗑 Cancelar agenda</button>
+        <button onclick="fecharAgendaRevisao()" style="background:var(--bg,#1e1e2e);border:1px solid var(--border,#45475a);color:var(--text,#cdd6f4);border-radius:8px;padding:8px 16px;font-size:0.82rem;cursor:pointer;">Fechar</button>
+      </div>
+    </div>`;
+  modal.style.display = 'flex';
+}
+
+function fecharAgendaRevisao() {
+  const modal = document.getElementById('agenda-revisao-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function agendarCaderno(dias) {
+  const res = await fetch('/api/revisao-agenda', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pdf_path: path, dias }),
+  });
+  if (res.ok) {
+    const d = await res.json();
+    showStudyToast(`📅 Revisão agendada para ${d.proxima_revisao}!`);
+    fecharAgendaRevisao();
+    _loadAgendaStatus();
+  } else {
+    showStudyToast('⚠️ Erro ao agendar revisão.');
+  }
+}
+
+async function marcarCadernoRevisado() {
+  const res = await fetch(`/api/revisao-agenda/${encodePath(path)}/revisado`, { method: 'POST' });
+  if (res.ok) {
+    const d = await res.json();
+    showStudyToast(`✅ Revisado! Próxima em ${d.intervalo_dias} dias (${d.proxima_revisao}).`);
+    _loadAgendaStatus();
+  } else {
+    showStudyToast('⚠️ Erro ao registrar revisão.');
+  }
+}
+
+async function cancelarAgendaCaderno() {
+  await fetch(`/api/revisao-agenda/${encodePath(path)}`, { method: 'DELETE' });
+  showStudyToast('Agendamento removido.');
+  fecharAgendaRevisao();
+  _loadAgendaStatus();
+}
 
 async function abrirRevisaoTelaCheia() {
   const overlay = document.getElementById('revisao-fullscreen');
@@ -1869,3 +1948,8 @@ window.abrirOclusaoEditor = abrirOclusaoEditor;
 window.ocluirLimpar = ocluirLimpar;
 window.ocluirSalvar = ocluirSalvar;
 window.ocluirFechar = ocluirFechar;
+window.abrirAgendaRevisao = abrirAgendaRevisao;
+window.fecharAgendaRevisao = fecharAgendaRevisao;
+window.agendarCaderno = agendarCaderno;
+window.marcarCadernoRevisado = marcarCadernoRevisado;
+window.cancelarAgendaCaderno = cancelarAgendaCaderno;

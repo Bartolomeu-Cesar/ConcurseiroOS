@@ -328,3 +328,83 @@ def test_bloco_sem_oclusoes_retorna_string_vazia():
         "pdf_path": PDF_PATH, "tipo": "texto", "titulo": "T", "conteudo": "c", "pagina": 1,
     })
     assert client.get(f"/api/revisao/{PDF_PATH}").json()[0]["oclusoes"] == ""
+
+
+# ==================== Agendamento espaçado do caderno ====================
+
+def _limpar_agenda():
+    conn = sqlite3.connect(_tmp_db.name)
+    conn.execute("DELETE FROM revisao_agenda")
+    conn.commit()
+    conn.close()
+
+
+def test_agendar_caderno_e_ler():
+    _limpar_agenda()
+    r = client.post("/api/revisao-agenda", json={"pdf_path": PDF_PATH, "dias": 3})
+    assert r.status_code == 200, r.text
+    assert r.json()["intervalo_dias"] == 3
+    g = client.get(f"/api/revisao-agenda/{PDF_PATH}")
+    assert g.status_code == 200
+    assert g.json()["agendado"] is True
+    assert g.json()["intervalo_dias"] == 3
+
+
+def test_agenda_inexistente_retorna_nao_agendado():
+    _limpar_agenda()
+    g = client.get("/api/revisao-agenda/Outro/Arquivo.pdf")
+    assert g.status_code == 200
+    assert g.json()["agendado"] is False
+
+
+def test_marcar_revisado_expande_intervalo():
+    _limpar_agenda()
+    client.post("/api/revisao-agenda", json={"pdf_path": PDF_PATH, "dias": 1})
+    r = client.post(f"/api/revisao-agenda/{PDF_PATH}/revisado")
+    assert r.status_code == 200, r.text
+    # intervalo 1 -> próximo da escada (3)
+    assert r.json()["intervalo_dias"] == 3
+    assert r.json()["revisoes_count"] == 1
+    # revisar de novo -> 7
+    r2 = client.post(f"/api/revisao-agenda/{PDF_PATH}/revisado")
+    assert r2.json()["intervalo_dias"] == 7
+    assert r2.json()["revisoes_count"] == 2
+
+
+def test_marcar_revisado_cria_agenda_se_nao_existir():
+    _limpar_agenda()
+    r = client.post(f"/api/revisao-agenda/{PDF_PATH}/revisado")
+    assert r.status_code == 200
+    assert r.json()["revisoes_count"] == 1
+
+
+def test_agenda_hoje_lista_vencidos():
+    _limpar_agenda()
+    # Agenda um caderno com proxima_revisao no passado (força via SQL).
+    conn = sqlite3.connect(_tmp_db.name)
+    conn.execute(
+        "INSERT INTO revisao_agenda (user_id, pdf_path, proxima_revisao, intervalo_dias, created_at) VALUES (1, ?, '2000-01-01', 1, '2000-01-01')",
+        (PDF_PATH,),
+    )
+    conn.commit()
+    conn.close()
+    r = client.get("/api/revisao-agenda/hoje")
+    assert r.status_code == 200, r.text
+    paths = [c["pdf_path"] for c in r.json()["cadernos"]]
+    assert PDF_PATH in paths
+
+
+def test_agenda_hoje_nao_lista_futuros():
+    _limpar_agenda()
+    client.post("/api/revisao-agenda", json={"pdf_path": PDF_PATH, "dias": 30})
+    r = client.get("/api/revisao-agenda/hoje")
+    paths = [c["pdf_path"] for c in r.json()["cadernos"]]
+    assert PDF_PATH not in paths
+
+
+def test_cancelar_agenda():
+    _limpar_agenda()
+    client.post("/api/revisao-agenda", json={"pdf_path": PDF_PATH, "dias": 3})
+    d = client.delete(f"/api/revisao-agenda/{PDF_PATH}")
+    assert d.status_code == 200
+    assert client.get(f"/api/revisao-agenda/{PDF_PATH}").json()["agendado"] is False

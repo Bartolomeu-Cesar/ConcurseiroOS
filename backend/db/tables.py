@@ -304,6 +304,21 @@ def _create_tables(conn):
         )
     """)
 
+    # Agendamento espaçado do caderno de revisão (Spaced Practice por PDF)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS revisao_agenda (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL DEFAULT 1,
+            pdf_path TEXT NOT NULL,
+            proxima_revisao TEXT NOT NULL,
+            intervalo_dias INTEGER NOT NULL DEFAULT 1,
+            revisoes_count INTEGER NOT NULL DEFAULT 0,
+            ultima_revisao TEXT DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT DEFAULT ''
+        )
+    """)
+
     # Calendário personalizado
     conn.execute("""
         CREATE TABLE IF NOT EXISTS calendario_personalizado (
