@@ -96,6 +96,26 @@ def get_progress_bulk(conn=Depends(get_db_session), user_id: int = Depends(get_u
     return {r[0]: {"current_page": r[1], "total_pages": r[2]} for r in rows}
 
 
+@router.get("/api/pdf-existe/{path:path}", summary="Verificar se um PDF existe",
+            description="Checagem leve de existência de um PDF (sem transferir o arquivo).")
+def pdf_existe(path: str):
+    """Retorna {existe: bool} para o caminho de PDF informado.
+
+    Usado pelo viewer para avisar o usuário quando o arquivo não existe mais
+    no diretório, em vez de exibir o erro genérico do PDF.js.
+    """
+    if ".." in path or path.startswith("/"):
+        return {"existe": False}
+    full = Path(PDF_ROOT) / path
+    try:
+        full.relative_to(Path(PDF_ROOT))
+    except ValueError:
+        return {"existe": False}
+    resolved = full.resolve()
+    existe = resolved.exists() and resolved.suffix.lower() == ".pdf"
+    return {"existe": existe}
+
+
 @router.get("/pdf/{path:path}")
 def serve_pdf(path: str):
     # Path traversal protection: reject obvious traversal attempts

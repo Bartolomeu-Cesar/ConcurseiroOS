@@ -34,6 +34,15 @@ async function initProgress() {
   lastSavedPage = currentPage;
   updateInfo();
 
+  // Verifica se o PDF ainda existe no diretório antes de tentar renderizar.
+  try {
+    const chk = await fetch(`${API}/api/pdf-existe/${encodePath(path)}`).then(r => r.json());
+    if (chk && chk.existe === false) {
+      mostrarPdfInexistente();
+      return;
+    }
+  } catch (e) { /* rede offline: segue e deixa o PDF.js tentar (pode estar em cache) */ }
+
   const pdfUrl = encodeURIComponent(`${location.origin}/pdf/${encodePath(path)}`);
   const frame = document.getElementById('pdf-frame');
   frame.src = `/pdfjs/web/viewer.html?file=${pdfUrl}#page=${currentPage}`;
@@ -47,6 +56,27 @@ async function initProgress() {
   });
 
   setInterval(() => readPageFromViewer(), 400);
+}
+
+function mostrarPdfInexistente() {
+  const viewer = document.getElementById('viewer');
+  if (viewer) {
+    viewer.innerHTML = `
+      <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:24px;">
+        <div style="background:var(--bg-surface,#313244);border:1px solid var(--border,#45475a);border-radius:16px;padding:36px 32px;max-width:420px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.4);">
+          <div style="font-size:2.6rem;margin-bottom:12px;">📄❌</div>
+          <h2 style="color:var(--red,#f38ba8);font-size:1.15rem;margin:0 0 10px;">PDF não encontrado</h2>
+          <p style="color:var(--text,#cdd6f4);font-size:0.9rem;line-height:1.6;margin:0 0 20px;">
+            O arquivo <strong>${_escHtml(name)}</strong> não existe mais no diretório.<br>
+            Ele pode ter sido movido, renomeado ou excluído.
+          </p>
+          <a href="/" style="display:inline-block;background:var(--accent,#89b4fa);color:var(--bg,#1e1e2e);border-radius:8px;padding:10px 22px;font-weight:600;font-size:0.9rem;text-decoration:none;">🏠 Voltar ao início</a>
+        </div>
+      </div>`;
+  }
+  const pageInfo = document.getElementById('page-info');
+  if (pageInfo) pageInfo.textContent = 'PDF indisponível';
+  showStudyToast('⚠️ Este PDF não existe mais no diretório.');
 }
 
 function readPageFromViewer() {
