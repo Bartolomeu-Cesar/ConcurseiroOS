@@ -250,7 +250,20 @@ function updateTimerDisplay() {
 }
 
 function tick() {
+  // Defesa em profundidade: se o estado persistido diz que está pausado, não
+  // conta — neutraliza qualquer retomada acidental (ex: re-init ao trocar de
+  // página). O botão ⏸/▶ é a única forma de alternar paused.
   if (paused || !startedAt) return;
+  const persisted = loadTimerState();
+  if (persisted && persisted.paused) {
+    paused = true;
+    clearInterval(timerInterval);
+    timerInterval = null;
+    startedAt = null;
+    updateTimerDisplay();
+    _atualizarBotoesTimer();
+    return;
+  }
   elapsed = Math.floor((Date.now() - startedAt) / 1000);
   updateTimerDisplay();
   saveTimerState();
