@@ -825,6 +825,130 @@ async function aiAction(action) {
   }
 }
 
+// --- Gerar com IA a partir do PDF (resumo / flashcards / questões) ---
+function _escHtml(s) {
+  const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML;
+}
+
+function abrirGerarIA() {
+  const pgAtual = currentPage || 1;
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  overlay.innerHTML = `
+    <div style="background:var(--bg-surface,#313244);border:1px solid var(--border,#45475a);border-radius:14px;padding:20px;max-width:560px;width:100%;max-height:92vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+      <h3 style="color:var(--text,#cdd6f4);margin:0 0 4px;font-size:1rem;">✨ Gerar com IA — ${_escHtml(name)}</h3>
+      <p style="color:var(--text-sub,#a6adc8);font-size:0.78rem;margin:0 0 14px;">A IA lê o texto do intervalo de páginas escolhido e gera o conteúdo.</p>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+        <label style="flex:1;min-width:120px;font-size:0.78rem;color:var(--text,#cdd6f4);">Ação
+          <select id="ia-acao" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--border,#45475a);background:var(--bg,#1e1e2e);color:var(--text,#cdd6f4);">
+            <option value="resumo">📄 Resumo</option>
+            <option value="flashcards">🧠 Flashcards</option>
+            <option value="questoes">❓ Questões</option>
+          </select>
+        </label>
+        <label style="width:88px;font-size:0.78rem;color:var(--text,#cdd6f4);">Pág. inicial
+          <input type="number" id="ia-pg-ini" min="1" value="${pgAtual}" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--border,#45475a);background:var(--bg,#1e1e2e);color:var(--text,#cdd6f4);">
+        </label>
+        <label style="width:88px;font-size:0.78rem;color:var(--text,#cdd6f4);">Pág. final
+          <input type="number" id="ia-pg-fim" min="1" value="${pgAtual}" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--border,#45475a);background:var(--bg,#1e1e2e);color:var(--text,#cdd6f4);">
+        </label>
+      </div>
+
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px;">
+        <label id="ia-qtd-wrap" style="width:120px;font-size:0.78rem;color:var(--text,#cdd6f4);">Quantidade
+          <input type="number" id="ia-qtd" min="1" max="20" value="5" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--border,#45475a);background:var(--bg,#1e1e2e);color:var(--text,#cdd6f4);">
+        </label>
+        <label id="ia-salvar-wrap" style="display:flex;align-items:center;gap:6px;font-size:0.8rem;color:var(--text,#cdd6f4);margin-top:16px;">
+          <input type="checkbox" id="ia-salvar" checked style="width:16px;height:16px;"> Salvar no meu material
+        </label>
+      </div>
+
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:12px;">
+        <button id="ia-cancel" style="background:var(--bg,#1e1e2e);border:1px solid var(--border,#45475a);color:var(--text,#cdd6f4);border-radius:8px;padding:8px 16px;font-size:0.82rem;cursor:pointer;">Fechar</button>
+        <button id="ia-gerar" style="background:var(--mauve,#cba6f7);color:#1e1e2e;border:none;border-radius:8px;padding:8px 18px;font-weight:700;font-size:0.82rem;cursor:pointer;">Gerar</button>
+      </div>
+
+      <div id="ia-resultado" style="display:none;background:var(--bg,#1e1e2e);border:1px solid var(--border,#45475a);border-radius:8px;padding:12px;font-size:0.82rem;color:var(--text,#cdd6f4);white-space:pre-wrap;line-height:1.5;max-height:320px;overflow-y:auto;"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const close = () => overlay.remove();
+  overlay.querySelector('#ia-cancel').onclick = close;
+  overlay.onclick = (e) => { if (e.target === overlay) close(); };
+
+  // Quantidade/salvar só fazem sentido para flashcards/questões
+  const acaoSel = overlay.querySelector('#ia-acao');
+  const ajustarCampos = () => {
+    const ehResumo = acaoSel.value === 'resumo';
+    overlay.querySelector('#ia-qtd-wrap').style.display = ehResumo ? 'none' : 'block';
+    overlay.querySelector('#ia-salvar-wrap').style.display = ehResumo ? 'none' : 'flex';
+  };
+  acaoSel.onchange = ajustarCampos;
+  ajustarCampos();
+
+  overlay.querySelector('#ia-gerar').onclick = async () => {
+    const acao = acaoSel.value;
+    const pgIni = Math.max(1, parseInt(overlay.querySelector('#ia-pg-ini').value) || 1);
+    const pgFim = Math.max(pgIni, parseInt(overlay.querySelector('#ia-pg-fim').value) || pgIni);
+    const qtd = Math.min(20, Math.max(1, parseInt(overlay.querySelector('#ia-qtd').value) || 5));
+    const salvar = overlay.querySelector('#ia-salvar').checked;
+    const resultado = overlay.querySelector('#ia-resultado');
+    const btn = overlay.querySelector('#ia-gerar');
+
+    resultado.style.display = 'block';
+    resultado.innerHTML = '<span style="color:#fab387;">🤖 Lendo o PDF e gerando com IA...</span>';
+    btn.disabled = true; btn.style.opacity = '0.6';
+
+    try {
+      const res = await fetch('/api/ai/analisar-pdf', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pdf_path: path, acao,
+          pagina_inicial: pgIni, pagina_final: pgFim,
+          materia: name, quantidade: qtd, salvar,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        resultado.innerHTML = `<span style="color:#f38ba8;">${_escHtml(data.detail || 'Não foi possível gerar. Configure um provider de IA em Social → AI Tutor → ⚙️.')}</span>`;
+        return;
+      }
+      resultado.innerHTML = _renderResultadoIA(data);
+    } catch (e) {
+      resultado.innerHTML = `<span style="color:#f38ba8;">Erro de conexão: ${_escHtml(e.message)}</span>`;
+    } finally {
+      btn.disabled = false; btn.style.opacity = '1';
+    }
+  };
+}
+
+function _renderResultadoIA(data) {
+  if (data.acao === 'resumo') {
+    return _escHtml(data.resumo || data.resposta || '');
+  }
+  if (data.acao === 'flashcards') {
+    const fcs = data.flashcards || [];
+    const salvo = data.salvo ? `<div style="color:#a6e3a1;margin-bottom:8px;">✅ ${data.salvos} flashcard(s) salvo(s) para revisão (FSRS).</div>` : '';
+    if (!fcs.length) return '<span style="color:#f38ba8;">A IA não retornou flashcards. Tente outro intervalo.</span>';
+    return salvo + fcs.map((f, i) =>
+      `<div style="border-bottom:1px solid var(--border,#45475a);padding:6px 0;"><strong>${i + 1}. ${_escHtml(f.pergunta)}</strong><br><span style="color:var(--text-sub,#a6adc8);">${_escHtml(f.resposta)}</span></div>`
+    ).join('');
+  }
+  if (data.acao === 'questoes') {
+    const qs = data.questoes || [];
+    const salvo = data.salvo ? `<div style="color:#a6e3a1;margin-bottom:8px;">✅ ${data.salvos} questão(ões) salva(s) no banco.</div>` : '';
+    if (!qs.length) return '<span style="color:#f38ba8;">A IA não retornou questões. Tente outro intervalo.</span>';
+    return salvo + qs.map((q, i) => {
+      const alts = ['a', 'b', 'c', 'd', 'e']
+        .filter(l => q['alternativa_' + l])
+        .map(l => `${l.toUpperCase()}) ${_escHtml(q['alternativa_' + l])}`).join('<br>');
+      return `<div style="border-bottom:1px solid var(--border,#45475a);padding:8px 0;"><strong>${i + 1}. ${_escHtml(q.enunciado)}</strong><br>${alts}<br><span style="color:#a6e3a1;">Gabarito: ${_escHtml(q.resposta_correta)}</span></div>`;
+    }).join('');
+  }
+  return _escHtml(data.resposta || '');
+}
+
 // --- Study Technique Selector ---
 const TECHNIQUES = {
   livre: { name: '📖 Leitura Livre', guide: '' },
@@ -923,6 +1047,7 @@ window.checkRecall = checkRecall;
 window.rateRecall = rateRecall;
 window.closeAIModal = closeAIModal;
 window.aiAction = aiAction;
+window.abrirGerarIA = abrirGerarIA;
 window.selectSideAlt = selectSideAlt;
 window.loadSidePanelQuestions = loadSidePanelQuestions;
 window.goToPage = goToPage;
