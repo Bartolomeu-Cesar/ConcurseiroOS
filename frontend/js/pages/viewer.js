@@ -1526,12 +1526,18 @@ async function blocoParaFlashcard(id) {
 
 // --- Leitura da revisão em tela cheia (modo apostila) ---
 let _revFsZoom = 1.0;
+let _revFsRecall = false;   // Modo Recall (Retrieval Practice): oculta conteúdo
+let _revFsBlocos = [];      // cache dos blocos carregados p/ re-render sem refetch
 
 async function abrirRevisaoTelaCheia() {
   const overlay = document.getElementById('revisao-fullscreen');
   const body = document.getElementById('rev-fs-body');
   document.getElementById('rev-fs-titulo').textContent = name;
   overlay.style.display = 'flex';
+  // Sempre abre em modo leitura normal (recall desligado) para estado previsível.
+  _revFsRecall = false;
+  const rbtn = document.getElementById('rev-fs-recall-btn');
+  if (rbtn) { rbtn.style.background = 'var(--bg-elevated,#45475a)'; rbtn.style.color = 'var(--peach,#fab387)'; }
   body.innerHTML = '<div style="text-align:center;color:var(--text-sub,#9399b2);padding:40px;">Carregando revisão...</div>';
 
   let blocos;
@@ -1548,13 +1554,41 @@ async function abrirRevisaoTelaCheia() {
     return;
   }
 
+  _revFsBlocos = blocos;
+  _renderRevFsDoc();
+}
+
+// Renderiza (ou re-renderiza) o documento da tela cheia respeitando o modo recall.
+function _renderRevFsDoc() {
+  const body = document.getElementById('rev-fs-body');
+  if (!body) return;
   body.innerHTML = `<div id="rev-fs-doc" style="margin:0 auto;">
-    ${blocos.map(_renderBlocoFullscreen).join('')}
+    ${_revFsRecall ? `<div style="max-width:840px;margin:0 auto 18px;padding:10px 14px;background:rgba(250,179,135,0.12);border:1px solid var(--peach,#fab387);border-radius:8px;font-size:0.85rem;color:var(--peach,#fab387);text-align:center;">🎯 Modo Recall ativo — tente lembrar o conteúdo antes de clicar para revelar.</div>` : ''}
+    ${_revFsBlocos.map((b, i) => _renderBlocoFullscreen(b, i)).join('')}
   </div>`;
   applyRevFsZoom();
 }
 
-function _renderBlocoFullscreen(b) {
+// Alterna o Modo Recall (Retrieval Practice) e re-renderiza.
+function toggleRevFsRecall() {
+  _revFsRecall = !_revFsRecall;
+  const btn = document.getElementById('rev-fs-recall-btn');
+  if (btn) {
+    btn.style.background = _revFsRecall ? 'var(--peach,#fab387)' : 'var(--bg-elevated,#45475a)';
+    btn.style.color = _revFsRecall ? 'var(--bg,#1e1e2e)' : 'var(--peach,#fab387)';
+  }
+  _renderRevFsDoc();
+}
+
+// Revela um bloco individual coberto pela cortina de recall.
+function revelarBlocoRecall(idx) {
+  const cortina = document.getElementById(`rev-recall-cover-${idx}`);
+  const alvo = document.getElementById(`rev-recall-content-${idx}`);
+  if (cortina) cortina.style.display = 'none';
+  if (alvo) alvo.style.display = 'block';
+}
+
+function _renderBlocoFullscreen(b, idx) {
   const titulo = b.titulo
     ? `<h2 style="font-size:1.35em;color:var(--teal,#94e2d5);margin:0 0 12px;border-bottom:2px solid var(--border,#45475a);padding-bottom:8px;">${_escHtml(b.titulo)}</h2>`
     : '';
@@ -1566,9 +1600,23 @@ function _renderBlocoFullscreen(b) {
   const conteudo = b.conteudo
     ? `<div style="font-size:1.02em;color:var(--text,#cdd6f4);line-height:1.75;white-space:pre-wrap;margin-bottom:10px;">${_escHtml(b.conteudo)}</div>`
     : '';
+
+  // Modo Recall: oculta imagem+conteúdo sob uma cortina clicável (Retrieval
+  // Practice). O título e a página ficam visíveis como "dica" para o recall.
+  let corpo;
+  if (_revFsRecall && (img || conteudo)) {
+    corpo = `
+      <div id="rev-recall-cover-${idx}" onclick="revelarBlocoRecall(${idx})" title="Clique para revelar" style="cursor:pointer;background:repeating-linear-gradient(45deg,var(--bg-elevated,#45475a),var(--bg-elevated,#45475a) 10px,var(--bg-surface,#313244) 10px,var(--bg-surface,#313244) 20px);border:2px dashed var(--peach,#fab387);border-radius:8px;padding:28px 16px;text-align:center;color:var(--peach,#fab387);font-size:0.9em;">
+        🎯 Tente lembrar o conteúdo desta seção.<br><strong>Clique para revelar</strong> 👁
+      </div>
+      <div id="rev-recall-content-${idx}" style="display:none;">${img}${conteudo}</div>`;
+  } else {
+    corpo = `${img}${conteudo}`;
+  }
+
   return `<section style="background:var(--bg-surface,#313244);border-radius:12px;padding:24px 28px;margin-bottom:22px;box-shadow:0 2px 12px rgba(0,0,0,0.25);">
     <div style="font-size:0.75em;color:var(--blue,#89b4fa);margin-bottom:10px;cursor:pointer;" onclick="goToPage(${b.pagina});fecharRevisaoTelaCheia();" title="Abrir a página ${b.pagina} no PDF">📄 Página ${b.pagina} — abrir no PDF ↪</div>
-    ${titulo}${img}${conteudo}
+    ${titulo}${corpo}
   </section>`;
 }
 
@@ -1680,3 +1728,5 @@ window.imprimirRevisao = imprimirRevisao;
 window.abrirRevisaoTelaCheia = abrirRevisaoTelaCheia;
 window.fecharRevisaoTelaCheia = fecharRevisaoTelaCheia;
 window.revFsZoom = revFsZoom;
+window.toggleRevFsRecall = toggleRevFsRecall;
+window.revelarBlocoRecall = revelarBlocoRecall;

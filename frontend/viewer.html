@@ -234,6 +234,7 @@
       <span style="font-size:1.05rem;font-weight:700;color:var(--teal,#94e2d5);">📑 Revisão</span>
       <span id="rev-fs-titulo" style="flex:1;font-size:0.85rem;color:var(--text-sub,#a6adc8);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
       <div style="display:flex;align-items:center;gap:6px;">
+        <button onclick="toggleRevFsRecall()" id="rev-fs-recall-btn" title="Modo Recall: oculta o conteúdo para você tentar lembrar antes de revelar (Retrieval Practice)" style="background:var(--bg-elevated,#45475a);border:none;color:var(--peach,#fab387);border-radius:6px;padding:5px 10px;font-size:0.82rem;cursor:pointer;">🎯 Recall</button>
         <button onclick="revFsZoom(-1)" title="Diminuir" style="background:var(--bg-elevated,#45475a);border:none;color:var(--text,#cdd6f4);border-radius:6px;padding:5px 10px;font-size:0.9rem;cursor:pointer;">A−</button>
         <button onclick="revFsZoom(1)" title="Aumentar" style="background:var(--bg-elevated,#45475a);border:none;color:var(--text,#cdd6f4);border-radius:6px;padding:5px 10px;font-size:0.9rem;cursor:pointer;">A+</button>
         <button onclick="imprimirRevisao()" title="Imprimir / Salvar PDF" style="background:var(--bg-elevated,#45475a);border:none;color:var(--green,#a6e3a1);border-radius:6px;padding:5px 10px;font-size:0.82rem;cursor:pointer;">🖨 PDF</button>
