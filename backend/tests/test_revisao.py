@@ -213,3 +213,55 @@ def test_isolamento_por_user():
     ainda = conn.execute("SELECT COUNT(*) FROM revisao_blocos WHERE id = ?", (outro_id,)).fetchone()[0]
     conn.close()
     assert ainda == 1
+
+
+def _contar_flashcards(pergunta_like=None):
+    conn = sqlite3.connect(_tmp_db.name)
+    if pergunta_like:
+        n = conn.execute("SELECT COUNT(*) FROM flashcards WHERE pergunta = ?", (pergunta_like,)).fetchone()[0]
+    else:
+        n = conn.execute("SELECT COUNT(*) FROM flashcards").fetchone()[0]
+    conn.close()
+    return n
+
+
+def test_bloco_texto_para_flashcard():
+    _limpar()
+    rid = client.post("/api/revisao", json={
+        "pdf_path": PDF_PATH, "tipo": "texto",
+        "titulo": "O que é uma LAN?", "conteudo": "Rede local que conecta dispositivos próximos.", "pagina": 2,
+    }).json()["id"]
+    r = client.post(f"/api/revisao/{rid}/flashcard")
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["ok"] is True
+    assert data["pergunta"] == "O que é uma LAN?"
+    assert data["materia"] == "Informática"  # derivado do 1º nível do pdf_path
+    assert _contar_flashcards("O que é uma LAN?") == 1
+
+
+def test_bloco_recorte_para_flashcard():
+    _limpar()
+    rid = client.post("/api/revisao", json={
+        "pdf_path": PDF_PATH, "tipo": "recorte",
+        "titulo": "Topologia estrela", "imagem_data": PNG_1X1, "pagina": 7,
+    }).json()["id"]
+    r = client.post(f"/api/revisao/{rid}/flashcard")
+    assert r.status_code == 200
+    assert r.json()["pergunta"] == "Topologia estrela"
+
+
+def test_bloco_recorte_sem_titulo_gera_pergunta_recall():
+    _limpar()
+    rid = client.post("/api/revisao", json={
+        "pdf_path": PDF_PATH, "tipo": "recorte", "imagem_data": PNG_1X1, "pagina": 9,
+    }).json()["id"]
+    r = client.post(f"/api/revisao/{rid}/flashcard")
+    assert r.status_code == 200
+    assert "página 9" in r.json()["pergunta"]
+
+
+def test_flashcard_de_bloco_inexistente_404():
+    _limpar()
+    r = client.post("/api/revisao/999999/flashcard")
+    assert r.status_code == 404

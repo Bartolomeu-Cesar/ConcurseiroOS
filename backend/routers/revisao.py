@@ -130,6 +130,64 @@ def create_revisao(body: RevisaoBlocoCreate, conn=Depends(get_db_session), user_
     return {"ok": True, "id": cur.lastrowid, "ordem": prox}
 
 
+@router.post("/api/revisao/{id}/flashcard", summary="Transformar bloco de revisão em flashcard (FSRS)")
+def bloco_para_flashcard(id: int, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Cria um flashcard a partir de um bloco de revisão.
+
+    Fecha o ciclo de revisão espaçada: o material capturado do PDF vira um item
+    revisável pelo FSRS. Para blocos de texto/resumo, título vira a pergunta e o
+    conteúdo a resposta. Para recortes (imagem), gera uma pergunta de recall com
+    referência à página.
+    """
+    from utils import today_str
+
+    bloco = conn.execute(
+        "SELECT * FROM revisao_blocos WHERE id = ? AND user_id = ?", (id, user_id)
+    ).fetchone()
+    if not bloco:
+        raise HTTPException(status_code=404, detail="Bloco não encontrado")
+
+    b = _bloco_to_dict(bloco)
+    titulo = (b["titulo"] or "").strip()
+    conteudo = (b["conteudo"] or "").strip()
+    pagina = b["pagina"]
+    materia = sanitize_input((b["pdf_path"].split("/")[0] if "/" in b["pdf_path"] else ""), max_length=200)
+
+    if b["tipo"] == "recorte":
+        # Recall ativo sobre o recorte visual.
+        pergunta = titulo or f"O que você lembra do recorte da página {pagina}?"
+        resposta = conteudo or f"(Recorte da página {pagina} — confira no caderno de revisão do PDF.)"
+    else:
+        # Texto/resumo/nota: título (ou 1ª linha) vira pergunta; conteúdo vira resposta.
+        if titulo and conteudo:
+            pergunta, resposta = titulo, conteudo
+        elif conteudo:
+            linhas = conteudo.split("\n", 1)
+            pergunta = linhas[0][:200]
+            resposta = linhas[1].strip() if len(linhas) > 1 else conteudo
+        else:
+            raise HTTPException(status_code=422, detail="Bloco sem conteúdo para gerar flashcard.")
+
+    pergunta = sanitize_input(pergunta, max_length=2000)
+    resposta = sanitize_input(resposta, max_length=5000)
+
+    try:
+        from plans import enforce_plan_limit
+        enforce_plan_limit(conn, user_id, "flashcards")
+    except HTTPException:
+        raise
+    except Exception:  # noqa: BLE001 - limite de plano é best-effort aqui
+        pass
+
+    cur = conn.execute(
+        "INSERT INTO flashcards (pergunta, resposta, proxima_revisao, materia, user_id) VALUES (?, ?, ?, ?, ?)",
+        (pergunta, resposta, today_str(), materia, user_id),
+    )
+    conn.commit()
+    log.info(f"Flashcard criado a partir de bloco de revisão {id} (user={user_id})")
+    return {"ok": True, "flashcard_id": cur.lastrowid, "pergunta": pergunta, "materia": materia}
+
+
 @router.put("/api/revisao/{id}", response_model=OkResponse, summary="Editar/reordenar bloco de revisão")
 def update_revisao(id: int, body: RevisaoBlocoUpdate, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     existing = conn.execute(

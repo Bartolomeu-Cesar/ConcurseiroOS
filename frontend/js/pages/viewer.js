@@ -1073,6 +1073,7 @@ function _renderBlocoRevisao(b, idx, total) {
       <button onclick="moverBlocoRevisao(${b.id}, -1)" ${idx === 0 ? 'disabled' : ''} title="Subir" style="background:none;border:none;color:${idx === 0 ? 'var(--border,#45475a)' : 'var(--text-sub,#9399b2)'};cursor:pointer;font-size:0.8rem;">▲</button>
       <button onclick="moverBlocoRevisao(${b.id}, 1)" ${idx === total - 1 ? 'disabled' : ''} title="Descer" style="background:none;border:none;color:${idx === total - 1 ? 'var(--border,#45475a)' : 'var(--text-sub,#9399b2)'};cursor:pointer;font-size:0.8rem;">▼</button>
       <button onclick="editarBlocoRevisao(${b.id})" title="Editar título/comentário" style="background:none;border:none;color:var(--yellow,#f9e2af);cursor:pointer;font-size:0.78rem;">✏️</button>
+      <button onclick="blocoParaFlashcard(${b.id})" title="Criar flashcard (revisão espaçada)" style="background:none;border:none;color:var(--mauve,#cba6f7);cursor:pointer;font-size:0.78rem;">🧠</button>
       <button onclick="excluirBlocoRevisao(${b.id})" title="Excluir" style="background:none;border:none;color:var(--red,#f38ba8);cursor:pointer;font-size:0.78rem;">🗑</button>
     </div>
     ${titulo}${img}${conteudo}
@@ -1294,6 +1295,18 @@ async function excluirBlocoRevisao(id) {
   loadRevisao();
 }
 
+// --- Converter bloco em flashcard (revisão espaçada FSRS) ---
+async function blocoParaFlashcard(id) {
+  const res = await fetch(`/api/revisao/${id}/flashcard`, { method: 'POST' });
+  if (res.ok) {
+    const data = await res.json();
+    showStudyToast(`🧠 Flashcard criado${data.materia ? ' em ' + data.materia : ''}! Será revisado (FSRS).`);
+  } else {
+    const err = await res.json().catch(() => ({}));
+    showStudyToast('⚠️ ' + (err.detail || 'Não foi possível criar o flashcard.'));
+  }
+}
+
 // --- Export ---
 function exportRevisaoMd() {
   window.open(`/api/revisao/${encodePath(path)}/export`, '_blank');
@@ -1367,5 +1380,6 @@ window.adicionarNotaRevisao = adicionarNotaRevisao;
 window.editarBlocoRevisao = editarBlocoRevisao;
 window.moverBlocoRevisao = moverBlocoRevisao;
 window.excluirBlocoRevisao = excluirBlocoRevisao;
+window.blocoParaFlashcard = blocoParaFlashcard;
 window.exportRevisaoMd = exportRevisaoMd;
 window.imprimirRevisao = imprimirRevisao;
