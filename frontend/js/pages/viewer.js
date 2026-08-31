@@ -53,6 +53,9 @@ async function initProgress() {
       tries++;
       if (readPageFromViewer() || tries > 40) clearInterval(wait);
     }, 250);
+    // Arma o auto-resume só depois que a página inicial sincronizou (evita
+    // retomar o timer por causa da sincronização de abertura, não do usuário).
+    setTimeout(() => { _timerAutoResumeArmado = true; }, 1500);
   });
 
   setInterval(() => readPageFromViewer(), 400);
@@ -118,15 +121,36 @@ function readPageFromViewer() {
 
 function setPage(p) {
   if (!p || p < 1) return;
+  const mudou = currentPage !== p;
   currentPage = p;
   updateInfo();
   scheduleSave();
+
+  // Mudança de página = sinal de que o estudante voltou a ler o PDF. Se o
+  // cronômetro estava PAUSADO (ex: parou para fazer um resumo/revisão), retoma
+  // automaticamente. Só age em mudança real e após o carregamento inicial
+  // assentar (_timerAutoResumeArmado), para não retomar na sincronização inicial.
+  if (mudou && _timerAutoResumeArmado && paused) {
+    _retomarTimerAuto();
+  }
 
   // Detectar se chegou na última página (PDF concluído)
   if (currentPage >= totalPages && totalPages > 1 && !window._pdfFinishShown) {
     window._pdfFinishShown = true;
     setTimeout(() => ofereceQuestoesPdf(), 1500);
   }
+}
+
+// Retoma o cronômetro pausado automaticamente (disparado por mudança de página).
+function _retomarTimerAuto() {
+  paused = false;
+  startedAt = Date.now() - (elapsed * 1000);
+  clearInterval(timerInterval);
+  timerInterval = setInterval(tick, 250);
+  tick();
+  saveTimerState();
+  _atualizarBotoesTimer();
+  showStudyToast('▶ Cronômetro retomado (você voltou a ler o PDF).');
 }
 
 function ofereceQuestoesPdf() {
@@ -204,6 +228,7 @@ function saveOnExit() {
 let timerInterval = null;
 let elapsed = 0;
 let paused = false;
+let _timerAutoResumeArmado = false; // libera o auto-resume só após a carga inicial
 let limitSeconds = 15 * 60;
 let startedAt = null;
 
@@ -250,20 +275,7 @@ function updateTimerDisplay() {
 }
 
 function tick() {
-  // Defesa em profundidade: se o estado persistido diz que está pausado, não
-  // conta — neutraliza qualquer retomada acidental (ex: re-init ao trocar de
-  // página). O botão ⏸/▶ é a única forma de alternar paused.
   if (paused || !startedAt) return;
-  const persisted = loadTimerState();
-  if (persisted && persisted.paused) {
-    paused = true;
-    clearInterval(timerInterval);
-    timerInterval = null;
-    startedAt = null;
-    updateTimerDisplay();
-    _atualizarBotoesTimer();
-    return;
-  }
   elapsed = Math.floor((Date.now() - startedAt) / 1000);
   updateTimerDisplay();
   saveTimerState();
