@@ -1448,6 +1448,66 @@ async function blocoParaFlashcard(id) {
   }
 }
 
+// --- Leitura da revisão em tela cheia (modo apostila) ---
+let _revFsZoom = 1.0;
+
+async function abrirRevisaoTelaCheia() {
+  const overlay = document.getElementById('revisao-fullscreen');
+  const body = document.getElementById('rev-fs-body');
+  document.getElementById('rev-fs-titulo').textContent = name;
+  overlay.style.display = 'flex';
+  body.innerHTML = '<div style="text-align:center;color:var(--text-sub,#9399b2);padding:40px;">Carregando revisão...</div>';
+
+  let blocos;
+  try {
+    blocos = await fetch(`/api/revisao/${encodePath(path)}`).then(r => r.json());
+  } catch (e) {
+    body.innerHTML = '<div style="text-align:center;color:var(--red,#f38ba8);padding:40px;">Erro ao carregar revisão.</div>';
+    return;
+  }
+  if (!Array.isArray(blocos) || blocos.length === 0) {
+    body.innerHTML = `<div style="max-width:760px;margin:0 auto;text-align:center;color:var(--text-sub,#9399b2);padding:60px 20px;line-height:1.7;">
+      <div style="font-size:2.4rem;margin-bottom:12px;">📭</div>
+      Caderno de revisão vazio.<br>Recorte partes do PDF ou adicione notas para montá-lo.</div>`;
+    return;
+  }
+
+  body.innerHTML = `<div id="rev-fs-doc" style="max-width:820px;margin:0 auto;font-size:${_revFsZoom}rem;">
+    ${blocos.map(_renderBlocoFullscreen).join('')}
+  </div>`;
+  applyRevFsZoom();
+}
+
+function _renderBlocoFullscreen(b) {
+  const titulo = b.titulo
+    ? `<h2 style="font-size:1.35em;color:var(--teal,#94e2d5);margin:0 0 10px;border-bottom:2px solid var(--border,#45475a);padding-bottom:6px;">${_escHtml(b.titulo)}</h2>`
+    : '';
+  const img = (b.tipo === 'recorte' && b.imagem_data)
+    ? `<img src="${b.imagem_data}" alt="Recorte p.${b.pagina}" style="max-width:100%;border-radius:8px;display:block;margin:0 auto 12px;border:1px solid var(--border,#45475a);box-shadow:0 2px 8px rgba(0,0,0,0.3);">`
+    : '';
+  const conteudo = b.conteudo
+    ? `<div style="font-size:1.02em;color:var(--text,#cdd6f4);line-height:1.75;white-space:pre-wrap;margin-bottom:10px;">${_escHtml(b.conteudo)}</div>`
+    : '';
+  return `<section style="background:var(--bg-surface,#313244);border-radius:12px;padding:24px 28px;margin-bottom:22px;box-shadow:0 2px 12px rgba(0,0,0,0.25);">
+    <div style="font-size:0.75em;color:var(--blue,#89b4fa);margin-bottom:10px;cursor:pointer;" onclick="goToPage(${b.pagina});fecharRevisaoTelaCheia();" title="Abrir a página ${b.pagina} no PDF">📄 Página ${b.pagina} — abrir no PDF ↪</div>
+    ${titulo}${img}${conteudo}
+  </section>`;
+}
+
+function fecharRevisaoTelaCheia() {
+  document.getElementById('revisao-fullscreen').style.display = 'none';
+}
+
+function revFsZoom(dir) {
+  _revFsZoom = Math.max(0.7, Math.min(1.8, _revFsZoom + dir * 0.1));
+  applyRevFsZoom();
+}
+
+function applyRevFsZoom() {
+  const doc = document.getElementById('rev-fs-doc');
+  if (doc) doc.style.fontSize = _revFsZoom.toFixed(2) + 'rem';
+}
+
 // --- Export ---
 function exportRevisaoMd() {
   window.open(`/api/revisao/${encodePath(path)}/export`, '_blank');
@@ -1489,6 +1549,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'c' || e.key === 'C') toggleRevisaoPanel();
   if (e.key === 'm' || e.key === 'M') toggleBookmarksPanel();
   if (e.key === 'Escape' && document.getElementById('crop-overlay').style.display === 'block') cancelarRecorte();
+  if (e.key === 'Escape' && document.getElementById('revisao-fullscreen').style.display === 'flex') fecharRevisaoTelaCheia();
 });
 
 // === Window assignments for HTML onclick/onchange handlers ===
@@ -1532,3 +1593,6 @@ window.excluirBlocoRevisao = excluirBlocoRevisao;
 window.blocoParaFlashcard = blocoParaFlashcard;
 window.exportRevisaoMd = exportRevisaoMd;
 window.imprimirRevisao = imprimirRevisao;
+window.abrirRevisaoTelaCheia = abrirRevisaoTelaCheia;
+window.fecharRevisaoTelaCheia = fecharRevisaoTelaCheia;
+window.revFsZoom = revFsZoom;
