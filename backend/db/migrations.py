@@ -690,6 +690,16 @@ def _m63_revisao_agenda(conn):
     log.info("Migration: created revisao_agenda table")
 
 
+def _m64_revisao_tag(conn):
+    """Tag/categoria por bloco de revisão (decorar/entender/pegadinha/revisar),
+    usada para colorir e filtrar os blocos. Vazio = sem tag."""
+    try:
+        conn.execute("ALTER TABLE revisao_blocos ADD COLUMN tag TEXT DEFAULT ''")
+        log.info("Migration: added tag column to revisao_blocos")
+    except Exception:
+        pass  # coluna já existe
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -754,6 +764,7 @@ MIGRATIONS = [
     (61, _m61_metas_semanais_manuais),
     (62, _m62_revisao_oclusoes),
     (63, _m63_revisao_agenda),
+    (64, _m64_revisao_tag),
 ]
 
 

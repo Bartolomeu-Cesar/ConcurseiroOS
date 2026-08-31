@@ -21,14 +21,19 @@ from logger import log
 router = APIRouter(prefix="", tags=["Revisão"])
 
 _TIPOS_VALIDOS = {"recorte", "resumo_ia", "texto", "nota"}
+_TAGS_VALIDAS = {"", "decorar", "entender", "pegadinha", "revisar"}
+
+
+def _validar_tag(raw) -> str:
+    tag = (raw or "").strip().lower()
+    if tag not in _TAGS_VALIDAS:
+        raise HTTPException(status_code=422, detail=f"Tag inválida. Use: {', '.join(sorted(t for t in _TAGS_VALIDAS if t))}.")
+    return tag
 
 
 def _bloco_to_dict(row) -> dict:
-    # oclusoes pode não existir em bancos muito antigos (defensivo).
-    try:
-        oclusoes = row["oclusoes"] or ""
-    except (IndexError, KeyError):
-        oclusoes = ""
+    # oclusoes/tag podem não existir em bancos muito antigos (defensivo).
+    keys = row.keys()
     return {
         "id": row["id"],
         "pdf_path": row["pdf_path"],
@@ -38,7 +43,8 @@ def _bloco_to_dict(row) -> dict:
         "imagem_data": row["imagem_data"],
         "pagina": row["pagina"],
         "ordem": row["ordem"],
-        "oclusoes": oclusoes,
+        "oclusoes": (row["oclusoes"] or "") if "oclusoes" in keys else "",
+        "tag": (row["tag"] or "") if "tag" in keys else "",
         "created_at": row["created_at"],
     }
 
@@ -310,8 +316,8 @@ def gerar_revisao_ia(body: dict, conn=Depends(get_db_session), user_id: int = De
             continue
         conn.execute(
             """INSERT INTO revisao_blocos
-               (user_id, pdf_path, tipo, titulo, conteudo, imagem_data, pagina, ordem, oclusoes, created_at)
-               VALUES (?, ?, 'resumo_ia', ?, ?, '', ?, ?, '', ?)""",
+               (user_id, pdf_path, tipo, titulo, conteudo, imagem_data, pagina, ordem, oclusoes, tag, created_at)
+               VALUES (?, ?, 'resumo_ia', ?, ?, '', ?, ?, '', '', ?)""",
             (user_id, pdf_path, titulo, conteudo, pg_ini, prox + salvos, agora),
         )
         salvos += 1
@@ -405,6 +411,7 @@ def create_revisao(body: RevisaoBlocoCreate, conn=Depends(get_db_session), user_
         raise HTTPException(status_code=422, detail="imagem_data deve ser um data URI de imagem.")
 
     oclusoes = _validar_oclusoes(getattr(body, "oclusoes", "") or "")
+    tag = _validar_tag(getattr(body, "tag", "") or "")
 
     # Próxima ordem = fim da lista
     prox = conn.execute(
@@ -414,9 +421,9 @@ def create_revisao(body: RevisaoBlocoCreate, conn=Depends(get_db_session), user_
 
     cur = conn.execute(
         """INSERT INTO revisao_blocos
-           (user_id, pdf_path, tipo, titulo, conteudo, imagem_data, pagina, ordem, oclusoes, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (user_id, body.pdf_path, tipo, titulo, conteudo, imagem, body.pagina, prox, oclusoes, datetime.now().isoformat()),
+           (user_id, pdf_path, tipo, titulo, conteudo, imagem_data, pagina, ordem, oclusoes, tag, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (user_id, body.pdf_path, tipo, titulo, conteudo, imagem, body.pagina, prox, oclusoes, tag, datetime.now().isoformat()),
     )
     conn.commit()
     log.info(f"Revisão bloco criado: {body.pdf_path} p.{body.pagina} tipo={tipo} user={user_id}")
@@ -503,6 +510,9 @@ def update_revisao(id: int, body: RevisaoBlocoUpdate, conn=Depends(get_db_sessio
     if body.oclusoes is not None:
         campos.append("oclusoes = ?")
         valores.append(_validar_oclusoes(body.oclusoes))
+    if body.tag is not None:
+        campos.append("tag = ?")
+        valores.append(_validar_tag(body.tag))
 
     if campos:
         valores.extend([id, user_id])

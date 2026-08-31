@@ -408,3 +408,41 @@ def test_cancelar_agenda():
     d = client.delete(f"/api/revisao-agenda/{PDF_PATH}")
     assert d.status_code == 200
     assert client.get(f"/api/revisao-agenda/{PDF_PATH}").json()["agendado"] is False
+
+
+# ==================== Tags/cores por bloco ====================
+
+def test_criar_bloco_com_tag():
+    _limpar()
+    r = client.post("/api/revisao", json={
+        "pdf_path": PDF_PATH, "tipo": "texto", "titulo": "T", "conteudo": "c", "pagina": 1, "tag": "decorar",
+    })
+    assert r.status_code == 200, r.text
+    assert client.get(f"/api/revisao/{PDF_PATH}").json()[0]["tag"] == "decorar"
+
+
+def test_tag_invalida_422():
+    _limpar()
+    r = client.post("/api/revisao", json={
+        "pdf_path": PDF_PATH, "tipo": "texto", "titulo": "T", "conteudo": "c", "pagina": 1, "tag": "xpto",
+    })
+    assert r.status_code == 422
+
+
+def test_atualizar_tag_via_put():
+    _limpar()
+    rid = client.post("/api/revisao", json={
+        "pdf_path": PDF_PATH, "tipo": "texto", "titulo": "T", "conteudo": "c", "pagina": 1,
+    }).json()["id"]
+    assert client.get(f"/api/revisao/{PDF_PATH}").json()[0]["tag"] == ""
+    r = client.put(f"/api/revisao/{rid}", json={"tag": "pegadinha"})
+    assert r.status_code == 200
+    assert client.get(f"/api/revisao/{PDF_PATH}").json()[0]["tag"] == "pegadinha"
+
+
+def test_bloco_sem_tag_retorna_vazio():
+    _limpar()
+    client.post("/api/revisao", json={
+        "pdf_path": PDF_PATH, "tipo": "texto", "titulo": "T", "conteudo": "c", "pagina": 1,
+    })
+    assert client.get(f"/api/revisao/{PDF_PATH}").json()[0]["tag"] == ""

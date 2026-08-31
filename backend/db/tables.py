@@ -300,6 +300,7 @@ def _create_tables(conn):
             pagina INTEGER DEFAULT 1,
             ordem INTEGER DEFAULT 0,
             oclusoes TEXT DEFAULT '',
+            tag TEXT DEFAULT '',
             created_at TEXT NOT NULL
         )
     """)

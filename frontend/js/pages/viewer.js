@@ -1181,6 +1181,16 @@ setInterval(() => {
 
 // ========== CADERNO DE REVISÃO (recortes de PDF + notas) ==========
 let revisaoVisible = false;
+
+// Tags de bloco (categorias de estudo) com rótulo e cor.
+const _REV_TAGS = {
+  '': { label: 'Sem tag', cor: 'var(--text-sub,#9399b2)' },
+  decorar: { label: '📌 Decorar', cor: 'var(--red,#f38ba8)' },
+  entender: { label: '💡 Entender', cor: 'var(--blue,#89b4fa)' },
+  pegadinha: { label: '⚠️ Pegadinha', cor: 'var(--yellow,#f9e2af)' },
+  revisar: { label: '🔁 Revisar', cor: 'var(--mauve,#cba6f7)' },
+};
+let _revFsTagFiltro = ''; // filtro de tag ativo na tela cheia ('' = todas)
 let _cropState = null; // { startX, startY } durante o arraste
 
 // ---------- Gerenciador central de painéis laterais (lado direito) ----------
@@ -1278,9 +1288,15 @@ function _renderBlocoRevisao(b, idx, total) {
   const conteudo = b.conteudo
     ? `<div style="font-size:0.82rem;color:var(--text,#cdd6f4);line-height:1.5;white-space:pre-wrap;margin-bottom:6px;">${_escHtml(b.conteudo)}</div>`
     : '';
-  return `<div style="background:var(--bg,#1e1e2e);border-radius:10px;padding:12px;margin-bottom:10px;" data-id="${b.id}">
+  const tagAtual = b.tag || '';
+  const tagCor = (_REV_TAGS[tagAtual] || _REV_TAGS['']).cor;
+  const tagOpcoes = Object.entries(_REV_TAGS).map(([k, v]) =>
+    `<option value="${k}" ${k === tagAtual ? 'selected' : ''}>${v.label}</option>`).join('');
+  const bordaTag = tagAtual ? `border-left:3px solid ${tagCor};` : '';
+  return `<div style="background:var(--bg,#1e1e2e);border-radius:10px;padding:12px;margin-bottom:10px;${bordaTag}" data-id="${b.id}">
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
       <span style="font-size:0.7rem;color:var(--blue,#89b4fa);cursor:pointer;" onclick="goToPage(${b.pagina})" title="Ir para a página">p.${b.pagina}</span>
+      <select onchange="setBlocoTag(${b.id}, this.value)" title="Categoria do bloco" style="font-size:0.68rem;background:var(--bg-surface,#313244);color:${tagCor};border:1px solid var(--border,#45475a);border-radius:5px;padding:2px 4px;cursor:pointer;max-width:110px;">${tagOpcoes}</select>
       <span style="flex:1;"></span>
       <button onclick="moverBlocoRevisao(${b.id}, -1)" ${idx === 0 ? 'disabled' : ''} title="Subir" style="background:none;border:none;color:${idx === 0 ? 'var(--border,#45475a)' : 'var(--text-sub,#9399b2)'};cursor:pointer;font-size:0.8rem;">▲</button>
       <button onclick="moverBlocoRevisao(${b.id}, 1)" ${idx === total - 1 ? 'disabled' : ''} title="Descer" style="background:none;border:none;color:${idx === total - 1 ? 'var(--border,#45475a)' : 'var(--text-sub,#9399b2)'};cursor:pointer;font-size:0.8rem;">▼</button>
@@ -1514,7 +1530,19 @@ async function excluirBlocoRevisao(id) {
   loadRevisao();
 }
 
-// --- Converter bloco em flashcard (revisão espaçada FSRS) ---
+// --- Tag/categoria do bloco ---
+async function setBlocoTag(id, tag) {
+  const res = await fetch(`/api/revisao/${id}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tag }),
+  });
+  if (res.ok) {
+    showStudyToast('🏷️ Categoria atualizada.');
+    loadRevisao();
+  } else {
+    showStudyToast('⚠️ Erro ao atualizar categoria.');
+  }
+}
 async function blocoParaFlashcard(id) {
   const res = await fetch(`/api/revisao/${id}/flashcard`, { method: 'POST' });
   if (res.ok) {
@@ -1682,6 +1710,7 @@ async function abrirRevisaoTelaCheia() {
   overlay.style.display = 'flex';
   // Sempre abre em modo leitura normal (recall desligado) para estado previsível.
   _revFsRecall = false;
+  _revFsTagFiltro = '';
   const rbtn = document.getElementById('rev-fs-recall-btn');
   if (rbtn) { rbtn.style.background = 'var(--bg-elevated,#45475a)'; rbtn.style.color = 'var(--peach,#fab387)'; }
   body.innerHTML = '<div style="text-align:center;color:var(--text-sub,#9399b2);padding:40px;">Carregando revisão...</div>';
@@ -1708,11 +1737,30 @@ async function abrirRevisaoTelaCheia() {
 function _renderRevFsDoc() {
   const body = document.getElementById('rev-fs-body');
   if (!body) return;
+  // Chips de filtro por tag: mostra as tags presentes nos blocos + "Todas".
+  const tagsPresentes = [...new Set(_revFsBlocos.map(b => b.tag || '').filter(Boolean))];
+  const chip = (val, label, cor) => `<button onclick="setRevFsTagFiltro('${val}')" style="background:${_revFsTagFiltro === val ? cor : 'var(--bg-elevated,#45475a)'};color:${_revFsTagFiltro === val ? 'var(--bg,#1e1e2e)' : cor};border:1px solid ${cor};border-radius:999px;padding:3px 12px;font-size:0.75rem;cursor:pointer;font-weight:600;">${label}</button>`;
+  const filtros = tagsPresentes.length > 0
+    ? `<div style="max-width:840px;margin:0 auto 16px;display:flex;gap:6px;flex-wrap:wrap;justify-content:center;">
+        ${chip('', 'Todas', 'var(--text-sub,#9399b2)')}
+        ${tagsPresentes.map(t => chip(t, (_REV_TAGS[t] || {}).label || t, (_REV_TAGS[t] || {}).cor || 'var(--text-sub,#9399b2)')).join('')}
+      </div>`
+    : '';
+  const visiveis = _revFsTagFiltro
+    ? _revFsBlocos.filter(b => (b.tag || '') === _revFsTagFiltro)
+    : _revFsBlocos;
   body.innerHTML = `<div id="rev-fs-doc" style="margin:0 auto;">
     ${_revFsRecall ? `<div style="max-width:840px;margin:0 auto 18px;padding:10px 14px;background:rgba(250,179,135,0.12);border:1px solid var(--peach,#fab387);border-radius:8px;font-size:0.85rem;color:var(--peach,#fab387);text-align:center;">🎯 Modo Recall ativo — tente lembrar o conteúdo antes de clicar para revelar.</div>` : ''}
-    ${_revFsBlocos.map((b, i) => _renderBlocoFullscreen(b, i)).join('')}
+    ${filtros}
+    ${visiveis.length ? visiveis.map((b, i) => _renderBlocoFullscreen(b, i)).join('') : '<div style="text-align:center;color:var(--text-sub,#9399b2);padding:40px;">Nenhum bloco com esta categoria.</div>'}
   </div>`;
   applyRevFsZoom();
+}
+
+// Aplica filtro de tag na tela cheia.
+function setRevFsTagFiltro(tag) {
+  _revFsTagFiltro = tag || '';
+  _renderRevFsDoc();
 }
 
 // Alterna o Modo Recall (Retrieval Practice) e re-renderiza.
@@ -1763,8 +1811,13 @@ function _renderBlocoFullscreen(b, idx) {
     corpo = `${img}${conteudo}`;
   }
 
-  return `<section style="background:var(--bg-surface,#313244);border-radius:12px;padding:24px 28px;margin-bottom:22px;box-shadow:0 2px 12px rgba(0,0,0,0.25);">
-    <div style="font-size:0.75em;color:var(--blue,#89b4fa);margin-bottom:10px;cursor:pointer;" onclick="goToPage(${b.pagina});fecharRevisaoTelaCheia();" title="Abrir a página ${b.pagina} no PDF">📄 Página ${b.pagina} — abrir no PDF ↪</div>
+  const tagBadge = (b.tag && _REV_TAGS[b.tag])
+    ? `<span style="font-size:0.7em;padding:2px 10px;border-radius:999px;background:${_REV_TAGS[b.tag].cor};color:var(--bg,#1e1e2e);font-weight:700;margin-left:8px;">${_REV_TAGS[b.tag].label}</span>`
+    : '';
+  return `<section style="background:var(--bg-surface,#313244);border-radius:12px;padding:24px 28px;margin-bottom:22px;box-shadow:0 2px 12px rgba(0,0,0,0.25);${b.tag && _REV_TAGS[b.tag] ? `border-left:4px solid ${_REV_TAGS[b.tag].cor};` : ''}">
+    <div style="font-size:0.75em;color:var(--blue,#89b4fa);margin-bottom:10px;">
+      <span style="cursor:pointer;" onclick="goToPage(${b.pagina});fecharRevisaoTelaCheia();" title="Abrir a página ${b.pagina} no PDF">📄 Página ${b.pagina} — abrir no PDF ↪</span>${tagBadge}
+    </div>
     ${titulo}${corpo}
   </section>`;
 }
@@ -2022,3 +2075,5 @@ window.cancelarAgendaCaderno = cancelarAgendaCaderno;
 window.abrirGerarRevisaoIA = abrirGerarRevisaoIA;
 window.fecharGerarRevisaoIA = fecharGerarRevisaoIA;
 window.gerarRevisaoIA = gerarRevisaoIA;
+window.setBlocoTag = setBlocoTag;
+window.setRevFsTagFiltro = setRevFsTagFiltro;
