@@ -586,16 +586,37 @@ async function saveQuickFlashcard() {
 // --- Pomodoro Mode ---
 let pomodoroActive = false;
 let pomodoroCount = 0;
+
+// Configuração do Pomodoro (persistida em localStorage, por usuário/dispositivo).
+const POMODORO_CFG_KEY = 'viewer_pomodoro_cfg';
+const POMODORO_DEFAULTS = { foco: 25, pausa: 5, pausaLonga: 15, ciclos: 4 };
+
+function getPomodoroCfg() {
+  try {
+    const raw = localStorage.getItem(POMODORO_CFG_KEY);
+    if (raw) {
+      const c = JSON.parse(raw);
+      return {
+        foco: Number(c.foco) || POMODORO_DEFAULTS.foco,
+        pausa: Number(c.pausa) || POMODORO_DEFAULTS.pausa,
+        pausaLonga: Number(c.pausaLonga) || POMODORO_DEFAULTS.pausaLonga,
+        ciclos: Number(c.ciclos) || POMODORO_DEFAULTS.ciclos,
+      };
+    }
+  } catch { /* ignora config corrompida */ }
+  return { ...POMODORO_DEFAULTS };
+}
+
 function togglePomodoroMode() {
   pomodoroActive = !pomodoroActive;
   const btn = document.getElementById('btn-pomodoro');
   if (pomodoroActive) {
+    const cfg = getPomodoroCfg();
     btn.style.background = '#f38ba8';
     btn.style.color = '#1e1e2e';
     btn.textContent = '🍅 ON';
-    // Start 25 min timer
-    startTimer(25, 0);
-    showStudyToast('🍅 Pomodoro ativado! 25 min de foco.');
+    startTimer(cfg.foco, 0);
+    showStudyToast(`🍅 Pomodoro ativado! ${cfg.foco} min de foco.`);
     pomodoroCount++;
   } else {
     btn.style.background = '#45475a';
@@ -610,20 +631,63 @@ const _origFinishTimer = finishTimer;
 finishTimer = function(showOverlay) {
   _origFinishTimer(showOverlay);
   if (pomodoroActive) {
-    // After 25 min work, suggest 5 min break
+    const cfg = getPomodoroCfg();
+    // Pausa longa a cada N ciclos concluídos; caso contrário, pausa curta.
+    const ehPausaLonga = pomodoroCount > 0 && pomodoroCount % cfg.ciclos === 0;
+    const pausaMin = ehPausaLonga ? cfg.pausaLonga : cfg.pausa;
+    const pausaLabel = ehPausaLonga ? 'pausa longa' : 'pausa';
     setTimeout(async () => {
-      if (await confirmModal('Pomodoro', '🍅 Pomodoro completo! Fazer pausa de 5 min?', { type: 'success', confirmText: 'Pausar', cancelText: 'Continuar' })) {
-        startTimer(5, 0);
-        showStudyToast('☕ Pausa de 5 min. Relaxe!');
+      if (await confirmModal('Pomodoro', `🍅 Pomodoro completo! Fazer ${pausaLabel} de ${pausaMin} min?`, { type: 'success', confirmText: 'Pausar', cancelText: 'Continuar' })) {
+        startTimer(pausaMin, 0);
+        showStudyToast(`☕ ${ehPausaLonga ? 'Pausa longa' : 'Pausa'} de ${pausaMin} min. Relaxe!`);
       } else {
-        // Continue with next pomodoro
-        startTimer(25, 0);
+        startTimer(cfg.foco, 0);
         pomodoroCount++;
         showStudyToast(`🍅 Pomodoro ${pomodoroCount} iniciado!`);
       }
     }, 500);
   }
 };
+
+// --- Configuração do Pomodoro (modal) ---
+function abrirConfigPomodoro() {
+  const cfg = getPomodoroCfg();
+  document.getElementById('pomo-foco').value = cfg.foco;
+  document.getElementById('pomo-pausa').value = cfg.pausa;
+  document.getElementById('pomo-pausa-longa').value = cfg.pausaLonga;
+  document.getElementById('pomo-ciclos').value = cfg.ciclos;
+  document.getElementById('pomodoro-config-modal').style.display = 'flex';
+}
+
+function fecharConfigPomodoro() {
+  document.getElementById('pomodoro-config-modal').style.display = 'none';
+}
+
+function resetConfigPomodoro() {
+  document.getElementById('pomo-foco').value = POMODORO_DEFAULTS.foco;
+  document.getElementById('pomo-pausa').value = POMODORO_DEFAULTS.pausa;
+  document.getElementById('pomo-pausa-longa').value = POMODORO_DEFAULTS.pausaLonga;
+  document.getElementById('pomo-ciclos').value = POMODORO_DEFAULTS.ciclos;
+}
+
+function salvarConfigPomodoro() {
+  const clamp = (v, min, max, def) => {
+    const n = parseInt(v, 10);
+    if (isNaN(n)) return def;
+    return Math.max(min, Math.min(max, n));
+  };
+  const cfg = {
+    foco: clamp(document.getElementById('pomo-foco').value, 1, 120, POMODORO_DEFAULTS.foco),
+    pausa: clamp(document.getElementById('pomo-pausa').value, 1, 60, POMODORO_DEFAULTS.pausa),
+    pausaLonga: clamp(document.getElementById('pomo-pausa-longa').value, 1, 120, POMODORO_DEFAULTS.pausaLonga),
+    ciclos: clamp(document.getElementById('pomo-ciclos').value, 1, 12, POMODORO_DEFAULTS.ciclos),
+  };
+  localStorage.setItem(POMODORO_CFG_KEY, JSON.stringify(cfg));
+  fecharConfigPomodoro();
+  showStudyToast(`🍅 Config salva: ${cfg.foco}/${cfg.pausa} min (longa ${cfg.pausaLonga} a cada ${cfg.ciclos}).`);
+  // Se o Pomodoro estiver ativo, aplica o novo tempo de foco imediatamente.
+  if (pomodoroActive) startTimer(cfg.foco, 0);
+}
 
 // --- Study Summary ---
 let summaryVisible = false;
@@ -1384,6 +1448,10 @@ window.toggleNotePanel = toggleNotePanel;
 window.addBookmark = addBookmark;
 window.quickFlashcard = quickFlashcard;
 window.togglePomodoroMode = togglePomodoroMode;
+window.abrirConfigPomodoro = abrirConfigPomodoro;
+window.fecharConfigPomodoro = fecharConfigPomodoro;
+window.resetConfigPomodoro = resetConfigPomodoro;
+window.salvarConfigPomodoro = salvarConfigPomodoro;
 window.toggleStudySummary = toggleStudySummary;
 window.toggleActiveRecall = toggleActiveRecall;
 window.askAIAboutPage = askAIAboutPage;

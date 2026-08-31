@@ -84,6 +84,7 @@
       <button onclick="addBookmark()" title="Bookmark [B]" style="background:var(--bg-elevated);border:none;color:var(--blue);border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🔖</button>
       <button onclick="quickFlashcard()" title="Flashcard rápido [F]" style="background:var(--bg-elevated);border:none;color:var(--accent);border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🧠</button>
       <button onclick="togglePomodoroMode()" id="btn-pomodoro" title="Pomodoro [P]" style="background:var(--bg-elevated);border:none;color:var(--red);border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🍅</button>
+      <button onclick="abrirConfigPomodoro()" id="btn-pomodoro-cfg" title="Configurar Pomodoro" style="background:var(--bg-elevated);border:none;color:var(--text-sub,#9399b2);border-radius:6px;padding:4px 6px;font-size:0.78rem;cursor:pointer;">⚙️</button>
       <button onclick="toggleStudySummary()" title="Resumo [S]" style="background:var(--bg-elevated);border:none;color:var(--green);border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">📊</button>
       <button onclick="toggleActiveRecall()" id="btn-recall" title="Active Recall [R]" style="background:var(--bg-elevated);border:none;color:#94e2d5;border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🔒</button>
       <button onclick="askAIAboutPage()" title="Perguntar à IA sobre esta página [A]" style="background:var(--bg-elevated);border:none;color:var(--peach);border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🤖</button>
@@ -111,6 +112,38 @@
     <div style="padding:10px;border-top:1px solid var(--border);">
       <textarea id="note-input" placeholder="Escreva uma anotação para esta página..." style="width:100%;height:60px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px;font-size:0.82rem;resize:none;outline:none;"></textarea>
       <button onclick="saveNote()" style="width:100%;margin-top:6px;background:var(--yellow);color:var(--bg);border:none;border-radius:6px;padding:8px;font-weight:600;cursor:pointer;font-size:0.82rem;">💾 Salvar Nota</button>
+    </div>
+  </div>
+
+  <!-- Pomodoro Config Modal -->
+  <div id="pomodoro-config-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:999;align-items:center;justify-content:center;padding:16px;">
+    <div style="background:var(--bg-surface,#313244);border:1px solid var(--border,#45475a);border-radius:16px;padding:24px;max-width:420px;width:100%;max-height:92vh;overflow-y:auto;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <h3 style="color:var(--red,#f38ba8);margin:0;font-size:1.05rem;">🍅 Configurar Pomodoro</h3>
+        <button onclick="fecharConfigPomodoro()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:1.2rem;">✕</button>
+      </div>
+      <p style="color:var(--text-sub,#a6adc8);font-size:0.78rem;margin:0 0 14px;">Defina os tempos do seu ciclo de estudo. Técnica Pomodoro: foco → pausa curta, e pausa longa a cada N ciclos.</p>
+
+      <label style="display:block;font-size:0.82rem;color:var(--text,#cdd6f4);margin-bottom:10px;">⏱ Tempo de foco (min)
+        <input type="number" id="pomo-foco" min="1" max="120" value="25" style="width:100%;margin-top:4px;padding:9px;border-radius:8px;border:1px solid var(--border,#45475a);background:var(--bg,#1e1e2e);color:var(--text,#cdd6f4);">
+      </label>
+      <label style="display:block;font-size:0.82rem;color:var(--text,#cdd6f4);margin-bottom:10px;">☕ Pausa curta (min)
+        <input type="number" id="pomo-pausa" min="1" max="60" value="5" style="width:100%;margin-top:4px;padding:9px;border-radius:8px;border:1px solid var(--border,#45475a);background:var(--bg,#1e1e2e);color:var(--text,#cdd6f4);">
+      </label>
+      <label style="display:block;font-size:0.82rem;color:var(--text,#cdd6f4);margin-bottom:10px;">🛋 Pausa longa (min)
+        <input type="number" id="pomo-pausa-longa" min="1" max="120" value="15" style="width:100%;margin-top:4px;padding:9px;border-radius:8px;border:1px solid var(--border,#45475a);background:var(--bg,#1e1e2e);color:var(--text,#cdd6f4);">
+      </label>
+      <label style="display:block;font-size:0.82rem;color:var(--text,#cdd6f4);margin-bottom:16px;">🔁 Pausa longa a cada (ciclos)
+        <input type="number" id="pomo-ciclos" min="1" max="12" value="4" style="width:100%;margin-top:4px;padding:9px;border-radius:8px;border:1px solid var(--border,#45475a);background:var(--bg,#1e1e2e);color:var(--text,#cdd6f4);">
+      </label>
+
+      <div style="display:flex;gap:8px;justify-content:space-between;">
+        <button onclick="resetConfigPomodoro()" style="background:var(--bg,#1e1e2e);border:1px solid var(--border,#45475a);color:var(--text-sub,#9399b2);border-radius:8px;padding:9px 14px;font-size:0.8rem;cursor:pointer;">↺ Padrão</button>
+        <div style="display:flex;gap:8px;">
+          <button onclick="fecharConfigPomodoro()" style="background:var(--bg,#1e1e2e);border:1px solid var(--border,#45475a);color:var(--text,#cdd6f4);border-radius:8px;padding:9px 16px;font-size:0.82rem;cursor:pointer;">Cancelar</button>
+          <button onclick="salvarConfigPomodoro()" style="background:var(--red,#f38ba8);color:#1e1e2e;border:none;border-radius:8px;padding:9px 18px;font-weight:700;font-size:0.82rem;cursor:pointer;">Salvar</button>
+        </div>
+      </div>
     </div>
   </div>
 
