@@ -1611,6 +1611,9 @@ async function loadMetaAdaptativa() {
           <div style="height:3px;background:var(--border);border-radius:2px;margin-top:4px;"><div style="height:100%;width:${p.pct_flashcards}%;background:var(--green);border-radius:2px;"></div></div>
         </div>
       </div>
+      <div style="text-align:center;font-size:0.72rem;color:var(--text-sub);margin-bottom:12px;" title="Meta semanal dividida por 7 dias — os valores acima são da semana toda, não do dia.">
+        📆 Meta semanal • equivale a <strong style="color:var(--text);">≈ ${(m.horas / 7).toFixed(1)} h/dia</strong>, ${Math.round(m.questoes / 7)} questões/dia e ${Math.round(m.flashcards / 7)} flashcards/dia
+      </div>
       ${proj.dias_prova !== null ? `
         <div style="font-size:0.75rem;color:var(--text-sub);display:flex;gap:12px;flex-wrap:wrap;">
           <span>📅 ${proj.dias_prova} dias até a prova</span>
