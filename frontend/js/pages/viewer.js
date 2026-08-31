@@ -1340,9 +1340,15 @@ function _processarRecorte(vx, vy, vw, vh) {
   }
 
   const out = document.createElement('canvas');
-  out.width = Math.round(sw);
-  out.height = Math.round(sh);
+  // Upscale para garantir nitidez ao exibir grande: recortes estreitos são
+  // ampliados até uma largura-alvo (~1400px), preservando a proporção.
+  const larguraAlvo = 1400;
+  const fator = sw < larguraAlvo ? Math.min(3, larguraAlvo / sw) : 1;
+  out.width = Math.round(sw * fator);
+  out.height = Math.round(sh * fator);
   const ctx = out.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
   // Fundo branco (PDF pode ter transparência).
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, out.width, out.height);
@@ -1472,7 +1478,7 @@ async function abrirRevisaoTelaCheia() {
     return;
   }
 
-  body.innerHTML = `<div id="rev-fs-doc" style="max-width:820px;margin:0 auto;font-size:${_revFsZoom}rem;">
+  body.innerHTML = `<div id="rev-fs-doc" style="margin:0 auto;">
     ${blocos.map(_renderBlocoFullscreen).join('')}
   </div>`;
   applyRevFsZoom();
@@ -1480,10 +1486,12 @@ async function abrirRevisaoTelaCheia() {
 
 function _renderBlocoFullscreen(b) {
   const titulo = b.titulo
-    ? `<h2 style="font-size:1.35em;color:var(--teal,#94e2d5);margin:0 0 10px;border-bottom:2px solid var(--border,#45475a);padding-bottom:6px;">${_escHtml(b.titulo)}</h2>`
+    ? `<h2 style="font-size:1.35em;color:var(--teal,#94e2d5);margin:0 0 12px;border-bottom:2px solid var(--border,#45475a);padding-bottom:8px;">${_escHtml(b.titulo)}</h2>`
     : '';
+  // width:100% faz o recorte preencher a largura do documento (ocupa melhor o
+  // espaço mesmo quando o PNG original é pequeno). image-rendering suaviza o upscale.
   const img = (b.tipo === 'recorte' && b.imagem_data)
-    ? `<img src="${b.imagem_data}" alt="Recorte p.${b.pagina}" style="max-width:100%;border-radius:8px;display:block;margin:0 auto 12px;border:1px solid var(--border,#45475a);box-shadow:0 2px 8px rgba(0,0,0,0.3);">`
+    ? `<img src="${b.imagem_data}" alt="Recorte p.${b.pagina}" style="width:100%;height:auto;border-radius:8px;display:block;margin:0 auto 14px;border:1px solid var(--border,#45475a);box-shadow:0 2px 10px rgba(0,0,0,0.35);">`
     : '';
   const conteudo = b.conteudo
     ? `<div style="font-size:1.02em;color:var(--text,#cdd6f4);line-height:1.75;white-space:pre-wrap;margin-bottom:10px;">${_escHtml(b.conteudo)}</div>`
@@ -1499,13 +1507,19 @@ function fecharRevisaoTelaCheia() {
 }
 
 function revFsZoom(dir) {
-  _revFsZoom = Math.max(0.7, Math.min(1.8, _revFsZoom + dir * 0.1));
+  _revFsZoom = Math.max(0.6, Math.min(2.2, _revFsZoom + dir * 0.15));
   applyRevFsZoom();
 }
 
 function applyRevFsZoom() {
   const doc = document.getElementById('rev-fs-doc');
-  if (doc) doc.style.fontSize = _revFsZoom.toFixed(2) + 'rem';
+  if (!doc) return;
+  // O zoom escala a fonte E a largura do documento — como as imagens usam
+  // width:100%, elas crescem/encolhem junto com o zoom (não só o texto).
+  // Largura base ~840px, expandindo até ~1600px no zoom máximo.
+  doc.style.fontSize = _revFsZoom.toFixed(2) + 'rem';
+  const largura = Math.round(840 * _revFsZoom);
+  doc.style.maxWidth = largura + 'px';
 }
 
 // --- Export ---
