@@ -561,6 +561,7 @@ async function selectSideAlt(el) {
 initProgress();
 initTimer();
 _atualizarBotoesTimer();
+initDestaques();
 
 // ========== STUDY TOOLS ==========
 
@@ -2233,14 +2234,269 @@ document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
   if (e.key === 'c' || e.key === 'C') toggleRevisaoPanel();
   if (e.key === 'm' || e.key === 'M') toggleBookmarksPanel();
+  if (e.key === 'h' || e.key === 'H') toggleDestaquesPanel();
   if (e.key === 'Escape' && document.getElementById('crop-overlay').style.display === 'block') cancelarRecorte();
   if (e.key === 'Escape' && document.getElementById('revisao-fullscreen').style.display === 'flex') fecharRevisaoTelaCheia();
 });
+
+// ==================== DESTAQUES (marca-texto persistente por página) ====================
+// Mapa de cores: chave (backend) -> rgba para overlay semitransparente.
+const _DESTAQUE_CORES = {
+  yellow: 'rgba(249,226,175,0.45)',
+  green: 'rgba(166,227,161,0.45)',
+  blue: 'rgba(137,180,250,0.40)',
+  pink: 'rgba(245,194,231,0.45)',
+  orange: 'rgba(250,179,135,0.45)',
+};
+let _destaques = [];          // cache de todos os destaques do PDF
+let _selPendente = null;      // { pagina, rects:[{x,y,w,h}], texto } da seleção atual
+let _destaquesVisible = false;
+
+// Retorna o documento do iframe do PDF.js (mesma origem).
+function _pdfDoc() {
+  const frame = document.getElementById('pdf-frame');
+  try { return frame && frame.contentDocument ? frame.contentDocument : null; } catch (e) { return null; }
+}
+
+// Acha a div.page (PDF.js) que contém um ponto, retornando {pageDiv, pagina}.
+function _pageDivDoRect(doc, cx, cy) {
+  const pages = doc.querySelectorAll('.page[data-page-number]');
+  for (const pg of pages) {
+    const r = pg.getBoundingClientRect();
+    if (cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom) {
+      return { pageDiv: pg, pagina: parseInt(pg.getAttribute('data-page-number'), 10) };
+    }
+  }
+  return null;
+}
+
+// Captura a seleção atual dentro do iframe e monta _selPendente (rects 0-1 por página).
+function _capturarSelecaoDestaque() {
+  const doc = _pdfDoc();
+  if (!doc) return null;
+  const sel = doc.getSelection && doc.getSelection();
+  if (!sel || sel.isCollapsed || sel.rangeCount === 0) return null;
+  const texto = sel.toString().trim();
+  if (!texto) return null;
+
+  const range = sel.getRangeAt(0);
+  const clientRects = Array.from(range.getClientRects()).filter(r => r.width > 1 && r.height > 1);
+  if (clientRects.length === 0) return null;
+
+  let pagina = null, pageDiv = null;
+  const rectsRel = [];
+  for (const cr of clientRects) {
+    const cx = cr.left + cr.width / 2, cy = cr.top + cr.height / 2;
+    const hit = _pageDivDoRect(doc, cx, cy);
+    if (!hit) continue;
+    if (pagina === null) { pagina = hit.pagina; pageDiv = hit.pageDiv; }
+    if (hit.pagina !== pagina) continue; // mantém simples: 1 página por destaque
+    const pr = pageDiv.getBoundingClientRect();
+    if (pr.width <= 0 || pr.height <= 0) continue;
+    rectsRel.push({
+      x: +((cr.left - pr.left) / pr.width).toFixed(4),
+      y: +((cr.top - pr.top) / pr.height).toFixed(4),
+      w: +(cr.width / pr.width).toFixed(4),
+      h: +(cr.height / pr.height).toFixed(4),
+    });
+  }
+  if (pagina === null || rectsRel.length === 0) return null;
+  return { pagina, rects: rectsRel, texto: texto.slice(0, 5000) };
+}
+
+// Mostra a barra de cores perto do fim da seleção.
+function _mostrarColorbar() {
+  const doc = _pdfDoc();
+  const frame = document.getElementById('pdf-frame');
+  const bar = document.getElementById('destaque-colorbar');
+  if (!doc || !bar) return;
+  const sel = doc.getSelection();
+  if (!sel || sel.rangeCount === 0) { _esconderColorbar(); return; }
+  const rects = sel.getRangeAt(0).getClientRects();
+  if (!rects.length) { _esconderColorbar(); return; }
+  const last = rects[rects.length - 1];
+  const fr = frame.getBoundingClientRect();
+  let left = fr.left + last.right - 150;
+  let top = fr.top + last.bottom + 6;
+  left = Math.max(8, Math.min(window.innerWidth - 200, left));
+  top = Math.max(48, Math.min(window.innerHeight - 50, top));
+  bar.style.left = left + 'px';
+  bar.style.top = top + 'px';
+  bar.style.display = 'flex';
+}
+
+function _esconderColorbar() {
+  const bar = document.getElementById('destaque-colorbar');
+  if (bar) bar.style.display = 'none';
+}
+
+// Cria um destaque a partir da seleção pendente, com a cor escolhida.
+async function criarDestaque(cor) {
+  const sel = _selPendente || _capturarSelecaoDestaque();
+  if (!sel) { showStudyToast('🖍️ Selecione um trecho de texto no PDF primeiro.'); return; }
+  _esconderColorbar();
+  try {
+    const res = await fetch('/api/destaques', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pdf_path: path, pagina: sel.pagina, cor, texto: sel.texto, rects: JSON.stringify(sel.rects) }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      _destaques.push({ id: data.id, pdf_path: path, pagina: sel.pagina, cor, texto: sel.texto, rects: JSON.stringify(sel.rects) });
+      _renderDestaquesPagina(sel.pagina);
+      showStudyToast('🖍️ Destaque salvo!');
+      const doc = _pdfDoc();
+      if (doc && doc.getSelection) doc.getSelection().removeAllRanges();
+    } else {
+      showStudyToast('⚠️ ' + (data.detail || 'Erro ao salvar destaque.'));
+    }
+  } catch (e) {
+    showStudyToast('⚠️ Erro de conexão ao salvar destaque.');
+  }
+  _selPendente = null;
+}
+
+// Carrega todos os destaques do PDF e desenha nas páginas já renderizadas.
+async function carregarDestaques() {
+  try {
+    _destaques = await fetch(`/api/destaques/${encodePath(path)}`).then(r => r.json());
+    if (!Array.isArray(_destaques)) _destaques = [];
+  } catch (e) { _destaques = []; }
+  _reaplicarTodosDestaques();
+}
+
+// Desenha os overlays de destaque de uma página específica dentro da div.page.
+function _renderDestaquesPagina(pagina) {
+  const doc = _pdfDoc();
+  if (!doc) return;
+  const pageDiv = doc.querySelector(`.page[data-page-number="${pagina}"]`);
+  if (!pageDiv) return;
+  let layer = pageDiv.querySelector('.concurseiro-hl-layer');
+  if (layer) layer.remove();
+  const doList = _destaques.filter(d => d.pagina === pagina);
+  if (doList.length === 0) return;
+  layer = doc.createElement('div');
+  layer.className = 'concurseiro-hl-layer';
+  layer.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:5;';
+  for (const d of doList) {
+    let rects = [];
+    try { rects = JSON.parse(d.rects || '[]'); } catch (e) { rects = []; }
+    const cor = _DESTAQUE_CORES[d.cor] || _DESTAQUE_CORES.yellow;
+    for (const r of rects) {
+      const div = doc.createElement('div');
+      div.style.cssText = `position:absolute;left:${r.x * 100}%;top:${r.y * 100}%;width:${r.w * 100}%;height:${r.h * 100}%;background:${cor};border-radius:2px;pointer-events:auto;cursor:pointer;mix-blend-mode:multiply;`;
+      div.title = 'Clique para remover este destaque';
+      div.addEventListener('click', (ev) => { ev.stopPropagation(); excluirDestaque(d.id); });
+      layer.appendChild(div);
+    }
+  }
+  pageDiv.appendChild(layer);
+}
+
+// Reaplica em todas as páginas atualmente renderizadas no DOM do PDF.js.
+function _reaplicarTodosDestaques() {
+  const doc = _pdfDoc();
+  if (!doc) return;
+  const paginas = new Set(_destaques.map(d => d.pagina));
+  paginas.forEach(p => _renderDestaquesPagina(p));
+}
+
+async function excluirDestaque(id) {
+  if (!(await confirmModal('Remover destaque', 'Remover este destaque?', { type: 'danger', confirmText: 'Remover' }))) return;
+  try {
+    await fetch(`/api/destaques/${id}`, { method: 'DELETE' });
+  } catch (e) { /* segue e atualiza local */ }
+  const rem = _destaques.find(d => d.id === id);
+  _destaques = _destaques.filter(d => d.id !== id);
+  if (rem) _renderDestaquesPagina(rem.pagina);
+  if (_destaquesVisible) _renderPainelDestaques();
+  showStudyToast('Destaque removido.');
+}
+
+// --- Painel lateral de destaques ---
+function toggleDestaquesPanel() {
+  _destaquesVisible = !_destaquesVisible;
+  const panel = document.getElementById('destaques-panel');
+  panel.style.display = _destaquesVisible ? 'flex' : 'none';
+  const viewer = document.getElementById('viewer');
+  if (viewer) { viewer.style.transition = 'padding-right 0.25s ease'; viewer.style.paddingRight = _destaquesVisible ? '340px' : ''; }
+  if (_destaquesVisible) _renderPainelDestaques();
+}
+
+function _renderPainelDestaques() {
+  const body = document.getElementById('destaques-body');
+  if (!body) return;
+  if (!_destaques || _destaques.length === 0) {
+    body.innerHTML = `<div style="color:var(--text-sub,#585b70);font-size:0.85rem;text-align:center;padding:24px 12px;line-height:1.6;">
+      Nenhum destaque ainda.<br><br>Selecione um trecho de texto no PDF e escolha uma cor na barra que aparece.</div>`;
+    return;
+  }
+  const ordenados = [..._destaques].sort((a, b) => a.pagina - b.pagina || a.id - b.id);
+  body.innerHTML = ordenados.map(d => {
+    const cor = _DESTAQUE_CORES[d.cor] || _DESTAQUE_CORES.yellow;
+    const txt = (d.texto && d.texto.trim()) ? _escHtml(d.texto.trim()) : '(sem texto)';
+    return `<div style="background:var(--bg,#1e1e2e);border-left:4px solid ${cor};border-radius:8px;padding:10px 12px;margin-bottom:8px;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+        <span style="font-size:0.7rem;color:var(--blue,#89b4fa);cursor:pointer;" onclick="goToPage(${d.pagina})" title="Ir para a página">p.${d.pagina}</span>
+        <span style="flex:1;"></span>
+        <button onclick="excluirDestaque(${d.id})" title="Remover" style="background:none;border:none;color:var(--red,#f38ba8);cursor:pointer;font-size:0.78rem;">🗑</button>
+      </div>
+      <div style="font-size:0.82rem;color:var(--text,#cdd6f4);line-height:1.5;cursor:pointer;" onclick="goToPage(${d.pagina})">${txt}</div>
+    </div>`;
+  }).join('');
+}
+
+// Liga os eventos de seleção no iframe (chamado após o PDF.js carregar).
+function _setupDestaqueEvents() {
+  const doc = _pdfDoc();
+  if (!doc) return false;
+  if (doc._hlBound) return true; // evita bind duplicado
+  doc._hlBound = true;
+  doc.addEventListener('mouseup', () => {
+    setTimeout(() => {
+      const sel = _capturarSelecaoDestaque();
+      if (sel) { _selPendente = sel; _mostrarColorbar(); }
+      else { _selPendente = null; _esconderColorbar(); }
+    }, 10);
+  });
+  doc.addEventListener('scroll', () => { _esconderColorbar(); reaplicarDestaquesDebounced(); }, true);
+  return true;
+}
+
+// Reaplica destaques com debounce (páginas do PDF.js entram/saem do DOM ao rolar).
+let _reaplicarTimer = null;
+function reaplicarDestaquesDebounced() {
+  clearTimeout(_reaplicarTimer);
+  _reaplicarTimer = setTimeout(() => _reaplicarTodosDestaques(), 250);
+}
+
+// Inicialização: espera o PDF.js montar, liga eventos e carrega destaques.
+function initDestaques() {
+  let tries = 0;
+  const iv = setInterval(() => {
+    tries++;
+    const doc = _pdfDoc();
+    let app = null;
+    try { app = document.getElementById('pdf-frame').contentWindow.PDFViewerApplication; } catch (e) { app = null; }
+    if (doc && app && app.pdfDocument) {
+      _setupDestaqueEvents();
+      carregarDestaques();
+      setInterval(() => _reaplicarTodosDestaques(), 1500);
+      clearInterval(iv);
+    } else if (tries > 60) {
+      clearInterval(iv);
+    }
+  }, 300);
+}
+
 
 // === Window assignments for HTML onclick/onchange handlers ===
 window.toggleNotePanel = toggleNotePanel;
 window.toggleTimerPause = toggleTimerPause;
 window.pararTimer = pararTimer;
+window.criarDestaque = criarDestaque;
+window.toggleDestaquesPanel = toggleDestaquesPanel;
+window.excluirDestaque = excluirDestaque;
 window.addBookmark = addBookmark;
 window.toggleBookmarksPanel = toggleBookmarksPanel;
 window.loadBookmarksPanel = loadBookmarksPanel;
