@@ -1233,6 +1233,32 @@ def test_ai_config_endpoint(
 _MAX_CHARS_TRECHO_PDF = 24000
 
 
+def _parse_json_llm(text: str):
+    """Extrai o JSON de uma resposta do LLM, tolerando cerca de markdown (```json).
+
+    Retorna o objeto Python parseado ou None se não for possível.
+    """
+    if not text:
+        return None
+    clean = text.strip()
+    if clean.startswith("```"):
+        linhas = clean.split("\n")
+        # remove a primeira linha (```json) e a última se for ```
+        clean = "\n".join(linhas[1:-1] if linhas[-1].strip() == "```" else linhas[1:])
+    try:
+        return json.loads(clean)
+    except (json.JSONDecodeError, ValueError):
+        # Última tentativa: recortar do primeiro '[' ou '{' ao último ']' ou '}'
+        for abre, fecha in (("[", "]"), ("{", "}")):
+            i, j = clean.find(abre), clean.rfind(fecha)
+            if i != -1 and j != -1 and j > i:
+                try:
+                    return json.loads(clean[i:j + 1])
+                except (json.JSONDecodeError, ValueError):
+                    pass
+        return None
+
+
 def _resolver_pdf_path(pdf_path: str) -> str:
     """Resolve o caminho do PDF dentro do PDF_ROOT com proteção anti-traversal.
 
@@ -1344,5 +1370,63 @@ def analisar_pdf(
             "budget": budget,
         }
 
-    # Fases 1b/1c: flashcards e questoes (ainda não implementadas aqui)
+    if acao == "flashcards":
+        user_message = (
+            f"A partir do TRECHO do material '{nome_pdf}' ({contexto_paginas}), "
+            f"crie {body.quantidade} flashcards de estudo."
+            + (f" Matéria: {body.materia}." if body.materia else "")
+            + "\n\nTRECHO:\n"
+            + trecho
+        )
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPTS["generate_flashcards"]},
+            {"role": "user", "content": user_message},
+        ]
+        log.info(f"[AI] analisar-pdf flashcards user={user_id} pdf={nome_pdf[:40]} {contexto_paginas}")
+        text, tokens = call_llm_sync(messages, max_tokens=2000)
+        _record_usage(db, user_id, tokens, "flashcards_pdf", f"{nome_pdf} {contexto_paginas}", text[:500])
+
+        flashcards = _parse_json_llm(text)
+        if not isinstance(flashcards, list):
+            flashcards = None
+
+        salvos = 0
+        if body.salvar and flashcards:
+            materia_fc = body.materia or nome_pdf
+            for fc in flashcards:
+                if not isinstance(fc, dict):
+                    continue
+                pergunta = (fc.get("pergunta") or "").strip()
+                resposta = (fc.get("resposta") or "").strip()
+                if not pergunta or not resposta:
+                    continue
+                try:
+                    db.execute(
+                        """INSERT INTO flashcards (pergunta, resposta, proxima_revisao, materia, user_id)
+                           VALUES (?, ?, ?, ?, ?)""",
+                        (pergunta, resposta, _get_today_str(), materia_fc, user_id),
+                    )
+                    salvos += 1
+                except Exception as e:
+                    log.warning(f"[AI] Erro ao salvar flashcard do PDF: {e}")
+            if salvos:
+                db.commit()
+
+        updated_usage = _get_daily_usage(db, user_id)
+        return {
+            "ok": True,
+            "acao": "flashcards",
+            "flashcards": flashcards,
+            "resposta": text,
+            "pdf": nome_pdf,
+            "paginas": {"inicial": body.pagina_inicial, "final": body.pagina_final, "total": total_paginas},
+            "trecho_truncado": truncado,
+            "salvos": salvos,
+            "salvo": body.salvar and salvos > 0,
+            "tokens_usados": tokens,
+            "uso_diario": updated_usage,
+            "budget": budget,
+        }
+
+    # Fase 1c: questoes (ainda não implementada aqui)
     raise HTTPException(status_code=501, detail=f"Ação '{acao}' ainda não implementada.")

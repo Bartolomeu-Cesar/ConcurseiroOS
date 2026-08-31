@@ -158,9 +158,65 @@ class TestAnalisarPdfResumo:
         assert r.status_code == 422
 
     @patch("routers.ai_tutor.call_llm_sync")
-    def test_flashcards_ainda_nao_implementado_501(self, mock_llm):
+    def test_questoes_ainda_nao_implementado_501(self, mock_llm):
         mock_llm.return_value = ("x", 1)
         r = client.post("/api/ai/analisar-pdf", json={
-            "pdf_path": _PDF_REL, "acao": "flashcards",
+            "pdf_path": _PDF_REL, "acao": "questoes",
         })
         assert r.status_code == 501
+
+
+class TestAnalisarPdfFlashcards:
+    @patch("routers.ai_tutor.call_llm_sync")
+    def test_flashcards_gera_e_parseia(self, mock_llm):
+        mock_llm.return_value = (
+            '[{"pergunta": "O que é TCP/IP?", "resposta": "Base da comunicação na internet."},'
+            ' {"pergunta": "Quantas camadas tem o OSI?", "resposta": "Sete."}]',
+            200,
+        )
+        r = client.post("/api/ai/analisar-pdf", json={
+            "pdf_path": _PDF_REL, "acao": "flashcards", "pagina_inicial": 1, "pagina_final": 3,
+            "quantidade": 2, "materia": "Informática",
+        })
+        assert r.status_code == 200, r.text
+        data = r.json()
+        assert data["acao"] == "flashcards"
+        assert isinstance(data["flashcards"], list)
+        assert len(data["flashcards"]) == 2
+        assert data["salvo"] is False  # salvar não pedido
+        assert data["salvos"] == 0
+
+    @patch("routers.ai_tutor.call_llm_sync")
+    def test_flashcards_salva_no_banco(self, mock_llm):
+        mock_llm.return_value = (
+            '```json\n[{"pergunta": "P1", "resposta": "R1"}, {"pergunta": "P2", "resposta": "R2"}]\n```',
+            150,
+        )
+        r = client.post("/api/ai/analisar-pdf", json={
+            "pdf_path": _PDF_REL, "acao": "flashcards", "materia": "Redes", "salvar": True,
+        })
+        assert r.status_code == 200, r.text
+        data = r.json()
+        assert data["salvo"] is True
+        assert data["salvos"] == 2
+        # confirma persistência
+        c = sqlite3.connect(_tmp_db.name, timeout=10)
+        try:
+            n = c.execute(
+                "SELECT COUNT(*) FROM flashcards WHERE materia = 'Redes' AND pergunta IN ('P1','P2')"
+            ).fetchone()[0]
+        finally:
+            c.close()
+        assert n == 2
+
+    @patch("routers.ai_tutor.call_llm_sync")
+    def test_flashcards_json_invalido_nao_quebra(self, mock_llm):
+        mock_llm.return_value = ("desculpe, não consegui gerar", 50)
+        r = client.post("/api/ai/analisar-pdf", json={
+            "pdf_path": _PDF_REL, "acao": "flashcards", "salvar": True,
+        })
+        assert r.status_code == 200
+        data = r.json()
+        assert data["flashcards"] is None
+        assert data["salvos"] == 0
+        assert data["salvo"] is False
