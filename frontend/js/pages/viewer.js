@@ -351,6 +351,16 @@ let sidePanelMateria = '';
 
 function toggleSidePanel() {
   const panel = document.getElementById('side-panel');
+  const vaiAbrir = !panel.classList.contains('open');
+  if (vaiAbrir) {
+    // Exclusão mútua: fecha os painéis fixed do lado direito e zera o padding
+    // do viewer (o #side-panel empurra o PDF sozinho, por ser flex-item).
+    _fecharPaineisFixed(null);
+    _aplicarPaddingViewer(0);
+    _painelAtivo = 'questoes';
+  } else if (_painelAtivo === 'questoes') {
+    _painelAtivo = null;
+  }
   panel.classList.toggle('open');
   if (panel.classList.contains('open') && sidePanelQuestions.length === 0) {
     loadSidePanelQuestions();
@@ -560,10 +570,7 @@ const _BM_CORES = {
 };
 
 function toggleBookmarksPanel() {
-  bookmarksVisible = !bookmarksVisible;
-  const panel = document.getElementById('bookmarks-panel');
-  panel.style.display = bookmarksVisible ? 'flex' : 'none';
-  if (bookmarksVisible) loadBookmarksPanel();
+  _togglePainelDireita('bookmarks', loadBookmarksPanel);
 }
 
 async function loadBookmarksPanel() {
@@ -741,10 +748,7 @@ function salvarConfigPomodoro() {
 // --- Study Summary ---
 let summaryVisible = false;
 function toggleStudySummary() {
-  summaryVisible = !summaryVisible;
-  const panel = document.getElementById('summary-panel');
-  panel.style.display = summaryVisible ? 'flex' : 'none';
-  if (summaryVisible) loadStudySummary();
+  _togglePainelDireita('summary', loadStudySummary);
 }
 
 async function loadStudySummary() {
@@ -1179,19 +1183,75 @@ setInterval(() => {
 let revisaoVisible = false;
 let _cropState = null; // { startX, startY } durante o arraste
 
-function toggleRevisaoPanel() {
-  revisaoVisible = !revisaoVisible;
-  const panel = document.getElementById('revisao-panel');
-  panel.style.display = revisaoVisible ? 'flex' : 'none';
-  // Empurra o PDF para a esquerda pela largura do painel (380px) para que ele
-  // não fique coberto. O #viewer é flex e o iframe tem flex:1, então reduzir a
-  // área via padding-right encolhe o PDF em vez de sobrepô-lo.
+// ---------- Gerenciador central de painéis laterais (lado direito) ----------
+// Painéis fixed que ocupam o lado direito e cobririam o PDF. São mutuamente
+// exclusivos: abrir um fecha os demais. O #viewer (flex, iframe flex:1) recebe
+// padding-right = largura do painel ativo, empurrando o PDF para a esquerda.
+// O #side-panel (Questões) vive DENTRO do flex e já empurra sozinho, mas também
+// participa da exclusão para não haver dois painéis abertos ao mesmo tempo.
+const _PAINEIS_DIREITA = {
+  revisao: { el: 'revisao-panel', largura: 380 },
+  bookmarks: { el: 'bookmarks-panel', largura: 340 },
+  summary: { el: 'summary-panel', largura: 320 },
+};
+let _painelAtivo = null; // 'revisao' | 'bookmarks' | 'summary' | 'questoes' | null
+
+function _aplicarPaddingViewer(px) {
   const viewer = document.getElementById('viewer');
-  if (viewer) {
-    viewer.style.transition = 'padding-right 0.25s ease';
-    viewer.style.paddingRight = revisaoVisible ? '380px' : '';
+  if (!viewer) return;
+  viewer.style.transition = 'padding-right 0.25s ease';
+  viewer.style.paddingRight = px ? `${px}px` : '';
+}
+
+// Fecha todos os painéis fixed do lado direito e, opcionalmente, o de questões.
+// Não altera o padding aqui — quem chama decide o estado final.
+function _fecharPaineisFixed(exceto) {
+  for (const [nome, cfg] of Object.entries(_PAINEIS_DIREITA)) {
+    if (nome === exceto) continue;
+    const el = document.getElementById(cfg.el);
+    if (el) el.style.display = 'none';
   }
-  if (revisaoVisible) loadRevisao();
+  // Sincroniza as flags de visibilidade dos toggles legados.
+  if (exceto !== 'revisao') revisaoVisible = false;
+  if (exceto !== 'bookmarks') bookmarksVisible = false;
+  if (exceto !== 'summary') summaryVisible = false;
+}
+
+// Abre/fecha um painel fixed garantindo exclusão mútua. Retorna true se ficou
+// aberto. `onOpen` é chamado quando o painel passa a ficar visível.
+function _togglePainelDireita(nome, onOpen) {
+  const cfg = _PAINEIS_DIREITA[nome];
+  const el = document.getElementById(cfg.el);
+  if (!el) return false;
+  const vaiAbrir = _painelAtivo !== nome;
+
+  // Fecha os outros painéis fixed e o de questões (flex).
+  _fecharPaineisFixed(nome);
+  const sidePanel = document.getElementById('side-panel');
+  if (sidePanel && nome !== 'questoes') sidePanel.classList.remove('open');
+
+  if (vaiAbrir) {
+    el.style.display = 'flex';
+    _painelAtivo = nome;
+    _aplicarPaddingViewer(cfg.largura);
+    // flag legada
+    if (nome === 'revisao') revisaoVisible = true;
+    else if (nome === 'bookmarks') bookmarksVisible = true;
+    else if (nome === 'summary') summaryVisible = true;
+    if (typeof onOpen === 'function') onOpen();
+  } else {
+    el.style.display = 'none';
+    _painelAtivo = null;
+    _aplicarPaddingViewer(0);
+    if (nome === 'revisao') revisaoVisible = false;
+    else if (nome === 'bookmarks') bookmarksVisible = false;
+    else if (nome === 'summary') summaryVisible = false;
+  }
+  return vaiAbrir;
+}
+
+function toggleRevisaoPanel() {
+  _togglePainelDireita('revisao', loadRevisao);
 }
 
 async function loadRevisao() {
