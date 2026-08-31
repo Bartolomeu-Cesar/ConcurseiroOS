@@ -582,27 +582,38 @@ function _renderOrgTree(nodes, container) {
 function _setupDropZone(zone, pastaId) {
   zone.addEventListener('dragover', (e) => {
     e.preventDefault();
+    e.stopPropagation();
     e.dataTransfer.dropEffect = 'move';
     zone.style.borderColor = 'var(--accent)';
     zone.style.background = 'rgba(137,180,250,0.05)';
   });
-  zone.addEventListener('dragleave', () => {
+  zone.addEventListener('dragleave', (e) => {
+    e.stopPropagation();
     zone.style.borderColor = 'transparent';
     zone.style.background = '';
   });
   zone.addEventListener('drop', async (e) => {
     e.preventDefault();
+    // CRÍTICO: impede que o evento borbulhe até a drop-zone raiz (#tree),
+    // cujo handler moveria o PDF de volta para a raiz (pasta_id=null),
+    // desfazendo o movimento para a pasta destino.
+    e.stopPropagation();
     zone.style.borderColor = 'transparent';
     zone.style.background = '';
     const pdfPath = e.dataTransfer.getData('text/plain');
     if (!pdfPath) return;
 
     try {
-      await fetch('/api/pdf/mover', {
+      const res = await fetch('/api/pdf/mover', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pdf_path: pdfPath, pasta_virtual_id: pastaId || null })
+        body: JSON.stringify({ pdf_path: pdfPath, pasta_virtual_id: pastaId ?? null })
       });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast(err.detail || 'Erro ao mover PDF', 'error');
+        return;
+      }
       toast(`📄 PDF movido ${pastaId ? 'para a pasta' : 'para raiz'}!`, 'success', 1500);
       _loadOrganizacao(); // Recarrega
     } catch(e) { toast('Erro ao mover PDF', 'error'); }
