@@ -1192,6 +1192,9 @@ const _REV_TAGS = {
 };
 let _revFsTagFiltro = ''; // filtro de tag ativo na tela cheia ('' = todas)
 let _revFsBusca = '';     // termo de busca ativo na tela cheia
+let _revFsZoom = 1.0;     // zoom do documento na tela cheia
+let _revFsRecall = false; // Modo Recall (Retrieval Practice): oculta conteúdo
+let _revFsBlocos = [];    // cache dos blocos carregados p/ re-render sem refetch
 let _cropState = null; // { startX, startY } durante o arraste
 
 // ---------- Gerenciador central de painéis laterais (lado direito) ----------
