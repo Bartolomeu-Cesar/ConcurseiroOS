@@ -128,3 +128,27 @@ def test_isolamento_por_usuario():
 def test_path_traversal_bloqueado():
     r = client.get("/api/destaques/../../etc/passwd")
     assert r.status_code in (400, 404)
+
+
+def test_estilo_default_highlight():
+    client.post("/api/destaques", json={
+        "pdf_path": PDF_PATH, "pagina": 1, "cor": "yellow", "rects": RECTS,
+    })
+    d = client.get(f"/api/destaques/{PDF_PATH}").json()[0]
+    assert d["estilo"] == "highlight"
+
+
+def test_estilos_validos():
+    for estilo in ("highlight", "underline", "strike", "box"):
+        r = client.post("/api/destaques", json={
+            "pdf_path": PDF_PATH, "pagina": 1, "cor": "green", "rects": RECTS, "estilo": estilo,
+        })
+        assert r.status_code == 200, r.text
+        assert r.json()["estilo"] == estilo
+
+
+def test_estilo_invalido_422():
+    r = client.post("/api/destaques", json={
+        "pdf_path": PDF_PATH, "pagina": 1, "cor": "green", "rects": RECTS, "estilo": "neon",
+    })
+    assert r.status_code == 422

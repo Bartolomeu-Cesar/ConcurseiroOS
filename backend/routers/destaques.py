@@ -19,10 +19,12 @@ router = APIRouter(prefix="", tags=["Destaques"])
 
 # Paleta de cores permitidas (chaves; o frontend mapeia para o valor CSS).
 _CORES_VALIDAS = {"yellow", "green", "blue", "pink", "orange"}
+_ESTILOS_VALIDOS = {"highlight", "underline", "strike", "box"}
 _MAX_RECTS = 60
 
 
 def _destaque_to_dict(row) -> dict:
+    keys = row.keys()
     return {
         "id": row["id"],
         "pdf_path": row["pdf_path"],
@@ -30,6 +32,7 @@ def _destaque_to_dict(row) -> dict:
         "cor": row["cor"],
         "texto": row["texto"],
         "rects": row["rects"] or "[]",
+        "estilo": (row["estilo"] or "highlight") if "estilo" in keys else "highlight",
         "created_at": row["created_at"],
     }
 
@@ -86,18 +89,21 @@ def create_destaque(body: DestaqueCreate, conn=Depends(get_db_session), user_id:
     cor = (body.cor or "yellow").strip().lower()
     if cor not in _CORES_VALIDAS:
         raise HTTPException(status_code=422, detail=f"Cor inválida. Use: {', '.join(sorted(_CORES_VALIDAS))}.")
+    estilo = (body.estilo or "highlight").strip().lower()
+    if estilo not in _ESTILOS_VALIDOS:
+        raise HTTPException(status_code=422, detail=f"Estilo inválido. Use: {', '.join(sorted(_ESTILOS_VALIDOS))}.")
     pagina = max(1, int(body.pagina or 1))
     texto = sanitize_input(body.texto or "", max_length=5000)
     rects = _validar_rects(body.rects)
 
     cur = conn.execute(
-        """INSERT INTO destaques_pdf (user_id, pdf_path, pagina, cor, texto, rects, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        (user_id, body.pdf_path, pagina, cor, texto, rects, datetime.now().isoformat()),
+        """INSERT INTO destaques_pdf (user_id, pdf_path, pagina, cor, texto, rects, estilo, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        (user_id, body.pdf_path, pagina, cor, texto, rects, estilo, datetime.now().isoformat()),
     )
     conn.commit()
-    log.info(f"Destaque criado: {body.pdf_path} p.{pagina} cor={cor} user={user_id}")
-    return {"ok": True, "id": cur.lastrowid, "pagina": pagina, "cor": cor}
+    log.info(f"Destaque criado: {body.pdf_path} p.{pagina} cor={cor} estilo={estilo} user={user_id}")
+    return {"ok": True, "id": cur.lastrowid, "pagina": pagina, "cor": cor, "estilo": estilo}
 
 
 @router.delete("/api/destaques/{id}", response_model=OkResponse, summary="Excluir destaque")

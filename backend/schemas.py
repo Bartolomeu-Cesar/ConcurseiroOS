@@ -889,3 +889,5 @@ class DestaqueCreate(BaseModel):
     texto: str = Field(default="", max_length=5000)
     # JSON com a lista de retângulos da seleção, coords relativas 0-1 à página.
     rects: str = Field(default="[]", max_length=20000)
+    # Estilo: highlight | underline | strike | box
+    estilo: str = Field(default="highlight", max_length=20)

@@ -308,13 +308,21 @@
   </div>
   </div>
 
-  <!-- Barra flutuante de cores (aparece ao selecionar texto no PDF) -->
-  <div id="destaque-colorbar" style="display:none;position:fixed;z-index:600;background:var(--bg-surface,#313244);border:1px solid var(--border,#45475a);border-radius:24px;padding:6px 10px;box-shadow:0 4px 16px rgba(0,0,0,0.5);gap:6px;align-items:center;">
-    <button onclick="criarDestaque('yellow')" title="Amarelo" style="width:22px;height:22px;border-radius:50%;border:2px solid #fff2;background:#f9e2af;cursor:pointer;"></button>
-    <button onclick="criarDestaque('green')" title="Verde" style="width:22px;height:22px;border-radius:50%;border:2px solid #fff2;background:#a6e3a1;cursor:pointer;"></button>
-    <button onclick="criarDestaque('blue')" title="Azul" style="width:22px;height:22px;border-radius:50%;border:2px solid #fff2;background:#89b4fa;cursor:pointer;"></button>
-    <button onclick="criarDestaque('pink')" title="Rosa" style="width:22px;height:22px;border-radius:50%;border:2px solid #fff2;background:#f5c2e7;cursor:pointer;"></button>
-    <button onclick="criarDestaque('orange')" title="Laranja" style="width:22px;height:22px;border-radius:50%;border:2px solid #fff2;background:#fab387;cursor:pointer;"></button>
+  <!-- Barra flutuante de estilo + cores (aparece ao selecionar texto no PDF) -->
+  <div id="destaque-colorbar" style="display:none;position:fixed;z-index:600;background:var(--bg-surface,#313244);border:1px solid var(--border,#45475a);border-radius:12px;padding:6px 8px;box-shadow:0 4px 16px rgba(0,0,0,0.5);flex-direction:column;gap:6px;">
+    <div style="display:flex;gap:4px;align-items:center;justify-content:center;">
+      <button data-estilo="highlight" onclick="setDestaqueEstilo('highlight')" title="Marca-texto" style="background:var(--bg-elevated,#45475a);border:none;color:var(--text,#cdd6f4);border-radius:6px;padding:3px 8px;font-size:0.9rem;cursor:pointer;">🖍️</button>
+      <button data-estilo="underline" onclick="setDestaqueEstilo('underline')" title="Sublinhado" style="background:var(--bg-elevated,#45475a);border:none;color:var(--text,#cdd6f4);border-radius:6px;padding:3px 8px;font-size:0.9rem;cursor:pointer;text-decoration:underline;">S</button>
+      <button data-estilo="strike" onclick="setDestaqueEstilo('strike')" title="Tachado" style="background:var(--bg-elevated,#45475a);border:none;color:var(--text,#cdd6f4);border-radius:6px;padding:3px 8px;font-size:0.9rem;cursor:pointer;text-decoration:line-through;">T</button>
+      <button data-estilo="box" onclick="setDestaqueEstilo('box')" title="Caixa (contorno)" style="background:var(--bg-elevated,#45475a);border:1px solid var(--text-sub,#9399b2);color:var(--text,#cdd6f4);border-radius:6px;padding:2px 7px;font-size:0.8rem;cursor:pointer;">▢</button>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center;justify-content:center;">
+      <button onclick="criarDestaque('yellow')" title="Amarelo" style="width:22px;height:22px;border-radius:50%;border:2px solid #fff2;background:#f9e2af;cursor:pointer;"></button>
+      <button onclick="criarDestaque('green')" title="Verde" style="width:22px;height:22px;border-radius:50%;border:2px solid #fff2;background:#a6e3a1;cursor:pointer;"></button>
+      <button onclick="criarDestaque('blue')" title="Azul" style="width:22px;height:22px;border-radius:50%;border:2px solid #fff2;background:#89b4fa;cursor:pointer;"></button>
+      <button onclick="criarDestaque('pink')" title="Rosa" style="width:22px;height:22px;border-radius:50%;border:2px solid #fff2;background:#f5c2e7;cursor:pointer;"></button>
+      <button onclick="criarDestaque('orange')" title="Laranja" style="width:22px;height:22px;border-radius:50%;border:2px solid #fff2;background:#fab387;cursor:pointer;"></button>
+    </div>
   </div>
 
   <!-- Painel dedicado de Destaques -->

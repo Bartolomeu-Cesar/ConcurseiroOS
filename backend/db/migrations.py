@@ -723,6 +723,16 @@ def _m65_destaques_pdf(conn):
     log.info("Migration: created destaques_pdf table")
 
 
+def _m66_destaques_estilo(conn):
+    """Estilo de marcação do destaque: highlight (marca-texto), underline
+    (sublinhado), strike (tachado), box (contorno). Default highlight."""
+    try:
+        conn.execute("ALTER TABLE destaques_pdf ADD COLUMN estilo TEXT DEFAULT 'highlight'")
+        log.info("Migration: added estilo column to destaques_pdf")
+    except Exception:
+        pass  # coluna já existe
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -789,6 +799,7 @@ MIGRATIONS = [
     (63, _m63_revisao_agenda),
     (64, _m64_revisao_tag),
     (65, _m65_destaques_pdf),
+    (66, _m66_destaques_estilo),
 ]
 
 

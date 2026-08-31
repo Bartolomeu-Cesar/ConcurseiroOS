@@ -330,6 +330,7 @@ def _create_tables(conn):
             cor TEXT NOT NULL DEFAULT 'yellow',
             texto TEXT DEFAULT '',
             rects TEXT NOT NULL DEFAULT '[]',
+            estilo TEXT DEFAULT 'highlight',
             created_at TEXT NOT NULL
         )
     """)

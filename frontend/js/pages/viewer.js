@@ -2240,7 +2240,7 @@ document.addEventListener('keydown', e => {
 });
 
 // ==================== DESTAQUES (marca-texto persistente por página) ====================
-// Mapa de cores: chave (backend) -> rgba para overlay semitransparente.
+// Mapa de cores: chave (backend) -> rgba para overlay semitransparente (highlight).
 const _DESTAQUE_CORES = {
   yellow: 'rgba(249,226,175,0.45)',
   green: 'rgba(166,227,161,0.45)',
@@ -2248,9 +2248,26 @@ const _DESTAQUE_CORES = {
   pink: 'rgba(245,194,231,0.45)',
   orange: 'rgba(250,179,135,0.45)',
 };
+// Cores sólidas (para linha de sublinhado/tachado e contorno da caixa).
+const _DESTAQUE_CORES_SOLIDAS = {
+  yellow: '#f9e2af', green: '#a6e3a1', blue: '#89b4fa', pink: '#f5c2e7', orange: '#fab387',
+};
 let _destaques = [];          // cache de todos os destaques do PDF
 let _selPendente = null;      // { pagina, rects:[{x,y,w,h}], texto } da seleção atual
 let _destaquesVisible = false;
+let _destaqueEstilo = 'highlight'; // estilo atual escolhido na barra
+
+// Define o estilo de marcação atual e destaca o botão ativo na barra.
+function setDestaqueEstilo(estilo) {
+  _destaqueEstilo = estilo;
+  const bar = document.getElementById('destaque-colorbar');
+  if (bar) {
+    bar.querySelectorAll('[data-estilo]').forEach(b => {
+      const ativo = b.getAttribute('data-estilo') === estilo;
+      b.style.outline = ativo ? '2px solid var(--accent,#cba6f7)' : 'none';
+    });
+  }
+}
 
 // Retorna o documento do iframe do PDF.js (mesma origem).
 function _pdfDoc() {
@@ -2323,6 +2340,7 @@ function _mostrarColorbar() {
   bar.style.left = left + 'px';
   bar.style.top = top + 'px';
   bar.style.display = 'flex';
+  setDestaqueEstilo(_destaqueEstilo); // realça o botão do estilo atual
 }
 
 function _esconderColorbar() {
@@ -2335,23 +2353,24 @@ async function criarDestaque(cor) {
   const sel = _selPendente || _capturarSelecaoDestaque();
   if (!sel) { showStudyToast('🖍️ Selecione um trecho de texto no PDF primeiro.'); return; }
   _esconderColorbar();
+  const estilo = _destaqueEstilo || 'highlight';
   try {
     const res = await fetch('/api/destaques', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pdf_path: path, pagina: sel.pagina, cor, texto: sel.texto, rects: JSON.stringify(sel.rects) }),
+      body: JSON.stringify({ pdf_path: path, pagina: sel.pagina, cor, texto: sel.texto, rects: JSON.stringify(sel.rects), estilo }),
     });
     const data = await res.json().catch(() => ({}));
     if (res.ok) {
-      _destaques.push({ id: data.id, pdf_path: path, pagina: sel.pagina, cor, texto: sel.texto, rects: JSON.stringify(sel.rects) });
+      _destaques.push({ id: data.id, pdf_path: path, pagina: sel.pagina, cor, texto: sel.texto, rects: JSON.stringify(sel.rects), estilo });
       _renderDestaquesPagina(sel.pagina);
-      showStudyToast('🖍️ Destaque salvo!');
+      showStudyToast('🖍️ Marcação salva!');
       const doc = _pdfDoc();
       if (doc && doc.getSelection) doc.getSelection().removeAllRanges();
     } else {
-      showStudyToast('⚠️ ' + (data.detail || 'Erro ao salvar destaque.'));
+      showStudyToast('⚠️ ' + (data.detail || 'Erro ao salvar marcação.'));
     }
   } catch (e) {
-    showStudyToast('⚠️ Erro de conexão ao salvar destaque.');
+    showStudyToast('⚠️ Erro de conexão ao salvar marcação.');
   }
   _selPendente = null;
 }
@@ -2381,11 +2400,27 @@ function _renderDestaquesPagina(pagina) {
   for (const d of doList) {
     let rects = [];
     try { rects = JSON.parse(d.rects || '[]'); } catch (e) { rects = []; }
-    const cor = _DESTAQUE_CORES[d.cor] || _DESTAQUE_CORES.yellow;
+    const estilo = d.estilo || 'highlight';
+    const corBg = _DESTAQUE_CORES[d.cor] || _DESTAQUE_CORES.yellow;
+    const corSolida = _DESTAQUE_CORES_SOLIDAS[d.cor] || _DESTAQUE_CORES_SOLIDAS.yellow;
     for (const r of rects) {
       const div = doc.createElement('div');
-      div.style.cssText = `position:absolute;left:${r.x * 100}%;top:${r.y * 100}%;width:${r.w * 100}%;height:${r.h * 100}%;background:${cor};border-radius:2px;pointer-events:auto;cursor:pointer;mix-blend-mode:multiply;`;
-      div.title = 'Clique para remover este destaque';
+      let extra;
+      if (estilo === 'underline') {
+        // Linha na base do retângulo (sublinhado).
+        extra = `background:transparent;border-bottom:2px solid ${corSolida};`;
+      } else if (estilo === 'strike') {
+        // Linha no meio (tachado) via gradiente de fundo fino centralizado.
+        extra = `background:linear-gradient(${corSolida},${corSolida}) center/100% 2px no-repeat;`;
+      } else if (estilo === 'box') {
+        // Contorno retangular.
+        extra = `background:transparent;border:1.5px solid ${corSolida};border-radius:3px;`;
+      } else {
+        // highlight (padrão): marca-texto.
+        extra = `background:${corBg};border-radius:2px;mix-blend-mode:multiply;`;
+      }
+      div.style.cssText = `position:absolute;left:${r.x * 100}%;top:${r.y * 100}%;width:${r.w * 100}%;height:${r.h * 100}%;pointer-events:auto;cursor:pointer;${extra}`;
+      div.title = 'Clique para remover esta marcação';
       div.addEventListener('click', (ev) => { ev.stopPropagation(); excluirDestaque(d.id); });
       layer.appendChild(div);
     }
@@ -2432,11 +2467,14 @@ function _renderPainelDestaques() {
     return;
   }
   const ordenados = [..._destaques].sort((a, b) => a.pagina - b.pagina || a.id - b.id);
+  const _ESTILO_ICONE = { highlight: '🖍️', underline: 'S̲', strike: 'S̶', box: '▢' };
   body.innerHTML = ordenados.map(d => {
     const cor = _DESTAQUE_CORES[d.cor] || _DESTAQUE_CORES.yellow;
     const txt = (d.texto && d.texto.trim()) ? _escHtml(d.texto.trim()) : '(sem texto)';
+    const icone = _ESTILO_ICONE[d.estilo || 'highlight'] || '🖍️';
     return `<div style="background:var(--bg,#1e1e2e);border-left:4px solid ${cor};border-radius:8px;padding:10px 12px;margin-bottom:8px;">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+        <span title="Estilo" style="font-size:0.8rem;">${icone}</span>
         <span style="font-size:0.7rem;color:var(--blue,#89b4fa);cursor:pointer;" onclick="goToPage(${d.pagina})" title="Ir para a página">p.${d.pagina}</span>
         <span style="flex:1;"></span>
         <button onclick="excluirDestaque(${d.id})" title="Remover" style="background:none;border:none;color:var(--red,#f38ba8);cursor:pointer;font-size:0.78rem;">🗑</button>
@@ -2497,6 +2535,7 @@ window.pararTimer = pararTimer;
 window.criarDestaque = criarDestaque;
 window.toggleDestaquesPanel = toggleDestaquesPanel;
 window.excluirDestaque = excluirDestaque;
+window.setDestaqueEstilo = setDestaqueEstilo;
 window.addBookmark = addBookmark;
 window.toggleBookmarksPanel = toggleBookmarksPanel;
 window.loadBookmarksPanel = loadBookmarksPanel;
