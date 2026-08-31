@@ -299,6 +299,7 @@ def _create_tables(conn):
             imagem_data TEXT DEFAULT '',
             pagina INTEGER DEFAULT 1,
             ordem INTEGER DEFAULT 0,
+            oclusoes TEXT DEFAULT '',
             created_at TEXT NOT NULL
         )
     """)

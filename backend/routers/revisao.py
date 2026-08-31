@@ -24,6 +24,11 @@ _TIPOS_VALIDOS = {"recorte", "resumo_ia", "texto", "nota"}
 
 
 def _bloco_to_dict(row) -> dict:
+    # oclusoes pode não existir em bancos muito antigos (defensivo).
+    try:
+        oclusoes = row["oclusoes"] or ""
+    except (IndexError, KeyError):
+        oclusoes = ""
     return {
         "id": row["id"],
         "pdf_path": row["pdf_path"],
@@ -33,8 +38,44 @@ def _bloco_to_dict(row) -> dict:
         "imagem_data": row["imagem_data"],
         "pagina": row["pagina"],
         "ordem": row["ordem"],
+        "oclusoes": oclusoes,
         "created_at": row["created_at"],
     }
+
+
+def _validar_oclusoes(raw: str) -> str:
+    """Valida e normaliza o JSON de oclusões (lista de retângulos 0-1).
+
+    Retorna JSON compacto válido ou '' se vazio/inválido. Limita a 60 regiões.
+    """
+    import json
+
+    raw = (raw or "").strip()
+    if not raw:
+        return ""
+    try:
+        data = json.loads(raw)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=422, detail="oclusoes deve ser JSON válido.")
+    if not isinstance(data, list):
+        raise HTTPException(status_code=422, detail="oclusoes deve ser uma lista de retângulos.")
+    if len(data) > 60:
+        raise HTTPException(status_code=422, detail="Máximo de 60 regiões de oclusão.")
+    limpo = []
+    for r in data:
+        if not isinstance(r, dict):
+            continue
+        try:
+            x, y, w, h = float(r["x"]), float(r["y"]), float(r["w"]), float(r["h"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        # Clampa em [0,1] para evitar valores absurdos.
+        x = max(0.0, min(1.0, x)); y = max(0.0, min(1.0, y))
+        w = max(0.0, min(1.0, w)); h = max(0.0, min(1.0, h))
+        if w <= 0 or h <= 0:
+            continue
+        limpo.append({"x": round(x, 4), "y": round(y, 4), "w": round(w, 4), "h": round(h, 4)})
+    return json.dumps(limpo, separators=(",", ":")) if limpo else ""
 
 
 @router.get("/api/revisao/{pdf_path:path}/export", summary="Exportar caderno de revisão (Markdown)")
@@ -113,6 +154,8 @@ def create_revisao(body: RevisaoBlocoCreate, conn=Depends(get_db_session), user_
     if imagem and not imagem.startswith("data:image/"):
         raise HTTPException(status_code=422, detail="imagem_data deve ser um data URI de imagem.")
 
+    oclusoes = _validar_oclusoes(getattr(body, "oclusoes", "") or "")
+
     # Próxima ordem = fim da lista
     prox = conn.execute(
         "SELECT COALESCE(MAX(ordem), -1) + 1 FROM revisao_blocos WHERE pdf_path = ? AND user_id = ?",
@@ -121,9 +164,9 @@ def create_revisao(body: RevisaoBlocoCreate, conn=Depends(get_db_session), user_
 
     cur = conn.execute(
         """INSERT INTO revisao_blocos
-           (user_id, pdf_path, tipo, titulo, conteudo, imagem_data, pagina, ordem, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (user_id, body.pdf_path, tipo, titulo, conteudo, imagem, body.pagina, prox, datetime.now().isoformat()),
+           (user_id, pdf_path, tipo, titulo, conteudo, imagem_data, pagina, ordem, oclusoes, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (user_id, body.pdf_path, tipo, titulo, conteudo, imagem, body.pagina, prox, oclusoes, datetime.now().isoformat()),
     )
     conn.commit()
     log.info(f"Revisão bloco criado: {body.pdf_path} p.{body.pagina} tipo={tipo} user={user_id}")
@@ -207,6 +250,9 @@ def update_revisao(id: int, body: RevisaoBlocoUpdate, conn=Depends(get_db_sessio
     if body.ordem is not None:
         campos.append("ordem = ?")
         valores.append(body.ordem)
+    if body.oclusoes is not None:
+        campos.append("oclusoes = ?")
+        valores.append(_validar_oclusoes(body.oclusoes))
 
     if campos:
         valores.extend([id, user_id])

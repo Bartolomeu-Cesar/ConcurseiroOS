@@ -868,9 +868,12 @@ class RevisaoBlocoCreate(BaseModel):
     conteudo: str = Field(default="", max_length=20000)
     imagem_data: str = Field(default="", max_length=_MAX_IMAGEM_DATA_CHARS)
     pagina: int = 1
+    # JSON de retângulos de oclusão (image occlusion), coords relativas 0-1.
+    oclusoes: str = Field(default="", max_length=10000)
 
 
 class RevisaoBlocoUpdate(BaseModel):
     titulo: str | None = Field(default=None, max_length=300)
     conteudo: str | None = Field(default=None, max_length=20000)
     ordem: int | None = None
+    oclusoes: str | None = Field(default=None, max_length=10000)

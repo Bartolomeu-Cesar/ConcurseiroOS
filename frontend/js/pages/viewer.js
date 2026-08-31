@@ -1284,6 +1284,7 @@ function _renderBlocoRevisao(b, idx, total) {
       <button onclick="moverBlocoRevisao(${b.id}, -1)" ${idx === 0 ? 'disabled' : ''} title="Subir" style="background:none;border:none;color:${idx === 0 ? 'var(--border,#45475a)' : 'var(--text-sub,#9399b2)'};cursor:pointer;font-size:0.8rem;">▲</button>
       <button onclick="moverBlocoRevisao(${b.id}, 1)" ${idx === total - 1 ? 'disabled' : ''} title="Descer" style="background:none;border:none;color:${idx === total - 1 ? 'var(--border,#45475a)' : 'var(--text-sub,#9399b2)'};cursor:pointer;font-size:0.8rem;">▼</button>
       <button onclick="editarBlocoRevisao(${b.id})" title="Editar título/comentário" style="background:none;border:none;color:var(--yellow,#f9e2af);cursor:pointer;font-size:0.78rem;">✏️</button>
+      ${b.tipo === 'recorte' && b.imagem_data ? `<button onclick="abrirOclusaoEditor(${b.id})" title="Ocultar partes da imagem (image occlusion)" style="background:none;border:none;color:var(--teal,#94e2d5);cursor:pointer;font-size:0.78rem;">🕶️</button>` : ''}
       <button onclick="blocoParaFlashcard(${b.id})" title="Criar flashcard (revisão espaçada)" style="background:none;border:none;color:var(--mauve,#cba6f7);cursor:pointer;font-size:0.78rem;">🧠</button>
       <button onclick="excluirBlocoRevisao(${b.id})" title="Excluir" style="background:none;border:none;color:var(--red,#f38ba8);cursor:pointer;font-size:0.78rem;">🗑</button>
     </div>
@@ -1595,7 +1596,7 @@ function _renderBlocoFullscreen(b, idx) {
   // width:100% faz o recorte preencher a largura do documento (ocupa melhor o
   // espaço mesmo quando o PNG original é pequeno). image-rendering suaviza o upscale.
   const img = (b.tipo === 'recorte' && b.imagem_data)
-    ? `<img src="${b.imagem_data}" alt="Recorte p.${b.pagina}" style="width:100%;height:auto;border-radius:8px;display:block;margin:0 auto 14px;border:1px solid var(--border,#45475a);box-shadow:0 2px 10px rgba(0,0,0,0.35);">`
+    ? _imgComOclusoes(b, idx)
     : '';
   const conteudo = b.conteudo
     ? `<div style="font-size:1.02em;color:var(--text,#cdd6f4);line-height:1.75;white-space:pre-wrap;margin-bottom:10px;">${_escHtml(b.conteudo)}</div>`
@@ -1603,8 +1604,11 @@ function _renderBlocoFullscreen(b, idx) {
 
   // Modo Recall: oculta imagem+conteúdo sob uma cortina clicável (Retrieval
   // Practice). O título e a página ficam visíveis como "dica" para o recall.
+  // Exceção: recortes que já têm oclusões usam os próprios retângulos como
+  // mecanismo de recall — não recebem a cortina cheia.
+  const temOclusao = b.tipo === 'recorte' && _parseOclusoes(b).length > 0;
   let corpo;
-  if (_revFsRecall && (img || conteudo)) {
+  if (_revFsRecall && !temOclusao && (img || conteudo)) {
     corpo = `
       <div id="rev-recall-cover-${idx}" onclick="revelarBlocoRecall(${idx})" title="Clique para revelar" style="cursor:pointer;background:repeating-linear-gradient(45deg,var(--bg-elevated,#45475a),var(--bg-elevated,#45475a) 10px,var(--bg-surface,#313244) 10px,var(--bg-surface,#313244) 20px);border:2px dashed var(--peach,#fab387);border-radius:8px;padding:28px 16px;text-align:center;color:var(--peach,#fab387);font-size:0.9em;">
         🎯 Tente lembrar o conteúdo desta seção.<br><strong>Clique para revelar</strong> 👁
@@ -1622,6 +1626,137 @@ function _renderBlocoFullscreen(b, idx) {
 
 function fecharRevisaoTelaCheia() {
   document.getElementById('revisao-fullscreen').style.display = 'none';
+}
+
+// ---------- Image Occlusion (cloze visual) ----------
+// Parseia o JSON de oclusões de um bloco em array de {x,y,w,h} (0-1).
+function _parseOclusoes(b) {
+  if (!b || !b.oclusoes) return [];
+  try {
+    const arr = JSON.parse(b.oclusoes);
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) { return []; }
+}
+
+// Renderiza a imagem do recorte com retângulos de oclusão sobrepostos. Cada
+// retângulo revela o trecho ao ser clicado (Retrieval Practice visual).
+function _imgComOclusoes(b, idx) {
+  const regs = _parseOclusoes(b);
+  const imgTag = `<img src="${b.imagem_data}" alt="Recorte p.${b.pagina}" style="width:100%;height:auto;border-radius:8px;display:block;border:1px solid var(--border,#45475a);box-shadow:0 2px 10px rgba(0,0,0,0.35);">`;
+  if (regs.length === 0) {
+    return `<div style="margin:0 auto 14px;">${imgTag}</div>`;
+  }
+  const overlays = regs.map((r, ri) => `
+    <div onclick="this.style.opacity=this.style.opacity==='0'?'1':'0';" title="Clique para revelar/ocultar"
+      style="position:absolute;left:${(r.x * 100).toFixed(2)}%;top:${(r.y * 100).toFixed(2)}%;width:${(r.w * 100).toFixed(2)}%;height:${(r.h * 100).toFixed(2)}%;background:var(--teal,#94e2d5);border-radius:3px;cursor:pointer;transition:opacity 0.15s;" data-oc="${idx}-${ri}"></div>`).join('');
+  return `<div style="position:relative;margin:0 auto 14px;">${imgTag}${overlays}</div>`;
+}
+
+// --- Editor de oclusão ---
+let _ocluirState = null; // { id, regs: [], dragStart, imgEl, wrapEl }
+
+async function abrirOclusaoEditor(id) {
+  const blocos = await fetch(`/api/revisao/${encodePath(path)}`).then(r => r.json());
+  const b = Array.isArray(blocos) ? blocos.find(x => x.id === id) : null;
+  if (!b || b.tipo !== 'recorte' || !b.imagem_data) { showStudyToast('⚠️ Bloco de recorte não encontrado.'); return; }
+
+  const editor = document.getElementById('oclusao-editor');
+  const img = document.getElementById('oclusao-img');
+  const wrap = document.getElementById('oclusao-canvas-wrap');
+  img.src = b.imagem_data;
+  _ocluirState = { id, regs: _parseOclusoes(b), dragStart: null, imgEl: img, wrapEl: wrap };
+  editor.style.display = 'flex';
+  // Aguarda a imagem ter dimensões para desenhar as regiões existentes.
+  if (img.complete) _ocluirRedesenhar(); else img.onload = _ocluirRedesenhar;
+}
+
+// Redesenha as regiões já existentes sobre a imagem (no editor).
+function _ocluirRedesenhar() {
+  const { wrapEl, regs } = _ocluirState;
+  // Remove overlays antigos (mantém a <img>).
+  wrapEl.querySelectorAll('.oc-edit-rect').forEach(el => el.remove());
+  regs.forEach((r, i) => {
+    const d = document.createElement('div');
+    d.className = 'oc-edit-rect';
+    d.title = 'Clique para remover';
+    d.style.cssText = `position:absolute;left:${r.x * 100}%;top:${r.y * 100}%;width:${r.w * 100}%;height:${r.h * 100}%;background:rgba(148,226,213,0.75);border:1px solid #94e2d5;border-radius:3px;cursor:pointer;`;
+    d.addEventListener('click', (e) => { e.stopPropagation(); _ocluirState.regs.splice(i, 1); _ocluirRedesenhar(); });
+    wrapEl.appendChild(d);
+  });
+}
+
+// Setup de arraste no wrap do editor (uma vez).
+(function _setupOclusaoEvents() {
+  const wrap = document.getElementById('oclusao-canvas-wrap');
+  if (!wrap) return;
+  let temp = null;
+
+  wrap.addEventListener('mousedown', (e) => {
+    if (!_ocluirState || e.target.classList.contains('oc-edit-rect')) return;
+    const rect = wrap.getBoundingClientRect();
+    _ocluirState.dragStart = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    temp = document.createElement('div');
+    temp.className = 'oc-edit-temp';
+    temp.style.cssText = 'position:absolute;background:rgba(148,226,213,0.5);border:1px dashed #94e2d5;border-radius:3px;pointer-events:none;';
+    wrap.appendChild(temp);
+  });
+
+  wrap.addEventListener('mousemove', (e) => {
+    if (!_ocluirState || !_ocluirState.dragStart || !temp) return;
+    const rect = wrap.getBoundingClientRect();
+    const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+    const x = Math.min(cx, _ocluirState.dragStart.x), y = Math.min(cy, _ocluirState.dragStart.y);
+    const w = Math.abs(cx - _ocluirState.dragStart.x), h = Math.abs(cy - _ocluirState.dragStart.y);
+    temp.style.left = x + 'px'; temp.style.top = y + 'px';
+    temp.style.width = w + 'px'; temp.style.height = h + 'px';
+  });
+
+  wrap.addEventListener('mouseup', (e) => {
+    if (!_ocluirState || !_ocluirState.dragStart) return;
+    const rect = wrap.getBoundingClientRect();
+    const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+    const x = Math.min(cx, _ocluirState.dragStart.x), y = Math.min(cy, _ocluirState.dragStart.y);
+    const w = Math.abs(cx - _ocluirState.dragStart.x), h = Math.abs(cy - _ocluirState.dragStart.y);
+    _ocluirState.dragStart = null;
+    if (temp) { temp.remove(); temp = null; }
+    // Converte px → coords relativas (0-1) à imagem exibida.
+    if (w > 6 && h > 6 && rect.width > 0 && rect.height > 0) {
+      _ocluirState.regs.push({
+        x: +(x / rect.width).toFixed(4), y: +(y / rect.height).toFixed(4),
+        w: +(w / rect.width).toFixed(4), h: +(h / rect.height).toFixed(4),
+      });
+      _ocluirRedesenhar();
+    }
+  });
+})();
+
+function ocluirLimpar() {
+  if (!_ocluirState) return;
+  _ocluirState.regs = [];
+  _ocluirRedesenhar();
+}
+
+async function ocluirSalvar() {
+  if (!_ocluirState) return;
+  const res = await fetch(`/api/revisao/${_ocluirState.id}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ oclusoes: JSON.stringify(_ocluirState.regs) }),
+  });
+  if (res.ok) {
+    showStudyToast(`🕶️ ${_ocluirState.regs.length} região(ões) de oclusão salva(s)!`);
+    ocluirFechar();
+    loadRevisao();
+  } else {
+    showStudyToast('⚠️ Erro ao salvar oclusões.');
+  }
+}
+
+function ocluirFechar() {
+  const editor = document.getElementById('oclusao-editor');
+  if (editor) editor.style.display = 'none';
+  const wrap = document.getElementById('oclusao-canvas-wrap');
+  if (wrap) wrap.querySelectorAll('.oc-edit-rect,.oc-edit-temp').forEach(el => el.remove());
+  _ocluirState = null;
 }
 
 function revFsZoom(dir) {
@@ -1730,3 +1865,7 @@ window.fecharRevisaoTelaCheia = fecharRevisaoTelaCheia;
 window.revFsZoom = revFsZoom;
 window.toggleRevFsRecall = toggleRevFsRecall;
 window.revelarBlocoRecall = revelarBlocoRecall;
+window.abrirOclusaoEditor = abrirOclusaoEditor;
+window.ocluirLimpar = ocluirLimpar;
+window.ocluirSalvar = ocluirSalvar;
+window.ocluirFechar = ocluirFechar;

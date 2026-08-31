@@ -655,6 +655,19 @@ def _m61_metas_semanais_manuais(conn):
     log.info("Migration: added meta_semanal_horas/questoes/flashcards to metas_config")
 
 
+def _m62_revisao_oclusoes(conn):
+    """Occlusão de imagem (image occlusion) nos recortes do caderno de revisão.
+
+    Armazena um JSON com a lista de retângulos ocultos, cada um em coordenadas
+    relativas (0-1) à imagem: [{"x":0.1,"y":0.2,"w":0.3,"h":0.05}, ...].
+    Vazio/'' = sem oclusões (comportamento anterior)."""
+    try:
+        conn.execute("ALTER TABLE revisao_blocos ADD COLUMN oclusoes TEXT DEFAULT ''")
+        log.info("Migration: added oclusoes column to revisao_blocos")
+    except Exception:
+        pass  # coluna já existe
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -717,6 +730,7 @@ MIGRATIONS = [
     (59, _m59_metas_cargo_alvo),
     (60, _m60_simulados_tempo_registrado),
     (61, _m61_metas_semanais_manuais),
+    (62, _m62_revisao_oclusoes),
 ]
 
 

@@ -265,3 +265,66 @@ def test_flashcard_de_bloco_inexistente_404():
     _limpar()
     r = client.post("/api/revisao/999999/flashcard")
     assert r.status_code == 404
+
+
+# ==================== Occlusão de imagem (image occlusion) ====================
+
+def test_criar_recorte_com_oclusoes():
+    _limpar()
+    oclusoes = '[{"x":0.1,"y":0.2,"w":0.3,"h":0.05},{"x":0.5,"y":0.6,"w":0.2,"h":0.1}]'
+    r = client.post("/api/revisao", json={
+        "pdf_path": PDF_PATH, "tipo": "recorte",
+        "titulo": "Tabela", "imagem_data": PNG_1X1, "pagina": 4, "oclusoes": oclusoes,
+    })
+    assert r.status_code == 200, r.text
+    blocos = client.get(f"/api/revisao/{PDF_PATH}").json()
+    import json
+    regs = json.loads(blocos[0]["oclusoes"])
+    assert len(regs) == 2
+    assert regs[0]["x"] == 0.1 and regs[0]["w"] == 0.3
+
+
+def test_oclusoes_clampa_valores_fora_do_intervalo():
+    _limpar()
+    # x negativo e w > 1 devem ser clampados para [0,1]; retângulos sem área somem.
+    oclusoes = '[{"x":-0.5,"y":0.2,"w":2.0,"h":0.1},{"x":0.1,"y":0.1,"w":0,"h":0.1}]'
+    r = client.post("/api/revisao", json={
+        "pdf_path": PDF_PATH, "tipo": "recorte", "imagem_data": PNG_1X1, "pagina": 1, "oclusoes": oclusoes,
+    })
+    assert r.status_code == 200
+    import json
+    regs = json.loads(client.get(f"/api/revisao/{PDF_PATH}").json()[0]["oclusoes"])
+    assert len(regs) == 1  # o de área zero foi descartado
+    assert regs[0]["x"] == 0.0 and regs[0]["w"] == 1.0
+
+
+def test_oclusoes_json_invalido_422():
+    _limpar()
+    r = client.post("/api/revisao", json={
+        "pdf_path": PDF_PATH, "tipo": "recorte", "imagem_data": PNG_1X1, "pagina": 1,
+        "oclusoes": "não é json",
+    })
+    assert r.status_code == 422
+
+
+def test_atualizar_oclusoes_via_put():
+    _limpar()
+    rid = client.post("/api/revisao", json={
+        "pdf_path": PDF_PATH, "tipo": "recorte", "imagem_data": PNG_1X1, "pagina": 1,
+    }).json()["id"]
+    # Sem oclusões inicialmente
+    assert client.get(f"/api/revisao/{PDF_PATH}").json()[0]["oclusoes"] == ""
+    # Adiciona via PUT
+    r = client.put(f"/api/revisao/{rid}", json={"oclusoes": '[{"x":0.2,"y":0.2,"w":0.1,"h":0.1}]'})
+    assert r.status_code == 200
+    import json
+    regs = json.loads(client.get(f"/api/revisao/{PDF_PATH}").json()[0]["oclusoes"])
+    assert len(regs) == 1
+
+
+def test_bloco_sem_oclusoes_retorna_string_vazia():
+    _limpar()
+    client.post("/api/revisao", json={
+        "pdf_path": PDF_PATH, "tipo": "texto", "titulo": "T", "conteudo": "c", "pagina": 1,
+    })
+    assert client.get(f"/api/revisao/{PDF_PATH}").json()[0]["oclusoes"] == ""

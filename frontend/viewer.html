@@ -277,6 +277,22 @@
       </div>
     </div>
   </div>
+
+  <!-- Editor de Oclusão de Imagem (image occlusion / cloze visual) -->
+  <div id="oclusao-editor" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:1001;align-items:center;justify-content:center;padding:16px;">
+    <div style="background:var(--bg-surface,#313244);border:1px solid var(--border,#45475a);border-radius:14px;padding:18px;max-width:90vw;max-height:92vh;overflow:auto;display:flex;flex-direction:column;gap:10px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <h3 style="color:var(--teal,#94e2d5);margin:0;font-size:1rem;flex:1;">🕶️ Ocultar partes (image occlusion)</h3>
+        <button onclick="ocluirLimpar()" title="Remover todas as regiões" style="background:var(--bg,#1e1e2e);border:1px solid var(--border,#45475a);color:var(--text-sub,#9399b2);border-radius:6px;padding:5px 10px;font-size:0.78rem;cursor:pointer;">🧹 Limpar</button>
+        <button onclick="ocluirSalvar()" style="background:var(--teal,#94e2d5);color:#1e1e2e;border:none;border-radius:6px;padding:5px 14px;font-weight:700;font-size:0.8rem;cursor:pointer;">💾 Salvar</button>
+        <button onclick="ocluirFechar()" style="background:var(--red,#f38ba8);color:#1e1e2e;border:none;border-radius:6px;padding:5px 12px;font-weight:600;font-size:0.8rem;cursor:pointer;">✕ Fechar</button>
+      </div>
+      <p style="font-size:0.78rem;color:var(--text-sub,#a6adc8);margin:0;">Arraste sobre a imagem para criar retângulos que ficarão ocultos na revisão. Clique num retângulo para removê-lo. Na revisão (modo leitura ou Recall), clique nele para revelar.</p>
+      <div id="oclusao-canvas-wrap" style="position:relative;display:inline-block;margin:0 auto;max-width:100%;user-select:none;cursor:crosshair;">
+        <img id="oclusao-img" alt="Imagem do recorte" style="display:block;max-width:100%;max-height:70vh;border-radius:6px;">
+      </div>
+    </div>
+  </div>
   </div>
 
   <div id="viewer">
