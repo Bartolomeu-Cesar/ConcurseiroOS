@@ -10,7 +10,7 @@ from datetime import datetime
 from deps import get_user_id
 from fastapi import APIRouter, Depends, HTTPException
 from sanitize import sanitize_input
-from schemas import DestaqueCreate, OkResponse
+from schemas import DestaqueCreate, DestaqueUpdate, OkResponse
 
 from database import get_db_session
 from logger import log
@@ -33,6 +33,7 @@ def _destaque_to_dict(row) -> dict:
         "texto": row["texto"],
         "rects": row["rects"] or "[]",
         "estilo": (row["estilo"] or "highlight") if "estilo" in keys else "highlight",
+        "comentario": (row["comentario"] or "") if "comentario" in keys else "",
         "created_at": row["created_at"],
     }
 
@@ -94,16 +95,42 @@ def create_destaque(body: DestaqueCreate, conn=Depends(get_db_session), user_id:
         raise HTTPException(status_code=422, detail=f"Estilo inválido. Use: {', '.join(sorted(_ESTILOS_VALIDOS))}.")
     pagina = max(1, int(body.pagina or 1))
     texto = sanitize_input(body.texto or "", max_length=5000)
+    comentario = sanitize_input(body.comentario or "", max_length=5000)
     rects = _validar_rects(body.rects)
 
     cur = conn.execute(
-        """INSERT INTO destaques_pdf (user_id, pdf_path, pagina, cor, texto, rects, estilo, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-        (user_id, body.pdf_path, pagina, cor, texto, rects, estilo, datetime.now().isoformat()),
+        """INSERT INTO destaques_pdf (user_id, pdf_path, pagina, cor, texto, rects, estilo, comentario, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (user_id, body.pdf_path, pagina, cor, texto, rects, estilo, comentario, datetime.now().isoformat()),
     )
     conn.commit()
     log.info(f"Destaque criado: {body.pdf_path} p.{pagina} cor={cor} estilo={estilo} user={user_id}")
     return {"ok": True, "id": cur.lastrowid, "pagina": pagina, "cor": cor, "estilo": estilo}
+
+
+@router.put("/api/destaques/{id}", response_model=OkResponse, summary="Editar destaque (cor/estilo/comentário)")
+def update_destaque(id: int, body: DestaqueUpdate, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    existing = conn.execute("SELECT id FROM destaques_pdf WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
+    if not existing:
+        raise HTTPException(status_code=404, detail="Destaque não encontrado")
+    campos, valores = [], []
+    if body.cor is not None:
+        cor = body.cor.strip().lower()
+        if cor not in _CORES_VALIDAS:
+            raise HTTPException(status_code=422, detail="Cor inválida.")
+        campos.append("cor = ?"); valores.append(cor)
+    if body.estilo is not None:
+        estilo = body.estilo.strip().lower()
+        if estilo not in _ESTILOS_VALIDOS:
+            raise HTTPException(status_code=422, detail="Estilo inválido.")
+        campos.append("estilo = ?"); valores.append(estilo)
+    if body.comentario is not None:
+        campos.append("comentario = ?"); valores.append(sanitize_input(body.comentario, max_length=5000))
+    if campos:
+        valores.extend([id, user_id])
+        conn.execute(f"UPDATE destaques_pdf SET {', '.join(campos)} WHERE id = ? AND user_id = ?", valores)
+        conn.commit()
+    return {"ok": True}
 
 
 @router.delete("/api/destaques/{id}", response_model=OkResponse, summary="Excluir destaque")

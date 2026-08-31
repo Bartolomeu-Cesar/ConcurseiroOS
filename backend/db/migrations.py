@@ -733,6 +733,15 @@ def _m66_destaques_estilo(conn):
         pass  # coluna já existe
 
 
+def _m67_destaques_comentario(conn):
+    """Comentário/nota anexado a um destaque (Elaborative Interrogation)."""
+    try:
+        conn.execute("ALTER TABLE destaques_pdf ADD COLUMN comentario TEXT DEFAULT ''")
+        log.info("Migration: added comentario column to destaques_pdf")
+    except Exception:
+        pass  # coluna já existe
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -800,6 +809,7 @@ MIGRATIONS = [
     (64, _m64_revisao_tag),
     (65, _m65_destaques_pdf),
     (66, _m66_destaques_estilo),
+    (67, _m67_destaques_comentario),
 ]
 
 

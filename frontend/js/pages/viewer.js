@@ -2365,7 +2365,7 @@ async function criarDestaque(cor) {
     });
     const data = await res.json().catch(() => ({}));
     if (res.ok) {
-      _destaques.push({ id: data.id, pdf_path: path, pagina: sel.pagina, cor, texto: sel.texto, rects: JSON.stringify(sel.rects), estilo });
+      _destaques.push({ id: data.id, pdf_path: path, pagina: sel.pagina, cor, texto: sel.texto, rects: JSON.stringify(sel.rects), estilo, comentario: '' });
       _renderDestaquesPagina(sel.pagina);
       showStudyToast('🖍️ Marcação salva!');
       const doc = _pdfDoc();
@@ -2407,27 +2407,34 @@ function _renderDestaquesPagina(pagina) {
     const estilo = d.estilo || 'highlight';
     const corBg = _DESTAQUE_CORES[d.cor] || _DESTAQUE_CORES.yellow;
     const corSolida = _DESTAQUE_CORES_SOLIDAS[d.cor] || _DESTAQUE_CORES_SOLIDAS.yellow;
-    for (const r of rects) {
+    const temComentario = d.comentario && d.comentario.trim();
+    const tooltip = temComentario ? `💬 ${d.comentario.trim()}` : 'Clique para remover esta marcação';
+    rects.forEach((r, ri) => {
       const div = doc.createElement('div');
       let extra;
       if (estilo === 'underline') {
-        // Linha na base do retângulo (sublinhado).
         extra = `background:transparent;border-bottom:2px solid ${corSolida};`;
       } else if (estilo === 'strike') {
-        // Linha no meio (tachado) via gradiente de fundo fino centralizado.
         extra = `background:linear-gradient(${corSolida},${corSolida}) center/100% 2px no-repeat;`;
       } else if (estilo === 'box') {
-        // Contorno retangular.
         extra = `background:transparent;border:1.5px solid ${corSolida};border-radius:3px;`;
       } else {
-        // highlight (padrão): marca-texto.
         extra = `background:${corBg};border-radius:2px;mix-blend-mode:multiply;`;
       }
       div.style.cssText = `position:absolute;left:${r.x * 100}%;top:${r.y * 100}%;width:${r.w * 100}%;height:${r.h * 100}%;pointer-events:auto;cursor:pointer;${extra}`;
-      div.title = 'Clique para remover esta marcação';
+      div.title = tooltip;
       div.addEventListener('click', (ev) => { ev.stopPropagation(); excluirDestaque(d.id); });
       layer.appendChild(div);
-    }
+      // Badge de comentário no canto superior direito do 1º retângulo.
+      if (temComentario && ri === 0) {
+        const badge = doc.createElement('div');
+        badge.textContent = '💬';
+        badge.title = `💬 ${d.comentario.trim()}`;
+        badge.style.cssText = `position:absolute;left:calc(${(r.x + r.w) * 100}% - 6px);top:calc(${r.y * 100}% - 8px);font-size:11px;line-height:1;pointer-events:auto;cursor:pointer;filter:drop-shadow(0 1px 1px rgba(0,0,0,0.5));`;
+        badge.addEventListener('click', (ev) => { ev.stopPropagation(); comentarDestaque(d.id); });
+        layer.appendChild(badge);
+      }
+    });
   }
   pageDiv.appendChild(layer);
 }
@@ -2452,6 +2459,33 @@ async function excluirDestaque(id) {
   showStudyToast('Destaque removido.');
 }
 
+// Adiciona/edita um comentário no destaque (Elaborative Interrogation).
+async function comentarDestaque(id) {
+  const d = _destaques.find(x => x.id === id);
+  if (!d) return;
+  const txt = await promptModal('Comentário / nota para este destaque:', {
+    title: '💬 Comentar destaque', defaultValue: d.comentario || '', multiline: true,
+    placeholder: 'Ex: cai muito, confundi com X, decorar...',
+  });
+  if (txt === null) return; // cancelou
+  try {
+    const res = await fetch(`/api/destaques/${id}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ comentario: txt.trim() }),
+    });
+    if (res.ok) {
+      d.comentario = txt.trim();
+      _renderDestaquesPagina(d.pagina);
+      if (_destaquesVisible) _renderPainelDestaques();
+      showStudyToast('💬 Comentário salvo.');
+    } else {
+      showStudyToast('⚠️ Erro ao salvar comentário.');
+    }
+  } catch (e) {
+    showStudyToast('⚠️ Erro de conexão.');
+  }
+}
+
 // --- Painel lateral de destaques ---
 function toggleDestaquesPanel() {
   _togglePainelDireita('destaques', _renderPainelDestaques);
@@ -2471,14 +2505,20 @@ function _renderPainelDestaques() {
     const cor = _DESTAQUE_CORES[d.cor] || _DESTAQUE_CORES.yellow;
     const txt = (d.texto && d.texto.trim()) ? _escHtml(d.texto.trim()) : '(sem texto)';
     const icone = _ESTILO_ICONE[d.estilo || 'highlight'] || '🖍️';
+    const temComentario = d.comentario && d.comentario.trim();
+    const comentarioHtml = temComentario
+      ? `<div style="margin-top:6px;padding:6px 8px;background:var(--bg-elevated,#45475a);border-radius:6px;font-size:0.75rem;color:var(--text-sub,#a6adc8);">💬 ${_escHtml(d.comentario.trim())}</div>`
+      : '';
     return `<div style="background:var(--bg,#1e1e2e);border-left:4px solid ${cor};border-radius:8px;padding:10px 12px;margin-bottom:8px;">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
         <span title="Estilo" style="font-size:0.8rem;">${icone}</span>
         <span style="font-size:0.7rem;color:var(--blue,#89b4fa);cursor:pointer;" onclick="goToPage(${d.pagina})" title="Ir para a página">p.${d.pagina}</span>
         <span style="flex:1;"></span>
+        <button onclick="comentarDestaque(${d.id})" title="${temComentario ? 'Editar comentário' : 'Adicionar comentário'}" style="background:none;border:none;color:${temComentario ? 'var(--green,#a6e3a1)' : 'var(--text-sub,#9399b2)'};cursor:pointer;font-size:0.78rem;">💬</button>
         <button onclick="excluirDestaque(${d.id})" title="Remover" style="background:none;border:none;color:var(--red,#f38ba8);cursor:pointer;font-size:0.78rem;">🗑</button>
       </div>
       <div style="font-size:0.82rem;color:var(--text,#cdd6f4);line-height:1.5;cursor:pointer;" onclick="goToPage(${d.pagina})">${txt}</div>
+      ${comentarioHtml}
     </div>`;
   }).join('');
 }
@@ -2535,6 +2575,7 @@ window.criarDestaque = criarDestaque;
 window.toggleDestaquesPanel = toggleDestaquesPanel;
 window.excluirDestaque = excluirDestaque;
 window.setDestaqueEstilo = setDestaqueEstilo;
+window.comentarDestaque = comentarDestaque;
 window.addBookmark = addBookmark;
 window.toggleBookmarksPanel = toggleBookmarksPanel;
 window.loadBookmarksPanel = loadBookmarksPanel;

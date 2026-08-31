@@ -891,3 +891,10 @@ class DestaqueCreate(BaseModel):
     rects: str = Field(default="[]", max_length=20000)
     # Estilo: highlight | underline | strike | box
     estilo: str = Field(default="highlight", max_length=20)
+    comentario: str = Field(default="", max_length=5000)
+
+
+class DestaqueUpdate(BaseModel):
+    cor: str | None = Field(default=None, max_length=20)
+    estilo: str | None = Field(default=None, max_length=20)
+    comentario: str | None = Field(default=None, max_length=5000)

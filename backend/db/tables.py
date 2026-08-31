@@ -331,6 +331,7 @@ def _create_tables(conn):
             texto TEXT DEFAULT '',
             rects TEXT NOT NULL DEFAULT '[]',
             estilo TEXT DEFAULT 'highlight',
+            comentario TEXT DEFAULT '',
             created_at TEXT NOT NULL
         )
     """)

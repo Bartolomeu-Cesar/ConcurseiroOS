@@ -152,3 +152,34 @@ def test_estilo_invalido_422():
         "pdf_path": PDF_PATH, "pagina": 1, "cor": "green", "rects": RECTS, "estilo": "neon",
     })
     assert r.status_code == 422
+
+
+def test_criar_com_comentario():
+    client.post("/api/destaques", json={
+        "pdf_path": PDF_PATH, "pagina": 1, "cor": "yellow", "rects": RECTS, "comentario": "cai muito em prova",
+    })
+    d = client.get(f"/api/destaques/{PDF_PATH}").json()[0]
+    assert d["comentario"] == "cai muito em prova"
+
+
+def test_editar_comentario_e_cor_via_put():
+    rid = client.post("/api/destaques", json={
+        "pdf_path": PDF_PATH, "pagina": 1, "cor": "yellow", "rects": RECTS,
+    }).json()["id"]
+    r = client.put(f"/api/destaques/{rid}", json={"comentario": "revisar depois", "cor": "pink"})
+    assert r.status_code == 200
+    d = client.get(f"/api/destaques/{PDF_PATH}").json()[0]
+    assert d["comentario"] == "revisar depois" and d["cor"] == "pink"
+
+
+def test_put_destaque_inexistente_404():
+    r = client.put("/api/destaques/999999", json={"comentario": "x"})
+    assert r.status_code == 404
+
+
+def test_put_cor_invalida_422():
+    rid = client.post("/api/destaques", json={
+        "pdf_path": PDF_PATH, "pagina": 1, "cor": "yellow", "rects": RECTS,
+    }).json()["id"]
+    r = client.put(f"/api/destaques/{rid}", json={"cor": "roxo-neon"})
+    assert r.status_code == 422
