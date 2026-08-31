@@ -6,9 +6,32 @@ def _create_tables(conn):
     # Tabela de progresso de PDFs
     conn.execute("""
         CREATE TABLE IF NOT EXISTS progress (
-            path TEXT PRIMARY KEY,
+            path TEXT NOT NULL,
             current_page INTEGER DEFAULT 1,
-            total_pages INTEGER DEFAULT 1
+            total_pages INTEGER DEFAULT 1,
+            user_id INTEGER NOT NULL DEFAULT 1,
+            last_read_at TEXT DEFAULT '',
+            PRIMARY KEY (path, user_id)
+        )
+    """)
+
+    # Visibilidade de PDFs: dono de cada arquivo (arquivos globais no disco)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS pdf_owner (
+            pdf_path TEXT PRIMARY KEY,
+            owner_id INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL
+        )
+    """)
+
+    # Compartilhamento self-service de PDFs (dono → destino, leitura)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS pdf_compartilhamentos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            pdf_path TEXT NOT NULL,
+            owner_id INTEGER NOT NULL,
+            shared_with_id INTEGER NOT NULL,
+            created_at TEXT NOT NULL
         )
     """)
 

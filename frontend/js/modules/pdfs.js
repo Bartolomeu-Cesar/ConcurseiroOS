@@ -18,6 +18,10 @@ function saveOpenFolders(set) { sessionStorage.setItem(OPEN_KEY, JSON.stringify(
 let _linkPdfToDisc = null;
 let _unlinkPdf = null;
 
+// Estado de propriedade/compartilhamento (preenchido em load via /api/pdf/meus)
+let _sharedWithMe = new Set();   // paths compartilhados comigo (não sou dono)
+let _sharedByMe = new Map();     // path -> [{nome,email,username}, ...] que EU compartilhei
+
 export async function load() {
   showLoading('tree');
   try {
@@ -25,6 +29,15 @@ export async function load() {
       fetch(`${API}/api/tree`).then(r => r.json()),
       fetch(`${API}/api/progress-bulk`).then(r => r.json())
     ]);
+    // Carrega estado de propriedade/compartilhamento (não bloqueia render se falhar)
+    try {
+      const meus = await fetch(`${API}/api/pdf/meus`).then(r => r.json());
+      _sharedWithMe = new Set((meus.compartilhados_comigo || []).map(c => c.path));
+      _sharedByMe = new Map((meus.meus || []).map(m => [m.path, m.compartilhado_com || []]));
+    } catch (e) {
+      _sharedWithMe = new Set();
+      _sharedByMe = new Map();
+    }
     // Always reload edital data for vinculo display
     try { state.editalData = await fetch('/api/edital').then(r => r.json()); }
     catch (e) { state.editalData = []; }
@@ -94,14 +107,31 @@ function renderNodes(nodes, container, bulk, prefix) {
       const linkBtn = vinculado
         ? `<button class="pdf-link-disc-btn pdf-unlink" onclick="event.stopPropagation();unlinkPdf('${path.replace(/'/g, "\\'")}')" title="Desvincular disciplina" aria-label="Desvincular disciplina">❌</button>`
         : `<button class="pdf-link-disc-btn" onclick="event.stopPropagation();linkPdfToDisc('${path.replace(/'/g, "\\'")}')" title="Vincular a disciplina">🔗</button>`;
+      const pathEsc = path.replace(/'/g, "\\'");
+      const isSharedWithMe = _sharedWithMe.has(path);
+      const isOwner = _sharedByMe.has(path);
+      const nShares = isOwner ? (_sharedByMe.get(path) || []).length : 0;
+      // Badge: PDF compartilhado comigo (sou destino) vs. compartilhado por mim (sou dono)
+      let shareTag = '';
+      if (isSharedWithMe) {
+        shareTag = '<span class="pdf-materia-tag" style="background:rgba(166,227,161,0.25);color:var(--green);" title="Compartilhado com você">👥 compartilhado</span>';
+      } else if (nShares > 0) {
+        shareTag = `<span class="pdf-materia-tag" style="background:rgba(137,180,250,0.2);" title="Você compartilhou com ${nShares} pessoa(s)">👥 ${nShares}</span>`;
+      }
+      // Botão compartilhar: só aparece se sou dono (não compartilhado comigo)
+      const shareBtn = !isSharedWithMe
+        ? `<button class="pdf-link-disc-btn" onclick="event.stopPropagation();sharePdf('${pathEsc}')" title="Compartilhar PDF" aria-label="Compartilhar PDF">👥</button>`
+        : '';
       const div = document.createElement('div');
       div.innerHTML = `
         <div class="pdf-item" data-path="${path}" style="background:linear-gradient(to right, rgba(137,220,235,0.25) ${pct}%, transparent ${pct}%);">
           <span>📄</span>
           <span class="pdf-name">${escapeHtml(node.name.replace(/_/g, ' '))}</span>
           ${materiaTag}
+          ${shareTag}
           <span class="pdf-progress">${label}</span>
           ${pct === 100 ? '<span class="badge-done">✓</span>' : ''}
+          ${shareBtn}
           ${linkBtn}
         </div>
       `;
@@ -252,6 +282,67 @@ function restoreTimer() {
     updateDisplay();
   }
 }
+
+// ==================== COMPARTILHAMENTO DE PDF ====================
+
+/**
+ * Abre um fluxo para compartilhar o PDF com outro usuário (por email ou username)
+ * e mostrar com quem já está compartilhado.
+ */
+export async function sharePdf(path) {
+  const atuais = _sharedByMe.get(path) || [];
+  const listaTxt = atuais.length
+    ? 'Atualmente compartilhado com:\n' + atuais.map(u => `• ${u.nome || u.username || u.email} (${u.email})`).join('\n') + '\n\n'
+    : 'Este PDF ainda não foi compartilhado.\n\n';
+
+  const destino = await promptModal(
+    listaTxt + 'Digite o e-mail ou username de quem terá acesso (vazio para cancelar):',
+    { title: '👥 Compartilhar PDF', placeholder: 'email@exemplo.com ou username' }
+  );
+  if (!destino || !destino.trim()) return;
+
+  try {
+    const res = await fetch(`${API}/api/pdf/compartilhar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pdf_path: path, destino: destino.trim() })
+    });
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      const alvo = data.compartilhado_com;
+      toast(`👥 Compartilhado com ${alvo.nome || alvo.username || alvo.email}!`, 'success');
+      load();
+    } else {
+      toast(data.detail || 'Erro ao compartilhar.', 'error');
+    }
+  } catch (e) {
+    toast('Erro de conexão ao compartilhar.', 'error');
+  }
+}
+
+/** Remove o compartilhamento de um PDF com um usuário específico. */
+export async function unsharePdf(path, destino) {
+  try {
+    const res = await fetch(`${API}/api/pdf/descompartilhar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pdf_path: path, destino })
+    });
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      toast('Acesso removido.', 'success');
+      load();
+    } else {
+      toast(data.detail || 'Erro ao remover acesso.', 'error');
+    }
+  } catch (e) {
+    toast('Erro de conexão.', 'error');
+  }
+}
+
+window.sharePdf = sharePdf;
+window.unsharePdf = unsharePdf;
+
 
 export function exportProgress() {
   const a = document.createElement('a');

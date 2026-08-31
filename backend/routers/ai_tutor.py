@@ -1293,11 +1293,14 @@ def _parse_json_llm(text: str):
         return None
 
 
-def _resolver_pdf_path(pdf_path: str) -> str:
+def _resolver_pdf_path(pdf_path: str, conn=None, user_id: int = None) -> str:
     """Resolve o caminho do PDF dentro do PDF_ROOT com proteção anti-traversal.
 
     Aceita tanto o path relativo da árvore ('Matéria/arquivo.pdf') quanto com
     prefixo '/pdf/'. Levanta HTTPException se inválido ou fora da raiz.
+
+    Se `conn` e `user_id` forem informados, também valida a visibilidade do PDF
+    (dono ou compartilhado) — impede que um usuário analise PDF de outro.
     """
     from pathlib import Path
 
@@ -1314,6 +1317,11 @@ def _resolver_pdf_path(pdf_path: str) -> str:
 
     if ".." in rel or not rel:
         raise HTTPException(status_code=400, detail="Caminho de PDF inválido.")
+
+    # Autorização de visibilidade (dono ou compartilhado)
+    if conn is not None and user_id is not None:
+        if not pdf_module.can_access(conn, user_id, rel):
+            raise HTTPException(status_code=403, detail="Acesso negado ao PDF.")
 
     full = Path(root) / rel
     try:
@@ -1347,7 +1355,7 @@ def analisar_pdf(
     if body.pagina_final is not None and body.pagina_final < body.pagina_inicial:
         raise HTTPException(status_code=422, detail="Página final deve ser >= página inicial.")
 
-    caminho = _resolver_pdf_path(body.pdf_path)
+    caminho = _resolver_pdf_path(body.pdf_path, conn=db, user_id=user_id)
 
     # Extrai apenas o intervalo de páginas pedido (PDFs de matéria são enormes).
     from routers.questoes.importacao import _extrair_texto_pdf_intervalo

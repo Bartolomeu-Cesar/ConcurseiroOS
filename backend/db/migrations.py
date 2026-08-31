@@ -742,6 +742,124 @@ def _m67_destaques_comentario(conn):
         pass  # coluna já existe
 
 
+def _m68_pdf_ownership(conn):
+    """Visibilidade de PDFs por usuário: dono + compartilhamento self-service.
+
+    Os arquivos permanecem globais no disco (PDF_ROOT). O controle de acesso é
+    feito na camada de metadados:
+      - pdf_owner: quem é o dono de cada pdf_path (backfill → uid 1).
+      - pdf_compartilhamentos: donos concedem acesso de leitura a outros usuários.
+
+    Também corrige a PK da tabela progress: era apenas (path), o que impedia dois
+    usuários de ter progresso independente no mesmo arquivo. Passa a ser
+    (path, user_id), preservando todos os dados existentes.
+    """
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    # ---- 1. Tabela de donos ----
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS pdf_owner (
+            pdf_path TEXT PRIMARY KEY,
+            owner_id INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_pdf_owner_owner ON pdf_owner(owner_id)")
+
+    # ---- 2. Tabela de compartilhamentos ----
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS pdf_compartilhamentos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            pdf_path TEXT NOT NULL,
+            owner_id INTEGER NOT NULL,
+            shared_with_id INTEGER NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    """)
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_pdf_compart_unique ON pdf_compartilhamentos(pdf_path, shared_with_id)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_pdf_compart_shared ON pdf_compartilhamentos(shared_with_id)"
+    )
+
+    # ---- 3. Backfill: todos os PDFs existentes pertencem ao uid 1 ----
+    # (a) paths já registrados em progress
+    try:
+        paths = {r[0] for r in conn.execute("SELECT DISTINCT path FROM progress").fetchall()}
+    except Exception:
+        paths = set()
+
+    # (b) paths presentes no disco (PDF_ROOT), via build_tree
+    try:
+        from settings import settings
+        from utils import build_tree
+        from pathlib import Path as _Path
+
+        root = settings.PDF_ROOT
+        if root and _Path(root).exists():
+            def _collect(nodes):
+                for n in nodes:
+                    if n.get("type") == "pdf" and n.get("path"):
+                        paths.add(n["path"])
+                    elif n.get("type") == "folder":
+                        _collect(n.get("children", []))
+            _collect(build_tree(root))
+    except Exception as e:
+        log.warning(f"Migration 68: não foi possível varrer PDF_ROOT no backfill: {e}")
+
+    for p in paths:
+        conn.execute(
+            "INSERT OR IGNORE INTO pdf_owner (pdf_path, owner_id, created_at) VALUES (?, 1, ?)",
+            (p, now)
+        )
+    log.info(f"Migration 68: {len(paths)} PDF(s) atribuídos ao dono uid=1")
+
+    # ---- 4. Corrigir PK de progress: (path) -> (path, user_id) ----
+    table_info = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='progress'"
+    ).fetchone()
+    sql = (table_info[0] if table_info else "") or ""
+    # Só recria se a PK ainda for apenas (path) — isto é, não contém PRIMARY KEY composta
+    if "PRIMARY KEY (path, user_id)" not in sql and "PRIMARY KEY(path, user_id)" not in sql:
+        try:
+            # Descobrir colunas existentes para copiar de forma robusta
+            cols = [r[1] for r in conn.execute("PRAGMA table_info(progress)").fetchall()]
+            has_last_read = "last_read_at" in cols
+
+            conn.execute("ALTER TABLE progress RENAME TO _progress_old")
+            conn.execute("""
+                CREATE TABLE progress (
+                    path TEXT NOT NULL,
+                    current_page INTEGER DEFAULT 1,
+                    total_pages INTEGER DEFAULT 1,
+                    user_id INTEGER NOT NULL DEFAULT 1,
+                    last_read_at TEXT DEFAULT '',
+                    PRIMARY KEY (path, user_id)
+                )
+            """)
+            if has_last_read:
+                conn.execute("""
+                    INSERT INTO progress (path, current_page, total_pages, user_id, last_read_at)
+                    SELECT path, current_page, total_pages, COALESCE(user_id, 1),
+                           COALESCE(last_read_at, '')
+                    FROM _progress_old
+                """)
+            else:
+                conn.execute("""
+                    INSERT INTO progress (path, current_page, total_pages, user_id, last_read_at)
+                    SELECT path, current_page, total_pages, COALESCE(user_id, 1), ''
+                    FROM _progress_old
+                """)
+            conn.execute("DROP TABLE _progress_old")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_progress_user_id ON progress(user_id)")
+            log.info("Migration 68: progress PK corrigida para (path, user_id)")
+        except Exception as e:
+            log.warning(f"Migration 68: falha ao recriar progress: {e}")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -810,6 +928,7 @@ MIGRATIONS = [
     (65, _m65_destaques_pdf),
     (66, _m66_destaques_estilo),
     (67, _m67_destaques_comentario),
+    (68, _m68_pdf_ownership),
 ]
 
 
