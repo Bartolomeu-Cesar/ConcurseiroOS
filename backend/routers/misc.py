@@ -5,6 +5,7 @@ import time
 from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from backup import create_backup, delete_backup, list_backups, restore_from_backup
@@ -20,6 +21,31 @@ router = APIRouter(prefix="", tags=["Utilidades"])
 # Set from main.py
 APP_START_TIME = None
 DB_PATH = "./progress.db"
+
+
+def _require_admin_role(conn, user_id: int):
+    """Verifica role='admin' (consistente com routers/admin.py)."""
+    try:
+        row = conn.execute("SELECT role FROM users WHERE id = ?", (user_id,)).fetchone()
+        is_admin = row and (row["role"] if not isinstance(row, tuple) else row[0]) == "admin"
+    except Exception:
+        is_admin = False
+    if not is_admin:
+        raise HTTPException(status_code=403, detail="Acesso restrito ao administrador")
+
+
+def _audit_backup(conn, admin_id: int, acao: str, filename=""):
+    """Registra ação de backup no log de auditoria (best-effort)."""
+    try:
+        from datetime import timezone
+        conn.execute(
+            "INSERT INTO admin_audit (admin_id, acao, alvo_tipo, alvo_id, detalhe, created_at) "
+            "VALUES (?, ?, 'backup', ?, '', ?)",
+            (admin_id, acao, str(filename), datetime.now(timezone.utc).isoformat())
+        )
+        conn.commit()
+    except Exception:
+        pass
 
 
 # ============================================================
@@ -196,56 +222,71 @@ class RestoreRequest(BaseModel):
 
 
 @router.get("/api/backups", summary="Listar backups", tags=["Sistema"])
-def get_backups(user_id: int = Depends(get_user_id)):
+def get_backups(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Lista todos os backups disponíveis com tamanho e data."""
-    if user_id != 1:
-        raise HTTPException(status_code=403, detail="Acesso restrito ao administrador")
+    _require_admin_role(conn, user_id)
     return list_backups()
 
 
 @router.post("/api/backups", summary="Criar backup", tags=["Sistema"])
-def create_backup_endpoint(user_id: int = Depends(get_user_id)):
+def create_backup_endpoint(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Cria um backup manual do banco de dados."""
-    if user_id != 1:
-        raise HTTPException(status_code=403, detail="Acesso restrito ao administrador")
-    path = create_backup(DB_PATH)
+    _require_admin_role(conn, user_id)
+    path = create_backup(settings.DB_PATH)
     log.info(f"Manual backup created: {path}")
-    return {"ok": True, "path": path}
+    _audit_backup(conn, user_id, "backup.criar", os.path.basename(path))
+    return {"ok": True, "path": path, "filename": os.path.basename(path)}
+
+
+@router.get("/api/backups/download/{filename}", summary="Baixar backup", tags=["Sistema"])
+def download_backup_endpoint(filename: str, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Baixa um arquivo de backup específico (admin only)."""
+    _require_admin_role(conn, user_id)
+    # Path traversal protection
+    if ".." in filename or "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=400, detail="Nome de arquivo inválido")
+    from pathlib import Path as _P
+    bdir = _P(settings.BACKUP_DIR).resolve()
+    fpath = (bdir / filename).resolve()
+    if not fpath.is_relative_to(bdir) or not fpath.exists():
+        raise HTTPException(status_code=404, detail="Backup não encontrado")
+    _audit_backup(conn, user_id, "backup.download", filename)
+    return FileResponse(str(fpath), media_type="application/octet-stream", filename=filename)
 
 
 @router.post("/api/backups/restore/{filename}", summary="Restaurar backup", tags=["Sistema"])
-def restore_backup_endpoint(filename: str, user_id: int = Depends(get_user_id)):
+def restore_backup_endpoint(filename: str, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Restaura um backup específico (admin only). Cria backup do estado atual antes."""
-    if user_id != 1:
-        raise HTTPException(status_code=403, detail="Acesso restrito ao administrador")
-    success = restore_from_backup(filename, DB_PATH)
+    _require_admin_role(conn, user_id)
+    success = restore_from_backup(filename, settings.DB_PATH)
     if not success:
         raise HTTPException(status_code=404, detail="Backup não encontrado")
     log.info(f"Backup restored: {filename}")
+    _audit_backup(conn, user_id, "backup.restaurar", filename)
     return {"ok": True, "restored": filename}
 
 
 @router.post("/api/backups/restore", summary="Restaurar backup (body)", tags=["Sistema"])
-def restore_backup_endpoint_body(body: RestoreRequest, user_id: int = Depends(get_user_id)):
+def restore_backup_endpoint_body(body: RestoreRequest, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Restaura um backup específico (compatibilidade com body request)."""
-    if user_id != 1:
-        raise HTTPException(status_code=403, detail="Acesso restrito ao administrador")
-    success = restore_from_backup(body.filename, DB_PATH)
+    _require_admin_role(conn, user_id)
+    success = restore_from_backup(body.filename, settings.DB_PATH)
     if not success:
         raise HTTPException(status_code=404, detail="Backup não encontrado")
     log.info(f"Backup restored: {body.filename}")
+    _audit_backup(conn, user_id, "backup.restaurar", body.filename)
     return {"ok": True, "restored": body.filename}
 
 
 @router.delete("/api/backups/{filename}", summary="Deletar backup", tags=["Sistema"])
-def delete_backup_endpoint(filename: str, user_id: int = Depends(get_user_id)):
+def delete_backup_endpoint(filename: str, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Remove um backup específico (admin only)."""
-    if user_id != 1:
-        raise HTTPException(status_code=403, detail="Acesso restrito ao administrador")
+    _require_admin_role(conn, user_id)
     success = delete_backup(filename)
     if not success:
         raise HTTPException(status_code=404, detail="Backup não encontrado")
     log.info(f"Backup deleted: {filename}")
+    _audit_backup(conn, user_id, "backup.deletar", filename)
     return {"ok": True, "deleted": filename}
 
 

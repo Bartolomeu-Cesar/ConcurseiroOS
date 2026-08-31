@@ -155,6 +155,18 @@
       <div id="pendentes-list" style="font-size:0.85rem;color:#9399b2;">Carregando...</div>
     </div>
 
+    <!-- Backups -->
+    <div style="margin-top:24px;padding:20px;background:#181825;border:1px solid #45475a;border-radius:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+        <h2 style="color:#a6e3a1;margin:0;font-size:1.1rem;">💾 Backups do Banco</h2>
+        <div style="display:flex;gap:8px;">
+          <button class="btn small" style="background:#a6e3a1;color:#1e1e2e;" onclick="criarBackup()">➕ Criar backup</button>
+          <button class="btn small secondary" onclick="loadBackups()">🔄 Atualizar</button>
+        </div>
+      </div>
+      <div id="bk-list" style="font-size:0.82rem;color:#9399b2;">Carregando...</div>
+    </div>
+
     <!-- Broadcast / Anúncios -->
     <div style="margin-top:24px;padding:20px;background:#181825;border:1px solid #45475a;border-radius:12px;">
       <h2 style="color:#cba6f7;margin:0 0 12px;font-size:1.1rem;">📢 Anúncios / Broadcast</h2>
@@ -1005,6 +1017,62 @@
       } catch(e) { el.innerHTML = '<span style="color:#f38ba8;">Erro ao carregar histórico.</span>'; }
     };
 
+    // ==================== BACKUPS ====================
+    window.loadBackups = async function() {
+      const el = document.getElementById('bk-list');
+      if (!el) return;
+      try {
+        const backups = await fetch('/api/backups').then(r => r.json());
+        if (backups.detail) { el.innerHTML = `<span style="color:#f38ba8;">${esc(backups.detail)}</span>`; return; }
+        if (!backups.length) { el.innerHTML = '<span>Nenhum backup ainda. Clique em "Criar backup".</span>'; return; }
+        el.innerHTML = backups.map(b => {
+          const quando = b.created ? new Date(b.created).toLocaleString('pt-BR') : '';
+          const fn = esc(b.filename);
+          return `
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #313244;">
+              <div style="min-width:0;">
+                <strong style="color:#cdd6f4;">${fn}</strong>
+                <span style="color:#9399b2;font-size:0.72rem;"> · ${b.size_mb} MB · ${esc(quando)}</span>
+              </div>
+              <div style="display:flex;gap:6px;flex-shrink:0;">
+                <a class="btn small secondary" href="/api/backups/download/${encodeURIComponent(b.filename)}" title="Baixar">⬇️</a>
+                <button class="btn small" style="background:#f9e2af;color:#1e1e2e;" onclick="restaurarBackup('${fn.replace(/'/g, "\\'")}')" title="Restaurar">♻️</button>
+                <button class="btn small danger" onclick="deletarBackup('${fn.replace(/'/g, "\\'")}')" title="Excluir">🗑</button>
+              </div>
+            </div>`;
+        }).join('');
+      } catch(e) { el.innerHTML = '<span style="color:#f38ba8;">Erro ao carregar backups.</span>'; }
+    };
+
+    window.criarBackup = async function() {
+      try {
+        const r = await fetch('/api/backups', { method: 'POST' });
+        const d = await r.json();
+        if (r.ok && d.ok) { toast('💾 Backup criado: ' + (d.filename || ''), 'success'); loadBackups(); loadHealth(); }
+        else toast(d.detail || 'Erro ao criar backup.', 'error');
+      } catch(e) { toast('Erro de conexão.', 'error'); }
+    };
+
+    window.restaurarBackup = async function(filename) {
+      if (!await confirmModal('Restaurar backup', `Restaurar "${esc(filename)}"? O estado atual será salvo em um novo backup antes de sobrescrever.`, { type: 'danger', confirmText: 'Restaurar' })) return;
+      try {
+        const r = await fetch('/api/backups/restore/' + encodeURIComponent(filename), { method: 'POST' });
+        const d = await r.json();
+        if (r.ok && d.ok) { toast('♻️ Backup restaurado. Recarregue os dados.', 'success'); loadBackups(); }
+        else toast(d.detail || 'Erro ao restaurar.', 'error');
+      } catch(e) { toast('Erro de conexão.', 'error'); }
+    };
+
+    window.deletarBackup = async function(filename) {
+      if (!await confirmModal('Excluir backup', `Excluir "${esc(filename)}"? Esta ação é irreversível.`, { type: 'danger', confirmText: 'Excluir' })) return;
+      try {
+        const r = await fetch('/api/backups/' + encodeURIComponent(filename), { method: 'DELETE' });
+        const d = await r.json();
+        if (r.ok && d.ok) { toast('🗑 Backup excluído.', 'success'); loadBackups(); loadHealth(); }
+        else toast(d.detail || 'Erro ao excluir.', 'error');
+      } catch(e) { toast('Erro de conexão.', 'error'); }
+    };
+
     // Init
     loadStats();
     loadUsers();
@@ -1014,6 +1082,7 @@
     loadAuditoria();
     loadHealth();
     loadBroadcasts();
+    loadBackups();
   })();
   </script>
 </body>
