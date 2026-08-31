@@ -155,6 +155,28 @@
       <div id="pendentes-list" style="font-size:0.85rem;color:#9399b2;">Carregando...</div>
     </div>
 
+    <!-- Broadcast / Anúncios -->
+    <div style="margin-top:24px;padding:20px;background:#181825;border:1px solid #45475a;border-radius:12px;">
+      <h2 style="color:#cba6f7;margin:0 0 12px;font-size:1.1rem;">📢 Anúncios / Broadcast</h2>
+      <div style="display:grid;gap:8px;max-width:640px;">
+        <input type="text" id="bc-titulo" placeholder="Título do anúncio" maxlength="120" style="padding:8px;background:#313244;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;">
+        <textarea id="bc-corpo" placeholder="Mensagem (opcional)" rows="3" style="padding:8px;background:#313244;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;resize:vertical;"></textarea>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <input type="text" id="bc-url" placeholder="URL de destino (opcional, ex: /planos.html)" style="flex:1;min-width:180px;padding:8px;background:#313244;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;">
+          <select id="bc-segmento" style="padding:8px;background:#313244;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;">
+            <option value="todos">Todos os usuários</option>
+            <option value="free">Apenas Free</option>
+            <option value="premium">Apenas Premium</option>
+            <option value="ativos">Ativos (7 dias)</option>
+          </select>
+          <button class="btn small" style="background:#cba6f7;color:#1e1e2e;" onclick="enviarBroadcast()">📢 Enviar</button>
+        </div>
+      </div>
+      <div id="bc-result" style="font-size:0.8rem;margin-top:8px;"></div>
+      <h3 style="color:#9399b2;font-size:0.85rem;margin:16px 0 8px;">Histórico</h3>
+      <div id="bc-historico" style="font-size:0.8rem;color:#9399b2;">Carregando...</div>
+    </div>
+
     <!-- Log de Auditoria -->
     <div style="margin-top:24px;padding:20px;background:#181825;border:1px solid #45475a;border-radius:12px;">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
@@ -932,6 +954,57 @@
       } catch(e) {}
     };
 
+    // ==================== BROADCAST / ANÚNCIOS ====================
+    window.enviarBroadcast = async function() {
+      const titulo = document.getElementById('bc-titulo').value.trim();
+      const corpo = document.getElementById('bc-corpo').value.trim();
+      const url = document.getElementById('bc-url').value.trim();
+      const segmento = document.getElementById('bc-segmento').value;
+      const res = document.getElementById('bc-result');
+      if (!titulo) { toast('Informe um título.', 'error'); return; }
+      const segLabel = { todos: 'todos os usuários', free: 'usuários Free', premium: 'usuários Premium', ativos: 'usuários ativos' }[segmento];
+      if (!await confirmModal('Enviar anúncio', `Enviar "${esc(titulo)}" para ${segLabel}?`, { confirmText: 'Enviar' })) return;
+      res.innerHTML = '<span style="color:#9399b2;">Enviando...</span>';
+      try {
+        const r = await fetch('/api/admin/broadcast', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ titulo, corpo, url, segmento })
+        });
+        const d = await r.json();
+        if (r.ok && d.ok) {
+          res.innerHTML = `<span style="color:#a6e3a1;">✅ Enviado! Alcance: ${d.alcance} usuário(s) · ${d.push_enviados} push.</span>`;
+          document.getElementById('bc-titulo').value = '';
+          document.getElementById('bc-corpo').value = '';
+          document.getElementById('bc-url').value = '';
+          loadBroadcasts();
+        } else {
+          res.innerHTML = `<span style="color:#f38ba8;">${esc(d.detail || 'Erro.')}</span>`;
+        }
+      } catch(e) {
+        res.innerHTML = '<span style="color:#f38ba8;">Erro de conexão.</span>';
+      }
+    };
+
+    window.loadBroadcasts = async function() {
+      const el = document.getElementById('bc-historico');
+      if (!el) return;
+      try {
+        const data = await fetch('/api/admin/broadcasts?limit=10').then(r => r.json());
+        const items = data.items || [];
+        if (!items.length) { el.innerHTML = '<span>Nenhum anúncio enviado ainda.</span>'; return; }
+        const segLabel = { todos: 'Todos', free: 'Free', premium: 'Premium', ativos: 'Ativos' };
+        el.innerHTML = items.map(b => {
+          const quando = b.created_at ? new Date(b.created_at).toLocaleString('pt-BR') : '';
+          return `
+            <div style="padding:8px 0;border-bottom:1px solid #313244;">
+              <strong style="color:#cdd6f4;">${esc(b.titulo)}</strong>
+              <span style="color:#9399b2;font-size:0.72rem;"> · ${segLabel[b.segmento] || b.segmento} · alcance ${b.alcance} · ${b.push_enviados} push · ${esc(quando)}</span>
+              ${b.corpo ? `<div style="font-size:0.75rem;color:#6c7086;">${esc(b.corpo)}</div>` : ''}
+            </div>`;
+        }).join('');
+      } catch(e) { el.innerHTML = '<span style="color:#f38ba8;">Erro ao carregar histórico.</span>'; }
+    };
+
     // Init
     loadStats();
     loadUsers();
@@ -940,6 +1013,7 @@
     loadMetricas();
     loadAuditoria();
     loadHealth();
+    loadBroadcasts();
   })();
   </script>
 </body>

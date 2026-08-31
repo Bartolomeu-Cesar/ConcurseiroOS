@@ -481,6 +481,104 @@ def listar_auditoria(
 
 
 # ============================================================
+# BROADCAST / ANÚNCIOS
+# ============================================================
+
+_SEGMENTOS_VALIDOS = {"todos", "free", "premium", "ativos"}
+
+
+def _resolver_segmento(conn, segmento: str) -> list:
+    """Retorna a lista de user_ids que pertencem ao segmento informado."""
+    from datetime import date, timedelta
+    if segmento == "todos":
+        rows = conn.execute("SELECT id FROM users").fetchall()
+    elif segmento == "free":
+        rows = conn.execute("SELECT id FROM users WHERE plano IN ('free','guest') OR plano IS NULL").fetchall()
+    elif segmento == "premium":
+        rows = conn.execute("SELECT id FROM users WHERE plano NOT IN ('free','guest') AND plano IS NOT NULL").fetchall()
+    elif segmento == "ativos":
+        limite = (date.today() - timedelta(days=7)).isoformat()
+        rows = conn.execute(
+            "SELECT DISTINCT user_id AS id FROM streaks WHERE data >= ? AND "
+            "(horas_estudadas > 0 OR questoes_resolvidas > 0 OR flashcards_revisados > 0)",
+            (limite,)
+        ).fetchall()
+    else:
+        rows = []
+    return [r["id"] if not isinstance(r, tuple) else r[0] for r in rows]
+
+
+@router.post("/broadcast", summary="Enviar anúncio para usuários (por segmento)")
+def enviar_broadcast(
+    body: dict,
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Cria um anúncio e (best-effort) envia push aos usuários do segmento.
+
+    body: {titulo, corpo, url (opcional), segmento: todos|free|premium|ativos}
+    O anúncio fica salvo para exibição in-app; o push é um complemento.
+    """
+    _require_admin(user_id)
+    from datetime import datetime, timezone
+
+    titulo = (body.get("titulo") or "").strip()
+    corpo = (body.get("corpo") or "").strip()
+    url = (body.get("url") or "").strip()
+    segmento = (body.get("segmento") or "todos").strip().lower()
+
+    if not titulo:
+        raise HTTPException(status_code=400, detail="titulo é obrigatório")
+    if segmento not in _SEGMENTOS_VALIDOS:
+        raise HTTPException(status_code=400, detail=f"segmento inválido. Opções: {sorted(_SEGMENTOS_VALIDOS)}")
+
+    destinatarios = _resolver_segmento(conn, segmento)
+    alcance = len(destinatarios)
+
+    now = datetime.now(timezone.utc).isoformat()
+    cur = conn.execute(
+        "INSERT INTO broadcasts (admin_id, titulo, corpo, url, segmento, alcance, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (user_id, titulo, corpo, url, segmento, alcance, now)
+    )
+    broadcast_id = cur.lastrowid
+
+    # Push best-effort (não quebra se pywebpush indisponível)
+    push_enviados = 0
+    try:
+        from routers.notifications import _send_push_to_user
+        for uid in destinatarios:
+            try:
+                push_enviados += _send_push_to_user(conn, uid, titulo, corpo, url, tag="broadcast")
+            except Exception:
+                pass
+    except Exception as e:
+        log.warning(f"[broadcast] push indisponível: {e}")
+
+    conn.execute("UPDATE broadcasts SET push_enviados = ? WHERE id = ?", (push_enviados, broadcast_id))
+    conn.commit()
+
+    _audit(conn, user_id, "broadcast.enviar", "broadcast", broadcast_id,
+           {"segmento": segmento, "alcance": alcance, "push": push_enviados, "titulo": titulo})
+    log.info(f"[admin] Broadcast #{broadcast_id} segmento={segmento} alcance={alcance} push={push_enviados}")
+    return {"ok": True, "id": broadcast_id, "segmento": segmento, "alcance": alcance, "push_enviados": push_enviados}
+
+
+@router.get("/broadcasts", summary="Histórico de anúncios enviados")
+def listar_broadcasts(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Lista os anúncios já enviados, mais recentes primeiro."""
+    _require_admin(user_id)
+    from utils import sql_paginate
+    query = "SELECT id, titulo, corpo, url, segmento, alcance, push_enviados, created_at FROM broadcasts ORDER BY id DESC"
+    return sql_paginate(conn, query, (), page=page, limit=limit)
+
+
+# ============================================================
 # ESTATÍSTICAS GLOBAIS
 # ============================================================
 

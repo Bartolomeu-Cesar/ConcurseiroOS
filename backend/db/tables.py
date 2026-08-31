@@ -16,6 +16,29 @@ def _create_tables(conn):
         )
     """)
 
+    # Anúncios/broadcasts do admin
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS broadcasts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            admin_id INTEGER NOT NULL,
+            titulo TEXT NOT NULL,
+            corpo TEXT NOT NULL DEFAULT '',
+            url TEXT DEFAULT '',
+            segmento TEXT NOT NULL DEFAULT 'todos',
+            push_enviados INTEGER DEFAULT 0,
+            alcance INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS broadcast_reads (
+            broadcast_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            read_at TEXT NOT NULL,
+            PRIMARY KEY (broadcast_id, user_id)
+        )
+    """)
+
     # Tabela de progresso de PDFs
     conn.execute("""
         CREATE TABLE IF NOT EXISTS progress (

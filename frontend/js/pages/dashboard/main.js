@@ -2227,6 +2227,44 @@ setTimeout(loadSiTechniquesAlerts, 1200);
   } catch(e) {}
 })();
 
+// Broadcast/anúncios do admin (feed in-app)
+(async function loadBroadcastFeed() {
+  try {
+    const data = await fetch('/api/broadcasts/feed').then(r => r.ok ? r.json() : null);
+    if (!data || !data.anuncios || data.anuncios.length === 0) return;
+
+    const target = document.querySelector('.panel-visao .charts') || document.querySelector('.panel-visao');
+    if (!target) return;
+
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const anunciosHtml = data.anuncios.map(a => `
+      <div data-bc-id="${a.id}" style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;background:var(--bg-surface);border-radius:10px;border-left:3px solid #cba6f7;">
+        <span style="font-size:1.2rem;">📢</span>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:0.85rem;font-weight:700;color:var(--text);">${esc(a.titulo)}</div>
+          ${a.corpo ? `<div style="font-size:0.8rem;color:var(--text-sub);margin-top:2px;">${esc(a.corpo)}</div>` : ''}
+          ${a.url ? `<a href="${esc(a.url)}" style="font-size:0.78rem;color:var(--accent);">Saiba mais →</a>` : ''}
+        </div>
+        <button onclick="window.dispensarAnuncio(${a.id})" title="Dispensar" style="background:none;border:none;color:var(--text-sub);font-size:1rem;cursor:pointer;">✕</button>
+      </div>
+    `).join('');
+
+    const container = document.createElement('div');
+    container.id = 'broadcast-feed-inline';
+    container.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin-bottom:16px;';
+    container.innerHTML = anunciosHtml;
+    target.insertBefore(container, target.firstChild);
+  } catch(e) {}
+})();
+
+window.dispensarAnuncio = async function(id) {
+  try { await fetch(`/api/broadcasts/${id}/dispensar`, { method: 'POST' }); } catch(e) {}
+  const el = document.querySelector(`#broadcast-feed-inline [data-bc-id="${id}"]`);
+  if (el) el.remove();
+  const cont = document.getElementById('broadcast-feed-inline');
+  if (cont && !cont.children.length) cont.remove();
+};
+
 // Notification Preferences Modal
 window.showNotificationPrefs = async function() {
   const _headers = () => {

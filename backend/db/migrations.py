@@ -885,6 +885,39 @@ def _m69_admin_audit(conn):
     log.info("Migration: created admin_audit table")
 
 
+def _m70_broadcasts(conn):
+    """Anúncios/broadcasts do admin para usuários (por segmento).
+
+    - broadcasts: cada anúncio criado pelo admin (título, corpo, segmento, url).
+    - broadcast_reads: marca quais usuários já leram/dispensaram cada anúncio,
+      para o feed in-app não repetir.
+    Segmentos: 'todos' | 'free' | 'premium' | 'ativos'.
+    """
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS broadcasts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            admin_id INTEGER NOT NULL,
+            titulo TEXT NOT NULL,
+            corpo TEXT NOT NULL DEFAULT '',
+            url TEXT DEFAULT '',
+            segmento TEXT NOT NULL DEFAULT 'todos',
+            push_enviados INTEGER DEFAULT 0,
+            alcance INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_broadcasts_created ON broadcasts(created_at DESC)")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS broadcast_reads (
+            broadcast_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            read_at TEXT NOT NULL,
+            PRIMARY KEY (broadcast_id, user_id)
+        )
+    """)
+    log.info("Migration: created broadcasts + broadcast_reads tables")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -955,6 +988,7 @@ MIGRATIONS = [
     (67, _m67_destaques_comentario),
     (68, _m68_pdf_ownership),
     (69, _m69_admin_audit),
+    (70, _m70_broadcasts),
 ]
 
 

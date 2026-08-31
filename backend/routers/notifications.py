@@ -754,3 +754,64 @@ def get_vapid_key():
         if fresh_key:
             return {"vapid_public_key": fresh_key}
     return {"vapid_public_key": VAPID_PUBLIC_KEY}
+
+
+# ============================================================
+# BROADCAST FEED (anúncios do admin, in-app)
+# ============================================================
+
+
+def _user_matches_segmento(conn, user_id: int, segmento: str) -> bool:
+    """Verifica se o usuário pertence ao segmento de um broadcast."""
+    if segmento == "todos":
+        return True
+    row = conn.execute("SELECT plano FROM users WHERE id = ?", (user_id,)).fetchone()
+    plano = (row["plano"] if row else None) or "free"
+    if segmento == "free":
+        return plano in ("free", "guest")
+    if segmento == "premium":
+        return plano not in ("free", "guest")
+    if segmento == "ativos":
+        from datetime import date, timedelta
+        limite = (date.today() - timedelta(days=7)).isoformat()
+        r = conn.execute(
+            "SELECT 1 FROM streaks WHERE user_id = ? AND data >= ? AND "
+            "(horas_estudadas > 0 OR questoes_resolvidas > 0 OR flashcards_revisados > 0) LIMIT 1",
+            (user_id, limite)
+        ).fetchone()
+        return r is not None
+    return False
+
+
+@router.get("/api/broadcasts/feed", summary="Anúncios do admin para o usuário (não lidos)")
+def broadcasts_feed(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Retorna anúncios recentes direcionados ao usuário que ele ainda não dispensou."""
+    try:
+        rows = conn.execute("""
+            SELECT b.id, b.titulo, b.corpo, b.url, b.segmento, b.created_at
+            FROM broadcasts b
+            WHERE b.id NOT IN (SELECT broadcast_id FROM broadcast_reads WHERE user_id = ?)
+            ORDER BY b.id DESC LIMIT 50
+        """, (user_id,)).fetchall()
+    except Exception:
+        return {"anuncios": []}
+    anuncios = []
+    for r in rows:
+        if _user_matches_segmento(conn, user_id, r["segmento"]):
+            anuncios.append({
+                "id": r["id"], "titulo": r["titulo"], "corpo": r["corpo"],
+                "url": r["url"], "created_at": r["created_at"],
+            })
+    return {"anuncios": anuncios, "total": len(anuncios)}
+
+
+@router.post("/api/broadcasts/{broadcast_id}/dispensar", summary="Dispensar um anúncio")
+def dispensar_broadcast(broadcast_id: int, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Marca um anúncio como lido/dispensado para o usuário (não reaparece)."""
+    from datetime import datetime, timezone
+    conn.execute(
+        "INSERT OR IGNORE INTO broadcast_reads (broadcast_id, user_id, read_at) VALUES (?, ?, ?)",
+        (broadcast_id, user_id, datetime.now(timezone.utc).isoformat())
+    )
+    conn.commit()
+    return {"ok": True}
