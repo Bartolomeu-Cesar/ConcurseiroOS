@@ -71,12 +71,30 @@ def _get_jwt_secret() -> str:
     return new_secret
 
 
+def _anchor(path_str: str) -> str:
+    """Resolve caminhos relativos a partir do diretório do backend (não do cwd).
+
+    Motivo: o servidor pode ser iniciado da raiz do projeto (`uvicorn
+    backend.main:app`) ou de dentro de `backend/`. Um DB_PATH relativo como
+    `./progress.db` apontaria para arquivos diferentes conforme o cwd — o que
+    causava 'no such table' ao subir da raiz (banco vazio). Ancorando no
+    diretório do backend, o caminho fica determinístico. Caminhos absolutos
+    (produção, testes com tmp) são respeitados sem alteração.
+    """
+    if not path_str:
+        return path_str
+    p = Path(path_str)
+    if p.is_absolute():
+        return str(p)
+    return str((_BACKEND_DIR / p).resolve())
+
+
 class Settings:
     """Configurações da aplicação. Valores podem ser overridden via env vars."""
-    PDF_ROOT: str = os.environ.get("PDF_ROOT", "./pdfs")
-    DB_PATH: str = os.environ.get("DB_PATH", "./progress.db")
+    PDF_ROOT: str = _anchor(os.environ.get("PDF_ROOT", "./pdfs"))
+    DB_PATH: str = _anchor(os.environ.get("DB_PATH", "./progress.db"))
     APP_VERSION: str = "2.4.0"
-    BACKUP_DIR: str = os.environ.get("BACKUP_DIR", "./backups")
+    BACKUP_DIR: str = _anchor(os.environ.get("BACKUP_DIR", "./backups"))
     BACKUP_MAX_KEEP: int = int(os.environ.get("BACKUP_MAX_KEEP", "7"))
     BACKUP_AUTO: bool = os.environ.get("BACKUP_AUTO", "true").lower() == "true"
     CORS_ORIGINS: list = [
