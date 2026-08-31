@@ -285,6 +285,46 @@ function finishTimer(showOverlay = false) {
   }
 }
 
+// Atualiza os ícones/estado dos botões de controle do cronômetro.
+function _atualizarBotoesTimer() {
+  const bt = document.getElementById('btn-timer-toggle');
+  if (!bt) return;
+  const rodando = !!timerInterval && !paused;
+  bt.textContent = rodando ? '⏸' : '▶';
+  bt.title = rodando ? 'Pausar cronômetro' : 'Retomar cronômetro';
+  bt.style.color = rodando ? 'var(--yellow,#f9e2af)' : 'var(--green,#a6e3a1)';
+}
+
+// Pausa ou retoma o cronômetro (mantém o tempo já decorrido).
+function toggleTimerPause() {
+  if (paused || !timerInterval) {
+    // Retomar: recalcula startedAt para continuar de `elapsed`.
+    paused = false;
+    startedAt = Date.now() - (elapsed * 1000);
+    clearInterval(timerInterval);
+    timerInterval = setInterval(tick, 250);
+    tick();
+    showStudyToast('▶ Cronômetro retomado.');
+  } else {
+    // Pausar: congela o tempo decorrido e para o intervalo.
+    paused = true;
+    elapsed = startedAt ? Math.floor((Date.now() - startedAt) / 1000) : elapsed;
+    clearInterval(timerInterval);
+    timerInterval = null;
+    updateTimerDisplay();
+    showStudyToast('⏸ Cronômetro pausado.');
+  }
+  saveTimerState();
+  _atualizarBotoesTimer();
+}
+
+// Para e zera o cronômetro (sem exibir o overlay de descanso).
+function pararTimer() {
+  finishTimer(false);
+  _atualizarBotoesTimer();
+  showStudyToast('⏹ Cronômetro parado e zerado.');
+}
+
 function initTimer() {
   const state = loadTimerState();
   const minutes = parseInt(localStorage.getItem(TIMER_LIMIT_KEY) || '15', 10);
@@ -302,7 +342,14 @@ function initTimer() {
     timerInterval = setInterval(tick, 250);
     tick();
   } else if (state && state.paused && state.limitSeconds > 0) {
-    startTimer(Math.round(state.limitSeconds / 60), state.elapsed || 0);
+    // Restaura o cronômetro no estado PAUSADO (não retoma sozinho no reload).
+    limitSeconds = state.limitSeconds;
+    elapsed = state.elapsed || 0;
+    paused = true;
+    startedAt = null;
+    timerInterval = null;
+    updateTimerDisplay();
+    saveTimerState();
   } else {
     startTimer(minutes, 0);
   }
@@ -488,6 +535,7 @@ async function selectSideAlt(el) {
 
 initProgress();
 initTimer();
+_atualizarBotoesTimer();
 
 // ========== STUDY TOOLS ==========
 
@@ -2166,6 +2214,8 @@ document.addEventListener('keydown', e => {
 
 // === Window assignments for HTML onclick/onchange handlers ===
 window.toggleNotePanel = toggleNotePanel;
+window.toggleTimerPause = toggleTimerPause;
+window.pararTimer = pararTimer;
 window.addBookmark = addBookmark;
 window.toggleBookmarksPanel = toggleBookmarksPanel;
 window.loadBookmarksPanel = loadBookmarksPanel;

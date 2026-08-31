@@ -77,6 +77,10 @@
     <a href="/" id="btn-voltar" style="background:var(--accent);color:var(--bg);border-radius:6px;padding:5px 12px;font-weight:600;font-size:0.82rem;text-decoration:none;">🏠 Início</a>
     <span id="title"></span>
     <span id="timer-display">00:00:00</span>
+    <span id="timer-controls" style="display:inline-flex;gap:4px;align-items:center;">
+      <button id="btn-timer-toggle" onclick="toggleTimerPause()" title="Pausar/Retomar cronômetro" style="background:var(--bg-elevated);border:none;color:var(--yellow,#f9e2af);border-radius:6px;padding:4px 8px;font-size:0.8rem;cursor:pointer;">⏸</button>
+      <button id="btn-timer-stop" onclick="pararTimer()" title="Parar e zerar cronômetro" style="background:var(--bg-elevated);border:none;color:var(--red,#f38ba8);border-radius:6px;padding:4px 8px;font-size:0.8rem;cursor:pointer;">⏹</button>
+    </span>
     <span id="page-info"></span>
     <!-- Study Tools -->
     <div id="study-tools" style="display:flex;gap:6px;align-items:center;">
