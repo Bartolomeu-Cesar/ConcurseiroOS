@@ -69,6 +69,46 @@ def _decode_token(token: str) -> dict:
         raise HTTPException(status_code=401, detail="Token inválido")
 
 
+def _bloquear_se_conta_inativa(conn, email: str):
+    """Levanta 403 se a conta estiver banida ou suspensa (moderação).
+
+    Suspensão com `conta_status_ate` no passado é tratada como expirada
+    (reativa automaticamente). Best-effort: se as colunas não existirem, não bloqueia.
+    """
+    from datetime import datetime, timezone
+    try:
+        row = conn.execute(
+            "SELECT conta_status, conta_status_motivo, conta_status_ate FROM users WHERE email = ?",
+            (email,)
+        ).fetchone()
+    except Exception:
+        return  # colunas ausentes → não bloquear
+    if not row:
+        return
+    status = (row["conta_status"] if not isinstance(row, tuple) else row[0]) or "ativo"
+    motivo = (row["conta_status_motivo"] if not isinstance(row, tuple) else row[1]) or ""
+    ate = (row["conta_status_ate"] if not isinstance(row, tuple) else row[2]) or ""
+
+    if status == "banido":
+        detalhe = "Conta banida." + (f" Motivo: {motivo}" if motivo else "")
+        raise HTTPException(status_code=403, detail=detalhe)
+    if status == "suspenso":
+        # Suspensão expirada → reativa
+        if ate:
+            try:
+                dt = datetime.fromisoformat(ate)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                if datetime.now(timezone.utc) >= dt:
+                    conn.execute("UPDATE users SET conta_status = 'ativo', conta_status_ate = '' WHERE email = ?", (email,))
+                    conn.commit()
+                    return
+            except (ValueError, TypeError):
+                pass
+        detalhe = "Conta suspensa." + (f" Motivo: {motivo}" if motivo else "") + (f" Até: {ate}" if ate else "")
+        raise HTTPException(status_code=403, detail=detalhe)
+
+
 def _send_email(to_email: str, subject: str, html_body: str):
     """Envia email via SMTP."""
     if not settings.SMTP_USER or not settings.SMTP_PASSWORD:
@@ -249,6 +289,9 @@ def login(body: LoginRequest, conn=Depends(get_db_session)):
     if not user:
         raise HTTPException(status_code=404, detail="Email não cadastrado. Registre-se primeiro.")
 
+    # Moderação: bloquear conta banida/suspensa antes de enviar código
+    _bloquear_se_conta_inativa(conn, email)
+
     # Invalidar códigos anteriores
     conn.execute("UPDATE auth_codes SET used = 1 WHERE email = ? AND used = 0", (email,))
 
@@ -303,6 +346,9 @@ def verify_code(body: VerifyCodeRequest, request: Request = None, conn=Depends(g
 
     # Marcar como usado
     conn.execute("UPDATE auth_codes SET used = 1 WHERE id = ?", (auth["id"],))
+
+    # Moderação: bloquear conta banida/suspensa (defense-in-depth)
+    _bloquear_se_conta_inativa(conn, email)
 
     # Atualizar usuário
     conn.execute(

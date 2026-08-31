@@ -436,6 +436,7 @@
               <button class="btn small secondary" onclick="editUser(${u.id})">✏️</button>
               <button class="btn small" onclick="openMoneyModal(${u.id}, '${esc(u.nome)}')" title="Gerenciar plano/créditos">💰</button>
               ${u.id !== 1 ? '<button class="btn small" style="background:#89dceb;color:#1e1e2e;" onclick="impersonar(' + u.id + ',\'' + esc(u.nome) + '\')" title="Entrar como este usuário">🎭</button>' : ''}
+              ${u.id !== 1 ? '<button class="btn small" style="background:#fab387;color:#1e1e2e;" onclick="moderarUsuario(' + u.id + ',\'' + esc(u.nome) + '\')" title="Moderar (banir/suspender)">🚫</button>' : ''}
               ${u.id !== 1 ? '<button class="btn small danger" onclick="deleteUser(' + u.id + ',\'' + esc(u.nome) + '\')">🗑</button>' : ''}
             </td>
           </tr>
@@ -1140,6 +1141,40 @@
         });
         const d = await r.json();
         if (r.ok && d.ok) { toast(`🚩 ${chave}: ${ativo ? 'ligado' : 'desligado'}`, 'success'); loadFlags(); }
+        else toast(d.detail || 'Erro.', 'error');
+      } catch(e) { toast('Erro de conexão.', 'error'); }
+    };
+
+    // ==================== MODERAÇÃO ====================
+    window.moderarUsuario = async function(uid, nome) {
+      const acao = await promptModal(
+        `Moderar "${nome}". Digite a ação: banir, suspender ou ativar:`,
+        { title: '🚫 Moderação', placeholder: 'banir / suspender / ativar' }
+      );
+      if (!acao) return;
+      const status = acao.trim().toLowerCase();
+      const map = { banir: 'banido', suspender: 'suspenso', ativar: 'ativo', banido: 'banido', suspenso: 'suspenso', ativo: 'ativo' };
+      const st = map[status];
+      if (!st) { toast('Ação inválida. Use banir, suspender ou ativar.', 'error'); return; }
+
+      let motivo = '';
+      if (st !== 'ativo') {
+        motivo = await promptModal('Motivo (opcional):', { title: 'Motivo da moderação' }) || '';
+      }
+      let ate = '';
+      if (st === 'suspenso') {
+        ate = await promptModal('Suspender até quando? (AAAA-MM-DD, vazio = indefinido):', { title: 'Fim da suspensão', placeholder: '2026-12-31' }) || '';
+        if (ate.trim()) ate = new Date(ate.trim() + 'T23:59:59').toISOString();
+      }
+      const verbo = { banido: 'Banir', suspenso: 'Suspender', ativo: 'Reativar' }[st];
+      if (!await confirmModal(verbo + ' usuário', `${verbo} "${esc(nome)}"?`, { type: st === 'ativo' ? 'info' : 'danger', confirmText: verbo })) return;
+      try {
+        const r = await fetch(`/api/admin/users/${uid}/status`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: st, motivo, ate })
+        });
+        const d = await r.json();
+        if (r.ok && d.ok) { toast(`Usuário ${st}.`, 'success'); loadUsers(); }
         else toast(d.detail || 'Erro.', 'error');
       } catch(e) { toast('Erro de conexão.', 'error'); }
     };

@@ -918,6 +918,26 @@ def _m70_broadcasts(conn):
     log.info("Migration: created broadcasts + broadcast_reads tables")
 
 
+def _m71_conta_status(conn):
+    """Status da conta para moderação: ativo | suspenso | banido.
+
+    - conta_status: estado atual (default 'ativo').
+    - conta_status_motivo: justificativa do admin.
+    - conta_status_ate: (opcional) data de fim da suspensão (ISO); vazio = indefinido.
+    """
+    for col, defn in [
+        ("conta_status", "TEXT DEFAULT 'ativo'"),
+        ("conta_status_motivo", "TEXT DEFAULT ''"),
+        ("conta_status_ate", "TEXT DEFAULT ''"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE users ADD COLUMN {col} {defn}")
+        except Exception:
+            pass  # coluna já existe
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_users_conta_status ON users(conta_status)")
+    log.info("Migration: added conta_status columns to users")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -989,6 +1009,7 @@ MIGRATIONS = [
     (68, _m68_pdf_ownership),
     (69, _m69_admin_audit),
     (70, _m70_broadcasts),
+    (71, _m71_conta_status),
 ]
 
 

@@ -481,6 +481,55 @@ def listar_auditoria(
 
 
 # ============================================================
+# MODERAÇÃO: STATUS DA CONTA (BANIR/SUSPENDER)
+# ============================================================
+
+_STATUS_CONTA_VALIDOS = {"ativo", "suspenso", "banido"}
+
+
+@router.post("/users/{uid}/status", summary="Alterar status da conta (moderação)")
+def alterar_status_conta(
+    uid: int,
+    body: dict,
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Define o status da conta de um usuário: ativo | suspenso | banido.
+
+    body: {status, motivo (opcional), ate (opcional ISO, só p/ suspenso)}
+    - banido: bloqueia login permanentemente até reativar.
+    - suspenso: bloqueia login (até `ate`, se informado).
+    - ativo: reativa a conta.
+    """
+    _require_admin(user_id)
+
+    status = (body.get("status") or "").strip().lower()
+    motivo = (body.get("motivo") or "").strip()
+    ate = (body.get("ate") or "").strip()
+
+    if status not in _STATUS_CONTA_VALIDOS:
+        raise HTTPException(status_code=400, detail=f"status inválido. Opções: {sorted(_STATUS_CONTA_VALIDOS)}")
+    if uid == 1:
+        raise HTTPException(status_code=400, detail="Não é possível moderar o administrador principal.")
+
+    alvo = conn.execute("SELECT id, role FROM users WHERE id = ?", (uid,)).fetchone()
+    if not alvo:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+    alvo_role = alvo["role"] if not isinstance(alvo, tuple) else alvo[1]
+    if alvo_role == "admin" and status != "ativo":
+        raise HTTPException(status_code=400, detail="Não é possível suspender/banir outro administrador.")
+
+    conn.execute(
+        "UPDATE users SET conta_status = ?, conta_status_motivo = ?, conta_status_ate = ? WHERE id = ?",
+        (status, motivo, ate if status == "suspenso" else "", uid)
+    )
+    conn.commit()
+    _audit(conn, user_id, f"user.{status}", "user", uid, {"motivo": motivo, "ate": ate})
+    log.info(f"[admin] Status conta: user={uid} → {status} motivo={motivo}")
+    return {"ok": True, "user_id": uid, "status": status}
+
+
+# ============================================================
 # FEATURE FLAGS / KILL SWITCH
 # ============================================================
 
