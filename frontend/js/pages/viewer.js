@@ -1985,14 +1985,20 @@ function _ocluirRedesenhar() {
 }
 
 // Setup de arraste no wrap do editor (uma vez).
+// As coordenadas são calculadas relativas à <img> renderizada (getBoundingClientRect
+// da imagem), não do wrap — o wrap inline-block pode ter tamanho diferente da
+// imagem (por max-height:70vh), o que deslocaria as regiões.
 (function _setupOclusaoEvents() {
   const wrap = document.getElementById('oclusao-canvas-wrap');
   if (!wrap) return;
   let temp = null;
 
+  const imgRect = () => document.getElementById('oclusao-img').getBoundingClientRect();
+
   wrap.addEventListener('mousedown', (e) => {
     if (!_ocluirState || e.target.classList.contains('oc-edit-rect')) return;
-    const rect = wrap.getBoundingClientRect();
+    e.preventDefault();
+    const rect = imgRect();
     _ocluirState.dragStart = { x: e.clientX - rect.left, y: e.clientY - rect.top };
     temp = document.createElement('div');
     temp.className = 'oc-edit-temp';
@@ -2002,8 +2008,10 @@ function _ocluirRedesenhar() {
 
   wrap.addEventListener('mousemove', (e) => {
     if (!_ocluirState || !_ocluirState.dragStart || !temp) return;
-    const rect = wrap.getBoundingClientRect();
-    const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+    const rect = imgRect();
+    // Clampa dentro da imagem.
+    const cx = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+    const cy = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
     const x = Math.min(cx, _ocluirState.dragStart.x), y = Math.min(cy, _ocluirState.dragStart.y);
     const w = Math.abs(cx - _ocluirState.dragStart.x), h = Math.abs(cy - _ocluirState.dragStart.y);
     temp.style.left = x + 'px'; temp.style.top = y + 'px';
@@ -2012,8 +2020,9 @@ function _ocluirRedesenhar() {
 
   wrap.addEventListener('mouseup', (e) => {
     if (!_ocluirState || !_ocluirState.dragStart) return;
-    const rect = wrap.getBoundingClientRect();
-    const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+    const rect = imgRect();
+    const cx = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+    const cy = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
     const x = Math.min(cx, _ocluirState.dragStart.x), y = Math.min(cy, _ocluirState.dragStart.y);
     const w = Math.abs(cx - _ocluirState.dragStart.x), h = Math.abs(cy - _ocluirState.dragStart.y);
     _ocluirState.dragStart = null;
@@ -2037,16 +2046,29 @@ function ocluirLimpar() {
 
 async function ocluirSalvar() {
   if (!_ocluirState) return;
-  const res = await fetch(`/api/revisao/${_ocluirState.id}`, {
-    method: 'PUT', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ oclusoes: JSON.stringify(_ocluirState.regs) }),
-  });
-  if (res.ok) {
-    showStudyToast(`🕶️ ${_ocluirState.regs.length} região(ões) de oclusão salva(s)!`);
-    ocluirFechar();
-    loadRevisao();
-  } else {
-    showStudyToast('⚠️ Erro ao salvar oclusões.');
+  const payload = JSON.stringify(_ocluirState.regs);
+  console.log('[oclusão] salvando', _ocluirState.regs.length, 'região(ões) no bloco', _ocluirState.id, payload);
+  if (_ocluirState.regs.length === 0) {
+    showStudyToast('⚠️ Nenhuma região desenhada. Arraste sobre a imagem antes de salvar.');
+    return;
+  }
+  try {
+    const res = await fetch(`/api/revisao/${_ocluirState.id}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ oclusoes: payload }),
+    });
+    console.log('[oclusão] PUT status', res.status);
+    if (res.ok) {
+      showStudyToast(`🕶️ ${_ocluirState.regs.length} região(ões) de oclusão salva(s)!`);
+      ocluirFechar();
+      loadRevisao();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showStudyToast('⚠️ ' + (err.detail || `Erro ao salvar oclusões (HTTP ${res.status}).`));
+    }
+  } catch (e) {
+    console.error('[oclusão] erro no PUT:', e);
+    showStudyToast('⚠️ Erro de conexão ao salvar oclusões.');
   }
 }
 
