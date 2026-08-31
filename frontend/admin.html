@@ -426,6 +426,7 @@
             <td>
               <button class="btn small secondary" onclick="editUser(${u.id})">✏️</button>
               <button class="btn small" onclick="openMoneyModal(${u.id}, '${esc(u.nome)}')" title="Gerenciar plano/créditos">💰</button>
+              ${u.id !== 1 ? '<button class="btn small" style="background:#89dceb;color:#1e1e2e;" onclick="impersonar(' + u.id + ',\'' + esc(u.nome) + '\')" title="Entrar como este usuário">🎭</button>' : ''}
               ${u.id !== 1 ? '<button class="btn small danger" onclick="deleteUser(' + u.id + ',\'' + esc(u.nome) + '\')">🗑</button>' : ''}
             </td>
           </tr>
@@ -1070,6 +1071,27 @@
         const d = await r.json();
         if (r.ok && d.ok) { toast('🗑 Backup excluído.', 'success'); loadBackups(); loadHealth(); }
         else toast(d.detail || 'Erro ao excluir.', 'error');
+      } catch(e) { toast('Erro de conexão.', 'error'); }
+    };
+
+    // ==================== IMPERSONATION ====================
+    window.impersonar = async function(uid, nome) {
+      if (!await confirmModal('Entrar como usuário', `Entrar como "${esc(nome)}"? Você navegará como este usuário por 30 minutos. A ação é registrada na auditoria.`, { confirmText: 'Entrar' })) return;
+      try {
+        const r = await fetch(`/api/admin/users/${uid}/impersonate`, { method: 'POST' });
+        const d = await r.json();
+        if (!r.ok || !d.ok) { toast(d.detail || 'Erro ao impersonar.', 'error'); return; }
+        // Salva credenciais do admin para poder voltar
+        const adminToken = localStorage.getItem('auth_token');
+        const adminUser = localStorage.getItem('auth_user');
+        if (adminToken) localStorage.setItem('admin_token_backup', adminToken);
+        if (adminUser) localStorage.setItem('admin_user_backup', adminUser);
+        // Assume identidade do alvo
+        localStorage.setItem('auth_token', d.token);
+        localStorage.setItem('auth_user', JSON.stringify(d.user));
+        localStorage.setItem('impersonating', JSON.stringify({ user: d.user, since: Date.now() }));
+        toast(`🎭 Entrando como ${esc(d.user.nome || d.user.email)}...`, 'success');
+        setTimeout(() => { window.location.href = '/'; }, 800);
       } catch(e) { toast('Erro de conexão.', 'error'); }
     };
 

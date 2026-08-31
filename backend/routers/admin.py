@@ -481,6 +481,57 @@ def listar_auditoria(
 
 
 # ============================================================
+# IMPERSONATION (ENTRAR COMO USUÁRIO)
+# ============================================================
+
+@router.post("/users/{uid}/impersonate", summary="Gerar token para entrar como usuário")
+def impersonate_user(
+    uid: int,
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Gera um access token de curta duração para o admin navegar como o usuário.
+
+    Uso de suporte/debug. A ação é sempre auditada. O token carrega a claim
+    `imp` (id do admin) para que o frontend exiba um banner e seja rastreável.
+    """
+    _require_admin(user_id)
+    import jwt as _jwt
+    from datetime import datetime, timezone, timedelta
+
+    from settings import settings as _settings
+
+    alvo = conn.execute("SELECT id, email, nome FROM users WHERE id = ?", (uid,)).fetchone()
+    if not alvo:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+    if uid == user_id:
+        raise HTTPException(status_code=400, detail="Você já está logado como este usuário.")
+
+    email = alvo["email"] if not isinstance(alvo, tuple) else alvo[1]
+    nome = alvo["nome"] if not isinstance(alvo, tuple) else alvo[2]
+
+    # Token de curta duração (30 min) com claim de impersonação
+    payload = {
+        "sub": str(uid),
+        "email": email,
+        "type": "access",
+        "imp": user_id,  # admin que iniciou a impersonação
+        "exp": datetime.now(timezone.utc) + timedelta(minutes=30),
+        "iat": datetime.now(timezone.utc),
+    }
+    token = _jwt.encode(payload, _settings.JWT_SECRET, algorithm=_settings.JWT_ALGORITHM)
+
+    _audit(conn, user_id, "user.impersonate", "user", uid, {"email": email})
+    log.info(f"[admin] Impersonation: admin={user_id} → user={uid}")
+    return {
+        "ok": True,
+        "token": token,
+        "user": {"id": uid, "nome": nome, "email": email},
+        "expires_min": 30,
+    }
+
+
+# ============================================================
 # BROADCAST / ANÚNCIOS
 # ============================================================
 

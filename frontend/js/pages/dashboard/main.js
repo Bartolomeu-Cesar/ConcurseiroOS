@@ -2265,6 +2265,33 @@ window.dispensarAnuncio = async function(id) {
   if (cont && !cont.children.length) cont.remove();
 };
 
+// Banner de impersonation (admin navegando como usuário)
+(function impersonationBanner() {
+  let imp;
+  try { imp = JSON.parse(localStorage.getItem('impersonating') || 'null'); } catch(e) { imp = null; }
+  if (!imp) return;
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const bar = document.createElement('div');
+  bar.id = 'impersonation-banner';
+  bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:100000;background:#fab387;color:#1e1e2e;padding:8px 14px;display:flex;align-items:center;justify-content:center;gap:12px;font-size:0.85rem;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,0.3);';
+  bar.innerHTML = `
+    <span>🎭 Você está navegando como <strong>${esc(imp.user?.nome || imp.user?.email || 'usuário')}</strong> (modo admin)</span>
+    <button id="imp-exit" style="background:#1e1e2e;color:#fab387;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-weight:700;">↩️ Voltar ao admin</button>
+  `;
+  document.body.appendChild(bar);
+  document.body.style.paddingTop = '38px';
+  document.getElementById('imp-exit').onclick = function() {
+    const bToken = localStorage.getItem('admin_token_backup');
+    const bUser = localStorage.getItem('admin_user_backup');
+    if (bToken) localStorage.setItem('auth_token', bToken); else localStorage.removeItem('auth_token');
+    if (bUser) localStorage.setItem('auth_user', bUser); else localStorage.removeItem('auth_user');
+    localStorage.removeItem('admin_token_backup');
+    localStorage.removeItem('admin_user_backup');
+    localStorage.removeItem('impersonating');
+    window.location.href = '/admin.html';
+  };
+})();
+
 // Notification Preferences Modal
 window.showNotificationPrefs = async function() {
   const _headers = () => {
