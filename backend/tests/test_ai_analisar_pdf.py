@@ -115,6 +115,7 @@ class TestAnalisarPdfResumo:
         assert "Resumo" in data["resumo"]
         assert data["tokens_usados"] == 120
         assert data["paginas"]["total"] == 3
+        assert "tecnica" in data  # Fase 3
         # O LLM recebeu o texto extraído do trecho
         args, kwargs = mock_llm.call_args
         messages = args[0]
@@ -177,6 +178,10 @@ class TestAnalisarPdfFlashcards:
         assert len(data["flashcards"]) == 2
         assert data["salvo"] is False  # salvar não pedido
         assert data["salvos"] == 0
+        # Fase 3: usa prompt científico dedicado e reporta a técnica
+        assert "FSRS" in data.get("tecnica", "")
+        system_prompt = mock_llm.call_args[0][0][0]["content"]
+        assert "retrieval practice" in system_prompt.lower() or "elaborative" in system_prompt.lower()
 
     @patch("routers.ai_tutor.call_llm_sync")
     def test_flashcards_salva_no_banco(self, mock_llm):
@@ -239,6 +244,10 @@ class TestAnalisarPdfQuestoes:
         assert isinstance(data["questoes"], list)
         assert len(data["questoes"]) == 2
         assert data["salvo"] is False
+        # Fase 3: prompt científico (distratores/dificuldade) e técnica reportada
+        assert "Pre-testing" in data.get("tecnica", "") or "Desirable" in data.get("tecnica", "")
+        system_prompt = mock_llm.call_args[0][0][0]["content"]
+        assert "distrator" in system_prompt.lower() or "dificuldade desejável" in system_prompt.lower()
 
     @patch("routers.ai_tutor.call_llm_sync")
     def test_questoes_salva_no_banco_com_prova_origem(self, mock_llm):

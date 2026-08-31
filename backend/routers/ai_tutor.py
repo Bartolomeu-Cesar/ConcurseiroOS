@@ -90,6 +90,25 @@ A partir do TRECHO de material fornecido, produza um resumo em Markdown otimizad
 - Termine com `> Macete:` — uma regra de ouro ou mnemônico curto para fixar.
 - Seja fiel ao conteúdo do trecho; NÃO invente informação que não esteja nele.
 - Se o trecho for questões de prova (e não teoria), resuma os PONTOS TEÓRICOS cobrados, não as questões em si.""",
+
+    "flashcards_pdf": """Você é um especialista em criar flashcards de alta retenção para concursos, aplicando técnicas científicas de aprendizagem (retrieval practice + elaborative interrogation).
+A partir do TRECHO fornecido, crie flashcards no formato JSON: [{"pergunta": "...", "resposta": "..."}]
+Regras baseadas em evidência:
+- Cada flashcard testa UM único conceito (atomic). Evite perguntas com múltiplas respostas.
+- Prefira perguntas de RECUPERAÇÃO ATIVA ("O que é...", "Qual a diferença entre...", "Quando se aplica...") em vez de reconhecimento.
+- Inclua ao menos 1 flashcard de "por quê/como" (elaborative interrogation) quando o trecho permitir.
+- Respostas concisas (máx 2 frases), com o termo-chave explícito.
+- Seja fiel ao TRECHO; não invente. Foque nos pontos com maior chance de cair em prova.""",
+
+    "questoes_pdf": """Você é um elaborador de questões de concurso (estilo CESPE/CEBRASPE e FCC) que aplica dificuldade desejável (desirable difficulty) e análise de distratores.
+A partir do TRECHO fornecido, crie questões de múltipla escolha (A-E) no formato JSON:
+[{"enunciado": "...", "alternativa_a": "...", "alternativa_b": "...", "alternativa_c": "...", "alternativa_d": "...", "alternativa_e": "...", "resposta_correta": "A", "explicacao": "..."}]
+Regras baseadas em evidência:
+- Enunciados claros; cobre COMPREENSÃO e APLICAÇÃO, não apenas memorização literal.
+- Distratores PLAUSÍVEIS (erros conceituais comuns), não absurdos — isso torna o teste diagnóstico.
+- Uma única alternativa correta, fiel ao TRECHO.
+- A explicação deve dizer por que a correta está certa E por que o distrator mais provável está errado (efeito de hipercorreção).
+- Não invente fatos fora do TRECHO.""",
 }
 
 # ---------------------------------------------------------------------------
@@ -1362,6 +1381,7 @@ def analisar_pdf(
             "acao": "resumo",
             "resumo": text,
             "resposta": text,
+            "tecnica": "Distributed Summary + Dual Coding",
             "pdf": nome_pdf,
             "paginas": {"inicial": body.pagina_inicial, "final": body.pagina_final, "total": total_paginas},
             "trecho_truncado": truncado,
@@ -1379,7 +1399,7 @@ def analisar_pdf(
             + trecho
         )
         messages = [
-            {"role": "system", "content": SYSTEM_PROMPTS["generate_flashcards"]},
+            {"role": "system", "content": SYSTEM_PROMPTS["flashcards_pdf"]},
             {"role": "user", "content": user_message},
         ]
         log.info(f"[AI] analisar-pdf flashcards user={user_id} pdf={nome_pdf[:40]} {contexto_paginas}")
@@ -1418,6 +1438,7 @@ def analisar_pdf(
             "acao": "flashcards",
             "flashcards": flashcards,
             "resposta": text,
+            "tecnica": "Retrieval Practice + FSRS (revisão espaçada)",
             "pdf": nome_pdf,
             "paginas": {"inicial": body.pagina_inicial, "final": body.pagina_final, "total": total_paginas},
             "trecho_truncado": truncado,
@@ -1437,7 +1458,7 @@ def analisar_pdf(
             + trecho
         )
         messages = [
-            {"role": "system", "content": SYSTEM_PROMPTS["generate_questions"]},
+            {"role": "system", "content": SYSTEM_PROMPTS["questoes_pdf"]},
             {"role": "user", "content": user_message},
         ]
         log.info(f"[AI] analisar-pdf questoes user={user_id} pdf={nome_pdf[:40]} {contexto_paginas}")
@@ -1494,6 +1515,7 @@ def analisar_pdf(
             "acao": "questoes",
             "questoes": questoes,
             "resposta": text,
+            "tecnica": "Pre-testing + Desirable Difficulty",
             "pdf": nome_pdf,
             "paginas": {"inicial": body.pagina_inicial, "final": body.pagina_final, "total": total_paginas},
             "trecho_truncado": truncado,

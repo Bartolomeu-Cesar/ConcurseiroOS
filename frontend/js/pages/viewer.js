@@ -924,29 +924,32 @@ function abrirGerarIA() {
 }
 
 function _renderResultadoIA(data) {
+  const tecnica = data.tecnica
+    ? `<div style="font-size:0.72rem;color:var(--mauve,#cba6f7);margin-bottom:8px;">🔬 Técnica: ${_escHtml(data.tecnica)}</div>`
+    : '';
   if (data.acao === 'resumo') {
-    return _escHtml(data.resumo || data.resposta || '');
+    return tecnica + _escHtml(data.resumo || data.resposta || '');
   }
   if (data.acao === 'flashcards') {
     const fcs = data.flashcards || [];
     const salvo = data.salvo ? `<div style="color:#a6e3a1;margin-bottom:8px;">✅ ${data.salvos} flashcard(s) salvo(s) para revisão (FSRS).</div>` : '';
-    if (!fcs.length) return '<span style="color:#f38ba8;">A IA não retornou flashcards. Tente outro intervalo.</span>';
-    return salvo + fcs.map((f, i) =>
+    if (!fcs.length) return tecnica + '<span style="color:#f38ba8;">A IA não retornou flashcards. Tente outro intervalo.</span>';
+    return tecnica + salvo + fcs.map((f, i) =>
       `<div style="border-bottom:1px solid var(--border,#45475a);padding:6px 0;"><strong>${i + 1}. ${_escHtml(f.pergunta)}</strong><br><span style="color:var(--text-sub,#a6adc8);">${_escHtml(f.resposta)}</span></div>`
     ).join('');
   }
   if (data.acao === 'questoes') {
     const qs = data.questoes || [];
     const salvo = data.salvo ? `<div style="color:#a6e3a1;margin-bottom:8px;">✅ ${data.salvos} questão(ões) salva(s) no banco.</div>` : '';
-    if (!qs.length) return '<span style="color:#f38ba8;">A IA não retornou questões. Tente outro intervalo.</span>';
-    return salvo + qs.map((q, i) => {
+    if (!qs.length) return tecnica + '<span style="color:#f38ba8;">A IA não retornou questões. Tente outro intervalo.</span>';
+    return tecnica + salvo + qs.map((q, i) => {
       const alts = ['a', 'b', 'c', 'd', 'e']
         .filter(l => q['alternativa_' + l])
         .map(l => `${l.toUpperCase()}) ${_escHtml(q['alternativa_' + l])}`).join('<br>');
       return `<div style="border-bottom:1px solid var(--border,#45475a);padding:8px 0;"><strong>${i + 1}. ${_escHtml(q.enunciado)}</strong><br>${alts}<br><span style="color:#a6e3a1;">Gabarito: ${_escHtml(q.resposta_correta)}</span></div>`;
     }).join('');
   }
-  return _escHtml(data.resposta || '');
+  return tecnica + _escHtml(data.resposta || '');
 }
 
 // --- Study Technique Selector ---
