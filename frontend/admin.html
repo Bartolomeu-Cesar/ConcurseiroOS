@@ -29,6 +29,23 @@
       <div class="stat-card"><div class="stat-value" id="st-respostas">—</div><div class="stat-label">Respostas</div></div>
     </div>
 
+    <!-- Saúde do Sistema -->
+    <div style="margin:8px 0 20px;padding:20px;background:#181825;border:1px solid #45475a;border-radius:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <h2 style="color:#89dceb;margin:0;font-size:1.1rem;">🩺 Saúde do Sistema</h2>
+        <button class="btn small secondary" onclick="loadHealth()">🔄 Atualizar</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;">
+        <div class="stat-card" style="border-left:3px solid #89dceb;"><div class="stat-value" id="h-dbsize" style="font-size:1.2rem;">—</div><div class="stat-label">progress.db</div></div>
+        <div class="stat-card" style="border-left:3px solid #89b4fa;"><div class="stat-value" id="h-wal" style="font-size:1.2rem;">—</div><div class="stat-label">WAL</div></div>
+        <div class="stat-card" style="border-left:3px solid #cba6f7;"><div class="stat-value" id="h-schema" style="font-size:1.2rem;">—</div><div class="stat-label">Schema</div></div>
+        <div class="stat-card" style="border-left:3px solid #f9e2af;"><div class="stat-value" id="h-ia-tokens" style="font-size:1.2rem;">—</div><div class="stat-label">Tokens IA hoje</div></div>
+        <div class="stat-card" style="border-left:3px solid #a6e3a1;"><div class="stat-value" id="h-backups" style="font-size:1.2rem;">—</div><div class="stat-label">Backups</div></div>
+        <div class="stat-card" style="border-left:3px solid #fab387;"><div class="stat-value" id="h-ratedb" style="font-size:1.2rem;">—</div><div class="stat-label">rate_limit.db</div></div>
+      </div>
+      <div id="h-backup-ultimo" style="font-size:0.72rem;color:#9399b2;margin-top:8px;"></div>
+    </div>
+
     <!-- Métricas de Negócio -->
     <div style="margin:8px 0 20px;padding:20px;background:#181825;border:1px solid #45475a;border-radius:12px;">
       <h2 style="color:#a6e3a1;margin:0 0 16px;font-size:1.1rem;">💵 Métricas de Negócio</h2>
@@ -896,6 +913,25 @@
       }
     };
 
+    // ==================== SAÚDE DO SISTEMA ====================
+    window.loadHealth = async function() {
+      try {
+        const d = await fetch('/api/admin/health').then(r => r.json());
+        if (d.detail) return;
+        const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+        set('h-dbsize', (d.bancos.progress_db_mb ?? 0) + ' MB');
+        set('h-wal', (d.bancos.progress_wal_mb ?? 0) + ' MB');
+        set('h-ratedb', (d.bancos.rate_limit_db_mb ?? 0) + ' MB');
+        set('h-schema', 'v' + (d.schema_version ?? '—'));
+        set('h-ia-tokens', (d.ia?.hoje_tokens ?? 0).toLocaleString('pt-BR'));
+        set('h-backups', d.backups?.total ?? 0);
+        const ult = d.backups?.ultimo ? new Date(d.backups.ultimo).toLocaleString('pt-BR') : 'nenhum';
+        const bdirmb = d.backups?.dir_mb ?? 0;
+        const el = document.getElementById('h-backup-ultimo');
+        if (el) el.textContent = `Último backup: ${ult} · ${bdirmb} MB em disco · IA hoje: ${d.ia?.hoje_requests ?? 0} requisições`;
+      } catch(e) {}
+    };
+
     // Init
     loadStats();
     loadUsers();
@@ -903,6 +939,7 @@
     loadPendentes();
     loadMetricas();
     loadAuditoria();
+    loadHealth();
   })();
   </script>
 </body>

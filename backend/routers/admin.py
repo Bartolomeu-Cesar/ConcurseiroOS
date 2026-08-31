@@ -483,6 +483,117 @@ def listar_auditoria(
 # ============================================================
 # ESTATÍSTICAS GLOBAIS
 # ============================================================
+
+@router.get("/health", summary="Saúde do sistema (admin)")
+def admin_health(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Painel de saúde: bancos, schema, uso de IA, últimos erros e contagens.
+
+    Consolida sinais operacionais para o admin monitorar a aplicação sem
+    depender de ferramentas externas.
+    """
+    _require_admin(user_id)
+    import os
+    from datetime import timedelta
+
+    from settings import settings
+
+    def _size_mb(path):
+        try:
+            return round(os.path.getsize(path) / (1024 * 1024), 2) if os.path.exists(path) else 0.0
+        except Exception:
+            return 0.0
+
+    # --- Bancos de dados ---
+    db_path = settings.DB_PATH
+    rate_db = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "rate_limit.db")
+    bancos = {
+        "progress_db_mb": _size_mb(db_path),
+        "progress_wal_mb": _size_mb(str(db_path) + "-wal"),
+        "rate_limit_db_mb": _size_mb(rate_db),
+    }
+
+    # --- Versão do schema ---
+    try:
+        schema_version = conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] or 0
+    except Exception:
+        schema_version = 0
+
+    # --- Uso de IA (tokens/requests por dia, últimos 7 dias) ---
+    ia = {"hoje_tokens": 0, "hoje_requests": 0, "timeline": []}
+    try:
+        hoje = today_str()
+        row = conn.execute(
+            "SELECT COALESCE(SUM(tokens_used),0), COALESCE(SUM(requests_count),0) FROM ai_usage WHERE data = ?",
+            (hoje,)
+        ).fetchone()
+        ia["hoje_tokens"], ia["hoje_requests"] = row[0], row[1]
+        # timeline 7 dias
+        from datetime import date
+        for i in range(6, -1, -1):
+            d = (date.today() - timedelta(days=i)).isoformat()
+            r = conn.execute(
+                "SELECT COALESCE(SUM(tokens_used),0), COALESCE(SUM(requests_count),0) FROM ai_usage WHERE data = ?",
+                (d,)
+            ).fetchone()
+            ia["timeline"].append({"data": d, "tokens": r[0], "requests": r[1]})
+    except Exception:
+        pass
+
+    # --- Contagens gerais ---
+    def _count(tabela):
+        try:
+            return conn.execute(f"SELECT COUNT(*) FROM {tabela}").fetchone()[0]
+        except Exception:
+            return 0
+    contagens = {
+        "users": _count("users"),
+        "questoes": _count("questoes"),
+        "flashcards": _count("flashcards"),
+        "sessoes_estudo": _count("sessoes_estudo"),
+        "pagamentos": _count("pagamentos"),
+        "pdfs": _count("pdf_owner"),
+        "acoes_admin": _count("admin_audit"),
+    }
+
+    # --- Backups ---
+    backups_info = {"total": 0, "ultimo": None, "dir_mb": 0.0}
+    try:
+        from pathlib import Path as _P
+        bdir = _P(settings.BACKUP_DIR)
+        if bdir.exists():
+            arqs = sorted(bdir.glob("*.db*"), key=lambda p: p.stat().st_mtime, reverse=True)
+            backups_info["total"] = len(arqs)
+            backups_info["dir_mb"] = round(sum(p.stat().st_size for p in arqs) / (1024 * 1024), 2)
+            if arqs:
+                from datetime import datetime as _dt, timezone as _tz
+                backups_info["ultimo"] = _dt.fromtimestamp(arqs[0].stat().st_mtime, _tz.utc).isoformat()
+    except Exception:
+        pass
+
+    # --- Últimas ações administrativas destrutivas (sinal de atividade) ---
+    ultimas_acoes = []
+    try:
+        for r in conn.execute(
+            "SELECT acao, admin_id, alvo_id, created_at FROM admin_audit ORDER BY id DESC LIMIT 5"
+        ).fetchall():
+            ultimas_acoes.append({"acao": r[0], "admin_id": r[1], "alvo_id": r[2], "created_at": r[3]})
+    except Exception:
+        pass
+
+    return {
+        "status": "ok",
+        "bancos": bancos,
+        "schema_version": schema_version,
+        "ia": ia,
+        "contagens": contagens,
+        "backups": backups_info,
+        "ultimas_acoes": ultimas_acoes,
+    }
+
+
+# ============================================================
+# ESTATÍSTICAS GLOBAIS (interno)
+# ============================================================
 @router.get("/stats", summary="Estatísticas globais do sistema")
 def global_stats(
     conn=Depends(get_db_session),
