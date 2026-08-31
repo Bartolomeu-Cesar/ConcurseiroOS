@@ -5,6 +5,7 @@ Apenas user_id=1 (admin) pode acessar estes endpoints.
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 
 from database import get_db_session
 from deps import get_user_id
@@ -437,6 +438,82 @@ def change_plan(
     log.info(f"[admin] Plan changed: user={uid} → {body.plano} (expires={body.plano_expira})")
     _audit(conn, user_id, "user.plano", "user", uid, {"plano": body.plano, "expira": body.plano_expira})
     return {"ok": True, "plano": body.plano, "plano_nome": PLANS[body.plano]["nome"], "plano_expira": body.plano_expira}
+
+
+# ============================================================
+# RELATÓRIOS EXPORTÁVEIS (CSV)
+# ============================================================
+
+def _csv_response(nome_arquivo: str, cabecalho: list, linhas: list) -> Response:
+    """Monta um Response text/csv com Content-Disposition para download."""
+    import csv
+    import io
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(cabecalho)
+    for linha in linhas:
+        writer.writerow(linha)
+    conteudo = buf.getvalue()
+    return Response(
+        content=conteudo,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{nome_arquivo}"'},
+    )
+
+
+@router.get("/relatorios/usuarios.csv", summary="Relatório de usuários (CSV)")
+def relatorio_usuarios_csv(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Exporta todos os usuários em CSV."""
+    _require_admin(user_id)
+    rows = conn.execute("""
+        SELECT id, nome, email, username, plano, plano_expira, role,
+               COALESCE(conta_status, 'ativo') AS conta_status, created_at, last_login
+        FROM users ORDER BY id
+    """).fetchall()
+    linhas = [[r["id"], r["nome"], r["email"], r["username"], r["plano"], r["plano_expira"],
+               r["role"], r["conta_status"], r["created_at"], r["last_login"]] for r in rows]
+    _audit(conn, user_id, "relatorio.export", "relatorio", "usuarios", {"linhas": len(linhas)})
+    return _csv_response("usuarios.csv",
+                         ["id", "nome", "email", "username", "plano", "plano_expira", "role", "conta_status", "created_at", "last_login"],
+                         linhas)
+
+
+@router.get("/relatorios/receita.csv", summary="Relatório de receita (CSV)")
+def relatorio_receita_csv(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Exporta os pagamentos (receita) em CSV."""
+    _require_admin(user_id)
+    try:
+        rows = conn.execute("""
+            SELECT p.id, p.user_id, u.email, p.tipo, p.creditos, p.valor, p.status, p.created_at
+            FROM pagamentos p LEFT JOIN users u ON u.id = p.user_id
+            ORDER BY p.id DESC
+        """).fetchall()
+    except Exception:
+        rows = []
+    linhas = [[r["id"], r["user_id"], r["email"], r["tipo"], r["creditos"], r["valor"], r["status"], r["created_at"]] for r in rows]
+    _audit(conn, user_id, "relatorio.export", "relatorio", "receita", {"linhas": len(linhas)})
+    return _csv_response("receita.csv",
+                         ["id", "user_id", "email", "tipo", "creditos", "valor", "status", "created_at"],
+                         linhas)
+
+
+@router.get("/relatorios/uso-ia.csv", summary="Relatório de uso de IA (CSV)")
+def relatorio_uso_ia_csv(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Exporta o uso diário de IA por usuário em CSV."""
+    _require_admin(user_id)
+    try:
+        rows = conn.execute("""
+            SELECT a.user_id, u.email, a.data, a.tokens_used, a.requests_count
+            FROM ai_usage a LEFT JOIN users u ON u.id = a.user_id
+            ORDER BY a.data DESC, a.user_id
+        """).fetchall()
+    except Exception:
+        rows = []
+    linhas = [[r["user_id"], r["email"], r["data"], r["tokens_used"], r["requests_count"]] for r in rows]
+    _audit(conn, user_id, "relatorio.export", "relatorio", "uso-ia", {"linhas": len(linhas)})
+    return _csv_response("uso-ia.csv",
+                         ["user_id", "email", "data", "tokens_used", "requests_count"],
+                         linhas)
 
 
 # ============================================================
