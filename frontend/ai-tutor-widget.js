@@ -50,7 +50,7 @@
       width: 56px; height: 56px; border-radius: 50%;
       background: linear-gradient(135deg, var(--accent, #cba6f7), var(--blue, #89b4fa));
       border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;
-      font-size: 1.6rem; box-shadow: 0 4px 16px rgba(203,166,247,0.4);
+      color: #fff; font-size: 1.6rem; box-shadow: 0 4px 16px rgba(203,166,247,0.4);
       transition: transform 0.2s, box-shadow 0.2s;
       animation: ai-fab-pulse 3s infinite;
     }
@@ -88,6 +88,12 @@
       background: var(--bg, #1e1e2e);
     }
     .ai-panel-header h4 { margin: 0; font-size: 0.92rem; color: var(--text, #cdd6f4); flex: 1; }
+    .ai-header-icon {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 30px; height: 30px; border-radius: 50%; color: #fff;
+      background: linear-gradient(135deg, var(--accent, #cba6f7), var(--blue, #89b4fa));
+    }
+    .ai-header-icon svg { width: 20px; height: 20px; display: block; }
     .ai-panel-header button {
       background: none; border: none; color: var(--text-sub, #9399b2);
       font-size: 1.1rem; cursor: pointer; padding: 4px; border-radius: 4px;
@@ -160,18 +166,20 @@
   document.head.appendChild(style);
 
   // Create FAB button
-  // Ícone "megamente": cabeça grande azul estilizada (SVG original, próprio —
-  // remete a um tutor genial de cabeçorra, sem copiar personagem protegido).
+  // Ícone do tutor: robô minimalista (SVG original, próprio). Alto contraste
+  // para acessibilidade: o CORPO é branco (`currentColor` = #fff, herdado do
+  // #ai-tutor-fab e do disco .ai-header-icon, ambos com gradiente accent→blue)
+  // e os DETALHES internos (olhos/sorriso) usam um tom ESCURO fixo (#1e1e2e,
+  // base Catppuccin), com contraste ~18:1 sobre o corpo branco — nítido em
+  // QUALQUER tema (Mocha/Latte) e para baixa visão.
   const MEGA_HEAD_SVG = `<svg viewBox="0 0 48 48" width="30" height="30" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-    <ellipse cx="24" cy="17" rx="15" ry="14" fill="#dbe9ff"/>
-    <path d="M24 3c8.8 0 15 5.8 15 14 0 5.2-3 8.6-6 10.5V29c0 1.1-.9 2-2 2H17c-1.1 0-2-.9-2-2v-1.5C12 25.6 9 22.2 9 17 9 8.8 15.2 3 24 3z" fill="#eaf2ff"/>
-    <path d="M16 33c0-1.1.9-2 2-2h12c1.1 0 2 .9 2 2l1.5 8c.2 1.3-.8 2.5-2 2.5H16.5c-1.2 0-2.2-1.2-2-2.5L16 33z" fill="#89b4fa"/>
-    <ellipse cx="18" cy="18" rx="3.2" ry="3.6" fill="#1e2333"/>
-    <ellipse cx="30" cy="18" rx="3.2" ry="3.6" fill="#1e2333"/>
-    <circle cx="19.1" cy="16.9" r="1" fill="#fff"/>
-    <circle cx="31.1" cy="16.9" r="1" fill="#fff"/>
-    <path d="M19 25c1.8 1.6 8.2 1.6 10 0" stroke="#5b6178" stroke-width="1.6" stroke-linecap="round"/>
-    <path d="M13.5 11.5c2-2 4.5-3 7-3M34.5 11.5c-2-2-4.5-3-7-3" stroke="#b9cdf0" stroke-width="1.4" stroke-linecap="round"/>
+    <circle cx="24" cy="7.5" r="2.5" fill="currentColor"/>
+    <path d="M24 10v4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+    <rect x="10" y="14" width="28" height="22" rx="8" fill="currentColor"/>
+    <circle cx="18.5" cy="24" r="3.2" fill="#1e1e2e"/>
+    <circle cx="29.5" cy="24" r="3.2" fill="#1e1e2e"/>
+    <path d="M18.5 30.5c1.8 1.6 8.7 1.6 10.5 0" stroke="#1e1e2e" stroke-width="2.4" stroke-linecap="round"/>
+    <path d="M6 22v6M42 22v6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
   </svg>`;
   const fab = document.createElement('button');
   fab.id = 'ai-tutor-fab';
@@ -186,7 +194,7 @@
   panel.setAttribute('aria-label', 'AI Tutor Chat');
   panel.innerHTML = `
     <div class="ai-panel-header">
-      <span style="font-size:1.3rem;">🤖</span>
+      <span class="ai-header-icon">${MEGA_HEAD_SVG}</span>
       <h4>AI Tutor</h4>
       <button onclick="document.getElementById('ai-tutor-widget-clear').click()" title="Limpar histórico">🗑️</button>
       <button onclick="toggleAITutor()" title="Fechar">✕</button>
