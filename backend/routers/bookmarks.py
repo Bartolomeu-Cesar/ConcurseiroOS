@@ -1,15 +1,33 @@
 """Router de Bookmarks de PDF."""
 from datetime import datetime
 
-from fastapi import APIRouter, Depends
-
-from database import get_db_session
 from deps import get_user_id
-from logger import log
+from fastapi import APIRouter, Depends, Query
 from sanitize import sanitize_input
 from schemas import BookmarkCreate, OkResponse
 
+from database import get_db_session
+from logger import log
+
 router = APIRouter(prefix="", tags=["Bookmarks"])
+
+
+@router.get("/api/bookmarks", summary="Listar bookmarks de um PDF (query string)",
+            description="Lista bookmarks por pdf_path (query). Consumido pelo viewer.")
+def list_bookmarks_query(
+    pdf_path: str = Query(..., description="Caminho do PDF"),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Endpoint consumido pelo viewer (query string).
+
+    Mantém compatibilidade com o endpoint path-param GET /api/bookmarks/{path}.
+    """
+    rows = conn.execute(
+        "SELECT * FROM bookmarks_pdf WHERE pdf_path = ? AND user_id = ? ORDER BY pagina",
+        (pdf_path, user_id),
+    ).fetchall()
+    return [dict(r) for r in rows]
 
 
 @router.get("/api/bookmarks/{path:path}")

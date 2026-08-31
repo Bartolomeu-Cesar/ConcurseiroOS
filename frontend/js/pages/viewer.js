@@ -549,6 +549,53 @@ async function addBookmark() {
   showStudyToast(`🔖 Página ${currentPage} marcada!`);
 }
 
+// --- Painel dedicado de Bookmarks ---
+let bookmarksVisible = false;
+
+const _BM_CORES = {
+  blue: '#89b4fa', green: '#a6e3a1', yellow: '#f9e2af',
+  red: '#f38ba8', purple: '#cba6f7',
+};
+
+function toggleBookmarksPanel() {
+  bookmarksVisible = !bookmarksVisible;
+  const panel = document.getElementById('bookmarks-panel');
+  panel.style.display = bookmarksVisible ? 'flex' : 'none';
+  if (bookmarksVisible) loadBookmarksPanel();
+}
+
+async function loadBookmarksPanel() {
+  const body = document.getElementById('bookmarks-body');
+  try {
+    const bms = await fetch(`/api/bookmarks?pdf_path=${encodeURIComponent(path)}`).then(r => r.json());
+    if (!Array.isArray(bms) || bms.length === 0) {
+      body.innerHTML = `<div style="color:var(--text-sub,#585b70);font-size:0.85rem;text-align:center;padding:24px 12px;line-height:1.6;">
+        Nenhum bookmark ainda.<br><br>Use o botão <strong>🔖</strong> (ou tecla <strong>B</strong>) para marcar a página atual.</div>`;
+      return;
+    }
+    body.innerHTML = bms.map(b => {
+      const cor = _BM_CORES[b.cor] || _BM_CORES.blue;
+      const label = b.label && b.label.trim() ? _escHtml(b.label) : `Página ${b.pagina}`;
+      return `<div style="display:flex;align-items:center;gap:8px;background:var(--bg,#1e1e2e);border-left:3px solid ${cor};border-radius:8px;padding:10px 12px;margin-bottom:8px;">
+        <div style="flex:1;min-width:0;cursor:pointer;" onclick="goToPage(${b.pagina});toggleBookmarksPanel();" title="Ir para a página ${b.pagina}">
+          <div style="font-size:0.85rem;color:var(--text,#cdd6f4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${label}</div>
+          <div style="font-size:0.72rem;color:var(--text-sub,#9399b2);">📄 Página ${b.pagina}${b.created_at ? ' · ' + (b.created_at.split('T')[0]) : ''}</div>
+        </div>
+        <button onclick="goToPage(${b.pagina});toggleBookmarksPanel();" title="Ir" style="background:var(--bg-elevated,#45475a);border:none;color:${cor};border-radius:6px;padding:5px 9px;font-size:0.75rem;cursor:pointer;">↪</button>
+        <button onclick="excluirBookmark(${b.id})" title="Excluir" style="background:none;border:none;color:var(--red,#f38ba8);cursor:pointer;font-size:0.85rem;">🗑</button>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    body.innerHTML = '<div style="color:var(--red,#f38ba8);font-size:0.85rem;">Erro ao carregar bookmarks.</div>';
+  }
+}
+
+async function excluirBookmark(id) {
+  if (!(await confirmModal('Excluir bookmark', 'Remover este bookmark?', { type: 'danger', confirmText: 'Excluir' }))) return;
+  await fetch(`/api/bookmarks/${id}`, { method: 'DELETE' });
+  loadBookmarksPanel();
+}
+
 // --- Quick Flashcard ---
 function quickFlashcard() {
   document.getElementById('fc-page-num').textContent = currentPage;
@@ -1440,12 +1487,16 @@ async function imprimirRevisao() {
 document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
   if (e.key === 'c' || e.key === 'C') toggleRevisaoPanel();
+  if (e.key === 'm' || e.key === 'M') toggleBookmarksPanel();
   if (e.key === 'Escape' && document.getElementById('crop-overlay').style.display === 'block') cancelarRecorte();
 });
 
 // === Window assignments for HTML onclick/onchange handlers ===
 window.toggleNotePanel = toggleNotePanel;
 window.addBookmark = addBookmark;
+window.toggleBookmarksPanel = toggleBookmarksPanel;
+window.loadBookmarksPanel = loadBookmarksPanel;
+window.excluirBookmark = excluirBookmark;
 window.quickFlashcard = quickFlashcard;
 window.togglePomodoroMode = togglePomodoroMode;
 window.abrirConfigPomodoro = abrirConfigPomodoro;

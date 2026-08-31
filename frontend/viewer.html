@@ -82,6 +82,7 @@
     <div id="study-tools" style="display:flex;gap:6px;align-items:center;">
       <button onclick="toggleNotePanel()" title="Anotações [N]" style="background:var(--bg-elevated);border:none;color:var(--yellow);border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">📝</button>
       <button onclick="addBookmark()" title="Bookmark [B]" style="background:var(--bg-elevated);border:none;color:var(--blue);border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🔖</button>
+      <button onclick="toggleBookmarksPanel()" title="Meus bookmarks [M]" style="background:var(--bg-elevated);border:none;color:var(--blue);border-radius:6px;padding:4px 6px;font-size:0.78rem;cursor:pointer;">📑🔖</button>
       <button onclick="quickFlashcard()" title="Flashcard rápido [F]" style="background:var(--bg-elevated);border:none;color:var(--accent);border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🧠</button>
       <button onclick="togglePomodoroMode()" id="btn-pomodoro" title="Pomodoro [P]" style="background:var(--bg-elevated);border:none;color:var(--red);border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🍅</button>
       <button onclick="abrirConfigPomodoro()" id="btn-pomodoro-cfg" title="Configurar Pomodoro" style="background:var(--bg-elevated);border:none;color:var(--text-sub,#9399b2);border-radius:6px;padding:4px 6px;font-size:0.78rem;cursor:pointer;">⚙️</button>
@@ -222,6 +223,18 @@
       <button onclick="adicionarNotaRevisao()" style="flex:1;min-width:110px;background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:7px;font-size:0.8rem;cursor:pointer;">📝 Nota de texto</button>
     </div>
     <div id="revisao-body" style="flex:1;overflow-y:auto;padding:12px;">
+      <div style="color:var(--text-sub);font-size:0.85rem;text-align:center;padding:20px;">Carregando...</div>
+    </div>
+  </div>
+
+  <!-- Painel dedicado de Bookmarks -->
+  <div id="bookmarks-panel" style="display:none;position:fixed;top:44px;right:0;width:340px;bottom:0;background:var(--bg-surface);border-left:1px solid var(--border);z-index:100;flex-direction:column;overflow:hidden;">
+    <div style="padding:10px 14px;background:var(--bg);display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);">
+      <h3 style="font-size:0.9rem;color:var(--blue,#89b4fa);flex:1;margin:0;">🔖 Meus Bookmarks</h3>
+      <button onclick="addBookmark().then(loadBookmarksPanel)" title="Marcar página atual" style="background:var(--bg-elevated);border:none;color:var(--blue);border-radius:6px;padding:4px 8px;font-size:0.75rem;cursor:pointer;">+ Página atual</button>
+      <button onclick="toggleBookmarksPanel()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:1.1rem;">✕</button>
+    </div>
+    <div id="bookmarks-body" style="flex:1;overflow-y:auto;padding:12px;">
       <div style="color:var(--text-sub);font-size:0.85rem;text-align:center;padding:20px;">Carregando...</div>
     </div>
   </div>
