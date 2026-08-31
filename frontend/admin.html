@@ -259,6 +259,18 @@
         </div>
       </div>
 
+      <div style="margin-bottom:16px;padding:12px;background:#1e1e2e;border-radius:8px;">
+        <h4 style="color:#f9e2af;font-size:0.82rem;margin:0 0 8px;">🤖 Quota de IA (tokens/dia)</h4>
+        <div id="ia-quota-info" style="font-size:0.72rem;color:#9399b2;margin-bottom:8px;">—</div>
+        <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;">
+          <div>
+            <label style="font-size:0.7rem;color:#9399b2;display:block;">Limite (0=padrão, -1=ilimitado)</label>
+            <input type="number" id="ia-quota-limite" value="0" min="-1" style="width:120px;padding:6px;background:#313244;border:1px solid #45475a;border-radius:4px;color:#cdd6f4;">
+          </div>
+          <button class="btn small secondary" onclick="salvarIaQuota()">💾 Salvar quota</button>
+        </div>
+      </div>
+
       <div class="modal-actions">
         <button class="btn danger small" onclick="closeMoneyModal()">Fechar</button>
       </div>
@@ -616,6 +628,34 @@
       document.getElementById('brinde-qtd').value = 10;
       document.getElementById('brinde-motivo').value = '';
       document.getElementById('modal-money').classList.add('open');
+      carregarIaQuota(uid);
+    };
+
+    window.carregarIaQuota = async function(uid) {
+      const info = document.getElementById('ia-quota-info');
+      const inp = document.getElementById('ia-quota-limite');
+      if (!info) return;
+      try {
+        const d = await fetch(`/api/admin/users/${uid}/ia-quota`).then(r => r.json());
+        if (d.detail) { info.textContent = d.detail; return; }
+        const lbl = d.override === 0 ? 'padrão do plano' : (d.override === -1 ? 'ilimitado' : d.override + '/dia');
+        info.textContent = `Hoje: ${d.hoje_tokens.toLocaleString('pt-BR')} tokens · ${d.hoje_requests} requisições · Limite atual: ${lbl}`;
+        if (inp) inp.value = d.override;
+      } catch(e) { info.textContent = 'Erro ao carregar quota.'; }
+    };
+
+    window.salvarIaQuota = async function() {
+      const uid = document.getElementById('money-uid').value;
+      const limite = parseInt(document.getElementById('ia-quota-limite').value);
+      if (isNaN(limite) || limite < -1) { toast('Limite inválido.', 'error'); return; }
+      try {
+        const r = await fetch(`/api/admin/users/${uid}/ia-quota`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ limite })
+        });
+        const d = await r.json();
+        if (r.ok && d.ok) { toast('🤖 Quota de IA salva.', 'success'); carregarIaQuota(uid); }
+        else toast(d.detail || 'Erro.', 'error');
+      } catch(e) { toast('Erro de conexão.', 'error'); }
     };
 
     window.closeMoneyModal = function() {

@@ -938,6 +938,20 @@ def _m71_conta_status(conn):
     log.info("Migration: added conta_status columns to users")
 
 
+def _m72_ai_token_limit(conn):
+    """Override de quota diária de tokens de IA por usuário.
+
+    ai_token_limit = 0 → usa o limite padrão do plano.
+    ai_token_limit > 0 → limite diário customizado (sobrepõe o padrão).
+    ai_token_limit = -1 → ilimitado para este usuário.
+    """
+    try:
+        conn.execute("ALTER TABLE users ADD COLUMN ai_token_limit INTEGER DEFAULT 0")
+        log.info("Migration: added ai_token_limit to users")
+    except Exception:
+        pass  # coluna já existe
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -1010,6 +1024,7 @@ MIGRATIONS = [
     (69, _m69_admin_audit),
     (70, _m70_broadcasts),
     (71, _m71_conta_status),
+    (72, _m72_ai_token_limit),
 ]
 
 

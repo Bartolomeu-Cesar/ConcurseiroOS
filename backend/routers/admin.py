@@ -481,6 +481,81 @@ def listar_auditoria(
 
 
 # ============================================================
+# QUOTAS DE IA POR USUÁRIO
+# ============================================================
+
+@router.get("/users/{uid}/ia-quota", summary="Consumo e quota de IA de um usuário")
+def ia_quota_usuario(uid: int, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Retorna o consumo de IA (hoje + 7 dias) e o limite/override do usuário."""
+    _require_admin(user_id)
+    from datetime import date, timedelta
+
+    user = conn.execute("SELECT id, nome, email, plano FROM users WHERE id = ?", (uid,)).fetchone()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+
+    try:
+        override_row = conn.execute("SELECT ai_token_limit FROM users WHERE id = ?", (uid,)).fetchone()
+        override = override_row[0] if override_row and override_row[0] is not None else 0
+    except Exception:
+        override = 0
+
+    hoje = today_str()
+    row = conn.execute(
+        "SELECT COALESCE(tokens_used,0), COALESCE(requests_count,0) FROM ai_usage WHERE user_id = ? AND data = ?",
+        (uid, hoje)
+    ).fetchone()
+    hoje_tokens = row[0] if row else 0
+    hoje_requests = row[1] if row else 0
+
+    timeline = []
+    for i in range(6, -1, -1):
+        d = (date.today() - timedelta(days=i)).isoformat()
+        r = conn.execute(
+            "SELECT COALESCE(tokens_used,0), COALESCE(requests_count,0) FROM ai_usage WHERE user_id = ? AND data = ?",
+            (uid, d)
+        ).fetchone()
+        timeline.append({"data": d, "tokens": r[0] if r else 0, "requests": r[1] if r else 0})
+
+    return {
+        "user": dict(user) if not isinstance(user, tuple) else {"id": user[0], "nome": user[1], "email": user[2], "plano": user[3]},
+        "override": override,  # 0=default, -1=ilimitado, >0=custom
+        "hoje_tokens": hoje_tokens,
+        "hoje_requests": hoje_requests,
+        "timeline": timeline,
+    }
+
+
+@router.put("/users/{uid}/ia-quota", summary="Definir quota de IA de um usuário")
+def definir_ia_quota(
+    uid: int,
+    body: dict,
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Define o override de tokens diários. body: {limite: int}
+    limite = 0 (default do plano) | -1 (ilimitado) | >0 (custom)."""
+    _require_admin(user_id)
+    limite = body.get("limite")
+    try:
+        limite = int(limite)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="limite deve ser inteiro (0, -1 ou >0).")
+    if limite < -1:
+        raise HTTPException(status_code=400, detail="limite inválido.")
+
+    user = conn.execute("SELECT id FROM users WHERE id = ?", (uid,)).fetchone()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+
+    conn.execute("UPDATE users SET ai_token_limit = ? WHERE id = ?", (limite, uid))
+    conn.commit()
+    _audit(conn, user_id, "user.ia_quota", "user", uid, {"limite": limite})
+    log.info(f"[admin] IA quota: user={uid} → {limite}")
+    return {"ok": True, "user_id": uid, "override": limite}
+
+
+# ============================================================
 # MODERAÇÃO: STATUS DA CONTA (BANIR/SUSPENDER)
 # ============================================================
 

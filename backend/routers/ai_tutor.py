@@ -586,12 +586,34 @@ def _get_daily_usage(db, user_id: int) -> dict:
     return {"tokens_used": 0, "requests_count": 0}
 
 
+def _get_user_token_limit(db, user_id: int) -> int:
+    """Retorna o override de limite diário de tokens do usuário.
+
+    0 → sem override (usa default do plano). >0 → limite custom. -1 → ilimitado.
+    """
+    try:
+        row = db.execute("SELECT ai_token_limit FROM users WHERE id = ?", (user_id,)).fetchone()
+        if row and row[0] is not None:
+            return int(row[0])
+    except Exception:
+        pass
+    return 0
+
+
 def _check_budget(db, user_id: int) -> dict:
     """Check if user has remaining token budget. Returns budget info or raises HTTPException."""
     plan = _get_user_plan(db, user_id)
     usage = _get_daily_usage(db, user_id)
+    override = _get_user_token_limit(db, user_id)
 
-    if plan == "ilimitado":
+    # Override por usuário tem prioridade: -1 = ilimitado, >0 = limite custom
+    if override == -1:
+        return {
+            "plan": plan, "tokens_used": usage["tokens_used"], "tokens_limit": None,
+            "tokens_remaining": None, "requests_today": usage["requests_count"],
+        }
+
+    if plan == "ilimitado" and override == 0:
         return {
             "plan": plan,
             "tokens_used": usage["tokens_used"],
@@ -600,14 +622,15 @@ def _check_budget(db, user_id: int) -> dict:
             "requests_today": usage["requests_count"],
         }
 
-    tokens_remaining = DAILY_TOKEN_LIMIT_FREE - usage["tokens_used"]
+    limite = override if override > 0 else DAILY_TOKEN_LIMIT_FREE
+    tokens_remaining = limite - usage["tokens_used"]
     if tokens_remaining <= 0:
         raise HTTPException(
             status_code=429,
             detail={
                 "error": "Limite diário de tokens atingido.",
                 "tokens_used": usage["tokens_used"],
-                "tokens_limit": DAILY_TOKEN_LIMIT_FREE,
+                "tokens_limit": limite,
                 "reset": "meia-noite",
                 "dica": "Atualize para o plano ilimitado para uso sem restrições.",
             },
@@ -616,7 +639,7 @@ def _check_budget(db, user_id: int) -> dict:
     return {
         "plan": plan,
         "tokens_used": usage["tokens_used"],
-        "tokens_limit": DAILY_TOKEN_LIMIT_FREE,
+        "tokens_limit": limite,
         "tokens_remaining": tokens_remaining,
         "requests_today": usage["requests_count"],
     }
