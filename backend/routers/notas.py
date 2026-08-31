@@ -1,15 +1,40 @@
 """Router de Notas de PDF."""
 from datetime import datetime
 
-from fastapi import APIRouter, Depends
-
-from database import get_db_session
 from deps import get_user_id
-from logger import log
+from fastapi import APIRouter, Depends, Query
 from sanitize import sanitize_input
 from schemas import NotaCreate, OkResponse
 
+from database import get_db_session
+from logger import log
+
 router = APIRouter(prefix="", tags=["Notas"])
+
+
+@router.get("/api/notas", summary="Listar notas de um PDF (query string)",
+            description="Lista notas por pdf_path (query), com filtro opcional de página.")
+def list_notas_query(
+    pdf_path: str = Query(..., description="Caminho do PDF"),
+    pagina: int | None = Query(None, description="Filtrar por página (opcional)"),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Endpoint consumido pelo viewer (query string + filtro por página).
+
+    Mantém compatibilidade com o endpoint path-param GET /api/notas/{path}.
+    """
+    if pagina is not None:
+        rows = conn.execute(
+            "SELECT * FROM notas_pdf WHERE pdf_path = ? AND pagina = ? AND user_id = ? ORDER BY id",
+            (pdf_path, pagina, user_id),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM notas_pdf WHERE pdf_path = ? AND user_id = ? ORDER BY pagina, id",
+            (pdf_path, user_id),
+        ).fetchall()
+    return [dict(r) for r in rows]
 
 
 @router.get("/api/notas/{path:path}")
