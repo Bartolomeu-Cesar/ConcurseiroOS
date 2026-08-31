@@ -79,6 +79,15 @@ def _setup_pdf_root():
     _gerar_pdf_teste(Path(_pdf_root) / _PDF_REL)
     old_root = pdf_module.PDF_ROOT
     pdf_module.PDF_ROOT = _pdf_root
+    # Política fail-closed: registra o dono (uid 1) do PDF de teste.
+    from datetime import datetime, timezone
+    _c = sqlite3.connect(_tmp_db.name, timeout=10)
+    _c.execute(
+        "INSERT OR REPLACE INTO pdf_owner (pdf_path, owner_id, created_at) VALUES (?, 1, ?)",
+        (_PDF_REL, datetime.now(timezone.utc).isoformat()),
+    )
+    _c.commit()
+    _c.close()
     yield
     pdf_module.PDF_ROOT = old_root
 

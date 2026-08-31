@@ -32,17 +32,33 @@ def get_owner_id(conn, path: str):
     return row[0] if row else None
 
 
-def can_access(conn, user_id: int, path: str) -> bool:
-    """True se o usuário pode ver o PDF: é dono, foi compartilhado com ele,
-    ou o PDF ainda não tem dono registrado (legado/backfill pendente).
+def _is_admin(conn, user_id: int) -> bool:
+    """True se o usuário tem role='admin'."""
+    try:
+        row = conn.execute("SELECT role FROM users WHERE id = ?", (user_id,)).fetchone()
+    except Exception:
+        return False
+    if not row:
+        return False
+    # Suporta row_factory=Row e tupla
+    try:
+        return row["role"] == "admin"
+    except (TypeError, IndexError, KeyError):
+        return len(row) > 0 and row[0] == "admin"
 
-    PDFs sem dono são tratados como visíveis (fail-open apenas para o caso de
-    arquivo órfão que a migration ainda não indexou); assim que houver upload/
-    backfill, passam a ter dono e a regra estrita se aplica.
+
+def can_access(conn, user_id: int, path: str) -> bool:
+    """True se o usuário pode ver o PDF: é o dono OU o dono compartilhou com ele.
+
+    Política fail-closed: PDF sem dono registrado é INVISÍVEL (acesso negado) —
+    EXCETO para administradores, que veem PDFs órfãos para poder compartilhá-los
+    ou definir o dono.
+    Todo PDF acessível precisa ter um dono em pdf_owner — uploads registram o
+    dono e a migration de backfill atribuiu os arquivos existentes ao uid 1.
     """
     owner_id = get_owner_id(conn, path)
     if owner_id is None:
-        return True  # sem dono registrado → não bloquear (legado)
+        return _is_admin(conn, user_id)  # órfão: só admin vê (fail-closed p/ os demais)
     if owner_id == user_id:
         return True
     shared = conn.execute(
@@ -52,8 +68,28 @@ def can_access(conn, user_id: int, path: str) -> bool:
     return shared is not None
 
 
+def _orphan_paths(conn) -> set:
+    """PDFs presentes no disco que NÃO têm dono registrado (órfãos)."""
+    if not PDF_ROOT or not Path(PDF_ROOT).exists():
+        return set()
+    owned = {r[0] for r in conn.execute("SELECT pdf_path FROM pdf_owner").fetchall()}
+    disco = set()
+
+    def _collect(nodes):
+        for n in nodes:
+            if n.get("type") == "pdf" and n.get("path"):
+                disco.add(n["path"])
+            elif n.get("type") == "folder":
+                _collect(n.get("children", []))
+    _collect(build_tree(PDF_ROOT))
+    return disco - owned
+
+
 def visible_paths(conn, user_id: int) -> set:
-    """Conjunto de pdf_paths que o usuário pode ver (dono + compartilhados)."""
+    """Conjunto de pdf_paths que o usuário pode ver (dono + compartilhados).
+
+    Administradores também veem os PDFs órfãos (sem dono registrado).
+    """
     paths = set()
     for r in conn.execute(
         "SELECT pdf_path FROM pdf_owner WHERE owner_id = ?", (user_id,)
@@ -63,29 +99,25 @@ def visible_paths(conn, user_id: int) -> set:
         "SELECT pdf_path FROM pdf_compartilhamentos WHERE shared_with_id = ?", (user_id,)
     ).fetchall():
         paths.add(r[0])
+    if _is_admin(conn, user_id):
+        paths |= _orphan_paths(conn)
     return paths
 
 
-def _owned_paths_set(conn) -> set:
-    """Todos os pdf_paths que já têm dono registrado (para saber o que é 'legado')."""
-    return {r[0] for r in conn.execute("SELECT pdf_path FROM pdf_owner").fetchall()}
-
-
-def _filter_tree(nodes, allowed: set, owned: set):
+def _filter_tree(nodes, allowed: set):
     """Filtra a árvore de PDFs mantendo apenas os visíveis ao usuário.
 
-    - PDF com dono: só aparece se estiver em `allowed`.
-    - PDF sem dono (não está em `owned`): aparece (legado, fail-open).
-    - Pastas vazias após o filtro são removidas.
+    Política fail-closed: um PDF só aparece se estiver em `allowed` (dono ou
+    compartilhado). PDFs sem dono registrado ficam ocultos. Pastas vazias após
+    o filtro são removidas.
     """
     result = []
     for n in nodes:
         if n.get("type") == "pdf":
-            p = n.get("path")
-            if p in allowed or p not in owned:
+            if n.get("path") in allowed:
                 result.append(n)
         elif n.get("type") == "folder":
-            children = _filter_tree(n.get("children", []), allowed, owned)
+            children = _filter_tree(n.get("children", []), allowed)
             if children:
                 result.append({**n, "children": children})
     return result
@@ -97,8 +129,7 @@ def get_tree(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
         return []
     tree = build_tree(PDF_ROOT)
     allowed = visible_paths(conn, user_id)
-    owned = _owned_paths_set(conn)
-    return _filter_tree(tree, allowed, owned)
+    return _filter_tree(tree, allowed)
 
 
 @router.get("/api/progress/recentes", summary="PDFs lidos recentemente")
@@ -359,8 +390,7 @@ def get_organizacao(conn=Depends(get_db_session), user_id: int = Depends(get_use
     # Árvore real do filesystem (filtrada por visibilidade)
     tree_real = build_tree(PDF_ROOT) if Path(PDF_ROOT).exists() else []
     allowed = visible_paths(conn, user_id)
-    owned = _owned_paths_set(conn)
-    tree_real = _filter_tree(tree_real, allowed, owned)
+    tree_real = _filter_tree(tree_real, allowed)
 
     # Buscar pastas virtuais do usuário
     pastas = conn.execute(
@@ -585,9 +615,14 @@ def compartilhar_pdf(
     conn=Depends(get_db_session),
     user_id: int = Depends(get_user_id)
 ):
-    """Compartilha um PDF (do qual o solicitante é dono) com outro usuário.
+    """Compartilha um PDF com outro usuário.
 
     body: {pdf_path: str, destino: str}  # destino = id, email ou username
+
+    Regras:
+    - PDF com dono: apenas o dono (ou um admin) pode compartilhar.
+    - PDF órfão (sem dono): apenas um admin pode agir; ao compartilhar, o admin
+      passa a ser registrado como dono do arquivo.
     """
     from datetime import datetime, timezone
 
@@ -598,24 +633,36 @@ def compartilhar_pdf(
     if not destino:
         raise HTTPException(status_code=400, detail="destino (id/email/username) é obrigatório")
 
-    # Só o dono pode compartilhar
+    now = datetime.now(timezone.utc).isoformat()
+    is_admin = _is_admin(conn, user_id)
     owner_id = get_owner_id(conn, pdf_path)
+
     if owner_id is None:
-        raise HTTPException(status_code=404, detail="PDF não encontrado ou sem dono registrado")
-    if owner_id != user_id:
+        # PDF órfão: só admin pode agir e assume a propriedade.
+        if not is_admin:
+            raise HTTPException(status_code=404, detail="PDF não encontrado ou sem dono registrado")
+        # Valida que o arquivo existe no disco antes de registrar dono
+        if PDF_ROOT and ".." not in pdf_path and not pdf_path.startswith("/"):
+            if not (Path(PDF_ROOT) / pdf_path).exists():
+                raise HTTPException(status_code=404, detail="Arquivo PDF não encontrado no disco")
+        conn.execute(
+            "INSERT OR REPLACE INTO pdf_owner (pdf_path, owner_id, created_at) VALUES (?, ?, ?)",
+            (pdf_path, user_id, now)
+        )
+        owner_id = user_id
+    elif owner_id != user_id and not is_admin:
         raise HTTPException(status_code=403, detail="Apenas o dono pode compartilhar este PDF")
 
     alvo = _resolve_user(conn, destino)
     if not alvo:
         raise HTTPException(status_code=404, detail="Usuário destino não encontrado")
-    if alvo[0] == user_id:
-        raise HTTPException(status_code=400, detail="Você já é o dono deste PDF")
+    if alvo[0] == owner_id:
+        raise HTTPException(status_code=400, detail="O destino já é o dono deste PDF")
 
-    now = datetime.now(timezone.utc).isoformat()
     conn.execute("""
         INSERT OR IGNORE INTO pdf_compartilhamentos (pdf_path, owner_id, shared_with_id, created_at)
         VALUES (?, ?, ?, ?)
-    """, (pdf_path, user_id, alvo[0], now))
+    """, (pdf_path, owner_id, alvo[0], now))
     conn.commit()
     return {
         "ok": True,
@@ -643,7 +690,7 @@ def descompartilhar_pdf(
     owner_id = get_owner_id(conn, pdf_path)
     if owner_id is None:
         raise HTTPException(status_code=404, detail="PDF não encontrado ou sem dono registrado")
-    if owner_id != user_id:
+    if owner_id != user_id and not _is_admin(conn, user_id):
         raise HTTPException(status_code=403, detail="Apenas o dono pode remover compartilhamentos")
 
     alvo = _resolve_user(conn, destino)
@@ -656,3 +703,65 @@ def descompartilhar_pdf(
     )
     conn.commit()
     return {"ok": True, "pdf_path": pdf_path, "removido": alvo[0]}
+
+
+# ==================== ADMIN: PDFs ÓRFÃOS ====================
+
+@router.get("/api/pdf/orfaos", summary="[Admin] Listar PDFs sem dono",
+            description="Lista os PDFs presentes no disco que ainda não têm dono registrado.")
+def listar_orfaos(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Só administradores enxergam PDFs órfãos (para atribuir dono/compartilhar)."""
+    if not _is_admin(conn, user_id):
+        raise HTTPException(status_code=403, detail="Acesso restrito ao administrador.")
+    orfaos = sorted(_orphan_paths(conn))
+    return {"orfaos": [{"path": p, "nome": p.split("/")[-1]} for p in orfaos], "total": len(orfaos)}
+
+
+@router.post("/api/pdf/definir-dono", summary="[Admin] Definir o dono de um PDF",
+             description="Atribui (ou reatribui) o dono de um PDF. Restrito a administradores.")
+def definir_dono(
+    body: dict = Body(...),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Define o dono de um PDF (por id/email/username do novo dono).
+
+    body: {pdf_path: str, dono: str}
+    Restrito a admin — usado principalmente para adotar PDFs órfãos.
+    """
+    from datetime import datetime, timezone
+
+    if not _is_admin(conn, user_id):
+        raise HTTPException(status_code=403, detail="Acesso restrito ao administrador.")
+
+    pdf_path = (body.get("pdf_path") or "").strip()
+    dono = body.get("dono")
+    if not pdf_path or not dono:
+        raise HTTPException(status_code=400, detail="pdf_path e dono são obrigatórios")
+
+    # Valida que o arquivo existe no disco
+    if ".." in pdf_path or pdf_path.startswith("/"):
+        raise HTTPException(status_code=400, detail="Caminho inválido")
+    if PDF_ROOT and not (Path(PDF_ROOT) / pdf_path).exists():
+        raise HTTPException(status_code=404, detail="Arquivo PDF não encontrado no disco")
+
+    novo_dono = _resolve_user(conn, dono)
+    if not novo_dono:
+        raise HTTPException(status_code=404, detail="Usuário (novo dono) não encontrado")
+
+    now = datetime.now(timezone.utc).isoformat()
+    conn.execute(
+        "INSERT OR REPLACE INTO pdf_owner (pdf_path, owner_id, created_at) VALUES (?, ?, ?)",
+        (pdf_path, novo_dono[0], now)
+    )
+    # Se o novo dono estava como destino de compartilhamento, remove (agora é dono)
+    conn.execute(
+        "DELETE FROM pdf_compartilhamentos WHERE pdf_path = ? AND shared_with_id = ?",
+        (pdf_path, novo_dono[0])
+    )
+    conn.commit()
+    return {
+        "ok": True,
+        "pdf_path": pdf_path,
+        "dono": {"user_id": novo_dono[0], "nome": novo_dono[1], "email": novo_dono[2], "username": novo_dono[3]},
+    }

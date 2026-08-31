@@ -84,6 +84,12 @@ def _seed():
             "INSERT OR IGNORE INTO users (id, nome, email, username, created_at) VALUES (?, ?, ?, ?, ?)",
             (uid, nome, email, uname, now),
         )
+    # Usuário administrador (role='admin') para a política de órfãos.
+    conn.execute(
+        "INSERT OR IGNORE INTO users (id, nome, email, username, created_at, role) VALUES (?, ?, ?, ?, ?, 'admin')",
+        (99, "Admin", "admin@t.com", "admin", now),
+    )
+    conn.execute("UPDATE users SET role='admin' WHERE id=99")
     # PDFs 'dono.pdf' e 'compartilhado.pdf' pertencem ao uid 10.
     # 'legado.pdf' fica SEM dono (fail-open).
     for p in (_PATH_DONO, _PATH_COMPART):
@@ -126,22 +132,91 @@ def test_pdf_existe_respeita_visibilidade():
     assert r.json() == {"existe": False}
 
 
-def test_pdf_legado_sem_dono_e_visivel():
-    """PDF sem dono registrado é fail-open (legado ainda não indexado)."""
+def test_pdf_legado_sem_dono_e_invisivel():
+    """Política fail-closed: PDF sem dono registrado é invisível para todos."""
     app.dependency_overrides[get_user_id] = _override_user_id(30)
     r = client.get(f"/pdf/{_PATH_LEGADO}")
-    assert r.status_code == 200
+    assert r.status_code == 403
+    # Nem o próprio uid 1 vê um PDF sem dono (fail-closed estrito).
+    app.dependency_overrides[get_user_id] = _override_user_id(1)
+    assert client.get(f"/pdf/{_PATH_LEGADO}").status_code == 403
 
 
 def test_tree_filtra_por_visibilidade():
-    # Terceiro não vê os PDFs do dono, mas vê o legado (sem dono).
+    # Terceiro não vê os PDFs do dono nem o legado (sem dono → oculto).
     app.dependency_overrides[get_user_id] = _override_user_id(30)
     r = client.get("/api/tree")
     assert r.status_code == 200
     paths = _flatten_paths(r.json())
     assert _PATH_DONO not in paths
     assert _PATH_COMPART not in paths
-    assert _PATH_LEGADO in paths
+    assert _PATH_LEGADO not in paths
+
+
+# ==================== ADMIN: PDFs ÓRFÃOS ====================
+
+def test_admin_ve_pdf_orfao():
+    """Admin enxerga PDF sem dono (para poder adotar/compartilhar)."""
+    app.dependency_overrides[get_user_id] = _override_user_id(99)
+    assert client.get(f"/pdf/{_PATH_LEGADO}").status_code == 200
+
+
+def test_admin_ve_orfao_na_arvore():
+    app.dependency_overrides[get_user_id] = _override_user_id(99)
+    r = client.get("/api/tree")
+    assert r.status_code == 200
+    assert _PATH_LEGADO in _flatten_paths(r.json())
+
+
+def test_admin_lista_orfaos():
+    app.dependency_overrides[get_user_id] = _override_user_id(99)
+    r = client.get("/api/pdf/orfaos")
+    assert r.status_code == 200
+    orf_paths = {o["path"] for o in r.json()["orfaos"]}
+    assert _PATH_LEGADO in orf_paths
+    # PDFs com dono não aparecem como órfãos
+    assert _PATH_DONO not in orf_paths
+
+
+def test_nao_admin_nao_lista_orfaos():
+    app.dependency_overrides[get_user_id] = _override_user_id(30)
+    r = client.get("/api/pdf/orfaos")
+    assert r.status_code == 403
+
+
+def test_admin_define_dono_de_orfao():
+    # Cria um órfão exclusivo para este teste.
+    Path(_pdf_root, "orfao_adotar.pdf").write_bytes(b"%PDF-1.4 orf")
+    app.dependency_overrides[get_user_id] = _override_user_id(99)
+    r = client.post("/api/pdf/definir-dono", json={"pdf_path": "orfao_adotar.pdf", "dono": "dono@t.com"})
+    assert r.status_code == 200, r.text
+    assert r.json()["dono"]["user_id"] == 10
+
+    # Agora o dono (uid 10) vê; terceiro não.
+    app.dependency_overrides[get_user_id] = _override_user_id(10)
+    assert client.get("/pdf/orfao_adotar.pdf").status_code == 200
+    app.dependency_overrides[get_user_id] = _override_user_id(30)
+    assert client.get("/pdf/orfao_adotar.pdf").status_code == 403
+
+
+def test_admin_compartilha_orfao_e_assume_propriedade():
+    Path(_pdf_root, "orfao_share.pdf").write_bytes(b"%PDF-1.4 orfs")
+    app.dependency_overrides[get_user_id] = _override_user_id(99)
+    r = client.post("/api/pdf/compartilhar", json={"pdf_path": "orfao_share.pdf", "destino": "amigo@t.com"})
+    assert r.status_code == 200, r.text
+    # Admin virou dono; amigo tem acesso.
+    app.dependency_overrides[get_user_id] = _override_user_id(20)
+    assert client.get("/pdf/orfao_share.pdf").status_code == 200
+    # Terceiro continua sem ver.
+    app.dependency_overrides[get_user_id] = _override_user_id(30)
+    assert client.get("/pdf/orfao_share.pdf").status_code == 403
+
+
+def test_nao_admin_nao_define_dono():
+    Path(_pdf_root, "orfao_x.pdf").write_bytes(b"%PDF-1.4 x")
+    app.dependency_overrides[get_user_id] = _override_user_id(10)
+    r = client.post("/api/pdf/definir-dono", json={"pdf_path": "orfao_x.pdf", "dono": "amigo@t.com"})
+    assert r.status_code == 403
 
 
 def _flatten_paths(nodes):

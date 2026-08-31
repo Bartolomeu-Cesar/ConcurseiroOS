@@ -49,6 +49,17 @@ def _ensure(monkeypatch):
     database.DB_PATH = _tmp_db.name
     app.dependency_overrides[get_db_session] = _override_db_session
     pdf_module.PDF_ROOT = _pdf_root
+    # Registra o dono (uid 1) dos PDFs de teste — política fail-closed exige dono.
+    _c = sqlite3.connect(_tmp_db.name, timeout=10)
+    from datetime import datetime, timezone
+    _now = datetime.now(timezone.utc).isoformat()
+    for _p in ("Materia/existe.pdf", "Materia/nota.txt"):
+        _c.execute(
+            "INSERT OR REPLACE INTO pdf_owner (pdf_path, owner_id, created_at) VALUES (?, 1, ?)",
+            (_p, _now),
+        )
+    _c.commit()
+    _c.close()
     yield
 
 

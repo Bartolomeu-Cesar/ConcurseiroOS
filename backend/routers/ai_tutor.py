@@ -1318,11 +1318,6 @@ def _resolver_pdf_path(pdf_path: str, conn=None, user_id: int = None) -> str:
     if ".." in rel or not rel:
         raise HTTPException(status_code=400, detail="Caminho de PDF inválido.")
 
-    # Autorização de visibilidade (dono ou compartilhado)
-    if conn is not None and user_id is not None:
-        if not pdf_module.can_access(conn, user_id, rel):
-            raise HTTPException(status_code=403, detail="Acesso negado ao PDF.")
-
     full = Path(root) / rel
     try:
         full.relative_to(Path(root))
@@ -1332,6 +1327,13 @@ def _resolver_pdf_path(pdf_path: str, conn=None, user_id: int = None) -> str:
     resolved = full.resolve()
     if not resolved.exists() or resolved.suffix.lower() != ".pdf":
         raise HTTPException(status_code=404, detail="PDF não encontrado.")
+
+    # Autorização de visibilidade (dono ou compartilhado) — após confirmar que o
+    # arquivo existe, para não confundir "inexistente" (404) com "sem acesso" (403).
+    if conn is not None and user_id is not None:
+        if not pdf_module.can_access(conn, user_id, rel):
+            raise HTTPException(status_code=403, detail="Acesso negado ao PDF.")
+
     return str(resolved)
 
 

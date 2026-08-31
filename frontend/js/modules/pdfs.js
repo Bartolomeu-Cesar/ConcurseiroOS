@@ -1,6 +1,7 @@
 // ==================== TAB 1: PDFs ====================
 import { state } from './state.js';
 import { escapeHtml, showLoading, showEmpty, toast, confirmModal, promptModal } from './utils.js';
+import { getUser } from './auth.js';
 
 const API = '';
 const OPEN_KEY = 'folders_open';
@@ -21,6 +22,8 @@ let _unlinkPdf = null;
 // Estado de propriedade/compartilhamento (preenchido em load via /api/pdf/meus)
 let _sharedWithMe = new Set();   // paths compartilhados comigo (não sou dono)
 let _sharedByMe = new Map();     // path -> [{nome,email,username}, ...] que EU compartilhei
+let _orphans = new Set();        // paths órfãos (sem dono) — só admin
+let _isAdmin = false;
 
 export async function load() {
   showLoading('tree');
@@ -37,6 +40,15 @@ export async function load() {
     } catch (e) {
       _sharedWithMe = new Set();
       _sharedByMe = new Map();
+    }
+    // Admin: carrega PDFs órfãos (sem dono) para poder adotar/compartilhar.
+    _isAdmin = getUser()?.role === 'admin';
+    _orphans = new Set();
+    if (_isAdmin) {
+      try {
+        const orf = await fetch(`${API}/api/pdf/orfaos`).then(r => r.json());
+        _orphans = new Set((orf.orfaos || []).map(o => o.path));
+      } catch (e) { _orphans = new Set(); }
     }
     // Always reload edital data for vinculo display
     try { state.editalData = await fetch('/api/edital').then(r => r.json()); }
@@ -110,17 +122,24 @@ function renderNodes(nodes, container, bulk, prefix) {
       const pathEsc = path.replace(/'/g, "\\'");
       const isSharedWithMe = _sharedWithMe.has(path);
       const isOwner = _sharedByMe.has(path);
+      const isOrphan = _isAdmin && _orphans.has(path);
       const nShares = isOwner ? (_sharedByMe.get(path) || []).length : 0;
       // Badge: PDF compartilhado comigo (sou destino) vs. compartilhado por mim (sou dono)
       let shareTag = '';
-      if (isSharedWithMe) {
+      if (isOrphan) {
+        shareTag = '<span class="pdf-materia-tag" style="background:rgba(250,179,135,0.25);color:var(--peach,#fab387);" title="Sem dono — clique em 👤 para atribuir">⚠️ sem dono</span>';
+      } else if (isSharedWithMe) {
         shareTag = '<span class="pdf-materia-tag" style="background:rgba(166,227,161,0.25);color:var(--green);" title="Compartilhado com você">👥 compartilhado</span>';
       } else if (nShares > 0) {
         shareTag = `<span class="pdf-materia-tag" style="background:rgba(137,180,250,0.2);" title="Você compartilhou com ${nShares} pessoa(s)">👥 ${nShares}</span>`;
       }
-      // Botão compartilhar: só aparece se sou dono (não compartilhado comigo)
-      const shareBtn = !isSharedWithMe
+      // Botão compartilhar: aparece para dono e para admin (admin pode adotar órfão ao compartilhar)
+      const shareBtn = (!isSharedWithMe)
         ? `<button class="pdf-link-disc-btn" onclick="event.stopPropagation();sharePdf('${pathEsc}')" title="Compartilhar PDF" aria-label="Compartilhar PDF">👥</button>`
+        : '';
+      // Botão definir dono: só admin, só para órfãos
+      const ownerBtn = isOrphan
+        ? `<button class="pdf-link-disc-btn" onclick="event.stopPropagation();definirDonoPdf('${pathEsc}')" title="Definir dono do PDF" aria-label="Definir dono">👤</button>`
         : '';
       const div = document.createElement('div');
       div.innerHTML = `
@@ -131,6 +150,7 @@ function renderNodes(nodes, container, bulk, prefix) {
           ${shareTag}
           <span class="pdf-progress">${label}</span>
           ${pct === 100 ? '<span class="badge-done">✓</span>' : ''}
+          ${ownerBtn}
           ${shareBtn}
           ${linkBtn}
         </div>
@@ -342,6 +362,34 @@ export async function unsharePdf(path, destino) {
 
 window.sharePdf = sharePdf;
 window.unsharePdf = unsharePdf;
+
+/** [Admin] Define o dono de um PDF órfão (por email/username). */
+export async function definirDonoPdf(path) {
+  const dono = await promptModal(
+    'Este PDF não tem dono. Informe o e-mail ou username do dono (vazio para cancelar):',
+    { title: '👤 Definir dono do PDF', placeholder: 'email@exemplo.com ou username' }
+  );
+  if (!dono || !dono.trim()) return;
+  try {
+    const res = await fetch(`${API}/api/pdf/definir-dono`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pdf_path: path, dono: dono.trim() })
+    });
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      const d = data.dono;
+      toast(`👤 Dono definido: ${d.nome || d.username || d.email}`, 'success');
+      load();
+    } else {
+      toast(data.detail || 'Erro ao definir dono.', 'error');
+    }
+  } catch (e) {
+    toast('Erro de conexão.', 'error');
+  }
+}
+
+window.definirDonoPdf = definirDonoPdf;
 
 
 export function exportProgress() {
