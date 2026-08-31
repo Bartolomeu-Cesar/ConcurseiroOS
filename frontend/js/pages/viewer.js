@@ -1779,6 +1779,7 @@ async function gerarRevisaoIA() {
 async function abrirRevisaoTelaCheia() {
   const overlay = document.getElementById('revisao-fullscreen');
   const body = document.getElementById('rev-fs-body');
+  console.log('[revisão FS] abrir: overlay=', !!overlay, 'body=', !!body, 'path=', path);
   document.getElementById('rev-fs-titulo').textContent = name;
   overlay.style.display = 'flex';
   // Sempre abre em modo leitura normal (recall desligado) para estado previsível.
@@ -1793,12 +1794,17 @@ async function abrirRevisaoTelaCheia() {
 
   let blocos;
   try {
-    blocos = await fetch(`/api/revisao/${encodePath(path)}`).then(r => r.json());
+    const _resp = await fetch(`/api/revisao/${encodePath(path)}`);
+    console.log('[revisão FS] fetch status=', _resp.status);
+    blocos = await _resp.json();
+    console.log('[revisão FS] blocos recebidos=', Array.isArray(blocos) ? blocos.length : blocos);
   } catch (e) {
+    console.error('[revisão FS] erro no fetch:', e);
     body.innerHTML = '<div style="text-align:center;color:var(--red,#f38ba8);padding:40px;">Erro ao carregar revisão.</div>';
     return;
   }
   if (!Array.isArray(blocos) || blocos.length === 0) {
+    console.warn('[revisão FS] resposta não é lista de blocos ou está vazia:', blocos);
     body.innerHTML = `<div style="max-width:760px;margin:0 auto;text-align:center;color:var(--text-sub,#9399b2);padding:60px 20px;line-height:1.7;">
       <div style="font-size:2.4rem;margin-bottom:12px;">📭</div>
       Caderno de revisão vazio.<br>Recorte partes do PDF ou adicione notas para montá-lo.</div>`;
@@ -1807,6 +1813,7 @@ async function abrirRevisaoTelaCheia() {
 
   _revFsBlocos = blocos;
   _renderRevFsDoc();
+  console.log('[revisão FS] render concluído, blocos=', _revFsBlocos.length);
 }
 
 // Renderiza (ou re-renderiza) o documento da tela cheia respeitando o modo recall.
@@ -2065,8 +2072,32 @@ function applyRevFsZoom() {
 }
 
 // --- Export ---
-function exportRevisaoMd() {
-  window.open(`/api/revisao/${encodePath(path)}/export`, '_blank');
+async function exportRevisaoMd() {
+  // window.open() faz navegação direta e NÃO envia o header Authorization →
+  // 401 quando AUTH_ENABLED=true. Buscamos via fetch (o interceptor injeta o
+  // token) e disparamos o download a partir do Blob.
+  try {
+    const res = await fetch(`/api/revisao/${encodePath(path)}/export`);
+    if (!res.ok) {
+      showStudyToast(res.status === 401 ? '⚠️ Sessão expirada. Faça login novamente.' : `⚠️ Falha ao exportar (HTTP ${res.status}).`);
+      return;
+    }
+    let filename = `revisao_${name.replace(/\s+/g, '_')}.md`;
+    const disp = res.headers.get('Content-Disposition') || '';
+    const m = disp.match(/filename="?([^"]+)"?/i);
+    if (m) filename = m[1];
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(objectUrl);
+  } catch (e) {
+    showStudyToast('⚠️ Erro ao exportar o caderno.');
+  }
 }
 
 async function imprimirRevisao() {
