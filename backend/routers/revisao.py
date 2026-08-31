@@ -226,6 +226,108 @@ def delete_agenda(pdf_path: str, conn=Depends(get_db_session), user_id: int = De
     return {"ok": True}
 
 
+# ============================================================
+# AUTO-GERAR BLOCOS DE REVISÃO COM IA
+# ============================================================
+
+_SYSTEM_PROMPT_REVISAO_IA = (
+    "Você é um professor que monta cadernos de revisão para concursos. A partir do "
+    "TRECHO de material fornecido, gere blocos de revisão CONCISOS e independentes, "
+    "cada um cobrindo UM ponto importante. Responda APENAS em JSON, no formato: "
+    '[{"titulo": "Título curto do ponto", "conteudo": "Resumo objetivo em 1-4 frases, '
+    'com o essencial para revisar rápido."}]. '
+    "Regras: foque no que mais cai em prova; use linguagem clara; NÃO invente conteúdo "
+    "fora do trecho; produza entre 3 e 10 blocos."
+)
+
+
+@router.post("/api/revisao-ia/gerar", summary="Auto-gerar blocos de revisão com IA a partir do PDF")
+def gerar_revisao_ia(body: dict, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Lê um intervalo de páginas do PDF e gera blocos de resumo (tipo resumo_ia)
+    salvos direto no caderno de revisão. Reusa a infra de IA do ai_tutor.
+
+    Body: {pdf_path, pagina_inicial, pagina_final?, materia?}."""
+    pdf_path = (body.get("pdf_path") or "").strip()
+    if not pdf_path or ".." in pdf_path:
+        raise HTTPException(status_code=400, detail="pdf_path inválido")
+    try:
+        pg_ini = max(1, int(body.get("pagina_inicial") or 1))
+    except (TypeError, ValueError):
+        pg_ini = 1
+    try:
+        pg_fim = int(body.get("pagina_final")) if body.get("pagina_final") else None
+    except (TypeError, ValueError):
+        pg_fim = None
+    if pg_fim is not None and pg_fim < pg_ini:
+        raise HTTPException(status_code=422, detail="Página final deve ser >= inicial.")
+
+    # Reusa helpers do ai_tutor (import tardio: evita ciclo e mantém patch de testes).
+    from routers import ai_tutor
+    from routers.questoes.importacao import _extrair_texto_pdf_intervalo
+
+    budget = ai_tutor._check_budget(conn, user_id)
+
+    caminho = ai_tutor._resolver_pdf_path(pdf_path)
+    try:
+        texto, _total = _extrair_texto_pdf_intervalo(caminho, pg_ini, pg_fim)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Não foi possível extrair texto do PDF.") from None
+
+    texto = (texto or "").strip()
+    if len(texto) < 50:
+        raise HTTPException(status_code=400, detail="Trecho sem texto suficiente (PDF escaneado ou intervalo vazio).")
+
+    trecho = texto[: ai_tutor._MAX_CHARS_TRECHO_PDF]
+    nome_pdf = pdf_path.split("/")[-1].replace(".pdf", "")
+    materia = (body.get("materia") or nome_pdf).strip()
+    contexto = f"páginas {pg_ini}" + (f"–{pg_fim}" if pg_fim else " em diante")
+
+    messages = [
+        {"role": "system", "content": _SYSTEM_PROMPT_REVISAO_IA},
+        {"role": "user", "content": f"Material: {nome_pdf} ({contexto}). Matéria: {materia}.\n\nTRECHO:\n{trecho}"},
+    ]
+    text, tokens = ai_tutor.call_llm_sync(messages, max_tokens=2000)
+    ai_tutor._record_usage(conn, user_id, tokens, "revisao_ia", f"{nome_pdf} {contexto}", text[:500])
+
+    blocos_ia = ai_tutor._parse_json_llm(text)
+    if not isinstance(blocos_ia, list) or not blocos_ia:
+        raise HTTPException(status_code=422, detail="A IA não retornou blocos. Tente outro intervalo de páginas.")
+
+    # Próxima ordem
+    prox = conn.execute(
+        "SELECT COALESCE(MAX(ordem), -1) + 1 FROM revisao_blocos WHERE pdf_path = ? AND user_id = ?",
+        (pdf_path, user_id),
+    ).fetchone()[0]
+
+    salvos = 0
+    agora = datetime.now().isoformat()
+    for b in blocos_ia:
+        if not isinstance(b, dict):
+            continue
+        titulo = sanitize_input((b.get("titulo") or "").strip(), max_length=300)
+        conteudo = sanitize_input((b.get("conteudo") or "").strip(), max_length=20000)
+        if not conteudo:
+            continue
+        conn.execute(
+            """INSERT INTO revisao_blocos
+               (user_id, pdf_path, tipo, titulo, conteudo, imagem_data, pagina, ordem, oclusoes, created_at)
+               VALUES (?, ?, 'resumo_ia', ?, ?, '', ?, ?, '', ?)""",
+            (user_id, pdf_path, titulo, conteudo, pg_ini, prox + salvos, agora),
+        )
+        salvos += 1
+    if salvos:
+        conn.commit()
+    log.info(f"[Revisão IA] {salvos} blocos gerados p/ {pdf_path} user={user_id}")
+
+    return {
+        "ok": True,
+        "salvos": salvos,
+        "tecnica": "Distributed Summary + Cognitive Load Segmenting",
+        "tokens_usados": tokens,
+        "budget": budget,
+    }
+
+
 @router.get("/api/revisao/{pdf_path:path}/export", summary="Exportar caderno de revisão (Markdown)")
 def export_revisao(pdf_path: str, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Exporta o caderno de revisão de um PDF como Markdown.

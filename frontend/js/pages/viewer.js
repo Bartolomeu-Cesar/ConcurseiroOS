@@ -1609,6 +1609,72 @@ async function cancelarAgendaCaderno() {
   _loadAgendaStatus();
 }
 
+// --- Auto-gerar blocos de revisão com IA ---
+function abrirGerarRevisaoIA() {
+  const pgAtual = currentPage || 1;
+  let modal = document.getElementById('gerar-revisao-ia-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'gerar-revisao-ia-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:1002;display:flex;align-items:center;justify-content:center;padding:16px;';
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = `
+    <div style="background:var(--bg-surface,#313244);border:1px solid var(--border,#45475a);border-radius:14px;padding:20px;max-width:440px;width:100%;">
+      <h3 style="color:var(--mauve,#cba6f7);margin:0 0 4px;font-size:1rem;">✨ Gerar revisão com IA</h3>
+      <p style="font-size:0.78rem;color:var(--text-sub,#a6adc8);margin:0 0 14px;">A IA lê o intervalo de páginas e cria blocos de resumo direto no caderno.</p>
+      <div style="display:flex;gap:8px;margin-bottom:14px;">
+        <label style="flex:1;font-size:0.78rem;color:var(--text,#cdd6f4);">Pág. inicial
+          <input type="number" id="gri-pg-ini" min="1" value="${pgAtual}" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--border,#45475a);background:var(--bg,#1e1e2e);color:var(--text,#cdd6f4);">
+        </label>
+        <label style="flex:1;font-size:0.78rem;color:var(--text,#cdd6f4);">Pág. final
+          <input type="number" id="gri-pg-fim" min="1" value="${pgAtual}" style="width:100%;margin-top:4px;padding:8px;border-radius:8px;border:1px solid var(--border,#45475a);background:var(--bg,#1e1e2e);color:var(--text,#cdd6f4);">
+        </label>
+      </div>
+      <div id="gri-status" style="display:none;font-size:0.8rem;color:var(--peach,#fab387);margin-bottom:10px;"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button onclick="fecharGerarRevisaoIA()" style="background:var(--bg,#1e1e2e);border:1px solid var(--border,#45475a);color:var(--text,#cdd6f4);border-radius:8px;padding:8px 16px;font-size:0.82rem;cursor:pointer;">Fechar</button>
+        <button id="gri-gerar" onclick="gerarRevisaoIA()" style="background:var(--mauve,#cba6f7);color:#1e1e2e;border:none;border-radius:8px;padding:8px 18px;font-weight:700;font-size:0.82rem;cursor:pointer;">Gerar</button>
+      </div>
+    </div>`;
+  modal.style.display = 'flex';
+}
+
+function fecharGerarRevisaoIA() {
+  const modal = document.getElementById('gerar-revisao-ia-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function gerarRevisaoIA() {
+  const pgIni = Math.max(1, parseInt(document.getElementById('gri-pg-ini').value) || 1);
+  const pgFim = Math.max(pgIni, parseInt(document.getElementById('gri-pg-fim').value) || pgIni);
+  const status = document.getElementById('gri-status');
+  const btn = document.getElementById('gri-gerar');
+  status.style.display = 'block';
+  status.textContent = '🤖 Lendo o PDF e gerando blocos...';
+  btn.disabled = true; btn.style.opacity = '0.6';
+  try {
+    const res = await fetch('/api/revisao-ia/gerar', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pdf_path: path, pagina_inicial: pgIni, pagina_final: pgFim, materia: name }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      status.style.color = 'var(--red,#f38ba8)';
+      status.textContent = data.detail || 'Não foi possível gerar. Configure um provider de IA em Social → AI Tutor → ⚙️.';
+      return;
+    }
+    showStudyToast(`✨ ${data.salvos} bloco(s) de revisão gerado(s) com IA!`);
+    fecharGerarRevisaoIA();
+    loadRevisao();
+  } catch (e) {
+    status.style.color = 'var(--red,#f38ba8)';
+    status.textContent = 'Erro de conexão.';
+  } finally {
+    btn.disabled = false; btn.style.opacity = '1';
+  }
+}
+
 async function abrirRevisaoTelaCheia() {
   const overlay = document.getElementById('revisao-fullscreen');
   const body = document.getElementById('rev-fs-body');
@@ -1953,3 +2019,6 @@ window.fecharAgendaRevisao = fecharAgendaRevisao;
 window.agendarCaderno = agendarCaderno;
 window.marcarCadernoRevisado = marcarCadernoRevisado;
 window.cancelarAgendaCaderno = cancelarAgendaCaderno;
+window.abrirGerarRevisaoIA = abrirGerarRevisaoIA;
+window.fecharGerarRevisaoIA = fecharGerarRevisaoIA;
+window.gerarRevisaoIA = gerarRevisaoIA;
