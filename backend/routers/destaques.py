@@ -72,6 +72,44 @@ def _validar_rects(raw: str) -> str:
     return json.dumps(limpo, separators=(",", ":"))
 
 
+@router.get("/api/destaques/{pdf_path:path}/export", summary="Exportar destaques (Markdown)")
+def export_destaques(pdf_path: str, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Exporta os destaques de um PDF como Markdown, agrupados por página."""
+    from fastapi.responses import PlainTextResponse
+
+    if ".." in pdf_path:
+        raise HTTPException(status_code=400, detail="Caminho inválido")
+    rows = conn.execute(
+        "SELECT * FROM destaques_pdf WHERE pdf_path = ? AND user_id = ? ORDER BY pagina, id",
+        (pdf_path, user_id),
+    ).fetchall()
+
+    _ESTILO_LABEL = {"highlight": "marca-texto", "underline": "sublinhado", "strike": "tachado", "box": "caixa"}
+    nome = pdf_path.split("/")[-1].replace(".pdf", "").replace("_", " ")
+    linhas = [f"# Destaques — {nome}", ""]
+    pagina_atual = None
+    for row in rows:
+        d = _destaque_to_dict(row)
+        if d["pagina"] != pagina_atual:
+            pagina_atual = d["pagina"]
+            linhas.append(f"## Página {pagina_atual}")
+            linhas.append("")
+        estilo = _ESTILO_LABEL.get(d["estilo"], d["estilo"])
+        texto = (d["texto"] or "").strip() or "(sem texto)"
+        linhas.append(f"- **[{d['cor']}/{estilo}]** {texto}")
+        if (d.get("comentario") or "").strip():
+            linhas.append(f"  - 💬 {d['comentario'].strip()}")
+    if not rows:
+        linhas.append("_Nenhum destaque neste PDF._")
+    md = "\n".join(linhas) + "\n"
+    filename = f"destaques_{nome.replace(' ', '_')}.md"
+    return PlainTextResponse(
+        md,
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.get("/api/destaques/{pdf_path:path}", summary="Listar destaques de um PDF")
 def get_destaques(pdf_path: str, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     if ".." in pdf_path:

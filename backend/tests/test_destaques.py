@@ -183,3 +183,26 @@ def test_put_cor_invalida_422():
     }).json()["id"]
     r = client.put(f"/api/destaques/{rid}", json={"cor": "roxo-neon"})
     assert r.status_code == 422
+
+
+def test_export_markdown():
+    client.post("/api/destaques", json={
+        "pdf_path": PDF_PATH, "pagina": 2, "cor": "green", "texto": "Firewall filtra tráfego",
+        "rects": RECTS, "estilo": "underline", "comentario": "cai em prova",
+    })
+    r = client.get(f"/api/destaques/{PDF_PATH}/export")
+    assert r.status_code == 200, r.text
+    assert "text/markdown" in r.headers.get("content-type", "")
+    assert "attachment" in r.headers.get("content-disposition", "")
+    md = r.text
+    assert "# Destaques" in md
+    assert "## Página 2" in md
+    assert "Firewall filtra tráfego" in md
+    assert "green/sublinhado" in md
+    assert "💬 cai em prova" in md
+
+
+def test_export_vazio_nao_quebra():
+    r = client.get("/api/destaques/PDF/Sem/Destaques.pdf/export")
+    assert r.status_code == 200
+    assert "Nenhum destaque" in r.text

@@ -2529,6 +2529,26 @@ function toggleDestaquesPanel() {
   _togglePainelDireita('destaques', _renderPainelDestaques);
 }
 
+// Exporta os destaques do PDF como Markdown (download autenticado via fetch+blob;
+// window.open não envia Authorization → 401 com AUTH_ENABLED=true).
+async function exportarDestaquesMd() {
+  if (!_destaques || _destaques.length === 0) { showStudyToast('Nenhum destaque para exportar.'); return; }
+  try {
+    const res = await fetch(`/api/destaques/${encodePath(path)}/export`);
+    if (!res.ok) { showStudyToast(res.status === 401 ? '⚠️ Sessão expirada.' : `⚠️ Falha ao exportar (HTTP ${res.status}).`); return; }
+    let filename = `destaques_${name.replace(/\s+/g, '_')}.md`;
+    const disp = res.headers.get('Content-Disposition') || '';
+    const m = disp.match(/filename="?([^"]+)"?/i);
+    if (m) filename = m[1];
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  } catch (e) { showStudyToast('⚠️ Erro ao exportar destaques.'); }
+}
+
 function _renderPainelDestaques() {
   const body = document.getElementById('destaques-body');
   if (!body) return;
@@ -2618,6 +2638,7 @@ window.setDestaqueEstilo = setDestaqueEstilo;
 window.comentarDestaque = comentarDestaque;
 window.destaqueParaFlashcard = destaqueParaFlashcard;
 window.destaqueParaRevisao = destaqueParaRevisao;
+window.exportarDestaquesMd = exportarDestaquesMd;
 window.addBookmark = addBookmark;
 window.toggleBookmarksPanel = toggleBookmarksPanel;
 window.loadBookmarksPanel = loadBookmarksPanel;
