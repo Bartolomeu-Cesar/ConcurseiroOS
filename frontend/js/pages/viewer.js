@@ -2459,6 +2459,44 @@ async function excluirDestaque(id) {
   showStudyToast('Destaque removido.');
 }
 
+// Cria um flashcard FSRS a partir de um destaque (frente=texto, verso=comentário).
+async function destaqueParaFlashcard(id) {
+  const d = _destaques.find(x => x.id === id);
+  if (!d) return;
+  const pergunta = (d.texto || '').trim();
+  if (!pergunta) { showStudyToast('⚠️ Destaque sem texto para virar flashcard.'); return; }
+  const materia = path.includes('/') ? path.split('/')[0] : name;
+  const resposta = (d.comentario && d.comentario.trim())
+    ? d.comentario.trim()
+    : `(Complete a resposta) — trecho da página ${d.pagina} de ${name}.`;
+  try {
+    const res = await fetch('/api/flashcards', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pergunta, resposta, materia }),
+    });
+    if (res.ok) showStudyToast(`🧠 Flashcard criado em ${materia}! Será revisado (FSRS).`);
+    else { const e = await res.json().catch(() => ({})); showStudyToast('⚠️ ' + (e.detail || 'Erro ao criar flashcard.')); }
+  } catch (e) { showStudyToast('⚠️ Erro de conexão ao criar flashcard.'); }
+}
+
+// Envia um destaque como bloco de texto para o Caderno de Revisão.
+async function destaqueParaRevisao(id) {
+  const d = _destaques.find(x => x.id === id);
+  if (!d) return;
+  const texto = (d.texto || '').trim();
+  if (!texto) { showStudyToast('⚠️ Destaque sem texto.'); return; }
+  const titulo = texto.length > 60 ? texto.slice(0, 57) + '...' : texto;
+  const conteudo = (d.comentario && d.comentario.trim()) ? `${texto}\n\n💬 ${d.comentario.trim()}` : texto;
+  try {
+    const res = await fetch('/api/revisao', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pdf_path: path, tipo: 'texto', titulo, conteudo, pagina: d.pagina }),
+    });
+    if (res.ok) showStudyToast('📑 Enviado ao Caderno de Revisão!');
+    else { const e = await res.json().catch(() => ({})); showStudyToast('⚠️ ' + (e.detail || 'Erro ao enviar à revisão.')); }
+  } catch (e) { showStudyToast('⚠️ Erro de conexão.'); }
+}
+
 // Adiciona/edita um comentário no destaque (Elaborative Interrogation).
 async function comentarDestaque(id) {
   const d = _destaques.find(x => x.id === id);
@@ -2514,6 +2552,8 @@ function _renderPainelDestaques() {
         <span title="Estilo" style="font-size:0.8rem;">${icone}</span>
         <span style="font-size:0.7rem;color:var(--blue,#89b4fa);cursor:pointer;" onclick="goToPage(${d.pagina})" title="Ir para a página">p.${d.pagina}</span>
         <span style="flex:1;"></span>
+        <button onclick="destaqueParaFlashcard(${d.id})" title="Criar flashcard (revisão espaçada)" style="background:none;border:none;color:var(--mauve,#cba6f7);cursor:pointer;font-size:0.78rem;">🧠</button>
+        <button onclick="destaqueParaRevisao(${d.id})" title="Enviar ao Caderno de Revisão" style="background:none;border:none;color:var(--teal,#94e2d5);cursor:pointer;font-size:0.78rem;">📑</button>
         <button onclick="comentarDestaque(${d.id})" title="${temComentario ? 'Editar comentário' : 'Adicionar comentário'}" style="background:none;border:none;color:${temComentario ? 'var(--green,#a6e3a1)' : 'var(--text-sub,#9399b2)'};cursor:pointer;font-size:0.78rem;">💬</button>
         <button onclick="excluirDestaque(${d.id})" title="Remover" style="background:none;border:none;color:var(--red,#f38ba8);cursor:pointer;font-size:0.78rem;">🗑</button>
       </div>
@@ -2576,6 +2616,8 @@ window.toggleDestaquesPanel = toggleDestaquesPanel;
 window.excluirDestaque = excluirDestaque;
 window.setDestaqueEstilo = setDestaqueEstilo;
 window.comentarDestaque = comentarDestaque;
+window.destaqueParaFlashcard = destaqueParaFlashcard;
+window.destaqueParaRevisao = destaqueParaRevisao;
 window.addBookmark = addBookmark;
 window.toggleBookmarksPanel = toggleBookmarksPanel;
 window.loadBookmarksPanel = loadBookmarksPanel;
