@@ -1428,5 +1428,80 @@ def analisar_pdf(
             "budget": budget,
         }
 
-    # Fase 1c: questoes (ainda não implementada aqui)
+    if acao == "questoes":
+        user_message = (
+            f"A partir do TRECHO do material '{nome_pdf}' ({contexto_paginas}), "
+            f"crie {body.quantidade} questões de múltipla escolha (A-E) no estilo CESPE/FCC."
+            + (f" Matéria: {body.materia}." if body.materia else "")
+            + "\n\nTRECHO:\n"
+            + trecho
+        )
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPTS["generate_questions"]},
+            {"role": "user", "content": user_message},
+        ]
+        log.info(f"[AI] analisar-pdf questoes user={user_id} pdf={nome_pdf[:40]} {contexto_paginas}")
+        text, tokens = call_llm_sync(messages, max_tokens=3000)
+        _record_usage(db, user_id, tokens, "questoes_pdf", f"{nome_pdf} {contexto_paginas}", text[:500])
+
+        questoes = _parse_json_llm(text)
+        if not isinstance(questoes, list):
+            questoes = None
+
+        salvos = 0
+        if body.salvar and questoes:
+            materia_q = body.materia or nome_pdf
+            prova_origem = f"IA: {nome_pdf}"
+            for q in questoes:
+                if not isinstance(q, dict):
+                    continue
+                enunciado = (q.get("enunciado") or "").strip()
+                if len(enunciado) < 10:
+                    continue
+                try:
+                    db.execute(
+                        """INSERT INTO questoes (materia, topico, enunciado, alternativa_a, alternativa_b,
+                            alternativa_c, alternativa_d, alternativa_e, resposta_correta, explicacao,
+                            dificuldade, banca, prova_origem, created_at, user_id)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (
+                            materia_q,
+                            "",
+                            enunciado,
+                            (q.get("alternativa_a") or "").strip(),
+                            (q.get("alternativa_b") or "").strip(),
+                            (q.get("alternativa_c") or "").strip(),
+                            (q.get("alternativa_d") or "").strip(),
+                            (q.get("alternativa_e") or "").strip(),
+                            (q.get("resposta_correta") or "").strip().upper(),
+                            (q.get("explicacao") or "").strip(),
+                            "Médio",
+                            "IA",
+                            prova_origem,
+                            _get_today_str(),
+                            user_id,
+                        ),
+                    )
+                    salvos += 1
+                except Exception as e:
+                    log.warning(f"[AI] Erro ao salvar questão do PDF: {e}")
+            if salvos:
+                db.commit()
+
+        updated_usage = _get_daily_usage(db, user_id)
+        return {
+            "ok": True,
+            "acao": "questoes",
+            "questoes": questoes,
+            "resposta": text,
+            "pdf": nome_pdf,
+            "paginas": {"inicial": body.pagina_inicial, "final": body.pagina_final, "total": total_paginas},
+            "trecho_truncado": truncado,
+            "salvos": salvos,
+            "salvo": body.salvar and salvos > 0,
+            "tokens_usados": tokens,
+            "uso_diario": updated_usage,
+            "budget": budget,
+        }
+
     raise HTTPException(status_code=501, detail=f"Ação '{acao}' ainda não implementada.")

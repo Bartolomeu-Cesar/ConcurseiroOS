@@ -157,14 +157,6 @@ class TestAnalisarPdfResumo:
         })
         assert r.status_code == 422
 
-    @patch("routers.ai_tutor.call_llm_sync")
-    def test_questoes_ainda_nao_implementado_501(self, mock_llm):
-        mock_llm.return_value = ("x", 1)
-        r = client.post("/api/ai/analisar-pdf", json={
-            "pdf_path": _PDF_REL, "acao": "questoes",
-        })
-        assert r.status_code == 501
-
 
 class TestAnalisarPdfFlashcards:
     @patch("routers.ai_tutor.call_llm_sync")
@@ -220,3 +212,64 @@ class TestAnalisarPdfFlashcards:
         assert data["flashcards"] is None
         assert data["salvos"] == 0
         assert data["salvo"] is False
+
+
+class TestAnalisarPdfQuestoes:
+    _JSON_Q = (
+        '[{"enunciado": "O protocolo HTTPS usa qual tecnologia para cifrar?",'
+        ' "alternativa_a": "TLS", "alternativa_b": "FTP", "alternativa_c": "SMTP",'
+        ' "alternativa_d": "DNS", "alternativa_e": "ARP", "resposta_correta": "A",'
+        ' "explicacao": "HTTPS = HTTP sobre TLS."},'
+        ' {"enunciado": "Quantas camadas tem o modelo OSI?",'
+        ' "alternativa_a": "4", "alternativa_b": "5", "alternativa_c": "6",'
+        ' "alternativa_d": "7", "alternativa_e": "8", "resposta_correta": "D",'
+        ' "explicacao": "O modelo OSI tem 7 camadas."}]'
+    )
+
+    @patch("routers.ai_tutor.call_llm_sync")
+    def test_questoes_gera_e_parseia(self, mock_llm):
+        mock_llm.return_value = (self._JSON_Q, 300)
+        r = client.post("/api/ai/analisar-pdf", json={
+            "pdf_path": _PDF_REL, "acao": "questoes", "pagina_inicial": 1, "pagina_final": 3,
+            "quantidade": 2, "materia": "Informática",
+        })
+        assert r.status_code == 200, r.text
+        data = r.json()
+        assert data["acao"] == "questoes"
+        assert isinstance(data["questoes"], list)
+        assert len(data["questoes"]) == 2
+        assert data["salvo"] is False
+
+    @patch("routers.ai_tutor.call_llm_sync")
+    def test_questoes_salva_no_banco_com_prova_origem(self, mock_llm):
+        mock_llm.return_value = (self._JSON_Q, 300)
+        r = client.post("/api/ai/analisar-pdf", json={
+            "pdf_path": _PDF_REL, "acao": "questoes", "materia": "Informática", "salvar": True,
+        })
+        assert r.status_code == 200, r.text
+        data = r.json()
+        assert data["salvo"] is True
+        assert data["salvos"] == 2
+        c = sqlite3.connect(_tmp_db.name, timeout=10)
+        try:
+            rows = c.execute(
+                "SELECT materia, resposta_correta, prova_origem, banca FROM questoes "
+                "WHERE prova_origem = 'IA: Redes' ORDER BY id"
+            ).fetchall()
+        finally:
+            c.close()
+        assert len(rows) == 2
+        assert rows[0][0] == "Informática"      # materia
+        assert rows[0][1] in ("A", "D")          # resposta_correta preenchida
+        assert rows[0][3] == "IA"                # banca
+
+    @patch("routers.ai_tutor.call_llm_sync")
+    def test_questoes_json_invalido_nao_quebra(self, mock_llm):
+        mock_llm.return_value = ("não foi possível", 40)
+        r = client.post("/api/ai/analisar-pdf", json={
+            "pdf_path": _PDF_REL, "acao": "questoes", "salvar": True,
+        })
+        assert r.status_code == 200
+        data = r.json()
+        assert data["questoes"] is None
+        assert data["salvos"] == 0
