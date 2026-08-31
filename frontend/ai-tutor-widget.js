@@ -160,9 +160,22 @@
   document.head.appendChild(style);
 
   // Create FAB button
+  // Ícone "megamente": cabeça grande azul estilizada (SVG original, próprio —
+  // remete a um tutor genial de cabeçorra, sem copiar personagem protegido).
+  const MEGA_HEAD_SVG = `<svg viewBox="0 0 48 48" width="30" height="30" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <ellipse cx="24" cy="17" rx="15" ry="14" fill="#dbe9ff"/>
+    <path d="M24 3c8.8 0 15 5.8 15 14 0 5.2-3 8.6-6 10.5V29c0 1.1-.9 2-2 2H17c-1.1 0-2-.9-2-2v-1.5C12 25.6 9 22.2 9 17 9 8.8 15.2 3 24 3z" fill="#eaf2ff"/>
+    <path d="M16 33c0-1.1.9-2 2-2h12c1.1 0 2 .9 2 2l1.5 8c.2 1.3-.8 2.5-2 2.5H16.5c-1.2 0-2.2-1.2-2-2.5L16 33z" fill="#89b4fa"/>
+    <ellipse cx="18" cy="18" rx="3.2" ry="3.6" fill="#1e2333"/>
+    <ellipse cx="30" cy="18" rx="3.2" ry="3.6" fill="#1e2333"/>
+    <circle cx="19.1" cy="16.9" r="1" fill="#fff"/>
+    <circle cx="31.1" cy="16.9" r="1" fill="#fff"/>
+    <path d="M19 25c1.8 1.6 8.2 1.6 10 0" stroke="#5b6178" stroke-width="1.6" stroke-linecap="round"/>
+    <path d="M13.5 11.5c2-2 4.5-3 7-3M34.5 11.5c-2-2-4.5-3-7-3" stroke="#b9cdf0" stroke-width="1.4" stroke-linecap="round"/>
+  </svg>`;
   const fab = document.createElement('button');
   fab.id = 'ai-tutor-fab';
-  fab.innerHTML = '🤖';
+  fab.innerHTML = MEGA_HEAD_SVG;
   fab.title = 'AI Tutor — clique para abrir · duplo clique (ou segurar) para ocultar por alguns segundos';
   fab.setAttribute('aria-label', 'Abrir AI Tutor');
 
@@ -266,7 +279,7 @@
   window.toggleAITutor = function() {
     const isOpen = panel.classList.toggle('show');
     fab.classList.toggle('open', isOpen);
-    fab.innerHTML = isOpen ? '✕' : '🤖';
+    fab.innerHTML = isOpen ? '✕' : MEGA_HEAD_SVG;
     if (isOpen) {
       setTimeout(() => document.getElementById('ai-widget-input').focus(), 200);
       const msgs = document.getElementById('ai-widget-messages');
