@@ -654,6 +654,29 @@ window._excluirPasta = _excluirPasta;
 
 let _modoLocal = false;
 
+// ==================== SINCRONIZAR / RELER LISTAGEM ====================
+// Relê a listagem de PDFs conforme o modo ativo, sem exigir reescolher a pasta:
+// - modo local: revarre a pasta já autorizada (reflete PDFs adicionados/removidos);
+// - modo servidor: recarrega /api/tree (reflete mudanças na pasta do servidor).
+// Útil ao trocar de estação de trabalho, quando a pasta muda ou o conteúdo diverge.
+export async function sincronizar() {
+  const btn = document.getElementById('sync-pdfs-btn');
+  const prevHtml = btn ? btn.innerHTML : null;
+  if (btn) { btn.disabled = true; btn.innerHTML = '🔄 Sincronizando...'; }
+  try {
+    if (_modoLocal) {
+      await _renderArvoreLocal();
+    } else {
+      await load();
+    }
+    toast('✅ Listagem de PDFs sincronizada', 'success', 2500);
+  } catch (e) {
+    toast('Erro ao sincronizar: ' + (e && e.message ? e.message : e), 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = prevHtml; }
+  }
+}
+
 export async function toggleModoLocal() {
   const btn = document.getElementById('local-mode-btn');
 
@@ -747,9 +770,16 @@ async function _renderArvoreLocal() {
   toolbar.innerHTML = `
     <span style="font-size:0.72rem;color:var(--green);align-self:center;">💻 Modo local — ${totalPdfs} PDF(s) na sua máquina · o arquivo não sai do computador</span>
     <span style="flex:1;"></span>
+    <button id="btn-sync-local" style="padding:5px 10px;background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:6px;font-size:0.72rem;cursor:pointer;" title="Reler a pasta atual e atualizar a lista (PDFs adicionados/removidos)">🔄 Sincronizar</button>
     <button id="btn-trocar-pasta" style="padding:5px 10px;background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:6px;font-size:0.72rem;cursor:pointer;">📂 Trocar pasta</button>
   `;
   container.appendChild(toolbar);
+  const sync = document.getElementById('btn-sync-local');
+  if (sync) sync.addEventListener('click', async () => {
+    sync.disabled = true; const prev = sync.textContent; sync.textContent = '🔄 ...';
+    try { await _renderArvoreLocal(); toast('✅ Pasta relida', 'success', 2000); }
+    catch (e) { toast('Erro ao reler a pasta: ' + (e.message || e), 'error'); sync.disabled = false; sync.textContent = prev; }
+  });
   const trocar = document.getElementById('btn-trocar-pasta');
   if (trocar) trocar.addEventListener('click', async () => {
     try { await escolherPastaLocal(); await _renderArvoreLocal(); }
