@@ -1192,44 +1192,127 @@
     };
 
     // ==================== FEATURE FLAGS ====================
+    // Rótulos amigáveis para os roles do sistema.
+    const _ROLE_LABEL = { admin: '👑 Admin', user: '👤 Usuário comum' };
+
     window.loadFlags = async function() {
       const el = document.getElementById('flags-list');
       if (!el) return;
       try {
         const data = await fetch('/api/admin/flags').then(r => r.json());
         if (data.detail) { el.innerHTML = `<span style="color:#f38ba8;">${esc(data.detail)}</span>`; return; }
-        el.innerHTML = (data.flags || []).map(f => `
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 10px;background:#1e1e2e;border-radius:8px;">
-            <div style="min-width:0;">
-              <strong style="color:#cdd6f4;">${esc(f.label)}</strong>
-              <div style="font-size:0.72rem;color:#9399b2;">${esc(f.desc)}</div>
+        const roles = data.roles || ['admin', 'user'];
+        window._adminRoles = roles;
+        el.innerHTML = (data.flags || []).map(f => {
+          const porRole = f.estado_por_role || {};
+          // Chips mostrando o estado efetivo por role.
+          const chips = roles.map(r => {
+            const on = porRole[r] !== false;
+            return `<span title="${esc(_ROLE_LABEL[r] || r)}: ${on ? 'ligado' : 'desligado'}"
+              style="font-size:0.68rem;padding:2px 8px;border-radius:999px;font-weight:600;
+              background:${on ? 'rgba(166,227,161,0.18)' : 'rgba(108,112,134,0.25)'};
+              color:${on ? '#a6e3a1' : '#9399b2'};border:1px solid ${on ? '#a6e3a1' : '#6c7086'};">
+              ${esc(_ROLE_LABEL[r] || r)}: ${on ? 'ON' : 'OFF'}</span>`;
+          }).join(' ');
+          return `
+          <div style="display:flex;flex-direction:column;gap:8px;padding:10px 12px;background:#1e1e2e;border-radius:8px;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+              <div style="min-width:0;">
+                <strong style="color:#cdd6f4;">${esc(f.label)}</strong>
+                <div style="font-size:0.72rem;color:#9399b2;">${esc(f.desc)}</div>
+              </div>
+              <span style="flex-shrink:0;font-size:0.72rem;padding:3px 10px;border-radius:6px;font-weight:600;
+                background:${f.ativo ? 'rgba(166,227,161,0.18)' : 'rgba(108,112,134,0.25)'};
+                color:${f.ativo ? '#a6e3a1' : '#9399b2'};">Global: ${f.ativo ? 'ON' : 'OFF'}</span>
             </div>
-            <button class="btn small" style="background:${f.ativo ? '#a6e3a1' : '#6c7086'};color:#1e1e2e;flex-shrink:0;"
-              onclick="toggleFlag('${esc(f.chave)}', ${!f.ativo})">
-              ${f.ativo ? '● Ligado' : '○ Desligado'}
-            </button>
-          </div>
-        `).join('');
+            <div style="display:flex;flex-wrap:wrap;gap:5px;">${chips}</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              <button class="btn small secondary" style="flex-shrink:0;"
+                onclick='abrirFlagRoles(${JSON.stringify(f).replace(/'/g, "&#39;")})'>⚙️ Configurar por role</button>
+              <button class="btn small" style="background:#a6e3a1;color:#1e1e2e;flex-shrink:0;"
+                onclick="toggleFlagRoles('${esc(f.chave)}', true, null)">● Ligar p/ todos</button>
+              <button class="btn small" style="background:#6c7086;color:#1e1e2e;flex-shrink:0;"
+                onclick="toggleFlagRoles('${esc(f.chave)}', false, null)">○ Desligar p/ todos</button>
+            </div>
+          </div>`;
+        }).join('');
       } catch(e) { el.innerHTML = '<span style="color:#f38ba8;">Erro ao carregar flags.</span>'; }
     };
 
-    window.toggleFlag = async function(chave, ativo) {
-      // manutenção e registro são sensíveis — confirmar
-      if ((chave === 'manutencao' && ativo) || (chave === 'registro' && !ativo)) {
+    // Abre um modal para escolher a ação (ligar/desligar) e os roles-alvo.
+    window.abrirFlagRoles = function(f) {
+      const roles = window._adminRoles || ['admin', 'user'];
+      const porRole = f.estado_por_role || {};
+      const checkboxes = roles.map(r => {
+        const on = porRole[r] !== false;
+        return `<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#1e1e2e;border-radius:8px;cursor:pointer;">
+          <input type="checkbox" class="flag-role-cb" value="${esc(r)}" style="width:16px;height:16px;">
+          <span style="flex:1;color:#cdd6f4;font-size:0.85rem;">${esc(_ROLE_LABEL[r] || r)}</span>
+          <span style="font-size:0.7rem;color:${on ? '#a6e3a1' : '#9399b2'};">${on ? 'ligado' : 'desligado'}</span>
+        </label>`;
+      }).join('');
+      let modal = document.getElementById('flag-roles-modal');
+      if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'flag-roles-modal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px;';
+        document.body.appendChild(modal);
+      }
+      modal.innerHTML = `
+        <div style="background:#313244;border:1px solid #45475a;border-radius:14px;padding:22px;max-width:420px;width:100%;">
+          <h3 style="color:#f9e2af;margin:0 0 4px;font-size:1.05rem;">🚩 ${esc(f.label)}</h3>
+          <p style="font-size:0.78rem;color:#a6adc8;margin:0 0 14px;">Escolha os roles e a ação. A alteração vale apenas para os roles marcados.</p>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">${checkboxes}</div>
+          <div style="display:flex;gap:8px;justify-content:space-between;">
+            <button class="btn small secondary" onclick="fecharFlagRoles()">Cancelar</button>
+            <div style="display:flex;gap:8px;">
+              <button class="btn small" style="background:#f38ba8;color:#1e1e2e;" onclick="aplicarFlagRoles('${esc(f.chave)}', false)">○ Desligar</button>
+              <button class="btn small" style="background:#a6e3a1;color:#1e1e2e;" onclick="aplicarFlagRoles('${esc(f.chave)}', true)">● Ligar</button>
+            </div>
+          </div>
+        </div>`;
+      modal.style.display = 'flex';
+    };
+
+    window.fecharFlagRoles = function() {
+      const modal = document.getElementById('flag-roles-modal');
+      if (modal) modal.style.display = 'none';
+    };
+
+    // Lê os roles marcados no modal e aplica a ação.
+    window.aplicarFlagRoles = async function(chave, ativo) {
+      const modal = document.getElementById('flag-roles-modal');
+      const marcados = Array.from(modal.querySelectorAll('.flag-role-cb:checked')).map(cb => cb.value);
+      if (marcados.length === 0) { toast('Selecione ao menos um role.', 'error'); return; }
+      fecharFlagRoles();
+      await toggleFlagRoles(chave, ativo, marcados);
+    };
+
+    // Aplica a mudança de flag. roles=null → global (todos); roles=[...] → por-role.
+    window.toggleFlagRoles = async function(chave, ativo, roles) {
+      // manutenção e registro são sensíveis — confirmar (apenas ação global).
+      if (roles === null && ((chave === 'manutencao' && ativo) || (chave === 'registro' && !ativo))) {
         const msg = chave === 'manutencao'
           ? 'Ativar o modo manutenção? Um aviso será exibido a todos os usuários.'
           : 'Desativar o registro de novos usuários?';
         if (!await confirmModal('Confirmar', msg, { type: 'danger', confirmText: 'Confirmar' })) return;
       }
       try {
+        const body = roles === null ? { ativo } : { ativo, roles };
         const r = await fetch('/api/admin/flags/' + encodeURIComponent(chave), {
-          method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ativo })
+          method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
         });
         const d = await r.json();
-        if (r.ok && d.ok) { toast(`🚩 ${chave}: ${ativo ? 'ligado' : 'desligado'}`, 'success'); loadFlags(); }
-        else toast(d.detail || 'Erro.', 'error');
+        if (r.ok && d.ok) {
+          const alvo = roles === null ? 'todos' : roles.join(', ');
+          toast(`🚩 ${chave}: ${ativo ? 'ligado' : 'desligado'} para ${alvo}`, 'success');
+          loadFlags();
+        } else toast(d.detail || 'Erro.', 'error');
       } catch(e) { toast('Erro de conexão.', 'error'); }
     };
+
+    // Compat: mantém toggleFlag(chave, ativo) como ação global.
+    window.toggleFlag = function(chave, ativo) { return window.toggleFlagRoles(chave, ativo, null); };
 
     // ==================== VALIDADE DO CÓDIGO DE LOGIN ====================
     window.loadAuthCodeExpire = async function() {

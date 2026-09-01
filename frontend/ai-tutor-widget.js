@@ -365,16 +365,31 @@
     input.focus();
   }
 
-  // Só injeta o widget se a feature flag global "ai_tutor" estiver ligada.
-  // O estado é público via /api/config/flags (admin controla no painel).
-  // Fallback: se a consulta falhar (ex.: offline), injeta para não prejudicar
-  // a UX; mas se a flag vier explicitamente desligada, o widget não aparece.
-  async function initIfEnabled() {
+  // Só injeta o widget se a feature flag "ai_tutor" estiver ligada para o role
+  // do usuário. O estado é público via /api/config/flags (aplica o recorte por
+  // role no backend). Endurecido: em erro de rede fazemos uma segunda tentativa
+  // curta; se ainda assim não confirmarmos que está LIGADA, NÃO injetamos —
+  // fail-closed, para não expor o Tutor IA a quem foi desabilitado.
+  async function _fetchAiTutorFlag() {
     try {
-      const flags = await fetch('/api/config/flags').then(r => r.ok ? r.json() : {});
-      if (flags && flags.ai_tutor === false) return; // desligado pelo admin
-    } catch (e) { /* offline/erro: segue com injeção (fallback) */ }
-    inject();
+      const r = await fetch('/api/config/flags', { cache: 'no-store' });
+      if (!r.ok) return null;
+      const flags = await r.json();
+      return (flags && typeof flags.ai_tutor === 'boolean') ? flags.ai_tutor : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async function initIfEnabled() {
+    let enabled = await _fetchAiTutorFlag();
+    if (enabled === null) {
+      // Falha/ambiguidade: uma segunda tentativa após breve espera.
+      await new Promise(res => setTimeout(res, 800));
+      enabled = await _fetchAiTutorFlag();
+    }
+    // Fail-closed: só injeta quando o backend confirma explicitamente TRUE.
+    if (enabled === true) inject();
   }
 
   // Inject when DOM is ready

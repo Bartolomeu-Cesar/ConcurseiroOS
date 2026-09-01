@@ -420,9 +420,40 @@ FEATURE_FLAGS = {
 
 _FLAG_PREFIX = "flag."
 
+# Roles conhecidas do sistema (fonte: coluna users.role — ver admin.py).
+KNOWN_ROLES = ["admin", "user"]
+
+
+def _roles_off_key(flag: str) -> str:
+    """Chave em app_config que guarda as roles para as quais a flag está OFF."""
+    return f"{_FLAG_PREFIX}{flag}.roles_off"
+
+
+def get_roles_off(flag: str) -> list:
+    """Roles para as quais a flag está explicitamente DESLIGADA (por-role).
+
+    Persistido como CSV em app_config (ex.: "user" ou "admin,user"). Vazio =
+    nenhuma role desligada individualmente (vale o estado global da flag).
+    """
+    raw = get_app_config(_roles_off_key(flag), "")
+    if not raw:
+        return []
+    return [r.strip() for r in raw.split(",") if r.strip()]
+
+
+def set_roles_off(conn, flag: str, roles: list):
+    """Grava o conjunto de roles desligadas (por-role) para a flag."""
+    limpo = [r for r in dict.fromkeys(roles) if r in KNOWN_ROLES]
+    set_app_config(conn, _roles_off_key(flag), ",".join(limpo))
+
 
 def is_feature_enabled(flag: str) -> bool:
-    """Retorna se uma feature flag está ligada (lê de app_config, com default)."""
+    """Retorna se uma feature flag está ligada globalmente (lê de app_config).
+
+    Estado GLOBAL, ignorando o recorte por-role. Usado quando não há um role de
+    solicitante (ex.: checagens agnósticas). Para decisões por usuário use
+    is_feature_enabled_for(flag, role).
+    """
     meta = FEATURE_FLAGS.get(flag)
     default = meta["default"] if meta else True
     val = get_app_config(_FLAG_PREFIX + flag, "")
@@ -432,36 +463,89 @@ def is_feature_enabled(flag: str) -> bool:
 
 
 def is_feature_enabled_for(flag: str, role: str = None) -> bool:
-    """Como is_feature_enabled, mas considera isenção por role.
+    """Estado da flag para um role específico, com recorte por-role.
 
-    Retorna True se a flag está ligada OU se o `role` do usuário está na lista
-    `roles_isentos` da flag (ex.: admin continua com o Tutor IA disponível mesmo
-    com a flag desligada para os usuários comuns).
+    Ordem de decisão:
+      1) Se o `role` está na lista `roles_off` da flag (desligado pelo admin
+         especificamente para esse role) → False.
+      2) Caso a flag esteja globalmente ligada → True.
+      3) Caso desligada, mas o `role` conste em `roles_isentos` (piso estático,
+         ex.: admin) → True.
+      4) Caso contrário → False.
     """
+    # 1) Recorte explícito por-role tem prioridade máxima.
+    if role is not None and role in get_roles_off(flag):
+        return False
+    # 2) Estado global ligado libera para todos os não-desligados.
     if is_feature_enabled(flag):
         return True
+    # 3) Piso estático de isenção (compatibilidade: admin nunca perde acesso a
+    #    menos que esteja explicitamente em roles_off pelo passo 1).
     meta = FEATURE_FLAGS.get(flag) or {}
     isentos = meta.get("roles_isentos") or []
     return role in isentos
 
 
 def get_all_flags() -> dict:
-    """Retorna o estado atual de todas as flags conhecidas."""
+    """Retorna o estado GLOBAL atual de todas as flags conhecidas."""
     return {flag: is_feature_enabled(flag) for flag in FEATURE_FLAGS}
 
 
 def get_all_flags_for(role: str = None) -> dict:
-    """Estado das flags do ponto de vista de um role (aplica isenções).
+    """Estado das flags do ponto de vista de um role (aplica recorte por-role).
 
     Para um admin, flags com ele em `roles_isentos` aparecem como ligadas mesmo
-    que globalmente desligadas — usado pelo frontend para decidir a UI por role.
+    que globalmente desligadas — a menos que o admin tenha explicitamente
+    desligado a flag para o próprio role admin (roles_off). Usado pelo frontend
+    para decidir a UI por role.
     """
     return {flag: is_feature_enabled_for(flag, role) for flag in FEATURE_FLAGS}
 
 
-def set_feature_flag(conn, flag: str, enabled: bool):
-    """Grava o estado de uma feature flag."""
-    set_app_config(conn, _FLAG_PREFIX + flag, "1" if enabled else "0")
+def set_feature_flag(conn, flag: str, enabled: bool, roles: list = None):
+    """Liga/desliga uma feature flag.
+
+    - Sem `roles`: comportamento global (compatível com o legado). Liga/desliga
+      a flag para todos e LIMPA qualquer recorte por-role anterior, evitando
+      estados ambíguos.
+    - Com `roles`: aplica a ação apenas às roles indicadas, ajustando o conjunto
+      `roles_off` (roles desligadas). A flag global permanece LIGADA para servir
+      de base; o bloqueio efetivo por role vem de `roles_off`. Se, após a
+      operação, TODAS as roles conhecidas ficarem desligadas, a flag global
+      também é desligada (coerência do estado agregado).
+    """
+    if roles is None:
+        # Global: define a flag e zera o recorte por-role.
+        set_app_config(conn, _FLAG_PREFIX + flag, "1" if enabled else "0")
+        set_app_config(conn, _roles_off_key(flag), "")
+        return
+
+    alvo = [r for r in dict.fromkeys(roles) if r in KNOWN_ROLES]
+    off = set(get_roles_off(flag))
+    if enabled:
+        # Reabilitar para essas roles = removê-las do conjunto "off".
+        off -= set(alvo)
+    else:
+        # Desabilitar para essas roles = adicioná-las ao conjunto "off".
+        off |= set(alvo)
+
+    # Coerência com a flag global:
+    if off >= set(KNOWN_ROLES):
+        # Todas as roles desligadas → flag global OFF. Mantemos o recorte
+        # explícito (roles_off) para que o passo 1 de is_feature_enabled_for
+        # bloqueie inclusive roles com isenção estática (ex.: admin): o admin
+        # optou por desligar para todos, e essa escolha deve prevalecer sobre
+        # o piso `roles_isentos`.
+        set_app_config(conn, _FLAG_PREFIX + flag, "0")
+        set_app_config(conn, _roles_off_key(flag), ",".join(sorted(off)))
+    elif not off:
+        # Nenhuma role desligada → flag global LIGADA e recorte limpo.
+        set_app_config(conn, _FLAG_PREFIX + flag, "1")
+        set_app_config(conn, _roles_off_key(flag), "")
+    else:
+        # Base global LIGADA + recorte de roles desligadas.
+        set_app_config(conn, _FLAG_PREFIX + flag, "1")
+        set_app_config(conn, _roles_off_key(flag), ",".join(sorted(off)))
 
 
 def _get_vitalicio_window():

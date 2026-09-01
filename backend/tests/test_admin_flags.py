@@ -257,3 +257,93 @@ def test_is_feature_enabled_for_isencao_admin():
     set_app_config(conn, _FLAG_PREFIX + "batalhas", "0")
     conn.close()
     assert is_feature_enabled_for("batalhas", "admin") is False
+
+
+# ============================================================
+# RECORTE POR-ROLE (ligar/desligar por role específico)
+# ============================================================
+
+def test_desligar_ai_tutor_apenas_para_user():
+    """Admin desliga o Tutor IA só para 'user'; admin permanece com acesso."""
+    app.dependency_overrides[get_user_id] = _override_user_id(1)
+    r = client.put("/api/admin/flags/ai_tutor", json={"ativo": False, "roles": ["user"]})
+    assert r.status_code == 200
+    d = r.json()
+    assert d["roles_off"] == ["user"]
+    assert d["estado_por_role"]["user"] is False
+    assert d["estado_por_role"]["admin"] is True
+
+    # Público reflete por role
+    app.dependency_overrides[get_optional_user_id] = _override_user_id(80)  # user
+    assert client.get("/api/config/flags").json()["ai_tutor"] is False
+    app.dependency_overrides[get_optional_user_id] = _override_user_id(1)   # admin
+    assert client.get("/api/config/flags").json()["ai_tutor"] is True
+    app.dependency_overrides.pop(get_optional_user_id, None)
+
+    # Enforcement: usuário comum recebe 503; admin não.
+    app.dependency_overrides[get_user_id] = _override_user_id(80)
+    assert client.post("/api/ai/analisar-pdf", json={"pdf_path": "x.pdf", "acao": "resumo"}).status_code == 503
+    app.dependency_overrides[get_user_id] = _override_user_id(1)
+    assert client.post("/api/ai/analisar-pdf", json={"pdf_path": "x.pdf", "acao": "resumo"}).status_code != 503
+
+
+def test_desligar_para_todos_os_roles_bloqueia_ate_admin():
+    """Selecionar admin+user no desligamento bloqueia inclusive o admin
+    (a escolha explícita do admin prevalece sobre a isenção estática)."""
+    app.dependency_overrides[get_user_id] = _override_user_id(1)
+    r = client.put("/api/admin/flags/ai_tutor", json={"ativo": False, "roles": ["admin", "user"]})
+    assert r.status_code == 200
+    d = r.json()
+    assert d["estado_por_role"]["user"] is False
+    assert d["estado_por_role"]["admin"] is False
+
+    # Admin agora também é bloqueado no enforcement.
+    r = client.post("/api/ai/analisar-pdf", json={"pdf_path": "x.pdf", "acao": "resumo"})
+    assert r.status_code == 503
+
+
+def test_reabilitar_para_role_remove_do_roles_off():
+    """Reabilitar um role removido antes volta o acesso só para aquele role."""
+    app.dependency_overrides[get_user_id] = _override_user_id(1)
+    # Desliga para ambos
+    client.put("/api/admin/flags/ai_tutor", json={"ativo": False, "roles": ["admin", "user"]})
+    # Reabilita só para user
+    r = client.put("/api/admin/flags/ai_tutor", json={"ativo": True, "roles": ["user"]})
+    d = r.json()
+    assert d["estado_por_role"]["user"] is True
+    assert d["estado_por_role"]["admin"] is False
+    assert "admin" in d["roles_off"] and "user" not in d["roles_off"]
+
+
+def test_roles_invalidos_sao_ignorados_ou_400():
+    app.dependency_overrides[get_user_id] = _override_user_id(1)
+    # Lista só com role inválido → 400
+    r = client.put("/api/admin/flags/ai_tutor", json={"ativo": False, "roles": ["hacker"]})
+    assert r.status_code == 400
+    # roles não-lista → 400
+    r = client.put("/api/admin/flags/ai_tutor", json={"ativo": False, "roles": "user"})
+    assert r.status_code == 400
+
+
+def test_acao_global_limpa_recorte_por_role():
+    """Ação global (sem 'roles') zera qualquer recorte por-role anterior."""
+    app.dependency_overrides[get_user_id] = _override_user_id(1)
+    client.put("/api/admin/flags/ai_tutor", json={"ativo": False, "roles": ["user"]})
+    # Global ON limpa roles_off
+    r = client.put("/api/admin/flags/ai_tutor", json={"ativo": True})
+    assert r.json()["roles_off"] == []
+    # Ambos veem True
+    r = client.get("/api/admin/flags")
+    f = next(x for x in r.json()["flags"] if x["chave"] == "ai_tutor")
+    assert f["estado_por_role"]["user"] is True
+    assert f["estado_por_role"]["admin"] is True
+
+
+def test_listar_flags_inclui_estado_por_role():
+    app.dependency_overrides[get_user_id] = _override_user_id(1)
+    r = client.get("/api/admin/flags")
+    assert r.status_code == 200
+    body = r.json()
+    assert "roles" in body and "admin" in body["roles"] and "user" in body["roles"]
+    f = next(x for x in body["flags"] if x["chave"] == "ai_tutor")
+    assert "roles_off" in f and "estado_por_role" in f

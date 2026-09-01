@@ -778,17 +778,24 @@ def alterar_status_conta(
 
 @router.get("/flags", summary="Listar feature flags")
 def listar_flags(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
-    """Retorna o estado atual das feature flags conhecidas + metadados."""
+    """Retorna o estado atual das feature flags conhecidas + metadados.
+
+    Inclui o recorte por-role: `roles_off` (roles desligadas) e `estado_por_role`
+    (mapa role→bool), para o painel admin exibir/editar a granularidade por role.
+    """
     _require_admin(user_id)
-    from plans import FEATURE_FLAGS, get_all_flags
+    from plans import FEATURE_FLAGS, KNOWN_ROLES, get_all_flags, get_roles_off, is_feature_enabled_for
     estados = get_all_flags()
     return {
+        "roles": KNOWN_ROLES,
         "flags": [
             {
                 "chave": k,
                 "ativo": estados.get(k, meta["default"]),
                 "label": meta["label"],
                 "desc": meta["desc"],
+                "roles_off": get_roles_off(k),
+                "estado_por_role": {r: is_feature_enabled_for(k, r) for r in KNOWN_ROLES},
             }
             for k, meta in FEATURE_FLAGS.items()
         ]
@@ -802,17 +809,41 @@ def atualizar_flag(
     conn=Depends(get_db_session),
     user_id: int = Depends(get_user_id)
 ):
-    """Liga ou desliga uma feature flag. body: {ativo: bool}"""
+    """Liga ou desliga uma feature flag.
+
+    body:
+      - {ativo: bool}                       → aplicação GLOBAL (todos os roles).
+      - {ativo: bool, roles: ["user", ...]} → aplica só aos roles indicados
+                                              (recorte por-role). Roles inválidos
+                                              são ignorados.
+    """
     _require_admin(user_id)
-    from plans import FEATURE_FLAGS, set_feature_flag
+    from plans import FEATURE_FLAGS, KNOWN_ROLES, get_roles_off, is_feature_enabled_for, set_feature_flag
 
     if flag not in FEATURE_FLAGS:
         raise HTTPException(status_code=404, detail=f"Flag desconhecida. Válidas: {list(FEATURE_FLAGS.keys())}")
     ativo = bool(body.get("ativo", False))
-    set_feature_flag(conn, flag, ativo)
-    _audit(conn, user_id, "flag.set", "flag", flag, {"ativo": ativo})
-    log.info(f"[admin] Feature flag '{flag}' → {'ON' if ativo else 'OFF'}")
-    return {"ok": True, "flag": flag, "ativo": ativo}
+
+    roles = body.get("roles")
+    if roles is not None:
+        if not isinstance(roles, list):
+            raise HTTPException(status_code=400, detail="'roles' deve ser uma lista de strings.")
+        roles = [r for r in roles if r in KNOWN_ROLES]
+        if not roles:
+            raise HTTPException(status_code=400, detail=f"Nenhum role válido. Válidos: {KNOWN_ROLES}")
+
+    set_feature_flag(conn, flag, ativo, roles=roles)
+    _audit(conn, user_id, "flag.set", "flag", flag, {"ativo": ativo, "roles": roles})
+    alvo = ", ".join(roles) if roles else "TODOS"
+    log.info(f"[admin] Feature flag '{flag}' → {'ON' if ativo else 'OFF'} para: {alvo}")
+    return {
+        "ok": True,
+        "flag": flag,
+        "ativo": ativo,
+        "roles_aplicados": roles,
+        "roles_off": get_roles_off(flag),
+        "estado_por_role": {r: is_feature_enabled_for(flag, r) for r in KNOWN_ROLES},
+    }
 
 
 # ============================================================
