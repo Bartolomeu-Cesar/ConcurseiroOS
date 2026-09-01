@@ -347,5 +347,10 @@
   <script src="/timer-global.js"></script>
   <script src="/sidebar.js"></script>
   <script src="/js/pages/raio-x.js"></script>
+  <script type="module">
+    import { confirmModal, alertModal, promptModal } from '/js/modules/utils.js';
+    import { toast } from '/js/modules/toast.js';
+    Object.assign(window, { confirmModal, alertModal, promptModal, toast });
+  </script>
 </body>
 </html>

@@ -510,5 +510,10 @@
   </style>
 
   <script type="module" src="/js/pages/studyroom.js"></script>
+  <script type="module">
+    import { confirmModal, alertModal, promptModal } from '/js/modules/utils.js';
+    import { toast } from '/js/modules/toast.js';
+    Object.assign(window, { confirmModal, alertModal, promptModal, toast });
+  </script>
 </body>
 </html>

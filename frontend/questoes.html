@@ -594,7 +594,10 @@
 
 <script type="module">
   import { toggleTheme, initTheme } from './js/modules/theme.js';
+  import { confirmModal, alertModal, promptModal } from './js/modules/utils.js';
+  import { toast } from './js/modules/toast.js';
   window.toggleTheme = toggleTheme;
+  Object.assign(window, { confirmModal, alertModal, promptModal, toast });
   initTheme();
 </script>
 </body>
