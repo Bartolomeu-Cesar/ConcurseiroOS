@@ -565,11 +565,66 @@ def upgrade_plan(body: UpgradePlanRequest, user=Depends(get_current_user), conn=
         log.info(f"Admin {user['email']} upgraded to {plano} ({tipo})")
         return {"ok": True, "plano": plano, "expira": expires, "vitalicio": body.vitalicio or plano == "ilimitado"}
 
-    # Usuário comum: precisa ter créditos — use /api/auth/creditos/ativar para converter
-    raise HTTPException(
-        status_code=403,
-        detail="Para ativar Premium, use seus créditos em 'Ativar Créditos'. Compre créditos via PIX se não tiver saldo."
+    # Usuário comum: só Premium via créditos. Ilimitado/Vitalício não é comprável
+    # por créditos (via admin ou PIX vitalício).
+    if plano != "premium":
+        raise HTTPException(
+            status_code=403,
+            detail="Este plano não pode ser ativado com créditos. Assine o Vitalício via PIX ou contate o suporte."
+        )
+
+    from plans import calcular_dias_creditos, creditos_para_mes
+
+    custo = creditos_para_mes()  # créditos equivalentes a 1 mês de Premium
+    row = conn.execute("SELECT creditos_saldo, plano, plano_expira FROM users WHERE id = ?", (user["id"],)).fetchone()
+    saldo = (row[0] if row and row[0] else 0)
+
+    if saldo < custo:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Você precisa de {custo} créditos para ativar o Premium (tem {saldo}). "
+                   f"Compre créditos via PIX em 'Ativar Créditos'."
+        )
+
+    # Consome os créditos e ativa Premium (estende se já houver premium vigente).
+    dias = calcular_dias_creditos(custo)
+    plano_atual = (row[1] if row else "free") or "free"
+    plano_expira = (row[2] if row else "") or ""
+    agora = datetime.now(timezone.utc)
+    if plano_atual == "premium" and plano_expira and plano_expira.lower() not in ("vitalicio", "vitalício", "lifetime"):
+        try:
+            base = datetime.fromisoformat(plano_expira)
+            inicio = base if base > agora else agora
+        except (ValueError, TypeError):
+            inicio = agora
+    else:
+        inicio = agora
+    nova_expira = (inicio + timedelta(days=dias)).isoformat()
+    novo_saldo = saldo - custo
+
+    conn.execute(
+        "UPDATE users SET creditos_saldo = ?, plano = 'premium', plano_expira = ? WHERE id = ?",
+        (novo_saldo, nova_expira, user["id"])
     )
+    try:
+        conn.execute("""
+            INSERT INTO creditos_historico (user_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, created_at)
+            VALUES (?, 'ativacao', ?, ?, ?, ?, ?)
+        """, (user["id"], -custo, saldo, novo_saldo,
+              f"Upgrade Premium: {dias} dias ({custo} créditos)", agora.isoformat()))
+    except Exception:
+        pass
+    conn.commit()
+    log.info(f"User {user['email']} ativou Premium via {custo} créditos ({dias} dias, saldo: {novo_saldo})")
+    return {
+        "ok": True,
+        "plano": "premium",
+        "expira": nova_expira,
+        "vitalicio": False,
+        "creditos_usados": custo,
+        "dias_ativados": dias,
+        "saldo_restante": novo_saldo,
+    }
 
 
 # ==================== SISTEMA DE CRÉDITOS ====================

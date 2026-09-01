@@ -224,14 +224,15 @@ export async function doUpgrade(plano) {
     });
     const data = await res.json();
     if (data.ok) {
-      // Atualizar user local
-      const user = getUser();
-      user.plano = plano;
-      localStorage.setItem('auth_user', JSON.stringify(user));
       document.getElementById('upgrade-modal')?.remove();
-      updateAuthUI();
-      // Toast de sucesso (se disponível)
-      if (window.toast) window.toast(`🎉 Upgrade para ${PLAN_LABELS[plano].nome} ativado!`, 'success');
+      // Sincroniza com o servidor (fonte de verdade: plano + plano_expira).
+      await syncUserFromServer();
+      if (window.toast) {
+        const msg = data.dias_ativados
+          ? `🎉 Premium ativado por ${data.dias_ativados} dias! (${data.creditos_usados} créditos usados)`
+          : `🎉 Upgrade para ${PLAN_LABELS[plano]?.nome || plano} ativado!`;
+        window.toast(msg, 'success');
+      }
     } else {
       if (window.toast) window.toast(data.detail || 'Erro no upgrade', 'error');
     }
@@ -268,6 +269,34 @@ export function updateAuthUI() {
     link.textContent = '👤 Login';
   }
 }
+
+// Sincroniza o usuário local (localStorage) com o servidor (/api/auth/me), que
+// é a fonte de verdade do plano efetivo — inclui premium temporário obtido via
+// ATIVAÇÃO DE CRÉDITOS (o backend seta plano='premium' com plano_expira). Sem
+// esta sincronização, o badge continuaria mostrando "Gratuito" após ativar.
+// Retorna o objeto user atualizado (ou null se offline/sem login).
+export async function syncUserFromServer() {
+  if (!isLoggedIn()) return null;
+  try {
+    const token = getToken();
+    const res = await fetch('/api/auth/me', { headers: { 'Authorization': `Bearer ${token}` } });
+    if (!res.ok) return null;
+    const me = await res.json();
+    const user = getUser() || {};
+    user.plano = me.plano ?? user.plano;
+    user.role = me.role ?? user.role;
+    user.nome = me.nome ?? user.nome;
+    user.avatar = me.avatar ?? user.avatar;
+    user.plano_expira = me.plano_expira ?? user.plano_expira;
+    localStorage.setItem('auth_user', JSON.stringify(user));
+    updateAuthUI();
+    if (window.renderSidebar) { try { window.renderSidebar(); } catch (e) {} }
+    return user;
+  } catch (e) {
+    return null;
+  }
+}
+window.syncUserFromServer = syncUserFromServer;
 
 export function showEditProfileModal() {
   document.getElementById('profile-menu')?.remove();
@@ -348,26 +377,9 @@ export async function initAuth() {
   }
 
   // Sincronizar dados do usuário (role/plano) com o backend — evita localStorage defasado
-  // (ex: admin muda plano/role → reflete sem precisar relogar)
+  // (ex: admin muda plano/role, ou usuário ativou créditos → reflete sem relogar)
   if (isLoggedIn()) {
-    try {
-      const token = getToken();
-      const meRes = await fetch('/api/auth/me', { headers: { 'Authorization': `Bearer ${token}` } });
-      if (meRes.ok) {
-        const me = await meRes.json();
-        const user = getUser() || {};
-        // Atualizar campos que podem mudar server-side
-        user.plano = me.plano ?? user.plano;
-        user.role = me.role ?? user.role;
-        user.nome = me.nome ?? user.nome;
-        user.avatar = me.avatar ?? user.avatar;
-        user.plano_expira = me.plano_expira ?? user.plano_expira;
-        localStorage.setItem('auth_user', JSON.stringify(user));
-        updateAuthUI();
-        // Se o link/menu de admin depende de role, re-renderizar sidebar se disponível
-        if (window.renderSidebar) { try { window.renderSidebar(); } catch(e) {} }
-      }
-    } catch(e) { /* offline: mantém cache local */ }
+    await syncUserFromServer();
   }
 }
 
@@ -492,7 +504,10 @@ export async function ativarCreditos() {
     const data = await res.json();
     if (data.ok) {
       const _toast = window.toast || window.showToast;
-      if (_toast) _toast(data.mensagem, 'success');
+      if (_toast) _toast(data.mensagem || `✅ ${data.dias_ativados} dias de Premium ativados!`, 'success');
+      // Sincroniza o plano com o servidor: a ativação tornou o usuário Premium
+      // (temporário). Atualiza o badge (⭐ Gratuito → 👑 Premium) e a UI.
+      await syncUserFromServer();
       _loadCreditosSaldo();
     } else {
       const _toast = window.toast || window.showToast;

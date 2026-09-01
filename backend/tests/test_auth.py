@@ -433,6 +433,53 @@ class TestCodigoExpiracao:
 
 
 # ============================================================
+# UPGRADE PREMIUM VIA CRÉDITOS (usuário comum)
+# ============================================================
+
+class TestUpgradePremiumViaCreditos:
+    """Usuário comum ativa Premium consumindo créditos no /api/auth/upgrade."""
+
+    def _set_creditos(self, email, saldo):
+        conn = sqlite3.connect(_tmp_db.name, timeout=10)
+        conn.execute("UPDATE users SET creditos_saldo = ?, role='user' WHERE email = ?", (saldo, email))
+        conn.commit()
+        conn.close()
+
+    def test_upgrade_sem_creditos_suficientes_403(self, client):
+        token = _register_and_get_token(client, "semcreditos@t.com", "Sem Créditos")
+        self._set_creditos("semcreditos@t.com", 0)
+        r = client.post("/api/auth/upgrade", json={"plano": "premium"}, headers=_auth_header(token))
+        assert r.status_code == 403
+        assert "créditos" in r.json()["detail"].lower()
+
+    def test_upgrade_com_creditos_ativa_premium(self, client):
+        from plans import calcular_dias_creditos, creditos_para_mes
+        custo = creditos_para_mes()
+        token = _register_and_get_token(client, "comcreditos@t.com", "Com Créditos")
+        self._set_creditos("comcreditos@t.com", custo + 3)
+
+        r = client.post("/api/auth/upgrade", json={"plano": "premium"}, headers=_auth_header(token))
+        assert r.status_code == 200
+        d = r.json()
+        assert d["ok"] is True
+        assert d["plano"] == "premium"
+        assert d["creditos_usados"] == custo
+        assert d["dias_ativados"] == calcular_dias_creditos(custo)
+        assert d["saldo_restante"] == 3
+        assert d["expira"]  # data futura, não vazio
+
+        # /me reflete Premium efetivo
+        me = client.get("/api/auth/me", headers=_auth_header(token)).json()
+        assert me["plano"] == "premium"
+
+    def test_upgrade_ilimitado_por_usuario_comum_403(self, client):
+        token = _register_and_get_token(client, "quernilimitado@t.com", "Quer Ilimitado")
+        self._set_creditos("quernilimitado@t.com", 999)
+        r = client.post("/api/auth/upgrade", json={"plano": "ilimitado"}, headers=_auth_header(token))
+        assert r.status_code == 403
+
+
+# ============================================================
 # CLEANUP
 # ============================================================
 
