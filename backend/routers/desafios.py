@@ -151,19 +151,55 @@ def _select_challenge_questions(conn, user_id: int, quantidade: int = 5) -> list
     except Exception:
         pass  # tabela erros_revisao pode não existir
 
-    # 2. Completar com seleção inteligente (filtrada por matérias ativas)
+    # 2. Completar com seleção inteligente (filtrada por matérias ativas).
+    #    Pede `quantidade` (não só o restante) para ter folga de deduplicação —
+    #    o smart pode devolver questões que já estão na revisão FSRS.
     qtd_restante = quantidade - len(revisao_pendentes)
     smart_qs = []
     if qtd_restante > 0:
-        smart_qs = _smart_select_questions(conn, user_id, qtd_restante, materias=materias_ativas)
+        smart_qs = _smart_select_questions(conn, user_id, quantidade, materias=materias_ativas)
 
     # 3. Combinar: revisão agendada + smart selection (sem duplicatas)
     seen_ids = {q["id"] for q in revisao_pendentes}
     combined = list(revisao_pendentes)
     for q in smart_qs:
+        if len(combined) >= quantidade:
+            break
         if q["id"] not in seen_ids:
             combined.append(q)
             seen_ids.add(q["id"])
+
+    # 4. Recompletar: se ainda faltam questões (deduplicação reduziu o total),
+    #    pega quaisquer não-dominadas ainda não incluídas — priorizando nunca
+    #    respondidas (Pre-testing). Garante o total sempre que houver questões
+    #    suficientes no banco (dentro do ciclo ativo).
+    if len(combined) < quantidade:
+        faltam = quantidade - len(combined)
+        excl = seen_ids or {0}
+        placeholders = ",".join("?" * len(excl))
+        params = [user_id]
+        mat_clause = ""
+        if materias_ativas:
+            mat_ph = ",".join("?" * len(materias_ativas))
+            mat_clause = f" AND q.materia IN ({mat_ph})"
+            params += list(materias_ativas)
+        params += list(excl)
+        try:
+            rows = conn.execute(f"""
+                SELECT * FROM questoes q
+                WHERE q.user_id = ?{mat_clause}
+                AND q.id NOT IN ({placeholders})
+                ORDER BY (q.id IN (SELECT questao_id FROM questoes_respostas WHERE user_id = ?)) ASC,
+                         RANDOM()
+                LIMIT ?
+            """, params + [user_id, faltam]).fetchall()
+            for r in rows:
+                q = dict(r)
+                if q["id"] not in seen_ids:
+                    combined.append(q)
+                    seen_ids.add(q["id"])
+        except Exception:
+            pass
 
     return combined[:quantidade]
 

@@ -288,6 +288,41 @@ class TestDesafioMenosQuestoes:
         assert data["total"] == 3
         assert data["pontos_possiveis"] == 3 * 20 + 30
 
+    def test_desafio_completa_5_com_muitas_novas(self, client):
+        """Havendo muitas questões novas (nunca respondidas), o desafio completa 5.
+
+        Regressão do relato: com centenas de novas no banco, o desafio vinha com 4
+        por causa da deduplicação entre revisão FSRS e a seleção inteligente. O
+        recompletar garante o total quando há questões suficientes.
+        """
+        conn = sqlite3.connect(_tmp_db.name)
+        conn.execute("DELETE FROM desafio_diario WHERE user_id = 1")
+        conn.execute("DELETE FROM questoes_respostas WHERE user_id = 1")
+        conn.execute("DELETE FROM questoes WHERE user_id = 1")
+        conn.commit()
+        conn.close()
+
+        # 20 questões novas (nunca respondidas)
+        for i in range(20):
+            r = client.post("/api/questoes", json={
+                "materia": "Informática" if i % 2 == 0 else "Língua Portuguesa",
+                "topico": "Tópico",
+                "enunciado": f"Questão nova #{i + 1}?",
+                "alternativa_a": "A", "alternativa_b": "B",
+                "alternativa_c": "C", "alternativa_d": "D", "alternativa_e": "",
+                "resposta_correta": "A", "explicacao": "x", "dificuldade": "Médio",
+            })
+            assert r.status_code == 200
+
+        r = client.get("/api/desafio-diario")
+        assert r.status_code == 200
+        data = r.json()
+        assert len(data["questoes"]) == 5, "com muitas novas, o desafio deve ter 5"
+        assert data["total"] == 5
+        # Sem duplicatas
+        ids = [q["id"] for q in data["questoes"]]
+        assert len(ids) == len(set(ids))
+
 
 # ============================================================
 # CLEANUP
