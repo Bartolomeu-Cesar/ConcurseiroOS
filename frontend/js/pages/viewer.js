@@ -83,12 +83,31 @@ async function initProgress() {
 }
 
 // Arma a sincronização de página assim que o iframe do PDF.js carrega.
+// Escuta o evento oficial 'pagesloaded' do PDF.js (quando o número de páginas
+// já é conhecido) e mantém um polling de segurança que NÃO desiste enquanto o
+// documento ainda estiver sendo carregado. Isso corrige o "0 páginas" no
+// primeiro acesso (rede fria), que antes só se resolvia com um refresh.
 function _armarLeitorPosLoad(frame) {
   frame.addEventListener('load', () => {
+    // 1) Caminho preferido: evento do PDF.js informando que as páginas foram
+    //    contadas. Dispara a leitura imediata (atualiza totalPages e página).
+    try {
+      const app = frame.contentWindow && frame.contentWindow.PDFViewerApplication;
+      if (app && app.eventBus && typeof app.eventBus.on === 'function') {
+        const onReady = () => readPageFromViewer();
+        app.eventBus.on('pagesloaded', onReady);
+        app.eventBus.on('documentloaded', onReady);
+        app.eventBus.on('pagesinit', onReady);
+      }
+    } catch (e) { /* eventBus indisponível: o polling abaixo cobre */ }
+
+    // 2) Polling de segurança: só para quando readPageFromViewer() confirmar
+    //    que o documento está pronto (pagesCount conhecido) — não mais na mera
+    //    existência de pdfDocument. Janela ampla (~25s) para redes lentas.
     let tries = 0;
     const wait = setInterval(() => {
       tries++;
-      if (readPageFromViewer() || tries > 40) clearInterval(wait);
+      if (readPageFromViewer() || tries > 100) clearInterval(wait);
     }, 250);
     setTimeout(() => { _timerAutoResumeArmado = true; }, 1500);
   });
@@ -177,8 +196,16 @@ function readPageFromViewer() {
 
     const app = win.PDFViewerApplication;
     if (app && app.pdfDocument) {
-      if (app.pagesCount && app.pagesCount !== totalPages) {
-        totalPages = app.pagesCount;
+      // O documento pode já existir enquanto o PDF.js ainda não terminou de
+      // contar as páginas (pagesCount === 0), o que acontecia no PRIMEIRO
+      // carregamento (rede fria). Antes, retornávamos true aqui e o polling
+      // parava cedo → a UI ficava em "0 páginas" até um refresh (cache quente).
+      // Agora só consideramos "pronto" quando pagesCount já está disponível.
+      const count = app.pagesCount || (app.pdfDocument && app.pdfDocument.numPages) || 0;
+      if (!count) return false; // ainda contando — mantém o polling ativo
+      if (count !== totalPages) {
+        totalPages = count;
+        updateInfo();
       }
       const p = app.page;
       if (p && p !== currentPage) setPage(p);
