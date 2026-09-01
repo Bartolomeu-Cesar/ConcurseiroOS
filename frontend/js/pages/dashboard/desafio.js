@@ -189,25 +189,18 @@ function showDesafioQuestion() {
 async function submitDesafioRespostas() {
   clearInterval(desafioTimer);
 
-  // Calcular tempo real gasto no desafio
+  // Calcular tempo real gasto no desafio (apenas para exibir no resultado)
   const tempoRealSeg = desafioStartTime ? Math.round((Date.now() - desafioStartTime) / 1000) : 0;
 
-  // Parar timer global e registrar sessão de estudo com tempo real
+  // Parar o timer global. NÃO registramos a sessão de estudo aqui: o backend
+  // (/api/desafio-diario/responder) já grava em sessoes_estudo E sincroniza o
+  // streak do dia, usando o tempo real por questão. Registrar também aqui
+  // causava dupla contagem e, como o valor arredondado podia virar 0.00h, era
+  // rejeitado pelo /registrar (horas <= 0).
   try {
-    // Limpar o timer global (sem modal de confirmação)
     localStorage.removeItem('pomo_timer');
     const widget = document.getElementById('global-timer-widget');
     if (widget) widget.remove();
-
-    // Registrar sessão de estudo com tempo REAL gasto (mínimo 10s para evitar registro de clique acidental)
-    if (tempoRealSeg >= 10) {
-      const horas = Math.round((tempoRealSeg / 3600) * 100) / 100;
-      fetch('/api/sessoes-estudo/registrar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ horas, materia: 'Desafio Diário', tipo: 'desafio_diario' })
-      }).catch(() => {});
-    }
   } catch(e) {}
 
   const body = document.getElementById('desafio-body');

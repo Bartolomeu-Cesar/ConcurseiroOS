@@ -334,3 +334,86 @@ def teardown_module():
         os.unlink(_tmp_db.name)
     except Exception:
         pass
+
+
+# ============================================================
+# Contabilização do tempo do desafio como estudo de HOJE
+# (regressão: tempo entrava em sessoes_estudo mas não em streaks)
+# ============================================================
+
+class TestDesafioContabilizaTempo:
+    def _reset(self):
+        conn = sqlite3.connect(_tmp_db.name)
+        conn.execute("DELETE FROM desafio_diario WHERE user_id = 1")
+        conn.execute("DELETE FROM questoes_respostas WHERE user_id = 1")
+        conn.execute("DELETE FROM questoes WHERE user_id = 1")
+        conn.execute("DELETE FROM sessoes_estudo WHERE user_id = 1")
+        conn.execute("DELETE FROM streaks WHERE user_id = 1")
+        conn.commit()
+        conn.close()
+
+    def _criar_questoes(self, client, n=5):
+        for i in range(n):
+            r = client.post("/api/questoes", json={
+                "materia": "Direito Administrativo",
+                "topico": "Atos",
+                "enunciado": f"Questão tempo #{i + 1}?",
+                "alternativa_a": "A", "alternativa_b": "B",
+                "alternativa_c": "C", "alternativa_d": "D", "alternativa_e": "",
+                "resposta_correta": "A", "explicacao": "x", "dificuldade": "Médio",
+            })
+            assert r.status_code == 200
+
+    def test_tempo_entra_em_sessoes_e_streaks(self, client):
+        """Responder o desafio grava horas em sessoes_estudo E em streaks (consistentes)."""
+        from utils import today_str
+        self._reset()
+        self._criar_questoes(client, 5)
+
+        data = client.get("/api/desafio-diario").json()
+        questoes = data["questoes"]
+        # Envia tempo_segundos explícito por questão (60s cada = 300s = 1/12 h).
+        respostas = [
+            {"questao_id": q["id"], "resposta": "A", "tempo_segundos": 60}
+            for q in questoes
+        ]
+        r = client.post("/api/desafio-diario/responder", json={"respostas": respostas})
+        assert r.status_code == 200
+
+        hoje = today_str()
+        conn = sqlite3.connect(_tmp_db.name)
+        conn.row_factory = sqlite3.Row
+        horas_sessao = conn.execute(
+            "SELECT COALESCE(SUM(horas),0) FROM sessoes_estudo WHERE data=? AND tipo='desafio_diario' AND user_id=1",
+            (hoje,),
+        ).fetchone()[0]
+        streak = conn.execute(
+            "SELECT COALESCE(horas_estudadas,0) FROM streaks WHERE data=? AND user_id=1",
+            (hoje,),
+        ).fetchone()
+        horas_streak = streak[0] if streak else 0
+        conn.close()
+
+        esperado = (5 * 60) / 3600  # 300s -> 0.08333h
+        assert abs(horas_sessao - esperado) < 1e-6, f"sessoes={horas_sessao} esperado={esperado}"
+        # A correção: o streak do dia reflete o mesmo tempo do desafio.
+        assert abs(horas_streak - esperado) < 1e-6, f"streak={horas_streak} esperado={esperado}"
+        # E as duas fontes ficam consistentes entre si.
+        assert abs(horas_sessao - horas_streak) < 1e-6
+
+    def test_metas_hoje_inclui_tempo_do_desafio(self, client):
+        """O endpoint /api/metas (fonte do card de horas) reflete o tempo do desafio."""
+        self._reset()
+        self._criar_questoes(client, 5)
+
+        data = client.get("/api/desafio-diario").json()
+        respostas = [
+            {"questao_id": q["id"], "resposta": "A", "tempo_segundos": 90}
+            for q in data["questoes"]
+        ]
+        client.post("/api/desafio-diario/responder", json={"respostas": respostas})
+
+        metas = client.get("/api/metas").json()
+        horas = metas["progresso"]["horas"]
+        esperado = (5 * 90) / 3600  # 450s -> 0.125h
+        assert abs(horas - esperado) < 1e-3, f"/api/metas horas={horas} esperado={esperado}"

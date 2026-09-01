@@ -444,6 +444,12 @@ def responder_desafio_diario(body: DesafioDiarioResposta, conn=Depends(get_db_se
             ("Desafio Diário", horas, hoje, user_id, datetime.now().isoformat())
         )
 
+    # Sincronizar o streak do dia (horas_estudadas). Sem isto, o tempo do desafio
+    # entrava em sessoes_estudo mas NÃO na tabela streaks, deixando as duas fontes
+    # de "horas de hoje" divergentes (algumas telas leem streaks, outras sessoes).
+    if horas > 0:
+        update_streak(conn, "horas_estudadas", value=horas, user_id=user_id)
+
     conn.commit()
 
     log.info(f"Desafio Diário respondido: user={user_id} acertos={acertos}/{total} pontos={pontos_ganhos}")
