@@ -259,6 +259,7 @@ function setPage(p) {
 function _retomarTimerAuto() {
   paused = false;
   startedAt = Date.now() - (elapsed * 1000);
+  _ultimoTickAt = 0; // não credita o intervalo pausado antes da retomada
   clearInterval(timerInterval);
   timerInterval = setInterval(tick, 250);
   tick();
@@ -347,9 +348,16 @@ let limitSeconds = 15 * 60;
 let startedAt = null;
 
 // --- Reading Session Time Tracking ---
-const _sessionOpenedAt = Date.now();
+// Chave de marcação da última contabilização (mantida por compatibilidade).
 const _lastReportedKey = 'leitor_last_reported_' + (path || '').replace(/\//g, '_');
-const _lastReportedAt = parseInt(localStorage.getItem(_lastReportedKey) || '0');
+
+// Opção A: tempo de leitura = tempo EFETIVAMENTE ativo do cronômetro.
+// _tempoAtivoLeituraMs acumula só os intervalos em que o timer esteve rodando
+// (alimentado no tick). _ultimoTickAt guarda o instante do último tick creditado
+// e é zerado em toda pausa/parada/retomada para não creditar o intervalo parado.
+let _tempoAtivoLeituraMs = 0;
+let _ultimoTickAt = 0;
+let _sessaoLeituraReportada = false; // blindagem contra dupla contagem (beforeunload+pagehide)
 
 const display = document.getElementById('timer-display');
 
@@ -390,6 +398,21 @@ function updateTimerDisplay() {
 
 function tick() {
   if (paused || !startedAt) return;
+  // Acumula o tempo EFETIVAMENTE ativo do cronômetro (Opção A): somamos o delta
+  // real desde o último tick só quando o timer está rodando. Isso ignora tempo
+  // com o cronômetro pausado/parado e tempo de janela ociosa — a leitura só
+  // conta enquanto o cronômetro corre. Sobrevive ao reset de `elapsed` (o
+  // acumulador é independente e só cresce).
+  const agora = Date.now();
+  if (_ultimoTickAt) {
+    const delta = agora - _ultimoTickAt;
+    // Ignora deltas absurdos (aba suspensa/hibernação): se o gap for maior que
+    // ~3x o intervalo do tick (250ms), não credita — evita creditar horas de
+    // uma aba que ficou dormindo em background.
+    if (delta > 0 && delta < 2000) _tempoAtivoLeituraMs += delta;
+  }
+  _ultimoTickAt = agora;
+
   elapsed = Math.floor((Date.now() - startedAt) / 1000);
   updateTimerDisplay();
   saveTimerState();
@@ -403,6 +426,7 @@ function startTimer(limitMin, resumeElapsed = 0) {
   elapsed = resumeElapsed;
   startedAt = Date.now() - (elapsed * 1000);
   paused = false;
+  _ultimoTickAt = 0; // reinicia a marca — o próximo tick não credita gap
   clearInterval(timerInterval);
   timerInterval = setInterval(tick, 250);
   tick();
@@ -415,6 +439,7 @@ function finishTimer(showOverlay = false) {
   paused = false;
   startedAt = null;
   elapsed = 0;
+  _ultimoTickAt = 0; // para de creditar tempo ativo
   updateTimerDisplay();
   clearTimerState();
   localStorage.setItem('leitor_timer_finished', Date.now().toString());
@@ -440,6 +465,7 @@ function toggleTimerPause() {
     // Retomar: recalcula startedAt para continuar de `elapsed`.
     paused = false;
     startedAt = Date.now() - (elapsed * 1000);
+    _ultimoTickAt = 0; // não credita o intervalo em que ficou pausado
     clearInterval(timerInterval);
     timerInterval = setInterval(tick, 250);
     tick();
@@ -448,6 +474,7 @@ function toggleTimerPause() {
     // Pausar: congela o tempo decorrido e para o intervalo.
     paused = true;
     elapsed = startedAt ? Math.floor((Date.now() - startedAt) / 1000) : elapsed;
+    _ultimoTickAt = 0; // para de creditar tempo ativo durante a pausa
     clearInterval(timerInterval);
     timerInterval = null;
     updateTimerDisplay();
@@ -502,9 +529,24 @@ function onLeave() {
   saveOnExit();
   // Save timer state (persists for when user returns to viewer)
   saveTimerState();
-  // Report reading time to streak (horas_estudadas)
-  const readingSeconds = Math.floor((Date.now() - _sessionOpenedAt) / 1000);
-  if (readingSeconds >= 60) { // Only report if read for at least 1 minute
+
+  // Blindagem contra dupla contagem: beforeunload E pagehide podem disparar.
+  if (_sessaoLeituraReportada) return;
+
+  // Se o timer estiver rodando agora, credita o intervalo pendente desde o
+  // último tick antes de fechar (o tick de 250ms pode não ter corrido).
+  if (!paused && startedAt && _ultimoTickAt) {
+    const delta = Date.now() - _ultimoTickAt;
+    if (delta > 0 && delta < 2000) _tempoAtivoLeituraMs += delta;
+    _ultimoTickAt = 0;
+  }
+
+  // Opção A: reporta apenas o tempo EFETIVAMENTE ativo do cronômetro (respeita
+  // pausas/paradas), não o tempo de janela aberta. Se o cronômetro ficou
+  // parado, praticamente nada é contabilizado.
+  const readingSeconds = Math.floor(_tempoAtivoLeituraMs / 1000);
+  if (readingSeconds >= 60) { // Só reporta a partir de 1 min de leitura ativa
+    _sessaoLeituraReportada = true;
     const horas = readingSeconds / 3600;
     const materia = path.split('/')[0] || 'Leitura PDF';
     fetch('/api/sessoes-estudo/registrar', {
@@ -517,7 +559,8 @@ function onLeave() {
       }),
       keepalive: true
     }).catch(() => {});
-    // Mark as reported to avoid double-counting on next visit
+    // Evita recontagem se a página for reaproveitada.
+    _tempoAtivoLeituraMs = 0;
     localStorage.setItem(_lastReportedKey, Date.now().toString());
   }
 }
