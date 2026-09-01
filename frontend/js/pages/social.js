@@ -454,7 +454,7 @@ async function loadPendingRequests() {
               </div>
               <div class="pending-actions">
                 <button class="pending-btn pending-btn--accept" onclick="acceptFriend(${p.friendship_id})">✓ Aceitar</button>
-                <button class="pending-btn pending-btn--reject" onclick="rejectFriend(${p.friendship_id})">✗</button>
+                <button class="pending-btn pending-btn--reject" onclick="rejectFriend(${p.friendship_id})" aria-label="Rejeitar solicitação de amizade">✗</button>
               </div>
             </div>
           `).join('')}
@@ -618,7 +618,7 @@ async function openGroupDetail(groupId) {
               </button>
               <button onclick="removeMember(${m.user_id}, '${escapeHtml(m.nome)}')" 
                 style="background:none;border:1px solid #45475a;border-radius:4px;padding:3px 6px;font-size:0.68rem;color:#f38ba8;cursor:pointer;"
-                title="Remover do grupo">✕</button>
+                title="Remover do grupo" aria-label="Remover membro do grupo">✕</button>
             </div>
           ` : ''}
         </div>

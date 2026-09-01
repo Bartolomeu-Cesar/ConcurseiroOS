@@ -743,8 +743,8 @@ async function loadBookmarksPanel() {
           <div style="font-size:0.85rem;color:var(--text,#cdd6f4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${label}</div>
           <div style="font-size:0.72rem;color:var(--text-sub,#9399b2);">📄 Página ${b.pagina}${b.created_at ? ' · ' + (b.created_at.split('T')[0]) : ''}</div>
         </div>
-        <button onclick="goToPage(${b.pagina});toggleBookmarksPanel();" title="Ir" style="background:var(--bg-elevated,#45475a);border:none;color:${cor};border-radius:6px;padding:5px 9px;font-size:0.75rem;cursor:pointer;">↪</button>
-        <button onclick="excluirBookmark(${b.id})" title="Excluir" style="background:none;border:none;color:var(--red,#f38ba8);cursor:pointer;font-size:0.85rem;">🗑</button>
+        <button onclick="goToPage(${b.pagina});toggleBookmarksPanel();" title="Ir" style="background:var(--bg-elevated,#45475a);border:none;color:${cor};border-radius:6px;padding:5px 9px;font-size:0.75rem;cursor:pointer;" aria-label="Ir para a página do marcador">↪</button>
+        <button onclick="excluirBookmark(${b.id})" title="Excluir" style="background:none;border:none;color:var(--red,#f38ba8);cursor:pointer;font-size:0.85rem;" aria-label="Excluir marcador">🗑</button>
       </div>`;
     }).join('');
   } catch (e) {
@@ -1492,12 +1492,12 @@ function _renderBlocoRevisao(b, idx, total) {
       <span style="font-size:0.7rem;color:var(--blue,#89b4fa);cursor:pointer;" onclick="goToPage(${b.pagina})" title="Ir para a página">p.${b.pagina}</span>
       <select onchange="setBlocoTag(${b.id}, this.value)" title="Categoria do bloco" style="font-size:0.68rem;background:var(--bg-surface,#313244);color:${tagCor};border:1px solid var(--border,#45475a);border-radius:5px;padding:2px 4px;cursor:pointer;max-width:110px;">${tagOpcoes}</select>
       <span style="flex:1;"></span>
-      <button onclick="moverBlocoRevisao(${b.id}, -1)" ${idx === 0 ? 'disabled' : ''} title="Subir" style="background:none;border:none;color:${idx === 0 ? 'var(--border,#45475a)' : 'var(--text-sub,#9399b2)'};cursor:pointer;font-size:0.8rem;">▲</button>
-      <button onclick="moverBlocoRevisao(${b.id}, 1)" ${idx === total - 1 ? 'disabled' : ''} title="Descer" style="background:none;border:none;color:${idx === total - 1 ? 'var(--border,#45475a)' : 'var(--text-sub,#9399b2)'};cursor:pointer;font-size:0.8rem;">▼</button>
-      <button onclick="editarBlocoRevisao(${b.id})" title="Editar título/comentário" style="background:none;border:none;color:var(--yellow,#f9e2af);cursor:pointer;font-size:0.78rem;">✏️</button>
-      ${b.tipo === 'recorte' && b.imagem_data ? `<button onclick="abrirOclusaoEditor(${b.id})" title="Ocultar partes da imagem (image occlusion)" style="background:none;border:none;color:var(--teal,#94e2d5);cursor:pointer;font-size:0.78rem;">🕶️</button>` : ''}
-      <button onclick="blocoParaFlashcard(${b.id})" title="Criar flashcard (revisão espaçada)" style="background:none;border:none;color:var(--mauve,#cba6f7);cursor:pointer;font-size:0.78rem;">🧠</button>
-      <button onclick="excluirBlocoRevisao(${b.id})" title="Excluir" style="background:none;border:none;color:var(--red,#f38ba8);cursor:pointer;font-size:0.78rem;">🗑</button>
+      <button onclick="moverBlocoRevisao(${b.id}, -1)" ${idx === 0 ? 'disabled' : ''} title="Subir" style="background:none;border:none;color:${idx === 0 ? 'var(--border,#45475a)' : 'var(--text-sub,#9399b2)'};cursor:pointer;font-size:0.8rem;" aria-label="Mover bloco para cima">▲</button>
+      <button onclick="moverBlocoRevisao(${b.id}, 1)" ${idx === total - 1 ? 'disabled' : ''} title="Descer" style="background:none;border:none;color:${idx === total - 1 ? 'var(--border,#45475a)' : 'var(--text-sub,#9399b2)'};cursor:pointer;font-size:0.8rem;" aria-label="Mover bloco para baixo">▼</button>
+      <button onclick="editarBlocoRevisao(${b.id})" title="Editar título/comentário" style="background:none;border:none;color:var(--yellow,#f9e2af);cursor:pointer;font-size:0.78rem;" aria-label="Editar título e comentário do bloco">✏️</button>
+      ${b.tipo === 'recorte' && b.imagem_data ? `<button onclick="abrirOclusaoEditor(${b.id})" title="Ocultar partes da imagem (image occlusion)" style="background:none;border:none;color:var(--teal,#94e2d5);cursor:pointer;font-size:0.78rem;" aria-label="Ocultar partes da imagem">🕶️</button>` : ''}
+      <button onclick="blocoParaFlashcard(${b.id})" title="Criar flashcard (revisão espaçada)" style="background:none;border:none;color:var(--mauve,#cba6f7);cursor:pointer;font-size:0.78rem;" aria-label="Criar flashcard a partir do bloco">🧠</button>
+      <button onclick="excluirBlocoRevisao(${b.id})" title="Excluir" style="background:none;border:none;color:var(--red,#f38ba8);cursor:pointer;font-size:0.78rem;" aria-label="Excluir bloco de revisão">🗑</button>
     </div>
     ${titulo}${img}${conteudo}
   </div>`;
@@ -2694,11 +2694,11 @@ function _renderPainelDestaques() {
           <span title="Estilo" style="font-size:0.8rem;">${icone}</span>
           <span style="font-size:0.7rem;color:var(--blue,#89b4fa);cursor:pointer;" onclick="goToPage(${d.pagina})" title="Ir para a página">p.${d.pagina}</span>
           <span style="flex:1;"></span>
-          <button onclick="copiarDestaque(${d.id})" title="Copiar texto" style="background:none;border:none;color:var(--text-sub,#9399b2);cursor:pointer;font-size:0.78rem;">📋</button>
-          <button onclick="destaqueParaFlashcard(${d.id})" title="Criar flashcard (revisão espaçada)" style="background:none;border:none;color:var(--mauve,#cba6f7);cursor:pointer;font-size:0.78rem;">🧠</button>
-          <button onclick="destaqueParaRevisao(${d.id})" title="Enviar ao Caderno de Revisão" style="background:none;border:none;color:var(--teal,#94e2d5);cursor:pointer;font-size:0.78rem;">📑</button>
-          <button onclick="comentarDestaque(${d.id})" title="${temComentario ? 'Editar comentário' : 'Adicionar comentário'}" style="background:none;border:none;color:${temComentario ? 'var(--green,#a6e3a1)' : 'var(--text-sub,#9399b2)'};cursor:pointer;font-size:0.78rem;">💬</button>
-          <button onclick="excluirDestaque(${d.id})" title="Remover" style="background:none;border:none;color:var(--red,#f38ba8);cursor:pointer;font-size:0.78rem;">🗑</button>
+          <button onclick="copiarDestaque(${d.id})" title="Copiar texto" style="background:none;border:none;color:var(--text-sub,#9399b2);cursor:pointer;font-size:0.78rem;" aria-label="Copiar texto do destaque">📋</button>
+          <button onclick="destaqueParaFlashcard(${d.id})" title="Criar flashcard (revisão espaçada)" style="background:none;border:none;color:var(--mauve,#cba6f7);cursor:pointer;font-size:0.78rem;" aria-label="Criar flashcard a partir do destaque">🧠</button>
+          <button onclick="destaqueParaRevisao(${d.id})" title="Enviar ao Caderno de Revisão" style="background:none;border:none;color:var(--teal,#94e2d5);cursor:pointer;font-size:0.78rem;" aria-label="Enviar destaque ao caderno de revisão">📑</button>
+          <button onclick="comentarDestaque(${d.id})" title="${temComentario ? 'Editar comentário' : 'Adicionar comentário'}" style="background:none;border:none;color:${temComentario ? 'var(--green,#a6e3a1)' : 'var(--text-sub,#9399b2)'};cursor:pointer;font-size:0.78rem;" aria-label="Comentar destaque">💬</button>
+          <button onclick="excluirDestaque(${d.id})" title="Remover" style="background:none;border:none;color:var(--red,#f38ba8);cursor:pointer;font-size:0.78rem;" aria-label="Remover destaque">🗑</button>
         </div>
         <div style="font-size:0.82rem;color:var(--text,#cdd6f4);line-height:1.5;cursor:pointer;" onclick="goToPage(${d.pagina})">${txt}</div>
         ${comentarioHtml}

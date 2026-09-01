@@ -1156,7 +1156,7 @@ async function loadProvas() {
         </div>
         <div style="display:flex;gap:4px;">
           <button onclick="vincularProvaMateria('${p.prova.replace(/'/g, "\\'")}')" title="Vincular matéria" style="background:none;border:1px solid #89b4fa;color:#89b4fa;cursor:pointer;font-size:0.75rem;border-radius:6px;padding:4px 8px;">📚 Vincular</button>
-          <button onclick="deleteProva('${p.prova.replace(/'/g, "\\'")}')" title="Excluir prova inteira" style="background:none;border:none;color:#f38ba8;cursor:pointer;font-size:1.1rem;">🗑️</button>
+          <button onclick="deleteProva('${p.prova.replace(/'/g, "\\'")}')" title="Excluir prova inteira" style="background:none;border:none;color:#f38ba8;cursor:pointer;font-size:1.1rem;" aria-label="Excluir prova inteira">🗑️</button>
         </div>
       </div>`;
     }).join('');
@@ -1329,8 +1329,8 @@ async function loadBanco() {
       html += `<div class="q-list-item">
         <span class="q-list-text">${q.enunciado.substring(0, 100)}${q.enunciado.length > 100 ? '...' : ''}</span>
         <span class="q-list-meta" style="font-size:0.7rem;color:#9399b2;margin-left:4px;">${q.banca || ''}${provaInfo}${gabBadge}</span>
-        <button onclick="adicionarAoCaderno(${q.id})" title="Adicionar ao Caderno" style="background:none;border:none;color:#89b4fa;cursor:pointer;font-size:1rem;margin-right:2px;">📓</button>
-        <button class="q-list-edit" onclick="editQuestao(${q.id})" title="Editar gabarito" style="background:none;border:none;color:#89b4fa;cursor:pointer;font-size:1rem;margin-right:4px;">✏️</button>
+        <button onclick="adicionarAoCaderno(${q.id})" title="Adicionar ao Caderno" style="background:none;border:none;color:#89b4fa;cursor:pointer;font-size:1rem;margin-right:2px;" aria-label="Adicionar ao caderno">📓</button>
+        <button class="q-list-edit" onclick="editQuestao(${q.id})" title="Editar gabarito" style="background:none;border:none;color:#89b4fa;cursor:pointer;font-size:1rem;margin-right:4px;" aria-label="Editar gabarito">✏️</button>
         <button class="q-list-delete" onclick="deleteQuestao(${q.id})" title="Excluir" aria-label="Excluir questão">🗑</button>
       </div>`;
     });
@@ -1925,8 +1925,8 @@ async function loadCadernos() {
             </div>
             <div style="display:flex;gap:6px;">
               <button onclick="resolverCaderno(${c.id})" class="btn btn-success" style="font-size:0.78rem;padding:6px 12px;" title="Resolver questões">▶ Resolver</button>
-              <button onclick="verCaderno(${c.id})" class="btn" style="font-size:0.78rem;padding:6px 12px;background:var(--bg-elevated);color:var(--text);" title="Ver detalhes">📋</button>
-              <button onclick="excluirCaderno(${c.id})" class="btn" style="font-size:0.78rem;padding:6px 12px;background:var(--bg-elevated);color:var(--red);" title="Excluir">🗑</button>
+              <button onclick="verCaderno(${c.id})" class="btn" style="font-size:0.78rem;padding:6px 12px;background:var(--bg-elevated);color:var(--text);" title="Ver detalhes" aria-label="Ver detalhes do caderno">📋</button>
+              <button onclick="excluirCaderno(${c.id})" class="btn" style="font-size:0.78rem;padding:6px 12px;background:var(--bg-elevated);color:var(--red);" title="Excluir" aria-label="Excluir caderno">🗑</button>
             </div>
           </div>
           <div style="margin-top:10px;display:flex;align-items:center;gap:12px;">
@@ -2016,14 +2016,14 @@ async function verCaderno(id) {
             <span style="flex:1;font-size:0.82rem;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;">${q.enunciado.substring(0, 80)}${q.enunciado.length > 80 ? '...' : ''}</span>
             <span style="font-size:0.72rem;color:var(--text-sub);white-space:nowrap;">${q.materia}</span>
             ${q.ultimo_resultado !== null ? `<span style="font-size:0.9rem;">${q.ultimo_resultado === 1 ? '✅' : '❌'}</span>` : '<span style="font-size:0.72rem;color:var(--text-sub);">—</span>'}
-            <button onclick="removerDoCaderno(${id}, ${q.id})" style="background:none;border:none;cursor:pointer;font-size:0.9rem;" title="Remover">✕</button>
+            <button onclick="removerDoCaderno(${id}, ${q.id})" style="background:none;border:none;cursor:pointer;font-size:0.9rem;" title="Remover" aria-label="Remover questão do caderno">✕</button>
           </div>`).join('');
 
     overlay.innerHTML = `
       <div style="background:var(--bg-card);border-radius:16px;padding:24px;max-width:600px;width:100%;max-height:85vh;overflow-y:auto;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
           <h3 style="color:${data.cor || 'var(--accent)'};margin:0;">📓 ${data.nome}</h3>
-          <button onclick="document.getElementById('caderno-detail-modal').remove()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--text-sub);">✕</button>
+          <button onclick="document.getElementById('caderno-detail-modal').remove()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--text-sub);" aria-label="Fechar">✕</button>
         </div>
         ${data.descricao ? `<p style="font-size:0.82rem;color:var(--text-sub);margin-bottom:12px;">${data.descricao}</p>` : ''}
         <div style="display:flex;gap:16px;margin-bottom:16px;padding:12px;background:var(--bg);border-radius:8px;">

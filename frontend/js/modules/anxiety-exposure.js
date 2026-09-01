@@ -411,7 +411,7 @@ export async function startAnxietySession(nivel) {
     overlay.className = 'anxiety-overlay';
     overlay.id = 'anxiety-pre-overlay';
     overlay.innerHTML = `
-        <button class="anxiety-overlay__close" onclick="window._anxietyCloseOverlay()" title="Fechar">✕</button>
+        <button class="anxiety-overlay__close" onclick="window._anxietyCloseOverlay()" title="Fechar" aria-label="Fechar">✕</button>
         <div class="anxiety-overlay__content">
             <div class="anxiety-overlay__nivel-badge" style="background:color-mix(in srgb, ${cor} 20%, var(--surface0, #313244));color:${cor}">
                 ${config.emoji || '🧘'} Nível ${nivel} — ${config.nome}

@@ -159,7 +159,7 @@ function renderSumulaItem(s) {
       <strong style="color:#cba6f7;">${s.tribunal} ${s.numero}</strong>${vinc}${temaLabel}
       — ${escapeHtml(s.enunciado.substring(0, 80))}${s.enunciado.length > 80 ? '...' : ''}
     </span>
-    <button class="flash-list-edit" onclick="editSumula(${s.id})" title="Editar">✏️</button>
+    <button class="flash-list-edit" onclick="editSumula(${s.id})" title="Editar" aria-label="Editar súmula">✏️</button>
     <button class="flash-list-delete" onclick="deleteSumula(${s.id})" aria-label="Excluir súmula">🗑</button>
   </div>`;
 }

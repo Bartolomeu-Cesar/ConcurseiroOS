@@ -624,7 +624,7 @@ async function loadCalendario() {
           html += `<span class="cal-activity-time">${ativ.tempo_min}min</span>`;
           if (ativ.tempo_min > 0) {
             const pomoLabel = materia || (ativ.tipo === 'revisao' ? 'Flashcards (Revisão)' : detail);
-            html += `<button class="cal-pomo-btn" onclick="startPomodoro('${pomoLabel.replace(/'/g, "\\'")}', ${ativ.tempo_min}, '${ativ.tipo}')" title="Iniciar Timer">▶</button>`;
+            html += `<button class="cal-pomo-btn" onclick="startPomodoro('${pomoLabel.replace(/'/g, "\\'")}', ${ativ.tempo_min}, '${ativ.tipo}')" title="Iniciar Timer" aria-label="Iniciar timer Pomodoro">▶</button>`;
           }
           if ((calendarMode !== 'auto') && ativ.id) {
             html += `<button class="cal-delete-btn" onclick="removeCalItem(${ativ.id})" aria-label="Remover atividade">❌</button>`;
@@ -928,7 +928,7 @@ function initPushPermissionBanner() {
           <div style="color:var(--text-sub);font-size:0.75rem;">Receba lembretes de streak, flashcards e provas</div>
         </div>
         <button onclick="requestPushPermission()" style="background:var(--accent);color:var(--bg);border:none;border-radius:6px;padding:6px 14px;font-size:0.8rem;font-weight:600;cursor:pointer;">Ativar</button>
-        <button onclick="this.parentNode.parentNode.remove()" style="background:none;border:none;color:var(--text-sub);cursor:pointer;">✕</button>
+        <button onclick="this.parentNode.parentNode.remove()" style="background:none;border:none;color:var(--text-sub);cursor:pointer;" aria-label="Fechar">✕</button>
       </div>
     `;
     const main = document.querySelector('.main-content') || document.querySelector('.dash-panel.active');
@@ -1452,7 +1452,7 @@ async function loadAgendaHoje() {
         ${blocos.map((b, idx) => {
           const isPausa = b.tipo === 'pausa' || b.tipo === 'pausa_longa';
           const isStudy = !isPausa;
-          const playBtn = isStudy ? `<button class="agenda-play-btn" data-idx="${idx}" title="Iniciar estudo">▶</button>` : '';
+          const playBtn = isStudy ? `<button class="agenda-play-btn" data-idx="${idx}" title="Iniciar estudo" aria-label="Iniciar estudo">▶</button>` : '';
           return `
             <div class="agenda-bloco ${isPausa ? 'agenda-bloco--pausa' : ''}" style="border-left:4px solid ${b.cor};">
               <div class="agenda-bloco__hora">${b.hora_inicio}</div>
@@ -2245,7 +2245,7 @@ setTimeout(loadSiTechniquesAlerts, 1200);
           ${a.corpo ? `<div style="font-size:0.8rem;color:var(--text-sub);margin-top:2px;">${esc(a.corpo)}</div>` : ''}
           ${a.url ? `<a href="${esc(a.url)}" style="font-size:0.78rem;color:var(--accent);">Saiba mais →</a>` : ''}
         </div>
-        <button onclick="window.dispensarAnuncio(${a.id})" title="Dispensar" style="background:none;border:none;color:var(--text-sub);font-size:1rem;cursor:pointer;">✕</button>
+        <button onclick="window.dispensarAnuncio(${a.id})" title="Dispensar" style="background:none;border:none;color:var(--text-sub);font-size:1rem;cursor:pointer;" aria-label="Dispensar anúncio">✕</button>
       </div>
     `).join('');
 
@@ -2325,7 +2325,7 @@ window.showNotificationPrefs = async function() {
       <div style="background:var(--bg-elevated, #45475a);border-radius:16px;padding:24px;max-width:400px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
           <h3 style="color:var(--text);margin:0;font-size:1.05rem;">🔔 Preferências de Notificação</h3>
-          <button onclick="document.getElementById('notif-prefs-overlay').remove()" style="background:none;border:none;color:var(--text-sub);font-size:1.3rem;cursor:pointer;">✕</button>
+          <button onclick="document.getElementById('notif-prefs-overlay').remove()" style="background:none;border:none;color:var(--text-sub);font-size:1.3rem;cursor:pointer;" aria-label="Fechar">✕</button>
         </div>
 
         <div style="margin-bottom:16px;padding:10px;background:var(--bg);border-radius:8px;font-size:0.78rem;color:var(--text-sub);">

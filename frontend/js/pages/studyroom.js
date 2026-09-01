@@ -239,7 +239,7 @@ function renderRoom(data) {
     const tempo = formatTime(p.tempo_estudado);
     const meClass = p.is_me ? ' me' : '';
     const goalHtml = p.meta ? `<div class="participant-goal">🎯 ${escHtml(p.meta)}</div>` : '';
-    const nudgeBtn = !p.is_me && p.status !== 'focando' ? `<button onclick="sendNudge(${p.user_id})" style="font-size:0.65rem;background:var(--yellow);color:var(--bg);border:none;border-radius:4px;padding:2px 6px;cursor:pointer;margin-top:2px;" title="Enviar incentivo">🔔</button>` : '';
+    const nudgeBtn = !p.is_me && p.status !== 'focando' ? `<button onclick="sendNudge(${p.user_id})" style="font-size:0.65rem;background:var(--yellow);color:var(--bg);border:none;border-radius:4px;padding:2px 6px;cursor:pointer;margin-top:2px;" title="Enviar incentivo" aria-label="Enviar incentivo">🔔</button>` : '';
     return `<div class="participant-card${meClass}">
       <div class="participant-status">${statusIcon}</div>
       <div class="participant-info">
@@ -1172,7 +1172,7 @@ async function loadCommitments() {
         <span>${status}</span>
         <div style="flex:1;font-size:0.8rem;color:var(--text);">${escHtml(c.nome)}: ${escHtml(c.commitment)}</div>
         <span style="font-size:0.7rem;color:var(--yellow);font-weight:700;">${c.xp_stake}XP</span>
-        ${c.is_mine && c.cumprida === null ? `<button onclick="resolveCommitment(true)" style="font-size:0.65rem;background:var(--green);color:var(--bg);border:none;border-radius:4px;padding:2px 6px;cursor:pointer;">✓</button><button onclick="resolveCommitment(false)" style="font-size:0.65rem;background:var(--red);color:var(--bg);border:none;border-radius:4px;padding:2px 6px;cursor:pointer;">✗</button>` : ''}
+        ${c.is_mine && c.cumprida === null ? `<button onclick="resolveCommitment(true)" style="font-size:0.65rem;background:var(--green);color:var(--bg);border:none;border-radius:4px;padding:2px 6px;cursor:pointer;" aria-label="Marcar compromisso como cumprido">✓</button><button onclick="resolveCommitment(false)" style="font-size:0.65rem;background:var(--red);color:var(--bg);border:none;border-radius:4px;padding:2px 6px;cursor:pointer;" aria-label="Marcar compromisso como não cumprido">✗</button>` : ''}
       </div>`;
     }).join('');
   } catch (e) { /* ignore */ }
@@ -1712,7 +1712,7 @@ function checkAdaptiveFatigue() {
     const banner = document.createElement('div');
     banner.id = 'fatigue-banner';
     banner.style.cssText = 'background:rgba(243,139,168,0.15);border:1px solid var(--red);border-radius:var(--radius-md);padding:10px;margin-top:10px;font-size:0.78rem;color:var(--red);text-align:center;';
-    banner.innerHTML = `⚠️ Fadiga detectada (acurácia caiu). Considere antecipar a pausa! <button onclick="this.parentNode.remove()" style="background:none;border:none;color:var(--red);cursor:pointer;font-weight:700;margin-left:8px;">✕</button>`;
+    banner.innerHTML = `⚠️ Fadiga detectada (acurácia caiu). Considere antecipar a pausa! <button onclick="this.parentNode.remove()" style="background:none;border:none;color:var(--red);cursor:pointer;font-weight:700;margin-left:8px;" aria-label="Fechar">✕</button>`;
     timerSection.appendChild(banner);
   }
 

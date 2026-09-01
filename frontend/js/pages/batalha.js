@@ -756,7 +756,7 @@ function renderMyBattles() {
 
   if (totalPages > 1) {
     html += `<div style="display:flex;justify-content:center;align-items:center;gap:12px;margin-top:8px;">
-      <button onclick="myBattlesNav(-1)" ${_myBattlesPage === 0 ? 'disabled' : ''} style="padding:4px 10px;background:${_myBattlesPage === 0 ? '#45475a' : '#89b4fa'};color:${_myBattlesPage === 0 ? '#585b70' : '#1e1e2e'};border:none;border-radius:6px;font-size:0.75rem;cursor:pointer;">◀</button>
+      <button onclick="myBattlesNav(-1)" ${_myBattlesPage === 0 ? 'disabled' : ''} style="padding:4px 10px;background:${_myBattlesPage === 0 ? '#45475a' : '#89b4fa'};color:${_myBattlesPage === 0 ? '#585b70' : '#1e1e2e'};border:none;border-radius:6px;font-size:0.75rem;cursor:pointer;" aria-label="Página anterior">◀</button>
       <span style="font-size:0.75rem;color:var(--text-sub);">${_myBattlesPage + 1}/${totalPages}</span>
       <button onclick="myBattlesNav(1)" ${_myBattlesPage >= totalPages - 1 ? 'disabled' : ''} style="padding:4px 10px;background:${_myBattlesPage >= totalPages - 1 ? '#45475a' : '#89b4fa'};color:${_myBattlesPage >= totalPages - 1 ? '#585b70' : '#1e1e2e'};border:none;border-radius:6px;font-size:0.75rem;cursor:pointer;">▶</button>
     </div>`;

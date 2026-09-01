@@ -53,8 +53,8 @@ async function vmBuscar() {
         <div class="vm-result-num">Art. ${escapeHtml(art.numero)}</div>
         <div class="vm-result-caput">${highlightTerm(escapeHtml(art.caput || ''), q)}</div>
         <div class="vm-result-actions">
-          <button class="vm-btn-star" onclick="event.stopPropagation();quickHighlight(${art.id}, true)" title="Destacar">⭐</button>
-          <button class="vm-btn-note" onclick="event.stopPropagation();openArtigoDetail(${art.id}, '${escapeAttr(art.lei_nome || '')}')" title="Anotar">📝</button>
+          <button class="vm-btn-star" onclick="event.stopPropagation();quickHighlight(${art.id}, true)" title="Destacar" aria-label="Destacar artigo">⭐</button>
+          <button class="vm-btn-note" onclick="event.stopPropagation();openArtigoDetail(${art.id}, '${escapeAttr(art.lei_nome || '')}')" title="Anotar" aria-label="Anotar no artigo">📝</button>
         </div>
       </div>
     `).join('');

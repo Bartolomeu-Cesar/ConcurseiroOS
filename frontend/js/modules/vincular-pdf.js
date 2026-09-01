@@ -115,7 +115,7 @@ async function loadNotesForTopic(id) {
   list.innerHTML = notes.map(n => `
     <div class="nota-item">
       <span class="nota-text">${escapeHtml(n.conteudo)}</span>
-      <button class="nota-del" onclick="deleteNote(${n.id})">×</button>
+      <button class="nota-del" onclick="deleteNote(${n.id})" aria-label="Excluir nota">×</button>
     </div>
   `).join('');
 }

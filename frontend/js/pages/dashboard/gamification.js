@@ -112,8 +112,8 @@ export async function loadDesafios() {
           <div style="display:flex;align-items:center;gap:6px;font-size:0.82rem;">
             <span style="flex:1;color:var(--text);font-weight:500;">${d.titulo}</span>
             <span style="font-size:0.72rem;color:var(--text-sub);">${d.dias_restantes}d restantes</span>
-            <button onclick="editarDesafio(${d.id},'${d.titulo.replace(/'/g,"\\'")}','${d.meta_tipo}',${d.meta_valor},'${(d.materia||'').replace(/'/g,"\\'")}',${d.dias})" style="background:none;border:none;color:var(--blue)88;cursor:pointer;font-size:0.8rem;" title="Editar">✏️</button>
-            <button onclick="deleteDesafio(${d.id})" style="background:none;border:none;color:var(--red)55;cursor:pointer;font-size:0.8rem;" title="Remover">×</button>
+            <button onclick="editarDesafio(${d.id},'${d.titulo.replace(/'/g,"\\'")}','${d.meta_tipo}',${d.meta_valor},'${(d.materia||'').replace(/'/g,"\\'")}',${d.dias})" style="background:none;border:none;color:var(--blue)88;cursor:pointer;font-size:0.8rem;" title="Editar" aria-label="Editar desafio">✏️</button>
+            <button onclick="deleteDesafio(${d.id})" style="background:none;border:none;color:var(--red)55;cursor:pointer;font-size:0.8rem;" title="Remover" aria-label="Remover desafio">×</button>
           </div>
           <div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
             <div style="flex:1;height:6px;background:var(--bg-elevated);border-radius:3px;overflow:hidden;">
@@ -128,7 +128,7 @@ export async function loadDesafios() {
 
     if (concluidos.length > 0) {
       html += `<div style="margin-top:8px;font-size:0.72rem;color:var(--green);font-weight:600;">✅ Concluídos</div>`;
-      html += concluidos.slice(0, 3).map(d => `<div style="padding:4px 8px;font-size:0.75rem;color:var(--text-sub);display:flex;align-items:center;gap:4px;"><span>✓</span><span style="flex:1;text-decoration:line-through;">${d.titulo}</span><button onclick="deleteDesafio(${d.id})" style="background:none;border:none;color:var(--red)55;cursor:pointer;">×</button></div>`).join('');
+      html += concluidos.slice(0, 3).map(d => `<div style="padding:4px 8px;font-size:0.75rem;color:var(--text-sub);display:flex;align-items:center;gap:4px;"><span>✓</span><span style="flex:1;text-decoration:line-through;">${d.titulo}</span><button onclick="deleteDesafio(${d.id})" style="background:none;border:none;color:var(--red)55;cursor:pointer;" aria-label="Remover desafio">×</button></div>`).join('');
     }
 
     if (sugestoes.length > 0 && ativos.length < 3) {

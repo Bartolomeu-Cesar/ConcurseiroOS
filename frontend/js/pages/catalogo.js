@@ -63,7 +63,7 @@ async function carregarCatalogo() {
         </div>
         <div style="display:flex;gap:6px;">
           <button onclick="importarItem(${it.id}, this)" style="flex:1;">📥 Importar</button>
-          <button onclick="abrirAvaliacoes(${it.id}, '${esc(it.titulo)}')" style="background:#45475a;color:#cdd6f4;flex:0 0 auto;padding:9px 12px;">⭐</button>
+          <button onclick="abrirAvaliacoes(${it.id}, '${esc(it.titulo)}')" style="background:#45475a;color:#cdd6f4;flex:0 0 auto;padding:9px 12px;" aria-label="Ver avaliações">⭐</button>
         </div>
       </div>
     `).join('');

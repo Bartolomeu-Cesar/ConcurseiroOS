@@ -108,7 +108,7 @@ export function toast(message, type = 'info', duration = 4000, action = null) {
     <span class="toast-icon">${icons[type] || icons.info}</span>
     <span class="toast-msg">${message}</span>
     ${action ? `<button class="toast-action">${action.label}</button>` : ''}
-    <button class="toast-close">×</button>
+    <button class="toast-close" aria-label="Fechar">×</button>
     <div class="toast-progress"><div class="toast-progress-bar"></div></div>
   `;
   toastContainer.appendChild(el);

@@ -60,7 +60,7 @@ export async function loadMetaDetails() {
             <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0;border-bottom:1px solid var(--border);">
               <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(s.materia)}</span>
               <span style="color:var(--blue);font-weight:600;white-space:nowrap;">${fmtDur(s.horas)}</span>
-              <button onclick="event.stopPropagation();excluirSessaoHoje('${encodeURIComponent(s.materia)}')" title="Excluir o tempo de hoje desta matéria (ex: timer esquecido)" style="background:none;border:none;color:var(--red,#f38ba8);cursor:pointer;font-size:0.85rem;padding:0 2px;line-height:1;">🗑</button>
+              <button onclick="event.stopPropagation();excluirSessaoHoje('${encodeURIComponent(s.materia)}')" title="Excluir o tempo de hoje desta matéria (ex: timer esquecido)" style="background:none;border:none;color:var(--red,#f38ba8);cursor:pointer;font-size:0.85rem;padding:0 2px;line-height:1;" aria-label="Excluir tempo de hoje desta matéria">🗑</button>
             </div>
           `).join('')}
           <div style="margin-top:8px;font-size:0.75rem;color:var(--text-muted);">Total: ${fmtDur(totalHoras)} em ${resumo.sessoes.length} matéria(s)</div>

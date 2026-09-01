@@ -122,7 +122,7 @@ function renderNodes(nodes, container, bulk, prefix) {
       const materiaTag = vinculado ? `<span class="pdf-materia-tag">${escapeHtml(vinculado.materia)}</span>` : '';
       const linkBtn = vinculado
         ? `<button class="pdf-link-disc-btn pdf-unlink" onclick="event.stopPropagation();unlinkPdf('${path.replace(/'/g, "\\'")}')" title="Desvincular disciplina" aria-label="Desvincular disciplina">❌</button>`
-        : `<button class="pdf-link-disc-btn" onclick="event.stopPropagation();linkPdfToDisc('${path.replace(/'/g, "\\'")}')" title="Vincular a disciplina">🔗</button>`;
+        : `<button class="pdf-link-disc-btn" onclick="event.stopPropagation();linkPdfToDisc('${path.replace(/'/g, "\\'")}')" title="Vincular a disciplina" aria-label="Vincular a disciplina">🔗</button>`;
       const pathEsc = path.replace(/'/g, "\\'");
       const isSharedWithMe = _sharedWithMe.has(path);
       const isOwner = _sharedByMe.has(path);
@@ -548,7 +548,7 @@ function _renderOrgTree(nodes, container) {
         <div class="folder-header" style="display:flex;align-items:center;gap:6px;">
           <span class="folder-icon">${node.virtual ? '📂' : '📁'}</span>
           <span class="folder-name" style="flex:1;">${escapeHtml(node.name)}</span>
-          ${node.virtual ? `<button onclick="event.stopPropagation();_renomearPasta(${node.id},'${escapeHtml(node.name)}')" style="background:none;border:none;cursor:pointer;font-size:0.7rem;" title="Renomear">✏️</button><button onclick="event.stopPropagation();_excluirPasta(${node.id})" style="background:none;border:none;cursor:pointer;font-size:0.7rem;" title="Excluir">🗑</button>` : ''}
+          ${node.virtual ? `<button onclick="event.stopPropagation();_renomearPasta(${node.id},'${escapeHtml(node.name)}')" style="background:none;border:none;cursor:pointer;font-size:0.7rem;" title="Renomear" aria-label="Renomear pasta">✏️</button><button onclick="event.stopPropagation();_excluirPasta(${node.id})" style="background:none;border:none;cursor:pointer;font-size:0.7rem;" title="Excluir" aria-label="Excluir pasta">🗑</button>` : ''}
           <span style="font-size:0.65rem;color:var(--text-sub);">${(node.children || []).length} itens</span>
         </div>
         <div class="folder-children open org-drop-zone" data-pasta-id="${node.id || ''}" style="min-height:30px;border:1px dashed transparent;border-radius:6px;transition:border-color 0.2s;padding:4px;"></div>

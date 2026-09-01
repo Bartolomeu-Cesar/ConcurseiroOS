@@ -110,7 +110,7 @@ export async function showSpacingDetails() {
       <div style="background:var(--bg-elevated);border-radius:16px;padding:20px;max-width:500px;width:92%;max-height:80vh;overflow-y:auto;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
           <h3 style="font-size:1rem;">📐 Tópicos para Revisão</h3>
-          <button onclick="this.closest('div[style*=fixed]').remove()" style="background:none;border:none;color:var(--text-sub);cursor:pointer;font-size:1.2rem;">✕</button>
+          <button onclick="this.closest('div[style*=fixed]').remove()" style="background:none;border:none;color:var(--text-sub);cursor:pointer;font-size:1.2rem;" aria-label="Fechar">✕</button>
         </div>
         <div style="font-size:0.78rem;color:var(--text-sub);margin-bottom:12px;">
           Retenção desejada: <strong>${Math.round(data.desired_retention * 100)}%</strong> · ${data.overdue} atrasados · ${data.due} na hora
@@ -157,8 +157,8 @@ function renderEditalTree() {
         <span class="tree-label">${escapeHtml(concurso)}</span>
         <span class="tree-stats">${concDone}/${concItems.length} (${concPct}%)</span>
         <div class="tree-bar"><div class="tree-bar-fill" style="width:${concPct}%"></div></div>
-        <button class="tree-archive-btn" onclick="event.stopPropagation();editarEdital('${concurso.replace(/'/g, "\\'")}')" title="Editar metadados">✏️</button>
-        <button class="tree-archive-btn" onclick="event.stopPropagation();arquivarConcurso('${concurso.replace(/'/g, "\\'")}')" title="Arquivar concurso inteiro">📦</button>
+        <button class="tree-archive-btn" onclick="event.stopPropagation();editarEdital('${concurso.replace(/'/g, "\\'")}')" title="Editar metadados" aria-label="Editar metadados do edital">✏️</button>
+        <button class="tree-archive-btn" onclick="event.stopPropagation();arquivarConcurso('${concurso.replace(/'/g, "\\'")}')" title="Arquivar concurso inteiro" aria-label="Arquivar concurso inteiro">📦</button>
         <button class="tree-archive-btn tree-excluir-btn" onclick="event.stopPropagation();excluirConcurso('${concurso.replace(/'/g, "\\'")}')" title="Excluir concurso inteiro" aria-label="Excluir concurso">🗑</button>
       </div>
       <div class="tree-children ${concOpen ? 'open' : ''}">`;
@@ -183,7 +183,7 @@ function renderEditalTree() {
           ${infoHtml}
           <span class="tree-stats">${cargoDone}/${cargoItems.length}</span>
           <div class="tree-bar"><div class="tree-bar-fill" style="width:${cargoPct}%"></div></div>
-          <button class="tree-archive-btn" onclick="event.stopPropagation();arquivarCargo('${concurso.replace(/'/g, "\\'")}','${cargo.replace(/'/g, "\\'")}')\" title="Arquivar">📦</button>
+          <button class="tree-archive-btn" onclick="event.stopPropagation();arquivarCargo('${concurso.replace(/'/g, "\\'")}','${cargo.replace(/'/g, "\\'")}')\" title="Arquivar" aria-label="Arquivar cargo">📦</button>
           <button class="tree-archive-btn tree-excluir-btn" onclick="event.stopPropagation();excluirCargo('${concurso.replace(/'/g, "\\'")}','${cargo.replace(/'/g, "\\'")}')\" title="Excluir permanentemente" aria-label="Excluir cargo">🗑</button>
         </div>
         <div class="tree-children ${cargoOpen ? 'open' : ''}">`;
@@ -214,7 +214,7 @@ function renderEditalTree() {
             <span class="tree-label">${escapeHtml(matNome)}</span>
             <span class="tree-stats">${matDone}/${items.length}${matHoras > 0 ? ' • ' + formatHours(matHoras) : ''}</span>
             <div class="tree-bar"><div class="tree-bar-fill" style="width:${matPct}%"></div></div>
-            <button class="tree-pdf-link-btn" style="font-size:0.7rem;" onclick="event.stopPropagation();linkPdfToMateria('${matNome.replace(/'/g, "\\\\'")}','${concurso}','${cargo}')" title="Vincular PDF à matéria">🔗</button>
+            <button class="tree-pdf-link-btn" style="font-size:0.7rem;" onclick="event.stopPropagation();linkPdfToMateria('${matNome.replace(/'/g, "\\\\'")}','${concurso}','${cargo}')" title="Vincular PDF à matéria" aria-label="Vincular PDF à matéria">🔗</button>
           </div>
           <div class="tree-children ${matOpen ? 'open' : ''}">`;
         for (const item of items) {
@@ -223,18 +223,18 @@ function renderEditalTree() {
           const safeTopico = item.topico.replace(/'/g, "\\'");
           const pdfBtn = item.pdf_link
             ? `<a class="tree-pdf-btn" href="viewer.html?path=${encodeURIComponent(item.pdf_link)}${item.pdf_pagina ? '#page=' + item.pdf_pagina : ''}" target="_blank" onclick="event.stopPropagation()" title="Abrir PDF">📖</a>`
-            : `<button class="tree-pdf-link-btn" onclick="event.stopPropagation();linkPdfToTopic(${item.id},'${safeMateria}')" title="Vincular PDF">🔗</button>`;
+            : `<button class="tree-pdf-link-btn" onclick="event.stopPropagation();linkPdfToTopic(${item.id},'${safeMateria}')" title="Vincular PDF" aria-label="Vincular PDF ao tópico">🔗</button>`;
           const videoBtn = item.video_link
-            ? `<button class="tree-pdf-btn" onclick="event.stopPropagation();openVideoPlayer(${item.id},'${escapeHtml(item.video_link).replace(/'/g, "\\'")}','${safeTopico}')" title="Assistir vídeo">▶️</button>`
-            : `<button class="tree-pdf-link-btn" onclick="event.stopPropagation();linkVideoToTopic(${item.id},'${safeTopico}')" title="Vincular vídeo YouTube">🎬</button>`;
+            ? `<button class="tree-pdf-btn" onclick="event.stopPropagation();openVideoPlayer(${item.id},'${escapeHtml(item.video_link).replace(/'/g, "\\'")}','${safeTopico}')" title="Assistir vídeo" aria-label="Assistir vídeo">▶️</button>`
+            : `<button class="tree-pdf-link-btn" onclick="event.stopPropagation();linkVideoToTopic(${item.id},'${safeTopico}')" title="Vincular vídeo YouTube" aria-label="Vincular vídeo do YouTube">🎬</button>`;
           html += `<div class="tree-leaf${sel}" data-id="${item.id}" onclick="selectEditalTopic(${item.id}, '${safeMateria}', '${safeTopico}')">
             <span class="tree-status ${getStatusClass(item.status)}" onclick="event.stopPropagation();toggleEditalStatus(${item.id})">${item.status === 'Concluído' ? '✓' : item.status === 'Em Andamento' ? '◐' : '○'}</span>
             <span class="tree-topic">${escapeHtml(item.topico)}</span>
             ${item.horas_estudadas > 0 ? `<span class="tree-hours">${formatHours(item.horas_estudadas)}</span>` : ''}
             ${pdfBtn}
             ${videoBtn}
-            <button class="tree-note" onclick="event.stopPropagation();openNoteModal(${item.id})" title="Notas">📝</button>
-            <button class="tree-del" onclick="event.stopPropagation();deleteEditalItem(${item.id})">×</button>
+            <button class="tree-note" onclick="event.stopPropagation();openNoteModal(${item.id})" title="Notas" aria-label="Abrir notas do tópico">📝</button>
+            <button class="tree-del" onclick="event.stopPropagation();deleteEditalItem(${item.id})" aria-label="Excluir item do edital">×</button>
           </div>`;
         }
         html += `</div></div>`;
@@ -591,7 +591,7 @@ export async function editarEdital(editalNome) {
   overlay.innerHTML = `<div style="background:#313244;border-radius:16px;padding:24px;max-width:700px;width:100%;max-height:90vh;overflow-y:auto;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
       <h3 style="color:#cba6f7;margin:0;">✏️ Editar: ${escapeHtml(editalNome)}</h3>
-      <button onclick="document.getElementById('editar-edital-modal').remove()" style="background:none;border:none;color:#f38ba8;font-size:1.2rem;cursor:pointer;">✕</button>
+      <button onclick="document.getElementById('editar-edital-modal').remove()" style="background:none;border:none;color:#f38ba8;font-size:1.2rem;cursor:pointer;" aria-label="Fechar">✕</button>
     </div>
     <div style="background:#1e1e2e;border:1px solid #f9e2af;border-radius:8px;padding:12px;margin-bottom:16px;">
       <label style="color:#f9e2af;font-size:0.85rem;font-weight:600;">📝 Nome do Edital (aplica para todos os cargos)

@@ -166,7 +166,7 @@ function _showFatigueBanner(level, sugestao, metricas) {
         </div>
         <div style="font-size:0.78rem;color:var(--text-sub, #9399b2);margin-top:2px;">${sugestao}</div>
       </div>
-      <button onclick="document.getElementById('fatigue-banner').remove()" style="background:none;border:none;color:var(--text-sub);font-size:1.2rem;cursor:pointer;padding:4px;" title="Fechar">✕</button>
+      <button onclick="document.getElementById('fatigue-banner').remove()" style="background:none;border:none;color:var(--text-sub);font-size:1.2rem;cursor:pointer;padding:4px;" title="Fechar" aria-label="Fechar">✕</button>
     </div>
     ${metricas ? `
       <div style="display:flex;gap:12px;font-size:0.72rem;color:var(--text-sub, #9399b2);background:${bgColor};border-radius:8px;padding:8px 12px;">
