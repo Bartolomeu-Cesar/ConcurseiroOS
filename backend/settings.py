@@ -121,7 +121,10 @@ class Settings:
     SMTP_USE_TLS: bool = os.environ.get("SMTP_USE_TLS", "true").lower() == "true"
 
     # Auth
-    AUTH_CODE_EXPIRE_MINUTES: int = int(os.environ.get("AUTH_CODE_EXPIRE_MINUTES", "10"))
+    # Validade do código de login por email. Limitada a no máximo 24h (1440 min)
+    # por segurança — mesmo que configurada acima disso via env, o teto prevalece.
+    # Piso de 1 min para evitar valores inválidos/zero.
+    AUTH_CODE_EXPIRE_MINUTES: int = max(1, min(int(os.environ.get("AUTH_CODE_EXPIRE_MINUTES", "10")), 1440))
     AUTH_ENABLED: bool = os.environ.get("AUTH_ENABLED", "false").lower() == "true"
 
     # Plano padrão para modo local (sem login): "guest", "free", "premium", "ilimitado"

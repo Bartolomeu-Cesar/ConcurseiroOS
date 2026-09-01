@@ -357,6 +357,48 @@ class TestAuthStatus:
 
 
 # ============================================================
+# EXPIRAÇÃO DO CÓDIGO DE LOGIN
+# ============================================================
+
+class TestCodigoExpiracao:
+    def test_codigo_expirado_rejeitado(self, client):
+        """verify-code rejeita (401) um código cujo expires_at já passou."""
+        email = "expira_codigo@example.com"
+        client.post("/api/auth/register", json={"email": email, "nome": "Expira"})
+        code = _get_code_from_db(email)
+        assert len(code) == 6
+
+        # Força o código a estar expirado (expires_at no passado).
+        passado = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
+        conn = sqlite3.connect(_tmp_db.name, check_same_thread=False, timeout=10)
+        conn.execute(
+            "UPDATE auth_codes SET expires_at = ? WHERE email = ? AND used = 0",
+            (passado, email),
+        )
+        conn.commit()
+        conn.close()
+
+        r = client.post("/api/auth/verify-code", json={"email": email, "code": code})
+        assert r.status_code == 401
+        assert "expirado" in r.json()["detail"].lower() or "inválido" in r.json()["detail"].lower()
+
+    def test_codigo_valido_dentro_da_validade(self, client):
+        """verify-code aceita um código dentro da validade (expires_at futuro)."""
+        email = "valido_codigo@example.com"
+        client.post("/api/auth/register", json={"email": email, "nome": "Valido"})
+        code = _get_code_from_db(email)
+        # expires_at padrão é futuro; verificação deve funcionar.
+        r = client.post("/api/auth/verify-code", json={"email": email, "code": code})
+        assert r.status_code == 200
+        assert "token" in r.json()
+
+    def test_validade_no_maximo_24h(self):
+        """O teto de validade do código nunca ultrapassa 24h (1440 min)."""
+        assert settings.AUTH_CODE_EXPIRE_MINUTES <= 1440
+        assert settings.AUTH_CODE_EXPIRE_MINUTES >= 1
+
+
+# ============================================================
 # CLEANUP
 # ============================================================
 
