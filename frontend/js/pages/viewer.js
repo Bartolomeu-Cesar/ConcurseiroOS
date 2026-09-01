@@ -67,8 +67,30 @@ async function initProgress() {
     }
   } catch (e) { /* rede offline: segue e deixa o PDF.js tentar (pode estar em cache) */ }
 
-  const pdfUrl = encodeURIComponent(`${location.origin}/pdf/${encodePath(path)}`);
-  frame.src = `/pdfjs/web/viewer.html?file=${pdfUrl}#page=${currentPage}`;
+  const pdfEndpoint = `${location.origin}/pdf/${encodePath(path)}`;
+  // O PDF.js embutido faz o próprio fetch da URL em `file=`, mas o browser NÃO
+  // anexa o header Authorization nesse fetch — resultando em 401 quando
+  // AUTH_ENABLED=true. Por isso buscamos o PDF aqui (com o Bearer token) e
+  // entregamos ao viewer via blob URL. Não expõe o token na URL.
+  try {
+    const token = localStorage.getItem('auth_token');
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(pdfEndpoint, { headers });
+    if (!res.ok) {
+      if (res.status === 401) { mostrarPdfNaoAutorizado(); return; }
+      if (res.status === 403) { mostrarPdfNaoAutorizado(true); return; }
+      if (res.status === 404) { mostrarPdfInexistente(); return; }
+      throw new Error(`HTTP ${res.status}`);
+    }
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    frame.src = `/pdfjs/web/viewer.html?file=${encodeURIComponent(blobUrl)}#page=${currentPage}`;
+  } catch (e) {
+    // Rede offline: tenta a URL direta (pode estar no cache do SW/PDF.js).
+    const pdfUrl = encodeURIComponent(pdfEndpoint);
+    frame.src = `/pdfjs/web/viewer.html?file=${pdfUrl}#page=${currentPage}`;
+  }
   _armarLeitorPosLoad(frame);
 
   setInterval(() => readPageFromViewer(), 400);
@@ -159,6 +181,32 @@ function mostrarPdfInexistente() {
   const pageInfo = document.getElementById('page-info');
   if (pageInfo) pageInfo.textContent = 'PDF indisponível';
   showStudyToast('⚠️ Este PDF não existe mais no diretório.');
+
+// Exibido quando o servidor recusa o acesso ao PDF: 401 (sessão) ou 403 (dono).
+function mostrarPdfNaoAutorizado(semPermissao) {
+  const viewer = document.getElementById('viewer');
+  if (viewer) {
+    const titulo = semPermissao ? 'Sem permissão para este PDF' : 'Sessão expirada';
+    const msg = semPermissao
+      ? 'Este PDF pertence a outro usuário e não foi compartilhado com você.'
+      : 'Sua sessão expirou ou você não está autenticado. Faça login novamente para abrir este PDF.';
+    const acao = semPermissao
+      ? '<a href="/" style="display:inline-block;background:var(--accent,#89b4fa);color:var(--bg,#1e1e2e);border-radius:8px;padding:10px 22px;font-weight:600;font-size:0.9rem;text-decoration:none;">🏠 Voltar ao início</a>'
+      : '<a href="/login.html" style="display:inline-block;background:var(--accent,#89b4fa);color:var(--bg,#1e1e2e);border-radius:8px;padding:10px 22px;font-weight:600;font-size:0.9rem;text-decoration:none;">🔑 Fazer login</a>';
+    viewer.innerHTML = `
+      <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:24px;">
+        <div style="background:var(--bg-surface,#313244);border:1px solid var(--border,#45475a);border-radius:16px;padding:36px 32px;max-width:420px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.4);">
+          <div style="font-size:2.6rem;margin-bottom:12px;">🔒</div>
+          <h2 style="color:var(--yellow,#f9e2af);font-size:1.15rem;margin:0 0 10px;">${titulo}</h2>
+          <p style="color:var(--text,#cdd6f4);font-size:0.9rem;line-height:1.6;margin:0 0 20px;">${msg}</p>
+          ${acao}
+        </div>
+      </div>`;
+  }
+  const pageInfo = document.getElementById('page-info');
+  if (pageInfo) pageInfo.textContent = 'PDF indisponível';
+  showStudyToast(semPermissao ? '🔒 Você não tem acesso a este PDF.' : '🔑 Sessão expirada. Faça login novamente.');
+}
 }
 
 function readPageFromViewer() {
