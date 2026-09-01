@@ -645,6 +645,32 @@ class TestDashboard:
         assert r.status_code == 200
         assert isinstance(r.json(), list)
 
+    def test_heatmap_inclui_dia_do_mes_passado(self, client):
+        """Regressão: dias estudados no mês passado (dentro de 365d) devem constar.
+
+        O endpoint retorna a janela de 365 dias — não só o mês atual. Garante que
+        o heatmap 'anual' não perca o passado recente (bug: sumia na virada de mês).
+        """
+        from datetime import date, timedelta
+        dia_passado = (date.today() - timedelta(days=40)).isoformat()
+        conn = sqlite3.connect(_tmp_db.name)
+        conn.execute(
+            """INSERT INTO streaks (data, horas_estudadas, questoes_resolvidas, flashcards_revisados, user_id)
+               VALUES (?, 2.0, 10, 5, 1)
+               ON CONFLICT(data, user_id) DO UPDATE SET horas_estudadas=excluded.horas_estudadas,
+                 questoes_resolvidas=excluded.questoes_resolvidas, flashcards_revisados=excluded.flashcards_revisados""",
+            (dia_passado,),
+        )
+        conn.commit()
+        conn.close()
+
+        r = client.get("/api/heatmap")
+        assert r.status_code == 200
+        dados = r.json()
+        item = next((d for d in dados if d["data"] == dia_passado), None)
+        assert item is not None, "dia estudado há 40 dias deveria aparecer no heatmap anual"
+        assert item["intensidade"] > 0, "dia com estudo deveria ter intensidade > 0"
+
     def test_radar(self, client):
         r = client.get("/api/radar")
         assert r.status_code == 200

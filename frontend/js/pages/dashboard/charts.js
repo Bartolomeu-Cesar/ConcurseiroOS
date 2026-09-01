@@ -243,15 +243,21 @@ export async function loadHeatmap() {
     data.forEach(d => { dateMap[d.data] = d.intensidade; });
     let html = '<div class="heatmap-grid">';
     const today = new Date();
-    const start = new Date(today.getFullYear(), today.getMonth(), 1);
-    const end = new Date(today.getFullYear(), 11, 31);
-    const totalDays = Math.ceil((end - start) / 86400000) + 1;
+    // Janela deslizante de 1 ano (últimos 365 dias até hoje) — alinhada ao backend
+    // (/api/heatmap retorna date.today()-365). Antes começava no 1º dia do mês
+    // atual, o que "zerava" os dias do passado na virada de mês.
+    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    start.setDate(start.getDate() - 364);
+    const end = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const totalDays = Math.round((end - start) / 86400000) + 1;
     for (let i = 0; i < totalDays; i++) {
       const d = new Date(start); d.setDate(d.getDate() + i);
-      const key = d.toISOString().split('T')[0];
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const key = `${yyyy}-${mm}-${dd}`;  // data local (evita shift de fuso do toISOString)
       const level = dateMap[key] || 0;
-      const isFuture = d > today;
-      html += `<div class="heatmap-cell ${level > 0 ? 'l'+level : ''} ${isFuture ? 'future' : ''}" title="${key}: ${level > 0 ? 'estudou' : isFuture ? 'futuro' : 'sem estudo'}"></div>`;
+      html += `<div class="heatmap-cell ${level > 0 ? 'l'+level : ''}" title="${key}: ${level > 0 ? 'estudou' : 'sem estudo'}"></div>`;
     }
     html += '</div>';
     el.innerHTML = html;
