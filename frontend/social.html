@@ -322,6 +322,7 @@
   </style>
 </head>
 <body>
+  <a href="#page-content" class="skip-link">Pular para conteúdo</a>
   <!-- Top Bar com perfil do usuário -->
   <header class="header" style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:#313244;border-radius:12px;margin-bottom:16px;">
     <div style="display:flex;align-items:center;gap:12px;">
@@ -340,12 +341,13 @@
     </div>
   </header>
 
-  <div class="tabs">
+  <main id="page-content" role="main">
+  <nav class="tabs" aria-label="Seções">
     <button class="tab-btn" onclick="switchTab('liga')">🏆 Liga</button>
     <button class="tab-btn" onclick="switchTab('ai')">🤖 AI Tutor</button>
     <button class="tab-btn active" onclick="switchTab('social')">👥 Social</button>
     <button class="tab-btn" onclick="switchTab('chat');loadChatConversations()">💬 Chat <span id="chat-badge" style="display:none;background:#f38ba8;color:#1e1e2e;font-size:0.65rem;padding:1px 5px;border-radius:8px;margin-left:4px;font-weight:700;"></span></button>
-  </div>
+  </nav>
 
   <!-- TAB: Liga -->
   <div class="tab-content" id="tab-liga">
@@ -584,6 +586,8 @@
       </div>
     </div>
   </div>
+
+  </main>
 
   <script src="/auth-interceptor.js"></script>
   <script src="/sidebar.js"></script>
