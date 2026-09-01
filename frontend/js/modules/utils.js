@@ -11,26 +11,79 @@ export function escapeHtml(text) {
   return div.innerHTML;
 }
 
+// ==================== MODAL ACCESSIBILITY HELPER ====================
+// Aplica semântica de diálogo (role/aria-modal/aria-labelledby), trap de foco,
+// fechamento com Esc e restauração do foco ao elemento anterior.
+// `onClose(reason)` é chamado quando o usuário pressiona Esc (reason = 'escape').
+let _modalIdSeq = 0;
+function _setupModalA11y(overlay, { labelId, onEscape } = {}) {
+  const dialog = overlay.firstElementChild;
+  if (dialog) {
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('aria-modal', 'true');
+    if (labelId) dialog.setAttribute('aria-labelledby', labelId);
+  }
+  // Elemento que tinha o foco antes de abrir o modal (para restaurar ao fechar)
+  const previouslyFocused = document.activeElement;
+
+  const getFocusable = () => Array.from(
+    overlay.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')
+  ).filter((el) => !el.disabled && el.offsetParent !== null);
+
+  const onKeydown = (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      if (onEscape) onEscape();
+      return;
+    }
+    if (e.key === 'Tab') {
+      const focusable = getFocusable();
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  };
+  overlay.addEventListener('keydown', onKeydown);
+
+  // Restaura o foco quando o overlay é removido do DOM
+  const cleanup = () => {
+    if (previouslyFocused && typeof previouslyFocused.focus === 'function' && document.contains(previouslyFocused)) {
+      previouslyFocused.focus();
+    }
+  };
+  const origRemove = overlay.remove.bind(overlay);
+  overlay.remove = () => { cleanup(); origRemove(); };
+}
+
 // ==================== MODAL DE CONFIRMAÇÃO ====================
 export function confirmModal(title, message, { confirmText = 'Confirmar', cancelText = 'Cancelar', type = 'warning', icon = '⚠️' } = {}) {
   return new Promise((resolve) => {
     const colors = { warning: '#f9e2af', danger: '#f38ba8', info: '#89b4fa', success: '#a6e3a1' };
     const btnColors = { warning: '#f9e2af', danger: '#f38ba8', info: '#89b4fa', success: '#a6e3a1' };
+    const titleId = `cm-title-${++_modalIdSeq}`;
     const overlay = document.createElement('div');
     overlay.id = 'confirm-modal-overlay';
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:99999;display:flex;align-items:center;justify-content:center;animation:fadeIn 0.15s;';
     overlay.innerHTML = `<div style="background:#313244;border-radius:16px;padding:28px;max-width:400px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.5);border:1px solid #45475a;animation:scaleIn 0.15s;">
       <div style="text-align:center;margin-bottom:16px;">
-        <div style="font-size:2.2rem;margin-bottom:8px;">${icon}</div>
-        <h3 style="color:${colors[type]};margin-bottom:8px;font-size:1.1rem;">${title}</h3>
-        <p style="font-size:0.85rem;color:#cdd6f4;line-height:1.5;">${message}</p>
+        <div style="font-size:2.2rem;margin-bottom:8px;" aria-hidden="true">${escapeHtml(icon)}</div>
+        <h3 id="${titleId}" style="color:${colors[type]};margin-bottom:8px;font-size:1.1rem;">${escapeHtml(title)}</h3>
+        <p style="font-size:0.85rem;color:#cdd6f4;line-height:1.5;white-space:pre-line;">${escapeHtml(message)}</p>
       </div>
       <div style="display:flex;gap:10px;justify-content:center;">
-        <button id="cm-cancel" style="background:#45475a;color:#cdd6f4;border:none;border-radius:8px;padding:10px 20px;font-size:0.88rem;cursor:pointer;font-weight:500;min-width:100px;">${cancelText}</button>
-        <button id="cm-confirm" style="background:${btnColors[type]};color:#1e1e2e;border:none;border-radius:8px;padding:10px 20px;font-size:0.88rem;cursor:pointer;font-weight:700;min-width:100px;">${confirmText}</button>
+        <button id="cm-cancel" style="background:#45475a;color:#cdd6f4;border:none;border-radius:8px;padding:10px 20px;font-size:0.88rem;cursor:pointer;font-weight:500;min-width:100px;">${escapeHtml(cancelText)}</button>
+        <button id="cm-confirm" style="background:${btnColors[type]};color:#1e1e2e;border:none;border-radius:8px;padding:10px 20px;font-size:0.88rem;cursor:pointer;font-weight:700;min-width:100px;">${escapeHtml(confirmText)}</button>
       </div>
     </div>`;
     document.body.appendChild(overlay);
+    _setupModalA11y(overlay, { labelId: titleId, onEscape: () => { overlay.remove(); resolve(false); } });
     overlay.querySelector('#cm-confirm').onclick = () => { overlay.remove(); resolve(true); };
     overlay.querySelector('#cm-cancel').onclick = () => { overlay.remove(); resolve(false); };
     overlay.addEventListener('click', (e) => { if (e.target === overlay) { overlay.remove(); resolve(false); } });
@@ -44,13 +97,14 @@ export function alertModal(message, { title = 'Aviso', type = 'info', icon = nul
     const colors = { warning: '#f9e2af', danger: '#f38ba8', info: '#89b4fa', success: '#a6e3a1' };
     const icons = { warning: '⚠️', danger: '❌', info: 'ℹ️', success: '✅' };
     const _icon = icon || icons[type] || 'ℹ️';
+    const titleId = `am-title-${++_modalIdSeq}`;
     const overlay = document.createElement('div');
     overlay.id = 'alert-modal-overlay';
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:99999;display:flex;align-items:center;justify-content:center;animation:fadeIn 0.15s;';
     overlay.innerHTML = `<div style="background:#313244;border-radius:16px;padding:28px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.5);border:1px solid #45475a;animation:scaleIn 0.15s;">
       <div style="text-align:center;margin-bottom:16px;">
-        <div style="font-size:2.2rem;margin-bottom:8px;">${_icon}</div>
-        <h3 style="color:${colors[type]};margin-bottom:8px;font-size:1.1rem;">${escapeHtml(title)}</h3>
+        <div style="font-size:2.2rem;margin-bottom:8px;" aria-hidden="true">${_icon}</div>
+        <h3 id="${titleId}" style="color:${colors[type]};margin-bottom:8px;font-size:1.1rem;">${escapeHtml(title)}</h3>
         <p style="font-size:0.85rem;color:#cdd6f4;line-height:1.5;white-space:pre-line;">${escapeHtml(message)}</p>
       </div>
       <div style="display:flex;justify-content:center;">
@@ -59,6 +113,7 @@ export function alertModal(message, { title = 'Aviso', type = 'info', icon = nul
     </div>`;
     document.body.appendChild(overlay);
     const close = () => { overlay.remove(); resolve(true); };
+    _setupModalA11y(overlay, { labelId: titleId, onEscape: close });
     overlay.querySelector('#am-ok').onclick = close;
     overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
     overlay.querySelector('#am-ok').focus();
@@ -68,6 +123,7 @@ export function alertModal(message, { title = 'Aviso', type = 'info', icon = nul
 // ==================== MODAL DE ENTRADA (prompt) ====================
 export function promptModal(message, { title = 'Informe', defaultValue = '', placeholder = '', confirmText = 'Confirmar', cancelText = 'Cancelar', icon = '✏️', multiline = false } = {}) {
   return new Promise((resolve) => {
+    const titleId = `pm-title-${++_modalIdSeq}`;
     const overlay = document.createElement('div');
     overlay.id = 'prompt-modal-overlay';
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:99999;display:flex;align-items:center;justify-content:center;animation:fadeIn 0.15s;';
@@ -76,8 +132,8 @@ export function promptModal(message, { title = 'Informe', defaultValue = '', pla
       : `<input id="pm-input" type="text" value="${escapeHtml(defaultValue)}" placeholder="${escapeHtml(placeholder)}" style="width:100%;padding:10px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.9rem;">`;
     overlay.innerHTML = `<div style="background:#313244;border-radius:16px;padding:28px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.5);border:1px solid #45475a;animation:scaleIn 0.15s;">
       <div style="text-align:center;margin-bottom:14px;">
-        <div style="font-size:2rem;margin-bottom:6px;">${icon}</div>
-        <h3 style="color:#89b4fa;margin-bottom:8px;font-size:1.1rem;">${escapeHtml(title)}</h3>
+        <div style="font-size:2rem;margin-bottom:6px;" aria-hidden="true">${escapeHtml(icon)}</div>
+        <h3 id="${titleId}" style="color:#89b4fa;margin-bottom:8px;font-size:1.1rem;">${escapeHtml(title)}</h3>
         ${message ? `<p style="font-size:0.85rem;color:#cdd6f4;line-height:1.5;margin-bottom:12px;">${escapeHtml(message)}</p>` : ''}
       </div>
       ${field}
@@ -90,6 +146,7 @@ export function promptModal(message, { title = 'Informe', defaultValue = '', pla
     const input = overlay.querySelector('#pm-input');
     const doConfirm = () => { const v = input.value; overlay.remove(); resolve(v); };
     const doCancel = () => { overlay.remove(); resolve(null); };
+    _setupModalA11y(overlay, { labelId: titleId, onEscape: doCancel });
     overlay.querySelector('#pm-confirm').onclick = doConfirm;
     overlay.querySelector('#pm-cancel').onclick = doCancel;
     overlay.addEventListener('click', (e) => { if (e.target === overlay) doCancel(); });
