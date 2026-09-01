@@ -406,6 +406,112 @@ class TestSimulados:
         r = client.delete(f"/api/simulados/{sid}")
         assert r.status_code == 200
 
+    def test_editar_simulado_pendente(self, client):
+        r = client.post("/api/simulados", json={"titulo": "Original", "tempo_limite_min": 30, "questao_ids": [1]})
+        sid = r.json()["id"]
+        r = client.patch(f"/api/simulados/{sid}", json={"titulo": "Editado", "tempo_limite_min": 45})
+        assert r.status_code == 200
+        assert r.json()["ok"] is True
+        data = client.get(f"/api/simulados/{sid}").json()
+        assert data["simulado"]["titulo"] == "Editado"
+        assert data["simulado"]["tempo_limite_min"] == 45
+
+    def test_editar_simulado_parcial(self, client):
+        r = client.post("/api/simulados", json={"titulo": "SoTitulo", "tempo_limite_min": 30, "questao_ids": [1]})
+        sid = r.json()["id"]
+        r = client.patch(f"/api/simulados/{sid}", json={"titulo": "NovoTitulo"})
+        assert r.status_code == 200
+        data = client.get(f"/api/simulados/{sid}").json()
+        assert data["simulado"]["titulo"] == "NovoTitulo"
+        assert data["simulado"]["tempo_limite_min"] == 30  # inalterado
+
+    def test_editar_simulado_finalizado_falha(self, client):
+        r = client.post("/api/simulados", json={"titulo": "ParaFinalizar", "tempo_limite_min": 30, "questao_ids": [1]})
+        sid = r.json()["id"]
+        client.post(f"/api/simulados/{sid}/finalizar", json={"tempo_gasto_seg": 60})
+        r = client.patch(f"/api/simulados/{sid}", json={"titulo": "NaoDeve"})
+        assert r.status_code == 400
+
+    def test_editar_simulado_inexistente(self, client):
+        r = client.patch("/api/simulados/999999", json={"titulo": "X"})
+        assert r.status_code == 404
+
+    def test_editar_simulado_titulo_vazio_falha(self, client):
+        r = client.post("/api/simulados", json={"titulo": "TituloOK", "tempo_limite_min": 30, "questao_ids": [1]})
+        sid = r.json()["id"]
+        r = client.patch(f"/api/simulados/{sid}", json={"titulo": "   "})
+        assert r.status_code == 400
+
+    def test_estatisticas_simulado_pendente(self, client):
+        r = client.post("/api/simulados", json={"titulo": "Pendente", "tempo_limite_min": 30, "questao_ids": [1]})
+        sid = r.json()["id"]
+        r = client.get(f"/api/simulados/{sid}/estatisticas")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["status"] == "pendente"
+        assert data["total_questoes"] == 1
+        assert data["acertos"] == 0
+        assert data["em_branco"] == 1
+
+
+# ============================================================
+# CADERNOS TEMÁTICOS
+# ============================================================
+
+class TestCadernos:
+    def test_listar_cadernos_vazio(self, client):
+        """GET /api/cadernos deve retornar lista (nunca erro 500) mesmo sem cadernos/questões."""
+        r = client.get("/api/cadernos")
+        assert r.status_code == 200
+        assert isinstance(r.json(), list)
+
+    def test_criar_e_listar_caderno(self, client):
+        r = client.post("/api/cadernos", json={"nome": "Revisão Final", "descricao": "temas quentes"})
+        assert r.status_code == 201
+        cid = r.json()["id"]
+        lista = client.get("/api/cadernos").json()
+        assert any(c["id"] == cid and c["nome"] == "Revisão Final" for c in lista)
+        # Caderno recém-criado sem questões: total_questoes = 0
+        cad = next(c for c in lista if c["id"] == cid)
+        assert cad["total_questoes"] == 0
+
+    def test_migracao_73_corrige_cadernos_antigo(self, tmp_path):
+        """Regressão: banco com tabela 'cadernos' antiga (sem cor/updated_at)
+        deve ser corrigido pela migração 73, sem quebrar o ORDER BY updated_at."""
+        import sqlite3
+
+        from db.migrations import _m73_cadernos_colunas_faltantes
+
+        db = tmp_path / "old.db"
+        conn = sqlite3.connect(str(db))
+        # Schema ANTIGO (sem cor nem updated_at) — reproduz o estado do bug
+        conn.execute("""
+            CREATE TABLE cadernos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome TEXT NOT NULL,
+                descricao TEXT DEFAULT '',
+                created_at TEXT NOT NULL,
+                user_id INTEGER NOT NULL DEFAULT 1
+            )
+        """)
+        conn.execute("INSERT INTO cadernos (nome, created_at, user_id) VALUES ('Antigo', '2024-01-01', 1)")
+        conn.commit()
+
+        # Aplica a migração de correção
+        _m73_cadernos_colunas_faltantes(conn)
+        conn.commit()
+
+        cols = [c[1] for c in conn.execute("PRAGMA table_info(cadernos)").fetchall()]
+        assert "cor" in cols
+        assert "updated_at" in cols
+
+        # A query que quebrava agora funciona
+        rows = conn.execute(
+            "SELECT * FROM cadernos ORDER BY updated_at DESC, created_at DESC"
+        ).fetchall()
+        assert len(rows) == 1
+        conn.close()
+
 
 # ============================================================
 # CICLO DE ESTUDOS

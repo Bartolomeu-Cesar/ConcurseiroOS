@@ -106,6 +106,11 @@ class SimuladoCreate(BaseModel):
     questao_ids: list[int]
 
 
+class SimuladoEditar(BaseModel):
+    titulo: str | None = None
+    tempo_limite_min: int | None = None
+
+
 class SimuladoResponder(BaseModel):
     questao_id: int
     resposta: str

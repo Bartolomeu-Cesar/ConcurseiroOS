@@ -7,6 +7,7 @@ from schemas import (
     SimuladoCreate,
     SimuladoCronometradoCreate,
     SimuladoCronometradoFinalizar,
+    SimuladoEditar,
     SimuladoFinalizar,
     SimuladoProvaReal,
     SimuladoResponder,
@@ -405,6 +406,39 @@ def create_simulado(body: SimuladoCreate, conn=Depends(get_db_session), user_id:
                      (sim_id, qid, i, user_id))
     conn.commit()
     return {"id": sim_id, "ok": True}
+
+
+@router.patch("/api/simulados/{id}", summary="Editar simulado não finalizado",
+              description="Edita título e/ou tempo limite de um simulado que ainda não foi finalizado.")
+def editar_simulado(id: int, body: SimuladoEditar, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    sim = conn.execute("SELECT status FROM simulados WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
+    if not sim:
+        raise HTTPException(status_code=404, detail="Simulado não encontrado")
+    if sim["status"] == "finalizado":
+        raise HTTPException(status_code=400, detail="Não é possível editar um simulado finalizado")
+
+    campos = []
+    valores = []
+    if body.titulo is not None:
+        titulo = body.titulo.strip()
+        if not titulo:
+            raise HTTPException(status_code=400, detail="Título não pode ser vazio")
+        campos.append("titulo = ?")
+        valores.append(titulo)
+    if body.tempo_limite_min is not None:
+        if body.tempo_limite_min <= 0:
+            raise HTTPException(status_code=400, detail="Tempo limite deve ser maior que zero")
+        campos.append("tempo_limite_min = ?")
+        valores.append(body.tempo_limite_min)
+
+    if not campos:
+        raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
+
+    valores.extend([id, user_id])
+    conn.execute(f"UPDATE simulados SET {', '.join(campos)} WHERE id = ? AND user_id = ?", valores)
+    conn.commit()
+    log.info(f"Simulado {id} editado (user={user_id})")
+    return {"ok": True}
 
 
 @router.post("/api/simulados/{id}/responder")

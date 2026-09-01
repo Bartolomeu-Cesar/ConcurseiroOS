@@ -677,7 +677,9 @@ async function loadSimulados() {
       ${s.status === 'finalizado'
         ? `<span class="sim-nota">${s.nota}%</span>
            <button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px;" onclick="toggleEstatisticasSimulado(${s.id})" aria-label="Ver estatísticas">📊 Estatísticas</button>`
-        : `<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 10px;" onclick="iniciarSimulado(${s.id})">Continuar</button>`}
+        : `<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 10px;" onclick="iniciarSimulado(${s.id})">Continuar</button>
+           <button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px;" onclick="toggleEstatisticasSimulado(${s.id})" aria-label="Ver estatísticas">📊 Estatísticas</button>
+           <button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px;" onclick="editarSimulado(${s.id})" aria-label="Editar simulado">✏️ Editar</button>`}
       <button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 8px;" onclick="deleteSimulado(${s.id})" aria-label="Excluir simulado">🗑</button>
     </div>
     <div id="sim-stats-${s.id}" style="display:none;margin:-4px 0 10px;padding:12px;background:var(--bg,#1e1e2e);border:1px solid var(--border,#45475a);border-radius:8px;"></div>
@@ -692,7 +694,26 @@ window.toggleEstatisticasSimulado = async function(id) {
   box.innerHTML = '<span style="color:#9399b2;font-size:0.8rem;">Carregando estatísticas...</span>';
   try {
     const st = await fetch(`/api/simulados/${id}/estatisticas`).then(r => r.json());
+    const respondidas = st.acertos + st.erros;
+    const pendente = st.status !== 'finalizado';
+
+    // Simulado ainda não iniciado (nenhuma questão respondida)
+    if (pendente && respondidas === 0) {
+      box.innerHTML = `
+        <div style="font-size:0.82rem;color:var(--text,#cdd6f4);margin-bottom:6px;">
+          <b>Simulado não iniciado</b> · ainda sem respostas.
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:12px;font-size:0.8rem;">
+          <span style="color:#89b4fa;">📝 ${st.total_questoes} questões</span>
+          <span style="color:#9399b2;">⬜ ${st.em_branco} pendentes</span>
+        </div>`;
+      return;
+    }
+
     const cor = st.pct_acerto >= 70 ? '#a6e3a1' : st.pct_acerto >= 50 ? '#f9e2af' : '#f38ba8';
+    const progresso = pendente
+      ? `<div style="font-size:0.78rem;color:#f9e2af;margin-bottom:8px;">⏳ Em andamento · ${respondidas}/${st.total_questoes} respondidas</div>`
+      : '';
     const mats = (st.por_materia || []).map(m => {
       const mc = m.pct >= 70 ? '#a6e3a1' : m.pct >= 50 ? '#f9e2af' : '#f38ba8';
       return `<div style="display:flex;align-items:center;gap:8px;margin:3px 0;font-size:0.78rem;">
@@ -702,6 +723,7 @@ window.toggleEstatisticasSimulado = async function(id) {
       </div>`;
     }).join('');
     box.innerHTML = `
+      ${progresso}
       <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:10px;font-size:0.8rem;">
         <span style="color:${cor};font-weight:700;font-size:1.1rem;">${st.pct_acerto}%</span>
         <span style="color:#a6e3a1;">✅ ${st.acertos} acertos</span>
@@ -717,6 +739,55 @@ window.toggleEstatisticasSimulado = async function(id) {
     box.innerHTML = '<span style="color:#f38ba8;font-size:0.8rem;">Erro ao carregar estatísticas.</span>';
   }
 };
+
+async function editarSimulado(id) {
+  // Buscar dados atuais do simulado
+  const data = await fetch(`/api/simulados/${id}`).then(r => r.json());
+  const sim = data.simulado;
+  if (!sim) { toast('Simulado não encontrado.', 'error'); return; }
+  if (sim.status === 'finalizado') {
+    toast('Não é possível editar um simulado finalizado.', 'error');
+    return;
+  }
+
+  const novoTitulo = await promptModal('Título do simulado', {
+    title: 'Editar simulado',
+    defaultValue: sim.titulo,
+    placeholder: 'Título',
+  });
+  if (novoTitulo === null) return; // cancelado
+
+  const tempoStr = await promptModal('Tempo limite (minutos)', {
+    title: 'Editar simulado',
+    defaultValue: String(sim.tempo_limite_min ?? 60),
+    placeholder: 'Ex: 60',
+  });
+  if (tempoStr === null) return; // cancelado
+
+  const tempo = parseInt(tempoStr, 10);
+  const payload = {};
+  if (novoTitulo.trim()) payload.titulo = novoTitulo.trim();
+  if (!isNaN(tempo) && tempo > 0) payload.tempo_limite_min = tempo;
+
+  if (Object.keys(payload).length === 0) {
+    toast('Nada para atualizar.', 'info');
+    return;
+  }
+
+  const res = await fetch(`/api/simulados/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (res.ok) {
+    toast('Simulado atualizado.', 'success');
+    loadSimulados();
+  } else {
+    const err = await res.json().catch(() => ({}));
+    toast(err.detail || 'Erro ao editar simulado.', 'error');
+  }
+}
+window.editarSimulado = editarSimulado;
 
 async function deleteSimulado(id) {
   if (!await confirmModal('Excluir simulado', 'Excluir este simulado?', { type: 'danger', confirmText: 'Excluir' })) return;

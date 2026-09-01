@@ -952,6 +952,39 @@ def _m72_ai_token_limit(conn):
         pass  # coluna já existe
 
 
+def _m73_cadernos_colunas_faltantes(conn):
+    """Garante colunas 'cor' e 'updated_at' na tabela cadernos.
+
+    Correção de banco: em instalações onde a tabela 'cadernos' foi criada com
+    schema antigo e a migração 53 foi marcada como aplicada sem executar de fato
+    (detecção 'fresh database'), essas colunas nunca foram adicionadas. Isso
+    quebrava GET /api/cadernos com 'no such column: c.updated_at'.
+    Idempotente: se a coluna já existe, o ALTER falha e é ignorado.
+    """
+    # A própria tabela pode não existir em bancos muito antigos — garante criação
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS cadernos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL DEFAULT 1,
+            nome TEXT NOT NULL,
+            descricao TEXT DEFAULT '',
+            cor TEXT DEFAULT '#89b4fa',
+            created_at TEXT NOT NULL,
+            updated_at TEXT DEFAULT ''
+        )
+    """)
+    for col, defn in [
+        ("cor", "TEXT DEFAULT '#89b4fa'"),
+        ("updated_at", "TEXT DEFAULT ''"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE cadernos ADD COLUMN {col} {defn}")
+            log.info(f"Migration: added {col} to cadernos")
+        except Exception:
+            pass  # coluna já existe
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_cadernos_user ON cadernos(user_id)")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -1025,6 +1058,7 @@ MIGRATIONS = [
     (70, _m70_broadcasts),
     (71, _m71_conta_status),
     (72, _m72_ai_token_limit),
+    (73, _m73_cadernos_colunas_faltantes),
 ]
 
 
