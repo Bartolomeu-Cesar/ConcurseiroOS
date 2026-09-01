@@ -80,4 +80,7 @@ USER appuser
 
 WORKDIR /app/backend
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--access-log"]
+# --no-access-log: o access log padrão do uvicorn registra a query string, o que
+# vazaria o ?token= usado para servir PDFs ao PDF.js. O app já tem logging
+# estruturado (AccessLogMiddleware) que registra apenas o path, sem a query.
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--no-access-log"]
