@@ -727,7 +727,7 @@ window.linkVideoToTopic = function(editalId, topico) {
     const id = extractYouTubeId(val);
     const preview = document.getElementById('video-link-preview');
     if (id) {
-      preview.innerHTML = `<img src="https://img.youtube.com/vi/${id}/mqdefault.jpg" style="width:120px;border-radius:6px;margin-top:4px;">`;
+      preview.innerHTML = `<img src="https://img.youtube.com/vi/${id}/mqdefault.jpg" alt="Miniatura do vídeo do YouTube" style="width:120px;border-radius:6px;margin-top:4px;">`;
     } else if (val) {
       preview.textContent = '⚠️ Link inválido — use um link do YouTube';
       preview.style.color = 'var(--red)';

@@ -603,7 +603,7 @@ async function openGroupDetail(groupId) {
       ${data.members.map(m => `
         <div style="display:flex;align-items:center;gap:10px;padding:8px;background:#1e1e2e;border-radius:8px;margin-bottom:6px;">
           <div style="width:36px;height:36px;border-radius:50%;background:#45475a;display:flex;align-items:center;justify-content:center;font-size:1rem;">
-            ${m.avatar ? `<img src="${m.avatar}" style="width:36px;height:36px;border-radius:50%;">` : roleIcons[m.role]}
+            ${m.avatar ? `<img src="${m.avatar}" alt="Avatar de ${escapeHtml(m.nome)}" style="width:36px;height:36px;border-radius:50%;">` : roleIcons[m.role]}
           </div>
           <div style="flex:1;">
             <div style="font-size:0.85rem;font-weight:600;color:#cdd6f4;">${escapeHtml(m.nome)}</div>
