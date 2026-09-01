@@ -400,15 +400,25 @@ async function loadFriends() {
     if (!friends.length) {
       container.innerHTML = '<div class="empty-state"><div class="emoji">👋</div><p>Nenhum amigo ainda</p><p class="hint">Convide alguém para estudar junto!</p></div>';
     } else {
-      container.innerHTML = friends.map(f => `
-        <div class="friend-item">
-          <div class="avatar">👤</div>
+      container.innerHTML = friends.map(f => {
+        // Usa o status de presença REAL vindo do backend (mesma fonte do widget
+        // "Amigos ativos"). Antes caía no fallback fixo 'online', divergindo do
+        // widget. `online` é boolean; `status_label` traz o rótulo humano.
+        const online = f.online === true;
+        const label = online ? (f.status_label || 'Online') : 'Offline';
+        const emoji = f.status_emoji || (online ? '🟢' : '💤');
+        const dotColor = online ? '#a6e3a1' : '#6c7086';
+        return `
+        <div class="friend-item" style="opacity:${online ? '1' : '0.6'};">
+          <div class="avatar" style="position:relative;">${escapeHtml(f.avatar || '👤')}
+            <span style="position:absolute;bottom:-2px;right:-2px;width:10px;height:10px;border-radius:50%;background:${dotColor};border:2px solid var(--bg,#1e1e2e);"></span>
+          </div>
           <div class="info">
             <div class="name">${escapeHtml(f.nome || f.username || f.email || 'Amigo')}</div>
-            <div class="sub">${f.status || 'online'}</div>
+            <div class="sub">${emoji} ${escapeHtml(label)}${online && f.materia ? ' · ' + escapeHtml(f.materia) : ''}</div>
           </div>
-        </div>
-      `).join('');
+        </div>`;
+      }).join('');
     }
   } catch {
     document.getElementById('friends-list').innerHTML = '<div class="empty-state"><div class="emoji">⚠️</div><p>Erro ao carregar amigos</p></div>';

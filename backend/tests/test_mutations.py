@@ -953,6 +953,31 @@ class TestIntegrationStateChanges:
         assert r.status_code == 200
         assert not any(f["user_id"] == 3 for f in r.json()["friends"])
 
+    def test_friends_list_inclui_presenca_consistente(self):
+        """Regressão: /api/social/friends deve retornar nome, avatar e status de
+        presença REAIS (mesma fonte do widget), não o fallback fixo 'online'.
+
+        Bug relatado: o mesmo usuário aparecia como 'online' na lista de amigos
+        (fallback) e 'Offline' no widget de presença, com nomes diferentes
+        (username vs nome).
+        """
+        _create_test_user(4, "presenca@test.com", "PresencaUser")
+        fid = _create_friendship(user_a=4, user_b=1, status="pending")
+        client.post(f"/api/social/friends/{fid}/accept")
+
+        r = client.get("/api/social/friends")
+        assert r.status_code == 200
+        amigo = next(f for f in r.json()["friends"] if f["user_id"] == 4)
+
+        # Campos de identidade e presença presentes.
+        assert "nome" in amigo and amigo["nome"]
+        assert "avatar" in amigo
+        assert "status_label" in amigo
+        # online deve ser boolean (não string fixa) e, sem heartbeat, False.
+        assert amigo["online"] is False
+        assert amigo["status"] == "offline"
+        assert amigo["status_label"] == "Offline"
+
     def test_full_group_lifecycle(self):
         """Test complete group flow: create → list → leave."""
         # Create

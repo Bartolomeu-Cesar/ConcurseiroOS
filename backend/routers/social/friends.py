@@ -41,16 +41,60 @@ def list_friends(
         return {"friends": []}
 
     friends = []
+    # Reusa a MESMA derivação de presença do widget (status.py) para que a lista
+    # de amigos e o widget "Amigos ativos" fiquem consistentes (mesmo nome e
+    # mesmo online/offline). Antes, esta rota só retornava `username` e nenhum
+    # status → o frontend caía no fallback fixo `'online'` e num nome diferente.
+    from .status import STATUS_VALIDOS, _is_online
+
     for r in rows:
         friend_info = db.execute(
-            "SELECT id, username FROM users WHERE id = ?", (r["friend_id"],)
+            """SELECT u.id, u.nome, u.username, u.avatar,
+                      s.status, s.materia, s.atualizado_em
+               FROM users u
+               LEFT JOIN user_status s ON s.user_id = u.id
+               WHERE u.id = ?""",
+            (r["friend_id"],)
         ).fetchone()
+
+        if not friend_info:
+            friends.append({
+                "friendship_id": r["id"],
+                "user_id": r["friend_id"],
+                "nome": "Desconhecido",
+                "username": "Desconhecido",
+                "avatar": "👤",
+                "online": False,
+                "status": "offline",
+                "status_label": STATUS_VALIDOS["offline"]["label"],
+                "status_emoji": STATUS_VALIDOS["offline"]["emoji"],
+                "materia": "",
+                "created_at": r["created_at"],
+            })
+            continue
+
+        status_raw = friend_info["status"] or "offline"
+        online = _is_online(friend_info["atualizado_em"]) and status_raw != "offline"
+        if not online:
+            status_raw = "offline"
+        info = STATUS_VALIDOS.get(status_raw, STATUS_VALIDOS["offline"])
+
         friends.append({
             "friendship_id": r["id"],
             "user_id": r["friend_id"],
-            "username": friend_info["username"] if friend_info else "Desconhecido",
-            "created_at": r["created_at"]
+            "nome": friend_info["nome"] or friend_info["username"] or f"Concurseiro #{friend_info['id']}",
+            "username": friend_info["username"] or "",
+            "avatar": friend_info["avatar"] or "👤",
+            "online": online,
+            "status": status_raw,
+            "status_label": info["label"],
+            "status_emoji": info["emoji"],
+            "materia": (friend_info["materia"] or "") if online else "",
+            "created_at": r["created_at"],
         })
+
+    # Online primeiro, depois por nome (mesma ordenação do widget de presença).
+    friends.sort(key=lambda a: (not a["online"], a["nome"].lower()))
 
     return {"friends": friends}
 
