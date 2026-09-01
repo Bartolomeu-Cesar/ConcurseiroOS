@@ -69,6 +69,7 @@ body {
   color: var(--text);
   min-height: 100vh;
   padding: 0 !important;
+  overflow-x: hidden;
 }
 
 a {
@@ -996,6 +997,10 @@ kbd { display: inline-block; background: #1e1e2e; border: 1px solid #45475a; bor
   #ciclo-cards-grid { grid-template-columns: 1fr; }
 }
 
+@media (max-width: 600px) {
+  body { padding: 12px; }
+}
+
 @media (max-width: 480px) {
   body { padding: 8px 4px 80px; }
   .page-content { padding: 12px; }
@@ -1007,10 +1012,6 @@ kbd { display: inline-block; background: #1e1e2e; border: 1px solid #45475a; bor
   .metas-mini { display: none; }
   .cards { grid-template-columns: 1fr; }
   .header { flex-direction: column; align-items: flex-start; gap: 12px; }
-}
-
-@media (max-width: 600px) {
-  body { padding: 12px; }
 }
 
 /* ===== LIGHT THEME (Catppuccin Latte) ===== */
