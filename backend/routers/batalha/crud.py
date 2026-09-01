@@ -224,7 +224,9 @@ def status_sala(
                 "_mapping": mapping,  # Para o frontend traduzir ao responder
                 "dificuldade": _round_difficulty(round_data["rodada_num"], battle["total_rodadas"]),
                 "tempo_segundos": _calcular_tempo_questao_batalha(
-                    round_data["enunciado"], len(alt_items), battle["tempo_por_questao"]
+                    round_data["enunciado"], len(alt_items), battle["tempo_por_questao"],
+                    alternativas=[{"texto": t} for _, t in alt_items],
+                    dificuldade=_round_difficulty(round_data["rodada_num"], battle["total_rodadas"])["nivel"],
                 ),
                 # Só revelar acertos depois que todos responderam
                 "responderam": [

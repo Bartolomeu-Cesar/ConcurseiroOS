@@ -6,6 +6,69 @@ from typing import Any
 from pypdf import PdfReader
 
 
+
+
+# ============================================================
+# TEMPO ADAPTATIVO POR QUESTÃO (mais justo — inclui alternativas)
+# ============================================================
+
+# Velocidade de leitura para COMPREENSÃO de prova (não leitura casual).
+# Leitura casual fica em ~200-250 wpm (Brysbaert, 2019), mas leitura analítica
+# de questão de concurso — com releitura, atenção a pegadinhas e negações —
+# cai para ~120-150 wpm. Usamos 130 wpm como base conservadora e mais justa.
+_WPM_COMPREENSAO = 130
+
+# Multiplicador de tempo por dificuldade declarada da questão.
+_FATOR_DIFICULDADE = {
+    "fácil": 1.0, "facil": 1.0,
+    "médio": 1.15, "medio": 1.15, "média": 1.15, "media": 1.15,
+    "difícil": 1.35, "dificil": 1.35,
+}
+
+
+def calcular_tempo_resposta_questao(
+    enunciado: str,
+    alternativas: list | None = None,
+    dificuldade: str = "Médio",
+    minimo: int = 30,
+    maximo: int = 180,
+) -> int:
+    """Tempo justo (segundos) para responder uma questão de múltipla escolha.
+
+    Melhora o cálculo antigo (que ignorava o texto das alternativas e usava
+    200 wpm) considerando:
+
+    - Leitura do enunciado E das alternativas a 130 wpm (compreensão de prova).
+    - Tempo de avaliação por alternativa (comparar/eliminar): 4s cada.
+    - Tempo de decisão/releitura do comando: 12s.
+    - Fator por dificuldade (Fácil 1.0 / Médio 1.15 / Difícil 1.35).
+    - Faixa padrão 30s–180s (questões longas de interpretação têm tempo justo).
+
+    `alternativas` pode ser uma lista de strings ou de dicts {"texto": ...}.
+    """
+    palavras_enunciado = len(enunciado.split()) if enunciado else 10
+
+    alternativas = alternativas or []
+    num_alt = 0
+    palavras_alt = 0
+    for a in alternativas:
+        texto = a.get("texto", "") if isinstance(a, dict) else str(a or "")
+        texto = texto.strip()
+        if not texto:
+            continue
+        num_alt += 1
+        palavras_alt += len(texto.split())
+    if num_alt == 0:
+        num_alt = 4  # fallback defensivo
+
+    total_palavras = palavras_enunciado + palavras_alt
+    tempo_leitura = (total_palavras / _WPM_COMPREENSAO) * 60  # segundos
+    tempo_avaliacao_alt = num_alt * 4  # avaliar/eliminar cada alternativa
+    tempo_decisao = 12  # releitura do comando + decisão final
+
+    fator = _FATOR_DIFICULDADE.get((dificuldade or "").strip().lower(), 1.15)
+    tempo = int((tempo_leitura + tempo_avaliacao_alt + tempo_decisao) * fator)
+    return max(minimo, min(maximo, tempo))
 def today_str():
     return date.today().isoformat()
 

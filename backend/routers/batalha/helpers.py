@@ -205,22 +205,23 @@ def _calculate_points(acertou: bool, tempo_seg: int, tempo_max: int, streak: int
     return subtotal
 
 
-def _calcular_tempo_questao_batalha(enunciado: str, num_alternativas: int, tempo_config: int) -> int:
+def _calcular_tempo_questao_batalha(enunciado: str, num_alternativas: int, tempo_config: int, alternativas=None, dificuldade: str = "Médio") -> int:
     """Calcula tempo adaptativo para questão de batalha.
 
-    Usa a mesma fórmula baseada em evidência (Brysbaert 2019: 200 wpm),
-    mas garante que o tempo nunca seja inferior ao configurado pelo criador
-    da sala (tempo_config).
+    Usa a função compartilhada (mais justa: inclui o texto das alternativas e
+    130 wpm de leitura de prova), mas garante que o tempo nunca seja inferior
+    ao configurado pelo criador da sala (tempo_config).
 
     Retorna o MAIOR entre: tempo calculado pela complexidade e tempo_config.
-    Isso garante que questões longas tenham tempo justo sem reduzir
-    o tempo que o criador definiu para questões curtas.
+    `alternativas` e `dificuldade` são opcionais; quando fornecidos tornam o
+    cálculo mais preciso.
     """
-    palavras = len(enunciado.split()) if enunciado else 10
-    tempo_leitura = (palavras / 200) * 60  # segundos para ler
-    tempo_alternativas = num_alternativas * 3  # 3s por alternativa
-    tempo_decisao = 5
-    tempo_calculado = int(tempo_leitura + tempo_alternativas + tempo_decisao)
-    tempo_calculado = max(20, min(120, tempo_calculado))  # clamp 20-120s para batalha
+    from utils import calcular_tempo_resposta_questao
+
+    if alternativas is None:
+        alternativas = [{"texto": "x " * 12}] * max(1, num_alternativas)
+    tempo_calculado = calcular_tempo_resposta_questao(
+        enunciado, alternativas, dificuldade, minimo=20, maximo=180
+    )
     # Usar o MAIOR entre o configurado e o calculado
     return max(tempo_config, tempo_calculado)

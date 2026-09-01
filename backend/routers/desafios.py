@@ -204,24 +204,25 @@ def _select_challenge_questions(conn, user_id: int, quantidade: int = 5) -> list
     return combined[:quantidade]
 
 
-def calcular_tempo_questao(enunciado: str, num_alternativas: int) -> int:
-    """Calcula tempo em segundos baseado na complexidade da questão.
+def calcular_tempo_questao(enunciado: str, num_alternativas: int, alternativas=None, dificuldade: str = "Médio") -> int:
+    """Tempo (segundos) para responder a questão do desafio diário.
 
-    Fundamentação científica:
-    - Velocidade média de leitura: ~200 palavras/min (Brysbaert, 2019)
-    - Tempo de processamento por alternativa: ~3s (Kyllonen & Zu, 2016)
-    - Tempo de decisão: +5s (margem para deliberação)
-    - Faixa: 20s-90s (desirable difficulty sem ser punitivo)
+    Delega para utils.calcular_tempo_resposta_questao, que é mais justo: inclui
+    o texto das alternativas na leitura, usa 130 wpm (compreensão de prova) e
+    aplica fator por dificuldade. `num_alternativas` é mantido por compatibilidade
+    de assinatura; quando `alternativas` (com texto) é fornecido, ele é usado.
 
-    Para questões C/E (2 alternativas): tempo tende a ser menor.
-    Para questões longas com 5 alternativas: tempo maior.
+    Fundamentação:
+    - Leitura para compreensão de prova: ~130 wpm (vs. 200 wpm de leitura casual).
+    - Avaliação por alternativa + decisão/releitura do comando.
+    - Faixa 30s–180s (questões longas de interpretação têm tempo justo).
     """
-    palavras = len(enunciado.split()) if enunciado else 10
-    tempo_leitura = (palavras / 200) * 60  # segundos para ler o enunciado
-    tempo_alternativas = num_alternativas * 3  # 3s por alternativa
-    tempo_decisao = 5  # margem de deliberação
-    tempo = int(tempo_leitura + tempo_alternativas + tempo_decisao)
-    return max(20, min(90, tempo))  # clamp entre 20s e 90s
+    from utils import calcular_tempo_resposta_questao
+
+    if alternativas is None:
+        # Sem texto das alternativas: aproxima com N alternativas "médias".
+        alternativas = [{"texto": "x " * 12}] * max(1, num_alternativas)
+    return calcular_tempo_resposta_questao(enunciado, alternativas, dificuldade)
 
 
 class DesafioDiarioResposta(BaseModel):
@@ -260,7 +261,10 @@ def get_desafio_diario(conn=Depends(get_db_session), user_id: int = Depends(get_
                     "enunciado": q_dict["enunciado"],
                     "alternativas": alternativas,
                     "dificuldade": q_dict.get("dificuldade", "Médio"),
-                    "tempo_segundos": calcular_tempo_questao(q_dict["enunciado"], len(alternativas)),
+                    "tempo_segundos": calcular_tempo_questao(
+                        q_dict["enunciado"], len(alternativas),
+                        alternativas=alternativas, dificuldade=q_dict.get("dificuldade", "Médio")
+                    ),
                 })
         return {
             "id": existing["id"],
@@ -308,7 +312,10 @@ def get_desafio_diario(conn=Depends(get_db_session), user_id: int = Depends(get_
             "enunciado": q["enunciado"],
             "alternativas": alternativas,
             "dificuldade": q.get("dificuldade", "Médio"),
-            "tempo_segundos": calcular_tempo_questao(q["enunciado"], len(alternativas)),
+            "tempo_segundos": calcular_tempo_questao(
+                q["enunciado"], len(alternativas),
+                alternativas=alternativas, dificuldade=q.get("dificuldade", "Médio")
+            ),
         })
 
     log.info(f"Desafio Diário gerado: id={desafio_id} user={user_id} questoes={len(questoes_fmt)}")
