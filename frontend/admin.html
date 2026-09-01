@@ -468,11 +468,11 @@
             <td style="font-size:0.72rem;color:${validadeCor[u.validade?.situacao] || '#9399b2'};">${esc(u.validade?.label || '—')}</td>
             <td style="font-size:0.75rem;color:#9399b2;">${formatDate(u.created_at)}</td>
             <td>
-              <button class="btn small secondary" onclick="editUser(${u.id})">✏️</button>
-              <button class="btn small" onclick="openMoneyModal(${u.id}, '${esc(u.nome)}')" title="Gerenciar plano/créditos">💰</button>
-              ${u.id !== 1 ? '<button class="btn small" style="background:#89dceb;color:#1e1e2e;" onclick="impersonar(' + u.id + ',\'' + esc(u.nome) + '\')" title="Entrar como este usuário">🎭</button>' : ''}
-              ${u.id !== 1 ? '<button class="btn small" style="background:#fab387;color:#1e1e2e;" onclick="moderarUsuario(' + u.id + ',\'' + esc(u.nome) + '\')" title="Moderar (banir/suspender)">🚫</button>' : ''}
-              ${u.id !== 1 ? '<button class="btn small danger" onclick="deleteUser(' + u.id + ',\'' + esc(u.nome) + '\')">🗑</button>' : ''}
+              <button class="btn small secondary" onclick="editUser(${u.id})" title="Editar usuário" aria-label="Editar usuário ${esc(u.nome)}">✏️</button>
+              <button class="btn small" onclick="openMoneyModal(${u.id}, '${esc(u.nome)}')" title="Gerenciar plano/créditos" aria-label="Gerenciar plano e créditos de ${esc(u.nome)}">💰</button>
+              ${u.id !== 1 ? '<button class="btn small" style="background:#89dceb;color:#1e1e2e;" onclick="impersonar(' + u.id + ',\'' + esc(u.nome) + '\')" title="Entrar como este usuário" aria-label="Entrar como ' + esc(u.nome) + '">🎭</button>' : ''}
+              ${u.id !== 1 ? '<button class="btn small" style="background:#fab387;color:#1e1e2e;" onclick="moderarUsuario(' + u.id + ',\'' + esc(u.nome) + '\')" title="Moderar (banir/suspender)" aria-label="Moderar ' + esc(u.nome) + ' (banir ou suspender)">🚫</button>' : ''}
+              ${u.id !== 1 ? '<button class="btn small danger" onclick="deleteUser(' + u.id + ',\'' + esc(u.nome) + '\')" title="Excluir usuário" aria-label="Excluir usuário ' + esc(u.nome) + '">🗑</button>' : ''}
             </td>
           </tr>
         `).join('');

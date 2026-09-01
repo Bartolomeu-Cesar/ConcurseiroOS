@@ -475,14 +475,14 @@
       <!-- Janela de mensagens (aparece ao selecionar conversa) -->
       <div id="chat-window" class="chat-window" style="display:none;">
         <div class="chat-window__header" id="chat-header">
-          <button class="chat-back-btn" onclick="closeChatWindow()">←</button>
+          <button class="chat-back-btn" onclick="closeChatWindow()" aria-label="Voltar">←</button>
           <span class="chat-friend-name" id="chat-friend-name"></span>
         </div>
         <div class="chat-messages" id="dm-messages"></div>
         <div class="chat-input-area">
           <input type="text" id="dm-input" placeholder="Digite sua mensagem..." maxlength="1000" onkeydown="if(event.key==='Enter')sendChatMessage()">
-          <button class="chat-audio-btn" id="dm-record-btn" onclick="toggleAudioRecording()" title="Gravar áudio">🎤</button>
-          <button class="chat-send-btn" onclick="sendChatMessage()">➤</button>
+          <button class="chat-audio-btn" id="dm-record-btn" onclick="toggleAudioRecording()" title="Gravar áudio" aria-label="Gravar áudio">🎤</button>
+          <button class="chat-send-btn" onclick="sendChatMessage()" aria-label="Enviar mensagem">➤</button>
         </div>
       </div>
     </div>
@@ -567,7 +567,7 @@
       <label style="font-size:0.82rem;color:#cdd6f4;font-weight:500;display:block;margin-bottom:4px;">API Key</label>
       <div style="position:relative;">
         <input type="password" id="ai-config-key" placeholder="Cole sua API key aqui..." style="padding-right:40px;">
-        <button onclick="toggleKeyVisibility()" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1rem;opacity:0.6;" title="Mostrar/Ocultar">👁</button>
+        <button onclick="toggleKeyVisibility()" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1rem;opacity:0.6;" title="Mostrar/Ocultar" aria-label="Mostrar ou ocultar a API key">👁</button>
       </div>
 
       <label style="font-size:0.82rem;color:#cdd6f4;font-weight:500;display:block;margin-bottom:4px;">Modelo <span style="color:#9399b2;font-weight:400;">(deixe vazio para usar o padrão)</span></label>
