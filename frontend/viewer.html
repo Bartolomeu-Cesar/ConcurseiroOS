@@ -97,7 +97,7 @@
       <button onclick="abrirGerarIA()" title="Gerar resumo/flashcards/questões deste PDF com IA" style="background:var(--bg-elevated);border:none;color:var(--mauve,#cba6f7);border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">✨ IA</button>
       <button onclick="toggleRevisaoPanel()" title="Caderno de Revisão [C]" style="background:var(--bg-elevated);border:none;color:var(--teal,#94e2d5);border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">📑 Revisão</button>
       <button onclick="toggleDestaquesPanel()" id="btn-destaques" title="Meus destaques [H]" style="background:var(--bg-elevated);border:none;color:var(--yellow,#f9e2af);border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;position:relative;">🖍️<span id="destaques-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--red,#f38ba8);color:#1e1e2e;font-size:0.6rem;font-weight:700;border-radius:999px;padding:0 4px;min-width:14px;text-align:center;"></span></button>
-      <select id="study-technique" onchange="setStudyTechnique(this.value)" title="Técnica de estudo" style="background:var(--bg-elevated);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:3px 6px;font-size:0.75rem;cursor:pointer;">
+      <select id="study-technique" onchange="setStudyTechnique(this.value)" title="Técnica de estudo" aria-label="Técnica de estudo" style="background:var(--bg-elevated);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:3px 6px;font-size:0.75rem;cursor:pointer;">
         <option value="livre">📖 Livre</option>
         <option value="sq3r">📐 SQ3R</option>
         <option value="cornell">📋 Cornell</option>
@@ -117,7 +117,7 @@
     </div>
     <div id="notes-list" style="flex:1;overflow-y:auto;padding:10px;"></div>
     <div style="padding:10px;border-top:1px solid var(--border);">
-      <textarea id="note-input" placeholder="Escreva uma anotação para esta página..." style="width:100%;height:60px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px;font-size:0.82rem;resize:none;outline:none;"></textarea>
+      <textarea id="note-input" placeholder="Escreva uma anotação para esta página..." aria-label="Anotação da página" style="width:100%;height:60px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px;font-size:0.82rem;resize:none;outline:none;"></textarea>
       <button onclick="saveNote()" style="width:100%;margin-top:6px;background:var(--yellow);color:var(--bg);border:none;border-radius:6px;padding:8px;font-weight:600;cursor:pointer;font-size:0.82rem;">💾 Salvar Nota</button>
     </div>
   </div>
@@ -158,8 +158,8 @@
   <div id="flashcard-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:999;align-items:center;justify-content:center;">
     <div style="background:var(--bg-surface);border-radius:16px;padding:24px;max-width:420px;width:90%;">
       <h3 style="color:var(--accent);margin:0 0 12px;">🧠 Flashcard Rápido — Página <span id="fc-page-num">1</span></h3>
-      <input type="text" id="fc-pergunta" placeholder="Pergunta (ex: O que é...?)" style="width:100%;padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.9rem;margin-bottom:10px;outline:none;">
-      <textarea id="fc-resposta" placeholder="Resposta..." style="width:100%;height:80px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px;font-size:0.85rem;resize:none;outline:none;margin-bottom:12px;"></textarea>
+      <input type="text" id="fc-pergunta" placeholder="Pergunta (ex: O que é...?)" aria-label="Pergunta do flashcard" style="width:100%;padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.9rem;margin-bottom:10px;outline:none;">
+      <textarea id="fc-resposta" placeholder="Resposta..." aria-label="Resposta do flashcard" style="width:100%;height:80px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px;font-size:0.85rem;resize:none;outline:none;margin-bottom:12px;"></textarea>
       <div style="display:flex;gap:8px;">
         <button onclick="closeFlashcardModal()" style="flex:1;background:var(--bg-elevated);color:var(--text);border:none;border-radius:8px;padding:10px;cursor:pointer;">Cancelar</button>
         <button onclick="saveQuickFlashcard()" style="flex:1;background:var(--accent);color:var(--bg);border:none;border-radius:8px;padding:10px;font-weight:600;cursor:pointer;">Salvar 🧠</button>
@@ -177,7 +177,7 @@
       </div>
     </div>
     <p style="font-size:0.8rem;color:var(--text-sub);margin-bottom:10px;">Sem olhar o texto, responda: O que você acabou de ler nesta página? Quais os conceitos principais?</p>
-    <textarea id="recall-input" placeholder="Escreva tudo que lembra desta página..." style="width:100%;height:100px;background:var(--bg-surface);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:12px;font-size:0.88rem;resize:none;outline:none;line-height:1.6;"></textarea>
+    <textarea id="recall-input" placeholder="Escreva tudo que lembra desta página..." aria-label="Escreva tudo que lembra desta página" style="width:100%;height:100px;background:var(--bg-surface);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:12px;font-size:0.88rem;resize:none;outline:none;line-height:1.6;"></textarea>
     <div id="recall-feedback" style="display:none;margin-top:10px;padding:12px;background:var(--bg-surface);border-radius:8px;"></div>
   </div>
 
@@ -195,7 +195,7 @@
         <button onclick="aiAction('simplificar')" class="ai-act-btn" style="background:var(--bg-elevated);border:none;color:var(--text);border-radius:6px;padding:6px 12px;font-size:0.8rem;cursor:pointer;">💡 Simplificar</button>
         <button onclick="aiAction('mapa')" class="ai-act-btn" style="background:var(--bg-elevated);border:none;color:var(--text);border-radius:6px;padding:6px 12px;font-size:0.8rem;cursor:pointer;">🗺 Mapa mental</button>
       </div>
-      <textarea id="ai-page-input" placeholder="Ou faça uma pergunta específica sobre o conteúdo..." style="width:100%;height:50px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px;font-size:0.85rem;resize:none;outline:none;margin-bottom:10px;"></textarea>
+      <textarea id="ai-page-input" placeholder="Ou faça uma pergunta específica sobre o conteúdo..." aria-label="Pergunta sobre o conteúdo da página" style="width:100%;height:50px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px;font-size:0.85rem;resize:none;outline:none;margin-bottom:10px;"></textarea>
       <button onclick="aiAction('pergunta')" style="width:100%;background:var(--peach);color:var(--bg);border:none;border-radius:8px;padding:10px;font-weight:600;cursor:pointer;margin-bottom:12px;">Perguntar 🤖</button>
       <div id="ai-page-response" style="display:none;background:var(--bg);border-radius:8px;padding:14px;font-size:0.85rem;color:var(--text);line-height:1.7;white-space:pre-wrap;"></div>
     </div>
@@ -234,7 +234,7 @@
     </div>
     <div id="revisao-agenda-status" style="display:none;padding:6px 14px;background:rgba(250,179,135,0.1);border-bottom:1px solid var(--border);font-size:0.72rem;color:var(--peach,#fab387);"></div>
     <div style="padding:8px 14px;background:var(--bg);border-bottom:1px solid var(--border);">
-      <input type="text" id="revisao-busca" oninput="filtrarRevisao(this.value)" placeholder="🔍 Buscar no caderno (título ou conteúdo)..." style="width:100%;padding:7px 10px;background:var(--bg-surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.8rem;outline:none;">
+      <input type="text" id="revisao-busca" oninput="filtrarRevisao(this.value)" placeholder="🔍 Buscar no caderno (título ou conteúdo)..." aria-label="Buscar no caderno de revisão" style="width:100%;padding:7px 10px;background:var(--bg-surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.8rem;outline:none;">
     </div>
     <div id="revisao-body" style="flex:1;overflow-y:auto;padding:12px;">
       <div style="color:var(--text-sub);font-size:0.85rem;text-align:center;padding:20px;">Carregando...</div>
@@ -247,7 +247,7 @@
       <span style="font-size:1.05rem;font-weight:700;color:var(--teal,#94e2d5);">📑 Revisão</span>
       <span id="rev-fs-titulo" style="flex:1;font-size:0.85rem;color:var(--text-sub,#a6adc8);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
       <div style="display:flex;align-items:center;gap:6px;">
-        <input type="text" id="rev-fs-busca" oninput="setRevFsBusca(this.value)" placeholder="🔍 Buscar..." style="background:var(--bg,#1e1e2e);border:1px solid var(--border,#45475a);color:var(--text,#cdd6f4);border-radius:6px;padding:5px 10px;font-size:0.8rem;outline:none;width:150px;">
+        <input type="text" id="rev-fs-busca" oninput="setRevFsBusca(this.value)" placeholder="🔍 Buscar..." aria-label="Buscar na revisão" style="background:var(--bg,#1e1e2e);border:1px solid var(--border,#45475a);color:var(--text,#cdd6f4);border-radius:6px;padding:5px 10px;font-size:0.8rem;outline:none;width:150px;">
         <button onclick="toggleRevFsRecall()" id="rev-fs-recall-btn" title="Modo Recall: oculta o conteúdo para você tentar lembrar antes de revelar (Retrieval Practice)" style="background:var(--bg-elevated,#45475a);border:none;color:var(--peach,#fab387);border-radius:6px;padding:5px 10px;font-size:0.82rem;cursor:pointer;">🎯 Recall</button>
         <button onclick="revFsZoom(-1)" title="Diminuir" style="background:var(--bg-elevated,#45475a);border:none;color:var(--text,#cdd6f4);border-radius:6px;padding:5px 10px;font-size:0.9rem;cursor:pointer;">A−</button>
         <button onclick="revFsZoom(1)" title="Aumentar" style="background:var(--bg-elevated,#45475a);border:none;color:var(--text,#cdd6f4);border-radius:6px;padding:5px 10px;font-size:0.9rem;cursor:pointer;">A+</button>
@@ -283,8 +283,8 @@
       <div style="text-align:center;margin-bottom:12px;background:var(--bg,#1e1e2e);border-radius:8px;padding:8px;">
         <img id="crop-preview" alt="Prévia do recorte" style="max-width:100%;max-height:280px;border-radius:6px;">
       </div>
-      <input type="text" id="crop-titulo" placeholder="Título (opcional) — ex: Art. 5º CF" style="width:100%;padding:9px;margin-bottom:8px;border-radius:8px;border:1px solid var(--border,#45475a);background:var(--bg,#1e1e2e);color:var(--text,#cdd6f4);font-size:0.85rem;outline:none;">
-      <textarea id="crop-comentario" placeholder="Comentário / explicação (opcional)..." style="width:100%;height:64px;padding:9px;margin-bottom:12px;border-radius:8px;border:1px solid var(--border,#45475a);background:var(--bg,#1e1e2e);color:var(--text,#cdd6f4);font-size:0.82rem;resize:none;outline:none;"></textarea>
+      <input type="text" id="crop-titulo" placeholder="Título (opcional) — ex: Art. 5º CF" aria-label="Título do recorte" style="width:100%;padding:9px;margin-bottom:8px;border-radius:8px;border:1px solid var(--border,#45475a);background:var(--bg,#1e1e2e);color:var(--text,#cdd6f4);font-size:0.85rem;outline:none;">
+      <textarea id="crop-comentario" placeholder="Comentário / explicação (opcional)..." aria-label="Comentário do recorte" style="width:100%;height:64px;padding:9px;margin-bottom:12px;border-radius:8px;border:1px solid var(--border,#45475a);background:var(--bg,#1e1e2e);color:var(--text,#cdd6f4);font-size:0.82rem;resize:none;outline:none;"></textarea>
       <div style="display:flex;gap:8px;justify-content:flex-end;">
         <button onclick="descartarRecorte()" style="background:var(--bg,#1e1e2e);border:1px solid var(--border,#45475a);color:var(--text,#cdd6f4);border-radius:8px;padding:8px 16px;font-size:0.82rem;cursor:pointer;">Descartar</button>
         <button onclick="salvarRecorte()" style="background:var(--teal,#94e2d5);color:#1e1e2e;border:none;border-radius:8px;padding:8px 18px;font-weight:700;font-size:0.82rem;cursor:pointer;">Salvar no caderno</button>

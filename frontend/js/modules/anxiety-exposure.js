@@ -424,7 +424,7 @@ export async function startAnxietySession(nivel) {
             <div class="anxiety-slider">
                 <span class="anxiety-slider__label">Como você se sente <strong>AGORA</strong>?</span>
                 <span class="anxiety-slider__value" id="anxiety-pre-value">5</span>
-                <input type="range" min="1" max="10" value="5" id="anxiety-pre-slider"
+                <input type="range" min="1" max="10" value="5" id="anxiety-pre-slider" aria-label="Nível de ansiedade agora (1 calmo a 10 pânico)"
                     oninput="document.getElementById('anxiety-pre-value').textContent=this.value" />
                 <div class="anxiety-slider__scale">
                     <span>1 — Calmo</span>
@@ -508,7 +508,7 @@ export function showAnxietyPostSession(nivel, nota) {
             <div class="anxiety-slider">
                 <span class="anxiety-slider__label">Como você se sente <strong>AGORA</strong> (pós-sessão)?</span>
                 <span class="anxiety-slider__value" id="anxiety-post-value">5</span>
-                <input type="range" min="1" max="10" value="5" id="anxiety-post-slider"
+                <input type="range" min="1" max="10" value="5" id="anxiety-post-slider" aria-label="Nível de ansiedade após a exposição (1 calmo a 10 pânico)"
                     oninput="document.getElementById('anxiety-post-value').textContent=this.value" />
                 <div class="anxiety-slider__scale">
                     <span>1 — Calmo</span>

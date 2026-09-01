@@ -196,7 +196,7 @@ export function showUpgradeModal() {
         <div id="creditos-ativar-section" style="display:none;padding:8px;background:#313244;border-radius:6px;margin-bottom:8px;">
           <div style="font-size:0.75rem;color:#cdd6f4;margin-bottom:6px;">Ativar créditos:</div>
           <div style="display:flex;gap:6px;align-items:center;">
-            <input id="creditos-ativar-input" type="number" min="1" value="10" style="width:60px;padding:6px;background:#1e1e2e;border:1px solid #45475a;border-radius:4px;color:#cdd6f4;font-size:0.82rem;">
+            <input id="creditos-ativar-input" type="number" min="1" value="10" aria-label="Quantidade de créditos a ativar" style="width:60px;padding:6px;background:#1e1e2e;border:1px solid #45475a;border-radius:4px;color:#cdd6f4;font-size:0.82rem;">
             <span style="font-size:0.7rem;color:#9399b2;">créditos =</span>
             <span id="creditos-dias-preview" style="font-size:0.82rem;color:#a6e3a1;font-weight:600;">30 dias</span>
             <button onclick="ativarCreditos()" style="padding:6px 12px;background:#89b4fa;color:#1e1e2e;border:none;border-radius:4px;font-size:0.75rem;font-weight:600;cursor:pointer;">Ativar</button>
@@ -282,7 +282,7 @@ export function showEditProfileModal() {
       <h3 style="color:#cba6f7;margin:0 0 16px;text-align:center;">✏️ Editar Perfil</h3>
       <div style="margin-bottom:14px;">
         <label style="font-size:0.8rem;color:#9399b2;display:block;margin-bottom:4px;">Nome</label>
-        <input id="edit-profile-nome" type="text" value="${user?.nome || ''}" style="width:100%;padding:10px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.9rem;">
+        <input id="edit-profile-nome" type="text" value="${user?.nome || ''}" aria-label="Nome do perfil" style="width:100%;padding:10px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.9rem;">
       </div>
       <div style="margin-bottom:14px;">
         <label style="font-size:0.8rem;color:#9399b2;display:block;margin-bottom:4px;">Avatar</label>
@@ -428,7 +428,7 @@ function _showPixQRCode(data) {
       <div style="margin-bottom:10px;">
         <div style="font-size:0.72rem;color:#9399b2;margin-bottom:4px;">Ou copie o código PIX:</div>
         <div style="display:flex;gap:6px;">
-          <input id="pix-code-input" type="text" value="${pix.qr_code}" readonly style="flex:1;padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;font-size:0.7rem;font-family:monospace;">
+          <input id="pix-code-input" type="text" value="${pix.qr_code}" readonly aria-label="Código PIX copia e cola" style="flex:1;padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;font-size:0.7rem;font-family:monospace;">
           <button onclick="navigator.clipboard.writeText(document.getElementById('pix-code-input').value);(window.toast||window.showToast)('📋 Código PIX copiado!','success')" style="padding:8px 12px;background:#89b4fa;color:#1e1e2e;border:none;border-radius:6px;font-size:0.75rem;font-weight:600;cursor:pointer;">Copiar</button>
         </div>
       </div>

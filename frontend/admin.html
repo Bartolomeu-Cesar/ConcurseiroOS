@@ -73,9 +73,9 @@
 
     <!-- Toolbar -->
     <div class="toolbar">
-      <input type="text" id="search-input" placeholder="🔍 Buscar por nome, email ou username..." onkeyup="if(event.key==='Enter')loadUsers()">
+      <input type="text" id="search-input" placeholder="🔍 Buscar por nome, email ou username..." aria-label="Buscar por nome, email ou username" onkeyup="if(event.key==='Enter')loadUsers()">
       <button class="btn" onclick="loadUsers()">Buscar</button>
-      <select id="filtro-validade" onchange="loadUsers(1)" style="background:var(--bg-surface,#313244);border:1px solid #45475a;border-radius:6px;padding:8px;color:#cdd6f4;font-size:0.82rem;">
+      <select id="filtro-validade" aria-label="Filtrar por plano" onchange="loadUsers(1)" style="background:var(--bg-surface,#313244);border:1px solid #45475a;border-radius:6px;padding:8px;color:#cdd6f4;font-size:0.82rem;">
         <option value="">Todos os planos</option>
         <option value="expirando">⚠️ Expirando (≤7d)</option>
         <option value="expirado">❌ Expirados</option>
@@ -83,7 +83,7 @@
         <option value="vitalicio">♾️ Vitalícios</option>
         <option value="free">Free</option>
       </select>
-      <select id="ordenar-validade" onchange="loadUsers(1)" style="background:var(--bg-surface,#313244);border:1px solid #45475a;border-radius:6px;padding:8px;color:#cdd6f4;font-size:0.82rem;">
+      <select id="ordenar-validade" aria-label="Ordenar usuários" onchange="loadUsers(1)" style="background:var(--bg-surface,#313244);border:1px solid #45475a;border-radius:6px;padding:8px;color:#cdd6f4;font-size:0.82rem;">
         <option value="">Ordem: ID</option>
         <option value="expiracao">Ordem: Expira antes</option>
       </select>
@@ -126,15 +126,15 @@
         <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:end;">
           <div>
             <label style="font-size:0.72rem;color:#9399b2;display:block;margin-bottom:2px;">Início da venda</label>
-            <input type="date" id="vit-inicio" style="padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;">
+            <input type="date" id="vit-inicio" aria-label="Início da venda do Vitalício" style="padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;">
           </div>
           <div>
             <label style="font-size:0.72rem;color:#9399b2;display:block;margin-bottom:2px;">Fim da venda</label>
-            <input type="date" id="vit-fim" style="padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;">
+            <input type="date" id="vit-fim" aria-label="Fim da venda do Vitalício" style="padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;">
           </div>
           <div>
             <label style="font-size:0.72rem;color:#9399b2;display:block;margin-bottom:2px;">Preço (R$)</label>
-            <input type="number" id="vit-preco" step="0.01" min="0" style="width:90px;padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;">
+            <input type="number" id="vit-preco" step="0.01" min="0" aria-label="Preço do Vitalício (R$)" style="width:90px;padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;">
           </div>
           <button class="btn" onclick="salvarVitalicio()">💾 Salvar Janela</button>
           <button class="btn danger small" onclick="limparVitalicio()" title="Limpar janela = sempre disponível">Limpar</button>
@@ -204,11 +204,11 @@
     <div style="margin-top:24px;padding:20px;background:#181825;border:1px solid #45475a;border-radius:12px;">
       <h2 style="color:#cba6f7;margin:0 0 12px;font-size:1.1rem;">📢 Anúncios / Broadcast</h2>
       <div style="display:grid;gap:8px;max-width:640px;">
-        <input type="text" id="bc-titulo" placeholder="Título do anúncio" maxlength="120" style="padding:8px;background:#313244;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;">
-        <textarea id="bc-corpo" placeholder="Mensagem (opcional)" rows="3" style="padding:8px;background:#313244;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;resize:vertical;"></textarea>
+        <input type="text" id="bc-titulo" placeholder="Título do anúncio" aria-label="Título do anúncio" maxlength="120" style="padding:8px;background:#313244;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;">
+        <textarea id="bc-corpo" placeholder="Mensagem (opcional)" aria-label="Mensagem do anúncio" rows="3" style="padding:8px;background:#313244;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;resize:vertical;"></textarea>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-          <input type="text" id="bc-url" placeholder="URL de destino (opcional, ex: /planos.html)" style="flex:1;min-width:180px;padding:8px;background:#313244;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;">
-          <select id="bc-segmento" style="padding:8px;background:#313244;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;">
+          <input type="text" id="bc-url" placeholder="URL de destino (opcional, ex: /planos.html)" aria-label="URL de destino do anúncio" style="flex:1;min-width:180px;padding:8px;background:#313244;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;">
+          <select id="bc-segmento" aria-label="Segmento de destinatários" style="padding:8px;background:#313244;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;">
             <option value="todos">Todos os usuários</option>
             <option value="free">Apenas Free</option>
             <option value="premium">Apenas Premium</option>
@@ -227,7 +227,7 @@
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
         <h2 style="color:#f38ba8;margin:0;font-size:1.1rem;">📝 Log de Auditoria</h2>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <select id="audit-filtro-acao" onchange="loadAuditoria(1)" style="background:#313244;border:1px solid #45475a;border-radius:6px;padding:6px;color:#cdd6f4;font-size:0.78rem;">
+          <select id="audit-filtro-acao" aria-label="Filtrar por ação de auditoria" onchange="loadAuditoria(1)" style="background:#313244;border:1px solid #45475a;border-radius:6px;padding:6px;color:#cdd6f4;font-size:0.78rem;">
             <option value="">Todas as ações</option>
             <option value="user.">Usuários</option>
             <option value="user.delete">Exclusões</option>
@@ -256,7 +256,7 @@
         <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;">
           <div>
             <label style="font-size:0.7rem;color:#9399b2;display:block;">Premium por N dias</label>
-            <input type="number" id="premio-dias" value="30" min="1" style="width:70px;padding:6px;background:#313244;border:1px solid #45475a;border-radius:4px;color:#cdd6f4;">
+            <input type="number" id="premio-dias" value="30" min="1" aria-label="Premium por N dias" style="width:70px;padding:6px;background:#313244;border:1px solid #45475a;border-radius:4px;color:#cdd6f4;">
           </div>
           <button class="btn small" onclick="ativarPremio('premium')">👑 Ativar Premium</button>
           <button class="btn small" style="background:#a6e3a1;" onclick="ativarPremio('vitalicio')">💎 Ativar Vitalício</button>
@@ -268,9 +268,9 @@
         <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;">
           <div>
             <label style="font-size:0.7rem;color:#9399b2;display:block;">Quantidade (+/−)</label>
-            <input type="number" id="brinde-qtd" value="10" style="width:70px;padding:6px;background:#313244;border:1px solid #45475a;border-radius:4px;color:#cdd6f4;">
+            <input type="number" id="brinde-qtd" value="10" aria-label="Quantidade de créditos (+/−)" style="width:70px;padding:6px;background:#313244;border:1px solid #45475a;border-radius:4px;color:#cdd6f4;">
           </div>
-          <input type="text" id="brinde-motivo" placeholder="Motivo (opcional)" style="flex:1;min-width:120px;padding:6px;background:#313244;border:1px solid #45475a;border-radius:4px;color:#cdd6f4;">
+          <input type="text" id="brinde-motivo" placeholder="Motivo (opcional)" aria-label="Motivo dos créditos" style="flex:1;min-width:120px;padding:6px;background:#313244;border:1px solid #45475a;border-radius:4px;color:#cdd6f4;">
           <button class="btn small secondary" onclick="darBrinde()">🎁 Dar Créditos</button>
         </div>
       </div>
@@ -289,7 +289,7 @@
         <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;">
           <div>
             <label style="font-size:0.7rem;color:#9399b2;display:block;">Limite (0=padrão, -1=ilimitado)</label>
-            <input type="number" id="ia-quota-limite" value="0" min="-1" style="width:120px;padding:6px;background:#313244;border:1px solid #45475a;border-radius:4px;color:#cdd6f4;">
+            <input type="number" id="ia-quota-limite" value="0" min="-1" aria-label="Limite de tokens de IA por dia (0=padrão, -1=ilimitado)" style="width:120px;padding:6px;background:#313244;border:1px solid #45475a;border-radius:4px;color:#cdd6f4;">
           </div>
           <button class="btn small secondary" onclick="salvarIaQuota()">💾 Salvar quota</button>
         </div>
@@ -308,7 +308,7 @@
       <p style="font-size:0.75rem;color:#9399b2;margin:0 0 12px;">Copia recursos de um usuário de origem para um ou mais destinos. Cada destino recebe uma cópia própria (SRS e progresso resetados).</p>
 
       <label>Usuário de origem</label>
-      <select id="share-origem" onchange="loadRecursosOrigem()">
+      <select id="share-origem" aria-label="Usuário de origem" onchange="loadRecursosOrigem()">
         <option value="">— selecione —</option>
       </select>
       <div id="share-recursos-count" style="font-size:0.72rem;color:#a6e3a1;margin:4px 0 12px;"></div>
@@ -326,7 +326,7 @@
       </div>
 
       <label>Usuários de destino (segure Ctrl para vários)</label>
-      <select id="share-destinos" multiple size="6" style="width:100%;padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;"></select>
+      <select id="share-destinos" multiple size="6" aria-label="Usuários de destino" style="width:100%;padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;"></select>
 
       <div id="share-result" style="font-size:0.75rem;margin-top:10px;"></div>
 
@@ -344,10 +344,10 @@
       <p style="font-size:0.75rem;color:#9399b2;margin:0 0 12px;">Publica um recurso de um usuário no catálogo público. Estudantes poderão importá-lo para a conta deles.</p>
 
       <label>Usuário de origem (dono do material)</label>
-      <select id="cat-origem" onchange="loadCatalogoRefs()"><option value="">— selecione —</option></select>
+      <select id="cat-origem" aria-label="Usuário de origem do material" onchange="loadCatalogoRefs()"><option value="">— selecione —</option></select>
 
       <label>Tipo de material</label>
-      <select id="cat-tipo" onchange="loadCatalogoRefs()">
+      <select id="cat-tipo" aria-label="Tipo de material" onchange="loadCatalogoRefs()">
         <option value="edital">📋 Edital verticalizado</option>
         <option value="caderno">📓 Caderno de questões</option>
         <option value="vademecum">📜 Lei (Vade Mécum)</option>
@@ -357,16 +357,16 @@
       </select>
 
       <label>Qual recurso (ref)</label>
-      <select id="cat-ref"><option value="">— selecione origem e tipo —</option></select>
+      <select id="cat-ref" aria-label="Recurso a publicar"><option value="">— selecione origem e tipo —</option></select>
 
       <label>Título (exibido no catálogo)</label>
-      <input type="text" id="cat-titulo" placeholder="Ex: Edital TJ-SP 2026 — Analista">
+      <input type="text" id="cat-titulo" placeholder="Ex: Edital TJ-SP 2026 — Analista" aria-label="Título do material no catálogo">
 
       <label>Descrição</label>
-      <input type="text" id="cat-descricao" placeholder="Breve descrição do material">
+      <input type="text" id="cat-descricao" placeholder="Breve descrição do material" aria-label="Descrição do material">
 
       <label>Categoria</label>
-      <input type="text" id="cat-categoria" placeholder="Ex: Tribunais, Fiscal, Polícia..." value="Geral">
+      <input type="text" id="cat-categoria" placeholder="Ex: Tribunais, Fiscal, Polícia..." aria-label="Categoria do material" value="Geral">
 
       <div id="cat-result" style="font-size:0.75rem;margin-top:10px;"></div>
 
@@ -383,25 +383,25 @@
       <h3 id="modal-title">Novo Usuário</h3>
       <input type="hidden" id="edit-id">
       <label>Nome</label>
-      <input type="text" id="field-nome" placeholder="Nome completo">
+      <input type="text" id="field-nome" placeholder="Nome completo" aria-label="Nome do usuário">
       <label>Email</label>
-      <input type="email" id="field-email" placeholder="email@exemplo.com">
+      <input type="email" id="field-email" placeholder="email@exemplo.com" aria-label="Email do usuário">
       <label>Username</label>
-      <input type="text" id="field-username" placeholder="username">
+      <input type="text" id="field-username" placeholder="username" aria-label="Username do usuário">
       <label>Plano</label>
-      <select id="field-plano">
+      <select id="field-plano" aria-label="Plano do usuário">
         <option value="guest">Visitante</option>
         <option value="free" selected>Estudante (Free)</option>
         <option value="premium">Premium</option>
         <option value="ilimitado">Vitalício</option>
       </select>
       <label>Perfil de acesso</label>
-      <select id="field-role">
+      <select id="field-role" aria-label="Perfil de acesso do usuário">
         <option value="user">👤 Usuário comum</option>
         <option value="admin">👑 Administrador</option>
       </select>
       <label>Senha (deixe vazio para manter)</label>
-      <input type="password" id="field-password" placeholder="Nova senha">
+      <input type="password" id="field-password" placeholder="Nova senha" aria-label="Senha do usuário">
       <div class="modal-actions">
         <button class="btn danger small" onclick="closeModal()">Cancelar</button>
         <button class="btn" id="modal-save-btn" onclick="saveUser()">Salvar</button>
@@ -603,7 +603,7 @@
         list.innerHTML = Object.entries(_creditosPrecos).sort((a,b) => a[0]-b[0]).map(([qtd, preco]) => `
           <div style="display:flex;flex-direction:column;gap:2px;">
             <label style="font-size:0.68rem;color:#9399b2;">${qtd} créd.</label>
-            <input type="number" step="0.01" min="0" value="${preco}" data-qtd="${qtd}" class="credito-preco-input" style="width:80px;padding:6px;background:#1e1e2e;border:1px solid #45475a;border-radius:4px;color:#cdd6f4;">
+            <input type="number" step="0.01" min="0" value="${preco}" data-qtd="${qtd}" class="credito-preco-input" aria-label="Preço para ${qtd} créditos" style="width:80px;padding:6px;background:#1e1e2e;border:1px solid #45475a;border-radius:4px;color:#cdd6f4;">
           </div>
         `).join('');
       } catch(e) {}

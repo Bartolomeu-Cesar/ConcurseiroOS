@@ -416,7 +416,7 @@
           </div>
         </div>
         <div class="chat-input-row">
-          <input type="text" id="chat-input" placeholder="Pergunte algo..." onkeydown="if(event.key==='Enter')sendChat()" autocomplete="off">
+          <input type="text" id="chat-input" placeholder="Pergunte algo..." aria-label="Pergunte algo ao tutor de IA" onkeydown="if(event.key==='Enter')sendChat()" autocomplete="off">
           <button onclick="sendChat()" id="chat-send-btn">Enviar</button>
         </div>
       </div>
@@ -482,7 +482,7 @@
         </div>
         <div class="chat-messages" id="dm-messages"></div>
         <div class="chat-input-area">
-          <input type="text" id="dm-input" placeholder="Digite sua mensagem..." maxlength="1000" onkeydown="if(event.key==='Enter')sendChatMessage()">
+          <input type="text" id="dm-input" placeholder="Digite sua mensagem..." aria-label="Digite sua mensagem" maxlength="1000" onkeydown="if(event.key==='Enter')sendChatMessage()">
           <button class="chat-audio-btn" id="dm-record-btn" onclick="toggleAudioRecording()" title="Gravar áudio" aria-label="Gravar áudio">🎤</button>
           <button class="chat-send-btn" onclick="sendChatMessage()" aria-label="Enviar mensagem">➤</button>
         </div>
@@ -494,7 +494,7 @@
   <div class="modal-overlay" id="modal-add-friend" onclick="if(event.target===this)closeModal('modal-add-friend')">
     <div class="modal">
       <h3>Adicionar Amigo</h3>
-      <input type="email" id="friend-email" placeholder="Email do amigo" autocomplete="email">
+      <input type="email" id="friend-email" placeholder="Email do amigo" aria-label="Email do amigo" autocomplete="email">
       <div class="modal-actions">
         <button class="btn-sm btn-secondary" onclick="closeModal('modal-add-friend')">Cancelar</button>
         <button class="btn-sm btn-primary" onclick="addFriend()">Enviar Convite</button>
@@ -506,9 +506,9 @@
   <div class="modal-overlay" id="modal-create-group" onclick="if(event.target===this)closeModal('modal-create-group')">
     <div class="modal">
       <h3>Criar Grupo de Estudo</h3>
-      <input type="text" id="group-name" placeholder="Nome do grupo">
-      <textarea id="group-desc" placeholder="Descrição (opcional)" rows="2"></textarea>
-      <input type="text" id="group-edital" placeholder="Edital (ex: TRT-2)">
+      <input type="text" id="group-name" placeholder="Nome do grupo" aria-label="Nome do grupo">
+      <textarea id="group-desc" placeholder="Descrição (opcional)" aria-label="Descrição do grupo" rows="2"></textarea>
+      <input type="text" id="group-edital" placeholder="Edital (ex: TRT-2)" aria-label="Edital do grupo">
       <div class="modal-actions">
         <button class="btn-sm btn-secondary" onclick="closeModal('modal-create-group')">Cancelar</button>
         <button class="btn-sm btn-primary" onclick="createGroup()">Criar</button>
@@ -532,7 +532,7 @@
     <div class="modal">
       <h3>👥 Adicionar Membro</h3>
       <p style="font-size:0.8rem;color:#9399b2;margin-bottom:10px;">Informe o email ou username do usuário para adicionar ao grupo.</p>
-      <input type="text" id="add-member-input" placeholder="Email ou username">
+      <input type="text" id="add-member-input" placeholder="Email ou username" aria-label="Email ou username do membro">
       <div id="add-member-feedback" style="font-size:0.8rem;margin-top:6px;min-height:20px;"></div>
       <div class="modal-actions">
         <button class="btn-sm btn-secondary" onclick="closeModal('modal-add-member')">Cancelar</button>
@@ -548,7 +548,7 @@
       <p style="font-size:0.8rem;color:#9399b2;margin-bottom:16px;">Escolha qual provedor de IA usar. Configure a API key do provider desejado.</p>
 
       <label style="font-size:0.82rem;color:#cdd6f4;font-weight:500;display:block;margin-bottom:4px;">Provider</label>
-      <select id="ai-config-provider" onchange="onProviderChange()" style="width:100%;padding:10px 14px;border-radius:8px;border:1px solid #45475a;background:#181825;color:#cdd6f4;font-size:0.9rem;margin-bottom:12px;">
+      <select id="ai-config-provider" aria-label="Provider de IA" onchange="onProviderChange()" style="width:100%;padding:10px 14px;border-radius:8px;border:1px solid #45475a;background:#181825;color:#cdd6f4;font-size:0.9rem;margin-bottom:12px;">
         <option value="auto">🔄 Auto-detectar</option>
         <option value="openai">🟢 OpenAI (GPT-4o-mini, GPT-4o)</option>
         <option value="claude">🟣 Anthropic Claude (Sonnet, Haiku)</option>
@@ -568,12 +568,12 @@
 
       <label style="font-size:0.82rem;color:#cdd6f4;font-weight:500;display:block;margin-bottom:4px;">API Key</label>
       <div style="position:relative;">
-        <input type="password" id="ai-config-key" placeholder="Cole sua API key aqui..." style="padding-right:40px;">
+        <input type="password" id="ai-config-key" placeholder="Cole sua API key aqui..." aria-label="API key do provider de IA" style="padding-right:40px;">
         <button onclick="toggleKeyVisibility()" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1rem;opacity:0.6;" title="Mostrar/Ocultar" aria-label="Mostrar ou ocultar a API key">👁</button>
       </div>
 
       <label style="font-size:0.82rem;color:#cdd6f4;font-weight:500;display:block;margin-bottom:4px;">Modelo <span style="color:#9399b2;font-weight:400;">(deixe vazio para usar o padrão)</span></label>
-      <input type="text" id="ai-config-model" placeholder="Ex: gpt-4o-mini, claude-3-5-sonnet...">
+      <input type="text" id="ai-config-model" placeholder="Ex: gpt-4o-mini, claude-3-5-sonnet..." aria-label="Modelo de IA">
 
       <div id="ai-config-info" style="background:#181825;border-radius:8px;padding:10px;margin-bottom:12px;font-size:0.78rem;color:#9399b2;display:none;"></div>
 

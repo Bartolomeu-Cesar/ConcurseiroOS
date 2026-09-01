@@ -264,8 +264,8 @@
     <div id="tab-busca" class="vm-tab-content active">
       <div class="panel">
         <div class="vm-search-bar">
-          <input type="text" id="vm-search-input" placeholder="Buscar artigo, termo ou número..." onkeydown="if(event.key==='Enter')vmBuscar()">
-          <select id="vm-search-lei">
+          <input type="text" id="vm-search-input" placeholder="Buscar artigo, termo ou número..." aria-label="Buscar artigo, termo ou número" onkeydown="if(event.key==='Enter')vmBuscar()">
+          <select id="vm-search-lei" aria-label="Filtrar por lei">
             <option value="0">Todas as leis</option>
           </select>
           <button onclick="vmBuscar()">🔍 Buscar</button>
@@ -385,7 +385,7 @@
         <div class="vm-detail-paragrafos" id="detail-paragrafos"></div>
       </div>
       <div class="vm-detail-section-label" style="margin-top:16px;">Anotação</div>
-      <textarea class="vm-detail-anotacao" id="detail-anotacao" placeholder="Escreva sua anotação aqui..."></textarea>
+      <textarea class="vm-detail-anotacao" id="detail-anotacao" placeholder="Escreva sua anotação aqui..." aria-label="Anotação do artigo"></textarea>
       <div class="vm-detail-actions">
         <button class="vm-btn-save" onclick="salvarAnotacao()">💾 Salvar</button>
         <button class="vm-btn-highlight" id="btn-destacar" onclick="toggleDestacar()">⭐ Destacar</button>

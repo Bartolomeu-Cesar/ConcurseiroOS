@@ -15,24 +15,24 @@ function showMenu() {
 
     <div class="lobby-card">
       <h2>🎮 Criar Nova Batalha</h2>
-      <div class="config-row"><label>Título:</label><input id="cfg-titulo" value="Batalha de Questões" placeholder="Nome da sala"></div>
+      <div class="config-row"><label>Título:</label><input id="cfg-titulo" value="Batalha de Questões" placeholder="Nome da sala" aria-label="Título da sala"></div>
       <div class="config-row"><label>Matérias:</label>
         <div id="materias-autocomplete" style="flex:1;position:relative;">
           <div id="materias-tags" style="display:flex;flex-wrap:wrap;gap:4px;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;min-height:38px;align-items:center;cursor:text;" onclick="document.getElementById('cfg-materias').focus()">
-            <input id="cfg-materias" placeholder="Digite para buscar... (vazio = todas)" style="border:none;background:transparent;color:var(--text);font-size:0.85rem;outline:none;flex:1;min-width:120px;padding:2px 0;" autocomplete="off">
+            <input id="cfg-materias" placeholder="Digite para buscar... (vazio = todas)" aria-label="Buscar matérias" style="border:none;background:transparent;color:var(--text);font-size:0.85rem;outline:none;flex:1;min-width:120px;padding:2px 0;" autocomplete="off">
           </div>
           <div id="materias-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg-surface);border:1px solid var(--border);border-radius:8px;margin-top:4px;max-height:180px;overflow-y:auto;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,0.4);"></div>
         </div>
       </div>
-      <div class="config-row"><label>Rodadas:</label><select id="cfg-rodadas">${[3,5,7,10,15,20].map(n => `<option value="${n}" ${n===5?'selected':''}>${n} rodadas</option>`).join('')}</select></div>
-      <div class="config-row"><label>Tempo/questão:</label><select id="cfg-tempo">${[15,20,30,45,60].map(n => `<option value="${n}" ${n===30?'selected':''}>${n} segundos</option>`).join('')}</select></div>
-      <div class="config-row"><label>Jogadores:</label><select id="cfg-max">${[2,3,4,5].map(n => `<option value="${n}" ${n===5?'selected':''}>${n} jogadores</option>`).join('')}</select></div>
+      <div class="config-row"><label>Rodadas:</label><select id="cfg-rodadas" aria-label="Número de rodadas">${[3,5,7,10,15,20].map(n => `<option value="${n}" ${n===5?'selected':''}>${n} rodadas</option>`).join('')}</select></div>
+      <div class="config-row"><label>Tempo/questão:</label><select id="cfg-tempo" aria-label="Tempo por questão">${[15,20,30,45,60].map(n => `<option value="${n}" ${n===30?'selected':''}>${n} segundos</option>`).join('')}</select></div>
+      <div class="config-row"><label>Jogadores:</label><select id="cfg-max" aria-label="Número de jogadores">${[2,3,4,5].map(n => `<option value="${n}" ${n===5?'selected':''}>${n} jogadores</option>`).join('')}</select></div>
       <button class="btn-battle" onclick="criarBatalha()">⚔️ Criar Sala</button>
     </div>
 
     <div class="lobby-card">
       <h2>🚪 Entrar em Sala</h2>
-      <input class="input-battle" id="join-code" placeholder="CÓDIGO" maxlength="6" style="margin-bottom:12px;" onkeyup="this.value=this.value.toUpperCase()">
+      <input class="input-battle" id="join-code" placeholder="CÓDIGO" aria-label="Código da sala" maxlength="6" style="margin-bottom:12px;" onkeyup="this.value=this.value.toUpperCase()">
       <button class="btn-battle secondary" onclick="entrarBatalha()">Entrar</button>
     </div>
 
@@ -367,15 +367,15 @@ window.openQuestionPoolSelector = async function() {
 
       <!-- Filtros -->
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
-        <select id="pool-filter-materia" onchange="filterPoolQuestions()" style="padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.82rem;">
+        <select id="pool-filter-materia" aria-label="Filtrar por matéria" onchange="filterPoolQuestions()" style="padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.82rem;">
           <option value="">Todas matérias</option>
           ${materiasList.map(m => '<option value="' + m + '">' + m + '</option>').join('')}
         </select>
-        <select id="pool-filter-banca" onchange="filterPoolQuestions()" style="padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.82rem;">
+        <select id="pool-filter-banca" aria-label="Filtrar por banca" onchange="filterPoolQuestions()" style="padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.82rem;">
           <option value="">Todas bancas</option>
           ${bancasList.map(b => '<option value="' + b + '">' + b + '</option>').join('')}
         </select>
-        <select id="pool-filter-dif" onchange="filterPoolQuestions()" style="padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.82rem;">
+        <select id="pool-filter-dif" aria-label="Filtrar por dificuldade" onchange="filterPoolQuestions()" style="padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.82rem;">
           <option value="">Todas dificuldades</option>
           ${dificuldades.map(d => '<option value="' + d + '">' + d + '</option>').join('')}
         </select>

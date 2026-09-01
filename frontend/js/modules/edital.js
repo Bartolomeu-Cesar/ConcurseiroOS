@@ -708,7 +708,7 @@ window.linkVideoToTopic = function(editalId, topico) {
     <div style="background:var(--bg-surface);border-radius:16px;padding:24px;max-width:480px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
       <h3 style="margin:0 0 8px;font-size:1rem;color:var(--accent);">🎬 Vincular Vídeo YouTube</h3>
       <p style="font-size:0.82rem;color:var(--text-sub);margin:0 0 16px;">Tópico: <strong style="color:var(--text);">${escapeHtml(topico)}</strong></p>
-      <input id="video-link-input" type="url" placeholder="Cole o link do YouTube aqui..." 
+      <input id="video-link-input" type="url" placeholder="Cole o link do YouTube aqui..." aria-label="Link do vídeo do YouTube"
         style="width:100%;padding:12px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.9rem;outline:none;box-sizing:border-box;"
         autofocus>
       <p id="video-link-preview" style="font-size:0.75rem;color:var(--text-sub);margin:8px 0 0;min-height:18px;"></p>

@@ -249,7 +249,7 @@ export async function configurarCargoAlvo() {
       <p style="font-size:0.8rem;color:var(--text-sub,#9399b2);margin:0 0 12px;">
         A trilha e as recomendações vão focar apenas nos tópicos deste cargo.
       </p>
-      <select id="cargo-alvo-select" style="width:100%;padding:10px;background:var(--bg,#1e1e2e);color:var(--text,#cdd6f4);border:1px solid var(--border,#45475a);border-radius:8px;font-size:0.85rem;margin-bottom:16px;">
+      <select id="cargo-alvo-select" aria-label="Cargo que estou estudando" style="width:100%;padding:10px;background:var(--bg,#1e1e2e);color:var(--text,#cdd6f4);border:1px solid var(--border,#45475a);border-radius:8px;font-size:0.85rem;margin-bottom:16px;">
         ${optionsHtml}
       </select>
       <div style="display:flex;gap:8px;justify-content:flex-end;">

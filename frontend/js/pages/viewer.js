@@ -1490,7 +1490,7 @@ function _renderBlocoRevisao(b, idx, total) {
   return `<div style="background:var(--bg,#1e1e2e);border-radius:10px;padding:12px;margin-bottom:10px;${bordaTag}" data-id="${b.id}">
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
       <span style="font-size:0.7rem;color:var(--blue,#89b4fa);cursor:pointer;" onclick="goToPage(${b.pagina})" title="Ir para a página">p.${b.pagina}</span>
-      <select onchange="setBlocoTag(${b.id}, this.value)" title="Categoria do bloco" style="font-size:0.68rem;background:var(--bg-surface,#313244);color:${tagCor};border:1px solid var(--border,#45475a);border-radius:5px;padding:2px 4px;cursor:pointer;max-width:110px;">${tagOpcoes}</select>
+      <select onchange="setBlocoTag(${b.id}, this.value)" title="Categoria do bloco" aria-label="Categoria do bloco" style="font-size:0.68rem;background:var(--bg-surface,#313244);color:${tagCor};border:1px solid var(--border,#45475a);border-radius:5px;padding:2px 4px;cursor:pointer;max-width:110px;">${tagOpcoes}</select>
       <span style="flex:1;"></span>
       <button onclick="moverBlocoRevisao(${b.id}, -1)" ${idx === 0 ? 'disabled' : ''} title="Subir" style="background:none;border:none;color:${idx === 0 ? 'var(--border,#45475a)' : 'var(--text-sub,#9399b2)'};cursor:pointer;font-size:0.8rem;" aria-label="Mover bloco para cima">▲</button>
       <button onclick="moverBlocoRevisao(${b.id}, 1)" ${idx === total - 1 ? 'disabled' : ''} title="Descer" style="background:none;border:none;color:${idx === total - 1 ? 'var(--border,#45475a)' : 'var(--text-sub,#9399b2)'};cursor:pointer;font-size:0.8rem;" aria-label="Mover bloco para baixo">▼</button>
@@ -2664,7 +2664,7 @@ function _renderPainelDestaques() {
   </div>`;
 
   // #4 Campo de busca.
-  const busca = `<input type="text" id="destaques-busca" oninput="filtrarDestaques(this.value)" value="${_escHtml(_destBusca)}" placeholder="🔍 Buscar no texto/comentário..." style="width:100%;padding:6px 10px;margin-bottom:8px;background:var(--bg-surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.78rem;outline:none;">`;
+  const busca = `<input type="text" id="destaques-busca" oninput="filtrarDestaques(this.value)" value="${_escHtml(_destBusca)}" placeholder="🔍 Buscar no texto/comentário..." aria-label="Buscar nos destaques" style="width:100%;padding:6px 10px;margin-bottom:8px;background:var(--bg-surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.78rem;outline:none;">`;
 
   // #6 Botões de limpeza.
   const limpar = `<div style="display:flex;gap:6px;margin-bottom:10px;">

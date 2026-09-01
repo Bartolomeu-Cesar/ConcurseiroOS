@@ -122,7 +122,7 @@ function showCurrentFlashcard() {
       <div style="margin-top:12px;padding:10px;background:var(--bg-surface);border-radius:8px;">
         <div style="font-size:0.78rem;color:var(--accent);font-weight:600;margin-bottom:4px;">📝 Distributed Summary</div>
         <div style="font-size:0.7rem;color:var(--text-sub);margin-bottom:6px;">Resuma em 1 frase o que aprendeu/revisou nesta sessão:</div>
-        <textarea id="session-summary-input" placeholder="Ex: 'Revisão de prazos processuais — mandado de segurança é 120 dias, habeas data é...' "
+        <textarea id="session-summary-input" placeholder="Ex: 'Revisão de prazos processuais — mandado de segurança é 120 dias, habeas data é...' " aria-label="Resumo da sessão"
           style="width:100%;min-height:40px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-size:0.8rem;font-family:inherit;resize:vertical;"></textarea>
         <button onclick="saveSessionSummary()" style="margin-top:6px;background:var(--accent);color:var(--bg);border:none;border-radius:6px;padding:6px 12px;font-size:0.78rem;font-weight:600;cursor:pointer;">💾 Salvar resumo</button>
       </div>` : '';
@@ -184,7 +184,7 @@ function showCurrentFlashcard() {
   let generationHtml = '';
   if (_generationMode) {
     generationHtml = `<div id="flash-generation-area" style="margin-bottom:10px;">
-      <textarea id="flash-generation-input" placeholder="Digite sua resposta antes de revelar..." 
+      <textarea id="flash-generation-input" placeholder="Digite sua resposta antes de revelar..." aria-label="Sua resposta"
         style="width:100%;min-height:60px;background:var(--bg-surface);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text);font-size:0.85rem;font-family:inherit;resize:vertical;"
         onkeydown="if(event.key==='Enter'&&event.ctrlKey)revealAnswer()"></textarea>
       <div style="font-size:0.65rem;color:var(--text-sub);margin-top:2px;">Ctrl+Enter para revelar</div>
@@ -555,7 +555,7 @@ function _showChunkPause(cardsDone, totalPendentes) {
     </div>
     <div style="margin-bottom:10px;">
       <div style="font-size:0.78rem;color:var(--text);font-weight:600;margin-bottom:4px;">🤔 Mini-resumo (opcional):</div>
-      <textarea id="chunk-resumo" placeholder="O que você aprendeu neste bloco? Conceitos-chave, regras, conexões..."
+      <textarea id="chunk-resumo" placeholder="O que você aprendeu neste bloco? Conceitos-chave, regras, conexões..." aria-label="Resumo do bloco"
         style="width:100%;min-height:50px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-size:0.8rem;font-family:inherit;resize:vertical;"></textarea>
     </div>
     <div style="display:flex;gap:8px;">
@@ -674,7 +674,7 @@ function _showMnemonicSuggestion(card) {
       <div style="font-size:0.75rem;font-weight:600;color:var(--accent);margin-bottom:6px;">💡 Sugestões de mnemônicos:</div>
       ${sugestoes.map(s => `<div style="font-size:0.75rem;color:var(--text-sub);padding:3px 0;">• ${s}</div>`).join('')}
     </div>
-    <textarea id="mnemonic-input" placeholder="Crie seu mnemônico aqui... (ex: 'Para lembrar que CF art.5 tem 78 incisos → 5+7+8=20, como nota máxima')"
+    <textarea id="mnemonic-input" placeholder="Crie seu mnemônico aqui... (ex: 'Para lembrar que CF art.5 tem 78 incisos → 5+7+8=20, como nota máxima')" aria-label="Seu mnemônico"
       style="width:100%;min-height:50px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text);font-size:0.82rem;font-family:inherit;resize:vertical;"></textarea>
     <div style="display:flex;gap:8px;margin-top:8px;">
       <button onclick="saveMnemonic()" style="flex:1;background:var(--peach);color:var(--bg);border:none;border-radius:6px;padding:8px;font-size:0.8rem;font-weight:600;cursor:pointer;">🔑 Salvar Mnemônico</button>
@@ -737,7 +737,7 @@ function _showElaborationPrompt(card) {
       <div style="font-size:0.78rem;color:var(--text-sub);margin-bottom:4px;">📚 ${card.materia || 'Flashcard'}</div>
       <div style="font-size:0.85rem;font-weight:600;color:var(--text);">${prompt}</div>
     </div>
-    <textarea id="elaboration-input" placeholder="Escreva sua explicação... (opcional mas recomendado)"
+    <textarea id="elaboration-input" placeholder="Escreva sua explicação... (opcional mas recomendado)" aria-label="Sua explicação"
       style="width:100%;min-height:70px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text);font-size:0.82rem;font-family:inherit;resize:vertical;"></textarea>
     <div style="display:flex;gap:8px;margin-top:8px;">
       <button onclick="saveElaboration()" style="flex:1;background:var(--accent);color:var(--bg);border:none;border-radius:6px;padding:8px;font-size:0.8rem;font-weight:600;cursor:pointer;">💾 Salvar</button>
@@ -1544,11 +1544,11 @@ export async function openBrainDump() {
       <div style="font-size:0.72rem;color:var(--text-sub);">Escreva TUDO que lembra sobre uma matéria — sem consultar nada!</div>
       <div style="font-size:0.65rem;color:var(--text-sub);margin-top:2px;">Karpicke & Blunt (2011): Free recall = retenção igual ou superior a concept mapping</div>
     </div>
-    <select id="brain-dump-materia" style="width:100%;padding:8px;background:var(--bg-surface);border:1px solid var(--border);border-radius:6px;color:var(--text);margin-bottom:8px;font-size:0.85rem;">
+    <select id="brain-dump-materia" aria-label="Matéria do brain dump" style="width:100%;padding:8px;background:var(--bg-surface);border:1px solid var(--border);border-radius:6px;color:var(--text);margin-bottom:8px;font-size:0.85rem;">
       <option value="">📚 Escolha a matéria...</option>
       ${materiaOpts}
     </select>
-    <textarea id="brain-dump-texto" placeholder="Escreva tudo que lembra sobre essa matéria... conceitos, regras, exceções, exemplos, artigos, súmulas... O que vier à mente! Sem consultar nada."
+    <textarea id="brain-dump-texto" placeholder="Escreva tudo que lembra sobre essa matéria... conceitos, regras, exceções, exemplos, artigos, súmulas... O que vier à mente! Sem consultar nada." aria-label="Brain dump da matéria"
       style="width:100%;min-height:150px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;color:var(--text);font-size:0.85rem;font-family:inherit;resize:vertical;line-height:1.5;"></textarea>
     <div id="brain-dump-counter" style="font-size:0.7rem;color:var(--text-sub);text-align:right;margin-top:2px;">0 palavras</div>
     <div style="display:flex;gap:8px;margin-top:10px;">

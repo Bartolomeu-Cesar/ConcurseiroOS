@@ -24,7 +24,7 @@ function openQuickSearch() {
   overlay.style.display = 'flex';
   overlay.innerHTML = `
     <div class="quick-search-box">
-      <input type="text" id="quick-search-input" placeholder="Buscar tópico, matéria, PDF..." autofocus>
+      <input type="text" id="quick-search-input" placeholder="Buscar tópico, matéria, PDF..." aria-label="Buscar tópico, matéria ou PDF" autofocus>
       <div id="quick-search-results" class="quick-search-results"></div>
       <div class="quick-search-hint">Esc para fechar • Enter para abrir • ↑↓ para navegar</div>
     </div>

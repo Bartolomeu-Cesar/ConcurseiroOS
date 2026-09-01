@@ -767,7 +767,7 @@ function renderTodos() {
     const completedClass = t.completed ? ' completed' : '';
     const checked = t.completed ? 'checked' : '';
     return `<li class="todo-item${completedClass}">
-      <input type="checkbox" ${checked} onchange="toggleTodoItem('${t.id}')">
+      <input type="checkbox" ${checked} onchange="toggleTodoItem('${t.id}')" aria-label="Marcar tarefa como concluída">
       <span class="todo-item-text">${escHtml(t.text)}</span>
     </li>`;
   }).join('');

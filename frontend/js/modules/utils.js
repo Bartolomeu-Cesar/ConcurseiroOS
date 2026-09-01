@@ -128,8 +128,8 @@ export function promptModal(message, { title = 'Informe', defaultValue = '', pla
     overlay.id = 'prompt-modal-overlay';
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:99999;display:flex;align-items:center;justify-content:center;animation:fadeIn 0.15s;';
     const field = multiline
-      ? `<textarea id="pm-input" placeholder="${escapeHtml(placeholder)}" style="width:100%;min-height:90px;padding:10px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.9rem;font-family:inherit;resize:vertical;">${escapeHtml(defaultValue)}</textarea>`
-      : `<input id="pm-input" type="text" value="${escapeHtml(defaultValue)}" placeholder="${escapeHtml(placeholder)}" style="width:100%;padding:10px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.9rem;">`;
+      ? `<textarea id="pm-input" aria-labelledby="${titleId}" placeholder="${escapeHtml(placeholder)}" style="width:100%;min-height:90px;padding:10px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.9rem;font-family:inherit;resize:vertical;">${escapeHtml(defaultValue)}</textarea>`
+      : `<input id="pm-input" type="text" aria-labelledby="${titleId}" value="${escapeHtml(defaultValue)}" placeholder="${escapeHtml(placeholder)}" style="width:100%;padding:10px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.9rem;">`;
     overlay.innerHTML = `<div style="background:#313244;border-radius:16px;padding:28px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.5);border:1px solid #45475a;animation:scaleIn 0.15s;">
       <div style="text-align:center;margin-bottom:14px;">
         <div style="font-size:2rem;margin-bottom:6px;" aria-hidden="true">${escapeHtml(icon)}</div>

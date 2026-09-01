@@ -650,12 +650,12 @@
         <p style="font-size:0.75rem;color:var(--text-sub);margin-bottom:8px;">Explique o tópico como se ensinasse a uma criança. Se travar, volte ao material.</p>
         <div id="feynman-box">
           <div style="margin-bottom:8px;">
-            <select id="feynman-materia" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:0.82rem;">
+            <select id="feynman-materia" aria-label="Matéria (Feynman)" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:0.82rem;">
               <option value="">Escolha uma matéria...</option>
             </select>
           </div>
           <div id="feynman-topico" style="font-size:0.85rem;color:var(--accent);font-weight:600;margin-bottom:6px;"></div>
-          <textarea id="feynman-texto" placeholder="Explique o tópico com suas palavras, de forma simples..." rows="4" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:0.82rem;resize:vertical;"></textarea>
+          <textarea id="feynman-texto" placeholder="Explique o tópico com suas palavras, de forma simples..." aria-label="Explicação Feynman" rows="4" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:0.82rem;resize:vertical;"></textarea>
           <div style="display:flex;gap:8px;margin-top:8px;">
             <button onclick="sortearFeynman()" style="background:var(--blue);color:var(--bg);border:none;border-radius:6px;padding:6px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;">🎲 Sortear Tópico</button>
             <button onclick="salvarFeynman()" style="background:var(--green);color:var(--bg);border:none;border-radius:6px;padding:6px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;">💾 Salvar</button>
@@ -667,9 +667,9 @@
         <p style="font-size:0.75rem;color:var(--text-sub);margin-bottom:8px;">Resuma o que aprendeu em exatamente 3 frases. Força síntese e retenção.</p>
         <div id="elaboracao-box">
           <div id="elab-topico-atual" style="font-size:0.82rem;color:var(--accent);font-weight:600;margin-bottom:8px;"></div>
-          <textarea id="elab-frase1" placeholder="Frase 1: O conceito principal é..." rows="1" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:0.82rem;margin-bottom:4px;"></textarea>
-          <textarea id="elab-frase2" placeholder="Frase 2: Isso é importante porque..." rows="1" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:0.82rem;margin-bottom:4px;"></textarea>
-          <textarea id="elab-frase3" placeholder="Frase 3: Um exemplo prático seria..." rows="1" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:0.82rem;margin-bottom:8px;"></textarea>
+          <textarea id="elab-frase1" placeholder="Frase 1: O conceito principal é..." aria-label="Frase 1 da elaboração" rows="1" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:0.82rem;margin-bottom:4px;"></textarea>
+          <textarea id="elab-frase2" placeholder="Frase 2: Isso é importante porque..." aria-label="Frase 2 da elaboração" rows="1" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:0.82rem;margin-bottom:4px;"></textarea>
+          <textarea id="elab-frase3" placeholder="Frase 3: Um exemplo prático seria..." aria-label="Frase 3 da elaboração" rows="1" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:0.82rem;margin-bottom:8px;"></textarea>
           <div style="display:flex;gap:8px;">
             <button onclick="sortearElaboracao()" style="background:var(--blue);color:var(--bg);border:none;border-radius:6px;padding:6px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;">🎲 Sortear</button>
             <button onclick="salvarElaboracao()" style="background:var(--green);color:var(--bg);border:none;border-radius:6px;padding:6px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;">💾 Salvar</button>
@@ -685,7 +685,7 @@
         <p style="font-size:0.75rem;color:var(--text-sub);margin-bottom:8px;">Tente lembrar SEM olhar o material. A dificuldade de lembrar fortalece a memória.</p>
         <div id="retrieval-box">
           <div id="retrieval-pergunta" style="font-size:0.9rem;color:var(--text);padding:12px;background:var(--bg);border-radius:8px;min-height:60px;margin-bottom:8px;">Clique em "Gerar" para um teste de recuperação aleatório.</div>
-          <textarea id="retrieval-resposta" placeholder="Escreva tudo que lembra sobre o tema..." rows="3" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:0.82rem;resize:vertical;display:none;"></textarea>
+          <textarea id="retrieval-resposta" placeholder="Escreva tudo que lembra sobre o tema..." aria-label="Resposta do teste de recuperação" rows="3" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:0.82rem;resize:vertical;display:none;"></textarea>
           <div id="retrieval-gabarito" style="display:none;padding:10px;background:var(--bg-surface);border-radius:8px;margin-top:8px;font-size:0.82rem;color:var(--green);"></div>
           <div style="display:flex;gap:8px;margin-top:8px;">
             <button onclick="gerarRetrieval()" style="background:var(--accent);color:var(--bg);border:none;border-radius:6px;padding:6px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;">🧪 Gerar</button>
@@ -742,7 +742,7 @@
         <p style="font-size:0.75rem;color:var(--text-sub);margin-bottom:8px;">Escrever a resposta completa fortalece mais a memória que múltipla escolha.</p>
         <div id="dissertativa-box">
           <div style="margin-bottom:8px;">
-            <select id="dissert-materia" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:0.82rem;">
+            <select id="dissert-materia" aria-label="Matéria (dissertativa)" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:0.82rem;">
               <option value="">Qualquer matéria</option>
             </select>
           </div>
@@ -757,10 +757,10 @@
           <div style="font-size:0.82rem;color:var(--accent);font-weight:600;margin-bottom:6px;" id="cornell-topico">Selecione um tópico para anotar:</div>
           <button onclick="sortearCornell()" style="background:var(--blue);color:var(--bg);border:none;border-radius:6px;padding:5px 12px;font-size:0.78rem;font-weight:600;cursor:pointer;margin-bottom:8px;">🎲 Sortear Tópico</button>
           <div style="display:grid;grid-template-columns:1fr 2fr;gap:6px;margin-bottom:6px;">
-            <textarea id="cornell-dicas" placeholder="📌 Palavras-chave / Dicas" rows="4" style="background:var(--bg);color:var(--yellow);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:0.78rem;resize:vertical;"></textarea>
-            <textarea id="cornell-notas" placeholder="📝 Notas detalhadas durante o estudo" rows="4" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:0.78rem;resize:vertical;"></textarea>
+            <textarea id="cornell-dicas" placeholder="📌 Palavras-chave / Dicas" aria-label="Palavras-chave e dicas (Cornell)" rows="4" style="background:var(--bg);color:var(--yellow);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:0.78rem;resize:vertical;"></textarea>
+            <textarea id="cornell-notas" placeholder="📝 Notas detalhadas durante o estudo" aria-label="Notas detalhadas (Cornell)" rows="4" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:0.78rem;resize:vertical;"></textarea>
           </div>
-          <textarea id="cornell-resumo" placeholder="📋 Resumo com suas palavras (preencha depois de estudar, sem olhar as notas)" rows="2" style="width:100%;background:var(--bg);color:var(--green);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:0.78rem;resize:vertical;"></textarea>
+          <textarea id="cornell-resumo" placeholder="📋 Resumo com suas palavras (preencha depois de estudar, sem olhar as notas)" aria-label="Resumo (Cornell)" rows="2" style="width:100%;background:var(--bg);color:var(--green);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:0.78rem;resize:vertical;"></textarea>
           <button onclick="salvarCornell()" style="margin-top:6px;background:var(--green);color:var(--bg);border:none;border-radius:6px;padding:5px 12px;font-size:0.78rem;font-weight:600;cursor:pointer;">💾 Salvar Cornell Note</button>
         </div>
       </div>
@@ -775,11 +775,11 @@
           <div style="padding:10px;background:var(--bg);border-radius:8px;margin-bottom:8px;">
             <div style="font-size:0.8rem;color:var(--accent);font-weight:600;margin-bottom:6px;">🗺️ Crie seu Palácio:</div>
             <div style="display:grid;grid-template-columns:auto 1fr;gap:4px;font-size:0.78rem;">
-              <span style="color:var(--blue);">🚪 Entrada:</span><input id="loci-1" placeholder="Conceito 1..." style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 6px;font-size:0.75rem;">
-              <span style="color:var(--blue);">🛋️ Sala:</span><input id="loci-2" placeholder="Conceito 2..." style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 6px;font-size:0.75rem;">
-              <span style="color:var(--blue);">🍳 Cozinha:</span><input id="loci-3" placeholder="Conceito 3..." style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 6px;font-size:0.75rem;">
-              <span style="color:var(--blue);">🛏️ Quarto:</span><input id="loci-4" placeholder="Conceito 4..." style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 6px;font-size:0.75rem;">
-              <span style="color:var(--blue);">🚿 Banheiro:</span><input id="loci-5" placeholder="Conceito 5..." style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 6px;font-size:0.75rem;">
+              <span style="color:var(--blue);">🚪 Entrada:</span><input id="loci-1" placeholder="Conceito 1..." aria-label="Conceito na entrada" style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 6px;font-size:0.75rem;">
+              <span style="color:var(--blue);">🛋️ Sala:</span><input id="loci-2" placeholder="Conceito 2..." aria-label="Conceito na sala" style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 6px;font-size:0.75rem;">
+              <span style="color:var(--blue);">🍳 Cozinha:</span><input id="loci-3" placeholder="Conceito 3..." aria-label="Conceito na cozinha" style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 6px;font-size:0.75rem;">
+              <span style="color:var(--blue);">🛏️ Quarto:</span><input id="loci-4" placeholder="Conceito 4..." aria-label="Conceito no quarto" style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 6px;font-size:0.75rem;">
+              <span style="color:var(--blue);">🚿 Banheiro:</span><input id="loci-5" placeholder="Conceito 5..." aria-label="Conceito no banheiro" style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 6px;font-size:0.75rem;">
             </div>
           </div>
           <div style="display:flex;gap:6px;">
@@ -831,7 +831,7 @@
               <button class="cal-mode-btn" data-mode="manual" onclick="setCalMode('manual')">✏️ Manual</button>
               <button class="cal-mode-btn" data-mode="hibrido" onclick="setCalMode('hibrido')">🔀 Híbrido</button>
             </div>
-            <select id="cal-horas" onchange="loadCalendario()" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:0.85rem;">
+            <select id="cal-horas" aria-label="Horas por dia" onchange="loadCalendario()" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:0.85rem;">
               <option value="2">2h/dia</option>
               <option value="3" selected>3h/dia</option>
               <option value="4">4h/dia</option>
@@ -849,16 +849,16 @@
         <div id="cal-manual-form" style="display:none;background:var(--bg);border-radius:8px;padding:12px;margin-bottom:16px;border:1px solid var(--border);">
           <div style="font-size:0.82rem;font-weight:600;color:var(--accent);margin-bottom:8px;">➕ Adicionar atividade</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-            <select id="cal-add-dia" style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:0.82rem;">
+            <select id="cal-add-dia" aria-label="Dia da atividade" style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:0.82rem;">
               <option value="0">Segunda</option><option value="1">Terça</option><option value="2">Quarta</option>
               <option value="3">Quinta</option><option value="4">Sexta</option><option value="5">Sábado</option><option value="6">Domingo</option>
             </select>
-            <select id="cal-add-tipo" style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:0.82rem;">
+            <select id="cal-add-tipo" aria-label="Tipo de atividade" style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:0.82rem;">
               <option value="estudo">📚 Estudo</option><option value="questoes">❓ Questões</option><option value="revisao">🧠 Revisão</option>
             </select>
-            <input id="cal-add-materia" type="text" placeholder="Matéria" style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:0.82rem;min-width:140px;">
-            <input id="cal-add-topicos" type="text" placeholder="Tópicos (opcional)" style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:0.82rem;min-width:140px;">
-            <input id="cal-add-tempo" type="number" value="60" min="10" step="10" style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:0.82rem;width:70px;">
+            <input id="cal-add-materia" type="text" placeholder="Matéria" aria-label="Matéria da atividade" style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:0.82rem;min-width:140px;">
+            <input id="cal-add-topicos" type="text" placeholder="Tópicos (opcional)" aria-label="Tópicos da atividade" style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:0.82rem;min-width:140px;">
+            <input id="cal-add-tempo" type="number" value="60" min="10" step="10" aria-label="Tempo da atividade em minutos" style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:0.82rem;width:70px;">
             <span style="font-size:0.75rem;color:var(--text-sub);">min</span>
             <button onclick="addCalendarioItem()" style="background:var(--green);color:var(--bg);border:none;border-radius:6px;padding:6px 14px;font-size:0.82rem;font-weight:600;cursor:pointer;">+ Adicionar</button>
           </div>
@@ -1080,7 +1080,7 @@
               <button class="plan-mode-btn active" data-mode="auto" onclick="setPlanMode('auto')">🤖 Auto</button>
               <button class="plan-mode-btn" data-mode="manual" onclick="setPlanMode('manual')">✏️ Manual</button>
             </div>
-            <select id="plan-horas-dia" onchange="loadPlanejadorSemanal()" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:0.82rem;">
+            <select id="plan-horas-dia" aria-label="Horas por dia" onchange="loadPlanejadorSemanal()" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:0.82rem;">
               <option value="2">2h/dia</option>
               <option value="3" selected>3h/dia</option>
               <option value="4">4h/dia</option>
@@ -1098,7 +1098,7 @@
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
             <div>
               <label style="font-size:0.72rem;color:var(--text-sub);display:block;margin-bottom:2px;">Dia</label>
-              <select id="plan-dia" style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:0.82rem;">
+              <select id="plan-dia" aria-label="Dia do plano" style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:0.82rem;">
                 <option value="0">Segunda</option>
                 <option value="1">Terça</option>
                 <option value="2">Quarta</option>
@@ -1110,12 +1110,12 @@
             </div>
             <div style="flex:1;min-width:150px;">
               <label style="font-size:0.72rem;color:var(--text-sub);display:block;margin-bottom:2px;">Matéria</label>
-              <input type="text" id="plan-materia" placeholder="Ex: Direito Constitucional" list="plan-materias-list" style="width:100%;background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:0.82rem;">
+              <input type="text" id="plan-materia" placeholder="Ex: Direito Constitucional" aria-label="Matéria do plano" list="plan-materias-list" style="width:100%;background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:0.82rem;">
               <datalist id="plan-materias-list"></datalist>
             </div>
             <div>
               <label style="font-size:0.72rem;color:var(--text-sub);display:block;margin-bottom:2px;">Horas</label>
-              <input type="number" id="plan-horas" value="1.5" min="0.5" max="8" step="0.5" style="width:70px;background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:0.82rem;">
+              <input type="number" id="plan-horas" value="1.5" min="0.5" max="8" step="0.5" aria-label="Horas do plano" style="width:70px;background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:0.82rem;">
             </div>
             <button onclick="addPlanejadorItem()" style="background:var(--green);color:var(--bg);border:none;border-radius:6px;padding:7px 14px;font-weight:600;font-size:0.82rem;cursor:pointer;">+ Adicionar</button>
           </div>

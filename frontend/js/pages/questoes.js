@@ -914,10 +914,10 @@ async function aplicarGabaritoPDF() {
     <div style="background:#313244;border:1px solid #45475a;border-radius:16px;padding:24px;max-width:420px;width:90%;">
       <h3 style="color:#cdd6f4;margin:0 0 12px;">📋 Aplicar Gabarito</h3>
       <p style="color:#a6adc8;font-size:0.82rem;margin:0 0 12px;">Selecione a prova para associar este gabarito:</p>
-      <select id="gab-prova-select" style="width:100%;padding:10px;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:8px;font-size:0.85rem;margin-bottom:8px;">
+      <select id="gab-prova-select" aria-label="Prova de destino do gabarito" style="width:100%;padding:10px;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:8px;font-size:0.85rem;margin-bottom:8px;">
         ${options}
       </select>
-      <input id="gab-prova-manual" type="text" placeholder="Nome da prova (ex: STM 2025 CG1)" style="display:none;width:100%;padding:10px;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:8px;font-size:0.85rem;margin-bottom:16px;box-sizing:border-box;">
+      <input id="gab-prova-manual" type="text" placeholder="Nome da prova (ex: STM 2025 CG1)" aria-label="Nome da prova" style="display:none;width:100%;padding:10px;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:8px;font-size:0.85rem;margin-bottom:16px;box-sizing:border-box;">
       <div style="display:flex;gap:8px;">
         <button id="gab-cancel" style="flex:1;padding:10px;background:#45475a;color:#cdd6f4;border:none;border-radius:8px;cursor:pointer;font-weight:600;">Cancelar</button>
         <button id="gab-confirm" style="flex:1;padding:10px;background:#a6e3a1;color:#1e1e2e;border:none;border-radius:8px;cursor:pointer;font-weight:700;">Aplicar Gabarito</button>
@@ -1009,12 +1009,12 @@ async function aplicarGabaritoTexto() {
     <div style="background:#313244;border:1px solid #45475a;border-radius:16px;padding:24px;max-width:520px;width:92%;">
       <h3 style="color:#cdd6f4;margin:0 0 12px;">📋 Aplicar Gabarito (colar texto)</h3>
       <p style="color:#a6adc8;font-size:0.82rem;margin:0 0 8px;">1. Escolha a prova de destino:</p>
-      <select id="gabt-prova-select" style="width:100%;padding:10px;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:8px;font-size:0.85rem;margin-bottom:8px;box-sizing:border-box;">
+      <select id="gabt-prova-select" aria-label="Prova de destino do gabarito" style="width:100%;padding:10px;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:8px;font-size:0.85rem;margin-bottom:8px;box-sizing:border-box;">
         ${options}
       </select>
-      <input id="gabt-prova-manual" type="text" placeholder="Nome da prova (ex: STM 2025 CG1)" style="display:none;width:100%;padding:10px;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:8px;font-size:0.85rem;margin-bottom:12px;box-sizing:border-box;">
+      <input id="gabt-prova-manual" type="text" placeholder="Nome da prova (ex: STM 2025 CG1)" aria-label="Nome da prova" style="display:none;width:100%;padding:10px;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:8px;font-size:0.85rem;margin-bottom:12px;box-sizing:border-box;">
       <p style="color:#a6adc8;font-size:0.82rem;margin:12px 0 8px;">2. Cole o gabarito (ex.: <code style="color:#89b4fa;">1 A 2 D 3 E 4 C ...</code>):</p>
-      <textarea id="gabt-texto" rows="7" placeholder="Respostas:\n1 A 2 D 3 E 4 C 5 B 6 B ...\n14 C 15 B 16 B ..." style="width:100%;padding:10px;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:8px;font-size:0.82rem;font-family:monospace;margin-bottom:16px;box-sizing:border-box;resize:vertical;"></textarea>
+      <textarea id="gabt-texto" rows="7" placeholder="Respostas:\n1 A 2 D 3 E 4 C 5 B 6 B ...\n14 C 15 B 16 B ..." aria-label="Texto do gabarito" style="width:100%;padding:10px;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:8px;font-size:0.82rem;font-family:monospace;margin-bottom:16px;box-sizing:border-box;resize:vertical;"></textarea>
       <div style="display:flex;gap:8px;">
         <button id="gabt-cancel" style="flex:1;padding:10px;background:#45475a;color:#cdd6f4;border:none;border-radius:8px;cursor:pointer;font-weight:600;">Cancelar</button>
         <button id="gabt-confirm" style="flex:1;padding:10px;background:#a6e3a1;color:#1e1e2e;border:none;border-radius:8px;cursor:pointer;font-weight:700;">Aplicar Gabarito</button>
@@ -1198,14 +1198,14 @@ async function vincularProvaMateria(provaNome) {
       <p style="font-size:0.82rem;color:#a6adc8;margin-bottom:12px;">Prova: <strong style="color:#cdd6f4;">${provaNome}</strong></p>
       <div style="margin-bottom:12px;">
         <label style="font-size:0.78rem;color:#9399b2;">Selecione a matéria:</label>
-        <select id="vpm-materia" style="width:100%;padding:10px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;margin-top:4px;font-size:0.88rem;">
+        <select id="vpm-materia" aria-label="Selecione a matéria" style="width:100%;padding:10px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;margin-top:4px;font-size:0.88rem;">
           <option value="">-- Selecione --</option>
           ${materias.map(m => `<option value="${m}">${m}</option>`).join('')}
         </select>
       </div>
       <div style="margin-bottom:12px;">
         <label style="font-size:0.78rem;color:#9399b2;">Ou digite uma nova:</label>
-        <input id="vpm-materia-custom" placeholder="Ex: Direito Constitucional" style="width:100%;padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;margin-top:4px;font-size:0.85rem;">
+        <input id="vpm-materia-custom" placeholder="Ex: Direito Constitucional" aria-label="Nova matéria" style="width:100%;padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;margin-top:4px;font-size:0.85rem;">
       </div>
       <div style="display:flex;gap:8px;margin-top:16px;">
         <button onclick="document.getElementById('vincular-prova-modal').remove()" style="flex:1;padding:10px;background:#45475a;color:#cdd6f4;border:none;border-radius:8px;cursor:pointer;">Cancelar</button>
@@ -1400,21 +1400,21 @@ async function editQuestao(id) {
       <h3 style="color:#cba6f7;margin:0 0 16px;">✏️ Editar Questão #${id}</h3>
       <div style="margin-bottom:10px;">
         <label style="font-size:0.8rem;color:#9399b2;">📄 Enunciado</label>
-        <textarea id="eq-enunciado" rows="4" style="width:100%;padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;margin-top:4px;resize:vertical;font-size:0.85rem;">${(q.enunciado || '').replace(/</g,'&lt;').replace(/"/g,'&quot;')}</textarea>
+        <textarea id="eq-enunciado" rows="4" aria-label="Enunciado da questão" style="width:100%;padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;margin-top:4px;resize:vertical;font-size:0.85rem;">${(q.enunciado || '').replace(/</g,'&lt;').replace(/"/g,'&quot;')}</textarea>
       </div>
       <div style="margin-bottom:10px;">
         <label style="font-size:0.8rem;color:#9399b2;">🔤 Alternativas</label>
         <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px;">
-          <div style="display:flex;gap:6px;align-items:center;"><span style="font-weight:700;color:#cba6f7;min-width:18px;">A</span><input id="eq-alt-a" value="${(q.alternativa_a || '').replace(/"/g,'&quot;')}" style="flex:1;padding:6px 8px;border-radius:6px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.82rem;"></div>
-          <div style="display:flex;gap:6px;align-items:center;"><span style="font-weight:700;color:#cba6f7;min-width:18px;">B</span><input id="eq-alt-b" value="${(q.alternativa_b || '').replace(/"/g,'&quot;')}" style="flex:1;padding:6px 8px;border-radius:6px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.82rem;"></div>
-          <div style="display:flex;gap:6px;align-items:center;"><span style="font-weight:700;color:#cba6f7;min-width:18px;">C</span><input id="eq-alt-c" value="${(q.alternativa_c || '').replace(/"/g,'&quot;')}" style="flex:1;padding:6px 8px;border-radius:6px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.82rem;"></div>
-          <div style="display:flex;gap:6px;align-items:center;"><span style="font-weight:700;color:#cba6f7;min-width:18px;">D</span><input id="eq-alt-d" value="${(q.alternativa_d || '').replace(/"/g,'&quot;')}" style="flex:1;padding:6px 8px;border-radius:6px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.82rem;"></div>
-          <div style="display:flex;gap:6px;align-items:center;"><span style="font-weight:700;color:#cba6f7;min-width:18px;">E</span><input id="eq-alt-e" value="${(q.alternativa_e || '').replace(/"/g,'&quot;')}" style="flex:1;padding:6px 8px;border-radius:6px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.82rem;"></div>
+          <div style="display:flex;gap:6px;align-items:center;"><span style="font-weight:700;color:#cba6f7;min-width:18px;">A</span><input id="eq-alt-a" value="${(q.alternativa_a || '').replace(/"/g,'&quot;')}" aria-label="Alternativa A" style="flex:1;padding:6px 8px;border-radius:6px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.82rem;"></div>
+          <div style="display:flex;gap:6px;align-items:center;"><span style="font-weight:700;color:#cba6f7;min-width:18px;">B</span><input id="eq-alt-b" value="${(q.alternativa_b || '').replace(/"/g,'&quot;')}" aria-label="Alternativa B" style="flex:1;padding:6px 8px;border-radius:6px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.82rem;"></div>
+          <div style="display:flex;gap:6px;align-items:center;"><span style="font-weight:700;color:#cba6f7;min-width:18px;">C</span><input id="eq-alt-c" value="${(q.alternativa_c || '').replace(/"/g,'&quot;')}" aria-label="Alternativa C" style="flex:1;padding:6px 8px;border-radius:6px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.82rem;"></div>
+          <div style="display:flex;gap:6px;align-items:center;"><span style="font-weight:700;color:#cba6f7;min-width:18px;">D</span><input id="eq-alt-d" value="${(q.alternativa_d || '').replace(/"/g,'&quot;')}" aria-label="Alternativa D" style="flex:1;padding:6px 8px;border-radius:6px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.82rem;"></div>
+          <div style="display:flex;gap:6px;align-items:center;"><span style="font-weight:700;color:#cba6f7;min-width:18px;">E</span><input id="eq-alt-e" value="${(q.alternativa_e || '').replace(/"/g,'&quot;')}" aria-label="Alternativa E" style="flex:1;padding:6px 8px;border-radius:6px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;font-size:0.82rem;"></div>
         </div>
       </div>
       <div style="margin-bottom:10px;">
         <label style="font-size:0.8rem;color:#9399b2;">📚 Disciplina</label>
-        <select id="eq-materia" style="width:100%;padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;margin-top:4px;">
+        <select id="eq-materia" aria-label="Disciplina" style="width:100%;padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;margin-top:4px;">
           <option value="">Sem disciplina</option>
           ${materias.map(m => `<option value="${m}" ${m === q.materia ? 'selected' : ''}>${m}</option>`).join('')}
           ${q.materia && !materias.includes(q.materia) ? `<option value="${q.materia}" selected>${q.materia}</option>` : ''}
@@ -1422,16 +1422,16 @@ async function editQuestao(id) {
       </div>
       <div style="margin-bottom:10px;">
         <label style="font-size:0.8rem;color:#9399b2;">📝 Tópico</label>
-        <input id="eq-topico" value="${q.topico || ''}" style="width:100%;padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;margin-top:4px;">
+        <input id="eq-topico" value="${q.topico || ''}" aria-label="Tópico" style="width:100%;padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;margin-top:4px;">
       </div>
       <div style="display:flex;gap:8px;margin-bottom:10px;">
         <div style="flex:1;">
           <label style="font-size:0.8rem;color:#9399b2;">🏛️ Banca</label>
-          <input id="eq-banca" value="${q.banca || ''}" style="width:100%;padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;margin-top:4px;">
+          <input id="eq-banca" value="${q.banca || ''}" aria-label="Banca" style="width:100%;padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;margin-top:4px;">
         </div>
         <div style="flex:1;">
           <label style="font-size:0.8rem;color:#9399b2;">⚡ Dificuldade</label>
-          <select id="eq-dificuldade" style="width:100%;padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;margin-top:4px;">
+          <select id="eq-dificuldade" aria-label="Dificuldade" style="width:100%;padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;margin-top:4px;">
             <option value="Fácil" ${q.dificuldade === 'Fácil' ? 'selected' : ''}>Fácil</option>
             <option value="Médio" ${q.dificuldade === 'Médio' ? 'selected' : ''}>Médio</option>
             <option value="Difícil" ${q.dificuldade === 'Difícil' ? 'selected' : ''}>Difícil</option>
@@ -1441,14 +1441,14 @@ async function editQuestao(id) {
       <div style="display:flex;gap:8px;margin-bottom:10px;">
         <div style="flex:1;">
           <label style="font-size:0.8rem;color:#9399b2;">✅ Resposta Correta</label>
-          <select id="eq-resposta" style="width:100%;padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;margin-top:4px;">
+          <select id="eq-resposta" aria-label="Resposta correta" style="width:100%;padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;margin-top:4px;">
             ${['A','B','C','D','E'].map(l => `<option value="${l}" ${q.resposta_correta === l ? 'selected' : ''}>${l}</option>`).join('')}
           </select>
         </div>
       </div>
       <div style="margin-bottom:10px;">
         <label style="font-size:0.8rem;color:#9399b2;">💡 Explicação</label>
-        <textarea id="eq-explicacao" rows="3" style="width:100%;padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;margin-top:4px;resize:vertical;">${q.explicacao || ''}</textarea>
+        <textarea id="eq-explicacao" rows="3" aria-label="Explicação" style="width:100%;padding:8px;border-radius:8px;border:1px solid #45475a;background:#1e1e2e;color:#cdd6f4;margin-top:4px;resize:vertical;">${q.explicacao || ''}</textarea>
       </div>
       <div style="display:flex;gap:8px;margin-top:16px;">
         <button onclick="document.getElementById('edit-questao-modal').remove()" style="flex:1;padding:10px;background:#45475a;color:#cdd6f4;border:none;border-radius:8px;cursor:pointer;">Cancelar</button>
@@ -1779,7 +1779,7 @@ function showGenQuestao() {
       </div>
       <p style="font-size:0.92rem;line-height:1.5;margin-bottom:16px;">${q.enunciado}</p>
       <div style="margin-bottom:12px;">
-        <textarea id="gen-resposta" placeholder="Digite sua resposta de memória..." 
+        <textarea id="gen-resposta" placeholder="Digite sua resposta de memória..." aria-label="Sua resposta de memória"
           style="width:100%;min-height:60px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text);font-size:0.88rem;font-family:inherit;resize:vertical;"
           onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitGenResposta(${q.id})}"></textarea>
       </div>
@@ -1952,11 +1952,11 @@ function showCriarCadernoModal() {
       <h3 style="color:var(--accent);margin:0 0 16px;">📓 Novo Caderno</h3>
       <div style="margin-bottom:12px;">
         <label style="font-size:0.8rem;color:var(--text-sub);display:block;margin-bottom:4px;">Nome *</label>
-        <input id="caderno-nome" type="text" placeholder="Ex: Direito Constitucional - TRF5" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;">
+        <input id="caderno-nome" type="text" placeholder="Ex: Direito Constitucional - TRF5" aria-label="Nome do caderno" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;">
       </div>
       <div style="margin-bottom:12px;">
         <label style="font-size:0.8rem;color:var(--text-sub);display:block;margin-bottom:4px;">Descrição (opcional)</label>
-        <input id="caderno-desc" type="text" placeholder="Ex: Questões para revisão final" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;">
+        <input id="caderno-desc" type="text" placeholder="Ex: Questões para revisão final" aria-label="Descrição do caderno" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;">
       </div>
       <div style="margin-bottom:16px;">
         <label style="font-size:0.8rem;color:var(--text-sub);display:block;margin-bottom:6px;">Cor</label>

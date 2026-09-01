@@ -166,7 +166,7 @@ export async function responderQuestaoDia(letra) {
           <button class="error-chip" data-motivo="tempo" onclick="selectErrorChip(this)">⏰ Faltou tempo</button>
         </div>
         <div style="font-size:0.75rem;color:var(--yellow);font-weight:600;margin-bottom:4px;">🧠 Reformule — agora que viu a explicação, resuma com suas palavras:</div>
-        <textarea id="qdia-self-explain" placeholder="Resuma com suas palavras o que aprendeu com esse erro... (reformular consolida a correção)" 
+        <textarea id="qdia-self-explain" placeholder="Resuma com suas palavras o que aprendeu com esse erro... (reformular consolida a correção)" aria-label="Sua explicação sobre o erro" 
           style="width:100%;min-height:50px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-size:0.82rem;font-family:inherit;resize:vertical;"></textarea>
         <button onclick="submitSelfExplanation(${q.id})" style="margin-top:6px;background:var(--yellow);color:var(--bg);border:none;border-radius:6px;padding:6px 14px;font-weight:600;cursor:pointer;font-size:0.82rem;">💾 Salvar e continuar</button>
         <button onclick="advanceQuestao()" style="margin-top:6px;margin-left:6px;background:var(--bg-elevated);color:var(--text-sub);border:none;border-radius:6px;padding:6px 14px;font-size:0.78rem;cursor:pointer;">Pular →</button>

@@ -129,7 +129,7 @@ window.abrirAvaliacoes = async function(itemId, titulo) {
           ${[1,2,3,4,5].map(n => `<span data-nota="${n}" style="color:${n <= minhaNota ? '#f9e2af' : '#585b70'};">★</span>`).join('')}
         </div>
       </div>
-      <textarea id="aval-comentario" placeholder="Comentário (opcional)" style="width:100%;min-height:60px;padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.85rem;margin-bottom:12px;">${esc(data.minha_avaliacao?.comentario || '')}</textarea>
+      <textarea id="aval-comentario" placeholder="Comentário (opcional)" aria-label="Comentário da avaliação" style="width:100%;min-height:60px;padding:8px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;font-size:0.85rem;margin-bottom:12px;">${esc(data.minha_avaliacao?.comentario || '')}</textarea>
       <div style="display:flex;gap:8px;margin-bottom:16px;">
         <button onclick="document.getElementById('aval-modal').remove()" style="flex:1;padding:9px;background:#45475a;color:#cdd6f4;border:none;border-radius:8px;cursor:pointer;">Fechar</button>
         <button id="aval-enviar" style="flex:1;padding:9px;background:#a6e3a1;color:#1e1e2e;border:none;border-radius:8px;font-weight:600;cursor:pointer;">Enviar avaliação</button>
@@ -172,7 +172,7 @@ window.abrirPublicar = async function() {
       <h3 style="color:#94e2d5;margin:0 0 4px;">📤 Publicar meu material</h3>
       <p style="font-size:0.75rem;color:#9399b2;margin-bottom:12px;">Compartilhe seus materiais com a comunidade. Materiais de usuários passam por moderação antes de aparecer.</p>
       <label style="font-size:0.75rem;color:#9399b2;">Tipo</label>
-      <select id="pub-tipo" onchange="carregarMeusRefs()" style="width:100%;padding:9px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;margin-bottom:10px;">
+      <select id="pub-tipo" aria-label="Tipo de material" onchange="carregarMeusRefs()" style="width:100%;padding:9px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;margin-bottom:10px;">
         <option value="edital">📋 Edital verticalizado</option>
         <option value="caderno">📓 Caderno de questões</option>
         <option value="vademecum">📜 Lei (Vade Mécum)</option>
@@ -181,13 +181,13 @@ window.abrirPublicar = async function() {
         <option value="deck_sumulas">⚖️ Súmulas</option>
       </select>
       <label style="font-size:0.75rem;color:#9399b2;">Recurso</label>
-      <select id="pub-ref" style="width:100%;padding:9px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;margin-bottom:10px;"><option value="">carregando...</option></select>
+      <select id="pub-ref" aria-label="Recurso a publicar" style="width:100%;padding:9px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;margin-bottom:10px;"><option value="">carregando...</option></select>
       <label style="font-size:0.75rem;color:#9399b2;">Título</label>
-      <input id="pub-titulo" placeholder="Ex: Edital PF 2026 completo" style="width:100%;padding:9px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;margin-bottom:10px;">
+      <input id="pub-titulo" placeholder="Ex: Edital PF 2026 completo" aria-label="Título do material" style="width:100%;padding:9px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;margin-bottom:10px;">
       <label style="font-size:0.75rem;color:#9399b2;">Descrição</label>
-      <input id="pub-descricao" placeholder="Breve descrição" style="width:100%;padding:9px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;margin-bottom:10px;">
+      <input id="pub-descricao" placeholder="Breve descrição" aria-label="Descrição do material" style="width:100%;padding:9px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;margin-bottom:10px;">
       <label style="font-size:0.75rem;color:#9399b2;">Categoria</label>
-      <input id="pub-categoria" value="Geral" style="width:100%;padding:9px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;margin-bottom:14px;">
+      <input id="pub-categoria" value="Geral" aria-label="Categoria do material" style="width:100%;padding:9px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;margin-bottom:14px;">
       <div id="pub-result" style="font-size:0.78rem;margin-bottom:8px;"></div>
       <div style="display:flex;gap:8px;">
         <button onclick="document.getElementById('pub-modal').remove()" style="flex:1;padding:9px;background:#45475a;color:#cdd6f4;border:none;border-radius:8px;cursor:pointer;">Cancelar</button>

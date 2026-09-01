@@ -184,7 +184,7 @@
         Responda <strong>sem ver alternativas</strong>. Gerar a resposta de memória (recall) é 40% mais efetivo que reconhecimento (múltipla escolha).
       </p>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
-        <select id="gen-filtro-materia" style="background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:0.82rem;">
+        <select id="gen-filtro-materia" aria-label="Filtrar por matéria" style="background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:0.82rem;">
           <option value="">Todas as matérias</option>
         </select>
         <button class="btn btn-primary" onclick="startGenerationMode()" style="font-size:0.82rem;padding:6px 14px;">▶ Iniciar sessão</button>
@@ -203,19 +203,19 @@
         <span id="tempo-vs-prova" style="font-size:0.78rem;color:var(--text-sub);"></span>
       </div>
       <div class="filter-bar">
-        <select id="filtro-materia" onchange="loadQuestoesResolver()">
+        <select id="filtro-materia" aria-label="Filtrar por matéria" onchange="loadQuestoesResolver()">
           <option value="">Todas as matérias</option>
         </select>
-        <select id="filtro-banca" onchange="loadQuestoesResolver()">
+        <select id="filtro-banca" aria-label="Filtrar por banca" onchange="loadQuestoesResolver()">
           <option value="">Todas as bancas</option>
         </select>
-        <select id="filtro-dificuldade" onchange="loadQuestoesResolver()">
+        <select id="filtro-dificuldade" aria-label="Filtrar por dificuldade" onchange="loadQuestoesResolver()">
           <option value="">Todas dificuldades</option>
           <option value="Fácil">Fácil</option>
           <option value="Médio">Médio</option>
           <option value="Difícil">Difícil</option>
         </select>
-        <select id="filtro-status" onchange="loadQuestoesResolver()">
+        <select id="filtro-status" aria-label="Filtrar por status" onchange="loadQuestoesResolver()">
           <option value="">Todas</option>
           <option value="acertadas">Só acertadas</option>
           <option value="erradas">Só erradas</option>
@@ -251,9 +251,9 @@
     <div class="panel">
       <h2>📝 Criar Simulado</h2>
       <div class="form-row">
-        <input type="text" id="sim-titulo" placeholder="Título do simulado">
-        <input type="number" id="sim-tempo" placeholder="Tempo (min)" value="60" min="5" max="300" style="max-width:100px;">
-        <input type="number" id="sim-qtd" placeholder="Qtd questões" value="10" min="1" max="100" style="max-width:110px;">
+        <input type="text" id="sim-titulo" placeholder="Título do simulado" aria-label="Título do simulado">
+        <input type="number" id="sim-tempo" placeholder="Tempo (min)" aria-label="Tempo do simulado em minutos" value="60" min="5" max="300" style="max-width:100px;">
+        <input type="number" id="sim-qtd" placeholder="Qtd questões" aria-label="Quantidade de questões" value="10" min="1" max="100" style="max-width:110px;">
         <button class="btn btn-primary" onclick="criarSimulado()">Criar Simulado</button>
       </div>
       <div style="margin-top:10px;">
@@ -267,7 +267,7 @@
         </div>
       </div>
       <!-- Manter o select oculto para compatibilidade -->
-      <select id="sim-materia-filtro" style="display:none;">
+      <select id="sim-materia-filtro" aria-label="Filtrar por matéria" style="display:none;">
         <option value="">Todas as matérias</option>
       </select>
     </div>
@@ -325,11 +325,11 @@
       <div class="form-row" style="align-items:flex-end;">
         <div style="flex:1;">
           <label style="font-size:0.8rem;color:#a6adc8;">Matéria</label>
-          <input type="text" id="pdf-import-materia" placeholder="Ex: Direito Constitucional">
+          <input type="text" id="pdf-import-materia" placeholder="Ex: Direito Constitucional" aria-label="Matéria da prova importada">
         </div>
         <div style="flex:1;">
           <label style="font-size:0.8rem;color:#a6adc8;">Banca</label>
-          <input type="text" id="pdf-import-banca" placeholder="Ex: CEBRASPE">
+          <input type="text" id="pdf-import-banca" placeholder="Ex: CEBRASPE" aria-label="Banca da prova importada">
         </div>
       </div>
       <div style="margin:12px 0;display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
@@ -388,24 +388,24 @@
       <div style="display:flex;flex-direction:column;gap:10px;">
         <div>
           <label style="font-size:0.8rem;color:#a6adc8;">URL da Prova (PDF) *</label>
-          <input type="url" id="url-import-prova" placeholder="https://cdn.cebraspe.org.br/.../prova.pdf" style="width:100%;">
+          <input type="url" id="url-import-prova" placeholder="https://cdn.cebraspe.org.br/.../prova.pdf" aria-label="URL da prova (PDF)" style="width:100%;">
         </div>
         <div>
           <label style="font-size:0.8rem;color:#a6adc8;">URL do Gabarito (opcional)</label>
-          <input type="url" id="url-import-gabarito" placeholder="https://cdn.cebraspe.org.br/.../gabarito.pdf" style="width:100%;">
+          <input type="url" id="url-import-gabarito" placeholder="https://cdn.cebraspe.org.br/.../gabarito.pdf" aria-label="URL do gabarito (PDF)" style="width:100%;">
         </div>
         <div class="form-row" style="align-items:flex-end;">
           <div style="flex:1;">
             <label style="font-size:0.8rem;color:#a6adc8;">Banca</label>
-            <input type="text" id="url-import-banca" placeholder="CESPE" value="CESPE">
+            <input type="text" id="url-import-banca" placeholder="CESPE" aria-label="Banca da prova (URL)" value="CESPE">
           </div>
           <div style="flex:1;">
             <label style="font-size:0.8rem;color:#a6adc8;">Nome da Prova</label>
-            <input type="text" id="url-import-nome" placeholder="Ex: PC-MA 2018 Perito">
+            <input type="text" id="url-import-nome" placeholder="Ex: PC-MA 2018 Perito" aria-label="Nome da prova (URL)">
           </div>
           <div style="flex:1;">
             <label style="font-size:0.8rem;color:#a6adc8;">Matéria (se única)</label>
-            <input type="text" id="url-import-materia" placeholder="Deixe vazio para auto-detectar">
+            <input type="text" id="url-import-materia" placeholder="Deixe vazio para auto-detectar" aria-label="Matéria da prova (URL)">
           </div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;">
@@ -429,34 +429,34 @@
     <div class="panel">
       <h2>➕ Cadastrar Nova Questão</h2>
       <div class="form-row">
-        <input type="text" id="cad-materia" placeholder="Matéria *">
-        <input type="text" id="cad-topico" placeholder="Tópico (opcional)">
-        <select id="cad-dificuldade">
+        <input type="text" id="cad-materia" placeholder="Matéria *" aria-label="Matéria">
+        <input type="text" id="cad-topico" placeholder="Tópico (opcional)" aria-label="Tópico">
+        <select id="cad-dificuldade" aria-label="Dificuldade">
           <option value="Fácil">Fácil</option>
           <option value="Médio" selected>Médio</option>
           <option value="Difícil">Difícil</option>
         </select>
       </div>
       <div class="form-row">
-        <textarea id="cad-enunciado" placeholder="Enunciado da questão *" rows="3"></textarea>
+        <textarea id="cad-enunciado" placeholder="Enunciado da questão *" aria-label="Enunciado da questão" rows="3"></textarea>
       </div>
       <div class="form-row">
-        <input type="text" id="cad-a" placeholder="A) Alternativa A *">
+        <input type="text" id="cad-a" placeholder="A) Alternativa A *" aria-label="Alternativa A">
       </div>
       <div class="form-row">
-        <input type="text" id="cad-b" placeholder="B) Alternativa B *">
+        <input type="text" id="cad-b" placeholder="B) Alternativa B *" aria-label="Alternativa B">
       </div>
       <div class="form-row">
-        <input type="text" id="cad-c" placeholder="C) Alternativa C *">
+        <input type="text" id="cad-c" placeholder="C) Alternativa C *" aria-label="Alternativa C">
       </div>
       <div class="form-row">
-        <input type="text" id="cad-d" placeholder="D) Alternativa D *">
+        <input type="text" id="cad-d" placeholder="D) Alternativa D *" aria-label="Alternativa D">
       </div>
       <div class="form-row">
-        <input type="text" id="cad-e" placeholder="E) Alternativa E (opcional)">
+        <input type="text" id="cad-e" placeholder="E) Alternativa E (opcional)" aria-label="Alternativa E">
       </div>
       <div class="form-row">
-        <select id="cad-resposta" style="max-width:160px;">
+        <select id="cad-resposta" aria-label="Resposta correta" style="max-width:160px;">
           <option value="">Resposta correta *</option>
           <option value="A">A</option>
           <option value="B">B</option>
@@ -466,7 +466,7 @@
         </select>
       </div>
       <div class="form-row">
-        <textarea id="cad-explicacao" placeholder="Explicação (inclua mnemônicos, macetes e dicas para fixação)" rows="2"></textarea>
+        <textarea id="cad-explicacao" placeholder="Explicação (inclua mnemônicos, macetes e dicas para fixação)" aria-label="Explicação da questão" rows="2"></textarea>
       </div>
       <button class="btn btn-success" onclick="cadastrarQuestao()">✓ Salvar Questão</button>
     </div>
@@ -480,20 +480,20 @@
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
         <div style="flex:1;min-width:150px;">
           <label style="font-size:0.75rem;color:var(--text-sub);">🎯 Filtro</label>
-          <select id="lote-filtro-tipo" onchange="changeLoteFiltro()" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);margin-top:4px;">
+          <select id="lote-filtro-tipo" aria-label="Filtro do lote" onchange="changeLoteFiltro()" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);margin-top:4px;">
             <option value="sem_materia">⚠️ Sem matéria atribuída</option>
             <option value="data">📅 Por data de importação</option>
           </select>
         </div>
         <div id="lote-data-wrapper" style="flex:1;min-width:150px;display:none;">
           <label style="font-size:0.75rem;color:var(--text-sub);">📅 Data de Importação</label>
-          <select id="lote-data" onchange="previewLote()" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);margin-top:4px;">
+          <select id="lote-data" aria-label="Data de importação" onchange="previewLote()" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);margin-top:4px;">
             <option value="">Selecione...</option>
           </select>
         </div>
         <div style="flex:1;min-width:150px;">
           <label style="font-size:0.75rem;color:var(--text-sub);">🏛️ Filtrar por banca (opcional)</label>
-          <select id="lote-banca" onchange="previewLote()" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);margin-top:4px;">
+          <select id="lote-banca" aria-label="Filtrar por banca" onchange="previewLote()" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);margin-top:4px;">
             <option value="">Todas</option>
           </select>
         </div>
@@ -502,13 +502,13 @@
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
         <div style="flex:1;min-width:150px;">
           <label style="font-size:0.75rem;color:var(--text-sub);">📚 Nova Disciplina</label>
-          <select id="lote-materia" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);margin-top:4px;">
+          <select id="lote-materia" aria-label="Nova disciplina" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);margin-top:4px;">
             <option value="">Manter atual</option>
           </select>
         </div>
         <div style="flex:1;min-width:150px;">
           <label style="font-size:0.75rem;color:var(--text-sub);">📝 Novo Tópico (opcional)</label>
-          <input id="lote-topico" placeholder="Ex: Controle de Constitucionalidade" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);margin-top:4px;">
+          <input id="lote-topico" placeholder="Ex: Controle de Constitucionalidade" aria-label="Novo tópico" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);margin-top:4px;">
         </div>
       </div>
       <button onclick="aplicarLote()" class="btn btn-success" style="width:100%;">🔗 Vincular em Lote</button>
@@ -523,8 +523,8 @@
     <div class="panel">
       <h2>📦 Todas as Questões</h2>
       <div class="filter-bar" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
-        <input type="text" id="banco-busca" placeholder="🔍 Buscar no enunciado..." oninput="loadBanco()" style="flex:1;min-width:200px;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85rem;">
-        <select id="banco-filtro-materia" onchange="loadBanco()">
+        <input type="text" id="banco-busca" placeholder="🔍 Buscar no enunciado..." aria-label="Buscar no enunciado" oninput="loadBanco()" style="flex:1;min-width:200px;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85rem;">
+        <select id="banco-filtro-materia" aria-label="Filtrar por matéria" onchange="loadBanco()">
           <option value="">Todas as matérias</option>
         </select>
         <label style="font-size:0.82rem;color:var(--text-sub);display:flex;align-items:center;gap:4px;cursor:pointer;">
@@ -565,7 +565,7 @@
 
     <div style="margin-bottom:18px;">
       <label style="font-size:0.8rem;color:#a6adc8;display:block;margin-bottom:6px;">Formato</label>
-      <select id="csv-import-formato" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.88rem;">
+      <select id="csv-import-formato" aria-label="Formato do CSV" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.88rem;">
         <option value="auto">🔍 Auto-detectar</option>
         <option value="qconcursos">QConcursos</option>
         <option value="gran">Gran Cursos</option>

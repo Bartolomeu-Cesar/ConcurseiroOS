@@ -183,24 +183,24 @@
           <h2>✨ Criar Sala</h2>
           <div class="config-row">
             <label>Título</label>
-            <input type="text" id="input-titulo" placeholder="Ex: Estudando Constitucional" maxlength="60">
+            <input type="text" id="input-titulo" placeholder="Ex: Estudando Constitucional" aria-label="Título da sala" maxlength="60">
           </div>
           <div class="config-row">
             <label>Técnica</label>
-            <select id="select-tecnica">
+            <select id="select-tecnica" aria-label="Técnica de estudo">
               <option value="pomodoro">🍅 Pomodoro (25min foco + 5min pausa)</option>
               <option value="livre">⏱️ Livre (timer contínuo)</option>
             </select>
           </div>
           <div class="config-row">
             <label>Duração (min)</label>
-            <input type="number" id="input-duracao" value="50" min="5" max="240">
+            <input type="number" id="input-duracao" value="50" min="5" max="240" aria-label="Duração em minutos">
           </div>
           <div class="config-row">
             <label>Máx. pessoas</label>
-            <input type="number" id="input-max" value="10" min="2" max="50">
+            <input type="number" id="input-max" value="10" min="2" max="50" aria-label="Máximo de pessoas">
           </div>
-          <input type="text" class="input-goal" id="input-goal-criar" placeholder="🎯 O que vou estudar hoje?" maxlength="120">
+          <input type="text" class="input-goal" id="input-goal-criar" placeholder="🎯 O que vou estudar hoje?" aria-label="O que vou estudar hoje" maxlength="120">
           <button class="btn-room" onclick="criarSala()" style="margin-top:12px;">Criar Sala</button>
         </div>
 
@@ -208,8 +208,8 @@
 
         <div class="room-card">
           <h2>🔑 Entrar em Sala</h2>
-          <input type="text" class="input-room" id="input-codigo" placeholder="Código da sala" maxlength="6">
-          <input type="text" class="input-goal" id="input-goal-entrar" placeholder="🎯 O que vou estudar hoje?" maxlength="120">
+          <input type="text" class="input-room" id="input-codigo" placeholder="Código da sala" aria-label="Código da sala" maxlength="6">
+          <input type="text" class="input-goal" id="input-goal-entrar" placeholder="🎯 O que vou estudar hoje?" aria-label="O que vou estudar hoje" maxlength="120">
           <button class="btn-room secondary" onclick="entrarSala()" style="margin-top:12px;">Entrar</button>
         </div>
 
@@ -328,7 +328,7 @@
                 <button class="ambient-btn" data-sound="lofi" onclick="toggleAmbient('lofi')">🎵 Lo-fi</button>
                 <button class="ambient-btn silence" data-sound="silence" onclick="toggleAmbient('silence')">🔇 Silêncio</button>
               </div>
-              <input type="range" class="ambient-volume" id="ambient-volume" min="0" max="100" value="40" oninput="setAmbientVolume(this.value)">
+              <input type="range" class="ambient-volume" id="ambient-volume" min="0" max="100" value="40" aria-label="Volume dos sons ambiente" oninput="setAmbientVolume(this.value)">
             </div>
 
             <!-- Participantes -->
@@ -345,7 +345,7 @@
               </div>
               <div class="todo-body" id="todo-body">
                 <div class="todo-input-row">
-                  <input type="text" class="todo-input" id="todo-input" placeholder="Nova tarefa..." maxlength="200" onkeydown="if(event.key==='Enter')addTodo()">
+                  <input type="text" class="todo-input" id="todo-input" placeholder="Nova tarefa..." aria-label="Nova tarefa" maxlength="200" onkeydown="if(event.key==='Enter')addTodo()">
                   <button class="todo-add-btn" onclick="addTodo()">+</button>
                 </div>
                 <ul class="todo-list" id="todo-list"></ul>
@@ -357,10 +357,10 @@
               <h2>🤝 Compromisso Público</h2>
               <div id="commitment-display"></div>
               <div id="commitment-form" style="margin-top:8px;">
-                <input type="text" class="todo-input" id="commitment-input" placeholder="Ex: Vou resolver 15 questões de Constitucional" maxlength="200" style="margin-bottom:6px;">
+                <input type="text" class="todo-input" id="commitment-input" placeholder="Ex: Vou resolver 15 questões de Constitucional" aria-label="Compromisso público" maxlength="200" style="margin-bottom:6px;">
                 <div style="display:flex;gap:8px;align-items:center;">
                   <span style="font-size:0.75rem;color:var(--text-sub);">XP em jogo:</span>
-                  <input type="number" id="commitment-xp" value="50" min="10" max="200" style="width:60px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-md);padding:4px 8px;color:var(--yellow);font-weight:700;font-size:0.82rem;">
+                  <input type="number" id="commitment-xp" value="50" min="10" max="200" aria-label="XP em jogo" style="width:60px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-md);padding:4px 8px;color:var(--yellow);font-weight:700;font-size:0.82rem;">
                   <button class="todo-add-btn" onclick="submitCommitment()">Firmar compromisso</button>
                 </div>
               </div>
@@ -382,7 +382,7 @@
               <h2 style="color:var(--accent);">🤔 Reflexão Metacognitiva</h2>
               <p id="elaboration-prompt" style="font-size:0.9rem;color:var(--text);font-style:italic;margin:8px 0;"></p>
               <p style="font-size:0.72rem;color:var(--text-sub);">Responda mentalmente ou anote abaixo:</p>
-              <textarea id="elaboration-response" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-md);padding:8px;color:var(--text);font-size:0.82rem;resize:none;" placeholder="Sua reflexão..."></textarea>
+              <textarea id="elaboration-response" rows="2" aria-label="Reflexão metacognitiva" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-md);padding:8px;color:var(--text);font-size:0.82rem;resize:none;" placeholder="Sua reflexão..."></textarea>
               <button class="todo-add-btn" onclick="dismissElaboration()" style="margin-top:6px;">✓ Feito</button>
             </div>
 
@@ -401,8 +401,8 @@
               <h2 style="color:var(--red);">⚔️ Desafio Boss Fight</h2>
               <div id="challenge-setup">
                 <div style="display:flex;gap:8px;margin-bottom:8px;">
-                  <input type="text" class="todo-input" id="challenge-materia" placeholder="Matéria" style="flex:1;">
-                  <input type="number" id="challenge-qty" value="10" min="5" max="30" style="width:50px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-md);padding:4px;color:var(--text);font-size:0.82rem;">
+                  <input type="text" class="todo-input" id="challenge-materia" placeholder="Matéria" aria-label="Matéria do desafio" style="flex:1;">
+                  <input type="number" id="challenge-qty" value="10" min="5" max="30" aria-label="Quantidade de questões do desafio" style="width:50px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-md);padding:4px;color:var(--text);font-size:0.82rem;">
                   <button class="todo-add-btn" onclick="startChallenge()" style="background:var(--red);">⚔️ Lutar</button>
                 </div>
               </div>
@@ -426,16 +426,16 @@
                 <button class="todo-add-btn" onclick="showNewDiscussion()" style="width:100%;">+ Nova Questão para Debate</button>
               </div>
               <div id="new-discussion-form" class="hidden" style="margin-top:10px;background:var(--bg);border-radius:var(--radius-md);padding:12px;">
-                <textarea id="disc-enunciado" rows="3" style="width:100%;background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:8px;color:var(--text);font-size:0.82rem;resize:none;margin-bottom:6px;" placeholder="Enunciado da questão..."></textarea>
-                <input type="text" class="todo-input" id="disc-materia" placeholder="Matéria" style="margin-bottom:6px;">
+                <textarea id="disc-enunciado" rows="3" aria-label="Enunciado da questão para debate" style="width:100%;background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:8px;color:var(--text);font-size:0.82rem;resize:none;margin-bottom:6px;" placeholder="Enunciado da questão..."></textarea>
+                <input type="text" class="todo-input" id="disc-materia" placeholder="Matéria" aria-label="Matéria da questão para debate" style="margin-bottom:6px;">
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:6px;">
-                  <input type="text" class="todo-input" id="disc-alt-a" placeholder="A)">
-                  <input type="text" class="todo-input" id="disc-alt-b" placeholder="B)">
-                  <input type="text" class="todo-input" id="disc-alt-c" placeholder="C)">
-                  <input type="text" class="todo-input" id="disc-alt-d" placeholder="D)">
+                  <input type="text" class="todo-input" id="disc-alt-a" placeholder="A)" aria-label="Alternativa A">
+                  <input type="text" class="todo-input" id="disc-alt-b" placeholder="B)" aria-label="Alternativa B">
+                  <input type="text" class="todo-input" id="disc-alt-c" placeholder="C)" aria-label="Alternativa C">
+                  <input type="text" class="todo-input" id="disc-alt-d" placeholder="D)" aria-label="Alternativa D">
                 </div>
                 <div style="display:flex;gap:8px;">
-                  <select id="disc-correta" style="background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:6px;color:var(--text);font-size:0.82rem;flex:1;">
+                  <select id="disc-correta" aria-label="Resposta correta" style="background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:6px;color:var(--text);font-size:0.82rem;flex:1;">
                     <option value="">Resposta correta</option>
                     <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option>
                   </select>
@@ -449,8 +449,8 @@
               <h2>🎯 Intenção & Reflexão</h2>
               <div id="intention-display"></div>
               <div id="intention-form">
-                <input type="text" class="todo-input" id="intention-input" placeholder="O que vou estudar agora?" maxlength="200" style="margin-bottom:6px;">
-                <input type="text" class="todo-input" id="intention-how" placeholder="Como vou estudar? (técnica/abordagem)" maxlength="200" style="margin-bottom:6px;">
+                <input type="text" class="todo-input" id="intention-input" placeholder="O que vou estudar agora?" aria-label="O que vou estudar agora" maxlength="200" style="margin-bottom:6px;">
+                <input type="text" class="todo-input" id="intention-how" placeholder="Como vou estudar? (técnica/abordagem)" aria-label="Como vou estudar" maxlength="200" style="margin-bottom:6px;">
                 <button class="todo-add-btn" onclick="submitIntention()">Definir Intenção</button>
               </div>
             </div>
@@ -462,7 +462,7 @@
             <div class="chat-messages" id="chat-messages"></div>
             <div class="chat-focus-msg" id="chat-focus-msg">🔒 Chat disponível no intervalo</div>
             <div class="chat-input-row">
-              <input type="text" class="chat-input" id="chat-input" placeholder="Mensagem..." maxlength="500" onkeydown="if(event.key==='Enter')enviarMsg()">
+              <input type="text" class="chat-input" id="chat-input" placeholder="Mensagem..." aria-label="Mensagem do chat" maxlength="500" onkeydown="if(event.key==='Enter')enviarMsg()">
               <button class="chat-send" id="chat-send-btn" onclick="enviarMsg()">Enviar</button>
             </div>
           </div>

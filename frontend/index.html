@@ -27,7 +27,7 @@
 
         <div class="timer-section" id="timer-box">
           <span class="timer-display" id="timer-display">00:00:00</span>
-          <select id="timer-select">
+          <select id="timer-select" aria-label="Duração do timer">
             <option value="5">5 min</option>
             <option value="10">10 min</option>
             <option value="15" selected>15 min</option>
@@ -43,7 +43,7 @@
         </div>
 
         <div class="search-box">
-          <input type="text" id="global-search" placeholder="Buscar tópicos, questões, flashcards..." onkeydown="if(event.key==='Enter')globalSearch(this.value)">
+          <input type="text" id="global-search" placeholder="Buscar tópicos, questões, flashcards..." aria-label="Buscar tópicos, questões, flashcards" onkeydown="if(event.key==='Enter')globalSearch(this.value)">
         </div>
 
         <div class="user-section">
@@ -124,8 +124,8 @@
       <button class="iobtn" id="local-mode-btn" onclick="toggleModoLocal()" title="Estudar PDFs que ficam no seu computador (privacidade — o arquivo não é enviado ao servidor)">💻 PDFs Locais</button>
       <button class="iobtn" onclick="exportProgress()">⬇ Exportar progresso</button>
       <button class="iobtn" onclick="document.getElementById('import-input').click()">⬆ Importar progresso</button>
-      <input id="upload-pdf-input" type="file" accept=".pdf" style="display:none" onchange="uploadPdf(this)">
-      <input id="import-input" type="file" accept=".json" style="display:none" onchange="importProgress(this)">
+      <input id="upload-pdf-input" type="file" accept=".pdf" aria-label="Enviar arquivo PDF" style="display:none" onchange="uploadPdf(this)">
+      <input id="import-input" type="file" accept=".json" aria-label="Importar progresso (JSON)" style="display:none" onchange="importProgress(this)">
     </div>
     <div id="tree"></div>
   </div>
@@ -140,7 +140,7 @@
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
         <h2 style="font-size:1rem;">🕸️ Mapa de Dependências</h2>
         <div style="display:flex;gap:6px;">
-          <select id="kg-filtro-materia" onchange="loadKnowledgeGraph()" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:0.78rem;color:var(--text);">
+          <select id="kg-filtro-materia" aria-label="Filtrar por matéria" onchange="loadKnowledgeGraph()" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:0.78rem;color:var(--text);">
             <option value="">Todas</option>
           </select>
           <button onclick="showKgSuggestions()" style="background:var(--green);color:var(--bg);border:none;border-radius:6px;padding:4px 10px;font-size:0.75rem;cursor:pointer;" aria-label="Sugerir dependências">💡 Sugerir</button>
@@ -173,7 +173,7 @@
         <button class="iobtn" onclick="exportarEdital('json')">⬇ JSON</button>
         <button class="iobtn" onclick="exportarEdital('csv')">⬇ CSV</button>
         <button class="iobtn" onclick="document.getElementById('import-edital-file').click()">⬆ Importar</button>
-        <input id="import-edital-file" type="file" accept=".json,.csv" style="display:none" onchange="importarEditalFile(this)">
+        <input id="import-edital-file" type="file" accept=".json,.csv" aria-label="Importar edital (JSON ou CSV)" style="display:none" onchange="importarEditalFile(this)">
         <span id="edital-stats" style="font-size:0.8rem;color:var(--text-sub);margin-left:auto;"></span>
       </div>
       <div id="edital-accordion"></div>
@@ -182,16 +182,16 @@
     <div class="panel">
       <h2>➕ Adicionar Matéria/Tópico</h2>
       <div class="edital-form">
-        <input type="text" id="edital-nome-input" placeholder="Concurso (ex: TCE-MA 2026)" style="min-width:160px;">
-        <input type="text" id="edital-cargo-input" placeholder="Cargo (ex: Auditor)">
-        <input type="text" id="edital-materia-input" placeholder="Disciplina">
-        <input type="text" id="edital-topico-input" placeholder="Tópico">
+        <input type="text" id="edital-nome-input" placeholder="Concurso (ex: TCE-MA 2026)" aria-label="Nome do concurso" style="min-width:160px;">
+        <input type="text" id="edital-cargo-input" placeholder="Cargo (ex: Auditor)" aria-label="Cargo">
+        <input type="text" id="edital-materia-input" placeholder="Disciplina" aria-label="Disciplina">
+        <input type="text" id="edital-topico-input" placeholder="Tópico" aria-label="Tópico">
         <button onclick="addEdital()">Adicionar</button>
       </div>
       <div class="import-edital">
-        <input type="text" id="edital-pdf-nome" placeholder="Nome do concurso" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:0.85rem;width:180px;">
+        <input type="text" id="edital-pdf-nome" placeholder="Nome do concurso" aria-label="Nome do concurso para importar" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:0.85rem;width:180px;">
         <button class="iobtn" onclick="document.getElementById('edital-pdf-input').click()">📄 Importar PDF</button>
-        <input id="edital-pdf-input" type="file" accept=".pdf" style="display:none" onchange="importEditalPdf(this)">
+        <input id="edital-pdf-input" type="file" accept=".pdf" aria-label="Importar edital (PDF)" style="display:none" onchange="importEditalPdf(this)">
       </div>
     </div>
   </div>
@@ -269,15 +269,15 @@
         <button class="iobtn" onclick="exportarCiclo('json')">⬇ JSON</button>
         <button class="iobtn" onclick="exportarCiclo('csv')">⬇ CSV</button>
         <button class="iobtn" onclick="document.getElementById('import-ciclo-file').click()">⬆ Importar</button>
-        <input id="import-ciclo-file" type="file" accept=".json,.csv" style="display:none" onchange="importarCicloFile(this)">
+        <input id="import-ciclo-file" type="file" accept=".json,.csv" aria-label="Importar ciclo (JSON ou CSV)" style="display:none" onchange="importarCicloFile(this)">
       </div>
     </div>
 
     <div class="panel">
       <h2>➕ Adicionar ao Ciclo</h2>
       <div class="edital-form">
-        <input type="text" id="ciclo-materia-input" placeholder="Matéria">
-        <input type="number" id="ciclo-horas-input" placeholder="Horas alvo" value="2" min="0.5" step="0.5" style="max-width:100px;">
+        <input type="text" id="ciclo-materia-input" placeholder="Matéria" aria-label="Matéria">
+        <input type="number" id="ciclo-horas-input" placeholder="Horas alvo" aria-label="Horas alvo" value="2" min="0.5" step="0.5" style="max-width:100px;">
         <button onclick="addCiclo()">Adicionar</button>
       </div>
     </div>
@@ -346,9 +346,9 @@
     </div>
     <div class="flash-panel flash-add-form">
       <h2>➕ Adicionar Flashcard</h2>
-      <textarea id="flash-pergunta" placeholder="Pergunta..." rows="2"></textarea>
-      <textarea id="flash-resposta" placeholder="Resposta (inclua mnemônicos 🧠, macetes e dicas para fixação)" rows="2"></textarea>
-      <select id="flash-add-materia" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;margin-bottom:8px;">
+      <textarea id="flash-pergunta" placeholder="Pergunta..." aria-label="Pergunta do flashcard" rows="2"></textarea>
+      <textarea id="flash-resposta" placeholder="Resposta (inclua mnemônicos 🧠, macetes e dicas para fixação)" aria-label="Resposta do flashcard" rows="2"></textarea>
+      <select id="flash-add-materia" aria-label="Disciplina do flashcard" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;margin-bottom:8px;">
         <option value="">📚 Disciplina (opcional)</option>
       </select>
       <button onclick="addFlashcard()">Adicionar</button>
@@ -369,7 +369,7 @@
       </div>
       <!-- Filtro por Disciplina -->
       <div style="margin-bottom:10px;">
-        <select id="flash-materia-filter" onchange="loadAllFlashcards()" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;">
+        <select id="flash-materia-filter" aria-label="Filtrar flashcards por disciplina" onchange="loadAllFlashcards()" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;">
           <option value="">Todas as Disciplinas</option>
         </select>
       </div>
@@ -378,7 +378,7 @@
         <button class="iobtn" onclick="exportarFlashcards('csv')">⬇ CSV</button>
         <button class="iobtn" onclick="exportarFlashcards('anki')">⬇ Anki</button>
         <button class="iobtn" onclick="document.getElementById('import-flash-file').click()">⬆ Importar</button>
-        <input id="import-flash-file" type="file" accept=".json,.csv,.txt,.tsv" style="display:none" onchange="importarFlashcardsFile(this)">
+        <input id="import-flash-file" type="file" accept=".json,.csv,.txt,.tsv" aria-label="Importar flashcards" style="display:none" onchange="importarFlashcardsFile(this)">
       </div>
       <div class="flash-count" id="flash-count"></div>
       <div id="flash-list"></div>
@@ -418,29 +418,29 @@
     <div class="flash-panel flash-add-form">
       <h2>➕ Adicionar Súmula</h2>
       <div style="display:flex;gap:8px;margin-bottom:8px;">
-        <select id="sumula-add-tribunal" style="padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;">
+        <select id="sumula-add-tribunal" aria-label="Tribunal da súmula" style="padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;">
           <option value="STF">STF</option>
           <option value="STJ">STJ</option>
           <option value="TST">TST</option>
           <option value="TSE">TSE</option>
           <option value="STF-V">STF Vinculante</option>
         </select>
-        <input id="sumula-add-numero" type="number" placeholder="Nº" style="width:80px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);">
+        <input id="sumula-add-numero" type="number" placeholder="Nº" aria-label="Número da súmula" style="width:80px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);">
       </div>
-      <textarea id="sumula-add-enunciado" placeholder="Enunciado da súmula..." rows="3" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;resize:vertical;margin-bottom:8px;"></textarea>
+      <textarea id="sumula-add-enunciado" placeholder="Enunciado da súmula..." aria-label="Enunciado da súmula" rows="3" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;resize:vertical;margin-bottom:8px;"></textarea>
       <div style="display:flex;gap:8px;margin-bottom:8px;">
-        <input id="sumula-add-tema" placeholder="Tema (ex: Direito Penal)" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);">
-        <input id="sumula-add-obs" placeholder="Observação/Dica" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);">
+        <input id="sumula-add-tema" placeholder="Tema (ex: Direito Penal)" aria-label="Tema da súmula" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);">
+        <input id="sumula-add-obs" placeholder="Observação/Dica" aria-label="Observação ou dica da súmula" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);">
       </div>
       <button onclick="addSumula()">Adicionar</button>
     </div>
     <div class="flash-panel">
       <h2>📦 Todas as Súmulas</h2>
       <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
-        <select id="sumula-filter-tribunal" onchange="loadAllSumulas()" style="padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85rem;">
+        <select id="sumula-filter-tribunal" aria-label="Filtrar por tribunal" onchange="loadAllSumulas()" style="padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85rem;">
           <option value="">Todos os Tribunais</option>
         </select>
-        <select id="sumula-filter-tema" onchange="loadAllSumulas()" style="padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85rem;">
+        <select id="sumula-filter-tema" aria-label="Filtrar por tema" onchange="loadAllSumulas()" style="padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85rem;">
           <option value="">Todos os Temas</option>
         </select>
       </div>
@@ -499,7 +499,7 @@
     <div class="modal-box">
       <h3 id="note-modal-title">📝 Notas</h3>
       <div id="note-modal-list"></div>
-      <textarea id="note-modal-input" placeholder="Escreva sua nota/resumo..."></textarea>
+      <textarea id="note-modal-input" placeholder="Escreva sua nota/resumo..." aria-label="Nota ou resumo"></textarea>
       <div class="modal-btns">
         <button class="iobtn" onclick="closeNoteModal()">Fechar</button>
         <button class="iobtn" style="background:var(--accent);color:var(--bg);" onclick="saveNote()">Salvar</button>
@@ -510,7 +510,7 @@
   <div class="modal-overlay" id="select-modal" role="dialog" aria-modal="true">
     <div class="modal-box">
       <h3 id="select-modal-title">Selecione</h3>
-      <input type="text" id="select-modal-search" placeholder="Buscar..." class="select-search">
+      <input type="text" id="select-modal-search" placeholder="Buscar..." aria-label="Buscar" class="select-search">
       <div id="select-modal-list" class="select-list"></div>
       <div class="modal-btns">
         <button class="iobtn" onclick="closeSelectModal()">Cancelar</button>
@@ -524,15 +524,15 @@
       <input type="hidden" id="flash-edit-id">
       <div style="margin-bottom:10px;">
         <label style="font-size:0.8rem;color:var(--text-sub);display:block;margin-bottom:4px;">Pergunta</label>
-        <textarea id="flash-edit-pergunta" rows="3" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;resize:vertical;"></textarea>
+        <textarea id="flash-edit-pergunta" rows="3" aria-label="Pergunta do flashcard" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;resize:vertical;"></textarea>
       </div>
       <div style="margin-bottom:10px;">
         <label style="font-size:0.8rem;color:var(--text-sub);display:block;margin-bottom:4px;">Resposta</label>
-        <textarea id="flash-edit-resposta" rows="3" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;resize:vertical;"></textarea>
+        <textarea id="flash-edit-resposta" rows="3" aria-label="Resposta do flashcard" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;resize:vertical;"></textarea>
       </div>
       <div style="margin-bottom:14px;">
         <label style="font-size:0.8rem;color:var(--text-sub);display:block;margin-bottom:4px;">📚 Disciplina (Edital)</label>
-        <select id="flash-edit-materia" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;">
+        <select id="flash-edit-materia" aria-label="Disciplina do flashcard" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;">
           <option value="">Sem disciplina</option>
         </select>
       </div>

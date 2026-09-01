@@ -122,7 +122,7 @@ function _renderCountdownModal(allProvas) {
 
   let html = '<div style="background:var(--bg-surface);border-radius:12px;padding:20px;max-width:440px;width:95%;max-height:80vh;display:flex;flex-direction:column;">';
   html += `<h3 style="color:var(--accent);margin:0 0 12px;">⏳ Escolher Prova (${allProvas.length} cargos)</h3>`;
-  html += '<input type="text" id="countdown-filter-input" placeholder="Filtrar por nome, cargo ou edital..." style="width:100%;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.88rem;margin-bottom:12px;font-family:inherit;" autocomplete="off">';
+  html += '<input type="text" id="countdown-filter-input" placeholder="Filtrar por nome, cargo ou edital..." aria-label="Filtrar por nome, cargo ou edital" style="width:100%;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.88rem;margin-bottom:12px;font-family:inherit;" autocomplete="off">';
   html += '<div id="countdown-items-list" style="overflow-y:auto;flex:1;display:grid;gap:8px;">';
   html += _buildCountdownItems(allProvas, favorito);
   html += '</div>';
@@ -608,7 +608,7 @@ async function loadCalendario() {
           const ativKey = `${dia.data}|${materia}|${ativ.tipo}`;
 
           html += `<div class="cal-activity${ativ.tipo === 'trilha' ? ' cal-activity--trilha' : ''}" data-key="${ativKey}" data-materia="${materia}" data-tipo="${ativ.tipo}" data-topico="${(detail || '').replace(/"/g,'&quot;')}" data-tempo="${ativ.tempo_min}" data-date="${dia.data}" data-diasemana="${dia.dia_semana}" data-total="${dia.atividades.length}">`;
-          html += `<input type="checkbox" class="cal-check" data-key="${ativKey}" onchange="toggleAtivConcluida(this)" title="Marcar como concluída">`;
+          html += `<input type="checkbox" class="cal-check" data-key="${ativKey}" onchange="toggleAtivConcluida(this)" title="Marcar como concluída" aria-label="Marcar atividade como concluída">`;
           html += `<span class="cal-activity-icon">${icon}</span>`;
           html += `<div class="cal-activity-info">`;
           if (materia) html += `<div class="cal-activity-materia truncated" onclick="this.classList.toggle('truncated');this.classList.toggle('expanded');" title="${materia}${detail ? ' — ' + detail.replace(/"/g,'&quot;') : ''}">${materia}</div>`;
@@ -1517,16 +1517,16 @@ window.openStudyPrefs = function() {
         <div style="display:flex;gap:8px;">
           <div style="flex:1;">
             <label style="font-size:0.72rem;color:var(--text-sub);">Início</label>
-            <input type="time" id="pref-hora-inicio" value="08:00" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85rem;">
+            <input type="time" id="pref-hora-inicio" value="08:00" aria-label="Hora de início" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85rem;">
           </div>
           <div style="flex:1;">
             <label style="font-size:0.72rem;color:var(--text-sub);">Fim</label>
-            <input type="time" id="pref-hora-fim" value="12:00" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85rem;">
+            <input type="time" id="pref-hora-fim" value="12:00" aria-label="Hora de fim" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85rem;">
           </div>
         </div>
         <div>
           <label style="font-size:0.72rem;color:var(--text-sub);">Bloco de estudo (minutos)</label>
-          <input type="number" id="pref-bloco" value="25" min="15" max="60" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85rem;">
+          <input type="number" id="pref-bloco" value="25" min="15" max="60" aria-label="Bloco de estudo em minutos" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85rem;">
         </div>
         <div style="display:flex;gap:8px;margin-top:8px;">
           <button onclick="document.getElementById('modal-study-prefs').remove()" style="flex:1;padding:10px;background:var(--border);color:var(--text);border:none;border-radius:8px;cursor:pointer;font-weight:600;">Cancelar</button>
@@ -2038,14 +2038,14 @@ window._showIntentionModal = function() {
     <div style="background:var(--bg-surface);border-radius:var(--radius-lg);padding:24px;max-width:360px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
       <h3 style="color:var(--text);margin:0 0 12px;font-size:1rem;">📋 Nova Intenção de Estudo</h3>
       <div style="font-size:0.78rem;color:var(--text-sub);margin-bottom:12px;">Declare O QUE vai estudar para +200% chance de executar</div>
-      <select id="intention-materia" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);margin-bottom:8px;font-size:0.85rem;">
+      <select id="intention-materia" aria-label="Matéria da intenção" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);margin-bottom:8px;font-size:0.85rem;">
         <option value="">Escolha a matéria...</option>
       </select>
       <div style="display:flex;gap:8px;margin-bottom:8px;">
-        <input id="intention-duracao" type="number" value="30" min="10" max="180" style="flex:1;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85rem;">
+        <input id="intention-duracao" type="number" value="30" min="10" max="180" aria-label="Duração em minutos" style="flex:1;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85rem;">
         <span style="align-self:center;font-size:0.8rem;color:var(--text-sub);">min</span>
       </div>
-      <select id="intention-atividade" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);margin-bottom:12px;font-size:0.85rem;">
+      <select id="intention-atividade" aria-label="Tipo de atividade" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);margin-bottom:12px;font-size:0.85rem;">
         <option value="teoria">📖 Estudar teoria</option>
         <option value="questoes">❓ Resolver questões</option>
         <option value="revisao">🔄 Revisão (flashcards)</option>
@@ -2354,9 +2354,9 @@ window.showNotificationPrefs = async function() {
           <div style="border-top:1px solid var(--border);margin-top:4px;padding-top:12px;">
             <div style="font-size:0.82rem;font-weight:600;color:var(--text);margin-bottom:8px;">🌙 Horário Silencioso</div>
             <div style="display:flex;align-items:center;gap:8px;">
-              <input type="number" id="pref-quiet-start" value="${prefs.quiet_hours_start}" min="0" max="23" style="width:50px;padding:6px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85rem;text-align:center;">
+              <input type="number" id="pref-quiet-start" value="${prefs.quiet_hours_start}" min="0" max="23" aria-label="Início do horário silencioso" style="width:50px;padding:6px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85rem;text-align:center;">
               <span style="color:var(--text-sub);font-size:0.8rem;">h até</span>
-              <input type="number" id="pref-quiet-end" value="${prefs.quiet_hours_end}" min="0" max="23" style="width:50px;padding:6px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85rem;text-align:center;">
+              <input type="number" id="pref-quiet-end" value="${prefs.quiet_hours_end}" min="0" max="23" aria-label="Fim do horário silencioso" style="width:50px;padding:6px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85rem;text-align:center;">
               <span style="color:var(--text-sub);font-size:0.8rem;">h</span>
             </div>
           </div>
@@ -2892,7 +2892,7 @@ window._initPeerTeach = function(materia) {
       <div style="font-size:1.5rem;text-align:center;margin-bottom:8px;">🎓</div>
       <h3 style="color:var(--text);text-align:center;margin-bottom:12px;">Ensine: ${materia}</h3>
       <p style="font-size:0.82rem;color:var(--text-sub);margin-bottom:16px;line-height:1.5;">${msg}</p>
-      <textarea id="peer-teach-text" placeholder="Escreva sua explicação aqui... (mínimo 50 caracteres)" style="width:100%;min-height:120px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;color:var(--text);font-size:0.85rem;font-family:inherit;resize:vertical;"></textarea>
+      <textarea id="peer-teach-text" placeholder="Escreva sua explicação aqui... (mínimo 50 caracteres)" aria-label="Sua explicação" style="width:100%;min-height:120px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;color:var(--text);font-size:0.85rem;font-family:inherit;resize:vertical;"></textarea>
       <div style="display:flex;gap:8px;margin-top:12px;">
         <button onclick="this.closest('div[style*=fixed]').remove()" style="flex:1;padding:10px;background:var(--border);color:var(--text);border:none;border-radius:8px;cursor:pointer;">Cancelar</button>
         <button onclick="window._submitPeerTeach('${materia.replace(/'/g, "\\'")}')" style="flex:1;padding:10px;background:var(--green);color:#1e1e2e;border:none;border-radius:8px;font-weight:600;cursor:pointer;">Registrar ✅</button>
