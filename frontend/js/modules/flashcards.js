@@ -721,11 +721,16 @@ function _showElaborationPrompt(card) {
 
   // Gerar prompt contextual
   const prompts = [
-    `Por que "${card.resposta}" é a resposta correta?`,
+    `Por que essa é a resposta correta?`,
     `Explique COM SUAS PALAVRAS por que isso é verdade.`,
     `Qual é a lógica/fundamento por trás dessa resposta?`,
   ];
   const prompt = prompts[Math.floor(Math.random() * prompts.length)];
+
+  // Escapar HTML para evitar XSS ao interpolar conteúdo do card
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
 
   q.innerHTML = `
     <div style="text-align:center;margin-bottom:8px;">
@@ -734,8 +739,12 @@ function _showElaborationPrompt(card) {
       <div style="font-size:0.72rem;color:var(--text-sub);margin-bottom:8px;">Explicar fortalece a memória em 10-40% (Dunlosky, 2013)</div>
     </div>
     <div style="background:var(--bg-surface);border-radius:8px;padding:10px;margin-bottom:10px;">
-      <div style="font-size:0.78rem;color:var(--text-sub);margin-bottom:4px;">📚 ${card.materia || 'Flashcard'}</div>
-      <div style="font-size:0.85rem;font-weight:600;color:var(--text);">${prompt}</div>
+      <div style="font-size:0.78rem;color:var(--text-sub);margin-bottom:6px;">📚 ${esc(card.materia || 'Flashcard')}</div>
+      <div style="font-size:0.82rem;color:var(--text);margin-bottom:4px;"><span style="color:var(--text-sub);">Pergunta:</span> ${esc(card.pergunta)}</div>
+      <div style="font-size:0.82rem;color:var(--text);border-top:1px dashed var(--border);padding-top:6px;margin-top:6px;"><span style="color:var(--text-sub);">Resposta:</span> <strong>${esc(card.resposta)}</strong></div>
+    </div>
+    <div style="background:var(--bg-surface);border-radius:8px;padding:10px;margin-bottom:10px;">
+      <div style="font-size:0.85rem;font-weight:600;color:var(--text);">${esc(prompt)}</div>
     </div>
     <textarea id="elaboration-input" placeholder="Escreva sua explicação... (opcional mas recomendado)" aria-label="Sua explicação"
       style="width:100%;min-height:70px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text);font-size:0.82rem;font-family:inherit;resize:vertical;"></textarea>
