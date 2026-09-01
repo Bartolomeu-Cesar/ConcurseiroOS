@@ -225,19 +225,19 @@ class RestoreRequest(BaseModel):
 def public_flags(conn=Depends(get_db_session), user_id: int = Depends(get_optional_user_id)):
     """Estado das feature flags do ponto de vista do solicitante (para a UI).
 
-    Aplica isenções por role: um admin vê como "ligadas" as flags em que seu role
-    está isento (ex.: ai_tutor), mesmo que globalmente desligadas — assim a UI
-    (ex.: widget do Tutor IA) continua disponível para admin.
+    Aplica o recorte por PLANO: features como o Tutor IA aparecem "ligadas"
+    conforme o PLANO do usuário (free/premium/ilimitado), não pela role — assim
+    a UI (ex.: widget do Tutor IA) reflete o que o plano dá acesso.
     """
-    from plans import get_all_flags_for
-    role = None
+    from plans import get_all_flags_for_plan, get_plan
+    plano = None
     try:
-        row = conn.execute("SELECT role FROM users WHERE id = ?", (user_id,)).fetchone()
+        row = conn.execute("SELECT plano, plano_expira FROM users WHERE id = ?", (user_id,)).fetchone()
         if row:
-            role = row["role"] if not isinstance(row, tuple) else row[0]
+            plano = get_plan(dict(row))
     except Exception:
-        role = None
-    return get_all_flags_for(role)
+        plano = None
+    return get_all_flags_for_plan(plano)
 
 
 @router.get("/api/backups", summary="Listar backups", tags=["Sistema"])

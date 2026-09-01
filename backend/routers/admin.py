@@ -780,22 +780,35 @@ def alterar_status_conta(
 def listar_flags(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Retorna o estado atual das feature flags conhecidas + metadados.
 
-    Inclui o recorte por-role: `roles_off` (roles desligadas) e `estado_por_role`
-    (mapa role→bool), para o painel admin exibir/editar a granularidade por role.
+    Para flags "por_plano" (ex.: ai_tutor), inclui o recorte por PLANO:
+    `planos_off` (planos desligados) e `estado_por_plano` (mapa plano→bool),
+    para o painel admin exibir/editar a granularidade por plano.
     """
     _require_admin(user_id)
-    from plans import FEATURE_FLAGS, KNOWN_ROLES, get_all_flags, get_roles_off, is_feature_enabled_for
+    from plans import (
+        FEATURE_FLAGS,
+        FLAG_PLANOS,
+        PLANS,
+        get_all_flags,
+        get_planos_off,
+        is_feature_enabled_for_plan,
+    )
     estados = get_all_flags()
     return {
-        "roles": KNOWN_ROLES,
+        "planos": FLAG_PLANOS,
+        "planos_labels": {p: PLANS.get(p, {}).get("nome", p) for p in FLAG_PLANOS},
         "flags": [
             {
                 "chave": k,
                 "ativo": estados.get(k, meta["default"]),
                 "label": meta["label"],
                 "desc": meta["desc"],
-                "roles_off": get_roles_off(k),
-                "estado_por_role": {r: is_feature_enabled_for(k, r) for r in KNOWN_ROLES},
+                "por_plano": bool(meta.get("por_plano")),
+                "planos_off": get_planos_off(k) if meta.get("por_plano") else [],
+                "estado_por_plano": (
+                    {p: is_feature_enabled_for_plan(k, p) for p in FLAG_PLANOS}
+                    if meta.get("por_plano") else {}
+                ),
             }
             for k, meta in FEATURE_FLAGS.items()
         ]
@@ -812,37 +825,48 @@ def atualizar_flag(
     """Liga ou desliga uma feature flag.
 
     body:
-      - {ativo: bool}                       → aplicação GLOBAL (todos os roles).
-      - {ativo: bool, roles: ["user", ...]} → aplica só aos roles indicados
-                                              (recorte por-role). Roles inválidos
-                                              são ignorados.
+      - {ativo: bool}                        → kill switch GLOBAL (todos os planos).
+      - {ativo: bool, planos: ["free", ...]} → aplica só aos planos indicados
+                                               (recorte por-plano). Planos inválidos
+                                               são ignorados.
     """
     _require_admin(user_id)
-    from plans import FEATURE_FLAGS, KNOWN_ROLES, get_roles_off, is_feature_enabled_for, set_feature_flag
+    from plans import (
+        FEATURE_FLAGS,
+        FLAG_PLANOS,
+        get_planos_off,
+        is_feature_enabled_for_plan,
+        set_feature_flag,
+    )
 
     if flag not in FEATURE_FLAGS:
         raise HTTPException(status_code=404, detail=f"Flag desconhecida. Válidas: {list(FEATURE_FLAGS.keys())}")
     ativo = bool(body.get("ativo", False))
 
-    roles = body.get("roles")
-    if roles is not None:
-        if not isinstance(roles, list):
-            raise HTTPException(status_code=400, detail="'roles' deve ser uma lista de strings.")
-        roles = [r for r in roles if r in KNOWN_ROLES]
-        if not roles:
-            raise HTTPException(status_code=400, detail=f"Nenhum role válido. Válidos: {KNOWN_ROLES}")
+    planos = body.get("planos")
+    if planos is not None:
+        if not isinstance(planos, list):
+            raise HTTPException(status_code=400, detail="'planos' deve ser uma lista de strings.")
+        if not FEATURE_FLAGS[flag].get("por_plano"):
+            raise HTTPException(status_code=400, detail=f"A flag '{flag}' não suporta recorte por plano.")
+        planos = [p for p in planos if p in FLAG_PLANOS]
+        if not planos:
+            raise HTTPException(status_code=400, detail=f"Nenhum plano válido. Válidos: {FLAG_PLANOS}")
 
-    set_feature_flag(conn, flag, ativo, roles=roles)
-    _audit(conn, user_id, "flag.set", "flag", flag, {"ativo": ativo, "roles": roles})
-    alvo = ", ".join(roles) if roles else "TODOS"
+    set_feature_flag(conn, flag, ativo, planos=planos)
+    _audit(conn, user_id, "flag.set", "flag", flag, {"ativo": ativo, "planos": planos})
+    alvo = ", ".join(planos) if planos else "TODOS (global)"
     log.info(f"[admin] Feature flag '{flag}' → {'ON' if ativo else 'OFF'} para: {alvo}")
     return {
         "ok": True,
         "flag": flag,
         "ativo": ativo,
-        "roles_aplicados": roles,
-        "roles_off": get_roles_off(flag),
-        "estado_por_role": {r: is_feature_enabled_for(flag, r) for r in KNOWN_ROLES},
+        "planos_aplicados": planos,
+        "planos_off": get_planos_off(flag) if FEATURE_FLAGS[flag].get("por_plano") else [],
+        "estado_por_plano": (
+            {p: is_feature_enabled_for_plan(flag, p) for p in FLAG_PLANOS}
+            if FEATURE_FLAGS[flag].get("por_plano") else {}
+        ),
     }
 
 

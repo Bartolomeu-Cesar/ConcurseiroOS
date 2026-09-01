@@ -46,6 +46,7 @@ PLANS = {
             "streak": True,            # streak de estudo
             "relatorios": False,       # relatórios avançados
             "backup_auto": False,      # backup automático
+            "ai_tutor": False,         # Tutor IA (recurso premium)
         }
     },
     "free": {
@@ -79,6 +80,7 @@ PLANS = {
             "streak": True,            # streaks
             "relatorios": False,       # sem relatórios avançados
             "backup_auto": False,      # sem backup auto
+            "ai_tutor": False,         # Tutor IA (recurso premium)
         }
     },
     "premium": {
@@ -114,6 +116,7 @@ PLANS = {
             "relatorios": True,        # relatórios de desempenho
             "backup_auto": True,       # backup automático
             # IA — com limite diário
+            "ai_tutor": True,          # Tutor IA habilitado
             "ai_tutor_ilimitado": False,
             "ai_tokens_dia": 50000,    # 50k tokens/dia (~30 perguntas)
             # Sem exclusivos vitalícios
@@ -157,6 +160,7 @@ PLANS = {
             "relatorios": True,
             "backup_auto": True,
             # === EXCLUSIVOS VITALÍCIO ===
+            "ai_tutor": True,             # Tutor IA habilitado
             "ai_tutor_ilimitado": True,   # Sem limite diário de tokens IA
             "ai_tokens_dia": -1,          # Premium = 50.000/dia
             "importacao_prioritaria": True,# Parser com OCR avançado
@@ -408,11 +412,12 @@ def get_auth_code_expire_minutes() -> int:
 # ============================================================
 
 # Flags conhecidas e seus defaults (ligadas por padrão, exceto manutenção).
-# "roles_isentos": roles que continuam com o recurso disponível MESMO com a flag
-# desligada (ex.: admin pode testar/demonstrar o Tutor IA mesmo desativado para os
-# usuários comuns). Vazio/ausente = a flag vale igualmente para todos.
+# "por_plano": quando True, o acesso à feature é decidido pelo PLANO do usuário
+# (guest/free/premium/ilimitado) — o default por plano vem de PLANS[...]["limites"],
+# e o admin pode sobrescrever por plano (planos_off). A flag global funciona como
+# kill switch: se desligada globalmente, bloqueia para TODOS os planos.
 FEATURE_FLAGS = {
-    "ai_tutor": {"default": True, "label": "Tutor IA", "desc": "Habilita o tutor de IA e análise de PDF.", "roles_isentos": ["admin"]},
+    "ai_tutor": {"default": True, "label": "Tutor IA", "desc": "Habilita o tutor de IA e análise de PDF.", "por_plano": True},
     "batalhas": {"default": True, "label": "Batalhas PvP", "desc": "Habilita o modo batalha entre usuários."},
     "registro": {"default": True, "label": "Registro de novos usuários", "desc": "Permite criar novas contas."},
     "manutencao": {"default": False, "label": "Modo manutenção", "desc": "Exibe aviso e bloqueia ações sensíveis."},
@@ -420,39 +425,61 @@ FEATURE_FLAGS = {
 
 _FLAG_PREFIX = "flag."
 
-# Roles conhecidas do sistema (fonte: coluna users.role — ver admin.py).
-KNOWN_ROLES = ["admin", "user"]
+# Planos elegíveis a recorte por-plano (exclui 'guest', que nunca tem IA).
+FLAG_PLANOS = ["free", "premium", "ilimitado"]
 
 
-def _roles_off_key(flag: str) -> str:
-    """Chave em app_config que guarda as roles para as quais a flag está OFF."""
-    return f"{_FLAG_PREFIX}{flag}.roles_off"
+def _planos_off_key(flag: str) -> str:
+    """Chave em app_config que guarda os planos FORÇADOS OFF pelo admin."""
+    return f"{_FLAG_PREFIX}{flag}.planos_off"
 
 
-def get_roles_off(flag: str) -> list:
-    """Roles para as quais a flag está explicitamente DESLIGADA (por-role).
+def _planos_on_key(flag: str) -> str:
+    """Chave em app_config que guarda os planos FORÇADOS ON pelo admin.
 
-    Persistido como CSV em app_config (ex.: "user" ou "admin,user"). Vazio =
-    nenhuma role desligada individualmente (vale o estado global da flag).
+    Permite LIGAR a feature para um plano cujo default é OFF (ex.: liberar IA
+    para o plano free).
     """
-    raw = get_app_config(_roles_off_key(flag), "")
+    return f"{_FLAG_PREFIX}{flag}.planos_on"
+
+
+def _csv_get(chave: str) -> list:
+    raw = get_app_config(chave, "")
     if not raw:
         return []
-    return [r.strip() for r in raw.split(",") if r.strip()]
+    return [p.strip() for p in raw.split(",") if p.strip()]
 
 
-def set_roles_off(conn, flag: str, roles: list):
-    """Grava o conjunto de roles desligadas (por-role) para a flag."""
-    limpo = [r for r in dict.fromkeys(roles) if r in KNOWN_ROLES]
-    set_app_config(conn, _roles_off_key(flag), ",".join(limpo))
+def get_planos_off(flag: str) -> list:
+    """Planos explicitamente DESLIGADOS pelo admin (override sobre o default)."""
+    return _csv_get(_planos_off_key(flag))
+
+
+def get_planos_on(flag: str) -> list:
+    """Planos explicitamente LIGADOS pelo admin (override sobre o default)."""
+    return _csv_get(_planos_on_key(flag))
+
+
+def set_planos_off(conn, flag: str, planos: list):
+    """Grava o conjunto de planos desligados (por-plano) para a flag."""
+    limpo = [p for p in dict.fromkeys(planos) if p in FLAG_PLANOS]
+    set_app_config(conn, _planos_off_key(flag), ",".join(limpo))
+
+
+def _plano_default_feature(flag: str, plano: str) -> bool:
+    """Default da feature para um plano, lido de PLANS[plano]["limites"][flag].
+
+    Se a chave não existir no plano, assume False (recurso não incluído).
+    """
+    limites = PLANS.get(plano, {}).get("limites", {})
+    return bool(limites.get(flag, False))
 
 
 def is_feature_enabled(flag: str) -> bool:
-    """Retorna se uma feature flag está ligada globalmente (lê de app_config).
+    """Estado GLOBAL da flag (kill switch), lido de app_config com default.
 
-    Estado GLOBAL, ignorando o recorte por-role. Usado quando não há um role de
-    solicitante (ex.: checagens agnósticas). Para decisões por usuário use
-    is_feature_enabled_for(flag, role).
+    Ignora o recorte por-plano. Usado como kill switch e em checagens agnósticas.
+    Para decisões por usuário use is_feature_enabled_for_plan(flag, plano).
     """
     meta = FEATURE_FLAGS.get(flag)
     default = meta["default"] if meta else True
@@ -462,90 +489,82 @@ def is_feature_enabled(flag: str) -> bool:
     return val == "1"
 
 
-def is_feature_enabled_for(flag: str, role: str = None) -> bool:
-    """Estado da flag para um role específico, com recorte por-role.
+def is_feature_enabled_for_plan(flag: str, plano: str = None) -> bool:
+    """Estado da flag para um PLANO específico.
 
     Ordem de decisão:
-      1) Se o `role` está na lista `roles_off` da flag (desligado pelo admin
-         especificamente para esse role) → False.
-      2) Caso a flag esteja globalmente ligada → True.
-      3) Caso desligada, mas o `role` conste em `roles_isentos` (piso estático,
-         ex.: admin) → True.
-      4) Caso contrário → False.
+      1) Se a flag está globalmente DESLIGADA (kill switch) → False para todos.
+      2) Se a flag não é "por_plano" → segue o estado global (True aqui).
+      3) Override do admin: `planos_off` (força OFF) tem prioridade sobre
+         `planos_on` (força ON).
+      4) Caso não haja override, usa o default do plano em PLANS.
     """
-    # 1) Recorte explícito por-role tem prioridade máxima.
-    if role is not None and role in get_roles_off(flag):
+    # 1) Kill switch global tem prioridade.
+    if not is_feature_enabled(flag):
         return False
-    # 2) Estado global ligado libera para todos os não-desligados.
-    if is_feature_enabled(flag):
-        return True
-    # 3) Piso estático de isenção (compatibilidade: admin nunca perde acesso a
-    #    menos que esteja explicitamente em roles_off pelo passo 1).
     meta = FEATURE_FLAGS.get(flag) or {}
-    isentos = meta.get("roles_isentos") or []
-    return role in isentos
+    # 2) Flags globais (não por-plano): já passaram no kill switch.
+    if not meta.get("por_plano"):
+        return True
+    # Sem plano identificado (ex.: visitante) → usa 'guest' como base.
+    plano = plano or "guest"
+    # 3) Overrides explícitos do admin (off vence on).
+    if plano in get_planos_off(flag):
+        return False
+    if plano in get_planos_on(flag):
+        return True
+    # 4) Default do plano.
+    return _plano_default_feature(flag, plano)
 
 
 def get_all_flags() -> dict:
-    """Retorna o estado GLOBAL atual de todas as flags conhecidas."""
+    """Retorna o estado GLOBAL atual de todas as flags conhecidas (kill switch)."""
     return {flag: is_feature_enabled(flag) for flag in FEATURE_FLAGS}
 
 
-def get_all_flags_for(role: str = None) -> dict:
-    """Estado das flags do ponto de vista de um role (aplica recorte por-role).
+def get_all_flags_for_plan(plano: str = None) -> dict:
+    """Estado das flags do ponto de vista de um PLANO (aplica recorte por-plano).
 
-    Para um admin, flags com ele em `roles_isentos` aparecem como ligadas mesmo
-    que globalmente desligadas — a menos que o admin tenha explicitamente
-    desligado a flag para o próprio role admin (roles_off). Usado pelo frontend
-    para decidir a UI por role.
+    Usado pelo frontend (ex.: widget do Tutor IA) para decidir a UI conforme o
+    plano do usuário logado.
     """
-    return {flag: is_feature_enabled_for(flag, role) for flag in FEATURE_FLAGS}
+    return {flag: is_feature_enabled_for_plan(flag, plano) for flag in FEATURE_FLAGS}
 
 
-def set_feature_flag(conn, flag: str, enabled: bool, roles: list = None):
+def set_feature_flag(conn, flag: str, enabled: bool, planos: list = None):
     """Liga/desliga uma feature flag.
 
-    - Sem `roles`: comportamento global (compatível com o legado). Liga/desliga
-      a flag para todos e LIMPA qualquer recorte por-role anterior, evitando
-      estados ambíguos.
-    - Com `roles`: aplica a ação apenas às roles indicadas, ajustando o conjunto
-      `roles_off` (roles desligadas). A flag global permanece LIGADA para servir
-      de base; o bloqueio efetivo por role vem de `roles_off`. Se, após a
-      operação, TODAS as roles conhecidas ficarem desligadas, a flag global
-      também é desligada (coerência do estado agregado).
+    - Sem `planos`: age no kill switch GLOBAL. Liga/desliga para todos e LIMPA
+      qualquer recorte por-plano anterior (evita estado ambíguo).
+    - Com `planos`: aplica a ação apenas aos planos indicados, ajustando o
+      conjunto `planos_off`. A flag global permanece LIGADA (kill switch aberto)
+      para que o recorte por-plano valha; o bloqueio efetivo por plano vem de
+      `planos_off`.
     """
-    if roles is None:
-        # Global: define a flag e zera o recorte por-role.
+    if planos is None:
+        # Global (kill switch): define a flag e zera os recortes por-plano.
         set_app_config(conn, _FLAG_PREFIX + flag, "1" if enabled else "0")
-        set_app_config(conn, _roles_off_key(flag), "")
+        set_app_config(conn, _planos_off_key(flag), "")
+        set_app_config(conn, _planos_on_key(flag), "")
         return
 
-    alvo = [r for r in dict.fromkeys(roles) if r in KNOWN_ROLES]
-    off = set(get_roles_off(flag))
+    alvo = set(p for p in dict.fromkeys(planos) if p in FLAG_PLANOS)
+    off = set(get_planos_off(flag))
+    on = set(get_planos_on(flag))
     if enabled:
-        # Reabilitar para essas roles = removê-las do conjunto "off".
-        off -= set(alvo)
+        # Ligar para esses planos: remove de "off" e marca em "on" (cobre planos
+        # cujo default é OFF, ex.: free).
+        off -= alvo
+        on |= alvo
     else:
-        # Desabilitar para essas roles = adicioná-las ao conjunto "off".
-        off |= set(alvo)
+        # Desligar para esses planos: remove de "on" e marca em "off".
+        on -= alvo
+        off |= alvo
 
-    # Coerência com a flag global:
-    if off >= set(KNOWN_ROLES):
-        # Todas as roles desligadas → flag global OFF. Mantemos o recorte
-        # explícito (roles_off) para que o passo 1 de is_feature_enabled_for
-        # bloqueie inclusive roles com isenção estática (ex.: admin): o admin
-        # optou por desligar para todos, e essa escolha deve prevalecer sobre
-        # o piso `roles_isentos`.
-        set_app_config(conn, _FLAG_PREFIX + flag, "0")
-        set_app_config(conn, _roles_off_key(flag), ",".join(sorted(off)))
-    elif not off:
-        # Nenhuma role desligada → flag global LIGADA e recorte limpo.
-        set_app_config(conn, _FLAG_PREFIX + flag, "1")
-        set_app_config(conn, _roles_off_key(flag), "")
-    else:
-        # Base global LIGADA + recorte de roles desligadas.
-        set_app_config(conn, _FLAG_PREFIX + flag, "1")
-        set_app_config(conn, _roles_off_key(flag), ",".join(sorted(off)))
+    # Mantém o kill switch global LIGADO para o recorte por-plano valer.
+    set_app_config(conn, _FLAG_PREFIX + flag, "1")
+    set_app_config(conn, _planos_off_key(flag), ",".join(sorted(off)))
+    set_app_config(conn, _planos_on_key(flag), ",".join(sorted(on)))
 
 
 def _get_vitalicio_window():
