@@ -229,8 +229,9 @@ def get_desafio_diario(conn=Depends(get_db_session), user_id: int = Depends(get_
         return {
             "id": existing["id"],
             "questoes": questoes,
+            "total": len(questoes),
             "completado": bool(existing["completado"]),
-            "pontos_possiveis": 100 + 20,  # 5*20 base + streak bonus potencial
+            "pontos_possiveis": len(questoes) * 20 + 30,  # 20/questão + bônus (streak até +20, +10 perfeito)
             "acertos": existing["acertos"],
             "pontos": existing["pontos"],
         }
@@ -279,8 +280,9 @@ def get_desafio_diario(conn=Depends(get_db_session), user_id: int = Depends(get_
     return {
         "id": desafio_id,
         "questoes": questoes_fmt,
+        "total": len(questoes_fmt),
         "completado": False,
-        "pontos_possiveis": 100 + 20,
+        "pontos_possiveis": len(questoes_fmt) * 20 + 30,  # 20/questão + bônus (streak até +20, +10 perfeito)
         "acertos": 0,
         "pontos": 0,
     }

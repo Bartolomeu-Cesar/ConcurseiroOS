@@ -18,6 +18,7 @@ export async function loadDesafioDiarioCard() {
     const card = document.getElementById('desafio-diario-card');
     const btn = document.getElementById('desafio-diario-btn');
     const status = document.getElementById('desafio-diario-status');
+    const desc = document.getElementById('desafio-diario-desc');
 
     if (!data.questoes || data.questoes.length === 0) {
       status.innerHTML = '<span style="color:var(--text-sub);">Sem questões</span>';
@@ -25,6 +26,11 @@ export async function loadDesafioDiarioCard() {
       btn.onclick = () => window.location.href = '/questoes.html';
       return;
     }
+
+    // Descrição reflete o número REAL de questões geradas (pode ser < 5 quando não
+    // há questões elegíveis suficientes: dominadas/ciclo ativo/já respondidas).
+    const n = data.questoes.length;
+    if (desc) desc.textContent = `${n} ${n === 1 ? 'questão rápida' : 'questões rápidas'} baseada${n === 1 ? '' : 's'} nas suas fraquezas`;
 
     if (data.completado) {
       card.classList.add('completed');

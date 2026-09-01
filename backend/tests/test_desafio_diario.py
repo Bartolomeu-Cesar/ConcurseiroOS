@@ -121,6 +121,19 @@ class TestDesafioDiarioGerar:
             assert "alternativas" in q
             assert len(q["alternativas"]) >= 4
 
+    def test_desafio_total_coerente_com_questoes(self, client, setup_questoes):
+        """O campo 'total' e 'pontos_possiveis' refletem o número real de questões.
+
+        Regressão: o card anunciava '5 questões' mas o desafio podia ter menos.
+        Agora total == len(questoes) e pontos_possiveis == total*20 + 30.
+        """
+        r = client.get("/api/desafio-diario")
+        assert r.status_code == 200
+        data = r.json()
+        assert "total" in data
+        assert data["total"] == len(data["questoes"])
+        assert data["pontos_possiveis"] == data["total"] * 20 + 30
+
     def test_desafio_diario_idempotente(self, client, setup_questoes):
         """Chamar GET /api/desafio-diario duas vezes no mesmo dia retorna o mesmo set."""
         r1 = client.get("/api/desafio-diario")
@@ -235,6 +248,45 @@ class TestDesafioDiarioResponder:
             "respostas": [{"questao_id": 1, "resposta": "A"}]
         })
         assert r.status_code == 404
+
+
+# ============================================================
+# Desafio com MENOS de 5 questões elegíveis (cenário do bug)
+# ============================================================
+
+class TestDesafioMenosQuestoes:
+    def test_desafio_com_poucas_questoes_total_coerente(self, client):
+        """Se só há N (<5) questões elegíveis, o desafio tem N e total == N.
+
+        Reproduz o relato: o card dizia '5 questões' mas só havia 4. Agora o
+        número anunciado (total) acompanha a quantidade real gerada.
+        """
+        # Isola o cenário: zera questões e desafios, cria apenas 3 questões novas.
+        conn = sqlite3.connect(_tmp_db.name)
+        conn.execute("DELETE FROM desafio_diario WHERE user_id = 1")
+        conn.execute("DELETE FROM questoes_respostas WHERE user_id = 1")
+        conn.execute("DELETE FROM questoes WHERE user_id = 1")
+        conn.commit()
+        conn.close()
+
+        for i in range(3):
+            r = client.post("/api/questoes", json={
+                "materia": "Direito Penal",
+                "topico": "Crimes",
+                "enunciado": f"Questão poucas #{i + 1}?",
+                "alternativa_a": "A", "alternativa_b": "B",
+                "alternativa_c": "C", "alternativa_d": "D", "alternativa_e": "",
+                "resposta_correta": "A", "explicacao": "x", "dificuldade": "Médio",
+            })
+            assert r.status_code == 200
+
+        r = client.get("/api/desafio-diario")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["id"] is not None
+        assert len(data["questoes"]) == 3, "desafio deve ter as 3 questões disponíveis"
+        assert data["total"] == 3
+        assert data["pontos_possiveis"] == 3 * 20 + 30
 
 
 # ============================================================
