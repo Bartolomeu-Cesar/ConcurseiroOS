@@ -2,6 +2,10 @@
 import { state } from './state.js';
 import { escapeHtml, showLoading, showEmpty, toast, confirmModal, promptModal } from './utils.js';
 import { getUser } from './auth.js';
+import {
+  suportaPdfLocal, escolherPastaLocal, getPastaLocal, esquecerPastaLocal,
+  listarPdfsLocais,
+} from './local-pdfs.js';
 
 const API = '';
 const OPEN_KEY = 'folders_open';
@@ -641,3 +645,171 @@ async function _excluirPasta(id) {
 
 window._renomearPasta = _renomearPasta;
 window._excluirPasta = _excluirPasta;
+
+
+// ==================== MODO PDF LOCAL (privacidade) ====================
+// Lista PDFs que ficam na máquina do estudante (via File System Access API).
+// O binário nunca vai ao servidor; só o progresso (página) é salvo, sob paths
+// com prefixo "local:". Os recursos de IA ficam indisponíveis nesta fase.
+
+let _modoLocal = false;
+
+export async function toggleModoLocal() {
+  const btn = document.getElementById('local-mode-btn');
+
+  if (!suportaPdfLocal()) {
+    await confirmModal(
+      'Navegador não compatível',
+      'O modo "PDFs Locais" usa a File System Access API, disponível apenas no Chrome ou Edge no computador. ' +
+      'Em outros navegadores, continue usando o modo servidor (📄 Enviar PDF).',
+      { type: 'info', confirmText: 'Entendi', cancelText: '' }
+    );
+    return;
+  }
+
+  _modoLocal = !_modoLocal;
+  if (btn) {
+    btn.textContent = _modoLocal ? '☁️ Voltar ao Servidor' : '💻 PDFs Locais';
+    btn.style.background = _modoLocal ? 'var(--green)' : 'var(--bg-surface)';
+    btn.style.color = _modoLocal ? 'var(--bg)' : 'var(--text)';
+  }
+  // Sair do modo organização se estava ativo (exclusão mútua).
+  if (_modoLocal) {
+    await _carregarPdfsLocais();
+  } else {
+    load(); // volta à árvore do servidor
+  }
+}
+
+async function _carregarPdfsLocais() {
+  const container = document.getElementById('tree');
+  container.innerHTML = '<p style="color:var(--text-sub);padding:8px;">Carregando PDFs locais...</p>';
+
+  // Tenta reaproveitar a pasta já autorizada; se não houver, pede para escolher.
+  let handle = null;
+  try {
+    handle = await getPastaLocal(false);
+  } catch (e) { handle = null; }
+
+  if (!handle) {
+    container.innerHTML = `
+      <div style="text-align:center;padding:24px 16px;color:var(--text-sub);">
+        <div style="font-size:2.2rem;margin-bottom:10px;">💻🔒</div>
+        <p style="font-size:0.9rem;line-height:1.6;margin-bottom:14px;">
+          Escolha a pasta do seu computador onde ficam seus PDFs de estudo.<br>
+          <strong>Os arquivos não são enviados ao servidor</strong> — só o seu progresso de leitura é salvo.
+        </p>
+        <button id="btn-escolher-pasta" style="background:var(--accent);color:var(--bg);border:none;border-radius:8px;padding:10px 18px;font-weight:600;cursor:pointer;font-size:0.85rem;">📂 Escolher pasta</button>
+      </div>`;
+    const b = document.getElementById('btn-escolher-pasta');
+    if (b) b.addEventListener('click', async () => {
+      try {
+        await escolherPastaLocal(); // gesto do usuário → pode abrir o seletor
+        await _renderArvoreLocal();
+      } catch (e) {
+        if (e && e.name === 'AbortError') return; // usuário cancelou o seletor
+        toast('Erro ao acessar a pasta: ' + (e.message || e), 'error');
+      }
+    });
+    return;
+  }
+
+  await _renderArvoreLocal();
+}
+
+async function _renderArvoreLocal() {
+  const container = document.getElementById('tree');
+  let handle = await getPastaLocal(true); // com prompt de re-permissão se preciso
+  if (!handle) {
+    // Permissão negada/expirada: pede para reescolher.
+    await esquecerPastaLocal();
+    return _carregarPdfsLocais();
+  }
+
+  let arvore = [];
+  try {
+    arvore = await listarPdfsLocais(handle);
+  } catch (e) {
+    container.innerHTML = `<p style="color:var(--red);padding:8px;">Erro ao ler a pasta: ${escapeHtml(e.message || String(e))}</p>`;
+    return;
+  }
+
+  // Carrega o progresso do servidor (metadados por path "local:...").
+  let bulk = {};
+  try { bulk = await fetch(`${API}/api/progress-bulk`).then(r => r.json()); }
+  catch (e) { bulk = {}; }
+
+  container.innerHTML = '';
+
+  const toolbar = document.createElement('div');
+  toolbar.style.cssText = 'display:flex;gap:8px;margin-bottom:10px;padding:4px;align-items:center;flex-wrap:wrap;';
+  const totalPdfs = _contarPdfs(arvore);
+  toolbar.innerHTML = `
+    <span style="font-size:0.72rem;color:var(--green);align-self:center;">💻 Modo local — ${totalPdfs} PDF(s) na sua máquina · o arquivo não sai do computador</span>
+    <span style="flex:1;"></span>
+    <button id="btn-trocar-pasta" style="padding:5px 10px;background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:6px;font-size:0.72rem;cursor:pointer;">📂 Trocar pasta</button>
+  `;
+  container.appendChild(toolbar);
+  const trocar = document.getElementById('btn-trocar-pasta');
+  if (trocar) trocar.addEventListener('click', async () => {
+    try { await escolherPastaLocal(); await _renderArvoreLocal(); }
+    catch (e) { if (e && e.name !== 'AbortError') toast('Erro: ' + (e.message || e), 'error'); }
+  });
+
+  if (totalPdfs === 0) {
+    showEmpty('tree', '📭', 'Nenhum PDF encontrado nessa pasta. Escolha outra pasta ou adicione PDFs.');
+    return;
+  }
+
+  // Reusa o mesmo formato visual da árvore normal (folder/pdf), mas os PDFs
+  // abrem o viewer com path "local:...".
+  _renderNodesLocal(arvore, container, bulk);
+}
+
+function _contarPdfs(nodes) {
+  let n = 0;
+  for (const node of nodes) {
+    if (node.type === 'pdf') n++;
+    else if (node.type === 'folder') n += _contarPdfs(node.children || []);
+  }
+  return n;
+}
+
+function _renderNodesLocal(nodes, container, bulk) {
+  for (const node of nodes) {
+    if (node.type === 'folder') {
+      const div = document.createElement('div');
+      div.className = 'folder';
+      div.innerHTML = `
+        <div class="folder-header"><span class="folder-icon">📁</span><span class="folder-name">${escapeHtml(node.name)}</span></div>
+        <div class="folder-children open"></div>
+      `;
+      const children = div.querySelector('.folder-children');
+      div.querySelector('.folder-header').addEventListener('click', () => children.classList.toggle('open'));
+      _renderNodesLocal(node.children || [], children, bulk);
+      container.appendChild(div);
+    } else if (node.type === 'pdf') {
+      const prog = bulk[node.path];
+      const tp = prog ? prog.total_pages : null;
+      const cp = prog ? prog.current_page : 1;
+      const pct = tp ? (cp >= tp ? 100 : Math.round((cp / tp) * 100)) : 0;
+      const label = tp ? `pág. ${cp}/${tp} (${pct}%)` : 'não lido';
+      const div = document.createElement('div');
+      div.innerHTML = `
+        <div class="pdf-item" data-path="${escapeHtml(node.path)}" style="background:linear-gradient(to right, rgba(166,227,161,0.22) ${pct}%, transparent ${pct}%);">
+          <span>📄</span>
+          <span class="pdf-name">${escapeHtml(node.name.replace(/\.pdf$/i, '').replace(/_/g, ' '))}</span>
+          <span class="pdf-materia-tag" style="background:rgba(166,227,161,0.2);color:var(--green);" title="Arquivo local — não enviado ao servidor">💻 local</span>
+          <span class="pdf-progress">${label}</span>
+          ${pct === 100 ? '<span class="badge-done">✓</span>' : ''}
+        </div>
+      `;
+      div.querySelector('.pdf-item').addEventListener('click', () => {
+        window.open(`viewer.html?path=${encodeURIComponent(node.path)}`, '_blank');
+      });
+      container.appendChild(div);
+    }
+  }
+}
+
+window.toggleModoLocal = toggleModoLocal;

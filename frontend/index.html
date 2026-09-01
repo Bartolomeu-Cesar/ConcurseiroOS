@@ -121,6 +121,7 @@
     <div id="io-box">
       <button class="iobtn" onclick="document.getElementById('upload-pdf-input').click()">📄 Enviar PDF</button>
       <button class="iobtn" id="org-mode-btn" onclick="toggleOrgMode()">📂 Organizar PDFs</button>
+      <button class="iobtn" id="local-mode-btn" onclick="toggleModoLocal()" title="Estudar PDFs que ficam no seu computador (privacidade — o arquivo não é enviado ao servidor)">💻 PDFs Locais</button>
       <button class="iobtn" onclick="exportProgress()">⬇ Exportar progresso</button>
       <button class="iobtn" onclick="document.getElementById('import-input').click()">⬆ Importar progresso</button>
       <input id="upload-pdf-input" type="file" accept=".pdf" style="display:none" onchange="uploadPdf(this)">

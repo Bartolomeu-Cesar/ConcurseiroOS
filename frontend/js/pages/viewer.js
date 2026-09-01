@@ -1,6 +1,7 @@
 // viewer.js — extracted from viewer.html inline script
 // ES module (strict mode by default)
 import { confirmModal, promptModal } from '../modules/utils.js';
+import { isLocalPath, obterArquivoLocalPorPath } from '../modules/local-pdfs.js';
 
 const API = '';
 const TIMER_LIMIT_KEY = 'leitor_timer_limit_min';
@@ -9,6 +10,8 @@ const params = new URLSearchParams(location.search);
 const path = params.get('path');
 if (!path) { location.href = '/'; }
 
+const _ehLocal = isLocalPath(path);
+
 // Chave única por PDF — evita conflito com timer pomodoro da listagem (pdfs.js)
 const TIMER_KEY = 'viewer_timer_' + (path || '').replace(/[^a-zA-Z0-9]/g, '_');
 
@@ -16,7 +19,7 @@ function encodePath(p) {
   return p.split('/').map(encodeURIComponent).join('/');
 }
 
-const name = path.split('/').pop().replace('.pdf', '').replace(/_/g, ' ');
+const name = path.split('/').pop().replace(/^local:/, '').replace('.pdf', '').replace(/_/g, ' ');
 document.title = name;
 document.getElementById('title').textContent = name;
 
@@ -34,6 +37,27 @@ async function initProgress() {
   lastSavedPage = currentPage;
   updateInfo();
 
+  const frame = document.getElementById('pdf-frame');
+
+  // ----- Modo PDF local: lê o arquivo da máquina do estudante (File System
+  // Access API) e o renderiza via blob URL, sem tocar o servidor. -----
+  if (_ehLocal) {
+    try {
+      const file = await obterArquivoLocalPorPath(path, true);
+      const blobUrl = URL.createObjectURL(file);
+      // O PDF.js embutido aceita blob: como parâmetro file=.
+      frame.src = `/pdfjs/web/viewer.html?file=${encodeURIComponent(blobUrl)}#page=${currentPage}`;
+      _armarLeitorPosLoad(frame);
+      _marcarViewerComoLocal();
+    } catch (e) {
+      if (e && e.name === 'AbortError') { mostrarPdfLocalIndisponivel(true); return; }
+      mostrarPdfLocalIndisponivel(false, e && e.message);
+    }
+    setInterval(() => readPageFromViewer(), 400);
+    return;
+  }
+
+  // ----- Modo servidor (padrão) -----
   // Verifica se o PDF ainda existe no diretório antes de tentar renderizar.
   try {
     const chk = await fetch(`${API}/api/pdf-existe/${encodePath(path)}`).then(r => r.json());
@@ -44,21 +68,76 @@ async function initProgress() {
   } catch (e) { /* rede offline: segue e deixa o PDF.js tentar (pode estar em cache) */ }
 
   const pdfUrl = encodeURIComponent(`${location.origin}/pdf/${encodePath(path)}`);
-  const frame = document.getElementById('pdf-frame');
   frame.src = `/pdfjs/web/viewer.html?file=${pdfUrl}#page=${currentPage}`;
+  _armarLeitorPosLoad(frame);
 
+  setInterval(() => readPageFromViewer(), 400);
+}
+
+// Arma a sincronização de página assim que o iframe do PDF.js carrega.
+function _armarLeitorPosLoad(frame) {
   frame.addEventListener('load', () => {
     let tries = 0;
     const wait = setInterval(() => {
       tries++;
       if (readPageFromViewer() || tries > 40) clearInterval(wait);
     }, 250);
-    // Arma o auto-resume só depois que a página inicial sincronizou (evita
-    // retomar o timer por causa da sincronização de abertura, não do usuário).
     setTimeout(() => { _timerAutoResumeArmado = true; }, 1500);
   });
+}
 
-  setInterval(() => readPageFromViewer(), 400);
+// Ajusta a UI para o modo local: rótulo de privacidade e desabilita recursos
+// que dependem de o servidor ler o arquivo (IA). Fase 1: sem IA para locais.
+function _marcarViewerComoLocal() {
+  document.title = '💻 ' + name;
+  // Marca visualmente (e neutraliza) os botões de IA, identificados pelo onclick.
+  const seletoresIA = [
+    'button[onclick*="askAIAboutPage"]',
+    'button[onclick*="abrirGerarIA"]',
+    'button[onclick*="abrirGerarRevisaoIA"]',
+  ];
+  seletoresIA.forEach(sel => document.querySelectorAll(sel).forEach(el => {
+    el.style.opacity = '0.4';
+    el.style.cursor = 'not-allowed';
+    el.title = 'Indisponível para PDFs locais (o arquivo não é enviado ao servidor)';
+  }));
+  // Banner informativo no topo.
+  const banner = document.createElement('div');
+  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:998;background:var(--green,#a6e3a1);color:var(--bg,#1e1e2e);font-size:0.75rem;text-align:center;padding:3px 8px;font-weight:600;';
+  banner.textContent = '💻 PDF local — o arquivo permanece no seu computador. Recursos de IA sobre o PDF ficam indisponíveis neste modo.';
+  document.body.appendChild(banner);
+  setTimeout(() => { banner.style.transition = 'opacity 0.5s'; banner.style.opacity = '0'; setTimeout(() => banner.remove(), 500); }, 6000);
+}
+
+// Guarda usada pelas ações de IA: bloqueia em modo local com aviso claro.
+function _iaIndisponivelLocal() {
+  if (_ehLocal) {
+    showStudyToast('💻 Recursos de IA não estão disponíveis para PDFs locais (o arquivo não é enviado ao servidor).');
+    return true;
+  }
+  return false;
+}
+
+function mostrarPdfLocalIndisponivel(cancelado, msg) {
+  const viewer = document.getElementById('viewer');
+  if (viewer) {
+    viewer.innerHTML = `
+      <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:24px;">
+        <div style="background:var(--bg-surface,#313244);border:1px solid var(--border,#45475a);border-radius:16px;padding:36px 32px;max-width:440px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.4);">
+          <div style="font-size:2.6rem;margin-bottom:12px;">💻🔒</div>
+          <h2 style="color:var(--yellow,#f9e2af);font-size:1.15rem;margin:0 0 10px;">PDF local indisponível</h2>
+          <p style="color:var(--text,#cdd6f4);font-size:0.9rem;line-height:1.6;margin:0 0 20px;">
+            ${cancelado
+              ? 'A permissão de acesso à pasta foi negada ou cancelada.'
+              : 'Não foi possível ler o arquivo local' + (msg ? ': ' + _escHtml(msg) : '.')}<br>
+            Volte à lista e reabra o modo <strong>💻 PDFs Locais</strong> para reautorizar a pasta.
+          </p>
+          <a href="/" style="display:inline-block;background:var(--accent,#89b4fa);color:var(--bg,#1e1e2e);border-radius:8px;padding:10px 22px;font-weight:600;font-size:0.9rem;text-decoration:none;">🏠 Voltar ao início</a>
+        </div>
+      </div>`;
+  }
+  const pageInfo = document.getElementById('page-info');
+  if (pageInfo) pageInfo.textContent = 'PDF local indisponível';
 }
 
 function mostrarPdfInexistente() {
@@ -992,6 +1071,7 @@ function rateRecall(quality) {
 
 // --- AI Page Actions ---
 function askAIAboutPage() {
+  if (_iaIndisponivelLocal()) return;
   document.getElementById('ai-page-num').textContent = currentPage;
   document.getElementById('ai-page-response').style.display = 'none';
   document.getElementById('ai-page-input').value = '';
@@ -1052,6 +1132,7 @@ function _escHtml(s) {
 }
 
 function abrirGerarIA() {
+  if (_iaIndisponivelLocal()) return;
   const pgAtual = currentPage || 1;
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
@@ -1793,6 +1874,7 @@ async function cancelarAgendaCaderno() {
 
 // --- Auto-gerar blocos de revisão com IA ---
 function abrirGerarRevisaoIA() {
+  if (_iaIndisponivelLocal()) return;
   const pgAtual = currentPage || 1;
   let modal = document.getElementById('gerar-revisao-ia-modal');
   if (!modal) {

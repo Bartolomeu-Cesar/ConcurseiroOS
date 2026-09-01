@@ -5,7 +5,7 @@ import { initOfflineListeners, escapeHtml, confirmModal, toast, removeToast, sho
 import { alertModal, promptModal } from './modules/utils.js';
 import { switchTab, initTabs } from './modules/tabs.js';
 import { initShortcuts, goToEditalItem } from './modules/shortcuts.js';
-import { load, exportProgress, importProgress, uploadPdf, initPdfs, toggleOrgMode, criarPastaVirtual } from './modules/pdfs.js';
+import { load, exportProgress, importProgress, uploadPdf, initPdfs, toggleOrgMode, criarPastaVirtual, toggleModoLocal } from './modules/pdfs.js';
 import { loadEdital, toggleTree, toggleAllEdital, selectEditalTopic, toggleEditalStatus, deleteEditalItem, addEdital, importEditalPdf, arquivarCargo, excluirCargo, arquivarConcurso, excluirConcurso, editarEdital, salvarEdicaoEdital, showArquivados, iniciarQuestoesPosEstudo, iniciarFlashPosEstudo, showSpacingDetails, loadKnowledgeGraph, showKgSuggestions, acceptKgSuggestion, showKgNodeInfo, initEdital } from './modules/edital.js';
 import { loadCiclo, cicloTimerToggle, cicloTimerStop, importarCicloDoEdital, addCiclo, deleteCiclo, resetarCiclo, limparCiclo, switchCicloView, initCiclo } from './modules/ciclo.js';
 import { loadTrilha, gerarTrilha, concluirEtapaTrilha, sincronizarTrilhaCalendario, initTrilha } from './modules/trilha.js';
@@ -30,7 +30,7 @@ Object.assign(window, {
   // Shortcuts
   goToEditalItem,
   // PDFs
-  load, exportProgress, importProgress, uploadPdf, toggleOrgMode, criarPastaVirtual,
+  load, exportProgress, importProgress, uploadPdf, toggleOrgMode, criarPastaVirtual, toggleModoLocal,
   // Edital
   loadEdital, toggleTree, toggleAllEdital, selectEditalTopic, toggleEditalStatus,
   deleteEditalItem, addEdital, importEditalPdf,
