@@ -66,6 +66,7 @@ def _seed():
     )
     # Reset flags entre testes
     conn.execute("DELETE FROM app_config WHERE chave LIKE 'flag.%'")
+    conn.execute("DELETE FROM app_config WHERE chave = 'auth_code_expire_minutes'")
     conn.commit()
     conn.close()
 
@@ -149,3 +150,57 @@ def test_config_flags_publico_reflete_ai_tutor_off():
     r = client.get("/api/config/flags")
     assert r.status_code == 200
     assert r.json()["ai_tutor"] is False
+
+
+# ============================================================
+# VALIDADE DO CÓDIGO DE LOGIN (config admin)
+# ============================================================
+
+def test_auth_code_expire_get_nao_admin_bloqueado():
+    app.dependency_overrides[get_user_id] = _override_user_id(80)
+    assert client.get("/api/admin/config/auth-code-expire").status_code == 403
+    assert client.put("/api/admin/config/auth-code-expire", json={"minutes": 30}).status_code == 403
+
+
+def test_auth_code_expire_get_default():
+    app.dependency_overrides[get_user_id] = _override_user_id(1)
+    r = client.get("/api/admin/config/auth-code-expire")
+    assert r.status_code == 200
+    d = r.json()
+    assert d["min"] == 1 and d["max"] == 1440
+    assert 1 <= d["minutes"] <= 1440
+
+
+def test_auth_code_expire_set_persiste():
+    app.dependency_overrides[get_user_id] = _override_user_id(1)
+    r = client.put("/api/admin/config/auth-code-expire", json={"minutes": 120})
+    assert r.status_code == 200
+    assert r.json()["minutes"] == 120
+    # Persiste e é lido de volta
+    r = client.get("/api/admin/config/auth-code-expire")
+    assert r.json()["minutes"] == 120
+
+
+def test_auth_code_expire_rejeita_fora_do_limite():
+    app.dependency_overrides[get_user_id] = _override_user_id(1)
+    assert client.put("/api/admin/config/auth-code-expire", json={"minutes": 0}).status_code == 400
+    assert client.put("/api/admin/config/auth-code-expire", json={"minutes": 1441}).status_code == 400
+    assert client.put("/api/admin/config/auth-code-expire", json={"minutes": "abc"}).status_code == 400
+
+
+def test_auth_code_expire_helper_aplica_teto_24h():
+    """Mesmo com valor absurdo persistido, o helper limita a 1440 min (24h)."""
+    from plans import set_app_config, get_auth_code_expire_minutes, AUTH_CODE_EXPIRE_KEY
+    import sqlite3 as _sq
+    conn = _sq.connect(_tmp_db.name, timeout=10)
+    set_app_config(conn, AUTH_CODE_EXPIRE_KEY, "999999")
+    conn.close()
+    assert get_auth_code_expire_minutes() == 1440
+
+
+def test_auth_code_expire_auditado():
+    app.dependency_overrides[get_user_id] = _override_user_id(1)
+    client.put("/api/admin/config/auth-code-expire", json={"minutes": 45})
+    r = client.get("/api/admin/auditoria?acao=config")
+    items = r.json()["items"]
+    assert any(it["acao"] == "config.set" for it in items)

@@ -378,6 +378,31 @@ def set_app_config(conn, chave: str, valor: str):
     conn.commit()
 
 
+# Chave e limites da validade do código de login (em minutos).
+AUTH_CODE_EXPIRE_KEY = "auth_code_expire_minutes"
+AUTH_CODE_EXPIRE_MIN = 1        # piso: 1 minuto
+AUTH_CODE_EXPIRE_MAX = 1440     # teto: 24 horas
+
+
+def get_auth_code_expire_minutes() -> int:
+    """Validade (em minutos) do código de login, configurável pelo admin.
+
+    Lê de app_config['auth_code_expire_minutes'] (definido no painel admin);
+    faz fallback para settings.AUTH_CODE_EXPIRE_MINUTES (env). Sempre limitado
+    ao intervalo [1, 1440] minutos — o código nunca expira em mais de 24h.
+    """
+    from settings import settings
+    raw = get_app_config(AUTH_CODE_EXPIRE_KEY, "")
+    if raw in (None, ""):
+        val = settings.AUTH_CODE_EXPIRE_MINUTES
+    else:
+        try:
+            val = int(raw)
+        except (ValueError, TypeError):
+            val = settings.AUTH_CODE_EXPIRE_MINUTES
+    return max(AUTH_CODE_EXPIRE_MIN, min(val, AUTH_CODE_EXPIRE_MAX))
+
+
 # ============================================================
 # FEATURE FLAGS / KILL SWITCH
 # ============================================================

@@ -138,6 +138,9 @@ def _send_email(to_email: str, subject: str, html_body: str):
 
 
 def _send_code_email(email: str, code: str):
+    from plans import get_auth_code_expire_minutes
+    _mins = get_auth_code_expire_minutes()
+    _validade = f"{_mins // 60}h" if _mins % 60 == 0 and _mins >= 60 else f"{_mins} minutos"
     """Envia email com código de verificação."""
     # Se SMTP não configurado, exibir código no terminal (modo desenvolvimento)
     if not settings.SMTP_USER or not settings.SMTP_PASSWORD:
@@ -154,7 +157,7 @@ def _send_code_email(email: str, code: str):
             {code}
         </div>
         <p style="text-align:center;font-size:0.8rem;color:#9399b2;">
-            Este código expira em {settings.AUTH_CODE_EXPIRE_MINUTES} minutos.<br>
+            Este código expira em {_validade}.<br>
             Se você não solicitou, ignore este email.
         </p>
     </div>
@@ -261,7 +264,8 @@ def register(body: RegisterRequest, conn=Depends(get_db_session)):
 
     # Gerar e enviar código
     code = _generate_code()
-    expires = (datetime.now(timezone.utc) + timedelta(minutes=settings.AUTH_CODE_EXPIRE_MINUTES)).isoformat()
+    from plans import get_auth_code_expire_minutes
+    expires = (datetime.now(timezone.utc) + timedelta(minutes=get_auth_code_expire_minutes())).isoformat()
     conn.execute(
         "INSERT INTO auth_codes (email, code, tipo, created_at, expires_at) VALUES (?, ?, ?, ?, ?)",
         (email, code, "verify", now, expires)
@@ -298,7 +302,8 @@ def login(body: LoginRequest, conn=Depends(get_db_session)):
     # Gerar novo código
     code = _generate_code()
     now = datetime.now(timezone.utc).isoformat()
-    expires = (datetime.now(timezone.utc) + timedelta(minutes=settings.AUTH_CODE_EXPIRE_MINUTES)).isoformat()
+    from plans import get_auth_code_expire_minutes
+    expires = (datetime.now(timezone.utc) + timedelta(minutes=get_auth_code_expire_minutes())).isoformat()
     conn.execute(
         "INSERT INTO auth_codes (email, code, tipo, created_at, expires_at) VALUES (?, ?, ?, ?, ?)",
         (email, code, "login", now, expires)

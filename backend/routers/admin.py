@@ -816,6 +816,53 @@ def atualizar_flag(
 
 
 # ============================================================
+# CONFIG — VALIDADE DO CÓDIGO DE LOGIN
+# ============================================================
+
+@router.get("/config/auth-code-expire", summary="Ler validade do código de login (min)")
+def get_auth_code_expire(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Retorna a validade atual do código de login em minutos, com os limites."""
+    _require_admin(user_id)
+    from plans import get_auth_code_expire_minutes, AUTH_CODE_EXPIRE_MIN, AUTH_CODE_EXPIRE_MAX
+    return {
+        "minutes": get_auth_code_expire_minutes(),
+        "min": AUTH_CODE_EXPIRE_MIN,
+        "max": AUTH_CODE_EXPIRE_MAX,
+    }
+
+
+@router.put("/config/auth-code-expire", summary="Definir validade do código de login (min)")
+def set_auth_code_expire(
+    body: dict,
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Define a validade do código de login (em minutos). body: {minutes: int}.
+
+    Aceita 1..1440 (no máximo 24h). Vale para TODOS os códigos gerados a partir
+    de então (login e registro). Auditado.
+    """
+    _require_admin(user_id)
+    from plans import (
+        set_app_config, AUTH_CODE_EXPIRE_KEY,
+        AUTH_CODE_EXPIRE_MIN, AUTH_CODE_EXPIRE_MAX,
+    )
+    try:
+        minutes = int(body.get("minutes"))
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="minutes deve ser um inteiro")
+    if minutes < AUTH_CODE_EXPIRE_MIN or minutes > AUTH_CODE_EXPIRE_MAX:
+        raise HTTPException(
+            status_code=400,
+            detail=f"minutes deve estar entre {AUTH_CODE_EXPIRE_MIN} e {AUTH_CODE_EXPIRE_MAX} (máx. 24h)",
+        )
+    set_app_config(conn, AUTH_CODE_EXPIRE_KEY, str(minutes))
+    _audit(conn, user_id, "config.set", "config", AUTH_CODE_EXPIRE_KEY, {"minutes": minutes})
+    log.info(f"[admin] Validade do código de login → {minutes} min")
+    return {"ok": True, "minutes": minutes}
+
+
+# ============================================================
 # IMPERSONATION (ENTRAR COMO USUÁRIO)
 # ============================================================
 

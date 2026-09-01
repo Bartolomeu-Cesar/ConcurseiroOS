@@ -397,6 +397,40 @@ class TestCodigoExpiracao:
         assert settings.AUTH_CODE_EXPIRE_MINUTES <= 1440
         assert settings.AUTH_CODE_EXPIRE_MINUTES >= 1
 
+    def test_login_usa_validade_configurada(self, client):
+        """O login respeita a validade em minutos gravada em app_config (config do admin)."""
+        from datetime import datetime as _dt, timezone as _tz
+        email = "cfg_expire@example.com"
+        client.post("/api/auth/register", json={"email": email, "nome": "Cfg"})
+
+        # Admin configura a validade para 120 minutos (grava em app_config).
+        conn = sqlite3.connect(_tmp_db.name, check_same_thread=False, timeout=10)
+        conn.execute(
+            """INSERT INTO app_config (chave, valor, updated_at) VALUES ('auth_code_expire_minutes', '120', ?)
+               ON CONFLICT(chave) DO UPDATE SET valor=excluded.valor, updated_at=excluded.updated_at""",
+            (_dt.now(_tz.utc).isoformat(),),
+        )
+        conn.commit()
+        conn.close()
+
+        # Novo login gera código com expires_at ~ agora + 120 min.
+        client.post("/api/auth/login", json={"email": email})
+        conn = sqlite3.connect(_tmp_db.name, check_same_thread=False, timeout=10)
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT created_at, expires_at FROM auth_codes WHERE email = ? ORDER BY created_at DESC LIMIT 1",
+            (email,),
+        ).fetchone()
+        # Limpa a config para não vazar para outros testes.
+        conn.execute("DELETE FROM app_config WHERE chave = 'auth_code_expire_minutes'")
+        conn.commit()
+        conn.close()
+
+        created = _dt.fromisoformat(row["created_at"])
+        expires = _dt.fromisoformat(row["expires_at"])
+        delta_min = (expires - created).total_seconds() / 60
+        assert 119 <= delta_min <= 121, f"esperado ~120 min, obtido {delta_min:.1f}"
+
 
 # ============================================================
 # CLEANUP

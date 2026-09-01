@@ -188,6 +188,28 @@
       <div id="flags-list" style="display:flex;flex-direction:column;gap:8px;font-size:0.85rem;">Carregando...</div>
     </div>
 
+    <!-- Segurança do Login: validade do código -->
+    <div style="margin-top:24px;padding:20px;background:#181825;border:1px solid #45475a;border-radius:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <h2 style="color:#89b4fa;margin:0;font-size:1.1rem;">🔐 Segurança do Login</h2>
+        <button class="btn small secondary" onclick="loadAuthCodeExpire()">🔄 Atualizar</button>
+      </div>
+      <div style="padding:10px;background:#1e1e2e;border-radius:8px;">
+        <strong style="color:#cdd6f4;">Validade do código de login</strong>
+        <div style="font-size:0.72rem;color:#9399b2;margin-bottom:10px;">
+          Tempo (em minutos) que o código enviado por email permanece válido. Vale para todos os códigos gerados a partir de agora. Máximo: 1440 min (24h).
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <input type="number" id="auth-code-expire-input" min="1" max="1440" step="1" value="10"
+                 aria-label="Validade do código de login em minutos"
+                 style="width:110px;padding:8px;background:#313244;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;">
+          <span style="font-size:0.8rem;color:#9399b2;">minutos</span>
+          <button class="btn small" onclick="saveAuthCodeExpire()" style="background:#a6e3a1;color:#1e1e2e;">💾 Salvar</button>
+          <span id="auth-code-expire-hint" style="font-size:0.72rem;color:#9399b2;"></span>
+        </div>
+      </div>
+    </div>
+
     <!-- Backups -->
     <div style="margin-top:24px;padding:20px;background:#181825;border:1px solid #45475a;border-radius:12px;">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
@@ -1209,6 +1231,46 @@
       } catch(e) { toast('Erro de conexão.', 'error'); }
     };
 
+    // ==================== VALIDADE DO CÓDIGO DE LOGIN ====================
+    window.loadAuthCodeExpire = async function() {
+      const input = document.getElementById('auth-code-expire-input');
+      const hint = document.getElementById('auth-code-expire-hint');
+      try {
+        const d = await fetch('/api/admin/config/auth-code-expire').then(r => r.json());
+        if (d && typeof d.minutes === 'number') {
+          input.value = d.minutes;
+          if (d.min) input.min = d.min;
+          if (d.max) input.max = d.max;
+          const h = d.minutes % 60 === 0 && d.minutes >= 60 ? (d.minutes / 60) + 'h' : d.minutes + ' min';
+          if (hint) hint.textContent = 'Atual: ' + h;
+        } else if (d && d.detail) {
+          if (hint) hint.textContent = d.detail;
+        }
+      } catch (e) { if (hint) hint.textContent = 'Erro ao carregar.'; }
+    };
+
+    window.saveAuthCodeExpire = async function() {
+      const input = document.getElementById('auth-code-expire-input');
+      const hint = document.getElementById('auth-code-expire-hint');
+      const minutes = parseInt(input.value, 10);
+      if (!Number.isInteger(minutes) || minutes < 1 || minutes > 1440) {
+        toast('Informe um valor entre 1 e 1440 minutos (máx. 24h).', 'error');
+        return;
+      }
+      try {
+        const r = await fetch('/api/admin/config/auth-code-expire', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ minutes })
+        });
+        const d = await r.json();
+        if (r.ok && d.ok) {
+          toast(`🔐 Validade do código: ${minutes} min`, 'success');
+          loadAuthCodeExpire();
+        } else {
+          toast(d.detail || 'Erro ao salvar.', 'error');
+        }
+      } catch (e) { toast('Erro de conexão.', 'error'); }
+    };
+
     // ==================== MODERAÇÃO ====================
     window.moderarUsuario = async function(uid, nome) {
       const acao = await promptModal(
@@ -1303,6 +1365,7 @@
     loadBroadcasts();
     loadBackups();
     loadFlags();
+    loadAuthCodeExpire();
     loadCuradoria();
   })();
   </script>
