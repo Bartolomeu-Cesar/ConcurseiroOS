@@ -27,7 +27,7 @@ database.init_db()
 
 from fastapi.testclient import TestClient
 
-from deps import get_user_id
+from deps import get_user_id, get_optional_user_id
 from main import app
 
 
@@ -78,6 +78,7 @@ def _ensure():
     _seed()
     yield
     app.dependency_overrides.pop(get_user_id, None)
+    app.dependency_overrides.pop(get_optional_user_id, None)
 
 
 def test_nao_admin_bloqueado():
@@ -123,33 +124,54 @@ def test_flag_auditada():
 
 def test_kill_switch_ai_tutor():
     app.dependency_overrides[get_user_id] = _override_user_id(1)
-    # Desliga IA
+    # Admin desliga a IA
     client.put("/api/admin/flags/ai_tutor", json={"ativo": False})
-    # analisar-pdf deve responder 503
+    # Para um usuário COMUM, analisar-pdf deve responder 503 (kill switch).
+    app.dependency_overrides[get_user_id] = _override_user_id(80)
     r = client.post("/api/ai/analisar-pdf", json={"pdf_path": "x.pdf", "acao": "resumo"})
     assert r.status_code == 503
 
 
-def test_config_flags_publico_reflete_ai_tutor_off():
-    """O endpoint público /api/config/flags reflete ai_tutor=False quando desligada.
+def test_ai_tutor_admin_isento_do_kill_switch():
+    """Com a flag desligada, o ADMIN não é bloqueado pela flag (isenção por role).
 
-    É o contrato que o widget do frontend (ai-tutor-widget.js) consome para NÃO
-    se injetar quando o admin desliga a flag. Independe do role do usuário.
+    O admin pode falhar adiante por outros motivos (PDF inexistente/budget), mas
+    NUNCA deve receber 503 causado pela feature flag.
     """
     app.dependency_overrides[get_user_id] = _override_user_id(1)
-    # Ligada por padrão
+    client.put("/api/admin/flags/ai_tutor", json={"ativo": False})
+    r = client.post("/api/ai/analisar-pdf", json={"pdf_path": "x.pdf", "acao": "resumo"})
+    assert r.status_code != 503, "admin deveria ser isento do kill switch da flag"
+
+
+def test_config_flags_publico_reflete_ai_tutor_off():
+    """O endpoint público /api/config/flags reflete o estado por ROLE do solicitante.
+
+    Com ai_tutor desligada: usuário comum vê False; admin vê True (isenção por
+    role) — contrato que o widget do frontend consome para decidir a UI por role.
+    """
+    app.dependency_overrides[get_user_id] = _override_user_id(1)
+    # Ligada por padrão (todos veem True)
     r = client.get("/api/config/flags")
     assert r.status_code == 200
     assert r.json()["ai_tutor"] is True
 
-    # Admin desliga
+    # Admin desliga a flag globalmente
     client.put("/api/admin/flags/ai_tutor", json={"ativo": False})
 
-    # Público reflete off — mesmo consultado por um usuário comum (não-admin)
-    app.dependency_overrides[get_user_id] = _override_user_id(80)
+    # Usuário comum: vê ai_tutor=False
+    app.dependency_overrides[get_optional_user_id] = _override_user_id(80)
     r = client.get("/api/config/flags")
     assert r.status_code == 200
     assert r.json()["ai_tutor"] is False
+
+    # Admin: vê ai_tutor=True (isento), mesmo com a flag globalmente desligada
+    app.dependency_overrides[get_optional_user_id] = _override_user_id(1)
+    r = client.get("/api/config/flags")
+    assert r.status_code == 200
+    assert r.json()["ai_tutor"] is True
+
+    app.dependency_overrides.pop(get_optional_user_id, None)
 
 
 # ============================================================
@@ -204,3 +226,34 @@ def test_auth_code_expire_auditado():
     r = client.get("/api/admin/auditoria?acao=config")
     items = r.json()["items"]
     assert any(it["acao"] == "config.set" for it in items)
+
+
+# ============================================================
+# ISENÇÃO POR ROLE (unitário)
+# ============================================================
+
+def test_is_feature_enabled_for_isencao_admin():
+    """is_feature_enabled_for: admin isento em ai_tutor; comum segue a flag."""
+    from plans import (
+        set_app_config, is_feature_enabled_for, get_all_flags_for, _FLAG_PREFIX,
+    )
+    import sqlite3 as _sq
+    # Desliga ai_tutor globalmente
+    conn = _sq.connect(_tmp_db.name, timeout=10)
+    set_app_config(conn, _FLAG_PREFIX + "ai_tutor", "0")
+    conn.close()
+
+    # Comum: bloqueado; admin: isento (True)
+    assert is_feature_enabled_for("ai_tutor", "user") is False
+    assert is_feature_enabled_for("ai_tutor", None) is False
+    assert is_feature_enabled_for("ai_tutor", "admin") is True
+
+    # get_all_flags_for reflete o role
+    assert get_all_flags_for("admin")["ai_tutor"] is True
+    assert get_all_flags_for("user")["ai_tutor"] is False
+
+    # Flag sem roles_isentos (batalhas): admin NÃO é isento
+    conn = _sq.connect(_tmp_db.name, timeout=10)
+    set_app_config(conn, _FLAG_PREFIX + "batalhas", "0")
+    conn.close()
+    assert is_feature_enabled_for("batalhas", "admin") is False

@@ -1371,8 +1371,10 @@ def analisar_pdf(
     Fase 1a: implementa a ação 'resumo'. Ações 'flashcards' e 'questoes' serão
     adicionadas nas fases seguintes.
     """
-    from plans import is_feature_enabled
-    if not is_feature_enabled("ai_tutor"):
+    from plans import is_feature_enabled_for
+    _role_row = db.execute("SELECT role FROM users WHERE id = ?", (user_id,)).fetchone()
+    _role = (_role_row["role"] if _role_row and not isinstance(_role_row, tuple) else (_role_row[0] if _role_row else None))
+    if not is_feature_enabled_for("ai_tutor", _role):
         raise HTTPException(status_code=503, detail="Recurso de IA temporariamente desativado pelo administrador.")
 
     budget = _check_budget(db, user_id)

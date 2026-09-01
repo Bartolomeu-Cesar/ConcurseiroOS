@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from backup import create_backup, delete_backup, list_backups, restore_from_backup
 from database import get_db_session, rebuild_search_index
-from deps import get_user_id, get_authenticated_user_id
+from deps import get_user_id, get_authenticated_user_id, get_optional_user_id
 from logger import log
 from schemas import HealthResponse, OkResponse
 from settings import settings
@@ -222,10 +222,22 @@ class RestoreRequest(BaseModel):
 
 
 @router.get("/api/config/flags", summary="Feature flags públicas", tags=["Sistema"])
-def public_flags():
-    """Estado público das feature flags (para o frontend adaptar a UI)."""
-    from plans import get_all_flags
-    return get_all_flags()
+def public_flags(conn=Depends(get_db_session), user_id: int = Depends(get_optional_user_id)):
+    """Estado das feature flags do ponto de vista do solicitante (para a UI).
+
+    Aplica isenções por role: um admin vê como "ligadas" as flags em que seu role
+    está isento (ex.: ai_tutor), mesmo que globalmente desligadas — assim a UI
+    (ex.: widget do Tutor IA) continua disponível para admin.
+    """
+    from plans import get_all_flags_for
+    role = None
+    try:
+        row = conn.execute("SELECT role FROM users WHERE id = ?", (user_id,)).fetchone()
+        if row:
+            role = row["role"] if not isinstance(row, tuple) else row[0]
+    except Exception:
+        role = None
+    return get_all_flags_for(role)
 
 
 @router.get("/api/backups", summary="Listar backups", tags=["Sistema"])

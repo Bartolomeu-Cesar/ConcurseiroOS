@@ -408,8 +408,11 @@ def get_auth_code_expire_minutes() -> int:
 # ============================================================
 
 # Flags conhecidas e seus defaults (ligadas por padrão, exceto manutenção).
+# "roles_isentos": roles que continuam com o recurso disponível MESMO com a flag
+# desligada (ex.: admin pode testar/demonstrar o Tutor IA mesmo desativado para os
+# usuários comuns). Vazio/ausente = a flag vale igualmente para todos.
 FEATURE_FLAGS = {
-    "ai_tutor": {"default": True, "label": "Tutor IA", "desc": "Habilita o tutor de IA e análise de PDF."},
+    "ai_tutor": {"default": True, "label": "Tutor IA", "desc": "Habilita o tutor de IA e análise de PDF.", "roles_isentos": ["admin"]},
     "batalhas": {"default": True, "label": "Batalhas PvP", "desc": "Habilita o modo batalha entre usuários."},
     "registro": {"default": True, "label": "Registro de novos usuários", "desc": "Permite criar novas contas."},
     "manutencao": {"default": False, "label": "Modo manutenção", "desc": "Exibe aviso e bloqueia ações sensíveis."},
@@ -428,9 +431,32 @@ def is_feature_enabled(flag: str) -> bool:
     return val == "1"
 
 
+def is_feature_enabled_for(flag: str, role: str = None) -> bool:
+    """Como is_feature_enabled, mas considera isenção por role.
+
+    Retorna True se a flag está ligada OU se o `role` do usuário está na lista
+    `roles_isentos` da flag (ex.: admin continua com o Tutor IA disponível mesmo
+    com a flag desligada para os usuários comuns).
+    """
+    if is_feature_enabled(flag):
+        return True
+    meta = FEATURE_FLAGS.get(flag) or {}
+    isentos = meta.get("roles_isentos") or []
+    return role in isentos
+
+
 def get_all_flags() -> dict:
     """Retorna o estado atual de todas as flags conhecidas."""
     return {flag: is_feature_enabled(flag) for flag in FEATURE_FLAGS}
+
+
+def get_all_flags_for(role: str = None) -> dict:
+    """Estado das flags do ponto de vista de um role (aplica isenções).
+
+    Para um admin, flags com ele em `roles_isentos` aparecem como ligadas mesmo
+    que globalmente desligadas — usado pelo frontend para decidir a UI por role.
+    """
+    return {flag: is_feature_enabled_for(flag, role) for flag in FEATURE_FLAGS}
 
 
 def set_feature_flag(conn, flag: str, enabled: bool):
