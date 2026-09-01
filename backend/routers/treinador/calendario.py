@@ -18,6 +18,38 @@ router = APIRouter(prefix="", tags=["Treinador Inteligente"])
 NOMES_DIAS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
 
 
+def _planejador_desalinhado(conn, user_id: int) -> bool:
+    """True se o planejador_semanal não corresponde mais ao ciclo ativo atual.
+
+    Detecta o caso em que o usuário trocou de concurso/ciclo mas o calendário
+    ficou preso a um planejamento antigo (de outro edital). Comparamos os
+    conjuntos de matérias: se o planejador contém matérias que não estão no
+    ciclo ativo, OU deixa de fora matérias do ciclo, consideramos desalinhado.
+
+    Só avalia quando há ciclo ativo (senão não há referência para comparar).
+    """
+    ciclo_mats = {
+        r[0] for r in conn.execute(
+            "SELECT DISTINCT materia FROM ciclo_estudos WHERE ativo = 1 AND user_id = ?",
+            (user_id,),
+        ).fetchall()
+    }
+    if not ciclo_mats:
+        return False  # sem ciclo ativo, não há como (nem por que) realinhar
+
+    plan_mats = {
+        r[0] for r in conn.execute(
+            "SELECT DISTINCT materia FROM planejador_semanal WHERE user_id = ?",
+            (user_id,),
+        ).fetchall()
+    }
+    if not plan_mats:
+        return False  # vazio é tratado pelo fluxo de geração normal
+
+    # Desalinhado se os conjuntos de matérias divergem em qualquer direção.
+    return plan_mats != ciclo_mats
+
+
 def _get_uncompleted_topics(conn, materia: str, user_id: int, edital_nome: str = "", cargo: str = "", limit: int = 3) -> list:
     query = "SELECT topico FROM edital WHERE materia = ? AND status != 'Concluído' AND user_id = ?"
     params = [materia, user_id]
@@ -131,7 +163,9 @@ def calendario_semanal(edital_nome: str = "", cargo: str = "", horas_dia: float 
 
     planejador = conn.execute("SELECT * FROM planejador_semanal WHERE user_id = ? ORDER BY dia_semana, id", (user_id,)).fetchall()
     planejador_gerado = False
-    if not planejador:
+    # Regenera se estiver vazio OU desalinhado do ciclo ativo (ex.: usuário trocou
+    # de concurso e o planejador ficou preso ao edital antigo).
+    if not planejador or _planejador_desalinhado(conn, user_id):
         _gerar_planejador_interno(conn, user_id, horas_dia)
         planejador = conn.execute("SELECT * FROM planejador_semanal WHERE user_id = ? ORDER BY dia_semana, id", (user_id,)).fetchall()
         planejador_gerado = True

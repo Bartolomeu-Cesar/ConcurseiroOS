@@ -513,3 +513,66 @@ class TestSugestaoRapida:
             "Direito Administrativo",
             "Revisão Geral",
         ]
+
+
+# ============================================================
+# 5. AUTO-REGENERAÇÃO: planejador desalinhado do ciclo ativo
+# ============================================================
+
+class TestCalendarioAutoRegenera:
+    """Ao trocar de concurso, o planejador antigo deve ser realinhado ao ciclo."""
+
+    def _set_ciclo(self, materias):
+        conn = sqlite3.connect(_tmp_db.name)
+        conn.execute("DELETE FROM ciclo_estudos WHERE user_id = 1")
+        for i, m in enumerate(materias):
+            conn.execute(
+                "INSERT INTO ciclo_estudos (materia, horas_alvo, ordem, ativo, user_id) VALUES (?, 2.0, ?, 1, 1)",
+                (m, i),
+            )
+        conn.commit()
+        conn.close()
+
+    def _set_planejador(self, materias):
+        conn = sqlite3.connect(_tmp_db.name)
+        conn.execute("DELETE FROM planejador_semanal WHERE user_id = 1")
+        for i, m in enumerate(materias):
+            conn.execute(
+                "INSERT INTO planejador_semanal (dia_semana, materia, horas, user_id) VALUES (?, ?, 1.0, 1)",
+                (i % 6, m),
+            )
+        conn.commit()
+        conn.close()
+
+    def _plan_materias(self):
+        conn = sqlite3.connect(_tmp_db.name)
+        rows = conn.execute("SELECT DISTINCT materia FROM planejador_semanal WHERE user_id = 1").fetchall()
+        conn.close()
+        return {r[0] for r in rows}
+
+    def test_desalinhado_regenera_para_ciclo_atual(self):
+        """Planejador de outro concurso é substituído pelas matérias do ciclo atual."""
+        self._set_ciclo(["Informática", "Língua Portuguesa", "Raciocínio Lógico e Científico"])
+        # Planejador preso a um concurso antigo (matérias que não estão no ciclo)
+        self._set_planejador(["Contabilidade Geral", "Auditoria", "Controle Externo"])
+
+        r = client.get("/api/calendario-semanal")
+        assert r.status_code == 200
+
+        mats = self._plan_materias()
+        # As matérias antigas sumiram e as do ciclo entraram
+        assert "Contabilidade Geral" not in mats
+        assert mats.issubset({"Informática", "Língua Portuguesa", "Raciocínio Lógico e Científico"})
+        assert len(mats) >= 1
+
+    def test_alinhado_nao_muda(self):
+        """Se o planejador já corresponde ao ciclo, não é regenerado (idempotente)."""
+        self._set_ciclo(["Informática", "Língua Portuguesa"])
+        self._set_planejador(["Informática", "Língua Portuguesa"])
+        antes = self._plan_materias()
+
+        r = client.get("/api/calendario-semanal")
+        assert r.status_code == 200
+
+        depois = self._plan_materias()
+        assert antes == depois == {"Informática", "Língua Portuguesa"}
