@@ -374,6 +374,9 @@
   <script src="/sidebar.js"></script>
   <script type="module">
     import { toggleTheme, initTheme } from './js/modules/theme.js';
+    import { confirmModal, alertModal, promptModal } from './js/modules/utils.js';
+    import { toast } from './js/modules/toast.js';
+    Object.assign(window, { confirmModal, alertModal, promptModal, toast });
     window.toggleTheme = toggleTheme;
     initTheme();
   </script>

@@ -212,7 +212,36 @@
     };
 
     window.globalTimerStop = function() {
-        // Custom confirmation modal (works on all pages without dependencies)
+        // Ação de parar: registra o tempo estudado e limpa o timer.
+        const _doStop = () => {
+            const state = getTimerState();
+            if (state) {
+                const elapsedSec = state.totalSeconds - Math.max(0, Math.floor((state.endTime - Date.now()) / 1000));
+                if (elapsedSec >= 60) { // At least 1 minute
+                    const horas = elapsedSec / 3600;
+                    fetch('/api/sessoes-estudo/registrar', {
+                        method: 'POST', headers: {'Content-Type':'application/json'},
+                        body: JSON.stringify({ horas: Math.round(horas * 100) / 100, materia: state.materia, tipo: state.tipo || 'timer' })
+                    }).catch(() => {});
+                }
+            }
+            clearTimerState();
+            removeWidget();
+            stopTimerLoop();
+            alarmPlayed = false;
+        };
+
+        // Usa o modal padrão do app (Catppuccin, com foco/Esc/ARIA) quando disponível.
+        if (typeof window.confirmModal === 'function') {
+            window.confirmModal(
+                'Parar Timer',
+                'Deseja parar o timer e registrar o tempo estudado?',
+                { type: 'danger', confirmText: 'Parar', cancelText: 'Cancelar', icon: '⏹' }
+            ).then((ok) => { if (ok) _doStop(); });
+            return;
+        }
+
+        // Fallback: modal interno (páginas sem o bridge de utils.js / sem dependências).
         const overlay = document.createElement('div');
         overlay.style.cssText = 'position:fixed;inset:0;background:rgba(30,30,46,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;animation:fadeIn 0.2s ease;';
         overlay.innerHTML = `
@@ -230,22 +259,7 @@
         overlay.querySelector('#gtw-cancel').onclick = () => overlay.remove();
         overlay.querySelector('#gtw-confirm').onclick = () => {
             overlay.remove();
-            // Register elapsed time before clearing
-            const state = getTimerState();
-            if (state) {
-                const elapsedSec = state.totalSeconds - Math.max(0, Math.floor((state.endTime - Date.now()) / 1000));
-                if (elapsedSec >= 60) { // At least 1 minute
-                    const horas = elapsedSec / 3600;
-                    fetch('/api/sessoes-estudo/registrar', {
-                        method: 'POST', headers: {'Content-Type':'application/json'},
-                        body: JSON.stringify({ horas: Math.round(horas * 100) / 100, materia: state.materia, tipo: state.tipo || 'timer' })
-                    }).catch(() => {});
-                }
-            }
-            clearTimerState();
-            removeWidget();
-            stopTimerLoop();
-            alarmPlayed = false;
+            _doStop();
         };
         overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
     };
