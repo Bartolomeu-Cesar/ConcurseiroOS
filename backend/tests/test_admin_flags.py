@@ -127,3 +127,25 @@ def test_kill_switch_ai_tutor():
     # analisar-pdf deve responder 503
     r = client.post("/api/ai/analisar-pdf", json={"pdf_path": "x.pdf", "acao": "resumo"})
     assert r.status_code == 503
+
+
+def test_config_flags_publico_reflete_ai_tutor_off():
+    """O endpoint público /api/config/flags reflete ai_tutor=False quando desligada.
+
+    É o contrato que o widget do frontend (ai-tutor-widget.js) consome para NÃO
+    se injetar quando o admin desliga a flag. Independe do role do usuário.
+    """
+    app.dependency_overrides[get_user_id] = _override_user_id(1)
+    # Ligada por padrão
+    r = client.get("/api/config/flags")
+    assert r.status_code == 200
+    assert r.json()["ai_tutor"] is True
+
+    # Admin desliga
+    client.put("/api/admin/flags/ai_tutor", json={"ativo": False})
+
+    # Público reflete off — mesmo consultado por um usuário comum (não-admin)
+    app.dependency_overrides[get_user_id] = _override_user_id(80)
+    r = client.get("/api/config/flags")
+    assert r.status_code == 200
+    assert r.json()["ai_tutor"] is False

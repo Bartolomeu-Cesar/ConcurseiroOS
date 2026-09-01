@@ -365,7 +365,19 @@
     input.focus();
   }
 
+  // Só injeta o widget se a feature flag global "ai_tutor" estiver ligada.
+  // O estado é público via /api/config/flags (admin controla no painel).
+  // Fallback: se a consulta falhar (ex.: offline), injeta para não prejudicar
+  // a UX; mas se a flag vier explicitamente desligada, o widget não aparece.
+  async function initIfEnabled() {
+    try {
+      const flags = await fetch('/api/config/flags').then(r => r.ok ? r.json() : {});
+      if (flags && flags.ai_tutor === false) return; // desligado pelo admin
+    } catch (e) { /* offline/erro: segue com injeção (fallback) */ }
+    inject();
+  }
+
   // Inject when DOM is ready
-  if (document.body) inject();
-  else document.addEventListener('DOMContentLoaded', inject);
+  if (document.body) initIfEnabled();
+  else document.addEventListener('DOMContentLoaded', initIfEnabled);
 })();
