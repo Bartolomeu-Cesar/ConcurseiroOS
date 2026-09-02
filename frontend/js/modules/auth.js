@@ -42,6 +42,45 @@ export function handleAuthNav() {
   }
 }
 
+// Calcula os dias restantes da assinatura Premium a partir de user.plano_expira.
+// - Vitalício (ilimitado ou plano_expira 'vitalicio'/vazio no premium) → sem contagem.
+// - Premium com data futura → dias restantes (arredonda p/ cima; mínimo 1 se ainda ativo).
+// - Expirado ou plano free/guest → não mostra.
+// Retorna { mostrar, texto, dias, cor }.
+function _diasRestantesPlano(user) {
+  const semContagem = { mostrar: false, texto: '', dias: null, cor: '#9399b2' };
+  if (!user) return semContagem;
+  const plano = user.plano || 'free';
+  const expira = user.plano_expira || '';
+
+  if (plano === 'ilimitado') {
+    return { mostrar: true, texto: '💎 Acesso vitalício', dias: null, cor: '#a6e3a1' };
+  }
+  if (plano !== 'premium') return semContagem;
+
+  // Premium vitalício (pagamento único): sem data de expiração.
+  const lower = String(expira).toLowerCase();
+  if (!expira || lower === 'vitalicio' || lower === 'vitalício' || lower === 'lifetime') {
+    return { mostrar: true, texto: '👑 Premium vitalício', dias: null, cor: '#f9e2af' };
+  }
+
+  const fim = new Date(expira);
+  if (isNaN(fim.getTime())) return semContagem;
+  const ms = fim.getTime() - Date.now();
+  if (ms <= 0) return semContagem; // expirado (o backend fará o downgrade)
+
+  const dias = Math.max(1, Math.ceil(ms / 86400000));
+  const dataFmt = fim.toLocaleDateString('pt-BR');
+  const cor = dias <= 3 ? '#f38ba8' : (dias <= 7 ? '#f9e2af' : '#a6e3a1');
+  const plural = dias === 1 ? 'dia' : 'dias';
+  return {
+    mostrar: true,
+    texto: `⏳ ${dias} ${plural} restante${dias === 1 ? '' : 's'} (até ${dataFmt})`,
+    dias,
+    cor,
+  };
+}
+
 function showProfileMenu() {
   const existing = document.getElementById('profile-menu');
   if (existing) { existing.remove(); return; }
@@ -49,6 +88,8 @@ function showProfileMenu() {
   const user = getUser();
   const plan = getUserPlan();
   const planInfo = PLAN_LABELS[plan] || PLAN_LABELS.free;
+  // Dias restantes da assinatura Premium (obtida via créditos ou mensal).
+  const diasInfo = _diasRestantesPlano(user);
   // Status de presença do próprio usuário (mesmo padrão visual do widget de amigos).
   // Usa window.getCurrentPresenceStatus (presence.js) com fallback seguro se ausente.
   const pres = (typeof window.getCurrentPresenceStatus === 'function')
@@ -69,6 +110,7 @@ function showProfileMenu() {
       <span style="display:inline-block;padding:2px 10px;border-radius:12px;font-size:0.72rem;font-weight:600;background:${planInfo.cor}22;color:${planInfo.cor};border:1px solid ${planInfo.cor}55;">
         ${planInfo.icon} ${planInfo.nome}
       </span>
+      ${diasInfo.mostrar ? `<div style="margin-top:6px;font-size:0.72rem;font-weight:600;color:${diasInfo.cor};">${diasInfo.texto}</div>` : ''}
     </div>
     <div style="border-top:1px solid #45475a;padding-top:8px;display:flex;flex-direction:column;gap:6px;">
       ${plan === 'free' || plan === 'guest' ? `<button onclick="showUpgradeModal()" style="background:#f9e2af;color:#1e1e2e;border:none;border-radius:6px;padding:8px;cursor:pointer;font-size:0.82rem;font-weight:600;">👑 Fazer Upgrade</button>` : `<button onclick="showUpgradeModal()" style="background:#45475a;color:#cdd6f4;border:none;border-radius:6px;padding:8px;cursor:pointer;font-size:0.82rem;">⚙️ Gerenciar Plano</button>`}
@@ -93,6 +135,10 @@ export function showUpgradeModal() {
   document.getElementById('profile-menu')?.remove();
 
   const currentPlan = getUserPlan();
+  const _diasModal = _diasRestantesPlano(getUser());
+  const _premiumBadgeAtual = _diasModal.mostrar
+    ? `<div style="margin-top:10px;padding:6px;border:1px solid #f9e2af;border-radius:6px;font-size:0.72rem;color:#f9e2af;font-weight:600;">✓ Plano Atual<br><span style="color:${_diasModal.cor};">${_diasModal.texto}</span></div>`
+    : '<div style="margin-top:10px;padding:6px;border:1px solid #f9e2af;border-radius:6px;font-size:0.75rem;color:#f9e2af;font-weight:600;">✓ Plano Atual</div>';
   const overlay = document.createElement('div');
   overlay.id = 'upgrade-modal';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;';
@@ -142,7 +188,7 @@ export function showUpgradeModal() {
             <li>✓ Backup automático</li>
             <li>✓ Calendário personalizado</li>
           </ul>
-          ${currentPlan === 'premium' ? '<div style="margin-top:10px;padding:6px;border:1px solid #f9e2af;border-radius:6px;font-size:0.75rem;color:#f9e2af;font-weight:600;">✓ Plano Atual</div>' : `<button onclick="doUpgrade('premium')" style="width:100%;margin-top:10px;padding:10px;border:none;border-radius:6px;background:#f9e2af;color:#1e1e2e;font-size:0.82rem;font-weight:600;cursor:pointer;">Assinar Premium</button>`}
+          ${currentPlan === 'premium' ? _premiumBadgeAtual : `<button onclick="doUpgrade('premium')" style="width:100%;margin-top:10px;padding:10px;border:none;border-radius:6px;background:#f9e2af;color:#1e1e2e;font-size:0.82rem;font-weight:600;cursor:pointer;">Assinar Premium</button>`}
         </div>
         <!-- Vitalício -->
         <div style="background:#1e1e2e;border:1px solid #a6e3a1;border-radius:12px;padding:16px;text-align:center;position:relative;">

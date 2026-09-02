@@ -468,9 +468,11 @@ class TestUpgradePremiumViaCreditos:
         assert d["saldo_restante"] == 3
         assert d["expira"]  # data futura, não vazio
 
-        # /me reflete Premium efetivo
+        # /me reflete Premium efetivo e a data de expiração (base p/ contagem de dias)
         me = client.get("/api/auth/me", headers=_auth_header(token)).json()
         assert me["plano"] == "premium"
+        assert me.get("plano_expira")  # data não-vazia
+        assert datetime.fromisoformat(me["plano_expira"]) > datetime.now(timezone.utc)
 
     def test_upgrade_ilimitado_por_usuario_comum_403(self, client):
         token = _register_and_get_token(client, "quernilimitado@t.com", "Quer Ilimitado")
