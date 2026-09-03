@@ -85,6 +85,8 @@ export async function loadFlashcardsToday() {
 function showCurrentFlashcard() {
   const q = document.getElementById('flash-question'), a = document.getElementById('flash-answer');
   const rb = document.getElementById('flash-reveal-btn'), rv = document.getElementById('flash-review-btns');
+  // Limpar hint de leitura em voz alta ao trocar de card (evita acúmulo no DOM)
+  document.getElementById('production-hint')?.remove();
   const progressEl = document.getElementById('flash-progress');
   const pendentes = flashcardsToday.length;
   const totalOriginal = _flashOriginalTotal || pendentes;
@@ -283,6 +285,8 @@ export function revealAnswer() {
   // Ler em voz alta melhora encoding em 10-15% vs ler silenciosamente
   // Mostrar hint sutil a cada 4 cards (não em todo card para não irritar)
   _productionCount = (_productionCount || 0) + 1;
+  // Remover hint anterior (evita acúmulo/duplicação entre cards ou re-reveals)
+  document.getElementById('production-hint')?.remove();
   if (!_examMode && _productionCount % 4 === 1) {
     const ansEl = document.getElementById('flash-answer');
     if (ansEl) {
