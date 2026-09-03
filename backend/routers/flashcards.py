@@ -569,18 +569,57 @@ def _limpar_html_anki(texto: str) -> str:
     return s
 
 
+def _converter_cloze(texto_bruto: str) -> tuple[str, str]:
+    """Converte um campo Cloze do Anki (com marcações {{c1::resposta::dica}}) em
+    um par (pergunta_com_lacuna, resposta).
+
+    Ex.: "A capital é {{c1::São Luís}}" ->
+         pergunta="A capital é [...]", resposta="São Luís".
+    Múltiplas lacunas viram "[...]" na pergunta e são unidas por " / " na resposta.
+    A dica opcional ({{c1::x::dica}}) vira "[dica]" na pergunta.
+    Se não houver marcação cloze, retorna (texto_limpo, "").
+    """
+    import re as _re
+
+    if not texto_bruto:
+        return "", ""
+
+    respostas: list[str] = []
+    padrao = _re.compile(r"\{\{c\d+::(.*?)\}\}", _re.DOTALL)
+
+    def _subst(m):
+        conteudo = m.group(1)
+        # separa resposta::dica (a dica é opcional)
+        partes = conteudo.split("::", 1)
+        resp = partes[0].strip()
+        dica = partes[1].strip() if len(partes) > 1 else ""
+        if resp:
+            respostas.append(resp)
+        return f"[{dica}]" if dica else "[...]"
+
+    pergunta_raw = padrao.sub(_subst, texto_bruto)
+    pergunta = _limpar_html_anki(pergunta_raw)
+    resposta = _limpar_html_anki(" / ".join(respostas)) if respostas else ""
+    return pergunta, resposta
+
+
 def _parse_apkg(content: bytes) -> list[dict]:
     """Extrai flashcards de um pacote .apkg do Anki (ZIP contendo SQLite).
 
-    Estrutura: o .apkg é um ZIP com 'collection.anki2' (schema legado) ou
-    'collection.anki21' (SQLite puro). Lê a tabela `notes` (coluna `flds` com os
-    campos separados por 0x1f: 1º=frente/pergunta, 2º=verso/resposta) e usa o
-    nome do deck (via `cards.did` + JSON `col.decks`) como matéria.
+    Robusto ao conteúdo/formato real dos decks do Anki:
+    - Aceita qualquer coleção SQLite dentro do ZIP: 'collection.anki2',
+      'collection.anki21' e também 'collection.db' (usado por ferramentas como
+      genanki). Detecta pelo cabeçalho "SQLite format 3".
+    - Usa os MODELOS (col.models) para saber quais campos são pergunta/resposta,
+      em vez de assumir cegamente campo[0]/campo[1]: o `sortf` do modelo indica o
+      campo de ordenação (pergunta) e o primeiro campo diferente vira a resposta.
+      Cobre modelos Frente/Verso, Front/Back, Pergunta/Resposta, etc.
+    - Trata notas Cloze (modelo type=1): converte '{{c1::resp}}' em pergunta com
+      lacuna "[...]" + resposta.
+    - Usa o nome do deck (via cards.did + col.decks) como matéria.
 
-    Não suporta 'collection.anki21b' (comprimido com Zstandard nas versões novas
-    do Anki), pois exigiria dependência externa — nesse caso, orienta o usuário.
-
-    Levanta HTTPException(400) com mensagem clara em caso de arquivo inválido.
+    Não suporta 'collection.anki21b' (Zstandard, versões novas do Anki) — orienta
+    o usuário. Levanta HTTPException(400) em caso de arquivo inválido.
     """
     import io as _io
     import json as _json
@@ -595,14 +634,23 @@ def _parse_apkg(content: bytes) -> list[dict]:
         raise HTTPException(status_code=400, detail="Arquivo .apkg inválido (não é um pacote ZIP válido).") from None
 
     nomes = zf.namelist()
-    # Preferir o schema mais novo suportado (anki21) antes do legado (anki2)
+    # Detecta a coleção: qualquer entrada 'collection.*' cujo conteúdo seja SQLite.
+    # Cobre .anki2 (legado), .anki21 e .db (genanki e similares).
+    SQLITE_MAGIC = b"SQLite format 3\x00"
     db_name = None
-    for candidato in ("collection.anki21", "collection.anki2"):
-        if candidato in nomes:
-            db_name = candidato
-            break
+    candidatos = [n for n in nomes if n.lower().startswith("collection.")]
+    # Preferência: anki21 > anki2 > db > qualquer outro collection.*
+    ordem_pref = {"collection.anki21": 0, "collection.anki2": 1, "collection.db": 2}
+    for cand in sorted(candidatos, key=lambda n: ordem_pref.get(n.lower(), 9)):
+        try:
+            if zf.read(cand)[:16] == SQLITE_MAGIC:
+                db_name = cand
+                break
+        except Exception:
+            continue
+
     if db_name is None:
-        if "collection.anki21b" in nomes:
+        if any(n.lower() == "collection.anki21b" for n in nomes):
             raise HTTPException(
                 status_code=400,
                 detail=(
@@ -613,7 +661,7 @@ def _parse_apkg(content: bytes) -> list[dict]:
             )
         raise HTTPException(
             status_code=400,
-            detail="Pacote .apkg sem coleção reconhecível (collection.anki2/anki21 não encontrada).",
+            detail="Pacote .apkg sem coleção SQLite reconhecível (collection.anki2/anki21/db não encontrada).",
         )
 
     # Extrai o SQLite para um arquivo temporário (sqlite3 precisa de um caminho)
@@ -626,22 +674,54 @@ def _parse_apkg(content: bytes) -> list[dict]:
         con = _sqlite3.connect(tmp_path)
         con.row_factory = _sqlite3.Row
         try:
+            # Lê decks e models separadamente para que a ausência de uma coluna
+            # (ex.: coleções mínimas geradas por outras ferramentas) não impeça a
+            # leitura da outra.
+            decks_raw = None
+            models_raw = None
+            try:
+                decks_raw = con.execute("SELECT decks FROM col LIMIT 1").fetchone()
+                decks_raw = decks_raw[0] if decks_raw else None
+            except _sqlite3.OperationalError:
+                decks_raw = None
+            try:
+                models_raw = con.execute("SELECT models FROM col LIMIT 1").fetchone()
+                models_raw = models_raw[0] if models_raw else None
+            except _sqlite3.OperationalError:
+                models_raw = None
+
             # Mapa deck_id -> nome do deck (matéria). O JSON está em col.decks.
             deck_names: dict[int, str] = {}
-            try:
-                col_row = con.execute("SELECT decks FROM col LIMIT 1").fetchone()
-                if col_row and col_row["decks"]:
-                    decks_json = _json.loads(col_row["decks"])
-                    for did_str, deck in decks_json.items():
+            if decks_raw:
+                try:
+                    for did_str, deck in _json.loads(decks_raw).items():
                         try:
                             nome = (deck.get("name") or "").split("::")[-1].strip()
                         except AttributeError:
                             nome = ""
-                        # "Default" não é uma matéria útil
                         if nome and nome.lower() != "default":
                             deck_names[int(did_str)] = nome
-            except (_sqlite3.OperationalError, ValueError, TypeError):
-                deck_names = {}
+                except (ValueError, TypeError):
+                    deck_names = {}
+
+            # Mapa model_id -> info do modelo: ordinais de pergunta/resposta e se é cloze.
+            # sortf = campo de ordenação (pergunta). A resposta é o 1º campo != sortf.
+            model_info: dict[int, dict] = {}
+            if models_raw:
+                try:
+                    for mid_str, m in _json.loads(models_raw).items():
+                        flds = sorted(m.get("flds", []), key=lambda f: f.get("ord", 0))
+                        ords = [f.get("ord", i) for i, f in enumerate(flds)]
+                        sortf = m.get("sortf", 0) or 0
+                        q_ord = sortf if sortf in ords else (ords[0] if ords else 0)
+                        a_ord = next((o for o in ords if o != q_ord), None)
+                        model_info[int(mid_str)] = {
+                            "cloze": m.get("type") == 1,
+                            "q_ord": q_ord,
+                            "a_ord": a_ord,
+                        }
+                except (ValueError, TypeError):
+                    model_info = {}
 
             # Deck de cada nota (via 1ª carta). Se falhar, matéria fica vazia.
             note_deck: dict[int, int] = {}
@@ -651,8 +731,18 @@ def _parse_apkg(content: bytes) -> list[dict]:
             except _sqlite3.OperationalError:
                 note_deck = {}
 
+            # Detecta se a tabela notes tem a coluna 'mid' (modelo)
             try:
-                notas = con.execute("SELECT id, flds FROM notes").fetchall()
+                note_cols = {c[1] for c in con.execute("PRAGMA table_info(notes)")}
+            except _sqlite3.OperationalError:
+                note_cols = set()
+            tem_mid = "mid" in note_cols
+
+            try:
+                if tem_mid:
+                    notas = con.execute("SELECT id, mid, flds FROM notes").fetchall()
+                else:
+                    notas = con.execute("SELECT id, flds FROM notes").fetchall()
             except _sqlite3.OperationalError:
                 raise HTTPException(
                     status_code=400,
@@ -663,8 +753,27 @@ def _parse_apkg(content: bytes) -> list[dict]:
             SEP = "\x1f"  # separador de campos do Anki
             for nota in notas:
                 campos = (nota["flds"] or "").split(SEP)
-                pergunta = _limpar_html_anki(campos[0] if len(campos) > 0 else "")
-                resposta = _limpar_html_anki(campos[1] if len(campos) > 1 else "")
+                info = model_info.get(nota["mid"]) if tem_mid else None
+
+                if info and info.get("cloze"):
+                    # Nota Cloze: o texto está no campo de ordenação (q_ord).
+                    q_ord = info.get("q_ord", 0)
+                    texto = campos[q_ord] if q_ord < len(campos) else (campos[0] if campos else "")
+                    pergunta, resposta = _converter_cloze(texto)
+                    # Se houver campo "Extra" (a_ord) e não houver resposta cloze, usa-o
+                    a_ord = info.get("a_ord")
+                    if not resposta and a_ord is not None and a_ord < len(campos):
+                        resposta = _limpar_html_anki(campos[a_ord])
+                else:
+                    # Nota padrão: usa os ordinais do modelo (fallback 0/1).
+                    if info:
+                        q_ord = info.get("q_ord", 0)
+                        a_ord = info.get("a_ord", 1 if len(campos) > 1 else None)
+                    else:
+                        q_ord, a_ord = 0, (1 if len(campos) > 1 else None)
+                    pergunta = _limpar_html_anki(campos[q_ord] if q_ord is not None and q_ord < len(campos) else "")
+                    resposta = _limpar_html_anki(campos[a_ord] if a_ord is not None and a_ord < len(campos) else "")
+
                 if not pergunta:
                     continue
                 did = note_deck.get(nota["id"])
