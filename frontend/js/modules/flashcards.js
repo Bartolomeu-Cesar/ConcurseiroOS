@@ -69,12 +69,19 @@ export async function loadFlashcardsToday() {
     flashcardsToday = await fetch('/api/flashcards/today').then(r => r.json());
     currentFlashIndex = 0;
 
-    // Buscar quantos já foram revisados hoje do streak
+    // Buscar quantos flashcards foram revisados HOJE (contagem específica de
+    // flashcards, sem contaminação de súmulas/outros modos). Fallback para o
+    // streak se o endpoint novo não existir (compat.).
     try {
-      const streak = await fetch('/api/streaks').then(r => r.json());
-      _flashReviewedToday = (streak && streak.hoje && streak.hoje.flashcards_revisados) ? streak.hoje.flashcards_revisados : 0;
+      const cnt = await fetch('/api/flashcards/today-count').then(r => r.json());
+      _flashReviewedToday = (cnt && typeof cnt.revisados_hoje === 'number') ? cnt.revisados_hoje : 0;
     } catch(e) {
-      _flashReviewedToday = parseInt(sessionStorage.getItem('flash_reviewed_today') || '0');
+      try {
+        const streak = await fetch('/api/streaks').then(r => r.json());
+        _flashReviewedToday = (streak && streak.hoje && streak.hoje.flashcards_revisados) ? streak.hoje.flashcards_revisados : 0;
+      } catch(e2) {
+        _flashReviewedToday = parseInt(sessionStorage.getItem('flash_reviewed_today') || '0');
+      }
     }
     _flashOriginalTotal = flashcardsToday.length + _flashReviewedToday;
 
@@ -1506,6 +1513,28 @@ export function initFlashcards(deps) {
     loadFlashcardsToday();
   }
   loadAllFlashcards();
+
+  // Recarregar a fila/contagem ao voltar para a aba de flashcards (SPA sem
+  // reload). Sem isso, `_flashReviewedToday` ficava obsoleto e o progresso
+  // exibia valores como "2/24" em vez de refletir o total já revisado hoje.
+  // Não recarrega no meio de uma sessão em andamento (evita perder posição):
+  //  - sessão filtrada por matéria (_currentFilterMateria)
+  //  - já revelou/revisou algum card nesta sessão (currentFlashIndex > 0)
+  try {
+    const flashTab = document.getElementById('tab-flashcards');
+    if (flashTab && typeof MutationObserver !== 'undefined') {
+      let _eraAtiva = flashTab.classList.contains('active');
+      const obs = new MutationObserver(() => {
+        const ativaAgora = flashTab.classList.contains('active');
+        const acabouDeAbrir = ativaAgora && !_eraAtiva;
+        _eraAtiva = ativaAgora;
+        if (!acabouDeAbrir) return;
+        const sessaoEmAndamento = _currentFilterMateria || currentFlashIndex > 0;
+        if (!sessaoEmAndamento) loadFlashcardsToday();
+      });
+      obs.observe(flashTab, { attributes: true, attributeFilter: ['class'] });
+    }
+  } catch (e) { /* observer é best-effort */ }
 }
 
 async function loadAddMaterias() {

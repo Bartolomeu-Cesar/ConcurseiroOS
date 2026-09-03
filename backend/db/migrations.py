@@ -985,6 +985,22 @@ def _m73_cadernos_colunas_faltantes(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_cadernos_user ON cadernos(user_id)")
 
 
+def _m74_flashcards_ultima_revisao(conn):
+    """Registra a data da última revisão de cada flashcard.
+
+    Permite contar com precisão quantos flashcards foram revisados HOJE
+    (independente do contador `flashcards_revisados` do streak, que é
+    compartilhado com súmulas e outros modos). Usado pela barra de progresso
+    da tela de revisão para exibir "X/Y" corretamente ao voltar à aba.
+    """
+    try:
+        conn.execute("ALTER TABLE flashcards ADD COLUMN ultima_revisao TEXT DEFAULT ''")
+        log.info("Migration: added ultima_revisao to flashcards")
+    except Exception:
+        pass  # coluna já existe
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_flashcards_ultima_revisao ON flashcards(user_id, ultima_revisao)")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -1059,6 +1075,7 @@ MIGRATIONS = [
     (71, _m71_conta_status),
     (72, _m72_ai_token_limit),
     (73, _m73_cadernos_colunas_faltantes),
+    (74, _m74_flashcards_ultima_revisao),
 ]
 
 

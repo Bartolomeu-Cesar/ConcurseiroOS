@@ -174,6 +174,47 @@ class TestFSRSFlashcards:
         assert r.status_code == 404
 
 
+class TestFlashcardsTodayCount:
+    """Progresso da revisão: contagem flashcard-específica (fix do 'X/Y')."""
+
+    def test_today_count_estrutura(self):
+        """O endpoint retorna pendentes e revisados_hoje."""
+        r = client.get("/api/flashcards/today-count")
+        assert r.status_code == 200
+        data = r.json()
+        assert "pendentes" in data and "revisados_hoje" in data
+        assert isinstance(data["pendentes"], int)
+        assert isinstance(data["revisados_hoje"], int)
+
+    def test_revisar_incrementa_revisados_hoje(self):
+        """Revisar um flashcard incrementa revisados_hoje (via ultima_revisao)."""
+        base = client.get("/api/flashcards/today-count").json()["revisados_hoje"]
+        fid = _create_flashcard("Contagem?", "Sim, conta hoje")
+        r = client.post(f"/api/flashcards/{fid}/review-fsrs", json={"quality": 4})
+        assert r.status_code == 200
+        depois = client.get("/api/flashcards/today-count").json()["revisados_hoje"]
+        assert depois == base + 1
+
+    def test_revisao_sumula_nao_conta_como_flashcard(self):
+        """Revisar SÚMULA não deve inflar revisados_hoje de flashcards
+        (fix da contaminação do contador do streak)."""
+        base = client.get("/api/flashcards/today-count").json()["revisados_hoje"]
+        sid = _create_sumula(numero=777, enunciado="Súmula não conta como flashcard")
+        # Revisar a súmula (SM-2)
+        r = client.post(f"/api/sumulas/{sid}/review-sm2", json={"quality": 4})
+        assert r.status_code == 200, r.text
+        depois = client.get("/api/flashcards/today-count").json()["revisados_hoje"]
+        assert depois == base, "Revisão de súmula não pode contar como flashcard revisado"
+
+    def test_flashcard_revisado_sai_dos_pendentes(self):
+        """Após revisar, o flashcard sai da fila de pendentes de hoje."""
+        fid = _create_flashcard("Sai da fila?", "Sim, proxima_revisao futura")
+        pend_antes = client.get("/api/flashcards/today-count").json()["pendentes"]
+        client.post(f"/api/flashcards/{fid}/review-fsrs", json={"quality": 4})
+        pend_depois = client.get("/api/flashcards/today-count").json()["pendentes"]
+        assert pend_depois <= pend_antes
+
+
 class TestFSRSEdital:
     """Testes do FSRS para tópicos do edital."""
 

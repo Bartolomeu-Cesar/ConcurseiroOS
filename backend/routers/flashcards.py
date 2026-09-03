@@ -94,6 +94,31 @@ def get_flashcards_today(materia: str = "", max_novos: int = Query(20, descripti
     return result
 
 
+@router.get("/api/flashcards/today-count", summary="Contagem de flashcards de hoje (pendentes e revisados)")
+def get_flashcards_today_count(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Contagem flashcard-específica para a barra de progresso da revisão.
+
+    - pendentes: flashcards com proxima_revisao <= hoje (mesmo critério do badge).
+    - revisados_hoje: flashcards efetivamente revisados HOJE (via ultima_revisao),
+      SEM contaminação de súmulas/outros modos (ao contrário de
+      streaks.flashcards_revisados). Usado para exibir "X/Y" corretamente
+      inclusive ao voltar à aba.
+    """
+    hoje = today_str()
+    pendentes = conn.execute(
+        "SELECT COUNT(*) FROM flashcards WHERE proxima_revisao <= ? AND user_id = ?",
+        (hoje, user_id),
+    ).fetchone()[0]
+    try:
+        revisados_hoje = conn.execute(
+            "SELECT COUNT(*) FROM flashcards WHERE ultima_revisao = ? AND user_id = ?",
+            (hoje, user_id),
+        ).fetchone()[0]
+    except Exception:
+        revisados_hoje = 0  # coluna ainda não existe (pré-migração)
+    return {"pendentes": pendentes, "revisados_hoje": revisados_hoje}
+
+
 @router.get("/api/flashcards/aleatorio", summary="Flashcards aleatórios para estudo")
 def get_flashcards_aleatorio(materia: str = "", quantidade: int = 10, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Retorna flashcards aleatórios para sessão de estudo (por disciplina ou todas)"""
@@ -136,8 +161,8 @@ def review_flashcard(id: int, body: FlashcardReview, conn=Depends(get_db_session
         raise HTTPException(status_code=404, detail="Flashcard não encontrado")
     new_intervalo = row[0] * 2 if body.acertou else 1
     proxima = (date.today() + timedelta(days=new_intervalo)).isoformat()
-    conn.execute("UPDATE flashcards SET intervalo_dias = ?, proxima_revisao = ? WHERE id = ? AND user_id = ?",
-                 (new_intervalo, proxima, id, user_id))
+    conn.execute("UPDATE flashcards SET intervalo_dias = ?, proxima_revisao = ?, ultima_revisao = ? WHERE id = ? AND user_id = ?",
+                 (new_intervalo, proxima, today_str(), id, user_id))
     update_streak(conn, "flashcards_revisados", user_id=user_id)
     conn.commit()
 
@@ -190,8 +215,8 @@ def review_flashcard_sm2(id: int, body: FlashcardReviewSM2, conn=Depends(get_db_
     proxima = (date.today() + timedelta(days=intervalo)).isoformat()
 
     conn.execute(
-        "UPDATE flashcards SET intervalo_dias = ?, proxima_revisao = ?, easiness_factor = ?, repetitions = ? WHERE id = ? AND user_id = ?",
-        (intervalo, proxima, round(ef, 4), reps, id, user_id)
+        "UPDATE flashcards SET intervalo_dias = ?, proxima_revisao = ?, easiness_factor = ?, repetitions = ?, ultima_revisao = ? WHERE id = ? AND user_id = ?",
+        (intervalo, proxima, round(ef, 4), reps, today_str(), id, user_id)
     )
     update_streak(conn, "flashcards_revisados", user_id=user_id)
     conn.commit()
@@ -291,10 +316,10 @@ def review_flashcard_fsrs(id: int, body: FlashcardReviewSM2, conn=Depends(get_db
     try:
         conn.execute(
             """UPDATE flashcards SET intervalo_dias = ?, proxima_revisao = ?,
-               stability = ?, difficulty = ?, fsrs_state = ?, repetitions = ?
+               stability = ?, difficulty = ?, fsrs_state = ?, repetitions = ?, ultima_revisao = ?
                WHERE id = ? AND user_id = ?""",
             (adjusted_interval, proxima, round(output.stability, 6),
-             round(output.difficulty, 4), output.state, new_reps, id, user_id)
+             round(output.difficulty, 4), output.state, new_reps, today_str(), id, user_id)
         )
     except Exception:
         # Fallback if FSRS columns don't exist - just update interval and next review
