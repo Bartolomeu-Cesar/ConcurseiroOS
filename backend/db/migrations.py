@@ -195,6 +195,24 @@ def _m36_erros_revisao(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_erros_revisao_user_id ON erros_revisao(user_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_erros_revisao_proxima ON erros_revisao(user_id, proxima_revisao)")
 
+    # Boss Battle (flashcards gamificados): guarda o XP bônus por batalha, que a
+    # liga soma no cálculo semanal (categoria 'boss_battles'). O XP por card já é
+    # contado via streaks.flashcards_revisados — aqui é só o bônus.
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS boss_battles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            data TEXT NOT NULL,
+            boss_tier INTEGER DEFAULT 1,
+            derrotou INTEGER DEFAULT 0,
+            xp_bonus INTEGER DEFAULT 0,
+            cards_revisados INTEGER DEFAULT 0,
+            stats TEXT DEFAULT '',
+            created_at TEXT DEFAULT ''
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_boss_battles_user_data ON boss_battles(user_id, data)")
+
 def _m37_simulados_tipo(conn):
     conn.execute("ALTER TABLE simulados ADD COLUMN tipo TEXT DEFAULT 'normal'")
 

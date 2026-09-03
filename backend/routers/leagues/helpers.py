@@ -170,6 +170,7 @@ def calculate_user_weekly_xp(db, user_id: int, week_start: str, week_end: str) -
         "metas": 0,
         "erros_corrigidos": 0,
         "simulados": 0,
+        "boss_battles": 0,
     }
 
     # 1. XP from questions answered correctly: +10 XP each
@@ -345,6 +346,22 @@ def calculate_user_weekly_xp(db, user_id: int, week_start: str, week_end: str) -
             breakdown["simulados"] = simulados[0] * XP_SIMULADO_COMPLETO
     except Exception as e:
         log.warning(f"Error calculating simulado XP: {e}")
+
+    # 12. XP bônus de Boss Battles (flashcards gamificados): soma o xp_bonus da semana.
+    # O XP por card revisado já entra em "flashcards" (via streaks) — aqui é só o bônus
+    # (derrotar boss + perfect + combo), evitando dupla contagem.
+    try:
+        boss_bonus = db.execute(
+            """SELECT COALESCE(SUM(xp_bonus), 0) FROM boss_battles
+            WHERE user_id = ?
+            AND date(data) >= ? AND date(data) <= ?""",
+            (user_id, week_start, week_end)
+        ).fetchone()
+        if boss_bonus and boss_bonus[0]:
+            breakdown["boss_battles"] = int(boss_bonus[0])
+    except Exception as e:
+        # tabela pode não existir ainda (nenhuma batalha registrada)
+        log.warning(f"Error calculating boss battle XP: {e}")
 
     total = sum(breakdown.values())
     return {"total": total, "breakdown": breakdown}

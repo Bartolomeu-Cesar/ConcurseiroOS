@@ -102,6 +102,7 @@ async function loadLeague() {
           { label: '🃏 Flashcards', value: bd.flashcards || 0, color: 'var(--mauve, #cba6f7)' },
           { label: '🎯 Desafios', value: bd.desafios || 0, color: 'var(--yellow)' },
           { label: '⚔️ Batalhas', value: bd.batalhas || 0, color: 'var(--red)' },
+          { label: '🐉 Boss Battle', value: bd.boss_battles || 0, color: 'var(--mauve, #cba6f7)' },
           { label: '🔥 Streak', value: bd.streak || 0, color: 'var(--peach, #fab387)' },
         ].filter(s => s.value > 0);
 

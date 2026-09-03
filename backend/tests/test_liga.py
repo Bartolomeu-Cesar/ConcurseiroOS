@@ -132,7 +132,7 @@ class TestLigaSemanal:
         breakdown = r.json()["xp_breakdown"]
         categorias_esperadas = {
             "questoes", "horas_estudo", "flashcards", "desafios", "batalhas", "streak",
-            "sumulas", "topicos", "metas", "erros_corrigidos", "simulados"
+            "sumulas", "topicos", "metas", "erros_corrigidos", "simulados", "boss_battles"
         }
         assert set(breakdown.keys()) == categorias_esperadas
 

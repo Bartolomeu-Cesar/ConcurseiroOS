@@ -2995,10 +2995,11 @@ def boss_battle_start(
     # Dano por rating: Again=5, Hard=15, Good=30, Easy=50
     dano_map = {1: 5, 2: 15, 3: 30, 4: 50}
 
-    # Preparar cards para batalha (sem mostrar resposta)
+    # Preparar cards para batalha (com resposta, para revelar sem novo fetch)
     battle_cards = [{
         "id": c["id"],
         "pergunta": c["pergunta"],
+        "resposta": c["resposta"],
         "materia": c["materia"],
         "difficulty": round(c.get("difficulty") or 3, 1),
     } for c in cards_list]
@@ -3044,24 +3045,52 @@ def boss_battle_resultado(
     conn=Depends(get_db_session),
     user_id: int = Depends(get_user_id),
 ):
-    """Registra resultado da boss battle e calcula XP ganho."""
+    """Registra resultado da boss battle e calcula XP ganho.
 
-    xp_total = 0
+    IMPORTANTE (evita dupla contagem nas Ligas): cada card revisado na batalha
+    já concede +5 XP na liga via streaks.flashcards_revisados (o frontend chama
+    /review-fsrs por card). Portanto, persistimos apenas o XP BÔNUS da batalha
+    (derrotar boss + perfect + combo) na tabela boss_battles, que a liga soma
+    separadamente. O XP por card NÃO é persistido aqui.
+    """
+    import json as _json
 
-    # XP por derrotar boss
+    # XP BÔNUS (persistido para a liga)
+    xp_bonus = 0
     if derrotou:
-        xp_total += boss_tier * 20
-
-    # Bônus perfect (sem erros)
+        xp_bonus += boss_tier * 20
     if erros_again == 0 and cards_revisados > 0:
-        xp_total += 50
-
-    # Bônus combo Easy ×3+
+        xp_bonus += 50  # Perfect battle
     if acertos_easy >= 3:
-        xp_total += 30
+        xp_bonus += 30  # Combo Easy ×3+
 
-    # XP base por cards revisados
-    xp_total += cards_revisados * 5
+    # XP total exibido ao usuário (bônus + base por card, só para feedback visual)
+    xp_total = xp_bonus + cards_revisados * 5
+
+    # Persistir o resultado — a liga conta o xp_bonus da semana (categoria própria).
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS boss_battles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            data TEXT NOT NULL,
+            boss_tier INTEGER DEFAULT 1,
+            derrotou INTEGER DEFAULT 0,
+            xp_bonus INTEGER DEFAULT 0,
+            cards_revisados INTEGER DEFAULT 0,
+            stats TEXT DEFAULT '',
+            created_at TEXT DEFAULT ''
+        )
+    """)
+    from datetime import datetime as _dt
+    stats_obj = {"easy": acertos_easy, "good": acertos_good, "hard": acertos_hard, "again": erros_again, "dano_total": dano_total}
+    conn.execute(
+        """INSERT INTO boss_battles
+           (user_id, data, boss_tier, derrotou, xp_bonus, cards_revisados, stats, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        (user_id, today_str(), boss_tier, 1 if derrotou else 0, xp_bonus,
+         cards_revisados, _json.dumps(stats_obj), _dt.now().isoformat()),
+    )
+    conn.commit()
 
     # Feedback narrativo
     if derrotou and erros_again == 0:
@@ -3075,6 +3104,7 @@ def boss_battle_resultado(
 
     return {
         "xp_ganho": xp_total,
+        "xp_bonus": xp_bonus,
         "derrotou": derrotou,
         "narrativa": narrativa,
         "stats": {

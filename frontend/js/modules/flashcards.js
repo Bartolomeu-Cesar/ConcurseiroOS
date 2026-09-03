@@ -1405,25 +1405,20 @@ function _renderBossBattle() {
   rb.style.display = 'inline-block';
   rv.style.display = 'none';
 
-  // Override reveal para boss mode
+  // Override reveal para boss mode — usa a resposta já presente no card
+  // (o payload de /boss-battle já traz `resposta`), sem baixar todos os cards.
   rb.onclick = function() {
-    // Buscar resposta do card
-    fetch(`/api/flashcards?page=1&limit=1`).catch(() => {});
-    // Mostrar resposta (precisa buscar do servidor)
-    fetch(`/api/flashcards`).then(r => r.json()).then(all => {
-      const fullCard = (Array.isArray(all) ? all : all.items || []).find(c => c.id === card.id);
-      a.textContent = fullCard ? fullCard.resposta : '(resposta)';
-      a.style.display = 'block';
-      rb.style.display = 'none';
-      rv.style.display = 'flex';
-      rv.innerHTML = `
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;width:100%;">
-          <button onclick="bossBattleReview(1)" style="background:var(--red);color:var(--bg);border:none;border-radius:6px;padding:8px 4px;font-size:0.72rem;font-weight:600;cursor:pointer;">💨 Miss<br>5dmg</button>
-          <button onclick="bossBattleReview(2)" style="background:var(--peach);color:var(--bg);border:none;border-radius:6px;padding:8px 4px;font-size:0.72rem;font-weight:600;cursor:pointer;">⚔️ Fraco<br>15dmg</button>
-          <button onclick="bossBattleReview(3)" style="background:var(--blue);color:var(--bg);border:none;border-radius:6px;padding:8px 4px;font-size:0.72rem;font-weight:600;cursor:pointer;">🗡️ Forte<br>30dmg</button>
-          <button onclick="bossBattleReview(4)" style="background:var(--green);color:var(--bg);border:none;border-radius:6px;padding:8px 4px;font-size:0.72rem;font-weight:600;cursor:pointer;">💥 Critical<br>50dmg</button>
-        </div>`;
-    }).catch(() => { a.textContent = '(erro ao carregar)'; a.style.display = 'block'; });
+    a.textContent = card.resposta || '(sem resposta)';
+    a.style.display = 'block';
+    rb.style.display = 'none';
+    rv.style.display = 'flex';
+    rv.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;width:100%;">
+        <button onclick="bossBattleReview(1)" style="background:var(--red);color:var(--bg);border:none;border-radius:6px;padding:8px 4px;font-size:0.72rem;font-weight:600;cursor:pointer;">💨 Miss<br>5dmg</button>
+        <button onclick="bossBattleReview(2)" style="background:var(--peach);color:var(--bg);border:none;border-radius:6px;padding:8px 4px;font-size:0.72rem;font-weight:600;cursor:pointer;">⚔️ Fraco<br>15dmg</button>
+        <button onclick="bossBattleReview(3)" style="background:var(--blue);color:var(--bg);border:none;border-radius:6px;padding:8px 4px;font-size:0.72rem;font-weight:600;cursor:pointer;">🗡️ Forte<br>30dmg</button>
+        <button onclick="bossBattleReview(4)" style="background:var(--green);color:var(--bg);border:none;border-radius:6px;padding:8px 4px;font-size:0.72rem;font-weight:600;cursor:pointer;">💥 Critical<br>50dmg</button>
+      </div>`;
   };
 }
 
