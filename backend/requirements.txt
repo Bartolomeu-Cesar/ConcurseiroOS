@@ -12,6 +12,9 @@ pydantic[email]>=2.0
 
 pywebpush>=2.0.1
 
+# Anki .apkg moderno (collection.anki21b comprimido com Zstandard)
+zstandard>=0.23.0
+
 # PostgreSQL (optional, for multi-user production)
 # psycopg2-binary>=2.9.9
 

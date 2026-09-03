@@ -620,6 +620,10 @@ def _parse_apkg(content: bytes) -> list[dict]:
 
     Não suporta 'collection.anki21b' (Zstandard, versões novas do Anki) — orienta
     o usuário. Levanta HTTPException(400) em caso de arquivo inválido.
+
+    Formato moderno: 'collection.anki21b' é comprimido com Zstandard e é
+    descomprimido quando a biblioteca opcional 'zstandard' está instalada; caso
+    contrário, retorna 400 orientando a instalar a lib ou exportar como legacy.
     """
     import io as _io
     import json as _json
@@ -637,38 +641,63 @@ def _parse_apkg(content: bytes) -> list[dict]:
     # Detecta a coleção: qualquer entrada 'collection.*' cujo conteúdo seja SQLite.
     # Cobre .anki2 (legado), .anki21 e .db (genanki e similares).
     SQLITE_MAGIC = b"SQLite format 3\x00"
-    db_name = None
+    db_bytes = None  # bytes do SQLite final (descomprimidos, se necessário)
     candidatos = [n for n in nomes if n.lower().startswith("collection.")]
     # Preferência: anki21 > anki2 > db > qualquer outro collection.*
     ordem_pref = {"collection.anki21": 0, "collection.anki2": 1, "collection.db": 2}
     for cand in sorted(candidatos, key=lambda n: ordem_pref.get(n.lower(), 9)):
         try:
-            if zf.read(cand)[:16] == SQLITE_MAGIC:
-                db_name = cand
+            dados = zf.read(cand)
+            if dados[:16] == SQLITE_MAGIC:
+                db_bytes = dados
                 break
         except Exception:
             continue
 
-    if db_name is None:
-        if any(n.lower() == "collection.anki21b" for n in nomes):
+    # Formato moderno do Anki: collection.anki21b comprimido com Zstandard.
+    # Só suportado se a biblioteca 'zstandard' estiver instalada (opcional).
+    if db_bytes is None and any(n.lower() == "collection.anki21b" for n in nomes):
+        try:
+            import zstandard as _zstd
+        except ImportError:
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    "Este .apkg usa o formato novo do Anki (compressão Zstandard), ainda não suportado. "
-                    "No Anki, ao exportar, marque 'Suportar Anki mais antigo' (legacy) ou exporte como "
+                    "Este .apkg usa o formato novo do Anki (compressão Zstandard) e a biblioteca "
+                    "'zstandard' não está instalada no servidor. Instale-a (pip install zstandard) ou, "
+                    "no Anki, exporte marcando 'Suportar Anki mais antigo' (legacy) ou como "
                     "'Notas em Texto Simples (.txt)'."
                 ),
-            )
+            ) from None
+        try:
+            comprimido = zf.read(next(n for n in nomes if n.lower() == "collection.anki21b"))
+            dctx = _zstd.ZstdDecompressor()
+            try:
+                dados = dctx.decompress(comprimido)
+            except _zstd.ZstdError:
+                # Frame sem tamanho no header → usa leitura por stream
+                dados = dctx.stream_reader(_io.BytesIO(comprimido)).read()
+            if dados[:16] == SQLITE_MAGIC:
+                db_bytes = dados
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(
+                status_code=400,
+                detail="Falha ao descomprimir a coleção Zstandard do .apkg (arquivo possivelmente corrompido).",
+            ) from None
+
+    if db_bytes is None:
         raise HTTPException(
             status_code=400,
-            detail="Pacote .apkg sem coleção SQLite reconhecível (collection.anki2/anki21/db não encontrada).",
+            detail="Pacote .apkg sem coleção SQLite reconhecível (collection.anki2/anki21/anki21b/db não encontrada).",
         )
 
-    # Extrai o SQLite para um arquivo temporário (sqlite3 precisa de um caminho)
+    # Escreve o SQLite num arquivo temporário (sqlite3 precisa de um caminho)
     tmp_path = None
     try:
         with _tempfile.NamedTemporaryFile(suffix=".anki", delete=False) as tmp:
-            tmp.write(zf.read(db_name))
+            tmp.write(db_bytes)
             tmp_path = tmp.name
 
         con = _sqlite3.connect(tmp_path)

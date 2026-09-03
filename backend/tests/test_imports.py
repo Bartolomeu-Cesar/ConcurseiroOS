@@ -386,13 +386,17 @@ class TestImportApkg:
         assert r.status_code == 400
         assert "apkg" in r.json()["detail"].lower() or "zip" in r.json()["detail"].lower()
 
-    def test_importar_apkg_formato_novo_zstd_400(self, client):
-        """.apkg com apenas 'collection.anki21b' (Zstandard) → 400 orientando o usuário."""
+    def test_importar_apkg_zstd_corrompido_400(self, client):
+        """.apkg com 'collection.anki21b' de dados Zstandard inválidos → 400.
+
+        Com a lib 'zstandard' instalada, a descompressão falha e retorna erro
+        claro. Sem a lib, retorna 400 orientando instalar/exportar legacy.
+        Ambos os caminhos resultam em 400."""
         import io
         import zipfile
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w") as zf:
-            zf.writestr("collection.anki21b", b"\x28\xb5\x2f\xfd")  # bytes quaisquer (magic zstd)
+            zf.writestr("collection.anki21b", b"\x28\xb5\x2f\xfd" + b"lixo invalido")  # zstd magic + dados corrompidos
             zf.writestr("media", "{}")
         r = client.post(
             "/api/flashcards/importar",
@@ -400,7 +404,8 @@ class TestImportApkg:
         )
         assert r.status_code == 400
         detail = r.json()["detail"].lower()
-        assert "zstandard" in detail or "legacy" in detail or "texto simples" in detail
+        # Aceita tanto a mensagem de lib ausente quanto a de falha na descompressão
+        assert any(t in detail for t in ("zstandard", "legacy", "texto simples", "descomprimir", "corrompido"))
 
 
 class TestImportApkgFormatoReal:
@@ -502,3 +507,57 @@ class TestImportApkgFormatoReal:
         assert row is not None
         assert "[sigla]" in row[0]
         assert row[1] == "HTTPS"
+
+    def test_importar_apkg_moderno_zstd(self, client):
+        """Formato moderno do Anki: collection.anki21b comprimido com Zstandard.
+
+        Requer a lib opcional 'zstandard'; se ausente, o teste é pulado
+        (o endpoint retorna 400 orientando a instalar/exportar legacy)."""
+        import io
+        import json
+        import os
+        import sqlite3 as _sq
+        import tempfile
+        import zipfile
+
+        zstd = pytest.importorskip("zstandard")
+
+        # Monta um SQLite estilo Anki e comprime com zstd
+        tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        tmp.close()
+        try:
+            con = _sq.connect(tmp.name)
+            con.execute("CREATE TABLE col (id INTEGER PRIMARY KEY, decks TEXT, models TEXT)")
+            models = {"3000": {"name": "Basic", "type": 0, "sortf": 0,
+                               "flds": [{"name": "Front", "ord": 0}, {"name": "Back", "ord": 1}]}}
+            decks = {"12": {"name": "Concurso Moderno"}}
+            con.execute("INSERT INTO col VALUES (1, ?, ?)", (json.dumps(decks), json.dumps(models)))
+            con.execute("CREATE TABLE notes (id INTEGER PRIMARY KEY, mid INTEGER, flds TEXT)")
+            con.execute("INSERT INTO notes VALUES (1, 3000, ?)", (f"O que é zstd?{SEP}Algoritmo de compressão",))
+            con.execute("CREATE TABLE cards (id INTEGER PRIMARY KEY, nid INTEGER, did INTEGER)")
+            con.execute("INSERT INTO cards VALUES (1, 1, 12)")
+            con.commit()
+            con.close()
+            with open(tmp.name, "rb") as f:
+                sqlite_bytes = f.read()
+        finally:
+            if os.path.exists(tmp.name):
+                os.remove(tmp.name)
+
+        comprimido = zstd.ZstdCompressor().compress(sqlite_bytes)
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            zf.writestr("collection.anki21b", comprimido)
+            zf.writestr("media", "{}")
+
+        r = client.post("/api/flashcards/importar", files={"file": ("moderno.apkg", buf.getvalue(), "application/octet-stream")})
+        assert r.status_code == 200, r.text
+        assert r.json()["importados"] == 1
+        conn = sqlite3.connect(_tmp_db.name)
+        row = conn.execute(
+            "SELECT resposta, materia FROM flashcards WHERE pergunta = 'O que é zstd?' AND user_id = 1"
+        ).fetchone()
+        conn.close()
+        assert row is not None
+        assert row[0] == "Algoritmo de compressão"
+        assert row[1] == "Concurso Moderno"
