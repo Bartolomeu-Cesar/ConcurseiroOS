@@ -1,5 +1,5 @@
 // ==================== TAB 4: FLASHCARDS ====================
-import { escapeHtml, toast, showLoading, showEmpty, api, undoableDelete } from './utils.js';
+import { escapeHtml, toast, showLoading, showEmpty, api, undoableDelete, confirmModal } from './utils.js';
 import { switchTab } from './tabs.js';
 import { showFlashcardXp } from './xp-notify.js';
 import { emit } from './event-bus.js';
@@ -1342,7 +1342,66 @@ window.loadLeitnerBoxes = loadLeitnerBoxes;
 
 let _bossBattle = null;
 
+// Persistência da batalha em andamento (Fase E): salva no localStorage para
+// retomar após fechar/recarregar. O estado é pequeno e expira no mesmo dia.
+// O FSRS de cada card já é persistido no servidor a cada ataque, então retomar
+// não reprocessa cards — apenas continua de onde parou.
+const _BOSS_KEY = 'concurseiro_boss_battle';
+
+function _hojeStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function _salvarBossBattle() {
+  if (!_bossBattle) return;
+  try {
+    localStorage.setItem(_BOSS_KEY, JSON.stringify({ ..._bossBattle, data: _hojeStr() }));
+  } catch (e) { /* storage cheio/indisponível — ignora */ }
+}
+
+function _limparBossBattle() {
+  try { localStorage.removeItem(_BOSS_KEY); } catch (e) {}
+}
+
+function _carregarBossBattleSalvo() {
+  try {
+    const raw = localStorage.getItem(_BOSS_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    // Válida somente se: for de hoje, tiver cards e ainda não terminou.
+    if (!s || s.data !== _hojeStr()) { _limparBossBattle(); return null; }
+    if (!Array.isArray(s.cards) || !s.cards.length || !s.boss) { _limparBossBattle(); return null; }
+    const terminou = s.index >= s.cards.length || s.danoTotal >= s.boss.hp_total;
+    if (terminou) { _limparBossBattle(); return null; }
+    return s;
+  } catch (e) { _limparBossBattle(); return null; }
+}
+
 export async function startBossBattle() {
+  // Retomar batalha salva de hoje, se houver.
+  const salvo = _carregarBossBattleSalvo();
+  if (salvo) {
+    const restantes = salvo.cards.length - salvo.index;
+    const ok = await confirmModal(
+      'Retomar batalha?',
+      `Você tem uma batalha contra ${salvo.boss.emoji} ${salvo.boss.nome} em andamento (${restantes} card(s) restante(s)). Deseja continuar de onde parou?`,
+      { type: 'info', confirmText: 'Retomar', cancelText: 'Nova batalha' }
+    );
+    if (ok) {
+      _bossBattle = salvo;
+      // defaults para campos que podem faltar em payloads antigos
+      _bossBattle.combo = _bossBattle.combo || { bonus_por_acerto: 5, teto: 15, inicio: 3 };
+      _bossBattle.critMult = _bossBattle.critMult || 2;
+      _bossBattle.fraquezas = _bossBattle.fraquezas || [];
+      _bossBattle.stats = _bossBattle.stats || { easy: 0, good: 0, hard: 0, again: 0 };
+      _renderBossBattle();
+      toast(`⚔️ Batalha retomada! ${restantes} card(s) restante(s).`, 'info', 2500);
+      return;
+    }
+    _limparBossBattle();
+  }
+
   try {
     const data = await fetch('/api/study-intelligence/boss-battle').then(r => r.json());
     if (!data.boss || !data.cards.length) {
@@ -1362,6 +1421,7 @@ export async function startBossBattle() {
       danoTotal: 0,
       stats: { easy: 0, good: 0, hard: 0, again: 0 },
     };
+    _salvarBossBattle();
     _renderBossBattle();
     const fraq = (data.fraquezas || []);
     const msgFraq = fraq.length ? ` Fraco em: ${fraq.join(', ')} (dano crítico!)` : '';
@@ -1401,6 +1461,7 @@ function _renderBossBattle() {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ boss_tier: b.boss.tier || 1, boss_hp_total: b.boss.hp_total, dano_total: b.danoTotal, cards_revisados: b.index, acertos_easy: b.stats.easy, acertos_good: b.stats.good, acertos_hard: b.stats.hard, erros_again: b.stats.again, combo_max: b.comboMax, derrotou })
     }).catch(() => {});
+    _limparBossBattle();
     _bossBattle = null;
     return;
   }
@@ -1489,6 +1550,7 @@ export async function bossBattleReview(rating) {
   toast(msg, ehCritico ? 'success' : (rating >= 2 ? 'success' : 'info'), 1600);
 
   b.index++;
+  _salvarBossBattle();
   _renderBossBattle();
 }
 
