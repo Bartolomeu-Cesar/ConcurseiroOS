@@ -236,3 +236,85 @@ def test_resultado_sem_combo_nao_da_bonus_combo(client):
     assert r.status_code == 200
     # não derrotou, teve erro, combo < 3 → bônus 0
     assert r.json()["xp_bonus"] == 0
+
+
+# ============================================================
+# (D) Fraquezas do boss por matéria (dano crítico → interleaving)
+# ============================================================
+
+def test_boss_battle_traz_fraquezas_e_crit(client):
+    """O payload traz fraquezas (subconjunto das matérias dos cards) e crit_mult."""
+    # Zera pendências antigas para controlar as matérias da batalha
+    conn = _conn()
+    conn.execute("UPDATE flashcards SET proxima_revisao = '2999-01-01' WHERE user_id = 1")
+    conn.commit()
+    conn.close()
+    _criar_flashcard_pendente("D-P1", "r", "Português")
+    _criar_flashcard_pendente("D-D1", "r", "Direito")
+    _criar_flashcard_pendente("D-I1", "r", "Informática")
+
+    r = client.get("/api/study-intelligence/boss-battle")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["boss"] is not None
+    fraquezas = data["fraquezas"]
+    materias_cards = {c["materia"] for c in data["cards"]}
+    # 1–2 fraquezas, todas presentes entre as matérias da batalha
+    assert 1 <= len(fraquezas) <= 2
+    assert set(fraquezas) <= materias_cards
+    assert data["crit_mult"] == 2
+    # boss também expõe as fraquezas
+    assert data["boss"]["fraquezas"] == fraquezas
+
+
+def test_boss_battle_marca_ponto_fraco_nos_cards(client):
+    """Cards cuja matéria é fraqueza vêm com ponto_fraco=True; os demais False."""
+    conn = _conn()
+    conn.execute("UPDATE flashcards SET proxima_revisao = '2999-01-01' WHERE user_id = 1")
+    conn.commit()
+    conn.close()
+    _criar_flashcard_pendente("PF-A", "r", "Matéria A")
+    _criar_flashcard_pendente("PF-B", "r", "Matéria B")
+
+    data = client.get("/api/study-intelligence/boss-battle").json()
+    fraquezas = set(data["fraquezas"])
+    for c in data["cards"]:
+        assert c["ponto_fraco"] == (c["materia"] in fraquezas)
+
+
+def test_fraqueza_prioriza_pior_desempenho(client):
+    """A matéria com pior % de acerto em questões deve ser escolhida como fraqueza."""
+    conn = _conn()
+    conn.execute("UPDATE flashcards SET proxima_revisao = '2999-01-01' WHERE user_id = 1")
+    # Duas matérias com flashcards pendentes
+    conn.commit()
+    conn.close()
+    _criar_flashcard_pendente("FR-forte", "r", "MatForte")
+    _criar_flashcard_pendente("FR-fraca", "r", "MatFraca")
+
+    # Cria questões: MatForte com bom acerto, MatFraca com péssimo acerto
+    conn = _conn()
+    from datetime import date as _d
+    hoje = _d.today().isoformat()
+    def _q(materia, acertou, n):
+        for _ in range(n):
+            cur = conn.execute(
+                """INSERT INTO questoes
+                   (materia, enunciado, alternativa_a, alternativa_b, alternativa_c,
+                    alternativa_d, alternativa_e, resposta_correta, created_at, user_id)
+                   VALUES (?, 'e', 'a', 'b', 'c', 'd', 'e', 'A', ?, 1)""",
+                (materia, hoje),
+            )
+            qid = cur.lastrowid
+            conn.execute(
+                "INSERT INTO questoes_respostas (questao_id, resposta_usuario, acertou, data, user_id) VALUES (?, 'A', ?, ?, 1)",
+                (qid, acertou, hoje),
+            )
+    _q("MatForte", 1, 8)   # 100% acerto
+    _q("MatFraca", 0, 8)   # 0% acerto
+    conn.commit()
+    conn.close()
+
+    data = client.get("/api/study-intelligence/boss-battle").json()
+    # Com 2 matérias, n_fraquezas=1 → deve ser a de pior desempenho
+    assert "MatFraca" in data["fraquezas"]

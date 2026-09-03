@@ -1354,6 +1354,8 @@ export async function startBossBattle() {
       cards: data.cards,
       dano_map: data.dano_map,
       combo: data.combo || { bonus_por_acerto: 5, teto: 15, inicio: 3 },
+      critMult: data.crit_mult || (data.boss && data.boss.crit_mult) || 2,
+      fraquezas: data.fraquezas || (data.boss && data.boss.fraquezas) || [],
       comboAtual: 0,   // acertos (>=Good) consecutivos correntes
       comboMax: 0,     // maior sequência de acertos na batalha
       index: 0,
@@ -1361,7 +1363,9 @@ export async function startBossBattle() {
       stats: { easy: 0, good: 0, hard: 0, again: 0 },
     };
     _renderBossBattle();
-    toast(`⚔️ ${data.boss.emoji} ${data.boss.nome} apareceu!`, 'warning', 3000);
+    const fraq = (data.fraquezas || []);
+    const msgFraq = fraq.length ? ` Fraco em: ${fraq.join(', ')} (dano crítico!)` : '';
+    toast(`⚔️ ${data.boss.emoji} ${data.boss.nome} apareceu!${msgFraq}`, 'warning', 3500);
   } catch(e) { toast('Erro ao iniciar Boss Battle', 'error'); }
 }
 
@@ -1403,7 +1407,11 @@ function _renderBossBattle() {
 
   // Mostrar card atual
   const card = b.cards[b.index];
+  const badgeFraco = card.ponto_fraco
+    ? `<div style="text-align:center;margin-bottom:6px;"><span style="background:var(--red);color:var(--bg);font-size:0.66rem;font-weight:700;padding:2px 8px;border-radius:10px;">🎯 PONTO FRACO — dano crítico ×${b.critMult}</span></div>`
+    : '';
   q.innerHTML = `<div style="text-align:center;margin-bottom:6px;font-size:0.72rem;color:var(--text-sub);">⚔️ Card ${b.index + 1}/${b.cards.length} | Dano total: ${b.danoTotal}</div>` +
+    badgeFraco +
     `<div style="font-size:0.95rem;color:var(--text);">${card.pergunta}</div>`;
   a.style.display = 'none';
   rb.style.display = 'inline-block';
@@ -1450,7 +1458,12 @@ export async function bossBattleReview(rating) {
   }
   // Hard (2) não incrementa nem zera o combo (mantém a sequência viva sem contar)
 
-  const dano = danoBase + danoCombo;
+  // Dano crítico por ponto fraco (Fase D): acertar (>=Good) um card de matéria
+  // fraca do boss multiplica o dano — incentiva alternar matérias (interleaving).
+  const critMult = b.critMult || 2;
+  const ehCritico = acerto && card.ponto_fraco;
+  let dano = danoBase + danoCombo;
+  if (ehCritico) dano = dano * critMult;
   b.danoTotal += dano;
 
   // Track stats
@@ -1468,11 +1481,12 @@ export async function bossBattleReview(rating) {
     });
   } catch(e) {}
 
-  // Feedback visual: dano base + combo, quando houver
+  // Feedback visual: dano base + combo (+ crítico de ponto fraco)
   const rotulos = ['💨 Errou', '⚔️ Difícil', '🗡️ Bom', '💥 Fácil'];
-  let msg = `${rotulos[rating - 1]} — ${danoBase} dano`;
-  if (danoCombo > 0) msg += ` +${danoCombo} combo (×${b.comboAtual})`;
-  toast(msg, rating >= 2 ? 'success' : 'info', 1500);
+  let msg = `${rotulos[rating - 1]} — ${dano} dano`;
+  if (danoCombo > 0) msg += ` (combo ×${b.comboAtual})`;
+  if (ehCritico) msg = `🎯 CRÍTICO! ${msg} (ponto fraco ×${critMult})`;
+  toast(msg, ehCritico ? 'success' : (rating >= 2 ? 'success' : 'info'), 1600);
 
   b.index++;
   _renderBossBattle();

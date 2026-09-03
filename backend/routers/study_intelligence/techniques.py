@@ -3007,6 +3007,45 @@ def boss_battle_start(
     combo_bonus_teto = 15
     combo_inicio = 3
 
+    # ─── Fraquezas do boss por matéria (Fase D — incentiva INTERLEAVING) ───
+    # O boss tem 1–2 matérias "fracas": acertar (>=Good) um card dessas matérias
+    # causa dano CRÍTICO (×2). Escolhemos como fracas as matérias em que o
+    # candidato tem PIOR desempenho entre as presentes na batalha — assim o
+    # crítico recompensa revisar justamente o que ele mais precisa, e alternar
+    # matérias (Rohrer, 2012: interleaving melhora discriminação e retenção).
+    materias_na_batalha = [m for m in {c["materia"] for c in cards_list if c["materia"]}]
+    fraquezas = []
+    CRIT_MULT = 2
+    if materias_na_batalha:
+        # % de acerto por matéria (menor acerto = mais "fraco" no candidato)
+        desempenho = {}
+        for m in materias_na_batalha:
+            row = conn.execute(
+                """SELECT COUNT(*) total, COALESCE(SUM(qr.acertou),0) ac
+                   FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id
+                   WHERE q.materia = ? AND qr.user_id = ?""",
+                (m, user_id),
+            ).fetchone()
+            total_q = row["total"] or 0
+            pct = (row["ac"] / total_q * 100) if total_q else None
+            desempenho[m] = pct
+        # Ordena: matérias com desempenho conhecido e menor % primeiro; depois as
+        # sem histórico (None) por maior difficulty média dos cards; empate estável.
+        dif_media = {}
+        for m in materias_na_batalha:
+            ds = [c.get("difficulty") or 3 for c in cards_list if c["materia"] == m]
+            dif_media[m] = sum(ds) / len(ds) if ds else 3
+        def _rank(m):
+            pct = desempenho.get(m)
+            # menor acerto → mais fraco (rank menor). Sem histórico usa 50 como neutro,
+            # desempatando por maior dificuldade (negativo para vir antes).
+            base = pct if pct is not None else 50.0
+            return (base, -dif_media[m])
+        ordenadas = sorted(materias_na_batalha, key=_rank)
+        # 1 fraqueza para poucas matérias, 2 quando há variedade suficiente
+        n_fraquezas = 2 if len(materias_na_batalha) >= 3 else 1
+        fraquezas = ordenadas[:n_fraquezas]
+
     # Preparar cards para batalha (com resposta, para revelar sem novo fetch)
     battle_cards = [{
         "id": c["id"],
@@ -3014,6 +3053,7 @@ def boss_battle_start(
         "resposta": c["resposta"],
         "materia": c["materia"],
         "difficulty": round(c.get("difficulty") or 3, 1),
+        "ponto_fraco": c["materia"] in fraquezas,
     } for c in cards_list]
 
     return {
@@ -3023,6 +3063,8 @@ def boss_battle_start(
             "tier": boss["tier"],
             "hp_total": boss_hp,
             "hp_atual": boss_hp,
+            "fraquezas": fraquezas,
+            "crit_mult": CRIT_MULT,
         },
         "cards": battle_cards,
         "total_cards": total_cards,
@@ -3032,6 +3074,8 @@ def boss_battle_start(
             "teto": combo_bonus_teto,
             "inicio": combo_inicio,
         },
+        "fraquezas": fraquezas,
+        "crit_mult": CRIT_MULT,
         "dano_descricao": {
             "again": "10 dano (Errou, mas atacou! 💨)",
             "hard": "15 dano (Lembrou com esforço ⚔️)",
@@ -3043,8 +3087,17 @@ def boss_battle_start(
             "sem_erros": "+50 XP bônus (Precisão total!)",
             "combo_acertos": "+30 XP (Combo de 3+ acertos seguidos)",
         },
-        "mensagem": f"⚔️ {boss['emoji']} {boss['nome']} (Tier {boss['tier']}) apareceu! HP: {boss_hp}. Revise os flashcards para atacar!",
-        "instrucao": "Cada flashcard = 1 ataque. Avalie com honestidade: Again(10), Hard(15), Good(20), Easy(25). Errar também ataca — o esforço conta! Acertos seguidos formam combo e causam dano extra.",
+        "mensagem": (
+            f"⚔️ {boss['emoji']} {boss['nome']} (Tier {boss['tier']}) apareceu! HP: {boss_hp}. "
+            + (f"Ponto(s) fraco(s): {', '.join(fraquezas)} — acerte esses cards para dano CRÍTICO! "
+               if fraquezas else "")
+            + "Revise os flashcards para atacar!"
+        ),
+        "instrucao": (
+            "Cada flashcard = 1 ataque. Avalie com honestidade: Again(10), Hard(15), Good(20), Easy(25). "
+            "Errar também ataca — o esforço conta! Acertos seguidos formam combo. "
+            "Acertar cards das matérias fracas do boss causa dano CRÍTICO (×2) — alterne matérias (interleaving)!"
+        ),
     }
 
 
