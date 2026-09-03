@@ -546,9 +546,23 @@ function onLeave() {
   // parado, praticamente nada é contabilizado.
   const readingSeconds = Math.floor(_tempoAtivoLeituraMs / 1000);
   if (readingSeconds >= 60) { // Só reporta a partir de 1 min de leitura ativa
+    // Blindagem entre execuções: beforeunload/pagehide/clique podem disparar em
+    // contextos onde a flag em memória não vale (script recarregado, iframe).
+    // Usa localStorage com janela de debounce para não gravar a mesma sessão 2x/3x.
+    const agoraMs = Date.now();
+    const ultimoReporte = parseInt(localStorage.getItem(_lastReportedKey) || '0', 10);
+    if (agoraMs - ultimoReporte < 10000) { // já reportado nos últimos 10s → ignora
+      _sessaoLeituraReportada = true;
+      _tempoAtivoLeituraMs = 0;
+      return;
+    }
     _sessaoLeituraReportada = true;
+    localStorage.setItem(_lastReportedKey, agoraMs.toString());
     const horas = readingSeconds / 3600;
-    const materia = path.split('/')[0] || 'Leitura PDF';
+    // Reporta o NOME DO PDF (não a pasta raiz) para o dashboard exibir o arquivo
+    // lido, e não "Estratégia Concursos" ou outra pasta. `name` já vem limpo
+    // (sem prefixo local:, sem .pdf, com _ trocado por espaço).
+    const materia = (name && name.trim()) ? name.trim() : 'Leitura PDF';
     fetch('/api/sessoes-estudo/registrar', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -561,7 +575,6 @@ function onLeave() {
     }).catch(() => {});
     // Evita recontagem se a página for reaproveitada.
     _tempoAtivoLeituraMs = 0;
-    localStorage.setItem(_lastReportedKey, Date.now().toString());
   }
 }
 

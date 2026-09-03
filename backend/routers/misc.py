@@ -482,6 +482,24 @@ def registrar_sessao_estudo(body: SessaoEstudoRegistrar, conn=Depends(get_db_ses
     horas = min(body.horas, 4.0)
     from datetime import datetime
     now_iso = datetime.now().isoformat()
+    # Dedup: beforeunload/pagehide/clique de voltar podem disparar o mesmo POST
+    # 2x/3x. Se já existe um registro idêntico (materia+horas+tipo) do mesmo
+    # usuário nos últimos 15s, trata como duplicata e ignora — evita inflar o
+    # tempo de leitura no dashboard.
+    dup = conn.execute(
+        """
+        SELECT id FROM sessoes_estudo
+        WHERE user_id = ? AND data = ? AND materia = ? AND tipo = ?
+          AND ABS(ROUND(horas, 4) - ROUND(?, 4)) < 0.0001
+          AND created_at != ''
+          AND (julianday(?) - julianday(created_at)) * 86400 < 15
+        ORDER BY id DESC LIMIT 1
+        """,
+        (user_id, today_str(), body.materia, body.tipo, horas, now_iso),
+    ).fetchone()
+    if dup:
+        log.info(f"Session dedup ignorada: {horas:.4f}h ({body.materia}/{body.tipo})")
+        return {"ok": True, "horas": horas, "duplicada": True}
     conn.execute(
         "INSERT INTO sessoes_estudo (materia, horas, data, tipo, user_id, created_at) VALUES (?, ?, ?, ?, ?, ?)",
         (body.materia, horas, today_str(), body.tipo, user_id, now_iso)

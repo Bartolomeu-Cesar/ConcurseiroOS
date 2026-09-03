@@ -737,6 +737,36 @@ class TestDashboard:
         r = client.delete("/api/sessoes-estudo/hoje", params={"materia": "Materia Que Nao Existe XYZ"})
         assert r.status_code == 404
 
+    def test_registrar_sessao_dedup_duplicata(self, client):
+        """POSTs idênticos em janela curta (beforeunload+pagehide+voltar) não
+        devem gravar 2x/3x a mesma sessão de leitura — só 1 registro deve existir."""
+        payload = {"materia": "Meu PDF de Direito", "horas": 0.1661, "tipo": "leitura"}
+        r1 = client.post("/api/sessoes-estudo/registrar", json=payload)
+        assert r1.status_code == 200 and r1.json()["ok"] is True
+        assert not r1.json().get("duplicada")
+        # Dois POSTs idênticos imediatos → tratados como duplicata
+        r2 = client.post("/api/sessoes-estudo/registrar", json=payload)
+        r3 = client.post("/api/sessoes-estudo/registrar", json=payload)
+        assert r2.json().get("duplicada") is True
+        assert r3.json().get("duplicada") is True
+
+        conn = sqlite3.connect(_tmp_db.name)
+        n = conn.execute(
+            "SELECT COUNT(*) FROM sessoes_estudo WHERE materia = ? AND tipo = 'leitura' AND user_id = 1",
+            ("Meu PDF de Direito",),
+        ).fetchone()[0]
+        conn.close()
+        assert n == 1, f"Esperado 1 registro, encontrado {n} (dedup falhou)"
+
+    def test_registrar_sessao_usa_nome_pdf(self, client):
+        """A sessão de leitura deve aparecer no resumo com o NOME do PDF
+        (não o nome da pasta raiz)."""
+        client.post("/api/sessoes-estudo/registrar", json={
+            "materia": "Constitucional - Aula 03", "horas": 0.5, "tipo": "leitura",
+        })
+        sessoes = client.get("/api/resumo-diario").json()["sessoes"]
+        assert any(s["materia"] == "Constitucional - Aula 03" for s in sessoes)
+
     def test_excluir_sessao_hoje_sem_materia_400(self, client):
         r = client.delete("/api/sessoes-estudo/hoje", params={"materia": ""})
         assert r.status_code in (400, 422)
