@@ -4,12 +4,13 @@ Detecta queda de performance DURANTE uma sessão de estudo e sugere ações.
 """
 import uuid
 from datetime import datetime
+from statistics import median
 
+from deps import get_user_id
 from fastapi import APIRouter, Depends
+from schemas import HeartbeatRequest, StartSessionRequest
 
 from database import get_db_session
-from deps import get_user_id
-from schemas import HeartbeatRequest, StartSessionRequest
 
 router = APIRouter(tags=["Fatigue Detection"])
 
@@ -82,16 +83,35 @@ def session_heartbeat(body: HeartbeatRequest, conn=Depends(get_db_session),
         acertos_inicio = acertos[:janela_inicio]
         acertos_recentes = acertos[-janela_fim:]
 
+        # Usar MEDIANA de tempo (robusta a outliers): uma única questão muito
+        # lenta no fim — ex.: enunciado longo, distração pontual — não deve
+        # dominar a média e disparar falso positivo de fadiga.
+        med_tempo_inicio = median(tempos_inicio) if tempos_inicio else 0
+        med_tempo_recente = median(tempos_recentes) if tempos_recentes else 0
+        # Média mantida apenas para exibição/retorno de métricas.
         avg_tempo_inicio = sum(tempos_inicio) / len(tempos_inicio)
         avg_tempo_recente = sum(tempos_recentes) / len(tempos_recentes)
 
         pct_acerto_inicio = (sum(acertos_inicio) / len(acertos_inicio)) * 100 if acertos_inicio else 0
         pct_acerto_recente = (sum(acertos_recentes) / len(acertos_recentes)) * 100 if acertos_recentes else 0
 
-        # Análise de tempo (aumento = fadiga)
+        # Fadiga por tempo só é confiável com amostra e duração suficientes.
+        # Fadiga cognitiva real não aparece em 3 min / 8 questões. Exigimos
+        # >= 12 questões E >= 10 min de sessão para considerar o sinal de tempo.
+        # Além disso, aplicamos um PISO ABSOLUTO: só conta aumento de tempo se a
+        # mediana recente ultrapassar 45s/questão (abaixo disso, variações são ruído).
+        TEMPO_MIN_QUESTOES = 12
+        TEMPO_MIN_DURACAO_MIN = 10.0
+        TEMPO_PISO_ABSOLUTO_MS = 45_000
+
         fadiga_tempo = "ok"
-        if avg_tempo_inicio > 0:
-            aumento_tempo = (avg_tempo_recente - avg_tempo_inicio) / avg_tempo_inicio
+        tempo_confiavel = (
+            total_questoes >= TEMPO_MIN_QUESTOES
+            and duracao_sessao_min >= TEMPO_MIN_DURACAO_MIN
+            and med_tempo_recente >= TEMPO_PISO_ABSOLUTO_MS
+        )
+        if tempo_confiavel and med_tempo_inicio > 0:
+            aumento_tempo = (med_tempo_recente - med_tempo_inicio) / med_tempo_inicio
             if aumento_tempo > 0.50:
                 fadiga_tempo = "alta"
             elif aumento_tempo > 0.30:
@@ -101,16 +121,24 @@ def session_heartbeat(body: HeartbeatRequest, conn=Depends(get_db_session),
         fadiga_acerto = "ok"
         if pct_acerto_inicio > 0:
             queda_acerto = (pct_acerto_inicio - pct_acerto_recente) / pct_acerto_inicio
-            if queda_acerto > 0.25:
+            if queda_acerto > 0.35:
                 fadiga_acerto = "alta"
-            elif queda_acerto > 0.15:
+            elif queda_acerto > 0.20:
                 fadiga_acerto = "leve"
 
-        # Determinar status final (pior caso prevalece)
-        if fadiga_tempo == "alta" or fadiga_acerto == "alta":
+        # Determinar status final.
+        # fadiga_ALTA exige CONCORDÂNCIA dos dois sinais (tempo alto E queda de
+        # acerto), OU uma queda de acerto forte e isolada. O sinal de tempo
+        # sozinho gera no máximo fadiga_leve — assim, acertar 80% num ritmo
+        # rápido não manda o usuário "parar".
+        if fadiga_acerto == "alta" and fadiga_tempo in ("alta", "leve"):
             status = "fadiga_alta"
             sugestao = "Encerre e descanse"
-        elif fadiga_tempo == "leve" or fadiga_acerto == "leve":
+        elif fadiga_acerto == "alta":
+            # Queda de acerto forte isolada → alerta alto (sinal mais fiável de fadiga)
+            status = "fadiga_alta"
+            sugestao = "Encerre e descanse"
+        elif fadiga_tempo == "alta" or fadiga_acerto == "leve" or fadiga_tempo == "leve":
             status = "fadiga_leve"
             sugestao = "Pause 5min"
     else:
@@ -127,10 +155,7 @@ def session_heartbeat(body: HeartbeatRequest, conn=Depends(get_db_session),
         pct_acerto_recente = (sum(acertos_recentes) / len(acertos_recentes)) * 100 if acertos_recentes else 0
 
     # Tempo total > 60min sem pausa → fadiga moderada (somente se não já detectou alta)
-    if duracao_sessao_min > 60 and status == "flow":
-        status = "fadiga_moderada"
-        sugestao = "Troque de matéria"
-    elif duracao_sessao_min > 60 and status == "fadiga_leve":
+    if duracao_sessao_min > 60 and status == "flow" or duracao_sessao_min > 60 and status == "fadiga_leve":
         status = "fadiga_moderada"
         sugestao = "Troque de matéria"
 
@@ -140,6 +165,7 @@ def session_heartbeat(body: HeartbeatRequest, conn=Depends(get_db_session),
             "questoes_respondidas": total_questoes,
             "tempo_medio_ms": round(tempo_medio_ms, 1),
             "tempo_medio_inicio_ms": round(avg_tempo_inicio, 1),
+            "tempo_medio_recente_ms": round(avg_tempo_recente, 1),
             "pct_acerto_recente": round(pct_acerto_recente, 1),
             "pct_acerto_inicio": round(pct_acerto_inicio, 1),
             "duracao_sessao_min": round(duracao_sessao_min, 1),
