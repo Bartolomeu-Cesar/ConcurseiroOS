@@ -483,19 +483,28 @@ def registrar_sessao_estudo(body: SessaoEstudoRegistrar, conn=Depends(get_db_ses
     from datetime import datetime
     now_iso = datetime.now().isoformat()
     # Dedup: beforeunload/pagehide/clique de voltar podem disparar o mesmo POST
-    # 2x/3x. Se já existe um registro idêntico (materia+horas+tipo) do mesmo
-    # usuário nos últimos 15s, trata como duplicata e ignora — evita inflar o
-    # tempo de leitura no dashboard.
+    # 2x/3x quase simultaneamente. O 2º disparo costuma trazer as horas
+    # LEVEMENTE diferentes (o timer acumulou uma fração de segundo a mais), então
+    # comparar horas por igualdade exata falha. Regra: se existe um registro da
+    # mesma matéria+tipo do mesmo usuário criado há < 8s E com duração próxima
+    # (diferença <= 1 min), tratamos como duplicata. A janela curta de 8s evita
+    # falso positivo com leituras reais distintas (que se espaçam bem mais).
+    DEDUP_JANELA_SEG = 8
+    DEDUP_TOLERANCIA_HORAS = 1.0 / 60.0  # 1 minuto
     dup = conn.execute(
         """
         SELECT id FROM sessoes_estudo
         WHERE user_id = ? AND data = ? AND materia = ? AND tipo = ?
-          AND ABS(ROUND(horas, 4) - ROUND(?, 4)) < 0.0001
+          AND ABS(ROUND(horas, 6) - ROUND(?, 6)) <= ?
           AND created_at != ''
-          AND (julianday(?) - julianday(created_at)) * 86400 < 15
+          AND (julianday(?) - julianday(created_at)) * 86400 < ?
         ORDER BY id DESC LIMIT 1
         """,
-        (user_id, today_str(), body.materia, body.tipo, horas, now_iso),
+        (
+            user_id, today_str(), body.materia, body.tipo,
+            horas, DEDUP_TOLERANCIA_HORAS,
+            now_iso, DEDUP_JANELA_SEG,
+        ),
     ).fetchone()
     if dup:
         log.info(f"Session dedup ignorada: {horas:.4f}h ({body.materia}/{body.tipo})")

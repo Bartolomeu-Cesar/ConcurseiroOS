@@ -758,6 +758,30 @@ class TestDashboard:
         conn.close()
         assert n == 1, f"Esperado 1 registro, encontrado {n} (dedup falhou)"
 
+    def test_registrar_sessao_dedup_horas_levemente_diferentes(self, client):
+        """Regressão (caso real 2026-09-03): beforeunload+pagehide disparam o
+        mesmo POST com horas LEVEMENTE diferentes (o timer acumulou uma fração de
+        segundo a mais). Ex.: 0.2297h vs 0.23h (diff 0.0003). A dedup antiga só
+        pegava diff < 0.0001 e deixava passar → inflava o tempo. Agora, dentro da
+        janela curta e com diferença <= 1 min, deve ser tratado como duplicata."""
+        r1 = client.post("/api/sessoes-estudo/registrar", json={
+            "materia": "Historia do Maranhao Aula 01", "horas": 0.2297, "tipo": "leitura",
+        })
+        assert r1.status_code == 200 and not r1.json().get("duplicada")
+        # 2º disparo quase imediato com horas ligeiramente maiores
+        r2 = client.post("/api/sessoes-estudo/registrar", json={
+            "materia": "Historia do Maranhao Aula 01", "horas": 0.23, "tipo": "leitura",
+        })
+        assert r2.json().get("duplicada") is True, "dedup deveria pegar horas levemente diferentes"
+
+        conn = sqlite3.connect(_tmp_db.name)
+        n = conn.execute(
+            "SELECT COUNT(*) FROM sessoes_estudo WHERE materia = ? AND tipo = 'leitura' AND user_id = 1",
+            ("Historia do Maranhao Aula 01",),
+        ).fetchone()[0]
+        conn.close()
+        assert n == 1, f"Esperado 1 registro, encontrado {n} (dedup de horas próximas falhou)"
+
     def test_registrar_sessao_usa_nome_pdf(self, client):
         """A sessão de leitura deve aparecer no resumo com o NOME do PDF
         (não o nome da pasta raiz)."""
