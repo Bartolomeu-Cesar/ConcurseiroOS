@@ -19,7 +19,18 @@ function encodePath(p) {
   return p.split('/').map(encodeURIComponent).join('/');
 }
 
-const name = path.split('/').pop().replace(/^local:/, '').replace('.pdf', '').replace(/_/g, ' ');
+// Nome do PDF para título e registro de sessão de leitura.
+// Blindagem: remove barra(s) final(is) antes de extrair o último segmento
+// (senão um path terminando em '/' devolveria vazio ou o nome da pasta),
+// tira prefixo 'local:' e a extensão .pdf (case-insensitive) e normaliza '_'.
+// Fallback 'Leitura PDF' garante que nunca registramos nome de pasta/vazio.
+function _nomePdfDoPath(p) {
+  const limpo = String(p || '').replace(/\/+$/, '');
+  const ultimo = limpo.split('/').pop() || '';
+  const nome = ultimo.replace(/^local:/, '').replace(/\.pdf$/i, '').replace(/_/g, ' ').trim();
+  return nome || 'Leitura PDF';
+}
+const name = _nomePdfDoPath(path);
 document.title = name;
 document.getElementById('title').textContent = name;
 
