@@ -185,3 +185,54 @@ def test_xp_bonus_reflete_no_weekly_xp(client):
     assert "boss_battles" in xp["breakdown"]
     assert xp["breakdown"]["boss_battles"] == 180
     assert xp["total"] >= 180
+
+
+# ============================================================
+# (C) Nova mecânica de dano (não punir o esforço) + combo
+# ============================================================
+
+def test_boss_battle_dano_map_nova_escala(client):
+    """O dano_map segue a nova escala (10/15/20/25) e traz config de combo."""
+    _criar_flashcard_pendente("Nova escala?", "sim", "Informática")
+    r = client.get("/api/study-intelligence/boss-battle")
+    assert r.status_code == 200
+    data = r.json()
+    # dano_map vem com chaves string no JSON
+    dm = {int(k): v for k, v in data["dano_map"].items()}
+    assert dm == {1: 10, 2: 15, 3: 20, 4: 25}
+    # Errar (1) não é irrisório perto de dominar (4): razão 2.5x, não 10x
+    assert dm[4] / dm[1] == 2.5
+    # Config de combo presente
+    assert "combo" in data
+    assert data["combo"]["inicio"] >= 1
+    assert data["combo"]["teto"] >= data["combo"]["bonus_por_acerto"]
+
+
+def test_resultado_combo_max_gera_bonus(client):
+    """combo_max >= 3 concede o bônus de combo de acertos (mesmo sem 'Easy')."""
+    conn = _conn()
+    conn.execute("DELETE FROM boss_battles WHERE user_id = 1")
+    conn.commit()
+    conn.close()
+
+    # Vitória com acertos majoritariamente 'Good' (não Easy), combo de 4 seguidos
+    r = client.post("/api/study-intelligence/boss-battle/resultado", json={
+        "boss_tier": 1, "boss_hp_total": 80, "dano_total": 90, "cards_revisados": 4,
+        "acertos_easy": 0, "acertos_good": 4, "acertos_hard": 0, "erros_again": 0,
+        "combo_max": 4, "derrotou": True,
+    })
+    assert r.status_code == 200
+    # bônus = tier*20 (20) + precisão (50) + combo (30) = 100
+    assert r.json()["xp_bonus"] == 100
+
+
+def test_resultado_sem_combo_nao_da_bonus_combo(client):
+    """combo_max < 3 (e sem Easy) não concede o bônus de combo."""
+    r = client.post("/api/study-intelligence/boss-battle/resultado", json={
+        "boss_tier": 1, "boss_hp_total": 80, "dano_total": 40, "cards_revisados": 3,
+        "acertos_easy": 0, "acertos_good": 2, "acertos_hard": 0, "erros_again": 1,
+        "combo_max": 2, "derrotou": False,
+    })
+    assert r.status_code == 200
+    # não derrotou, teve erro, combo < 3 → bônus 0
+    assert r.json()["xp_bonus"] == 0

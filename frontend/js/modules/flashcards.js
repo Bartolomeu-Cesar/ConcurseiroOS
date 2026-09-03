@@ -1353,6 +1353,9 @@ export async function startBossBattle() {
       boss: data.boss,
       cards: data.cards,
       dano_map: data.dano_map,
+      combo: data.combo || { bonus_por_acerto: 5, teto: 15, inicio: 3 },
+      comboAtual: 0,   // acertos (>=Good) consecutivos correntes
+      comboMax: 0,     // maior sequência de acertos na batalha
       index: 0,
       danoTotal: 0,
       stats: { easy: 0, good: 0, hard: 0, again: 0 },
@@ -1375,7 +1378,8 @@ function _renderBossBattle() {
 
   if (progressEl) {
     progressEl.style.display = 'block';
-    document.getElementById('flash-progress-text').textContent = `⚔️ ${b.boss.emoji} ${b.boss.nome} — HP: ${Math.max(0, b.boss.hp_total - b.danoTotal)}/${b.boss.hp_total}`;
+    const comboTxt = b.comboAtual >= 2 ? ` 🔥×${b.comboAtual}` : '';
+    document.getElementById('flash-progress-text').textContent = `⚔️ ${b.boss.emoji} ${b.boss.nome} — HP: ${Math.max(0, b.boss.hp_total - b.danoTotal)}/${b.boss.hp_total}${comboTxt}`;
     document.getElementById('flash-progress-pct').textContent = `${b.index}/${b.cards.length}`;
     document.getElementById('flash-progress-bar').style.width = `${100 - hpPct}%`;
     document.getElementById('flash-progress-bar').style.background = hpPct > 50 ? 'var(--blue)' : hpPct > 25 ? 'var(--peach)' : 'var(--green)';
@@ -1391,7 +1395,7 @@ function _renderBossBattle() {
     // Registrar resultado
     fetch('/api/study-intelligence/boss-battle/resultado', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ boss_tier: b.boss.tier || 1, boss_hp_total: b.boss.hp_total, dano_total: b.danoTotal, cards_revisados: b.index, acertos_easy: b.stats.easy, acertos_good: b.stats.good, acertos_hard: b.stats.hard, erros_again: b.stats.again, derrotou })
+      body: JSON.stringify({ boss_tier: b.boss.tier || 1, boss_hp_total: b.boss.hp_total, dano_total: b.danoTotal, cards_revisados: b.index, acertos_easy: b.stats.easy, acertos_good: b.stats.good, acertos_hard: b.stats.hard, erros_again: b.stats.again, combo_max: b.comboMax, derrotou })
     }).catch(() => {});
     _bossBattle = null;
     return;
@@ -1414,25 +1418,46 @@ function _renderBossBattle() {
     rv.style.display = 'flex';
     rv.innerHTML = `
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;width:100%;">
-        <button onclick="bossBattleReview(1)" style="background:var(--red);color:var(--bg);border:none;border-radius:6px;padding:8px 4px;font-size:0.72rem;font-weight:600;cursor:pointer;">💨 Miss<br>5dmg</button>
-        <button onclick="bossBattleReview(2)" style="background:var(--peach);color:var(--bg);border:none;border-radius:6px;padding:8px 4px;font-size:0.72rem;font-weight:600;cursor:pointer;">⚔️ Fraco<br>15dmg</button>
-        <button onclick="bossBattleReview(3)" style="background:var(--blue);color:var(--bg);border:none;border-radius:6px;padding:8px 4px;font-size:0.72rem;font-weight:600;cursor:pointer;">🗡️ Forte<br>30dmg</button>
-        <button onclick="bossBattleReview(4)" style="background:var(--green);color:var(--bg);border:none;border-radius:6px;padding:8px 4px;font-size:0.72rem;font-weight:600;cursor:pointer;">💥 Critical<br>50dmg</button>
+        <button onclick="bossBattleReview(1)" style="background:var(--red);color:var(--bg);border:none;border-radius:6px;padding:8px 4px;font-size:0.72rem;font-weight:600;cursor:pointer;">💨 Errei<br>10dmg</button>
+        <button onclick="bossBattleReview(2)" style="background:var(--peach);color:var(--bg);border:none;border-radius:6px;padding:8px 4px;font-size:0.72rem;font-weight:600;cursor:pointer;">⚔️ Difícil<br>15dmg</button>
+        <button onclick="bossBattleReview(3)" style="background:var(--blue);color:var(--bg);border:none;border-radius:6px;padding:8px 4px;font-size:0.72rem;font-weight:600;cursor:pointer;">🗡️ Bom<br>20dmg</button>
+        <button onclick="bossBattleReview(4)" style="background:var(--green);color:var(--bg);border:none;border-radius:6px;padding:8px 4px;font-size:0.72rem;font-weight:600;cursor:pointer;">💥 Fácil<br>25dmg</button>
       </div>`;
   };
 }
 
 export async function bossBattleReview(rating) {
   if (!_bossBattle) return;
-  const card = _bossBattle.cards[_bossBattle.index];
-  const dano = _bossBattle.dano_map[rating] || 0;
-  _bossBattle.danoTotal += dano;
+  const b = _bossBattle;
+  const card = b.cards[b.index];
+  const danoBase = b.dano_map[rating] || 0;
+
+  // Combo: ratings >= 3 (Good/Easy) contam como acerto e mantêm o combo.
+  // Hard (2) mantém o combo (lembrou, com esforço) mas não incrementa forte;
+  // Again (1) quebra o combo (sem punição de XP — só recomeça a sequência).
+  const acerto = rating >= 3;
+  let danoCombo = 0;
+  if (acerto) {
+    b.comboAtual++;
+    if (b.comboAtual > b.comboMax) b.comboMax = b.comboAtual;
+    if (b.comboAtual >= (b.combo.inicio || 3)) {
+      // Bônus cresce com o combo, limitado ao teto.
+      const passos = b.comboAtual - (b.combo.inicio || 3) + 1;
+      danoCombo = Math.min(passos * (b.combo.bonus_por_acerto || 5), b.combo.teto || 15);
+    }
+  } else if (rating === 1) {
+    b.comboAtual = 0; // Again quebra o combo
+  }
+  // Hard (2) não incrementa nem zera o combo (mantém a sequência viva sem contar)
+
+  const dano = danoBase + danoCombo;
+  b.danoTotal += dano;
 
   // Track stats
-  if (rating === 4) _bossBattle.stats.easy++;
-  else if (rating === 3) _bossBattle.stats.good++;
-  else if (rating === 2) _bossBattle.stats.hard++;
-  else _bossBattle.stats.again++;
+  if (rating === 4) b.stats.easy++;
+  else if (rating === 3) b.stats.good++;
+  else if (rating === 2) b.stats.hard++;
+  else b.stats.again++;
 
   // Review the flashcard via FSRS
   const quality = {1: 0, 2: 2, 3: 4, 4: 5}[rating] || 3;
@@ -1443,11 +1468,13 @@ export async function bossBattleReview(rating) {
     });
   } catch(e) {}
 
-  // Feedback visual rápido
-  const msgs = ['💨 Miss! 5 dano', '⚔️ 15 dano!', '🗡️ 30 dano!', '💥 CRITICAL! 50 dano!'];
-  toast(msgs[rating - 1], rating >= 3 ? 'success' : 'warning', 1500);
+  // Feedback visual: dano base + combo, quando houver
+  const rotulos = ['💨 Errou', '⚔️ Difícil', '🗡️ Bom', '💥 Fácil'];
+  let msg = `${rotulos[rating - 1]} — ${danoBase} dano`;
+  if (danoCombo > 0) msg += ` +${danoCombo} combo (×${b.comboAtual})`;
+  toast(msg, rating >= 2 ? 'success' : 'info', 1500);
 
-  _bossBattle.index++;
+  b.index++;
   _renderBossBattle();
 }
 

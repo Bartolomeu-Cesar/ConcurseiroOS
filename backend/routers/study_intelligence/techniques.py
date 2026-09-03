@@ -2973,8 +2973,11 @@ def boss_battle_start(
     avg_difficulty = sum(c.get("difficulty") or 3 for c in cards_list) / len(cards_list)
     total_cards = len(cards_list)
 
-    # Boss HP = média de difficulty × quantidade de cards × 10
-    boss_hp = int(avg_difficulty * total_cards * 10)
+    # Boss HP calibrado para a nova escala de dano (base 10–25/ataque, média ~17).
+    # HP por card = 10 + (difficulty média × 1.5) → ~15–20/card. Assim o boss é
+    # derrotável com bom desempenho ao longo dos cards, sem depender de marcar
+    # "Easy". Cards mais difíceis (maior difficulty) elevam levemente o HP.
+    boss_hp = int(total_cards * (10 + avg_difficulty * 1.5))
 
     # Escolher boss baseado na dificuldade
     bosses = [
@@ -2992,8 +2995,17 @@ def boss_battle_start(
             break
         boss = b  # Fallback para o último
 
-    # Dano por rating: Again=5, Hard=15, Good=30, Easy=50
-    dano_map = {1: 5, 2: 15, 3: 30, 4: 50}
+    # Dano por rating — nova mecânica (não punir o esforço no card difícil):
+    # Todo ataque causa dano base; a qualidade da recuperação modula moderadamente
+    # (diferença de 2.5x entre errar e dominar, não 10x). Errar (Again) ainda causa
+    # dano porque o esforço de enfrentar um card difícil é o que importa (desirable
+    # difficulty). A consistência é premiada pelo bônus de combo (ver frontend/resultado).
+    dano_map = {1: 10, 2: 15, 3: 20, 4: 25}
+    # Bônus de combo: a partir do 3º acerto (>=Good) consecutivo, +5 de dano por
+    # ataque, com teto de +15. Um "Again" reseta o combo (não pune, só recomeça).
+    combo_bonus_por_acerto = 5
+    combo_bonus_teto = 15
+    combo_inicio = 3
 
     # Preparar cards para batalha (com resposta, para revelar sem novo fetch)
     battle_cards = [{
@@ -3015,19 +3027,24 @@ def boss_battle_start(
         "cards": battle_cards,
         "total_cards": total_cards,
         "dano_map": dano_map,
+        "combo": {
+            "bonus_por_acerto": combo_bonus_por_acerto,
+            "teto": combo_bonus_teto,
+            "inicio": combo_inicio,
+        },
         "dano_descricao": {
-            "again": "5 dano (Miss! 💨)",
-            "hard": "15 dano (Ataque fraco ⚔️)",
-            "good": "30 dano (Ataque forte 🗡️)",
-            "easy": "50 dano (Critical Hit! 💥)",
+            "again": "10 dano (Errou, mas atacou! 💨)",
+            "hard": "15 dano (Lembrou com esforço ⚔️)",
+            "good": "20 dano (Lembrou bem 🗡️)",
+            "easy": "25 dano (Dominado 💥)",
         },
         "recompensas": {
             "derrotar_boss": f"+{boss['tier'] * 20} XP",
-            "sem_erros": "+50 XP bônus (Perfect Battle!)",
-            "combo_3_easy": "+30 XP (Combo Easy ×3)",
+            "sem_erros": "+50 XP bônus (Precisão total!)",
+            "combo_acertos": "+30 XP (Combo de 3+ acertos seguidos)",
         },
         "mensagem": f"⚔️ {boss['emoji']} {boss['nome']} (Tier {boss['tier']}) apareceu! HP: {boss_hp}. Revise os flashcards para atacar!",
-        "instrucao": "Cada flashcard = 1 ataque. Avalie honestamente: Again(5dmg), Hard(15), Good(30), Easy(50). Derrote o boss!",
+        "instrucao": "Cada flashcard = 1 ataque. Avalie com honestidade: Again(10), Hard(15), Good(20), Easy(25). Errar também ataca — o esforço conta! Acertos seguidos formam combo e causam dano extra.",
     }
 
 
@@ -3041,6 +3058,7 @@ def boss_battle_resultado(
     acertos_good: int = Body(0),
     acertos_hard: int = Body(0),
     erros_again: int = Body(0),
+    combo_max: int = Body(0),
     derrotou: bool = Body(False),
     conn=Depends(get_db_session),
     user_id: int = Depends(get_user_id),
@@ -3050,8 +3068,12 @@ def boss_battle_resultado(
     IMPORTANTE (evita dupla contagem nas Ligas): cada card revisado na batalha
     já concede +5 XP na liga via streaks.flashcards_revisados (o frontend chama
     /review-fsrs por card). Portanto, persistimos apenas o XP BÔNUS da batalha
-    (derrotar boss + perfect + combo) na tabela boss_battles, que a liga soma
+    (derrotar boss + precisão + combo) na tabela boss_battles, que a liga soma
     separadamente. O XP por card NÃO é persistido aqui.
+
+    Mecânica pedagógica (não punir o esforço): o bônus de combo premia a
+    CONSISTÊNCIA (maior sequência de acertos ≥ Good), não o marcar "Easy". Errar
+    um card difícil não zera XP — apenas quebra o combo em andamento.
     """
     import json as _json
 
@@ -3060,9 +3082,12 @@ def boss_battle_resultado(
     if derrotou:
         xp_bonus += boss_tier * 20
     if erros_again == 0 and cards_revisados > 0:
-        xp_bonus += 50  # Perfect battle
-    if acertos_easy >= 3:
-        xp_bonus += 30  # Combo Easy ×3+
+        xp_bonus += 50  # Precisão total (sem "Again")
+    # Combo de acertos: 3+ acertos consecutivos (Good/Easy/Hard). Fallback para
+    # payloads antigos (sem combo_max): usa acertos_easy como aproximação.
+    combo = combo_max if combo_max > 0 else acertos_easy
+    if combo >= 3:
+        xp_bonus += 30  # Combo de acertos ×3+
 
     # XP total exibido ao usuário (bônus + base por card, só para feedback visual)
     xp_total = xp_bonus + cards_revisados * 5
@@ -3082,7 +3107,7 @@ def boss_battle_resultado(
         )
     """)
     from datetime import datetime as _dt
-    stats_obj = {"easy": acertos_easy, "good": acertos_good, "hard": acertos_hard, "again": erros_again, "dano_total": dano_total}
+    stats_obj = {"easy": acertos_easy, "good": acertos_good, "hard": acertos_hard, "again": erros_again, "dano_total": dano_total, "combo_max": combo}
     conn.execute(
         """INSERT INTO boss_battles
            (user_id, data, boss_tier, derrotou, xp_bonus, cards_revisados, stats, created_at)
