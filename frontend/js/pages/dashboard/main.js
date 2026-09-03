@@ -471,16 +471,36 @@ async function regenerarPlanejador() {
 // ===== Calendario (large block, kept in main for simplicity) =====
 // NOTE: The full calendar code is complex - importing from a dedicated file would be ideal
 // but for this split we keep it here to avoid excessive file count.
-let calendarMode = 'auto';
+// Persistência do modo do calendário: sem isso, ao recarregar a página o modo
+// voltava para 'auto' e o /api/calendario-semanal regenerava do planejador,
+// descartando visualmente o calendário inteligente salvo ("volta para o reset").
+let calendarMode = localStorage.getItem('concurseiro_cal_mode') || 'auto';
 let calendarData = null;
 let concluidasHoje = new Set();
 
 function setCalMode(mode) {
   calendarMode = mode;
+  localStorage.setItem('concurseiro_cal_mode', mode);
   document.querySelectorAll('.cal-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
   document.getElementById('cal-manual-form').style.display = (mode === 'manual' || mode === 'hibrido') ? 'block' : 'none';
   document.getElementById('cal-hibrido-info').style.display = mode === 'hibrido' ? 'block' : 'none';
   document.getElementById('cal-actions').style.display = (mode === 'manual' || mode === 'hibrido') ? 'flex' : 'none';
+  loadCalendario();
+}
+
+// Inicializa o painel do calendário refletindo o modo PERSISTIDO (localStorage)
+// nos botões e formulários, antes de carregar. Sem isso, ao reabrir a aba os
+// botões mostravam 'Automático' ativo mesmo em modo personalizado, e o load
+// buscava o calendário-semanal (parecendo que "voltou para o reset").
+function initCalendarioPanel() {
+  const mode = calendarMode || 'auto';
+  document.querySelectorAll('.cal-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  const manualForm = document.getElementById('cal-manual-form');
+  const hibridoInfo = document.getElementById('cal-hibrido-info');
+  const actionsEl = document.getElementById('cal-actions');
+  if (manualForm) manualForm.style.display = (mode === 'manual' || mode === 'hibrido') ? 'block' : 'none';
+  if (hibridoInfo) hibridoInfo.style.display = mode === 'hibrido' ? 'block' : 'none';
+  if (actionsEl) actionsEl.style.display = (mode === 'manual' || mode === 'hibrido') ? 'flex' : 'none';
   loadCalendario();
 }
 
@@ -708,6 +728,7 @@ async function regenerarCalendario() {
   try {
     await fetch('/api/calendario-personalizado', { method: 'DELETE' });
     calendarMode = 'auto';
+    localStorage.setItem('concurseiro_cal_mode', 'auto');
     document.querySelectorAll('.cal-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === 'auto'));
     document.getElementById('cal-manual-form').style.display = 'none';
     document.getElementById('cal-hibrido-info').style.display = 'none';
@@ -730,6 +751,7 @@ async function regenerarInteligente() {
     const data = await res.json();
     if (data.ok) {
       calendarMode = 'personalizado';
+      localStorage.setItem('concurseiro_cal_mode', 'personalizado');
       document.querySelectorAll('.cal-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === 'personalizado'));
       document.getElementById('cal-manual-form').style.display = 'none';
       const actionsEl = document.getElementById('cal-actions');
@@ -1050,7 +1072,7 @@ function loadActivePanel() {
       loadSpacing();
       break;
     case 'panel-calendario':
-      loadCalendario();
+      initCalendarioPanel();
       break;
     case 'panel-analytics':
       loadEvolucao();
