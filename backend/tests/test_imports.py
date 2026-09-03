@@ -196,3 +196,149 @@ class TestImports:
         )
         assert r2.json()["importados"] == 0
         assert r2.json()["duplicados_ignorados"] == 1
+
+
+# ============================================================
+# IMPORTAÇÃO .apkg (Anki)
+# ============================================================
+
+def _gerar_apkg(notas, decks=None, deck_por_nota=None, db_name="collection.anki2"):
+    """Gera um .apkg mínimo em memória (ZIP com SQLite estilo Anki).
+
+    - notas: lista de (nid, flds) onde flds são os campos já unidos por \x1f.
+    - decks: dict {deck_id(int): nome(str)} para a coluna col.decks (JSON).
+    - deck_por_nota: dict {nid: deck_id} para a tabela cards.
+    - db_name: nome do arquivo interno ('collection.anki2' ou 'collection.anki21').
+    Retorna os bytes do .apkg.
+    """
+    import io
+    import json
+    import os
+    import sqlite3
+    import tempfile
+    import zipfile
+
+    decks = decks or {}
+    deck_por_nota = deck_por_nota or {}
+
+    tmp = tempfile.NamedTemporaryFile(suffix=".sqlite", delete=False)
+    tmp.close()
+    try:
+        con = sqlite3.connect(tmp.name)
+        con.execute("CREATE TABLE col (id INTEGER PRIMARY KEY, decks TEXT NOT NULL)")
+        decks_json = {str(did): {"name": nome} for did, nome in decks.items()}
+        con.execute("INSERT INTO col (id, decks) VALUES (1, ?)", (json.dumps(decks_json),))
+        con.execute("CREATE TABLE notes (id INTEGER PRIMARY KEY, flds TEXT NOT NULL)")
+        for nid, flds in notas:
+            con.execute("INSERT INTO notes (id, flds) VALUES (?, ?)", (nid, flds))
+        con.execute("CREATE TABLE cards (id INTEGER PRIMARY KEY, nid INTEGER, did INTEGER)")
+        cid = 1
+        for nid, did in deck_por_nota.items():
+            con.execute("INSERT INTO cards (id, nid, did) VALUES (?, ?, ?)", (cid, nid, did))
+            cid += 1
+        con.commit()
+        con.close()
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            with open(tmp.name, "rb") as f:
+                zf.writestr(db_name, f.read())
+            zf.writestr("media", "{}")
+        return buf.getvalue()
+    finally:
+        if os.path.exists(tmp.name):
+            os.remove(tmp.name)
+
+
+SEP = "\x1f"
+
+
+class TestImportApkg:
+    def test_importar_apkg_basico(self, client):
+        """Importa um .apkg com 2 notas (frente/verso separados por 0x1f)."""
+        apkg = _gerar_apkg(
+            notas=[
+                (1001, f"O que é HTTP?{SEP}HyperText Transfer Protocol"),
+                (1002, f"O que é DNS?{SEP}Domain Name System"),
+            ],
+            decks={1700000000000: "Redes"},
+            deck_por_nota={1001: 1700000000000, 1002: 1700000000000},
+        )
+        r = client.post("/api/flashcards/importar", files={"file": ("deck.apkg", apkg, "application/octet-stream")})
+        assert r.status_code == 200, r.text
+        assert r.json()["importados"] == 2
+
+    def test_importar_apkg_usa_deck_como_materia(self, client):
+        """O nome do deck vira a matéria; sub-deck usa o último segmento."""
+        apkg = _gerar_apkg(
+            notas=[(2001, f"Capital do Maranhão?{SEP}São Luís")],
+            decks={555: "Concurso::Geografia do Maranhão"},
+            deck_por_nota={2001: 555},
+        )
+        r = client.post("/api/flashcards/importar", files={"file": ("geo.apkg", apkg, "application/octet-stream")})
+        assert r.status_code == 200, r.text
+        assert r.json()["importados"] == 1
+        conn = sqlite3.connect(_tmp_db.name)
+        materia = conn.execute(
+            "SELECT materia FROM flashcards WHERE pergunta = 'Capital do Maranhão?' AND user_id = 1"
+        ).fetchone()[0]
+        conn.close()
+        assert materia == "Geografia do Maranhão"
+
+    def test_importar_apkg_limpa_html(self, client):
+        """Campos HTML do Anki (<br>, tags, entidades, [sound:]) são limpos."""
+        apkg = _gerar_apkg(
+            notas=[(3001, f"Linha 1<br>Linha 2 &amp; fim[sound:a.mp3]{SEP}<div>Resposta</div> &nbsp;ok")],
+            decks={1: "Default"},
+            deck_por_nota={3001: 1},
+        )
+        r = client.post("/api/flashcards/importar", files={"file": ("html.apkg", apkg, "application/octet-stream")})
+        assert r.status_code == 200, r.text
+        assert r.json()["importados"] == 1
+        conn = sqlite3.connect(_tmp_db.name)
+        row = conn.execute(
+            "SELECT pergunta, resposta, materia FROM flashcards WHERE pergunta LIKE 'Linha 1%' AND user_id = 1"
+        ).fetchone()
+        conn.close()
+        assert row is not None
+        assert row[0] == "Linha 1\nLinha 2 & fim"  # <br>->\n, &amp;->&, [sound:] removido
+        assert "Resposta" in row[1] and "<div>" not in row[1]
+        # Deck "Default" não é usado como matéria
+        assert row[2] == ""
+
+    def test_importar_apkg_schema_anki21(self, client):
+        """Também aceita o schema novo 'collection.anki21' (SQLite puro)."""
+        apkg = _gerar_apkg(
+            notas=[(4001, f"2+2?{SEP}4")],
+            decks={9: "Matemática"},
+            deck_por_nota={4001: 9},
+            db_name="collection.anki21",
+        )
+        r = client.post("/api/flashcards/importar", files={"file": ("m.apkg", apkg, "application/octet-stream")})
+        assert r.status_code == 200, r.text
+        assert r.json()["importados"] == 1
+
+    def test_importar_apkg_zip_invalido_400(self, client):
+        """Arquivo .apkg que não é um ZIP válido → 400 com mensagem clara."""
+        r = client.post(
+            "/api/flashcards/importar",
+            files={"file": ("bad.apkg", b"isto nao e um zip", "application/octet-stream")},
+        )
+        assert r.status_code == 400
+        assert "apkg" in r.json()["detail"].lower() or "zip" in r.json()["detail"].lower()
+
+    def test_importar_apkg_formato_novo_zstd_400(self, client):
+        """.apkg com apenas 'collection.anki21b' (Zstandard) → 400 orientando o usuário."""
+        import io
+        import zipfile
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            zf.writestr("collection.anki21b", b"\x28\xb5\x2f\xfd")  # bytes quaisquer (magic zstd)
+            zf.writestr("media", "{}")
+        r = client.post(
+            "/api/flashcards/importar",
+            files={"file": ("novo.apkg", buf.getvalue(), "application/octet-stream")},
+        )
+        assert r.status_code == 400
+        detail = r.json()["detail"].lower()
+        assert "zstandard" in detail or "legacy" in detail or "texto simples" in detail

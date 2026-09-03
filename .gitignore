@@ -45,3 +45,6 @@ backend/.last_vacuum
 .coverage
 backend/.coverage
 htmlcov/
+
+# Arquivos .apkg/decks de origem para importação (grandes; não versionar)
+backend/anki/

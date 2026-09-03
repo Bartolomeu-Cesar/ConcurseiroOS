@@ -379,7 +379,7 @@
         <button class="iobtn" onclick="exportarFlashcards('csv')">⬇ CSV</button>
         <button class="iobtn" onclick="exportarFlashcards('anki')">⬇ Anki</button>
         <button class="iobtn" onclick="document.getElementById('import-flash-file').click()">⬆ Importar</button>
-        <input id="import-flash-file" type="file" accept=".json,.csv,.txt,.tsv" aria-label="Importar flashcards" style="display:none" onchange="importarFlashcardsFile(this)">
+        <input id="import-flash-file" type="file" accept=".json,.csv,.txt,.tsv,.apkg" aria-label="Importar flashcards (JSON, CSV, Anki TSV ou .apkg)" style="display:none" onchange="importarFlashcardsFile(this)">
       </div>
       <div class="flash-count" id="flash-count"></div>
       <div id="flash-list"></div>

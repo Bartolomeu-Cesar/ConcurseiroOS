@@ -537,15 +537,164 @@ def exportar_flashcards(formato: str = "json", conn=Depends(get_db_session), use
     )
 
 
+def _limpar_html_anki(texto: str) -> str:
+    """Remove HTML dos campos do Anki e normaliza para texto simples.
+
+    Os campos do Anki são HTML (ex.: <div>, <br>, entidades &nbsp;). Convertemos
+    <br>/<div> em quebras de linha, removemos demais tags e decodificamos as
+    entidades HTML. Também retira referências a mídia ([sound:...], <img ...>)
+    que não têm como ser importadas aqui.
+    """
+    import html as _html
+    import re as _re
+
+    if not texto:
+        return ""
+    s = texto
+    # Referências de mídia/áudio não suportadas → removidas
+    s = _re.sub(r"\[sound:[^\]]*\]", "", s)
+    s = _re.sub(r"<img[^>]*>", "", s, flags=_re.IGNORECASE)
+    # Quebras de linha estruturais viram \n
+    s = _re.sub(r"<\s*br\s*/?\s*>", "\n", s, flags=_re.IGNORECASE)
+    s = _re.sub(r"</\s*(div|p|li|tr)\s*>", "\n", s, flags=_re.IGNORECASE)
+    # Remove as demais tags
+    s = _re.sub(r"<[^>]+>", "", s)
+    # Decodifica entidades HTML (&nbsp;, &amp;, etc.)
+    s = _html.unescape(s)
+    # &nbsp; vira U+00A0 (espaço não-quebrável) — normaliza para espaço comum
+    s = s.replace("\xa0", " ")
+    # Normaliza espaços em branco preservando quebras de linha
+    s = "\n".join(linha.strip() for linha in s.splitlines())
+    s = _re.sub(r"\n{3,}", "\n\n", s).strip()
+    return s
+
+
+def _parse_apkg(content: bytes) -> list[dict]:
+    """Extrai flashcards de um pacote .apkg do Anki (ZIP contendo SQLite).
+
+    Estrutura: o .apkg é um ZIP com 'collection.anki2' (schema legado) ou
+    'collection.anki21' (SQLite puro). Lê a tabela `notes` (coluna `flds` com os
+    campos separados por 0x1f: 1º=frente/pergunta, 2º=verso/resposta) e usa o
+    nome do deck (via `cards.did` + JSON `col.decks`) como matéria.
+
+    Não suporta 'collection.anki21b' (comprimido com Zstandard nas versões novas
+    do Anki), pois exigiria dependência externa — nesse caso, orienta o usuário.
+
+    Levanta HTTPException(400) com mensagem clara em caso de arquivo inválido.
+    """
+    import io as _io
+    import json as _json
+    import os as _os
+    import sqlite3 as _sqlite3
+    import tempfile as _tempfile
+    import zipfile as _zipfile
+
+    try:
+        zf = _zipfile.ZipFile(_io.BytesIO(content))
+    except _zipfile.BadZipFile:
+        raise HTTPException(status_code=400, detail="Arquivo .apkg inválido (não é um pacote ZIP válido).") from None
+
+    nomes = zf.namelist()
+    # Preferir o schema mais novo suportado (anki21) antes do legado (anki2)
+    db_name = None
+    for candidato in ("collection.anki21", "collection.anki2"):
+        if candidato in nomes:
+            db_name = candidato
+            break
+    if db_name is None:
+        if "collection.anki21b" in nomes:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Este .apkg usa o formato novo do Anki (compressão Zstandard), ainda não suportado. "
+                    "No Anki, ao exportar, marque 'Suportar Anki mais antigo' (legacy) ou exporte como "
+                    "'Notas em Texto Simples (.txt)'."
+                ),
+            )
+        raise HTTPException(
+            status_code=400,
+            detail="Pacote .apkg sem coleção reconhecível (collection.anki2/anki21 não encontrada).",
+        )
+
+    # Extrai o SQLite para um arquivo temporário (sqlite3 precisa de um caminho)
+    tmp_path = None
+    try:
+        with _tempfile.NamedTemporaryFile(suffix=".anki", delete=False) as tmp:
+            tmp.write(zf.read(db_name))
+            tmp_path = tmp.name
+
+        con = _sqlite3.connect(tmp_path)
+        con.row_factory = _sqlite3.Row
+        try:
+            # Mapa deck_id -> nome do deck (matéria). O JSON está em col.decks.
+            deck_names: dict[int, str] = {}
+            try:
+                col_row = con.execute("SELECT decks FROM col LIMIT 1").fetchone()
+                if col_row and col_row["decks"]:
+                    decks_json = _json.loads(col_row["decks"])
+                    for did_str, deck in decks_json.items():
+                        try:
+                            nome = (deck.get("name") or "").split("::")[-1].strip()
+                        except AttributeError:
+                            nome = ""
+                        # "Default" não é uma matéria útil
+                        if nome and nome.lower() != "default":
+                            deck_names[int(did_str)] = nome
+            except (_sqlite3.OperationalError, ValueError, TypeError):
+                deck_names = {}
+
+            # Deck de cada nota (via 1ª carta). Se falhar, matéria fica vazia.
+            note_deck: dict[int, int] = {}
+            try:
+                for r in con.execute("SELECT nid, did FROM cards"):
+                    note_deck.setdefault(r["nid"], r["did"])
+            except _sqlite3.OperationalError:
+                note_deck = {}
+
+            try:
+                notas = con.execute("SELECT id, flds FROM notes").fetchall()
+            except _sqlite3.OperationalError:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Coleção do .apkg sem tabela de notas (arquivo corrompido ou não suportado).",
+                ) from None
+
+            items: list[dict] = []
+            SEP = "\x1f"  # separador de campos do Anki
+            for nota in notas:
+                campos = (nota["flds"] or "").split(SEP)
+                pergunta = _limpar_html_anki(campos[0] if len(campos) > 0 else "")
+                resposta = _limpar_html_anki(campos[1] if len(campos) > 1 else "")
+                if not pergunta:
+                    continue
+                did = note_deck.get(nota["id"])
+                materia = deck_names.get(did, "") if did is not None else ""
+                items.append({"pergunta": pergunta, "resposta": resposta, "materia": materia})
+            return items
+        finally:
+            con.close()
+    finally:
+        if tmp_path and _os.path.exists(tmp_path):
+            try:
+                _os.remove(tmp_path)
+            except OSError:
+                pass
+
+
 @router.post("/api/flashcards/importar", summary="Importar flashcards",
-             description="Importa flashcards de JSON, CSV ou formato Anki (TSV)")
+             description="Importa flashcards de JSON, CSV, formato Anki (TSV) ou pacote .apkg do Anki")
 def importar_flashcards(file: UploadFile = File(...), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
-    """Aceita JSON, CSV (colunas: pergunta, resposta, [materia]) ou Anki TSV (pergunta<TAB>resposta)"""
+    """Aceita JSON, CSV (colunas: pergunta, resposta, [materia]), Anki TSV (pergunta<TAB>resposta) ou .apkg (Anki)"""
     content = file.file.read()
-    text = content.decode("utf-8-sig")  # utf-8-sig remove BOM se presente (Excel)
+    filename = (file.filename or "").lower()
     items = []
 
-    filename = (file.filename or "").lower()
+    # .apkg (pacote do Anki): binário (ZIP+SQLite) — trata ANTES de decodificar texto.
+    if filename.endswith(".apkg"):
+        items = _parse_apkg(content)
+        return _inserir_flashcards_importados(conn, user_id, items)
+
+    text = content.decode("utf-8-sig")  # utf-8-sig remove BOM se presente (Excel)
 
     def _pick(row: dict, *aliases: str) -> str:
         """Busca valor numa linha de CSV por nome de coluna, case-insensitive e
@@ -612,6 +761,17 @@ def importar_flashcards(file: UploadFile = File(...), conn=Depends(get_db_sessio
         except json.JSONDecodeError:
             raise HTTPException(status_code=400, detail="Arquivo JSON inválido") from None
 
+    return _inserir_flashcards_importados(conn, user_id, items)
+
+
+def _inserir_flashcards_importados(conn, user_id: int, items: list[dict]) -> dict:
+    """Insere uma lista de flashcards importados, deduplicando e distribuindo as
+    datas de revisão (máx. 20 novos/dia, como o Anki). Reutilizada por todos os
+    formatos de importação (JSON, CSV, Anki TSV, .apkg).
+
+    `items` é uma lista de dicts com chaves 'pergunta', 'resposta' e 'materia'.
+    Retorna o resumo {ok, importados, duplicados_ignorados, distribuidos_em_dias}.
+    """
     count = 0
     duplicados = 0
     max_por_dia = 20  # Limitar revisões por dia para não sobrecarregar
@@ -630,7 +790,7 @@ def importar_flashcards(file: UploadFile = File(...), conn=Depends(get_db_sessio
     ).fetchall():
         seen.add(_dedup_key(row[0] or "", row[1] or ""))
 
-    for i, item in enumerate(items):
+    for item in items:
         pergunta = sanitize_input((item.get("pergunta") or "").strip(), max_length=2000)
         resposta = sanitize_input((item.get("resposta") or "").strip(), max_length=5000)
         materia = sanitize_input((item.get("materia") or "").strip())
