@@ -264,11 +264,24 @@ def calendario_hoje(conn=Depends(get_db_session), user_id: int = Depends(get_use
         # Decidir tipo de atividade
         if m["total_questoes"] == 0 or m["pendentes"] > m["total_topicos"] * 0.7:
             tipo_bloco = "teoria"
-            # Buscar próximo tópico concreto (com pdf_link)
-            topico = conn.execute("""
-                SELECT id, topico, pdf_link, pdf_pagina FROM edital WHERE materia = ? AND status != 'Concluído'
-                AND arquivado = 0 AND user_id = ? ORDER BY id LIMIT 1
-            """, (m["materia"], user_id)).fetchone()
+            # Opção B: o tópico do bloco de teoria segue a ORDEM da trilha ativa
+            # (mantém a matéria priorizada por score, mas casa o tópico com a
+            # trilha para evitar descompasso). Fallback: ordem do edital.
+            from routers.trilha import topicos_pendentes_por_trilha
+            topico = None
+            _topicos_trilha = topicos_pendentes_por_trilha(conn, user_id, m["materia"], limit=1)
+            if _topicos_trilha:
+                topico = conn.execute("""
+                    SELECT id, topico, pdf_link, pdf_pagina FROM edital
+                    WHERE materia = ? AND topico = ? AND status != 'Concluído'
+                    AND arquivado = 0 AND user_id = ? ORDER BY id LIMIT 1
+                """, (m["materia"], _topicos_trilha[0], user_id)).fetchone()
+            if topico is None:
+                # Buscar próximo tópico concreto (com pdf_link) — ordem do edital
+                topico = conn.execute("""
+                    SELECT id, topico, pdf_link, pdf_pagina FROM edital WHERE materia = ? AND status != 'Concluído'
+                    AND arquivado = 0 AND user_id = ? ORDER BY id LIMIT 1
+                """, (m["materia"], user_id)).fetchone()
             descricao = f"Estudar: {topico['topico']}" if topico else f"Avançar teoria de {m['materia']}"
             tecnica = "Elaboração ativa — resuma, explique, conecte"
             cor = "#89b4fa"

@@ -854,17 +854,12 @@ def reset_inteligente(body: ResetInteligenteRequest = None, conn=Depends(get_db_
                 current_fmt = formatos_rotacao[last_fmt % len(formatos_rotacao)]
                 materia_last_format[a["materia"]] = last_fmt + 1
 
-                # Get topics for this matéria
-                topicos_query = "SELECT topico FROM edital WHERE materia = ? AND status != 'Concluído' AND arquivado = 0 AND user_id = ?"
-                topicos_params = [a["materia"], user_id]
-                if edital_nome:
-                    topicos_query += " AND edital_nome = ?"
-                    topicos_params.append(edital_nome)
-                if cargo:
-                    topicos_query += " AND cargo = ?"
-                    topicos_params.append(cargo)
-                topicos_query += " LIMIT 3"
-                topicos_list = [r[0] for r in conn.execute(topicos_query, topicos_params).fetchall()]
+                # Get topics for this matéria — na ORDEM da trilha ativa (Opção B),
+                # com fallback para a ordem do edital.
+                from routers.trilha import topicos_pendentes_por_trilha
+                topicos_list = topicos_pendentes_por_trilha(
+                    conn, user_id, a["materia"], limit=3, edital_nome=edital_nome, cargo=cargo
+                )
                 topicos_str = "; ".join(topicos_list) if topicos_list else "Revisão geral"
 
                 # --- #2 WARM-UP for each block: "relembre o que estudou sobre X" ---

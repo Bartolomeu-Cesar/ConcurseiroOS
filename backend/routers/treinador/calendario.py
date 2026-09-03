@@ -51,16 +51,18 @@ def _planejador_desalinhado(conn, user_id: int) -> bool:
 
 
 def _get_uncompleted_topics(conn, materia: str, user_id: int, edital_nome: str = "", cargo: str = "", limit: int = 3) -> list:
-    query = "SELECT topico FROM edital WHERE materia = ? AND status != 'Concluído' AND user_id = ?"
-    params = [materia, user_id]
-    if edital_nome:
-        query += " AND edital_nome = ?"
-        params.append(edital_nome)
-    if cargo:
-        query += " AND cargo = ?"
-        params.append(cargo)
-    query += f" LIMIT {limit}"
-    return [r[0] for r in conn.execute(query, params).fetchall()]
+    """Tópicos pendentes de uma matéria, na ORDEM da trilha ativa (Opção B).
+
+    Mantém a distribuição de matérias por dia do calendário, mas garante que o
+    tópico exibido para cada matéria seja o próximo indicado pela trilha —
+    eliminando o descompasso de tópico entre trilha e calendário. Sem trilha
+    ativa, cai no fallback da ordem do edital.
+    """
+    from routers.trilha import topicos_pendentes_por_trilha
+
+    return topicos_pendentes_por_trilha(
+        conn, user_id, materia, limit=limit, edital_nome=edital_nome, cargo=cargo
+    )
 
 
 def _gerar_planejador_interno(conn, user_id: int, horas_dia: float = 3.0):

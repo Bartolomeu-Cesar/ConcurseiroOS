@@ -426,6 +426,59 @@ def _aplicar_conclusao_etapa(conn, etapa, user_id: int) -> int:
     return xp_topico
 
 
+def topicos_pendentes_por_trilha(
+    conn, user_id: int, materia: str, limit: int = 3, edital_nome: str = "", cargo: str = ""
+) -> list:
+    """Retorna os próximos tópicos PENDENTES de uma matéria na ORDEM da trilha ativa.
+
+    Usado pelo calendário (grade semanal e agenda do dia) para que, mantida a
+    distribuição de matérias por dia, o tópico exibido para cada matéria seja
+    exatamente o próximo que a trilha indica — eliminando o descompasso de
+    tópico entre trilha e calendário (Opção B).
+
+    Ordem de resolução:
+      1. Se há trilha ativa: usa as etapas não-concluídas dessa matéria, na
+         ordem da trilha (campo `ordem`), retornando seus tópicos.
+      2. Fallback (sem trilha ou sem etapas pendentes para a matéria): usa a
+         ordem do edital (mesmo comportamento legado), filtrando não-concluídos.
+
+    Retorna lista de strings (tópicos). Nunca levanta erro — na dúvida, devolve
+    o fallback do edital.
+    """
+    if not materia:
+        return []
+    try:
+        trilha = conn.execute(
+            "SELECT id FROM trilha WHERE user_id = ? AND ativo = 1 ORDER BY id DESC LIMIT 1",
+            (user_id,),
+        ).fetchone()
+        if trilha:
+            rows = conn.execute(
+                """SELECT topico FROM trilha_etapas
+                   WHERE trilha_id = ? AND user_id = ? AND materia = ? AND status != 'concluida'
+                   ORDER BY ordem LIMIT ?""",
+                (trilha["id"], user_id, materia, limit),
+            ).fetchall()
+            topicos = [r["topico"] for r in rows if r["topico"]]
+            if topicos:
+                return topicos
+    except Exception:  # pragma: no cover - defensivo, cai no fallback
+        pass
+
+    # Fallback: ordem do edital (comportamento legado)
+    query = "SELECT topico FROM edital WHERE materia = ? AND status != 'Concluído' AND arquivado = 0 AND user_id = ?"
+    params = [materia, user_id]
+    if edital_nome:
+        query += " AND edital_nome = ?"
+        params.append(edital_nome)
+    if cargo:
+        query += " AND cargo = ?"
+        params.append(cargo)
+    query += " ORDER BY id LIMIT ?"
+    params.append(limit)
+    return [r["topico"] if hasattr(r, "keys") else r[0] for r in conn.execute(query, params).fetchall()]
+
+
 def marcar_etapa_por_topico(conn, user_id: int, materia: str, topico: str) -> bool:
     """Conclui automaticamente a etapa da trilha ativa que casa com (materia, topico).
 

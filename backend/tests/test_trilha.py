@@ -596,3 +596,85 @@ def test_trilha_expoe_retrieval_practice_na_etapa_atual(client):
     assert rp["tecnica"] == "retrieval_practice"
     # A etapa atual é a primeira não-concluída (Crase)
     assert "Crase" in rp["mensagem"]
+
+
+# ============================================================
+# OPÇÃO B — Tópicos do calendário seguem a ORDEM da trilha
+# ============================================================
+
+def test_topicos_por_trilha_respeita_ordem_da_trilha(client):
+    """topicos_pendentes_por_trilha retorna os tópicos da matéria na ordem
+    das etapas da trilha ativa (não na ordem do edital)."""
+    from routers.trilha import topicos_pendentes_por_trilha
+
+    conn = _conn()
+    # Insere no edital em ordem "invertida" em relação ao ciclo/trilha
+    _add_topico(conn, "Direito Aplicado", "1 CPP")
+    _add_topico(conn, "Direito Aplicado", "1.1 Prova")
+    _add_topico(conn, "Direito Aplicado", "1.1.1 Disposições gerais")
+    conn.commit()
+    conn.close()
+
+    client.post("/api/trilha/gerar")
+
+    conn = _conn()
+    topicos = topicos_pendentes_por_trilha(conn, 1, "Direito Aplicado", limit=3)
+    conn.close()
+    # A trilha (interleaving/edital) define a sequência; o 1º pendente é "1 CPP"
+    assert topicos[0] == "1 CPP"
+    assert len(topicos) == 3
+
+
+def test_topicos_por_trilha_pula_concluidos(client):
+    """Tópicos já concluídos na trilha não aparecem; retorna o próximo pendente."""
+    from routers.trilha import topicos_pendentes_por_trilha
+
+    conn = _conn()
+    _add_topico(conn, "Direito Aplicado", "1 CPP")
+    _add_topico(conn, "Direito Aplicado", "1.1 Prova")
+    conn.commit()
+    conn.close()
+
+    gerar = client.post("/api/trilha/gerar").json()
+    atual = next(e for e in gerar["etapas"] if e["status"] == "atual")
+    # Conclui a etapa atual (1 CPP)
+    client.post(f"/api/trilha/etapas/{atual['id']}/concluir")
+
+    conn = _conn()
+    topicos = topicos_pendentes_por_trilha(conn, 1, "Direito Aplicado", limit=3)
+    conn.close()
+    # "1 CPP" foi concluído → primeiro pendente agora é "1.1 Prova"
+    assert "1 CPP" not in topicos
+    assert topicos[0] == "1.1 Prova"
+
+
+def test_topicos_por_trilha_fallback_sem_trilha(client):
+    """Sem trilha ativa, cai no fallback da ordem do edital (não-concluídos)."""
+    from routers.trilha import topicos_pendentes_por_trilha
+
+    conn = _conn()
+    _add_topico(conn, "Geografia do Maranhão", "1 Localização")
+    _add_topico(conn, "Geografia do Maranhão", "2 Parques nacionais")
+    conn.commit()
+    # Nenhuma trilha gerada
+    topicos = topicos_pendentes_por_trilha(conn, 1, "Geografia do Maranhão", limit=2)
+    conn.close()
+    assert topicos == ["1 Localização", "2 Parques nacionais"]
+
+
+def test_grade_semanal_usa_topico_da_trilha(client):
+    """_get_uncompleted_topics (grade semanal) deve retornar o tópico da trilha."""
+    from routers.treinador.calendario import _get_uncompleted_topics
+
+    conn = _conn()
+    _add_topico(conn, "Direito Aplicado", "1 CPP")
+    _add_topico(conn, "Direito Aplicado", "1.1 Prova")
+    conn.commit()
+    conn.close()
+
+    client.post("/api/trilha/gerar")
+
+    conn = _conn()
+    topicos = _get_uncompleted_topics(conn, "Direito Aplicado", 1, limit=1)
+    conn.close()
+    assert topicos == ["1 CPP"]
