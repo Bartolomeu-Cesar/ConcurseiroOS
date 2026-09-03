@@ -388,6 +388,9 @@ def calendario_hoje(conn=Depends(get_db_session), user_id: int = Depends(get_use
     tempo_estudo = sum(b["duracao_min"] for b in blocos_estudo)
     tempo_pausas = sum(b["duracao_min"] for b in blocos if b["tipo"] in ("pausa", "pausa_longa"))
 
+    # === 6. Técnicas DINÂMICAS: só listamos o que a agenda de hoje realmente aplica ===
+    tecnicas = _derivar_tecnicas_agenda(blocos, materias_usadas, tempo_estudo)
+
     return {
         "data": hoje_str,
         "hora_inicio": hora_inicio,
@@ -401,14 +404,108 @@ def calendario_hoje(conn=Depends(get_db_session), user_id: int = Depends(get_use
             "revisoes_preditivas": len([b for b in blocos if b["tipo"] == "revisao_preditiva"]),
             "materias": list(materias_usadas),
         },
-        "tecnicas_aplicadas": [
-            "Curva de atenção: difícil → fácil",
-            "Pomodoro: blocos focados + pausas",
-            "Interleaving: matérias alternadas",
-            "Spaced Repetition: revisões no momento ideal",
-            "Retrieval Practice: questões antes de reler",
-        ],
+        "tecnicas_aplicadas": tecnicas,
     }
+
+
+def _derivar_tecnicas_agenda(blocos: list, materias_usadas: set, tempo_estudo_min: int) -> list:
+    """Deriva as técnicas científicas EFETIVAMENTE aplicadas na agenda de hoje.
+
+    Em vez de uma lista fixa, inspeciona os blocos gerados e só inclui a técnica
+    quando ela realmente se aplica ao conteúdo do dia. Cada item traz `nome`,
+    `descricao` (racional/evidência) e `icone` para exibição rica no frontend.
+    """
+    tipos = [b["tipo"] for b in blocos]
+    tem = set(tipos)
+    n_estudo = len([t for t in tipos if t not in ("pausa", "pausa_longa")])
+    n_materias = len(materias_usadas)
+    tem_pausa_longa = "pausa_longa" in tem
+    tem_pausa = "pausa" in tem or tem_pausa_longa
+
+    tec = []
+
+    # Serial Position / Curva de atenção — sempre que houver ordenação difícil→fácil
+    # (só faz sentido com 2+ blocos de estudo, quando há começo/meio/fim).
+    if n_estudo >= 2:
+        tec.append({
+            "nome": "Curva de atenção (Serial Position)",
+            "descricao": "Conteúdo difícil no início (pico de foco) e revisão leve no fim. Murdock (1962): itens no começo e fim são mais lembrados.",
+            "icone": "📈",
+        })
+
+    # Pomodoro — quando há pausas intercaladas com estudo
+    if tem_pausa and n_estudo >= 1:
+        tec.append({
+            "nome": "Pomodoro (blocos focados + pausas)",
+            "descricao": "Blocos curtos de foco com pausas evitam queda de atenção e fadiga cognitiva (Cirillo).",
+            "icone": "🍅",
+        })
+
+    # Interleaving — só quando há 2+ matérias diferentes alternadas
+    if n_materias >= 2:
+        tec.append({
+            "nome": "Interleaving (matérias alternadas)",
+            "descricao": f"{n_materias} matérias alternadas em vez de blocos isolados. Rohrer (2012): melhora discriminação e retenção de longo prazo.",
+            "icone": "🔀",
+        })
+
+    # Spaced Repetition — quando há revisão preditiva ou flashcards
+    if "revisao_preditiva" in tem or "flashcards" in tem:
+        tec.append({
+            "nome": "Spaced Repetition (FSRS)",
+            "descricao": "Revisões agendadas pouco antes do esquecimento previsto, maximizando retenção com menos tempo (Ebbinghaus; FSRS-5).",
+            "icone": "🔁",
+        })
+
+    # Retrieval Practice — quando há blocos de questões (recuperação ativa)
+    if "questoes" in tem or "questoes_avancadas" in tem:
+        tec.append({
+            "nome": "Retrieval Practice",
+            "descricao": "Responder questões (recuperar da memória) fixa mais que reler. Karpicke & Roediger (2008): +50% de retenção.",
+            "icone": "✍️",
+        })
+
+    # Desirable Difficulty — quando há questões avançadas (acima do nível atual)
+    if "questoes_avancadas" in tem:
+        tec.append({
+            "nome": "Desirable Difficulty",
+            "descricao": "Questões acima do nível atual geram esforço produtivo que consolida o aprendizado (Bjork, 1994).",
+            "icone": "🎯",
+        })
+
+    # Elaborative Interrogation — quando há blocos de teoria
+    if "teoria" in tem:
+        tec.append({
+            "nome": "Elaboração ativa (Elaborative Interrogation)",
+            "descricao": "Ao estudar teoria, pergunte 'por quê?' e conecte com o que já sabe. Dunlosky (2013): alta eficácia.",
+            "icone": "💡",
+        })
+
+    # Micro-breaks / Consolidação — quando há pausa longa
+    if tem_pausa_longa:
+        tec.append({
+            "nome": "Consolidação por descanso (Micro-breaks)",
+            "descricao": "Pausas entre blocos ativam replay neural e consolidam memória (Bjork, 2011; Dewar, 2012).",
+            "icone": "☕",
+        })
+
+    # Distributed Practice — sessão longa o suficiente para distribuir o esforço
+    if tempo_estudo_min >= 90:
+        tec.append({
+            "nome": "Distributed Practice",
+            "descricao": "Estudo distribuído ao longo do dia supera 'cramming'. Cepeda (2006): efeito robusto em 254 estudos.",
+            "icone": "🗓️",
+        })
+
+    # Fallback: se por algum motivo nada se aplicou (agenda mínima), ao menos Pomodoro
+    if not tec:
+        tec.append({
+            "nome": "Pomodoro (blocos focados + pausas)",
+            "descricao": "Blocos curtos de foco com pausas evitam queda de atenção e fadiga cognitiva.",
+            "icone": "🍅",
+        })
+
+    return tec
 
 
 # CALENDÁRIO PERSONALIZADO

@@ -1467,6 +1467,14 @@ async function loadAgendaHoje() {
       <div style="margin-top:8px;font-size:0.68rem;color:var(--text-sub);text-align:right;">
         ${data.hora_inicio} – ${data.hora_fim} · ${data.tecnicas_aplicadas.length} técnicas ativas
       </div>
+      ${Array.isArray(data.tecnicas_aplicadas) && data.tecnicas_aplicadas.length && typeof data.tecnicas_aplicadas[0] === 'object' ? `
+      <div class="agenda-tecnicas" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;">
+        ${data.tecnicas_aplicadas.map(t => `
+          <span class="agenda-tecnica-chip" title="${(t.descricao || '').replace(/"/g, '&quot;')}" style="display:inline-flex;align-items:center;gap:4px;background:var(--bg-elevated,#313244);border:1px solid var(--border,#45475a);border-radius:999px;padding:3px 9px;font-size:0.66rem;color:var(--text,#cdd6f4);cursor:help;">
+            <span aria-hidden="true">${t.icone || '🔬'}</span>${t.nome}
+          </span>
+        `).join('')}
+      </div>` : ''}
     `;
   } catch(e) {
     container.innerHTML = '<p style="color:var(--red);font-size:0.82rem;">Erro ao carregar agenda</p>';

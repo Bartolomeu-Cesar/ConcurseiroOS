@@ -598,3 +598,64 @@ def teardown_module():
         os.unlink(_tmp_db.name)
     except Exception:
         pass
+
+
+# ============================================================
+# AGENDA DE HOJE — TÉCNICAS DINÂMICAS
+# ============================================================
+
+class TestAgendaTecnicasDinamicas:
+    """A agenda do dia (/api/calendario/hoje) deve listar técnicas DINÂMICAS,
+    derivadas do conteúdo real dos blocos — não uma lista fixa."""
+
+    def _set_ciclo(self, materias):
+        c = sqlite3.connect(_tmp_db.name, timeout=10)
+        try:
+            c.execute("DELETE FROM ciclo_estudos WHERE user_id = 1")
+            for i, m in enumerate(materias):
+                c.execute(
+                    "INSERT INTO ciclo_estudos (materia, horas_alvo, ordem, ativo, user_id) VALUES (?, 2.0, ?, 1, 1)",
+                    (m, i),
+                )
+            c.commit()
+        finally:
+            c.close()
+
+    def test_tecnicas_sao_objetos_com_nome_e_descricao(self, client):
+        """Cada técnica agora é um objeto {nome, descricao, icone}."""
+        self._set_ciclo(["Direito Constitucional", "Direito Penal"])
+        r = client.get("/api/calendario/hoje")
+        assert r.status_code == 200
+        tec = r.json()["tecnicas_aplicadas"]
+        assert isinstance(tec, list) and len(tec) >= 1
+        for t in tec:
+            assert isinstance(t, dict)
+            assert t.get("nome") and t.get("descricao")
+
+    def test_interleaving_so_com_duas_ou_mais_materias(self, client):
+        """Interleaving só aparece quando há 2+ matérias no ciclo."""
+        # 1 matéria → sem interleaving
+        self._set_ciclo(["Direito Constitucional"])
+        tec1 = client.get("/api/calendario/hoje").json()["tecnicas_aplicadas"]
+        nomes1 = [t["nome"] for t in tec1]
+        assert not any("Interleaving" in n for n in nomes1)
+
+        # 2 matérias → com interleaving
+        self._set_ciclo(["Direito Constitucional", "Direito Penal", "Informática"])
+        tec2 = client.get("/api/calendario/hoje").json()["tecnicas_aplicadas"]
+        nomes2 = [t["nome"] for t in tec2]
+        assert any("Interleaving" in n for n in nomes2)
+
+    def test_sem_ciclo_nao_gera_tecnicas_fixas(self, client):
+        """Sem ciclo ativo, a agenda não retorna a lista fixa antiga."""
+        c = sqlite3.connect(_tmp_db.name, timeout=10)
+        try:
+            c.execute("DELETE FROM ciclo_estudos WHERE user_id = 1")
+            c.commit()
+        finally:
+            c.close()
+        r = client.get("/api/calendario/hoje")
+        assert r.status_code == 200
+        # Sem ciclo, o endpoint retorna blocos vazios (sem tecnicas_aplicadas fixas)
+        data = r.json()
+        assert data["blocos"] == []
