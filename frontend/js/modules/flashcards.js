@@ -478,6 +478,11 @@ export async function reviewFlashcard(quality) {
 
     const data = await api(`/api/flashcards/${card.id}/review-fsrs`, { method: 'POST', body: { quality } });
 
+    // Undo (à la Anki): guarda a última revisão para permitir desfazer.
+    // Snapshot do card + posição na fila para reinseri-lo caso o usuário desfaça.
+    _lastReview = { cardId: card.id, index: currentFlashIndex, card: { ...card }, quality };
+    _renderUndoButton();
+
     // Leech (à la Anki): avisa quando o card vira problemático — sugere ação.
     if (data.leech_now) {
       toast('🩸 Card marcado como problemático (leech): você já errou várias vezes. Considere reformulá-lo (dividir, simplificar ou criar um mnemônico).', 'warning', 6000);
@@ -568,6 +573,62 @@ export async function reviewFlashcard(quality) {
 
 let _elaborationAccertCount = 0;
 let _mnemonicErrorCount = 0;
+
+// === UNDO de review (à la Anki) ===
+let _lastReview = null;
+
+// Renderiza (ou atualiza) o botão "Desfazer última revisão" na barra de progresso.
+function _renderUndoButton() {
+  if (!_lastReview) return;
+  const progressEl = document.getElementById('flash-progress');
+  if (!progressEl) return;
+  let btn = document.getElementById('flash-undo-btn');
+  if (!btn) {
+    btn = document.createElement('button');
+    btn.id = 'flash-undo-btn';
+    btn.type = 'button';
+    btn.title = 'Desfazer a última avaliação (restaura o agendamento anterior do card)';
+    btn.setAttribute('aria-label', 'Desfazer última revisão');
+    btn.style.cssText = 'margin-top:6px;background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:0.72rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:4px;';
+    btn.textContent = '↩ Desfazer última revisão';
+    btn.onclick = () => undoLastReview();
+    progressEl.appendChild(btn);
+  }
+  btn.style.display = 'inline-flex';
+  btn.disabled = false;
+}
+
+function _hideUndoButton() {
+  const btn = document.getElementById('flash-undo-btn');
+  if (btn) btn.style.display = 'none';
+}
+
+// Desfaz a última revisão: reverte no backend e recoloca o card na fila.
+export async function undoLastReview() {
+  if (!_lastReview) { toast('Nada para desfazer', 'info'); return; }
+  const btn = document.getElementById('flash-undo-btn');
+  if (btn) btn.disabled = true;
+  const rev = _lastReview;
+  try {
+    await api(`/api/flashcards/${rev.cardId}/undo-review`, { method: 'POST' });
+    // Recoloca o card na fila na posição em que foi revisado e volta o índice.
+    const insertAt = Math.min(rev.index, flashcardsToday.length);
+    flashcardsToday.splice(insertAt, 0, rev.card);
+    currentFlashIndex = insertAt;
+    _chunkPauseShown = false;
+    _lastReview = null;
+    _hideUndoButton();
+    showCurrentFlashcard();
+    loadAllFlashcards();
+    if (_loadStreakBadge) _loadStreakBadge();
+    if (_loadMetas) _loadMetas();
+    toast('↩ Última revisão desfeita', 'success');
+  } catch (e) {
+    const msg = (e && e.message) ? e.message : 'Erro ao desfazer';
+    toast(msg, 'error');
+    if (btn) btn.disabled = false;
+  }
+}
 
 function _advanceAfterReview() {
     currentFlashIndex++;

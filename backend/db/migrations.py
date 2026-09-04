@@ -1238,6 +1238,23 @@ def _m79_metas_fsrs_weights(conn):
         pass  # coluna já existe
 
 
+def _m80_revlog_estado_card_antes(conn):
+    """Undo de review (à la Anki): snapshot completo do card ANTES da revisão.
+
+    Coluna `estado_card_antes` (JSON) em flashcard_revlog guarda o estado FSRS
+    integral do card imediatamente antes da revisão (intervalo_dias, proxima_revisao,
+    stability, difficulty, fsrs_state, repetitions, lapses, is_leech, suspenso,
+    ultima_revisao). Permite desfazer a última avaliação restaurando fielmente o card
+    e apagando a linha do revlog. Linhas antigas (sem snapshot) usam fallback seguro.
+    Vazio/NULL → não é possível undo fiel daquela linha (comportamento tolerante).
+    """
+    try:
+        conn.execute("ALTER TABLE flashcard_revlog ADD COLUMN estado_card_antes TEXT DEFAULT ''")
+        log.info("Migration 80: added column estado_card_antes to flashcard_revlog")
+    except Exception:
+        pass  # coluna já existe
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -1318,6 +1335,7 @@ MIGRATIONS = [
     (77, _m77_flashcards_cloze),
     (78, _m78_flashcards_reverso),
     (79, _m79_metas_fsrs_weights),
+    (80, _m80_revlog_estado_card_antes),
 ]
 
 

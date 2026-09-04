@@ -965,7 +965,7 @@ nenhum ponto):
 | 6 | **Otimização dos pesos FSRS por usuário** (treina W[0..18]) | ⭐⭐⭐ | Alto | revlog (#1) | ✅ SPRINT 5 (S0/W[0..3]) |
 | 7 | **Image Occlusion** (ocultar regiões de imagem) | ⭐⭐ | Alto | upload mídia | 🔲 |
 | 8 | **Estatísticas visuais** (heatmap reviews, forecast carga) | ⭐⭐ | Médio | revlog (#1) | 🔲 |
-| 9 | **Undo de review** (desfazer última avaliação) | ⭐ | Baixo | revlog (#1) | 🔲 |
+| 9 | **Undo de review** (desfazer última avaliação) | ⭐ | Baixo | revlog (#1) | ✅ SPRINT 6 |
 
 **Por que começar por #1 + #2:** aditivos ao FSRS atual (não quebram nada), baixo/médio esforço,
 e o revlog DESTRAVA #6, #8 e alimenta #2. Leech = vitória rápida percebida pelo aluno.
@@ -1100,3 +1100,44 @@ clamp, sem dados), review_card com/sem w_inicial (dict e lista), endpoints
 **Nota:** a estimativa usa reviews com espaçamento real (não a 1ª revisão, que já
 usa o S0 default → seria circular). Otimização completa dos 19 pesos (gradient
 descent sobre o revlog) permanece no roadmap como evolução futura.
+
+
+### 11.6 SPRINT 6 — Undo de review (#9)
+
+**Objetivo:** desfazer a última avaliação FSRS de um flashcard (à la Anki),
+restaurando fielmente o agendamento anterior do card e removendo a linha do revlog
+(a revisão desfeita não deve contar em métricas/retenção).
+
+**Schema (migration aditiva):**
+- Migration 80 (`_m80_revlog_estado_card_antes`): coluna `estado_card_antes` (JSON)
+  em `flashcard_revlog`. Guarda o SNAPSHOT COMPLETO do card imediatamente antes da
+  revisão (intervalo_dias, proxima_revisao, easiness_factor, repetitions, stability,
+  difficulty, fsrs_state, ultima_revisao, lapses, is_leech, suspenso). O revlog só
+  registrava valores "depois" + `estado_antes` do fsrs_state — insuficiente para um
+  undo fiel; o snapshot resolve isso sem reescrever o schema existente.
+
+**Backend (`routers/flashcards.py`):**
+- `_snapshot_estado_card(conn, id, user_id)`: captura o estado FSRS integral do card
+  (dict JSON-serializável) antes de qualquer UPDATE. Tolerante a colunas ausentes.
+- `review-fsrs`: chama o snapshot no início e o passa a `_registrar_revlog_e_leech`,
+  que grava em `estado_card_antes`. INSERT com fallback: se o schema for antigo (sem
+  a coluna), reinsere sem ela — nunca bloqueia a revisão.
+- `POST /api/flashcards/{id}/undo-review`: pega a última linha do revlog do card
+  (maior id), restaura o card a partir do snapshot JSON e APAGA essa linha. LIFO:
+  undo repetido desfaz revisões sucessivas. 404 se o card não existe; 400 se não há
+  revisão para desfazer, se a linha não tem snapshot (revisão anterior à migration 80)
+  ou se o snapshot está corrompido. Filtra por user_id (não vaza entre usuários).
+
+**Frontend (`flashcards.js`):** estado `_lastReview` gravado após cada review (cardId,
+índice na fila, cópia do card). `_renderUndoButton()` mostra "↩ Desfazer última revisão"
+na barra de progresso; `undoLastReview()` chama o endpoint, recoloca o card na fila na
+posição original, volta `currentFlashIndex` e re-renderiza. Exposto via window no app.js.
+
+**Testes:** `test_flashcard_undo.py` (8) — restaura estado anterior (intervalo/proxima/
+reps/stability/difficulty/fsrs_state), zera lapses após Again, apaga linha do revlog,
+undo repetido LIFO, 404 card inexistente, 400 sem revisão, 400 linha sem snapshot,
+isolamento entre usuários.
+
+**Status do roadmap:** faltam apenas #7 Image Occlusion (esforço alto: upload de mídia +
+editor canvas) e #8 Estatísticas visuais (dados prontos em `/api/flashcards/retencao-real`
+— campos `por_dia` e `forecast` —, falta a UI de heatmap/forecast).

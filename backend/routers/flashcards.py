@@ -711,6 +711,11 @@ def review_flashcard_fsrs(
     except Exception:
         pass  # FSRS columns don't exist yet, use defaults
 
+    # === UNDO (à la Anki): snapshot completo do card ANTES da revisão ===
+    # Capturado antes de qualquer UPDATE para permitir desfazer a última avaliação
+    # restaurando fielmente o card. Tolerante a colunas ausentes (schema antigo).
+    estado_card_antes = _snapshot_estado_card(conn, id, user_id)
+
     # Get desired_retention from user's metas_config
     desired_retention = FSRS_DEFAULT_RETENTION
     try:
@@ -783,6 +788,7 @@ def review_flashcard_fsrs(
         output,
         adjusted_interval,
         intervalo_anterior,
+        estado_card_antes,
     )
 
     conn.commit()
@@ -818,6 +824,102 @@ def review_flashcard_fsrs(
                 flash_row["pergunta"], flash_row["resposta"], flash_row["materia"] or ""
             )
     return result
+
+
+@router.post(
+    "/api/flashcards/{id}/undo-review",
+    summary="Desfazer última revisão",
+    description="Reverte a última avaliação FSRS do card: restaura o estado anterior (a partir do snapshot no revlog) e remove a linha do revlog.",
+)
+def undo_review_flashcard(id: int, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Desfaz a última revisão do flashcard (à la Anki).
+
+    - Localiza a última linha do revlog do card (maior id).
+    - Restaura o card ao estado anterior gravado em `estado_card_antes` (snapshot JSON).
+    - Apaga essa linha do revlog.
+    - 404 se o card não existir; 400 se não houver revisão para desfazer ou se a
+      linha não tiver snapshot (revisão anterior à migration 80 — undo não confiável).
+    """
+    import json
+
+    card = conn.execute("SELECT id FROM flashcards WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
+    if not card:
+        raise HTTPException(status_code=404, detail="Flashcard não encontrado")
+
+    try:
+        last = conn.execute(
+            """SELECT id, estado_card_antes FROM flashcard_revlog
+               WHERE flashcard_id = ? AND user_id = ?
+               ORDER BY id DESC LIMIT 1""",
+            (id, user_id),
+        ).fetchone()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Histórico de revisões indisponível") from None
+
+    if not last:
+        raise HTTPException(status_code=400, detail="Nenhuma revisão para desfazer")
+
+    revlog_id = last[0]
+    snapshot_raw = last[1]
+    if not snapshot_raw:
+        raise HTTPException(
+            status_code=400,
+            detail="Esta revisão não pode ser desfeita (registrada antes do suporte a undo).",
+        )
+    try:
+        snap = json.loads(snapshot_raw)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Snapshot de revisão corrompido") from None
+
+    # Restaura o card ao estado anterior (tolerante a colunas ausentes)
+    try:
+        conn.execute(
+            """UPDATE flashcards SET
+                   intervalo_dias = ?, proxima_revisao = ?, easiness_factor = ?, repetitions = ?,
+                   stability = ?, difficulty = ?, fsrs_state = ?, ultima_revisao = ?,
+                   lapses = ?, is_leech = ?, suspenso = ?
+               WHERE id = ? AND user_id = ?""",
+            (
+                snap.get("intervalo_dias"),
+                snap.get("proxima_revisao"),
+                snap.get("easiness_factor"),
+                snap.get("repetitions"),
+                snap.get("stability"),
+                snap.get("difficulty"),
+                snap.get("fsrs_state"),
+                snap.get("ultima_revisao"),
+                snap.get("lapses", 0),
+                snap.get("is_leech", 0),
+                snap.get("suspenso", 0),
+                id,
+                user_id,
+            ),
+        )
+    except Exception:
+        # Fallback para schema sem colunas FSRS/leech: restaura o essencial
+        conn.execute(
+            "UPDATE flashcards SET intervalo_dias = ?, proxima_revisao = ? WHERE id = ? AND user_id = ?",
+            (snap.get("intervalo_dias"), snap.get("proxima_revisao"), id, user_id),
+        )
+
+    # Remove a linha do revlog (a revisão desfeita não deve contar em métricas)
+    conn.execute("DELETE FROM flashcard_revlog WHERE id = ? AND user_id = ?", (revlog_id, user_id))
+    conn.commit()
+
+    log.info(f"Undo review: flashcard={id} revlog_id={revlog_id} restaurado")
+    return {
+        "id": id,
+        "undone": True,
+        "revlog_id": revlog_id,
+        "estado_restaurado": {
+            "intervalo_dias": snap.get("intervalo_dias"),
+            "proxima_revisao": snap.get("proxima_revisao"),
+            "repetitions": snap.get("repetitions"),
+            "lapses": snap.get("lapses", 0),
+            "is_leech": bool(snap.get("is_leech", 0)),
+            "suspenso": bool(snap.get("suspenso", 0)),
+        },
+    }
 
 
 @router.post(
@@ -1530,32 +1632,80 @@ def _inserir_flashcards_importados(conn, user_id: int, items: list[dict]) -> dic
 # ============================================================
 
 
+def _snapshot_estado_card(conn, flashcard_id, user_id):
+    """Captura o estado FSRS integral do card (para o undo de review).
+
+    Retorna um dict JSON-serializável com os campos que a revisão altera, ou None
+    se o card não existir. Tolerante a colunas ausentes (schema antigo → None).
+    """
+    try:
+        r = conn.execute(
+            """SELECT intervalo_dias, proxima_revisao, easiness_factor, repetitions,
+                      stability, difficulty, fsrs_state, ultima_revisao,
+                      lapses, is_leech, suspenso
+               FROM flashcards WHERE id = ? AND user_id = ?""",
+            (flashcard_id, user_id),
+        ).fetchone()
+    except Exception:
+        return None
+    if not r:
+        return None
+    keys = [
+        "intervalo_dias",
+        "proxima_revisao",
+        "easiness_factor",
+        "repetitions",
+        "stability",
+        "difficulty",
+        "fsrs_state",
+        "ultima_revisao",
+        "lapses",
+        "is_leech",
+        "suspenso",
+    ]
+    return {k: r[i] for i, k in enumerate(keys)}
+
+
 def _registrar_revlog_e_leech(
-    conn, flashcard_id, user_id, rating, quality, estado_antes, output, intervalo_novo, intervalo_anterior
+    conn,
+    flashcard_id,
+    user_id,
+    rating,
+    quality,
+    estado_antes,
+    output,
+    intervalo_novo,
+    intervalo_anterior,
+    estado_card_antes=None,
 ):
     """Grava a revisão no revlog e atualiza a detecção de leech.
 
     - revlog: 1 linha por revisão (base para retenção real e otimização FSRS).
     - leech: rating Again (1) incrementa `lapses`; ao atingir LEECH_THRESHOLD marca
       is_leech; a cada múltiplo de LEECH_THRESHOLD*LEECH_SUSPEND_MULTIPLE suspende.
+    - estado_card_antes: snapshot JSON-serializável do card antes da revisão (undo).
 
     Tolerante a falhas: se as tabelas/colunas não existirem (schema antigo), não
     quebra o fluxo de revisão. Retorna dict com lapses/is_leech/suspenso/leech_now.
     """
+    import json
     from datetime import datetime, timezone
 
     from constants import LEECH_SUSPEND_MULTIPLE, LEECH_THRESHOLD
 
     now = datetime.now(timezone.utc).isoformat()
     elapsed = max(0, int(intervalo_anterior or 0))
+    snapshot_json = json.dumps(estado_card_antes) if estado_card_antes else ""
 
-    # 1) Grava no revlog (best-effort)
+    # 1) Grava no revlog (best-effort). Tenta com a coluna de snapshot (undo);
+    #    se o schema for antigo (sem estado_card_antes), faz fallback sem ela.
     try:
         conn.execute(
             """INSERT INTO flashcard_revlog
                (flashcard_id, user_id, rating, quality, estado_antes, estado_depois,
-                stability, difficulty, intervalo_dias, elapsed_days, tempo_ms, revisado_em)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                stability, difficulty, intervalo_dias, elapsed_days, tempo_ms, revisado_em,
+                estado_card_antes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 flashcard_id,
                 user_id,
@@ -1569,10 +1719,33 @@ def _registrar_revlog_e_leech(
                 elapsed,
                 0,
                 now,
+                snapshot_json,
             ),
         )
     except Exception:
-        pass  # revlog não existe em schema antigo — não bloqueia a revisão
+        try:
+            conn.execute(
+                """INSERT INTO flashcard_revlog
+                   (flashcard_id, user_id, rating, quality, estado_antes, estado_depois,
+                    stability, difficulty, intervalo_dias, elapsed_days, tempo_ms, revisado_em)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    flashcard_id,
+                    user_id,
+                    rating,
+                    quality,
+                    estado_antes,
+                    output.state,
+                    round(output.stability, 6),
+                    round(output.difficulty, 4),
+                    intervalo_novo,
+                    elapsed,
+                    0,
+                    now,
+                ),
+            )
+        except Exception:
+            pass  # revlog não existe em schema antigo — não bloqueia a revisão
 
     # 2) Leech: só rating Again (esqueceu) conta como lapse
     info = {"lapses": 0, "is_leech": False, "suspenso": False, "leech_now": False}
