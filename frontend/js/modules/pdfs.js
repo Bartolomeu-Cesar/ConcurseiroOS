@@ -242,6 +242,8 @@ function stopTimer(showOverlay = false) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ horas: hours, materia: 'Leitura PDF', tipo: 'timer' })
+      }).then(() => {
+        window._eventBus?.emit('sessao:horas', { materia: 'Leitura PDF', horas: hours, tipo: 'timer' });
       }).catch(() => {});
     }
   }

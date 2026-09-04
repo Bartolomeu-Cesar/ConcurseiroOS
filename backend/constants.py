@@ -51,3 +51,13 @@ FSRS_DEFAULT_RETENTION = 0.9
 FSRS_MIN_STABILITY = 0.01
 FSRS_MAX_DIFFICULTY = 10.0
 FSRS_MIN_DIFFICULTY = 1.0
+
+# Leech detection (cards problemáticos, à la Anki)
+# Card que é esquecido (rating Again) LEECH_THRESHOLD vezes é marcado como leech.
+# A cada múltiplo de LEECH_THRESHOLD * LEECH_SUSPEND_MULTIPLE, é suspenso (sai da fila).
+LEECH_THRESHOLD = 8
+LEECH_SUSPEND_MULTIPLE = 2
+
+# Retenção real: um card é "maduro" quando seu intervalo anterior era >= este valor
+# (em dias). Reviews de cards maduros medem retenção de longo prazo (padrão Anki: 21d).
+MATURE_INTERVAL_DAYS = 21

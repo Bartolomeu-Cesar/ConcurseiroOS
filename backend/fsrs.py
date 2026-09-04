@@ -26,25 +26,25 @@ from datetime import datetime, timedelta
 
 # FSRS-5 default weights trained on 700M+ reviews
 W = [
-    0.4072,   # w[0]  - Initial stability for Again
-    1.1829,   # w[1]  - Initial stability for Hard
-    3.1262,   # w[2]  - Initial stability for Good
+    0.4072,  # w[0]  - Initial stability for Again
+    1.1829,  # w[1]  - Initial stability for Hard
+    3.1262,  # w[2]  - Initial stability for Good
     15.4722,  # w[3]  - Initial stability for Easy
-    7.2102,   # w[4]  - Initial difficulty baseline
-    0.5316,   # w[5]  - Initial difficulty rating scaling
-    1.0651,   # w[6]  - (unused in FSRS-5 core, reserved)
-    0.0589,   # w[7]  - Difficulty mean reversion weight
-    1.5330,   # w[8]  - Stability increase base factor
-    0.1544,   # w[9]  - Stability penalty for high S
-    1.0175,   # w[10] - Stability boost for low retrievability
-    1.8294,   # w[11] - Failure stability base
-    0.0953,   # w[12] - Failure difficulty penalty
-    0.2975,   # w[13] - Failure stability from prior S
-    2.2042,   # w[14] - Failure retrievability factor
-    0.2407,   # w[15] - Hard penalty
-    2.9466,   # w[16] - Easy bonus
-    0.5034,   # w[17] - Short-term stability (hard)
-    0.6567,   # w[18] - Short-term stability (good)
+    7.2102,  # w[4]  - Initial difficulty baseline
+    0.5316,  # w[5]  - Initial difficulty rating scaling
+    1.0651,  # w[6]  - (unused in FSRS-5 core, reserved)
+    0.0589,  # w[7]  - Difficulty mean reversion weight
+    1.5330,  # w[8]  - Stability increase base factor
+    0.1544,  # w[9]  - Stability penalty for high S
+    1.0175,  # w[10] - Stability boost for low retrievability
+    1.8294,  # w[11] - Failure stability base
+    0.0953,  # w[12] - Failure difficulty penalty
+    0.2975,  # w[13] - Failure stability from prior S
+    2.2042,  # w[14] - Failure retrievability factor
+    0.2407,  # w[15] - Hard penalty
+    2.9466,  # w[16] - Easy bonus
+    0.5034,  # w[17] - Short-term stability (hard)
+    0.6567,  # w[18] - Short-term stability (good)
 ]
 
 # Card states
@@ -76,7 +76,7 @@ class FSRSCard:
         stability: float = 0.0,
         difficulty: float = 0.0,
         state: int = STATE_NEW,
-        last_review: str = '',
+        last_review: str = "",
         reps: int = 0,
     ):
         self.stability = stability
@@ -138,17 +138,29 @@ def _clamp_stability(s: float) -> float:
     return max(0.01, s)
 
 
-def _initial_stability(rating: int) -> float:
+def _initial_stability(rating: int, w_inicial=None) -> float:
     """Calculate initial stability S0 for a new card based on first rating.
 
     S0(G) = w[G-1] where G is the rating (1-4).
 
     Args:
         rating: FSRS rating (1=Again, 2=Hard, 3=Good, 4=Easy).
+        w_inicial: pesos S0 personalizados por rating (dict {1..4: float} ou lista
+            de 4 floats). Quando None, usa os pesos default globais W[0..3].
 
     Returns:
         Initial stability in days.
     """
+    if w_inicial:
+        try:
+            if isinstance(w_inicial, dict):
+                val = w_inicial.get(rating, w_inicial.get(str(rating)))
+            else:
+                val = w_inicial[rating - 1]
+            if val and val > 0:
+                return float(val)
+        except (KeyError, IndexError, TypeError, ValueError):
+            pass
     return W[rating - 1]
 
 
@@ -219,9 +231,7 @@ def _update_difficulty(old_d: float, rating: int) -> float:
     return _clamp_difficulty(new_d)
 
 
-def _stability_after_success(
-    stability: float, difficulty: float, retrievability: float, rating: int
-) -> float:
+def _stability_after_success(stability: float, difficulty: float, retrievability: float, rating: int) -> float:
     """Calculate new stability after a successful recall (rating >= 2).
 
     S'_r = S * (exp(w[8]) * (11 - D) * S^(-w[9]) * (exp(w[10] * (1 - R)) - 1) + 1)
@@ -240,10 +250,7 @@ def _stability_after_success(
         New stability value (minimum 0.01).
     """
     s_base = stability * (
-        math.exp(W[8])
-        * (11.0 - difficulty)
-        * (stability ** (-W[9]))
-        * (math.exp(W[10] * (1.0 - retrievability)) - 1.0)
+        math.exp(W[8]) * (11.0 - difficulty) * (stability ** (-W[9])) * (math.exp(W[10] * (1.0 - retrievability)) - 1.0)
         + 1.0
     )
 
@@ -256,9 +263,7 @@ def _stability_after_success(
     return _clamp_stability(s_base)
 
 
-def _stability_after_failure(
-    stability: float, difficulty: float, retrievability: float
-) -> float:
+def _stability_after_failure(stability: float, difficulty: float, retrievability: float) -> float:
     """Calculate new stability after a failed recall (rating = 1/Again).
 
     S'_f = w[11] * D^(-w[12]) * ((S + 1)^w[13] - 1) * exp(w[14] * (1 - R))
@@ -272,10 +277,7 @@ def _stability_after_failure(
         New stability value (minimum 0.01).
     """
     s_new = (
-        W[11]
-        * (difficulty ** (-W[12]))
-        * ((stability + 1.0) ** W[13] - 1.0)
-        * math.exp(W[14] * (1.0 - retrievability))
+        W[11] * (difficulty ** (-W[12])) * ((stability + 1.0) ** W[13] - 1.0) * math.exp(W[14] * (1.0 - retrievability))
     )
     return _clamp_stability(s_new)
 
@@ -285,6 +287,7 @@ def review_card(
     rating: int,
     desired_retention: float = 0.9,
     review_date: str = None,
+    w_inicial=None,
 ) -> FSRSOutput:
     """Process a review and return updated card state with the next interval.
 
@@ -326,7 +329,7 @@ def review_card(
 
     # --- Handle NEW cards (first review) ---
     if card.state == STATE_NEW:
-        new_stability = _clamp_stability(_initial_stability(rating))
+        new_stability = _clamp_stability(_initial_stability(rating, w_inicial))
         new_difficulty = _initial_difficulty(rating)
 
         if rating == RATING_AGAIN:
@@ -344,8 +347,10 @@ def review_card(
             # Stay in learning/relearning with short interval
             new_state = STATE_LEARNING if card.state == STATE_LEARNING else STATE_RELEARNING
             # Use initial stability for Again to keep it short
-            new_stability = _clamp_stability(_initial_stability(RATING_AGAIN))
-            new_difficulty = _update_difficulty(card.difficulty, rating) if card.difficulty > 0 else _initial_difficulty(rating)
+            new_stability = _clamp_stability(_initial_stability(RATING_AGAIN, w_inicial))
+            new_difficulty = (
+                _update_difficulty(card.difficulty, rating) if card.difficulty > 0 else _initial_difficulty(rating)
+            )
             interval = 1
         else:
             # Graduate to Review state
@@ -355,8 +360,10 @@ def review_card(
                 new_stability = _stability_after_success(card.stability, card.difficulty, r, rating)
             else:
                 # First graduation: use initial stability based on rating
-                new_stability = _clamp_stability(_initial_stability(rating))
-            new_difficulty = _update_difficulty(card.difficulty, rating) if card.difficulty > 0 else _initial_difficulty(rating)
+                new_stability = _clamp_stability(_initial_stability(rating, w_inicial))
+            new_difficulty = (
+                _update_difficulty(card.difficulty, rating) if card.difficulty > 0 else _initial_difficulty(rating)
+            )
             interval = _next_interval(new_stability, desired_retention)
 
     # --- Handle REVIEW cards ---
@@ -426,17 +433,88 @@ def sm2_to_fsrs_rating(quality: int) -> int:
     mapping = {
         0: RATING_AGAIN,  # Complete blackout
         1: RATING_AGAIN,  # Incorrect but remembered upon seeing answer
-        2: RATING_HARD,   # Incorrect but easy to recall
-        3: RATING_HARD,   # Correct with serious difficulty
-        4: RATING_GOOD,   # Correct after hesitation
-        5: RATING_EASY,   # Perfect recall
+        2: RATING_HARD,  # Incorrect but easy to recall
+        3: RATING_HARD,  # Correct with serious difficulty
+        4: RATING_GOOD,  # Correct after hesitation
+        5: RATING_EASY,  # Perfect recall
     }
     return mapping[quality]
 
 
-def migrate_sm2_to_fsrs(
-    easiness_factor: float, repetitions: int, interval_days: int
-) -> FSRSCard:
+# Faixas sãs para S0 (dias), por rating — evita valores absurdos por ruído.
+_S0_MIN = {1: 0.1, 2: 0.3, 3: 0.8, 4: 2.0}
+_S0_MAX = {1: 3.0, 2: 8.0, 3: 30.0, 4: 90.0}
+# Mínimo de amostras por rating para confiar na estimativa.
+_S0_MIN_AMOSTRAS = 20
+
+
+def _mediana(valores: list[float]) -> float:
+    s = sorted(valores)
+    n = len(s)
+    if n == 0:
+        return 0.0
+    m = n // 2
+    return s[m] if n % 2 else (s[m - 1] + s[m]) / 2.0
+
+
+def otimizar_pesos_iniciais(primeiras_revisoes: list[dict]) -> dict:
+    """Estima os pesos de estabilidade inicial S0 (W[0..3]) do usuário.
+
+    Recebe as PRIMEIRAS revisões de cada card (uma por card), cada uma como
+    {"rating": 1-4, "stability": float} — a stability resultante logo após a
+    primeira resposta com aquele rating. Estima S0 por rating como a MEDIANA
+    observada (robusta a outliers), exigindo `_S0_MIN_AMOSTRAS` amostras.
+
+    Preserva as garantias do FSRS:
+    - Clampa cada S0 à faixa sã (_S0_MIN/_S0_MAX) por rating.
+    - Impõe monotonicidade: S0(Again) ≤ S0(Hard) ≤ S0(Good) ≤ S0(Easy).
+    - Ratings sem amostras suficientes usam o peso default global W[rating-1].
+
+    Retorna dict {
+      "w_inicial": {1: s0, 2: s0, 3: s0, 4: s0},   # pesos efetivos (custom+default)
+      "amostras": {1: n, 2: n, 3: n, 4: n},
+      "otimizados": [ratings realmente ajustados],
+      "default": [W[0], W[1], W[2], W[3]],
+    }
+    """
+    por_rating: dict[int, list[float]] = {1: [], 2: [], 3: [], 4: []}
+    for rev in primeiras_revisoes or []:
+        try:
+            g = int(rev["rating"])
+            s = float(rev["stability"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if g in por_rating and s > 0:
+            por_rating[g].append(s)
+
+    w_inicial: dict[int, float] = {}
+    amostras: dict[int, int] = {}
+    otimizados: list[int] = []
+    for g in (1, 2, 3, 4):
+        vals = por_rating[g]
+        amostras[g] = len(vals)
+        if len(vals) >= _S0_MIN_AMOSTRAS:
+            s0 = _mediana(vals)
+            s0 = max(_S0_MIN[g], min(_S0_MAX[g], s0))
+            w_inicial[g] = round(s0, 4)
+            otimizados.append(g)
+        else:
+            w_inicial[g] = W[g - 1]  # default global
+
+    # Monotonicidade: Again ≤ Hard ≤ Good ≤ Easy
+    for g in (2, 3, 4):
+        if w_inicial[g] < w_inicial[g - 1]:
+            w_inicial[g] = w_inicial[g - 1]
+
+    return {
+        "w_inicial": w_inicial,
+        "amostras": amostras,
+        "otimizados": otimizados,
+        "default": [W[0], W[1], W[2], W[3]],
+    }
+
+
+def migrate_sm2_to_fsrs(easiness_factor: float, repetitions: int, interval_days: int) -> FSRSCard:
     """Migrate an existing SM-2 card state to an equivalent FSRS card state.
 
     Estimates FSRS stability and difficulty from SM-2 parameters:
@@ -505,9 +583,7 @@ def migrate_sm2_to_fsrs(
 # --- Utility / convenience functions ---
 
 
-def get_intervals_for_all_ratings(
-    card: FSRSCard, desired_retention: float = 0.9, review_date: str = None
-) -> dict:
+def get_intervals_for_all_ratings(card: FSRSCard, desired_retention: float = 0.9, review_date: str = None) -> dict:
     """Preview the next interval for each possible rating.
 
     Useful for showing the user what each button would do.
@@ -522,7 +598,7 @@ def get_intervals_for_all_ratings(
         Example: {'again': 1, 'hard': 3, 'good': 7, 'easy': 21}
     """
     results = {}
-    names = {1: 'again', 2: 'hard', 3: 'good', 4: 'easy'}
+    names = {1: "again", 2: "hard", 3: "good", 4: "easy"}
 
     for rating in range(1, 5):
         output = review_card(card, rating, desired_retention, review_date)

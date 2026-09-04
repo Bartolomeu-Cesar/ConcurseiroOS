@@ -206,17 +206,27 @@ function setupTechniqueCrossLinks() {
 // ─── REGISTRAR LISTENERS DO EVENT BUS ────────────────────────
 
 export function initIntegrations() {
+  // Recarrega os cards de metas (badge do topo + card "tempo de hoje" do
+  // dashboard) sem exigir refresh manual. Ambos são expostos em window pelos
+  // seus módulos; o `?.` protege páginas onde algum deles não existe.
+  const _refreshMetas = () => {
+    try { window.loadMetas?.(); } catch (e) { /* módulo de metas pode não estar nesta página */ }
+    try { window.reloadMetasCard?.(); } catch (e) { /* card do dashboard pode não existir */ }
+  };
+
   // Questão respondida
   on('questao:respondida', (data) => {
     debouncedRefreshSidebar();
     queueMasteryUpdate(data.materia);
     queueDesafioCheck('questao', data.materia);
+    _refreshMetas();
   });
 
   // Flashcard revisado
   on('flashcard:revisado', (data) => {
     debouncedRefreshSidebar();
     queueDesafioCheck('flashcard', data.materia);
+    _refreshMetas();
   });
 
   // XP ganho
@@ -229,9 +239,11 @@ export function initIntegrations() {
     handleFatigueDetected(data);
   });
 
-  // Sessão de horas registrada
+  // Sessão de horas registrada → atualiza sidebar E o "tempo de hoje"
+  // instantaneamente (antes só aparecia após refresh da página).
   on('sessao:horas', () => {
     debouncedRefreshSidebar();
+    _refreshMetas();
   });
 
   // Setup cross-links entre técnicas (observar DOM)

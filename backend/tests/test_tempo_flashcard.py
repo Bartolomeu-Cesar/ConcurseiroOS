@@ -60,6 +60,38 @@ def test_fsrs_state_none_nao_quebra():
     assert 10 <= t <= 120
 
 
+def test_recuperacao_escala_com_densidade_da_resposta():
+    """Filosofia do desafio (tempo proporcional ao conteúdo): respostas mais
+    densas exigem mais recuperação ativa, mesmo com pergunta idêntica."""
+    pergunta = "Explique o conceito."
+    resp_curta = " ".join(["palavra"] * 3)
+    resp_media = " ".join(["palavra"] * 18)
+    resp_densa = " ".join(["palavra"] * 60)
+    t_curta = calc(pergunta, resp_curta, 2)
+    t_media = calc(pergunta, resp_media, 2)
+    t_densa = calc(pergunta, resp_densa, 2)
+    assert t_curta < t_media < t_densa, (t_curta, t_media, t_densa)
+
+
+def test_resposta_curta_nao_fica_no_plato_antigo():
+    """Regressão do 'sempre ~18s': cards com resposta curta devem ficar BEM
+    abaixo do platô fixo antigo (que somava 8s fixos de recuperação)."""
+    # Pergunta e resposta curtas, card maduro → deve ser rápido (< 15s).
+    t = calc("Prazo do MS?", "120 dias.", 2)
+    assert t < 15, t
+    assert t >= 10  # respeita o piso
+
+
+def test_nao_e_constante_para_conteudos_diferentes():
+    """Não deve colapsar em um valor único: variar o conteúdo varia o tempo."""
+    amostras = {
+        calc("P curta?", "R.", 2),
+        calc("Pergunta média de tamanho normal aqui?", " ".join(["x"] * 20), 0),
+        calc(" ".join(["q"] * 30), " ".join(["a"] * 50), 3),
+    }
+    assert len(amostras) >= 3, f"tempos colapsaram: {amostras}"
+
+
 # ---------------------------------------------------------------------------
 # Integração: payload de /api/flashcards/today contém tempo_segundos
 # ---------------------------------------------------------------------------
@@ -125,6 +157,29 @@ def test_today_expoe_tempo_segundos(client):
         assert "tempo_segundos" in c, "payload do flashcard precisa expor tempo_segundos"
         assert isinstance(c["tempo_segundos"], int)
         assert 10 <= c["tempo_segundos"] <= 120
+
+
+def test_aleatorio_expoe_tempo_segundos(client):
+    """A sessão por disciplina/aleatória (/api/flashcards/aleatorio) também deve
+    expor tempo_segundos, para o timer não cair no fallback fixo (~20s)."""
+    from utils import today_str
+
+    conn = sqlite3.connect(_tmp_db.name, timeout=10)
+    conn.execute("DELETE FROM flashcards WHERE 1=1")
+    conn.execute(
+        "INSERT INTO flashcards (pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia, fsrs_state, user_id) "
+        "VALUES ('P?', 'Resposta curta.', ?, 1, 2.5, 0, 'Geral', 2, 1)",
+        (today_str(),),
+    )
+    conn.commit()
+    conn.close()
+
+    cards = client.get("/api/flashcards/aleatorio?quantidade=5").json()
+    assert len(cards) >= 1
+    for c in cards:
+        assert "tempo_segundos" in c, "aleatorio precisa expor tempo_segundos"
+        assert 10 <= c["tempo_segundos"] <= 120
+        assert "fsrs_state" not in c  # campo interno removido do payload
 
 
 def teardown_module():

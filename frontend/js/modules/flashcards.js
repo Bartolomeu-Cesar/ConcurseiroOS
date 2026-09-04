@@ -17,11 +17,17 @@ let _examMode = false; // Encoding Specificity: modo prova sem ajudas
 let _productionCount = 0; // Production Effect: contador para hint de ler em voz alta
 let _currentFilterMateria = ''; // Matéria filtrada na sessão atual (para sugerir próxima)
 
-// Timer regressivo por card (análogo ao das questões): começa no tempo estimado
-// pela complexidade (card.tempo_segundos) e diminui até revelar a resposta.
+// Timer por card (análogo ao das questões): começa no tempo estimado pela
+// complexidade (card.tempo_segundos), decresce até 0 e então conta tempo extra.
+// Roda enquanto o estudante lê pergunta E resposta; só para quando ele confirma
+// se acertou/errou (reviewFlashcard/sessaoNext), não ao revelar a resposta.
 let _flashTimerInterval = null;
 let _flashTimerSeg = 0;
 let _flashTimerMax = 0;
+let _flashTimerFase = 'regressiva'; // 'regressiva' (previsto) | 'extra' (excedente)
+let _flashTimerExtra = 0;           // segundos além do previsto (fase extra)
+let _flashTimerElapsed = 0;         // segundos totais no card (previsto + extra)
+let _lastTempoResumo = null;        // resumo de tempo do card ao avaliar acerto/erro
 
 function _stopFlashTimer() {
   if (_flashTimerInterval) {
@@ -32,10 +38,21 @@ function _stopFlashTimer() {
   if (timer) timer.style.display = 'none';
 }
 
+/**
+ * Timer de revisão de flashcard em duas fases:
+ *  1) Regressiva: parte do tempo previsto (card.tempo_segundos, calculado no
+ *     backend a partir de enunciado + resposta + estado FSRS) e decresce até 0.
+ *  2) Extra: ao zerar NÃO para — passa a CRESCER, computando todo o tempo que o
+ *     estudante ainda leva até indicar acertou/errou (revelar a resposta chama
+ *     _stopFlashTimer). Assim medimos o tempo real completo no card.
+ */
 function _startFlashTimer(segundos) {
   _stopFlashTimer();
   _flashTimerMax = Math.max(1, segundos || 20);
   _flashTimerSeg = _flashTimerMax;
+  _flashTimerFase = 'regressiva';
+  _flashTimerExtra = 0;
+  _flashTimerElapsed = 0;
 
   const timer = document.getElementById('flash-timer');
   const fill = document.getElementById('flash-timer-fill');
@@ -45,35 +62,56 @@ function _startFlashTimer(segundos) {
   timer.style.display = 'block';
   fill.style.width = '100%';
   fill.style.background = 'var(--blue)';
+  fill.style.animation = '';
   label.textContent = `⏱ ${_flashTimerSeg}s`;
   label.style.color = 'var(--text-sub)';
+  label.style.fontWeight = '';
 
   _flashTimerInterval = setInterval(() => {
-    _flashTimerSeg--;
-    const pct = Math.max(0, (_flashTimerSeg / _flashTimerMax) * 100);
-    fill.style.width = pct + '%';
-    label.textContent = `⏱ ${Math.max(0, _flashTimerSeg)}s`;
+    _flashTimerElapsed++;
 
-    if (_flashTimerSeg <= 5) {
-      label.style.color = 'var(--red)';
-      fill.style.background = 'var(--red)';
-    } else if (_flashTimerSeg <= 10) {
-      label.style.color = 'var(--yellow)';
-      fill.style.background = 'var(--peach)';
+    if (_flashTimerFase === 'regressiva') {
+      _flashTimerSeg--;
+
+      if (_flashTimerSeg > 0) {
+        // Ainda dentro do tempo previsto: barra decrescente + gradiente de cor.
+        const pct = Math.max(0, (_flashTimerSeg / _flashTimerMax) * 100);
+        fill.style.width = pct + '%';
+        label.textContent = `⏱ ${_flashTimerSeg}s`;
+        if (_flashTimerSeg <= 5) {
+          label.style.color = 'var(--red)';
+          fill.style.background = 'var(--red)';
+        } else if (_flashTimerSeg <= 10) {
+          label.style.color = 'var(--yellow)';
+          fill.style.background = 'var(--peach)';
+        } else {
+          label.style.color = 'var(--text-sub)';
+          fill.style.background = 'var(--blue)';
+        }
+      } else {
+        // Esgotou o previsto → entra na fase EXTRA (cronômetro crescente).
+        _flashTimerFase = 'extra';
+        fill.style.width = '100%';
+        fill.style.background = 'var(--red)';
+        label.style.color = 'var(--red)';
+        label.style.fontWeight = '700';
+        label.textContent = '⏱ +0s (tempo extra)';
+      }
     } else {
-      label.style.color = 'var(--text-sub)';
-      fill.style.background = 'var(--blue)';
-    }
-
-    // Ao esgotar: para o timer e sinaliza (não força revelar — flashcard não
-    // tem "tempo esgotado" como questão; apenas indica que passou do estimado).
-    if (_flashTimerSeg <= 0) {
-      clearInterval(_flashTimerInterval);
-      _flashTimerInterval = null;
-      label.textContent = '⏱ tempo!';
-      label.style.color = 'var(--red)';
+      // Fase extra: apenas incrementa e mostra quanto passou do previsto.
+      _flashTimerExtra++;
+      label.textContent = `⏱ +${_flashTimerExtra}s (tempo extra)`;
     }
   }, 1000);
+}
+
+/** Descreve o desempenho de tempo do card atual (para feedback ao avaliar). */
+function _resumoTempoCard() {
+  const previsto = _flashTimerMax || 0;
+  const total = _flashTimerElapsed || 0;
+  const extra = _flashTimerExtra || 0;
+  const dentroDoPrevisto = extra <= 0 && total <= previsto;
+  return { previsto, total, extra, dentroDoPrevisto };
 }
 
 /**
@@ -221,16 +259,21 @@ function showCurrentFlashcard() {
   const card = flashcardsToday[currentFlashIndex];
   const isVariation = card._expanding_retrieval;
   const badge = card.materia ? `<span style="font-size:0.7rem;background:#45475a;color:#cba6f7;padding:2px 8px;border-radius:4px;margin-bottom:4px;display:inline-block;">📚 ${card.materia}</span><br>` : '';
+  // Leech (à la Anki): card esquecido muitas vezes. Sinaliza para o aluno
+  // reformular/refazer o card em vez de insistir num card mal formulado.
+  const leechBadge = card.is_leech
+    ? `<span title="Você errou este card muitas vezes. Considere reformulá-lo (dividir, simplificar, criar mnemônico)." style="font-size:0.65rem;background:var(--red);color:var(--bg);padding:2px 8px;border-radius:4px;margin-bottom:4px;display:inline-block;">🩸 Card problemático (leech)</span><br>`
+    : '';
 
   // Variação de Contexto: cards re-inseridos via expanding retrieval são mostrados INVERTIDOS
   // (resposta como pista → lembrar a pergunta/conceito)
   // Evidência: Smith et al. (1978) — Variar contexto de encoding melhora recall em 20-40%
   if (isVariation) {
     const variationBadge = `<span style="font-size:0.65rem;background:var(--peach);color:var(--bg);padding:2px 6px;border-radius:4px;margin-bottom:4px;display:inline-block;">🔄 Variação de Contexto</span><br>`;
-    q.innerHTML = badge + variationBadge + `<div style="font-size:0.72rem;color:var(--text-sub);margin-bottom:6px;">A resposta é a pista — lembre o conceito/pergunta original:</div>` + `<div style="font-weight:600;">${escapeHtml(card.resposta)}</div>`;
+    q.innerHTML = badge + leechBadge + variationBadge + `<div style="font-size:0.72rem;color:var(--text-sub);margin-bottom:6px;">A resposta é a pista — lembre o conceito/pergunta original:</div>` + `<div style="font-weight:600;">${escapeHtml(card.resposta)}</div>`;
     a.textContent = card.pergunta; // Inverte: mostra pergunta como "resposta"
   } else {
-    q.innerHTML = badge + escapeHtml(card.pergunta);
+    q.innerHTML = badge + leechBadge + escapeHtml(card.pergunta);
     a.textContent = card.resposta;
   }
   a.style.display = 'none';
@@ -328,8 +371,9 @@ export function revealNextSegment() {
 }
 
 export function revealAnswer() {
-  // Parar o timer regressivo do card (recall encerrado ao revelar a resposta)
-  _stopFlashTimer();
+  // NÃO paramos o timer aqui: o estudante ainda vai ler a resposta e decidir se
+  // acertou/errou. O timer segue contando (previsto → tempo extra) e só para em
+  // reviewFlashcard(), quando a avaliação é confirmada.
   // Record confidence level (metacognition)
   const confidence = _currentConfidence;
   _currentConfidence = 0; // Reset
@@ -401,6 +445,12 @@ export async function reviewFlashcard(quality) {
   const card = flashcardsToday[currentFlashIndex];
   if (!card) return;
   try {
+    // O estudante confirmou acerto/erro: AGORA o recall termina de verdade.
+    // Captura o desempenho de tempo (previsto vs total, incluindo o tempo lendo
+    // a resposta) e só então para o timer.
+    _lastTempoResumo = _resumoTempoCard();
+    _stopFlashTimer();
+
     // Acumular tempo gasto neste card
     if (_flashCardStart) {
       const elapsed = Math.round((Date.now() - _flashCardStart) / 1000);
@@ -427,6 +477,14 @@ export async function reviewFlashcard(quality) {
     }
 
     const data = await api(`/api/flashcards/${card.id}/review-fsrs`, { method: 'POST', body: { quality } });
+
+    // Leech (à la Anki): avisa quando o card vira problemático — sugere ação.
+    if (data.leech_now) {
+      toast('🩸 Card marcado como problemático (leech): você já errou várias vezes. Considere reformulá-lo (dividir, simplificar ou criar um mnemônico).', 'warning', 6000);
+    } else if (data.suspenso) {
+      toast('⏸ Card suspenso por excesso de erros. Reformule-o na lista de flashcards para reativá-lo.', 'warning', 6000);
+    }
+
     const intervalLabel = data.intervalo_dias >= 30 ? `${Math.round(data.intervalo_dias / 30)}m` : `${data.intervalo_dias}d`;
     const stateNames = ['Novo', 'Aprendendo', 'Revisão', 'Reaprendendo'];
     const stateLabel = stateNames[data.fsrs_state] || '';
@@ -447,7 +505,16 @@ export async function reviewFlashcard(quality) {
       else if (lastMetacog.calibrated) metacogMsg = ' ✅ Boa calibração!';
     }
 
-    toast(`${msgs[quality]} [${stateLabel}]${metacogMsg}`, quality >= 3 ? 'success' : 'warning', 3000);
+    // Feedback de tempo: total gasto (recall + leitura da resposta) vs previsto.
+    let tempoMsg = '';
+    const rt = _lastTempoResumo;
+    if (rt && rt.previsto > 0) {
+      tempoMsg = rt.dentroDoPrevisto
+        ? ` ⏱ ${rt.total}s/${rt.previsto}s ✓`
+        : ` ⏱ ${rt.total}s/${rt.previsto}s (+${rt.extra}s)`;
+    }
+
+    toast(`${msgs[quality]} [${stateLabel}]${metacogMsg}${tempoMsg}`, quality >= 3 ? 'success' : 'warning', 3000);
 
     // === HYPERCORRECTION EFFECT (Butterfield & Metcalfe, 2001) ===
     // Erros com alta confiança são corrigidos com mais eficácia.
@@ -517,6 +584,9 @@ function _advanceAfterReview() {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ horas: horas, materia: 'Flashcards (Revisão)', tipo: 'flashcard' })
+      }).then(() => {
+        // Notifica a UI para atualizar o "tempo de hoje" sem refresh manual.
+        emit('sessao:horas', { materia: 'Flashcards (Revisão)', horas, tipo: 'flashcard' });
       }).catch(() => {});
       _flashSessionSeconds = 0; // Reset para próximo bloco
     }
@@ -864,10 +934,13 @@ export async function addFlashcard() {
   // Verificar limite do plano antes de criar
   if (window.checkPlanLimit && !(await window.checkPlanLimit('flashcards'))) return;
   const materia = document.getElementById('flash-add-materia')?.value || '';
-  await fetch('/api/flashcards', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pergunta: p, resposta: r, materia }) });
+  const reverso = !!document.getElementById('flash-reverso')?.checked;
+  const resp = await fetch('/api/flashcards', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pergunta: p, resposta: r, materia, reverso }) }).then(x => x.json()).catch(() => ({}));
   document.getElementById('flash-pergunta').value = '';
   document.getElementById('flash-resposta').value = '';
-  toast('Flashcard criado!', 'success');
+  const chk = document.getElementById('flash-reverso');
+  if (chk) chk.checked = false;
+  toast(resp && resp.criados === 2 ? '🔄 2 cards criados (frente + verso)!' : 'Flashcard criado!', 'success');
   loadFlashcardsToday();
   loadAllFlashcards();
 }
@@ -923,6 +996,57 @@ async function loadFlashMaterias() {
   } catch(e) {}
 }
 
+// ============================================================
+// CUSTOM STUDY (filtered deck, à la Anki) — sessões sob demanda
+// ============================================================
+
+const _CUSTOM_STUDY_LABELS = {
+  errados_hoje: '❌ Errei hoje',
+  adiantar: '⏩ Adiantar',
+  dificeis: '🔥 Mais difíceis',
+  leech: '🩸 Leech',
+  materia: '📚 Cram',
+};
+
+/** Carrega uma fila de estudo personalizado por critério e inicia a sessão. */
+export async function customStudy(modo, materia = '') {
+  const cfg = _getConfigSessoes();
+  const limite = cfg.flashcards_sessao || 20;
+  let url = `/api/flashcards/custom-study?modo=${encodeURIComponent(modo)}&limite=${limite}`;
+  if (materia) url += `&materia=${encodeURIComponent(materia)}`;
+  try {
+    const data = await fetch(url).then(r => r.json());
+    const cards = (data && data.cards) || [];
+    if (!cards.length) {
+      toast(`Nenhum card para "${_CUSTOM_STUDY_LABELS[modo] || modo}".`, 'info');
+      return;
+    }
+    flashSessao = cards;
+    flashSessaoIndex = 0;
+    flashSessaoMode = `custom:${modo}`;
+    switchTab('tab-flashcards');
+    showSessaoFlashcard();
+    const rotulo = materia ? `${_CUSTOM_STUDY_LABELS[modo] || modo}: ${materia}` : (_CUSTOM_STUDY_LABELS[modo] || modo);
+    toast(`🧪 ${rotulo} (${cards.length} cards)`, 'success');
+  } catch (e) {
+    toast('Erro ao carregar estudo personalizado.', 'error');
+  }
+}
+
+/** Cram por matéria: pede a disciplina e chama customStudy('materia'). */
+export async function customStudyMateria() {
+  try {
+    const mats = await fetch('/api/flashcards/materias').then(r => r.json());
+    const opts = (mats || []).map(m => m.materia).filter(m => m);
+    if (!opts.length) { toast('Nenhuma disciplina disponível.', 'warning'); return; }
+    const escolha = await promptSelect('📚 Cram — escolha a disciplina:', opts);
+    if (!escolha) return;
+    await customStudy('materia', escolha);
+  } catch (e) {
+    toast('Erro ao listar disciplinas.', 'error');
+  }
+}
+
 export async function iniciarSessaoFlash(mode) {
   flashSessaoMode = mode;
   const cfg = _getConfigSessoes();
@@ -974,7 +1098,11 @@ function showSessaoFlashcard() {
   a.style.display = 'none';
   rb.style.display = 'inline-block';
   rv.style.display = 'none';
+  // Timer regressivo por complexidade (mesmo da revisão SRS): usa tempo_segundos
+  // calculado no backend por pergunta+resposta+FSRS. Sem isso caía no fallback.
+  _startFlashTimer(card.tempo_segundos);
   rb.onclick = function() {
+    // NÃO para o timer ao revelar: segue até o estudante avaliar em sessaoNext().
     a.style.display = 'block'; rb.style.display = 'none';
     rv.style.display = 'flex';
     // Auto-start global timer if not already running (igual ao fluxo de revisão SRS)
@@ -991,6 +1119,7 @@ function showSessaoFlashcard() {
 }
 
 export async function sessaoNext(quality) {
+  _stopFlashTimer();  // recall encerrado só ao confirmar acerto/erro
   const card = flashSessao[flashSessaoIndex];
   if (card && card.id) {
     try {
@@ -1398,11 +1527,91 @@ export async function loadLeitnerBoxes() {
       <div style="font-size:0.68rem;color:var(--text-sub);margin-top:8px;text-align:center;">
         Responda corretamente → sobe de caixa | Erre → volta para caixa 1
       </div>
+      <div id="retencao-real-box" style="margin-top:12px;"></div>
     `;
+    loadRetencaoReal();
   } catch(e) { container.style.display = 'none'; }
 }
 
 window.loadLeitnerBoxes = loadLeitnerBoxes;
+
+/**
+ * Retenção real (à la Anki): % de acerto em reviews de cards MADUROS (memória de
+ * longo prazo, não desempenho em cards novos), + contagem de cards problemáticos
+ * (leech). Renderiza dentro do container Leitner (#retencao-real-box).
+ */
+export async function loadRetencaoReal() {
+  const box = document.getElementById('retencao-real-box');
+  if (!box) return;
+  try {
+    const d = await fetch('/api/flashcards/retencao-real').then(r => r.json());
+    const tr = d.true_retention;
+    // Sem reviews maduros ainda: orienta o aluno em vez de mostrar vazio.
+    if (tr === null || tr === undefined) {
+      box.innerHTML = `<div style="font-size:0.68rem;color:var(--text-sub);text-align:center;border-top:1px solid var(--border);padding-top:8px;">
+        📈 Retenção real aparece após revisar cards maduros (intervalo ≥ ${d.mature_interval_days || 21} dias).
+        ${d.leech_count ? `<br>🩸 ${d.leech_count} card(s) problemático(s)${d.suspensos ? `, ${d.suspensos} suspenso(s)` : ''}.` : ''}
+      </div>`;
+      return;
+    }
+    const cor = tr >= 90 ? 'var(--green)' : tr >= 80 ? 'var(--yellow)' : 'var(--red)';
+    const proxDias = (d.forecast || []).slice(0, 7)
+      .map(f => `${f.data.slice(5)}: ${f.cards}`).join(' · ') || 'sem revisões futuras';
+    box.innerHTML = `
+      <div style="border-top:1px solid var(--border);padding-top:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <span style="font-size:0.82rem;font-weight:700;color:var(--text);">📈 Retenção real</span>
+          <span style="font-size:0.65rem;color:var(--text-sub);">cards maduros (≥${d.mature_interval_days}d)</span>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;">
+          <div style="font-size:1.6rem;font-weight:800;color:${cor};">${tr}%</div>
+          <div style="flex:1;font-size:0.68rem;color:var(--text-sub);">
+            ${d.reviews_maduros} revisões maduras · ${d.retention_geral ?? '—'}% geral (${d.reviews_total} total)
+            ${d.leech_count ? `<br>🩸 ${d.leech_count} problemático(s)${d.suspensos ? `, ${d.suspensos} suspenso(s)` : ''}` : ''}
+          </div>
+        </div>
+        <div style="font-size:0.62rem;color:var(--text-sub);margin-top:6px;">📅 Próximos 7 dias: ${proxDias}</div>
+        <div style="margin-top:8px;">
+          <button onclick="otimizarFSRS()" title="Ajusta o agendador FSRS ao seu histórico de acertos (à la Anki)" style="background:var(--bg);border:1px solid var(--accent);color:var(--accent);border-radius:6px;padding:5px 10px;font-size:0.72rem;font-weight:600;cursor:pointer;">🧠 Otimizar meu FSRS</button>
+          <div id="fsrs-pesos-box" style="font-size:0.62rem;color:var(--text-sub);margin-top:4px;"></div>
+        </div>
+      </div>`;
+    loadFsrsPesos();
+  } catch(e) { box.innerHTML = ''; }
+}
+window.loadRetencaoReal = loadRetencaoReal;
+
+/** Mostra o status dos pesos FSRS personalizados (S0 por rating). */
+export async function loadFsrsPesos() {
+  const el = document.getElementById('fsrs-pesos-box');
+  if (!el) return;
+  try {
+    const p = await fetch('/api/flashcards/fsrs/pesos').then(r => r.json());
+    if (p.otimizado) {
+      const wi = p.w_inicial || {};
+      el.innerHTML = `✅ Personalizado — S0 por rating: Errei ${(+wi[1]).toFixed(1)} · Difícil ${(+wi[2]).toFixed(1)} · Bom ${(+wi[3]).toFixed(1)} · Fácil ${(+wi[4]).toFixed(1)} dias`;
+    } else {
+      el.innerHTML = 'Usando pesos padrão. Otimize após acumular revisões espaçadas.';
+    }
+  } catch(e) { el.innerHTML = ''; }
+}
+window.loadFsrsPesos = loadFsrsPesos;
+
+/** Dispara a otimização dos pesos FSRS a partir do histórico do usuário. */
+export async function otimizarFSRS() {
+  try {
+    const r = await api('/api/flashcards/fsrs/otimizar', { method: 'POST', body: {} });
+    if (r.ok) {
+      toast(`🧠 ${r.mensagem}`, 'success', 4000);
+    } else {
+      toast(`ℹ️ ${r.mensagem}`, 'info', 5000);
+    }
+    loadFsrsPesos();
+  } catch(e) {
+    toast('Erro ao otimizar FSRS.', 'error');
+  }
+}
+window.otimizarFSRS = otimizarFSRS;
 
 // BOSS BATTLE MODE — Gamified Flashcard Review
 // ============================================================
@@ -1706,12 +1915,94 @@ export function initFlashcards(deps) {
 async function loadAddMaterias() {
   try {
     const materias = await fetch('/api/edital/materias-disponiveis').then(r => r.json());
+    const opts = '<option value="">📚 Disciplina (opcional)</option>' +
+      materias.map(m => `<option value="${m}">${m}</option>`).join('');
     const sel = document.getElementById('flash-add-materia');
-    if (sel) {
-      sel.innerHTML = '<option value="">📚 Disciplina (opcional)</option>' +
-        materias.map(m => `<option value="${m}">${m}</option>`).join('');
-    }
+    if (sel) sel.innerHTML = opts;
+    const clozeSel = document.getElementById('cloze-materia');
+    if (clozeSel) clozeSel.innerHTML = opts;
   } catch(e) { /* silencioso */ }
+}
+
+// ============================================================
+// CLOZE DELETION NATIVO (estilo Anki) — lacunas {{c1::resposta}}
+// Ideal para lei seca. Cada número (c1, c2...) vira um card.
+// ============================================================
+
+/** Envolve o texto selecionado (ou um placeholder) com {{cN::...}}. */
+export function clozeInserirLacuna(n) {
+  const ta = document.getElementById('cloze-texto');
+  if (!ta) return;
+  const ini = ta.selectionStart ?? ta.value.length;
+  const fim = ta.selectionEnd ?? ta.value.length;
+  const sel = ta.value.slice(ini, fim) || 'resposta';
+  const marcado = `{{c${n}::${sel}}}`;
+  ta.value = ta.value.slice(0, ini) + marcado + ta.value.slice(fim);
+  ta.focus();
+  // Posiciona o cursor logo após a lacuna inserida
+  const pos = ini + marcado.length;
+  ta.setSelectionRange(pos, pos);
+  clozePreview();
+}
+
+/** Mostra quantos cards e quais frentes/versos seriam gerados (parsing local). */
+function _parseClozeLocal(texto) {
+  const re = /\{\{c(\d+)::(.*?)\}\}/gs;
+  const grupos = new Set();
+  let m;
+  while ((m = re.exec(texto)) !== null) grupos.add(parseInt(m[1]));
+  const numeros = [...grupos].sort((a, b) => a - b);
+  return numeros.map(n => {
+    const respostas = [];
+    const pergunta = texto.replace(/\{\{c(\d+)::(.*?)\}\}/gs, (full, g, cont) => {
+      const partes = cont.split('::');
+      const resp = (partes[0] || '').trim();
+      const dica = (partes[1] || '').trim();
+      if (parseInt(g) === n) {
+        if (resp) respostas.push(resp);
+        return dica ? `[${dica}]` : '[...]';
+      }
+      return resp;
+    }).trim();
+    return { numero: n, pergunta, resposta: respostas.join(' / ') };
+  }).filter(c => c.pergunta && c.resposta);
+}
+
+export function clozePreview() {
+  const box = document.getElementById('cloze-preview');
+  const ta = document.getElementById('cloze-texto');
+  if (!box || !ta) return;
+  const cards = _parseClozeLocal(ta.value);
+  if (!cards.length) {
+    box.style.display = 'none';
+    return;
+  }
+  box.style.display = 'block';
+  box.innerHTML = `<strong>${cards.length} card(s):</strong>` + cards.map(c =>
+    `<div style="margin-top:4px;">• <span style="color:var(--text);">${escapeHtml(c.pergunta)}</span> → <span style="color:var(--green);">${escapeHtml(c.resposta)}</span></div>`
+  ).join('');
+}
+
+export async function criarCloze() {
+  const ta = document.getElementById('cloze-texto');
+  const texto = (ta?.value || '').trim();
+  if (!texto) { toast('Escreva o texto com lacunas.', 'warning'); return; }
+  if (!_parseClozeLocal(texto).length) {
+    toast('Nenhuma lacuna válida. Use {{c1::resposta}} ou o botão "Inserir lacuna".', 'warning');
+    return;
+  }
+  if (window.checkPlanLimit && !(await window.checkPlanLimit('flashcards'))) return;
+  const materia = document.getElementById('cloze-materia')?.value || '';
+  try {
+    const data = await api('/api/flashcards/cloze', { method: 'POST', body: { texto, materia } });
+    toast(`🧩 ${data.criados} card(s) Cloze criado(s)!`, 'success');
+    ta.value = '';
+    document.getElementById('cloze-preview').style.display = 'none';
+    loadFlashcardsToday();
+    loadAllFlashcards();
+  } catch(e) {
+    toast('Erro ao criar cards Cloze.', 'error');
+  }
 }
 
 

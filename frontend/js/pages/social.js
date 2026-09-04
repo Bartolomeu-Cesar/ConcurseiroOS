@@ -797,61 +797,9 @@ async function loadUserProfile() {
   }
 }
 
-function showProfileModal() {
-  // Fetch full profile data and show modal
-  fetch('/api/social/profile').then(r => r.json()).then(profile => {
-    const overlay = document.createElement('div');
-    overlay.id = 'profile-modal';
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);';
-    overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
-
-    const nome = profile.username || 'Concurseiro';
-    const initials = nome.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-
-    overlay.innerHTML = `
-      <div style="background:#313244;border-radius:16px;padding:28px;max-width:380px;width:90%;text-align:center;">
-        <div style="width:64px;height:64px;border-radius:50%;background:#cba6f7;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1.5rem;color:#1e1e2e;margin:0 auto 12px;">${initials}</div>
-        <h3 style="color:#cdd6f4;margin:0 0 4px;font-size:1.1rem;">${nome}</h3>
-        <p style="color:#9399b2;font-size:0.8rem;margin:0 0 16px;">user_id: ${profile.user_id}</p>
-
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;">
-          <div style="background:#1e1e2e;border-radius:10px;padding:12px;">
-            <div style="font-size:1.3rem;font-weight:700;color:#fab387;">🔥 ${profile.streak || 0}</div>
-            <div style="font-size:0.7rem;color:#9399b2;">Streak</div>
-          </div>
-          <div style="background:#1e1e2e;border-radius:10px;padding:12px;">
-            <div style="font-size:1.3rem;font-weight:700;color:#89b4fa;">⭐ ${profile.level || 1}</div>
-            <div style="font-size:0.7rem;color:#9399b2;">Nível</div>
-          </div>
-          <div style="background:#1e1e2e;border-radius:10px;padding:12px;">
-            <div style="font-size:1.3rem;font-weight:700;color:#a6e3a1;">${(profile.xp || 0).toLocaleString()}</div>
-            <div style="font-size:0.7rem;color:#9399b2;">XP</div>
-          </div>
-        </div>
-
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;">
-          <div style="background:#1e1e2e;border-radius:10px;padding:10px;">
-            <div style="font-size:1.1rem;font-weight:600;color:#cba6f7;">${profile.badges_count || 0}</div>
-            <div style="font-size:0.68rem;color:#9399b2;">Badges</div>
-          </div>
-          <div style="background:#1e1e2e;border-radius:10px;padding:10px;">
-            <div style="font-size:1.1rem;font-weight:600;color:#f9e2af;">${profile.friends_count || 0}</div>
-            <div style="font-size:0.68rem;color:#9399b2;">Amigos</div>
-          </div>
-          <div style="background:#1e1e2e;border-radius:10px;padding:10px;">
-            <div style="font-size:1.1rem;font-weight:600;color:#94e2d5;">${profile.groups_count || 0}</div>
-            <div style="font-size:0.68rem;color:#9399b2;">Grupos</div>
-          </div>
-        </div>
-
-        <button onclick="document.getElementById('profile-modal').remove()" style="background:#45475a;color:#cdd6f4;border:none;border-radius:8px;padding:10px 24px;cursor:pointer;font-size:0.9rem;">Fechar</button>
-        <button onclick="doLogout()" style="background:#f38ba8;color:#1e1e2e;border:none;border-radius:8px;padding:10px 24px;cursor:pointer;font-size:0.9rem;font-weight:600;margin-left:8px;">🚪 Sair</button>
-      </div>
-    `;
-    document.body.appendChild(overlay);
-  }).catch(() => showToast('Erro ao carregar perfil', 'error'));
-}
-window.showProfileModal = showProfileModal;
+// Perfil do usuário: o avatar da top bar usa o menu ÚNICO showProfileMenu()
+// (auth.js), acionado por handleAuthNav() — o mesmo do "Meu Dia". A antiga
+// showProfileModal() foi removida para não haver duas UIs de perfil divergentes.
 
 // Restore tab from sidebar navigation (if redirected)
 const savedTab = localStorage.getItem('concurseiro_social_tab');

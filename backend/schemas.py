@@ -5,6 +5,7 @@ All Pydantic models live here. Routers import from this single module.
 Usage:
     from schemas import LoginRequest, EditalCreate, FlashcardCreate, ...
 """
+
 from __future__ import annotations
 
 from typing import Optional
@@ -18,6 +19,7 @@ from constants import SM2_INITIAL_EF
 # PDF Progress
 # ============================================================
 
+
 class ProgressUpdate(BaseModel):
     current_page: int
     total_pages: int
@@ -26,6 +28,7 @@ class ProgressUpdate(BaseModel):
 # ============================================================
 # Edital
 # ============================================================
+
 
 class EditalCreate(BaseModel):
     materia: str
@@ -47,10 +50,12 @@ class EditalPdfLink(BaseModel):
 # Flashcards
 # ============================================================
 
+
 class FlashcardCreate(BaseModel):
     pergunta: str
     resposta: str
     materia: str = ""
+    reverso: bool = False  # se True, cria também o card invertido (R->P)
 
 
 class FlashcardUpdate(BaseModel):
@@ -74,6 +79,7 @@ class EditalReviewSM2(BaseModel):
 # ============================================================
 # Questões
 # ============================================================
+
 
 class QuestaoCreate(BaseModel):
     materia: str
@@ -99,6 +105,7 @@ class QuestaoResposta(BaseModel):
 # ============================================================
 # Simulados
 # ============================================================
+
 
 class SimuladoCreate(BaseModel):
     titulo: str
@@ -156,6 +163,7 @@ class SimuladoCronometradoFinalizar(BaseModel):
 # Ciclo de Estudos
 # ============================================================
 
+
 class CicloCreate(BaseModel):
     materia: str
     horas_alvo: float = 1.0
@@ -175,6 +183,7 @@ class CicloHoras(BaseModel):
 # Metas
 # ============================================================
 
+
 class MetasUpdate(BaseModel):
     meta_horas: float = 3.0
     meta_questoes: int = 30
@@ -186,6 +195,7 @@ class MetasUpdate(BaseModel):
 # ============================================================
 # Notas
 # ============================================================
+
 
 class NotaCreate(BaseModel):
     pdf_path: str
@@ -202,6 +212,7 @@ class NotaTopicoCreate(BaseModel):
 # Calendário Personalizado
 # ============================================================
 
+
 class CalendarioItem(BaseModel):
     dia_semana: int  # 0=Seg, 6=Dom
     materia: str
@@ -215,6 +226,7 @@ class CalendarioItem(BaseModel):
 # Planejador
 # ============================================================
 
+
 class PlanejadorItem(BaseModel):
     dia_semana: int  # 0=seg, 6=dom
     materia: str
@@ -224,6 +236,7 @@ class PlanejadorItem(BaseModel):
 # ============================================================
 # Cadernos
 # ============================================================
+
 
 class CadernoCreate(BaseModel):
     nome: str
@@ -239,6 +252,7 @@ class CadernoAddItem(BaseModel):
 # Bookmarks
 # ============================================================
 
+
 class BookmarkCreate(BaseModel):
     pdf_path: str
     pagina: int
@@ -250,6 +264,7 @@ class BookmarkCreate(BaseModel):
 # Feynman
 # ============================================================
 
+
 class FeynmanCreate(BaseModel):
     edital_id: int
     explicacao: str
@@ -258,6 +273,7 @@ class FeynmanCreate(BaseModel):
 # ============================================================
 # Desafios
 # ============================================================
+
 
 class DesafioCreate(BaseModel):
     titulo: str
@@ -271,6 +287,7 @@ class DesafioCreate(BaseModel):
 # Resumos (Elaboration Strategy)
 # ============================================================
 
+
 class ResumoCreate(BaseModel):
     resumo: str
     tipo: str = "livre"  # '3frases', 'mapa', 'livre'
@@ -279,6 +296,7 @@ class ResumoCreate(BaseModel):
 # ============================================================
 # Response Models (Core)
 # ============================================================
+
 
 class HealthDbStatus(BaseModel):
     status: str
@@ -387,37 +405,44 @@ class DashboardResponse(BaseModel):
 # Auth — Requests
 # ============================================================
 
+
 class LoginRequest(BaseModel):
     """POST /api/auth/login body."""
+
     email: EmailStr
 
 
 class RegisterRequest(BaseModel):
     """POST /api/auth/register body."""
+
     email: EmailStr
     nome: str = ""
 
 
 class VerifyCodeRequest(BaseModel):
     """POST /api/auth/verify-code body."""
+
     email: EmailStr
     code: str = Field(..., min_length=1)
 
 
 class ProfileUpdateRequest(BaseModel):
     """PUT /api/auth/profile body."""
+
     nome: str | None = None
     avatar: str | None = None
 
 
 class UpgradePlanRequest(BaseModel):
     """POST /api/auth/upgrade body."""
+
     plano: str = Field(default="premium", pattern=r"^(free|premium|ilimitado)$")
     vitalicio: bool = False  # Se True, pagamento único sem expiração
 
 
 class RefreshTokenRequest(BaseModel):
     """POST /api/auth/refresh body."""
+
     refresh_token: str = Field(..., min_length=1)
 
 
@@ -425,8 +450,10 @@ class RefreshTokenRequest(BaseModel):
 # Auth — Responses
 # ============================================================
 
+
 class UserResponse(BaseModel):
     """User data returned after login/verify or GET /api/auth/me."""
+
     id: int
     email: str
     nome: str
@@ -437,6 +464,7 @@ class UserResponse(BaseModel):
 
 class AuthTokenResponse(BaseModel):
     """Response from POST /api/auth/verify-code (success)."""
+
     ok: bool = True
     token: str
     user: UserResponse
@@ -444,6 +472,7 @@ class AuthTokenResponse(BaseModel):
 
 class AuthStatusResponse(BaseModel):
     """GET /api/auth/status response."""
+
     auth_enabled: bool
     smtp_configured: bool
 
@@ -452,6 +481,7 @@ class AuthStatusResponse(BaseModel):
 # Questões — Requests
 # ============================================================
 
+
 class QuestionCreate(BaseModel):
     """POST /api/questoes body — create a new question.
 
@@ -459,6 +489,7 @@ class QuestionCreate(BaseModel):
     This schema provides an alternative with slightly different field naming for
     external API consumers or future refactors.
     """
+
     materia: str
     enunciado: str
     alternativas: dict[str, str] = Field(
@@ -481,6 +512,7 @@ class QuestionCreate(BaseModel):
 
 class QuestionAnswer(BaseModel):
     """POST /api/questoes/{id}/responder body."""
+
     questao_id: int | None = None  # Optional — usually comes from path param
     resposta: str = Field(..., min_length=1, max_length=1, description="Answer letter (A-E)")
     tempo_segundos: int = 0
@@ -488,12 +520,14 @@ class QuestionAnswer(BaseModel):
 
 class QuestionBatchUpdate(BaseModel):
     """PUT /api/questoes/vincular-lote body (legacy untyped version)."""
+
     filtro: dict = Field(default_factory=dict)
     atualizar: dict = Field(default_factory=dict)
 
 
 class QuestionLinkBatchFiltro(BaseModel):
     """Filter criteria for batch-linking questions."""
+
     created_at: str | None = None
     materia_atual: str | None = None
     banca: str | None = None
@@ -503,6 +537,7 @@ class QuestionLinkBatchFiltro(BaseModel):
 
 class QuestionLinkBatchAtualizar(BaseModel):
     """Fields to update in batch-link operation."""
+
     materia: str | None = None
     topico: str | None = None
     banca: str | None = None
@@ -511,12 +546,14 @@ class QuestionLinkBatchAtualizar(BaseModel):
 
 class QuestionLinkBatch(BaseModel):
     """PUT /api/questoes/vincular-lote body — typed version."""
+
     filtro: QuestionLinkBatchFiltro = Field(default_factory=QuestionLinkBatchFiltro)
     atualizar: QuestionLinkBatchAtualizar = Field(default_factory=QuestionLinkBatchAtualizar)
 
 
 class QuestionUpdate(BaseModel):
     """PUT /api/questoes/{id} body — all fields optional."""
+
     materia: str | None = None
     topico: str | None = None
     enunciado: str | None = None
@@ -535,20 +572,24 @@ class QuestionUpdate(BaseModel):
 # Generic Responses
 # ============================================================
 
+
 class GenericResponse(BaseModel):
     """Generic OK/error response used across many endpoints."""
+
     ok: bool = True
     message: str = ""
 
 
 class GenericOkIdResponse(BaseModel):
     """Response with ok + created id."""
+
     ok: bool = True
     id: int
 
 
 class PaginatedResponse(BaseModel):
     """Wrapper for paginated list endpoints."""
+
     items: list
     total: int
     page: int | None = None
@@ -558,6 +599,7 @@ class PaginatedResponse(BaseModel):
 # ============================================================
 # Dashboard — Responses
 # ============================================================
+
 
 class DashboardEditalStats(BaseModel):
     total: int
@@ -578,6 +620,7 @@ class DashboardFlashcardsStats(BaseModel):
 
 class DashboardSummaryResponse(BaseModel):
     """GET /api/dashboard response (typed version)."""
+
     horas_por_dia: list
     total_horas: float
     horas_estudo: float = 0.0
@@ -592,6 +635,7 @@ class DashboardSummaryResponse(BaseModel):
 # ============================================================
 # Treinador — Responses (partial typing for key structures)
 # ============================================================
+
 
 class TreinadorMetaHoje(BaseModel):
     horas: float
@@ -619,8 +663,10 @@ class TreinadorRecommendation(BaseModel):
 # Admin — Requests
 # ============================================================
 
+
 class AdminCreateUser(BaseModel):
     """POST /api/admin/users body — admin creates a new user."""
+
     email: EmailStr
     nome: str = ""
     username: str = ""
@@ -633,6 +679,7 @@ class AdminCreateUser(BaseModel):
 
 class AdminUpdateUser(BaseModel):
     """PUT /api/admin/users/{id} body — all fields optional."""
+
     email: Optional[EmailStr] = None
     nome: Optional[str] = None
     username: Optional[str] = None
@@ -645,6 +692,7 @@ class AdminUpdateUser(BaseModel):
 
 class AdminBulkAction(BaseModel):
     """POST /api/admin/users/bulk body — bulk actions on users."""
+
     user_ids: list[int]
     action: str
     value: str = ""
@@ -652,6 +700,7 @@ class AdminBulkAction(BaseModel):
 
 class AdminChangePlan(BaseModel):
     """POST /api/admin/users/{id}/plano body — change user plan."""
+
     plano: str
     plano_expira: str = ""
 
@@ -660,8 +709,10 @@ class AdminChangePlan(BaseModel):
 # Batalha — Requests (P2-13)
 # ============================================================
 
+
 class CriarBatalhaRequest(BaseModel):
     """POST /api/batalha/criar body."""
+
     titulo: str = "Batalha de Questões"
     materias: list[str] = Field(default_factory=list)
     total_rodadas: int = 5
@@ -671,12 +722,14 @@ class CriarBatalhaRequest(BaseModel):
 
 class EntrarBatalhaRequest(BaseModel):
     """POST /api/batalha/entrar body."""
+
     codigo: str
     nome: Optional[str] = None
 
 
 class ReconfigurarBatalhaRequest(BaseModel):
     """POST /api/batalha/reconfigurar/{codigo} body."""
+
     materias: Optional[list[str]] = None
     total_rodadas: Optional[int] = None
     tempo_por_questao: Optional[int] = None
@@ -685,11 +738,13 @@ class ReconfigurarBatalhaRequest(BaseModel):
 
 class IniciarBatalhaRequest(BaseModel):
     """POST /api/batalha/iniciar/{codigo} body."""
+
     questao_ids: list[int] = Field(default_factory=list)
 
 
 class ResponderRodadaRequest(BaseModel):
     """POST /api/batalha/responder/{codigo} body."""
+
     resposta: str = ""
     tempo_seg: int = 0
 
@@ -698,8 +753,10 @@ class ResponderRodadaRequest(BaseModel):
 # Calendário — Requests (P2-13)
 # ============================================================
 
+
 class AtividadeConcluidaRequest(BaseModel):
     """POST /api/calendario/atividade-concluida body."""
+
     data: Optional[str] = None
     dia_semana: int = 0
     materia: str = ""
@@ -711,6 +768,7 @@ class AtividadeConcluidaRequest(BaseModel):
 
 class DesmarcarAtividadeRequest(BaseModel):
     """DELETE /api/calendario/atividade-concluida body."""
+
     data: Optional[str] = None
     materia: str = ""
     tipo: str = "estudo"
@@ -719,6 +777,7 @@ class DesmarcarAtividadeRequest(BaseModel):
 
 class SalvarQuestaoDissertativaRequest(BaseModel):
     """POST /api/questao-dissertativa/salvar body."""
+
     edital_id: Optional[int] = None
     resposta: str = ""
     confianca: int = 3
@@ -727,11 +786,13 @@ class SalvarQuestaoDissertativaRequest(BaseModel):
 
 class RegistrarAutoavaliacaoRequest(BaseModel):
     """POST /api/autoavaliacao/registrar body."""
+
     resultados: list[dict] = Field(default_factory=list)
 
 
 class ResetInteligenteRequest(BaseModel):
     """POST /api/planejador/reset-inteligente body."""
+
     edital_nome: str = ""
     cargo: str = ""
     horas_dia: Optional[float] = None
@@ -741,8 +802,10 @@ class ResetInteligenteRequest(BaseModel):
 # Edital — Requests (P2-13)
 # ============================================================
 
+
 class UpdateEditalInfoRequest(BaseModel):
     """PUT /api/edital/info/{id} body."""
+
     edital_nome: Optional[str] = None
     cargo: Optional[str] = None
     orgao: Optional[str] = None
@@ -761,6 +824,7 @@ class UpdateEditalInfoRequest(BaseModel):
 
 class CreateEditalInfoRequest(BaseModel):
     """POST /api/edital/info body."""
+
     edital_nome: str = ""
     cargo: str = ""
     orgao: str = ""
@@ -779,6 +843,7 @@ class CreateEditalInfoRequest(BaseModel):
 
 class RenomearEditalRequest(BaseModel):
     """PUT /api/edital/renomear body."""
+
     antigo: str = ""
     novo: str = ""
     cargo_antigo: str = ""
@@ -789,8 +854,10 @@ class RenomearEditalRequest(BaseModel):
 # Questões — Requests (P2-13)
 # ============================================================
 
+
 class RevisarErroRequest(BaseModel):
     """POST /api/questoes/erros/revisar/{id} body."""
+
     acertou: bool = False
     facilidade: int | None = None  # 1-4 mapping para FSRS ratings (opcional)
     tempo_segundos: int | None = None  # Tempo real gasto na revisão (se frontend enviar)
@@ -800,8 +867,10 @@ class RevisarErroRequest(BaseModel):
 # Social — Requests (P2-13)
 # ============================================================
 
+
 class AddMemberRequest(BaseModel):
     """POST /api/social/groups/{id}/add-member body."""
+
     email: str = ""
     user_id: Optional[int] = None
     username: str = ""
@@ -809,6 +878,7 @@ class AddMemberRequest(BaseModel):
 
 class ChangeMemberRoleRequest(BaseModel):
     """PUT /api/social/groups/{id}/members/{member_id}/role body."""
+
     role: str = "member"
 
 
@@ -816,8 +886,10 @@ class ChangeMemberRoleRequest(BaseModel):
 # Fatigue Detection — Requests (B3)
 # ============================================================
 
+
 class HeartbeatRequest(BaseModel):
     """POST /api/sessao/heartbeat body."""
+
     session_id: str
     questao_num: int
     tempo_ms: int
@@ -826,6 +898,7 @@ class HeartbeatRequest(BaseModel):
 
 class StartSessionRequest(BaseModel):
     """POST /api/sessao/iniciar body."""
+
     materia: Optional[str] = None
     tipo: str = "questoes"
 
@@ -834,8 +907,10 @@ class StartSessionRequest(BaseModel):
 # Generation Mode — Requests/Responses (C2)
 # ============================================================
 
+
 class ResponderGeracaoRequest(BaseModel):
     """POST /api/questoes/{id}/responder-geracao body."""
+
     resposta_digitada: str
     tempo_ms: int = 0
 
@@ -844,14 +919,17 @@ class ResponderGeracaoRequest(BaseModel):
 # Sessão Adaptativa / CAT — Requests (C1)
 # ============================================================
 
+
 class IniciarAdaptativaRequest(BaseModel):
     """POST /api/sessao-adaptativa/iniciar body."""
+
     materia: Optional[str] = None
     total_questoes: int = 20
 
 
 class ResponderAdaptativaRequest(BaseModel):
     """POST /api/sessao-adaptativa/{session_id}/responder body."""
+
     questao_id: int
     resposta: str
     tempo_ms: int = 0

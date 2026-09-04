@@ -17,7 +17,7 @@ ifeq ($(OS),Windows_NT)
 	RUFF := $(VENV)/Scripts/ruff
 endif
 
-.PHONY: dev test lint clean docker-up docker-down backup setup help
+.PHONY: dev test lint clean docker-up docker-down backup setup help db-check db-sync
 
 help: ## Mostra esta ajuda
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -66,3 +66,17 @@ setup: ## Instala pre-commit hooks
 	@$(PIP) install --quiet pre-commit
 	@$(VENV)/bin/pre-commit install
 	@echo "✅ Pre-commit hooks instalados!"
+
+db-check: ## Detecta se o diff do progress.db é dado REAL ou espúrio de teste
+	@python3 backend/db_guard.py
+
+db-sync: ## Se houver dado real no progress.db, commita (dedicado) e faz push
+	@if python3 backend/db_guard.py; then \
+		echo "Nada a sincronizar (diff espúrio ou sem alterações)."; \
+	else \
+		echo "🟡 Dado real detectado — commitando progress.db..."; \
+		git add backend/progress.db && \
+		git commit -m "chore: atualizar progress.db (dados reais)" && \
+		git push && \
+		echo "✅ progress.db sincronizado com o remoto."; \
+	fi

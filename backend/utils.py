@@ -87,11 +87,17 @@ def calcular_tempo_flashcard(
 ) -> int:
     """Tempo (segundos) de referência para revisar um flashcard, por complexidade.
 
-    Análogo a calcular_tempo_resposta_questao, mas para o fluxo de recall ativo
-    de flashcards (pergunta -> tentar lembrar -> conferir a resposta):
+    Segue a MESMA filosofia de `calcular_tempo_resposta_questao` (o cálculo do
+    desafio), adaptada ao recall ativo de flashcards. No desafio, o tempo escala
+    com o conteúdo (texto + nº de alternativas × 4s) — aqui o esforço de recall
+    escala com a COMPLEXIDADE DA RESPOSTA (quantos "pontos" precisam ser
+    lembrados), em vez de uma constante fixa que achatava tudo perto de ~18s.
 
-    - Leitura da pergunta a 130 wpm (compreensão).
-    - Tempo de recuperação ativa (tentar lembrar): 8s base.
+    Componentes:
+    - Leitura da pergunta a 130 wpm (compreensão de prova).
+    - Recuperação ativa PROPORCIONAL: 3s por "conceito" da resposta (aprox. 1
+      conceito a cada 6 palavras), análogo aos 4s/alternativa do desafio. Faixa
+      de 4s (resposta trivial) a 40s (resposta muito densa).
     - Leitura/conferência da resposta a 130 wpm.
     - Fator por estado FSRS (novo/relearning exigem mais esforço).
     - Faixa 10s–120s (flashcards são mais rápidos que questões).
@@ -100,8 +106,13 @@ def calcular_tempo_flashcard(
     palavras_resposta = len(resposta.split()) if resposta else 4
 
     tempo_leitura_pergunta = (palavras_pergunta / _WPM_COMPREENSAO) * 60
-    tempo_recuperacao = 8  # tentativa de recall ativo
     tempo_leitura_resposta = (palavras_resposta / _WPM_COMPREENSAO) * 60
+
+    # Recuperação ativa proporcional à densidade da resposta (análogo ao tempo de
+    # avaliar cada alternativa no desafio). ~1 conceito a cada 6 palavras; 3s por
+    # conceito; limitado a [4s, 40s] para não explodir nem virar constante.
+    conceitos = max(1, round(palavras_resposta / 6))
+    tempo_recuperacao = min(40, max(4, conceitos * 3))
 
     fator = _FATOR_FSRS_FLASHCARD.get(fsrs_state if fsrs_state is not None else 0, 1.15)
     tempo = int((tempo_leitura_pergunta + tempo_recuperacao + tempo_leitura_resposta) * fator)
@@ -145,16 +156,28 @@ def get_pdf_pages(filepath: str) -> int:
         return 1
 
 
-def build_tree(root: str) -> list:
+def build_tree(root: str, _base_root: str | None = None) -> list:
+    """Monta a árvore de PDFs/pastas a partir de `root`.
+
+    O campo `path` de cada PDF é SEMPRE relativo à raiz original (`_base_root`),
+    não à subpasta imediata. Ex.: um PDF em `Direito/aula1.pdf` recebe
+    `path == "Direito/aula1.pdf"` — a mesma convenção usada por `serve_pdf`
+    (`PDF_ROOT / path`), pela tabela `progress` e pelo overlay de organização.
+
+    `_base_root` é um parâmetro interno propagado pela recursão; chamadores
+    externos usam apenas `build_tree(root)`.
+    """
+    base = Path(_base_root).resolve() if _base_root else Path(root).resolve()
     result = []
-    root_path = Path(root).resolve()
     for entry in sorted(Path(root).iterdir()):
         if entry.is_dir():
-            children = build_tree(str(entry))
+            children = build_tree(str(entry), _base_root=str(base))
             if children:
                 result.append({"type": "folder", "name": entry.name, "children": children})
         elif entry.suffix.lower() == ".pdf" and ":" not in entry.name:
-            rel = str(entry.resolve().relative_to(root_path))
+            # Path completo relativo à raiz global (usa forward slash p/ consistência
+            # com a convenção de URL do viewer e do progress).
+            rel = entry.resolve().relative_to(base).as_posix()
             result.append({"type": "pdf", "name": entry.name, "path": rel})
     return result
 

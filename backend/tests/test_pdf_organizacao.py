@@ -56,14 +56,24 @@ def _override_db_session():
 app.dependency_overrides[get_db_session] = _override_db_session
 client = TestClient(app)
 
-# PDF_ROOT temporário com PDFs reais na RAIZ (onde build_tree gera path == name,
-# igual ao que o frontend arrasta em data-pdf-path).
+# PDF_ROOT temporário. Agora build_tree gera path COMPLETO relativo à raiz
+# (ex.: "Direito/aula1.pdf"), igual ao que o frontend arrasta em data-pdf-path
+# e ao que serve_pdf resolve (PDF_ROOT / path).
 _pdf_root = tempfile.mkdtemp(prefix="pdfroot_org_")
 Path(_pdf_root, "aula1.pdf").write_bytes(b"%PDF-1.4 a1")
 Path(_pdf_root, "aula2.pdf").write_bytes(b"%PDF-1.4 a2")
+# PDFs em subpastas — o cenário que reproduz o bug de path relativo à subpasta.
+Path(_pdf_root, "Direito").mkdir(parents=True, exist_ok=True)
+Path(_pdf_root, "Portugues").mkdir(parents=True, exist_ok=True)
+Path(_pdf_root, "Direito", "aula1.pdf").write_bytes(b"%PDF-1.4 dir")   # nome duplicado!
+Path(_pdf_root, "Portugues", "aula1.pdf").write_bytes(b"%PDF-1.4 port")  # nome duplicado!
+Path(_pdf_root, "Direito", "constituicao.pdf").write_bytes(b"%PDF-1.4 const")
 
 _PATH_A1 = "aula1.pdf"
 _PATH_A2 = "aula2.pdf"
+_PATH_DIR_A1 = "Direito/aula1.pdf"
+_PATH_PORT_A1 = "Portugues/aula1.pdf"
+_PATH_DIR_CONST = "Direito/constituicao.pdf"
 _UID = 10
 
 
@@ -91,7 +101,7 @@ def _ensure():
         "INSERT OR IGNORE INTO users (id, nome, email, username, created_at) VALUES (?, 'Dono', 'dono@t.com', 'dono', ?)",
         (_UID, now),
     )
-    for p in (_PATH_A1, _PATH_A2):
+    for p in (_PATH_A1, _PATH_A2, _PATH_DIR_A1, _PATH_PORT_A1, _PATH_DIR_CONST):
         conn.execute(
             "INSERT OR REPLACE INTO pdf_owner (pdf_path, owner_id, created_at) VALUES (?, ?, ?)",
             (p, _UID, now),
@@ -187,6 +197,63 @@ def test_mover_pdf_para_raiz_remove_da_pasta():
     assert _PATH_A1 not in _pdf_paths_in(pasta or {})
     raiz_pdfs = [n.get("path") or n.get("name") for n in data["tree"] if n.get("type") == "pdf"]
     assert _PATH_A1 in raiz_pdfs
+
+
+# ==================== REGRESSÃO: PDF EM SUBPASTA (path completo) ====================
+
+def test_build_tree_gera_path_completo():
+    """build_tree deve gerar path relativo à RAIZ, não à subpasta imediata."""
+    from utils import build_tree
+    paths = []
+
+    def _walk(nodes):
+        for n in nodes:
+            if n["type"] == "pdf":
+                paths.append(n["path"])
+            else:
+                _walk(n.get("children", []))
+    _walk(build_tree(_pdf_root))
+    assert _PATH_DIR_A1 in paths, f"esperava '{_PATH_DIR_A1}', paths={paths}"
+    assert _PATH_PORT_A1 in paths, f"esperava '{_PATH_PORT_A1}', paths={paths}"
+    # Nomes duplicados em pastas diferentes NÃO colidem (paths distintos).
+    assert paths.count("aula1.pdf") == 1  # só o da raiz tem esse path exato
+
+
+def test_mover_pdf_de_subpasta_aparece_na_pasta_virtual():
+    """Regressão do bug relatado: PDF em subpasta arrastado não saía do lugar.
+
+    Com path completo, mover 'Direito/constituicao.pdf' para uma pasta virtual
+    deve funcionar exatamente como um PDF da raiz.
+    """
+    pid = _criar_pasta("Revisão Direito")
+    r = client.post("/api/pdf/mover", json={"pdf_path": _PATH_DIR_CONST, "pasta_virtual_id": pid})
+    assert r.status_code == 200, r.text
+
+    data = client.get("/api/pdf/organizacao").json()
+    pasta = _find_folder(data["tree"], pid)
+    assert pasta is not None
+    assert _PATH_DIR_CONST in _pdf_paths_in(pasta), \
+        f"PDF de subpasta deveria estar na pasta {pid}, children={_pdf_paths_in(pasta)}"
+
+
+def test_mover_nomes_duplicados_em_pastas_diferentes():
+    """Dois PDFs 'aula1.pdf' (Direito e Portugues) devem ser movíveis de forma
+    independente — o bug de colisão de path movia/sumia o PDF errado."""
+    pd = _criar_pasta("Só Direito")
+    # Move apenas o de Direito.
+    r = client.post("/api/pdf/mover", json={"pdf_path": _PATH_DIR_A1, "pasta_virtual_id": pd})
+    assert r.status_code == 200, r.text
+
+    data = client.get("/api/pdf/organizacao").json()
+    pasta = _find_folder(data["tree"], pd)
+    dentro = _pdf_paths_in(pasta)
+    # O de Direito está na pasta; o de Portugues NÃO (não colidiu).
+    assert _PATH_DIR_A1 in dentro, f"children={dentro}"
+    assert _PATH_PORT_A1 not in dentro, f"colisão! children={dentro}"
+
+    # E o de Portugues continua acessível fora da pasta (na árvore real).
+    all_paths = _pdf_paths_in(data["tree"])
+    assert _PATH_PORT_A1 in all_paths
 
 
 def test_mover_re_mover_entre_pastas():

@@ -226,7 +226,7 @@ window.enviarPublicacao = async function() {
   try {
     const res = await fetch('/api/catalogo/publicar', {
       method: 'POST', headers: _headers(true),
-      body: JSON.stringify({ tipo, titulo, descricao, categoria, origem_uid: 0, ref })
+      body: JSON.stringify({ tipo, titulo, descricao, categoria, ref })
     });
     const data = await res.json();
     if (res.ok) {

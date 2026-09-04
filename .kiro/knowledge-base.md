@@ -943,3 +943,160 @@ Três erros de ambiente causaram retrabalho nesta sessão. Registrados para nunc
 
 `CACHE_VERSION` avançou v95 → v99 nesta sessão (auth.js, trilha.js, dashboard/main.js são
 precacheados). Regra reforçada: incrementar a cada mudança em JS/CSS listado em `PRECACHE_URLS`.
+
+
+---
+
+## 11. SESSÃO 04/09/2026 — Roadmap "Anki-like" (melhorias graduais)
+
+Análise profunda Anki vs ConcurseiroOS. Veredito: o app já SUPERA o Anki em pedagogia
+(FSRS-5 em flashcards E questões, 29+ técnicas científicas, boss battle, TTS/commuting,
+importação .apkg, viz Leitner). As lacunas do Anki estão na PROFUNDIDADE do modelo de card
+e no RIGOR do agendador. Roadmap priorizado por ROI (implementar gradualmente, sem esquecer
+nenhum ponto):
+
+| # | Melhoria | Impacto | Esforço | Depende de | Status |
+|---|----------|---------|---------|------------|--------|
+| 1 | **Review log (`revlog`) + retenção real** | ⭐⭐⭐ | Médio | — | ✅ SPRINT 1 (6c64c94) |
+| 2 | **Leech detection** (lapses ≥ 8 → suspende/sinaliza) | ⭐⭐⭐ | Baixo | — | ✅ SPRINT 1 (6c64c94) |
+| 3 | **Cloze deletion nativo** (`{{c1::...}}` → múltiplos cards) | ⭐⭐⭐ | Médio | note types | ✅ SPRINT 2 |
+| 4 | **Cards reversos / note type básico** (frente↔verso) | ⭐⭐ | Médio | — | ✅ SPRINT 3 |
+| 5 | **Filtered / Custom Study** (cram, "só erros de hoje") | ⭐⭐ | Baixo-Médio | — | ✅ SPRINT 4 |
+| 6 | **Otimização dos pesos FSRS por usuário** (treina W[0..18]) | ⭐⭐⭐ | Alto | revlog (#1) | ✅ SPRINT 5 (S0/W[0..3]) |
+| 7 | **Image Occlusion** (ocultar regiões de imagem) | ⭐⭐ | Alto | upload mídia | 🔲 |
+| 8 | **Estatísticas visuais** (heatmap reviews, forecast carga) | ⭐⭐ | Médio | revlog (#1) | 🔲 |
+| 9 | **Undo de review** (desfazer última avaliação) | ⭐ | Baixo | revlog (#1) | 🔲 |
+
+**Por que começar por #1 + #2:** aditivos ao FSRS atual (não quebram nada), baixo/médio esforço,
+e o revlog DESTRAVA #6, #8 e alimenta #2. Leech = vitória rápida percebida pelo aluno.
+
+**Estado atual confirmado (código):** tabela `flashcards` é simples (pergunta/resposta/materia +
+campos FSRS). NÃO há: tags de card, mídia/anexo, cloze nativo, card reverso agendável, decks
+hierárquicos, leech, revlog, otimização de pesos FSRS, retenção medida. `_converter_cloze` existe
+só na importação de .apkg (não é card cloze nativo). "Variação de Contexto" mostra invertido como
+técnica, mas não é card reverso agendado.
+
+### 11.1 SPRINT 1 — Fundação (revlog + retenção real + leech)
+
+**Schema (migration aditiva):**
+- Nova tabela `flashcard_revlog`: (id, flashcard_id, user_id, rating 1-4, quality 0-5, estado FSRS
+  antes/depois, stability, difficulty, intervalo_dias, elapsed_days, tempo_ms, revisado_em).
+- Novas colunas em `flashcards`: `lapses INTEGER DEFAULT 0`, `is_leech INTEGER DEFAULT 0`,
+  `suspenso INTEGER DEFAULT 0`.
+- Espelhar em `db/tables.py` (DBs novos) + migration numerada.
+
+**Gravação:** `/api/flashcards/{id}/review-fsrs` insere 1 linha no revlog por review (antes de
+atualizar o card, capturando estado anterior).
+
+**Leech:** rating Again (quality ≤ 1 / rating 1) incrementa `lapses`. Ao atingir `LEECH_THRESHOLD`
+(8, configurável) marca `is_leech=1`; múltiplo do threshold → `suspenso=1` (sai da fila `/today`).
+Técnica: "desirable difficulty tem limite" (Bjork). UI: badge 🩸 no card.
+
+**Retenção real:** endpoint `/api/flashcards/retencao-real` = % de acerto (rating≥3) em reviews de
+cards MADUROS (intervalo prévio ≥ 21d) a partir do revlog, + forecast de carga (quantos cards
+vencem por dia nos próximos N dias) a partir de `proxima_revisao`.
+
+
+### 11.2 SPRINT 2 — Cloze deletion nativo (#3)
+
+**Objetivo:** cards de lacuna estilo Anki (`{{c1::resposta}}`), ideal para lei seca.
+
+**Backend:**
+- `parse_cloze_nativo(texto)` em `routers/flashcards.py`: gera 1 card por NÚMERO de
+  lacuna distinto (c1, c2...). No card do grupo N, as lacunas cN viram `[...]` (ou
+  `[dica]` se `{{cN::resp::dica}}`); as demais lacunas ficam REVELADAS. Reusa a
+  ideia do `_converter_cloze` (importação .apkg) mas com a semântica multi-card do Anki.
+  Helper `_gerar_card_cloze` extraído para evitar closure em loop (B023).
+- Migration 77 (`_m77_flashcards_cloze`): coluna `cloze_text` guarda o texto-fonte
+  com marcações (para reedição). pergunta/resposta seguem sendo frente/verso derivadas.
+- Endpoint `POST /api/flashcards/cloze` {texto, materia?}: cria N cards (1/lacuna),
+  valida texto sem lacuna (400), respeita limite do plano (conta N cards), salva cloze_text.
+
+**Frontend (`index.html` + `flashcards.js`):** painel "🧩 Criar Cloze" com textarea,
+botões "Inserir lacuna c1/c2" (envolvem a seleção com `{{cN::}}`), preview local
+(`_parseClozeLocal`) e `criarCloze()`. Cards cloze entram na fila normal e herdam
+todo o fluxo FSRS/revlog/leech da Sprint 1.
+
+**Testes:** `test_flashcard_cloze.py` (10) — parsing (1 lacuna, multi-grupo, repetida,
+dica, sem cloze) + endpoint (cria N, salva cloze_text, valida, aparece no /today).
+**Constantes:** `LEECH_THRESHOLD = 8`, `LEECH_SUSPEND_MULTIPLE = 2` (suspende no 16º), em `constants.py`.
+
+### 11.3 SPRINT 3 — Cards reversos / note type básico (#4)
+
+**Objetivo:** de uma nota (pergunta/resposta) gerar 2 cards independentes: frente
+(P→R) e verso (R→P). Dobra o valor de cada flashcard criado.
+
+**Backend:**
+- Migration 78 (`_m78_flashcards_reverso`): colunas `card_tipo`
+  ('normal'|'frente'|'verso', default 'normal') e `note_id` (agrupa os cards da
+  mesma nota; = id do primeiro card). Índice idx_flashcards_note.
+- `FlashcardCreate.reverso: bool = False` (schemas.py).
+- `create_flashcard`: se reverso, cria card 'frente' (P→R) + card 'verso' (R→P
+  invertido) com o mesmo note_id; senão 1 card 'normal'. Conta 2 no limite do
+  plano quando reverso. Retorna {id, ids, criados, reverso}.
+- Cards são INDEPENDENTES: cada um tem seu próprio FSRS/revlog; excluir/editar um
+  não afeta o irmão (DELETE/PUT por id). Sibling burying (não mostrar irmãos no
+  mesmo dia) ficou para uma sprint futura.
+
+**Frontend:** checkbox "🔄 Criar também o card reverso" no formulário (index.html);
+`addFlashcard` envia `reverso` e mostra toast "2 cards criados" quando aplicável.
+
+**Testes:** `test_flashcard_reverso.py` (8) — cria 2 cards, inverte P/R, note_id
+compartilhado, normal/retrocompat (sem campo reverso), ambos no /today, revisão
+independente, excluir um preserva o irmão.
+
+### 11.4 SPRINT 4 — Filtered / Custom Study (#5)
+
+**Objetivo:** sessões de estudo sob demanda por critério, fora do agendamento SRS
+(úteis na reta final). Não altera o agendamento; respostas seguem indo ao revlog.
+
+**Backend:** `GET /api/flashcards/custom-study?modo=&materia=&limite=&dias=`. Modos:
+- `errados_hoje`: cards com rating Again hoje (via revlog) — reforço imediato.
+- `adiantar`: cards que vencem nos próximos `dias` (default 3) — antecipar carga.
+- `materia`: cram (todos os cards de uma matéria, aleatório).
+- `leech`: cards is_leech=1 (INCLUI suspensos, para reformular), ordenado por lapses.
+- `dificeis`: maior difficulty FSRS.
+Todos (exceto leech) excluem suspensos; retornam tempo_segundos + is_leech.
+Validações: modo inválido → 400; materia sem materia → 400.
+
+**Frontend:** painel "🧪 Estudo personalizado" (index.html) com botões por modo;
+`customStudy(modo, materia)` carrega a fila em `flashSessao` e usa o fluxo de
+sessão existente (`showSessaoFlashcard`); `customStudyMateria()` pede a disciplina.
+
+**Testes:** `test_flashcard_custom_study.py` (10) — cada modo, limite, exclusão de
+suspensos, leech inclui suspenso, tempo_segundos/is_leech, vazio, validações.
+
+### 11.5 SPRINT 5 — Otimização dos pesos FSRS por usuário (#6, parcial)
+
+**Escopo (baixo risco/alto valor):** otimizar os pesos de estabilidade inicial
+S0 = W[0..3] (por rating Again/Hard/Good/Easy) a partir do revlog (Sprint 1).
+NÃO reescreve o FSRS inteiro nem treina os 19 pesos (otimização completa fica
+para uma sprint futura); foca no subconjunto mais impactante e estimável.
+
+**fsrs.py:**
+- `_initial_stability(rating, w_inicial=None)`: usa S0 custom (dict {1..4} ou lista
+  de 4) quando fornecido; senão o default global W[rating-1]. Retrocompat total.
+- `review_card(..., w_inicial=None)`: propaga w_inicial às chamadas de S0.
+- `otimizar_pesos_iniciais(primeiras_revisoes)`: por rating, S0 = MEDIANA da
+  stability observada; exige ≥20 amostras/rating; clampa à faixa sã
+  (_S0_MIN/_S0_MAX) e impõe monotonicidade Again≤Hard≤Good≤Easy. Ratings sem
+  dados usam default.
+
+**Backend:**
+- Migration 79: coluna `fsrs_weights` (JSON) em metas_config.
+- `POST /api/flashcards/fsrs/otimizar`: estima S0 das PRIMEIRAS revisões ESPAÇADAS
+  (elapsed_days>=1 — evita circularidade com o S0 default) de cada card, salva em
+  metas_config. Falha graciosa se histórico insuficiente.
+- `GET /api/flashcards/fsrs/pesos`: retorna pesos atuais (custom ou default) + amostras.
+- `review-fsrs` carrega `_get_fsrs_weights(user)` e passa a review_card.
+
+**Frontend:** botão "🧠 Otimizar meu FSRS" na seção de retenção (loadRetencaoReal),
+`otimizarFSRS()` + `loadFsrsPesos()` exibindo o S0 por rating.
+
+**Testes:** `test_fsrs_otimizacao.py` (11) — função pura (amostras, monotonicidade,
+clamp, sem dados), review_card com/sem w_inicial (dict e lista), endpoints
+(default, sem histórico, com histórico espaçado).
+
+**Nota:** a estimativa usa reviews com espaçamento real (não a 1ª revisão, que já
+usa o S0 default → seria circular). Otimização completa dos 19 pesos (gradient
+descent sobre o revlog) permanece no roadmap como evolução futura.

@@ -166,6 +166,9 @@
                 fetch('/api/sessoes-estudo/registrar', {
                     method: 'POST', headers: {'Content-Type':'application/json'},
                     body: JSON.stringify({ horas: Math.round(horas * 100) / 100, materia: state.materia, tipo: 'pomodoro' })
+                }).then(() => {
+                    // Atualiza o "tempo de hoje" na UI sem refresh manual.
+                    window._eventBus?.emit('sessao:horas', { materia: state.materia, horas: Math.round(horas * 100) / 100, tipo: 'pomodoro' });
                 }).catch(() => {});
                 clearTimerState();
                 setTimeout(() => {
@@ -222,6 +225,8 @@
                     fetch('/api/sessoes-estudo/registrar', {
                         method: 'POST', headers: {'Content-Type':'application/json'},
                         body: JSON.stringify({ horas: Math.round(horas * 100) / 100, materia: state.materia, tipo: state.tipo || 'timer' })
+                    }).then(() => {
+                        window._eventBus?.emit('sessao:horas', { materia: state.materia, horas: Math.round(horas * 100) / 100, tipo: state.tipo || 'timer' });
                     }).catch(() => {});
                 }
             }

@@ -331,7 +331,7 @@
     </div>
     <div style="display:flex;align-items:center;gap:12px;">
       <div id="user-plan-badge" style="font-size:0.72rem;padding:3px 10px;border-radius:12px;font-weight:600;"></div>
-      <div style="display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="showProfileModal()" title="Seu perfil">
+      <div style="display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="handleAuthNav()" title="Seu perfil">
         <div id="user-avatar" style="width:34px;height:34px;border-radius:50%;background:#cba6f7;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.85rem;color:#1e1e2e;"></div>
         <div>
           <div id="user-name" style="font-size:0.85rem;color:#cdd6f4;font-weight:600;"></div>
@@ -596,7 +596,22 @@
   <script type="module">
     import { confirmModal, alertModal, promptModal } from '/js/modules/utils.js';
     import { toast } from '/js/modules/toast.js';
-    Object.assign(window, { confirmModal, alertModal, promptModal, toast });
+    // Menu de perfil ÚNICO (mesmo do "Meu Dia"): o avatar chama handleAuthNav()
+    // → showProfileMenu() do auth.js. Expomos as funções que os botões do menu
+    // e seus modais (upgrade/editar perfil/créditos) usam via onclick inline.
+    import {
+      handleAuthNav, logout, showUpgradeModal, doUpgrade, checkPlanLimit,
+      showEditProfileModal, saveProfile, comprarCreditos, ativarCreditos,
+      comprarVitalicio, loadCreditosSaldo, initAuth,
+    } from '/js/modules/auth.js';
+    Object.assign(window, {
+      confirmModal, alertModal, promptModal, toast,
+      handleAuthNav, logout, showUpgradeModal, doUpgrade, checkPlanLimit,
+      showEditProfileModal, saveProfile, comprarCreditos, ativarCreditos,
+      comprarVitalicio, loadCreditosSaldo,
+    });
+    // Garante que o estado de auth (avatar/plano) esteja carregado nesta página.
+    try { initAuth?.(); } catch (e) { /* best-effort */ }
   </script>
 </body>
 </html>
