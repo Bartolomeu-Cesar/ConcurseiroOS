@@ -134,6 +134,44 @@ def test_sem_atividade_hoje_retorna_zero(client):
     assert client.get("/api/metas").json()["progresso"]["questoes"] == 0
 
 
+def test_resumo_diario_conta_tabela_real(client):
+    """/api/resumo-diario deve reportar 'questoes' pela tabela real, não pelo
+    contador inflado de streaks."""
+    from utils import today_str
+
+    _reset()
+    hoje = today_str()
+    conn = _conn()
+    # 4 respostas reais hoje (precisam de questão para o JOIN do resumo)
+    for i in range(4):
+        conn.execute(
+            "INSERT INTO questoes (id, materia, enunciado, alternativa_a, alternativa_b, alternativa_c, alternativa_d, resposta_correta, created_at, user_id) "
+            "VALUES (?, 'Informática', 'E?', 'A', 'B', 'C', 'D', 'A', ?, 1)",
+            (500 + i, hoje),
+        )
+        conn.execute(
+            "INSERT INTO questoes_respostas (questao_id, resposta_usuario, acertou, tempo_segundos, data, user_id) "
+            "VALUES (?, 'A', 1, 30, ?, 1)",
+            (500 + i, hoje),
+        )
+    # Contador inflado
+    conn.execute(
+        "INSERT INTO streaks (data, horas_estudadas, questoes_resolvidas, flashcards_revisados, user_id) "
+        "VALUES (?, 1.0, 12, 3, 1)",
+        (hoje,),
+    )
+    conn.commit()
+    conn.close()
+
+    resumo = client.get("/api/resumo-diario").json()
+    assert resumo["questoes"] == 4, (
+        f"esperado 4 (tabela real), veio {resumo['questoes']} (contador inflado?)"
+    )
+    # e o detalhamento também soma 4
+    total_detalhes = sum(d["total"] for d in resumo["questoes_detalhes"])
+    assert total_detalhes == 4
+
+
 def teardown_module():
     try:
         os.unlink(_tmp_db.name)

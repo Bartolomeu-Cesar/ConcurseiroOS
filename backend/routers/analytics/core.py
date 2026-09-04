@@ -69,10 +69,15 @@ def resumo_diario(conn=Depends(get_db_session), user_id: int = Depends(get_user_
         WHERE status != 'Concluído' AND user_id = ? GROUP BY materia ORDER BY h ASC LIMIT 3
     """, (user_id,)).fetchall()
 
+    # Fonte de verdade para "questões de hoje": a tabela real questoes_respostas
+    # (soma de q_hoje), não o contador streaks.questoes_resolvidas — que também é
+    # incrementado por revisões do caderno de erros e divergia do dashboard.
+    questoes_hoje_total = sum(r[1] for r in q_hoje)
+
     return {
         "data": today_str(),
         "horas": hoje["horas_estudadas"] if hoje else 0,
-        "questoes": hoje["questoes_resolvidas"] if hoje else 0,
+        "questoes": questoes_hoje_total,
         "flashcards": hoje["flashcards_revisados"] if hoje else 0,
         "sessoes": [
             {"materia": r[0], "horas": round(r[1], 2), "minutos": round((r[1] or 0) * 60)}
