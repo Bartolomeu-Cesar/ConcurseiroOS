@@ -16,7 +16,7 @@ from schemas import (
     OkResponse,
 )
 from sanitize import sanitize_input
-from utils import sql_paginate, today_str, update_streak
+from utils import calcular_tempo_flashcard, sql_paginate, today_str, update_streak
 
 router = APIRouter(prefix="", tags=["Flashcards"])
 
@@ -89,6 +89,11 @@ def get_flashcards_today(materia: str = "", max_novos: int = Query(20, descripti
     # Limpar campos internos
     for card in result:
         card.pop("_expanding_retrieval", None)
+        # Tempo de referência por complexidade (para o timer regressivo na revisão),
+        # análogo ao das questões. Calculado antes de remover fsrs_state.
+        card["tempo_segundos"] = calcular_tempo_flashcard(
+            card.get("pergunta", ""), card.get("resposta", ""), card.get("fsrs_state") or 0
+        )
         card.pop("fsrs_state", None)
 
     return result

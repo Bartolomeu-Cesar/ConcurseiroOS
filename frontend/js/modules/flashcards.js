@@ -17,6 +17,65 @@ let _examMode = false; // Encoding Specificity: modo prova sem ajudas
 let _productionCount = 0; // Production Effect: contador para hint de ler em voz alta
 let _currentFilterMateria = ''; // Matéria filtrada na sessão atual (para sugerir próxima)
 
+// Timer regressivo por card (análogo ao das questões): começa no tempo estimado
+// pela complexidade (card.tempo_segundos) e diminui até revelar a resposta.
+let _flashTimerInterval = null;
+let _flashTimerSeg = 0;
+let _flashTimerMax = 0;
+
+function _stopFlashTimer() {
+  if (_flashTimerInterval) {
+    clearInterval(_flashTimerInterval);
+    _flashTimerInterval = null;
+  }
+  const timer = document.getElementById('flash-timer');
+  if (timer) timer.style.display = 'none';
+}
+
+function _startFlashTimer(segundos) {
+  _stopFlashTimer();
+  _flashTimerMax = Math.max(1, segundos || 20);
+  _flashTimerSeg = _flashTimerMax;
+
+  const timer = document.getElementById('flash-timer');
+  const fill = document.getElementById('flash-timer-fill');
+  const label = document.getElementById('flash-timer-label');
+  if (!timer || !fill || !label) return;
+
+  timer.style.display = 'block';
+  fill.style.width = '100%';
+  fill.style.background = 'var(--blue)';
+  label.textContent = `⏱ ${_flashTimerSeg}s`;
+  label.style.color = 'var(--text-sub)';
+
+  _flashTimerInterval = setInterval(() => {
+    _flashTimerSeg--;
+    const pct = Math.max(0, (_flashTimerSeg / _flashTimerMax) * 100);
+    fill.style.width = pct + '%';
+    label.textContent = `⏱ ${Math.max(0, _flashTimerSeg)}s`;
+
+    if (_flashTimerSeg <= 5) {
+      label.style.color = 'var(--red)';
+      fill.style.background = 'var(--red)';
+    } else if (_flashTimerSeg <= 10) {
+      label.style.color = 'var(--yellow)';
+      fill.style.background = 'var(--peach)';
+    } else {
+      label.style.color = 'var(--text-sub)';
+      fill.style.background = 'var(--blue)';
+    }
+
+    // Ao esgotar: para o timer e sinaliza (não força revelar — flashcard não
+    // tem "tempo esgotado" como questão; apenas indica que passou do estimado).
+    if (_flashTimerSeg <= 0) {
+      clearInterval(_flashTimerInterval);
+      _flashTimerInterval = null;
+      label.textContent = '⏱ tempo!';
+      label.style.color = 'var(--red)';
+    }
+  }, 1000);
+}
+
 /**
  * Inicia o timer global automaticamente se não estiver ativo.
  * Usa um Pomodoro de 25 min para a matéria indicada.
@@ -92,6 +151,9 @@ export async function loadFlashcardsToday() {
 function showCurrentFlashcard() {
   const q = document.getElementById('flash-question'), a = document.getElementById('flash-answer');
   const rb = document.getElementById('flash-reveal-btn'), rv = document.getElementById('flash-review-btns');
+  // Parar qualquer timer regressivo do card anterior (será reiniciado abaixo se
+  // um novo card for exibido). Cobre pausa de chunk, fim de sessão e trocas.
+  _stopFlashTimer();
   // Limpar hint de leitura em voz alta ao trocar de card (evita acúmulo no DOM)
   document.getElementById('production-hint')?.remove();
   const progressEl = document.getElementById('flash-progress');
@@ -179,6 +241,7 @@ function showCurrentFlashcard() {
     rb.style.display = 'inline-block';
     _flashCardStart = Date.now();
     if (!_flashSessionStart) _flashSessionStart = Date.now();
+    _startFlashTimer(card.tempo_segundos);
     return;
   }
 
@@ -229,6 +292,7 @@ function showCurrentFlashcard() {
   // Track time per card
   _flashCardStart = Date.now();
   if (!_flashSessionStart) _flashSessionStart = Date.now();
+  _startFlashTimer(card.tempo_segundos);
 }
 
 function _segmentText(text) {
@@ -264,6 +328,8 @@ export function revealNextSegment() {
 }
 
 export function revealAnswer() {
+  // Parar o timer regressivo do card (recall encerrado ao revelar a resposta)
+  _stopFlashTimer();
   // Record confidence level (metacognition)
   const confidence = _currentConfidence;
   _currentConfidence = 0; // Reset
@@ -887,6 +953,7 @@ export async function iniciarSessaoFlash(mode) {
 function showSessaoFlashcard() {
   const q = document.getElementById('flash-question'), a = document.getElementById('flash-answer');
   const rb = document.getElementById('flash-reveal-btn'), rv = document.getElementById('flash-review-btns');
+  _stopFlashTimer();
   if (flashSessaoIndex >= flashSessao.length) {
     q.innerHTML = '<span style="color:#a6e3a1;font-size:1.3rem;font-weight:600;">🎉 Sessão concluída! Parabéns!</span>';
     a.style.display = 'none'; rb.style.display = 'none'; rv.style.display = 'none';
@@ -1432,6 +1499,7 @@ export async function startBossBattle() {
 function _renderBossBattle() {
   const b = _bossBattle;
   if (!b) return;
+  _stopFlashTimer();
   const q = document.getElementById('flash-question'), a = document.getElementById('flash-answer');
   const rb = document.getElementById('flash-reveal-btn'), rv = document.getElementById('flash-review-btns');
   const progressEl = document.getElementById('flash-progress');
@@ -1670,6 +1738,7 @@ export async function openBrainDump() {
   const rv = document.getElementById('flash-review-btns');
   const progressEl = document.getElementById('flash-progress');
 
+  _stopFlashTimer();
   if (a) a.style.display = 'none';
   if (rb) rb.style.display = 'none';
   if (rv) rv.style.display = 'none';

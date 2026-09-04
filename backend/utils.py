@@ -66,6 +66,46 @@ def calcular_tempo_resposta_questao(
     fator = _FATOR_DIFICULDADE.get((dificuldade or "").strip().lower(), 1.15)
     tempo = int((tempo_leitura + tempo_avaliacao_alt + tempo_decisao) * fator)
     return max(minimo, min(maximo, tempo))
+
+
+# Multiplicador de tempo por estado FSRS do flashcard. Cards recém-esquecidos
+# (relearning) ou novos exigem mais esforço de recuperação que cards maduros.
+_FATOR_FSRS_FLASHCARD = {
+    0: 1.2,   # New — nunca visto, sem traço de memória
+    1: 1.15,  # Learning — em fase inicial
+    2: 1.0,   # Review — maduro, recall mais rápido
+    3: 1.25,  # Relearning — esquecido recentemente, mais difícil
+}
+
+
+def calcular_tempo_flashcard(
+    pergunta: str,
+    resposta: str,
+    fsrs_state: int = 0,
+    minimo: int = 10,
+    maximo: int = 120,
+) -> int:
+    """Tempo (segundos) de referência para revisar um flashcard, por complexidade.
+
+    Análogo a calcular_tempo_resposta_questao, mas para o fluxo de recall ativo
+    de flashcards (pergunta -> tentar lembrar -> conferir a resposta):
+
+    - Leitura da pergunta a 130 wpm (compreensão).
+    - Tempo de recuperação ativa (tentar lembrar): 8s base.
+    - Leitura/conferência da resposta a 130 wpm.
+    - Fator por estado FSRS (novo/relearning exigem mais esforço).
+    - Faixa 10s–120s (flashcards são mais rápidos que questões).
+    """
+    palavras_pergunta = len(pergunta.split()) if pergunta else 4
+    palavras_resposta = len(resposta.split()) if resposta else 4
+
+    tempo_leitura_pergunta = (palavras_pergunta / _WPM_COMPREENSAO) * 60
+    tempo_recuperacao = 8  # tentativa de recall ativo
+    tempo_leitura_resposta = (palavras_resposta / _WPM_COMPREENSAO) * 60
+
+    fator = _FATOR_FSRS_FLASHCARD.get(fsrs_state if fsrs_state is not None else 0, 1.15)
+    tempo = int((tempo_leitura_pergunta + tempo_recuperacao + tempo_leitura_resposta) * fator)
+    return max(minimo, min(maximo, tempo))
 def today_str():
     return date.today().isoformat()
 
