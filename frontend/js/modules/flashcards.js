@@ -17,15 +17,17 @@ let _examMode = false; // Encoding Specificity: modo prova sem ajudas
 let _productionCount = 0; // Production Effect: contador para hint de ler em voz alta
 let _currentFilterMateria = ''; // Matéria filtrada na sessão atual (para sugerir próxima)
 
-// Timer regressivo por card (análogo ao das questões): começa no tempo estimado
-// pela complexidade (card.tempo_segundos) e diminui até revelar a resposta.
+// Timer por card (análogo ao das questões): começa no tempo estimado pela
+// complexidade (card.tempo_segundos), decresce até 0 e então conta tempo extra.
+// Roda enquanto o estudante lê pergunta E resposta; só para quando ele confirma
+// se acertou/errou (reviewFlashcard/sessaoNext), não ao revelar a resposta.
 let _flashTimerInterval = null;
 let _flashTimerSeg = 0;
 let _flashTimerMax = 0;
 let _flashTimerFase = 'regressiva'; // 'regressiva' (previsto) | 'extra' (excedente)
 let _flashTimerExtra = 0;           // segundos além do previsto (fase extra)
 let _flashTimerElapsed = 0;         // segundos totais no card (previsto + extra)
-let _lastTempoResumo = null;        // resumo de tempo do último card revelado
+let _lastTempoResumo = null;        // resumo de tempo do card ao avaliar acerto/erro
 
 function _stopFlashTimer() {
   if (_flashTimerInterval) {
@@ -103,7 +105,7 @@ function _startFlashTimer(segundos) {
   }, 1000);
 }
 
-/** Descreve o desempenho de tempo do card atual (para feedback ao revelar). */
+/** Descreve o desempenho de tempo do card atual (para feedback ao avaliar). */
 function _resumoTempoCard() {
   const previsto = _flashTimerMax || 0;
   const total = _flashTimerElapsed || 0;
@@ -364,11 +366,9 @@ export function revealNextSegment() {
 }
 
 export function revealAnswer() {
-  // Capturar o desempenho de tempo ANTES de parar o timer (recall encerrado ao
-  // revelar): tempo previsto, tempo total gasto e excedente. Usado no feedback.
-  _lastTempoResumo = _resumoTempoCard();
-  // Parar o timer regressivo do card (recall encerrado ao revelar a resposta)
-  _stopFlashTimer();
+  // NÃO paramos o timer aqui: o estudante ainda vai ler a resposta e decidir se
+  // acertou/errou. O timer segue contando (previsto → tempo extra) e só para em
+  // reviewFlashcard(), quando a avaliação é confirmada.
   // Record confidence level (metacognition)
   const confidence = _currentConfidence;
   _currentConfidence = 0; // Reset
@@ -424,24 +424,7 @@ export function revealAnswer() {
 
   const rv = document.getElementById('flash-review-btns');
   rv.style.display = 'flex';
-
-  // Feedback de tempo: compara o tempo gasto com o previsto pela complexidade
-  // (enunciado + resposta + FSRS). Verde = dentro do previsto; peach = excedeu.
-  let tempoHtml = '';
-  const rt = _lastTempoResumo;
-  if (rt && rt.previsto > 0) {
-    if (rt.dentroDoPrevisto) {
-      tempoHtml = `<div style="font-size:0.68rem;color:var(--green);margin-bottom:6px;text-align:center;">
-        ⏱ ${rt.total}s / previsto ${rt.previsto}s — dentro do tempo ✓
-      </div>`;
-    } else {
-      tempoHtml = `<div style="font-size:0.68rem;color:var(--peach);margin-bottom:6px;text-align:center;">
-        ⏱ ${rt.total}s / previsto ${rt.previsto}s — +${rt.extra}s além do previsto
-      </div>`;
-    }
-  }
-
-  rv.innerHTML = tempoHtml + metacogHtml + `
+  rv.innerHTML = metacogHtml + `
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;width:100%;">
       <button onclick="reviewFlashcard(0)" style="background:var(--red);color:var(--bg);border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">0•Esqueci</button>
       <button onclick="reviewFlashcard(1)" style="background:var(--red);color:var(--bg);border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">1•Errei</button>
@@ -457,6 +440,12 @@ export async function reviewFlashcard(quality) {
   const card = flashcardsToday[currentFlashIndex];
   if (!card) return;
   try {
+    // O estudante confirmou acerto/erro: AGORA o recall termina de verdade.
+    // Captura o desempenho de tempo (previsto vs total, incluindo o tempo lendo
+    // a resposta) e só então para o timer.
+    _lastTempoResumo = _resumoTempoCard();
+    _stopFlashTimer();
+
     // Acumular tempo gasto neste card
     if (_flashCardStart) {
       const elapsed = Math.round((Date.now() - _flashCardStart) / 1000);
@@ -503,7 +492,16 @@ export async function reviewFlashcard(quality) {
       else if (lastMetacog.calibrated) metacogMsg = ' ✅ Boa calibração!';
     }
 
-    toast(`${msgs[quality]} [${stateLabel}]${metacogMsg}`, quality >= 3 ? 'success' : 'warning', 3000);
+    // Feedback de tempo: total gasto (recall + leitura da resposta) vs previsto.
+    let tempoMsg = '';
+    const rt = _lastTempoResumo;
+    if (rt && rt.previsto > 0) {
+      tempoMsg = rt.dentroDoPrevisto
+        ? ` ⏱ ${rt.total}s/${rt.previsto}s ✓`
+        : ` ⏱ ${rt.total}s/${rt.previsto}s (+${rt.extra}s)`;
+    }
+
+    toast(`${msgs[quality]} [${stateLabel}]${metacogMsg}${tempoMsg}`, quality >= 3 ? 'success' : 'warning', 3000);
 
     // === HYPERCORRECTION EFFECT (Butterfield & Metcalfe, 2001) ===
     // Erros com alta confiança são corrigidos com mais eficácia.
@@ -1037,7 +1035,7 @@ function showSessaoFlashcard() {
   // calculado no backend por pergunta+resposta+FSRS. Sem isso caía no fallback.
   _startFlashTimer(card.tempo_segundos);
   rb.onclick = function() {
-    _stopFlashTimer();
+    // NÃO para o timer ao revelar: segue até o estudante avaliar em sessaoNext().
     a.style.display = 'block'; rb.style.display = 'none';
     rv.style.display = 'flex';
     // Auto-start global timer if not already running (igual ao fluxo de revisão SRS)
@@ -1054,6 +1052,7 @@ function showSessaoFlashcard() {
 }
 
 export async function sessaoNext(quality) {
+  _stopFlashTimer();  // recall encerrado só ao confirmar acerto/erro
   const card = flashSessao[flashSessaoIndex];
   if (card && card.id) {
     try {
