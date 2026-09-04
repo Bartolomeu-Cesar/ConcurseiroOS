@@ -573,6 +573,9 @@ function _advanceAfterReview() {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ horas: horas, materia: 'Flashcards (Revisão)', tipo: 'flashcard' })
+      }).then(() => {
+        // Notifica a UI para atualizar o "tempo de hoje" sem refresh manual.
+        emit('sessao:horas', { materia: 'Flashcards (Revisão)', horas, tipo: 'flashcard' });
       }).catch(() => {});
       _flashSessionSeconds = 0; // Reset para próximo bloco
     }

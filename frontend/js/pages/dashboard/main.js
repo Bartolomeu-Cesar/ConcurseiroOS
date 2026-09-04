@@ -862,7 +862,10 @@ function _startPomoOverlay(materia, tempoMin, tipo) {
           fetch('/api/sessoes-estudo/registrar', {
             method: 'POST', headers: {'Content-Type':'application/json'},
             body: JSON.stringify({ horas: Math.round(horasEstudadas * 100) / 100, materia, tipo: 'pomodoro' })
-          }).then(() => { loadConcluidasHoje(); }).catch(() => {});
+          }).then(() => {
+            loadConcluidasHoje();
+            window._eventBus?.emit('sessao:horas', { materia, horas: Math.round(horasEstudadas * 100) / 100, tipo: 'pomodoro' });
+          }).catch(() => {});
         }
       }
     }

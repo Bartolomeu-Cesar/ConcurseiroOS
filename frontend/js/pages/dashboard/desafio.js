@@ -216,6 +216,16 @@ async function submitDesafioRespostas() {
     // Adicionar tempo real ao resultado para exibição
     result.tempo_real_seg = tempoRealSeg;
     showDesafioResults(result);
+
+    // O backend gravou o tempo em sessoes_estudo. Notifica a UI para atualizar
+    // o "tempo de hoje" e os contadores de metas sem precisar de refresh manual.
+    try {
+      window._eventBus?.emit('sessao:horas', {
+        materia: 'Desafio Diário',
+        horas: Math.round((tempoRealSeg / 3600) * 100) / 100,
+        tipo: 'desafio_diario',
+      });
+    } catch (e) { /* event-bus pode não estar disponível nesta página */ }
   } catch(e) {
     body.innerHTML = `<div style="text-align:center;color:var(--red);padding:20px;">Erro ao enviar respostas: ${e.message}</div>`;
   }
