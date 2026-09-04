@@ -1,7 +1,10 @@
 import random
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 
+from deps import get_user_id
 from fastapi import APIRouter, Body, Depends, HTTPException
+from schemas import DesafioCreate, MetasUpdate, StreakResponse
+from services import get_horas_estudadas
 
 from constants import (
     LEVEL_XP,
@@ -14,9 +17,6 @@ from constants import (
     XP_STREAK_WEEKLY_BONUS,
 )
 from database import get_db_session
-from deps import get_user_id
-from schemas import DesafioCreate, MetasUpdate, StreakResponse
-from services import get_horas_estudadas
 from utils import calculate_streak, today_str
 
 router = APIRouter(prefix="", tags=["Gamificação"])
@@ -49,6 +49,15 @@ def get_streaks(conn=Depends(get_db_session), user_id: int = Depends(get_user_id
     hoje = conn.execute("SELECT * FROM streaks WHERE data = ? AND user_id = ?", (today_str(), user_id)).fetchone()
     hoje_data = dict(hoje) if hoje else {"data": today_str(), "horas_estudadas": 0, "questoes_resolvidas": 0, "flashcards_revisados": 0}
 
+    # Fonte de verdade para "questões de hoje": a tabela real questoes_respostas.
+    # O contador em streaks.questoes_resolvidas também é incrementado por revisões
+    # do caderno de erros (que não gravam em questoes_respostas), o que fazia o
+    # card "Hoje" divergir do card "Questões Resolvidas" do dashboard. Contar a
+    # tabela real elimina essa discrepância e o drift acumulado do contador.
+    hoje_data["questoes_resolvidas"] = conn.execute(
+        "SELECT COUNT(*) FROM questoes_respostas WHERE data = ? AND user_id = ?", (today_str(), user_id)
+    ).fetchone()[0]
+
     streak_info = calculate_streak(conn, user_id)
 
     return {
@@ -71,6 +80,13 @@ def get_metas(conn=Depends(get_db_session), user_id: int = Depends(get_user_id))
         "SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE data = ? AND user_id = ?", (today_str(), user_id)
     ).fetchone()[0]
 
+    # Fonte de verdade para "questões de hoje": tabela real questoes_respostas
+    # (o contador streaks.questoes_resolvidas também soma revisões do caderno de
+    # erros, causando divergência com o dashboard). Ver /api/streaks.
+    questoes_hoje = conn.execute(
+        "SELECT COUNT(*) FROM questoes_respostas WHERE data = ? AND user_id = ?", (today_str(), user_id)
+    ).fetchone()[0]
+
     # Contar súmulas revisadas hoje
     sumulas_hoje = hoje_dict.get("sumulas_revisadas", 0)
 
@@ -78,7 +94,7 @@ def get_metas(conn=Depends(get_db_session), user_id: int = Depends(get_user_id))
         "config": config_dict,
         "progresso": {
             "horas": round(horas_hoje, 3),
-            "questoes": hoje_dict.get("questoes_resolvidas", 0),
+            "questoes": questoes_hoje,
             "flashcards": hoje_dict.get("flashcards_revisados", 0),
             "sumulas": sumulas_hoje
         }
