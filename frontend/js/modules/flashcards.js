@@ -22,6 +22,10 @@ let _currentFilterMateria = ''; // Matéria filtrada na sessão atual (para suge
 let _flashTimerInterval = null;
 let _flashTimerSeg = 0;
 let _flashTimerMax = 0;
+let _flashTimerFase = 'regressiva'; // 'regressiva' (previsto) | 'extra' (excedente)
+let _flashTimerExtra = 0;           // segundos além do previsto (fase extra)
+let _flashTimerElapsed = 0;         // segundos totais no card (previsto + extra)
+let _lastTempoResumo = null;        // resumo de tempo do último card revelado
 
 function _stopFlashTimer() {
   if (_flashTimerInterval) {
@@ -32,10 +36,21 @@ function _stopFlashTimer() {
   if (timer) timer.style.display = 'none';
 }
 
+/**
+ * Timer de revisão de flashcard em duas fases:
+ *  1) Regressiva: parte do tempo previsto (card.tempo_segundos, calculado no
+ *     backend a partir de enunciado + resposta + estado FSRS) e decresce até 0.
+ *  2) Extra: ao zerar NÃO para — passa a CRESCER, computando todo o tempo que o
+ *     estudante ainda leva até indicar acertou/errou (revelar a resposta chama
+ *     _stopFlashTimer). Assim medimos o tempo real completo no card.
+ */
 function _startFlashTimer(segundos) {
   _stopFlashTimer();
   _flashTimerMax = Math.max(1, segundos || 20);
   _flashTimerSeg = _flashTimerMax;
+  _flashTimerFase = 'regressiva';
+  _flashTimerExtra = 0;
+  _flashTimerElapsed = 0;
 
   const timer = document.getElementById('flash-timer');
   const fill = document.getElementById('flash-timer-fill');
@@ -45,35 +60,56 @@ function _startFlashTimer(segundos) {
   timer.style.display = 'block';
   fill.style.width = '100%';
   fill.style.background = 'var(--blue)';
+  fill.style.animation = '';
   label.textContent = `⏱ ${_flashTimerSeg}s`;
   label.style.color = 'var(--text-sub)';
+  label.style.fontWeight = '';
 
   _flashTimerInterval = setInterval(() => {
-    _flashTimerSeg--;
-    const pct = Math.max(0, (_flashTimerSeg / _flashTimerMax) * 100);
-    fill.style.width = pct + '%';
-    label.textContent = `⏱ ${Math.max(0, _flashTimerSeg)}s`;
+    _flashTimerElapsed++;
 
-    if (_flashTimerSeg <= 5) {
-      label.style.color = 'var(--red)';
-      fill.style.background = 'var(--red)';
-    } else if (_flashTimerSeg <= 10) {
-      label.style.color = 'var(--yellow)';
-      fill.style.background = 'var(--peach)';
+    if (_flashTimerFase === 'regressiva') {
+      _flashTimerSeg--;
+
+      if (_flashTimerSeg > 0) {
+        // Ainda dentro do tempo previsto: barra decrescente + gradiente de cor.
+        const pct = Math.max(0, (_flashTimerSeg / _flashTimerMax) * 100);
+        fill.style.width = pct + '%';
+        label.textContent = `⏱ ${_flashTimerSeg}s`;
+        if (_flashTimerSeg <= 5) {
+          label.style.color = 'var(--red)';
+          fill.style.background = 'var(--red)';
+        } else if (_flashTimerSeg <= 10) {
+          label.style.color = 'var(--yellow)';
+          fill.style.background = 'var(--peach)';
+        } else {
+          label.style.color = 'var(--text-sub)';
+          fill.style.background = 'var(--blue)';
+        }
+      } else {
+        // Esgotou o previsto → entra na fase EXTRA (cronômetro crescente).
+        _flashTimerFase = 'extra';
+        fill.style.width = '100%';
+        fill.style.background = 'var(--red)';
+        label.style.color = 'var(--red)';
+        label.style.fontWeight = '700';
+        label.textContent = '⏱ +0s (tempo extra)';
+      }
     } else {
-      label.style.color = 'var(--text-sub)';
-      fill.style.background = 'var(--blue)';
-    }
-
-    // Ao esgotar: para o timer e sinaliza (não força revelar — flashcard não
-    // tem "tempo esgotado" como questão; apenas indica que passou do estimado).
-    if (_flashTimerSeg <= 0) {
-      clearInterval(_flashTimerInterval);
-      _flashTimerInterval = null;
-      label.textContent = '⏱ tempo!';
-      label.style.color = 'var(--red)';
+      // Fase extra: apenas incrementa e mostra quanto passou do previsto.
+      _flashTimerExtra++;
+      label.textContent = `⏱ +${_flashTimerExtra}s (tempo extra)`;
     }
   }, 1000);
+}
+
+/** Descreve o desempenho de tempo do card atual (para feedback ao revelar). */
+function _resumoTempoCard() {
+  const previsto = _flashTimerMax || 0;
+  const total = _flashTimerElapsed || 0;
+  const extra = _flashTimerExtra || 0;
+  const dentroDoPrevisto = extra <= 0 && total <= previsto;
+  return { previsto, total, extra, dentroDoPrevisto };
 }
 
 /**
@@ -328,6 +364,9 @@ export function revealNextSegment() {
 }
 
 export function revealAnswer() {
+  // Capturar o desempenho de tempo ANTES de parar o timer (recall encerrado ao
+  // revelar): tempo previsto, tempo total gasto e excedente. Usado no feedback.
+  _lastTempoResumo = _resumoTempoCard();
   // Parar o timer regressivo do card (recall encerrado ao revelar a resposta)
   _stopFlashTimer();
   // Record confidence level (metacognition)
@@ -385,7 +424,24 @@ export function revealAnswer() {
 
   const rv = document.getElementById('flash-review-btns');
   rv.style.display = 'flex';
-  rv.innerHTML = metacogHtml + `
+
+  // Feedback de tempo: compara o tempo gasto com o previsto pela complexidade
+  // (enunciado + resposta + FSRS). Verde = dentro do previsto; peach = excedeu.
+  let tempoHtml = '';
+  const rt = _lastTempoResumo;
+  if (rt && rt.previsto > 0) {
+    if (rt.dentroDoPrevisto) {
+      tempoHtml = `<div style="font-size:0.68rem;color:var(--green);margin-bottom:6px;text-align:center;">
+        ⏱ ${rt.total}s / previsto ${rt.previsto}s — dentro do tempo ✓
+      </div>`;
+    } else {
+      tempoHtml = `<div style="font-size:0.68rem;color:var(--peach);margin-bottom:6px;text-align:center;">
+        ⏱ ${rt.total}s / previsto ${rt.previsto}s — +${rt.extra}s além do previsto
+      </div>`;
+    }
+  }
+
+  rv.innerHTML = tempoHtml + metacogHtml + `
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;width:100%;">
       <button onclick="reviewFlashcard(0)" style="background:var(--red);color:var(--bg);border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">0•Esqueci</button>
       <button onclick="reviewFlashcard(1)" style="background:var(--red);color:var(--bg);border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">1•Errei</button>
