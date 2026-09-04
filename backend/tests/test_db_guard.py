@@ -18,20 +18,26 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import db_guard
 
 
-def _mk_db(path, *, flashcards=0, user_status_val="offline", search_rows=0, schema_ver=1):
+def _mk_db(path, *, flashcards=0, user_status_val="offline", search_rows=0, schema_ver=1, bot_xp=100, real_xp=50):
     """Cria um .db com tabelas reais (flashcards) e efêmeras (user_status,
-    search_index, schema_version) para simular os diffs do dia a dia."""
+    search_index, schema_version) para simular os diffs do dia a dia.
+
+    Inclui league_members com um BOT (user_id<0, XP simulado) e o usuário REAL
+    (user_id>0) para exercitar o filtro de bots do db_guard."""
     c = sqlite3.connect(path)
     c.execute("CREATE TABLE flashcards (id INTEGER PRIMARY KEY, pergunta TEXT, resposta TEXT)")
     c.execute("CREATE TABLE user_status (user_id INTEGER PRIMARY KEY, status TEXT, atualizado_em TEXT)")
     c.execute("CREATE TABLE search_index (rowid INTEGER PRIMARY KEY, texto TEXT)")
     c.execute("CREATE TABLE schema_version (version INTEGER)")
+    c.execute("CREATE TABLE league_members (id INTEGER PRIMARY KEY, user_id INTEGER, weekly_xp INTEGER)")
     for i in range(flashcards):
         c.execute("INSERT INTO flashcards (pergunta, resposta) VALUES (?, ?)", (f"p{i}", f"r{i}"))
     c.execute("INSERT INTO user_status VALUES (1, ?, '2026-01-01T00:00:00')", (user_status_val,))
     for i in range(search_rows):
         c.execute("INSERT INTO search_index (texto) VALUES (?)", (f"t{i}",))
     c.execute("INSERT INTO schema_version VALUES (?)", (schema_ver,))
+    c.execute("INSERT INTO league_members VALUES (1, -1, ?)", (bot_xp,))  # bot simulado
+    c.execute("INSERT INTO league_members VALUES (2, 1, ?)", (real_xp,))  # usuário real
     c.commit()
     c.close()
 
@@ -123,6 +129,30 @@ def test_diff_dado_real_mesmo_com_contagem_igual(dois_dbs):
     assert rel["decisao"] == "dado_real", rel
     assert "flashcards" in rel["tabelas_alteradas"]
     assert rel["detalhe"]["flashcards"]["delta"] == 0  # mesma contagem, conteúdo mudou
+
+
+# ---------------------------------------------------------------------------
+# Filtro de bots (user_id < 0): XP simulado de oponentes não é dado real
+# ---------------------------------------------------------------------------
+
+
+def test_mudanca_so_de_bot_e_espuria(dois_dbs):
+    """XP de bots da liga (user_id < 0) muda pela simulação — não é dado real."""
+    base, atual = dois_dbs
+    _mk_db(base, flashcards=3, bot_xp=100, real_xp=50)
+    _mk_db(atual, flashcards=3, bot_xp=999, real_xp=50)  # só o bot mudou
+    rel = db_guard.diff_snapshots(db_guard._snapshot(atual), db_guard._snapshot(base))
+    assert rel["decisao"] == "espurio", rel
+
+
+def test_mudanca_do_usuario_real_e_dado_real(dois_dbs):
+    """XP do usuário real (user_id > 0) em league_members É dado real."""
+    base, atual = dois_dbs
+    _mk_db(base, flashcards=3, bot_xp=100, real_xp=50)
+    _mk_db(atual, flashcards=3, bot_xp=100, real_xp=80)  # usuário real mudou
+    rel = db_guard.diff_snapshots(db_guard._snapshot(atual), db_guard._snapshot(base))
+    assert rel["decisao"] == "dado_real", rel
+    assert "league_members" in rel["tabelas_alteradas"]
 
 
 # ---------------------------------------------------------------------------

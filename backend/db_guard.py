@@ -104,8 +104,14 @@ def _hash_tabela(conn: sqlite3.Connection, tabela: str) -> tuple[int, str]:
     if not cols:
         return (0, "")
     col_list = ", ".join(f'"{c}"' for c in cols)
+    # Bots/oponentes simulados usam user_id negativo (ex.: ranking de ligas). Seu
+    # estado (weekly_xp etc.) é gerado pela simulação, não é dado real do
+    # estudante — filtramos para não gerar falso positivo de "dado real".
+    where = ""
+    if "user_id" in cols:
+        where = ' WHERE "user_id" >= 0'
     try:
-        rows = conn.execute(f'SELECT {col_list} FROM "{tabela}"').fetchall()
+        rows = conn.execute(f'SELECT {col_list} FROM "{tabela}"{where}').fetchall()
     except sqlite3.DatabaseError:
         # Tabela ilegível → trata como "mudou" no lado seguro.
         return (-1, "ILEGIVEL")
