@@ -4,6 +4,7 @@ Versionamento: cada migration tem um número sequencial. Apenas migrations
 com número > versão atual são executadas. A tabela schema_version registra
 quais já foram aplicadas.
 """
+
 from datetime import datetime
 
 from logger import log
@@ -13,89 +14,116 @@ from logger import log
 # REGISTRO DE MIGRATIONS — cada entrada é (número, função)
 # ============================================================
 
+
 def _m01_edital_nome(conn):
     conn.execute("ALTER TABLE edital ADD COLUMN edital_nome TEXT DEFAULT 'Geral'")
+
 
 def _m02_edital_cargo(conn):
     conn.execute("ALTER TABLE edital ADD COLUMN cargo TEXT DEFAULT ''")
 
+
 def _m03_edital_pdf_link(conn):
     conn.execute("ALTER TABLE edital ADD COLUMN pdf_link TEXT DEFAULT ''")
+
 
 def _m04_edital_pdf_pagina(conn):
     conn.execute("ALTER TABLE edital ADD COLUMN pdf_pagina INTEGER DEFAULT 0")
 
+
 def _m05_edital_arquivado(conn):
     conn.execute("ALTER TABLE edital ADD COLUMN arquivado INTEGER DEFAULT 0")
+
 
 def _m06_edital_revisao(conn):
     conn.execute("ALTER TABLE edital ADD COLUMN proxima_revisao TEXT DEFAULT ''")
     conn.execute("ALTER TABLE edital ADD COLUMN intervalo_revisao INTEGER DEFAULT 1")
 
+
 def _m07_questoes_banca(conn):
     conn.execute("ALTER TABLE questoes ADD COLUMN banca TEXT DEFAULT ''")
 
+
 def _m08_questoes_ano(conn):
     conn.execute("ALTER TABLE questoes ADD COLUMN ano TEXT DEFAULT ''")
+
 
 def _m09_flashcards_sm2(conn):
     conn.execute("ALTER TABLE flashcards ADD COLUMN easiness_factor REAL DEFAULT 2.5")
     conn.execute("ALTER TABLE flashcards ADD COLUMN repetitions INTEGER DEFAULT 0")
 
+
 def _m10_flashcards_materia(conn):
     conn.execute("ALTER TABLE flashcards ADD COLUMN materia TEXT DEFAULT ''")
+
 
 def _m11_edital_sm2(conn):
     conn.execute("ALTER TABLE edital ADD COLUMN easiness_factor_edital REAL DEFAULT 2.5")
     conn.execute("ALTER TABLE edital ADD COLUMN repetitions_edital INTEGER DEFAULT 0")
 
+
 def _m12_users_plano(conn):
     conn.execute("ALTER TABLE users ADD COLUMN plano TEXT DEFAULT 'free'")
     conn.execute("ALTER TABLE users ADD COLUMN plano_expira TEXT DEFAULT ''")
 
+
 def _m13_metas_sumulas(conn):
     conn.execute("ALTER TABLE metas_config ADD COLUMN meta_sumulas INTEGER DEFAULT 0")
 
+
 def _m14_streaks_sumulas(conn):
     conn.execute("ALTER TABLE streaks ADD COLUMN sumulas_revisadas INTEGER DEFAULT 0")
+
 
 def _m15_streak_freeze(conn):
     conn.execute("ALTER TABLE metas_config ADD COLUMN streak_freezes_available INTEGER DEFAULT 1")
     conn.execute("ALTER TABLE metas_config ADD COLUMN streak_freezes_used INTEGER DEFAULT 0")
     conn.execute("ALTER TABLE metas_config ADD COLUMN last_freeze_earned TEXT DEFAULT ''")
 
+
 def _m16_sessoes_created_at(conn):
     conn.execute("ALTER TABLE sessoes_estudo ADD COLUMN created_at TEXT DEFAULT ''")
+
 
 def _m17_flashcards_stability(conn):
     conn.execute("ALTER TABLE flashcards ADD COLUMN stability REAL DEFAULT 0")
 
+
 def _m18_flashcards_difficulty(conn):
     conn.execute("ALTER TABLE flashcards ADD COLUMN difficulty REAL DEFAULT 0")
+
 
 def _m19_flashcards_fsrs_state(conn):
     conn.execute("ALTER TABLE flashcards ADD COLUMN fsrs_state INTEGER DEFAULT 0")
 
+
 def _m20_edital_stability(conn):
     conn.execute("ALTER TABLE edital ADD COLUMN stability_edital REAL DEFAULT 0")
+
 
 def _m21_edital_difficulty(conn):
     conn.execute("ALTER TABLE edital ADD COLUMN difficulty_edital REAL DEFAULT 0")
 
+
 def _m22_edital_fsrs_state(conn):
     conn.execute("ALTER TABLE edital ADD COLUMN fsrs_state_edital INTEGER DEFAULT 0")
+
 
 def _m23_sumulas_stability(conn):
     conn.execute("ALTER TABLE sumulas ADD COLUMN stability REAL DEFAULT 0")
 
+
 def _m24_sumulas_difficulty(conn):
     conn.execute("ALTER TABLE sumulas ADD COLUMN difficulty_sumulas REAL DEFAULT 0")
+
 
 def _m25_sumulas_fsrs_state(conn):
     conn.execute("ALTER TABLE sumulas ADD COLUMN fsrs_state INTEGER DEFAULT 0")
 
+
 def _m26_metas_desired_retention(conn):
     conn.execute("ALTER TABLE metas_config ADD COLUMN desired_retention REAL DEFAULT 0.9")
+
 
 def _m27_push_subscriptions(conn):
     conn.execute("""
@@ -112,6 +140,7 @@ def _m27_push_subscriptions(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id ON push_subscriptions(user_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_push_subscriptions_endpoint ON push_subscriptions(endpoint)")
 
+
 def _m28_notification_preferences(conn):
     conn.execute("""
         CREATE TABLE IF NOT EXISTS notification_preferences (
@@ -125,6 +154,7 @@ def _m28_notification_preferences(conn):
         )
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_notification_preferences_user_id ON notification_preferences(user_id)")
+
 
 def _m29_fix_notification_preferences(conn):
     # Fix old schema (had streak_risk instead of streak_reminders)
@@ -143,7 +173,10 @@ def _m29_fix_notification_preferences(conn):
                 quiet_hours_end INTEGER DEFAULT 7
             )
         """)
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_notification_preferences_user_id ON notification_preferences(user_id)")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_notification_preferences_user_id ON notification_preferences(user_id)"
+        )
+
 
 def _m30_notification_log(conn):
     conn.execute("""
@@ -160,22 +193,28 @@ def _m30_notification_log(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_notification_log_user_id ON notification_log(user_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_notification_log_sent_at ON notification_log(sent_at)")
 
+
 def _m31_edital_mastery(conn):
     conn.execute("ALTER TABLE edital ADD COLUMN mastery_level REAL DEFAULT 0")
     conn.execute("ALTER TABLE edital ADD COLUMN mastery_updated_at TEXT DEFAULT ''")
 
+
 def _m32_multi_user_isolation(conn):
     _migrate_user_id(conn)
 
+
 def _m33_users_username(conn):
     conn.execute("ALTER TABLE users ADD COLUMN username TEXT DEFAULT ''")
+
 
 def _m34_users_role(conn):
     conn.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'")
     conn.execute("UPDATE users SET role = 'admin' WHERE id = 1")
 
+
 def _m35_users_liga(conn):
     conn.execute("ALTER TABLE users ADD COLUMN liga TEXT DEFAULT 'bronze'")
+
 
 def _m36_erros_revisao(conn):
     conn.execute("""
@@ -213,8 +252,10 @@ def _m36_erros_revisao(conn):
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_boss_battles_user_data ON boss_battles(user_id, data)")
 
+
 def _m37_simulados_tipo(conn):
     conn.execute("ALTER TABLE simulados ADD COLUMN tipo TEXT DEFAULT 'normal'")
+
 
 def _m38_questoes_respostas_confianca(conn):
     """Migration 38: confidence field for confidence-based repetition (A2)."""
@@ -222,6 +263,7 @@ def _m38_questoes_respostas_confianca(conn):
         conn.execute("SELECT confianca FROM questoes_respostas LIMIT 1")
     except Exception:
         conn.execute("ALTER TABLE questoes_respostas ADD COLUMN confianca INTEGER DEFAULT NULL")
+
 
 def _m39_elaboration_log(conn):
     """Migration 39: elaboration log table for elaboration prompts (A3)."""
@@ -322,6 +364,7 @@ def _m43_sessao_adaptativa(conn):
 
 # Lista ordenada de todas as migrations
 
+
 def _m44_questoes_prova_origem(conn):
     """Add prova_origem column to questoes."""
     try:
@@ -329,6 +372,7 @@ def _m44_questoes_prova_origem(conn):
     except Exception:
         conn.execute("ALTER TABLE questoes ADD COLUMN prova_origem TEXT DEFAULT ''")
         log.info("Migration: added column prova_origem to questoes")
+
 
 def _m45_edital_video_link(conn):
     """Add video_link column to edital for YouTube videos."""
@@ -373,7 +417,9 @@ def _m47_topic_dependencies(conn):
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_topic_deps_topic ON topic_dependencies(topic_id, user_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_topic_deps_depends ON topic_dependencies(depends_on_id, user_id)")
-    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_topic_deps_unique ON topic_dependencies(topic_id, depends_on_id, user_id)")
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_topic_deps_unique ON topic_dependencies(topic_id, depends_on_id, user_id)"
+    )
     log.info("Migration: created topic_dependencies table")
 
 
@@ -482,7 +528,11 @@ def _m52_pdf_organizacao_virtual(conn):
 def _m53_cadernos_questoes(conn):
     """Upgrade cadernos table and create cadernos_questoes for question notebooks."""
     # Adicionar colunas novas à tabela cadernos existente
-    for col, defn in [("user_id", "INTEGER NOT NULL DEFAULT 1"), ("cor", "TEXT DEFAULT '#89b4fa'"), ("updated_at", "TEXT DEFAULT ''")]:
+    for col, defn in [
+        ("user_id", "INTEGER NOT NULL DEFAULT 1"),
+        ("cor", "TEXT DEFAULT '#89b4fa'"),
+        ("updated_at", "TEXT DEFAULT ''"),
+    ]:
         try:
             conn.execute(f"ALTER TABLE cadernos ADD COLUMN {col} {defn}")
         except Exception:
@@ -502,7 +552,9 @@ def _m53_cadernos_questoes(conn):
             FOREIGN KEY (questao_id) REFERENCES questoes(id)
         )
     """)
-    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_cadernos_questoes_unique ON cadernos_questoes(caderno_id, questao_id)")
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_cadernos_questoes_unique ON cadernos_questoes(caderno_id, questao_id)"
+    )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_cadernos_questoes_caderno ON cadernos_questoes(caderno_id)")
     log.info("Migration: upgraded cadernos + created cadernos_questoes table")
 
@@ -799,9 +851,7 @@ def _m68_pdf_ownership(conn):
     conn.execute(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_pdf_compart_unique ON pdf_compartilhamentos(pdf_path, shared_with_id)"
     )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_pdf_compart_shared ON pdf_compartilhamentos(shared_with_id)"
-    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_pdf_compart_shared ON pdf_compartilhamentos(shared_with_id)")
 
     # ---- 3. Backfill: todos os PDFs existentes pertencem ao uid 1 ----
     # (a) paths já registrados em progress
@@ -818,27 +868,24 @@ def _m68_pdf_ownership(conn):
 
         root = settings.PDF_ROOT
         if root and _Path(root).exists():
+
             def _collect(nodes):
                 for n in nodes:
                     if n.get("type") == "pdf" and n.get("path"):
                         paths.add(n["path"])
                     elif n.get("type") == "folder":
                         _collect(n.get("children", []))
+
             _collect(build_tree(root))
     except Exception as e:
         log.warning(f"Migration 68: não foi possível varrer PDF_ROOT no backfill: {e}")
 
     for p in paths:
-        conn.execute(
-            "INSERT OR IGNORE INTO pdf_owner (pdf_path, owner_id, created_at) VALUES (?, 1, ?)",
-            (p, now)
-        )
+        conn.execute("INSERT OR IGNORE INTO pdf_owner (pdf_path, owner_id, created_at) VALUES (?, 1, ?)", (p, now))
     log.info(f"Migration 68: {len(paths)} PDF(s) atribuídos ao dono uid=1")
 
     # ---- 4. Corrigir PK de progress: (path) -> (path, user_id) ----
-    table_info = conn.execute(
-        "SELECT sql FROM sqlite_master WHERE type='table' AND name='progress'"
-    ).fetchone()
+    table_info = conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='progress'").fetchone()
     sql = (table_info[0] if table_info else "") or ""
     # Só recria se a PK ainda for apenas (path) — isto é, não contém PRIMARY KEY composta
     if "PRIMARY KEY (path, user_id)" not in sql and "PRIMARY KEY(path, user_id)" not in sql:
@@ -1064,6 +1111,7 @@ def _m75_pdf_path_completo(conn):
         return
 
     from collections import defaultdict
+
     by_basename = defaultdict(list)
     full_set = set(full_paths)
     for fp in full_paths:
@@ -1094,6 +1142,51 @@ def _m75_pdf_path_completo(conn):
                 except Exception as e:  # pragma: no cover
                     log.warning(f"Migration 75: falha ao remapear {old_path} em {tabela}: {e}")
     log.info(f"Migration 75: {total} pdf_path(s) normalizado(s) para path completo")
+
+
+def _m76_flashcard_revlog_leech(conn):
+    """Fundação 'Anki-like': log de revisões (revlog) + detecção de leech.
+
+    - flashcard_revlog: uma linha por revisão de flashcard, capturando o estado
+      ANTES e DEPOIS (rating, quality, estado FSRS, stability, difficulty,
+      intervalo, dias decorridos, tempo gasto). Base para retenção real, futura
+      otimização dos pesos FSRS e estatísticas visuais.
+    - flashcards.lapses: nº de vezes que o card foi esquecido (rating Again).
+    - flashcards.is_leech: 1 quando lapses atinge o limite (card problemático).
+    - flashcards.suspenso: 1 quando suspenso (sai da fila de revisão).
+    """
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS flashcard_revlog (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            flashcard_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            rating INTEGER NOT NULL,            -- FSRS rating 1-4 (Again/Hard/Good/Easy)
+            quality INTEGER,                    -- quality 0-5 recebido do frontend
+            estado_antes INTEGER,               -- fsrs_state antes da revisão
+            estado_depois INTEGER,              -- fsrs_state depois
+            stability REAL,                     -- stability resultante
+            difficulty REAL,                    -- difficulty resultante
+            intervalo_dias INTEGER,             -- novo intervalo agendado
+            elapsed_days INTEGER,               -- dias desde a última revisão (0 se novo)
+            tempo_ms INTEGER DEFAULT 0,         -- tempo gasto no card (ms), 0 se desconhecido
+            revisado_em TEXT NOT NULL           -- timestamp ISO da revisão
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_revlog_user_data ON flashcard_revlog(user_id, revisado_em)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_revlog_flashcard ON flashcard_revlog(flashcard_id)")
+
+    for col, ddl in (
+        ("lapses", "ALTER TABLE flashcards ADD COLUMN lapses INTEGER DEFAULT 0"),
+        ("is_leech", "ALTER TABLE flashcards ADD COLUMN is_leech INTEGER DEFAULT 0"),
+        ("suspenso", "ALTER TABLE flashcards ADD COLUMN suspenso INTEGER DEFAULT 0"),
+    ):
+        try:
+            conn.execute(ddl)
+            log.info(f"Migration 76: added column {col} to flashcards")
+        except Exception:
+            pass  # coluna já existe
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_flashcards_leech ON flashcards(user_id, is_leech, suspenso)")
+    log.info("Migration 76: flashcard_revlog + leech columns ready")
 
 
 MIGRATIONS = [
@@ -1172,6 +1265,7 @@ MIGRATIONS = [
     (73, _m73_cadernos_colunas_faltantes),
     (74, _m74_flashcards_ultima_revisao),
     (75, _m75_pdf_path_completo),
+    (76, _m76_flashcard_revlog_leech),
 ]
 
 
@@ -1179,12 +1273,11 @@ MIGRATIONS = [
 # EXECUTOR DE MIGRATIONS COM VERSIONAMENTO
 # ============================================================
 
+
 def _ensure_schema_version_table(conn) -> bool:
     """Garante que a tabela schema_version existe. Retorna True se foi recém-criada."""
     # Verifica se a tabela existe
-    exists = conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_version'"
-    ).fetchone()
+    exists = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_version'").fetchone()
     if exists:
         return False
     # Cria a tabela (primeiro startup após update ou banco novo)
@@ -1228,10 +1321,7 @@ def _run_migrations(conn):
         if _is_fresh_database(conn):
             now = datetime.now().isoformat()
             for version, _ in MIGRATIONS:
-                conn.execute(
-                    "INSERT OR IGNORE INTO schema_version (version, applied_at) VALUES (?, ?)",
-                    (version, now)
-                )
+                conn.execute("INSERT OR IGNORE INTO schema_version (version, applied_at) VALUES (?, ?)", (version, now))
             conn.commit()
             log.info(f"Fresh database detected — marked {len(MIGRATIONS)} migrations as applied")
             return
@@ -1253,19 +1343,13 @@ def _run_migrations(conn):
     for version, migration_fn in pending:
         try:
             migration_fn(conn)
-            conn.execute(
-                "INSERT INTO schema_version (version, applied_at) VALUES (?, ?)",
-                (version, now)
-            )
+            conn.execute("INSERT INTO schema_version (version, applied_at) VALUES (?, ?)", (version, now))
             conn.commit()
             log.info(f"Migration {version} applied: {migration_fn.__name__}")
         except Exception as e:
             log.warning(f"Migration {version} ({migration_fn.__name__}) skipped: {e}")
             # Registra mesmo assim para não tentar novamente (coluna já existe, etc.)
-            conn.execute(
-                "INSERT OR IGNORE INTO schema_version (version, applied_at) VALUES (?, ?)",
-                (version, now)
-            )
+            conn.execute("INSERT OR IGNORE INTO schema_version (version, applied_at) VALUES (?, ?)", (version, now))
             conn.commit()
 
 
@@ -1286,10 +1370,7 @@ def _run_migrations_compat(conn):
         except Exception:
             skipped += 1
         # Registra independentemente (se falhou, é porque já existia)
-        conn.execute(
-            "INSERT OR IGNORE INTO schema_version (version, applied_at) VALUES (?, ?)",
-            (version, now)
-        )
+        conn.execute("INSERT OR IGNORE INTO schema_version (version, applied_at) VALUES (?, ?)", (version, now))
 
     conn.commit()
     log.info(f"Compat mode complete: {applied} applied, {skipped} skipped (already existed)")
@@ -1299,16 +1380,35 @@ def _run_migrations_compat(conn):
 # HELPER: Multi-user isolation (migration 32)
 # ============================================================
 
+
 def _migrate_user_id(conn):
     """Adiciona coluna user_id em todas as tabelas que precisam de isolamento por usuário."""
     tables_needing_user_id = [
-        "edital", "flashcards", "questoes", "questoes_respostas",
-        "simulados", "simulado_questoes", "ciclo_estudos", "sessoes_estudo",
-        "streaks", "metas_config", "notas_pdf", "notas_topico",
-        "bookmarks_pdf", "cadernos", "caderno_itens", "feynman",
-        "desafios", "planejador_semanal", "calendario_personalizado",
-        "calendario_atividades", "calendario_streaks", "resumos",
-        "sumulas", "progress", "edital_info",
+        "edital",
+        "flashcards",
+        "questoes",
+        "questoes_respostas",
+        "simulados",
+        "simulado_questoes",
+        "ciclo_estudos",
+        "sessoes_estudo",
+        "streaks",
+        "metas_config",
+        "notas_pdf",
+        "notas_topico",
+        "bookmarks_pdf",
+        "cadernos",
+        "caderno_itens",
+        "feynman",
+        "desafios",
+        "planejador_semanal",
+        "calendario_personalizado",
+        "calendario_atividades",
+        "calendario_streaks",
+        "resumos",
+        "sumulas",
+        "progress",
+        "edital_info",
     ]
 
     for table in tables_needing_user_id:
@@ -1323,9 +1423,17 @@ def _migrate_user_id(conn):
 
     # Criar índice composto para user_id nas tabelas mais consultadas
     index_tables = [
-        "edital", "flashcards", "questoes", "questoes_respostas",
-        "sessoes_estudo", "streaks", "simulados", "ciclo_estudos",
-        "sumulas", "metas_config", "progress",
+        "edital",
+        "flashcards",
+        "questoes",
+        "questoes_respostas",
+        "sessoes_estudo",
+        "streaks",
+        "simulados",
+        "ciclo_estudos",
+        "sumulas",
+        "metas_config",
+        "progress",
     ]
     for table in index_tables:
         try:

@@ -21,8 +21,18 @@ from utils import calcular_tempo_flashcard, sql_paginate, today_str, update_stre
 router = APIRouter(prefix="", tags=["Flashcards"])
 
 
-@router.get("/api/flashcards", summary="Listar flashcards", description="Lista todos os flashcards com paginação opcional e filtro por matéria")
-def list_flashcards(materia: str = "", page: int | None = Query(None), limit: int = 50, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+@router.get(
+    "/api/flashcards",
+    summary="Listar flashcards",
+    description="Lista todos os flashcards com paginação opcional e filtro por matéria",
+)
+def list_flashcards(
+    materia: str = "",
+    page: int | None = Query(None),
+    limit: int = 50,
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
     if materia:
         query = "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia, stability, fsrs_state FROM flashcards WHERE materia = ? AND user_id = ?"
         params = (materia, user_id)
@@ -34,12 +44,20 @@ def list_flashcards(materia: str = "", page: int | None = Query(None), limit: in
 
 @router.get("/api/flashcards/materias", summary="Listar matérias dos flashcards")
 def list_flashcards_materias(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
-    rows = conn.execute("SELECT materia, COUNT(*) as total FROM flashcards WHERE user_id = ? GROUP BY materia ORDER BY total DESC", (user_id,)).fetchall()
+    rows = conn.execute(
+        "SELECT materia, COUNT(*) as total FROM flashcards WHERE user_id = ? GROUP BY materia ORDER BY total DESC",
+        (user_id,),
+    ).fetchall()
     return [{"materia": r[0] or "Sem matéria", "total": r[1]} for r in rows]
 
 
 @router.get("/api/flashcards/today")
-def get_flashcards_today(materia: str = "", max_novos: int = Query(20, description="Máximo de flashcards novos por dia (padrão 20, como Anki)"), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+def get_flashcards_today(
+    materia: str = "",
+    max_novos: int = Query(20, description="Máximo de flashcards novos por dia (padrão 20, como Anki)"),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
     """Retorna flashcards pendentes com ordenação inteligente baseada em FSRS state.
 
     Prioridade de revisão (baseado em evidência científica):
@@ -56,13 +74,13 @@ def get_flashcards_today(materia: str = "", max_novos: int = Query(20, descripti
 
     if materia:
         rows = conn.execute(
-            "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia, fsrs_state FROM flashcards WHERE proxima_revisao <= ? AND materia = ? AND user_id = ?",
-            (today_str(), materia, user_id)
+            "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia, fsrs_state, COALESCE(is_leech,0) AS is_leech, COALESCE(lapses,0) AS lapses FROM flashcards WHERE proxima_revisao <= ? AND materia = ? AND user_id = ? AND COALESCE(suspenso, 0) = 0",
+            (today_str(), materia, user_id),
         ).fetchall()
     else:
         rows = conn.execute(
-            "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia, fsrs_state FROM flashcards WHERE proxima_revisao <= ? AND user_id = ?",
-            (today_str(), user_id)
+            "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia, fsrs_state, COALESCE(is_leech,0) AS is_leech, COALESCE(lapses,0) AS lapses FROM flashcards WHERE proxima_revisao <= ? AND user_id = ? AND COALESCE(suspenso, 0) = 0",
+            (today_str(), user_id),
         ).fetchall()
     items = [dict(r) for r in rows]
 
@@ -71,9 +89,9 @@ def get_flashcards_today(materia: str = "", max_novos: int = Query(20, descripti
 
     # Separar por estado FSRS (prioridade de revisão)
     relearning = [c for c in items if (c.get("fsrs_state") or 0) == 3]  # Esquecidos
-    learning = [c for c in items if (c.get("fsrs_state") or 0) == 1]    # Aprendendo
-    review = [c for c in items if (c.get("fsrs_state") or 0) == 2]      # Maduros vencidos
-    new_cards = [c for c in items if (c.get("fsrs_state") or 0) == 0]   # Novos
+    learning = [c for c in items if (c.get("fsrs_state") or 0) == 1]  # Aprendendo
+    review = [c for c in items if (c.get("fsrs_state") or 0) == 2]  # Maduros vencidos
+    new_cards = [c for c in items if (c.get("fsrs_state") or 0) == 0]  # Novos
 
     # Limitar novos cards por dia (como Anki: padrão 20)
     novos_limitados = new_cards[:max_novos]
@@ -95,6 +113,8 @@ def get_flashcards_today(materia: str = "", max_novos: int = Query(20, descripti
             card.get("pergunta", ""), card.get("resposta", ""), card.get("fsrs_state") or 0
         )
         card.pop("fsrs_state", None)
+        # Leech: expõe como booleano para o badge 🩸 na UI de revisão.
+        card["is_leech"] = bool(card.get("is_leech"))
 
     return result
 
@@ -124,18 +144,112 @@ def get_flashcards_today_count(conn=Depends(get_db_session), user_id: int = Depe
     return {"pendentes": pendentes, "revisados_hoje": revisados_hoje}
 
 
+@router.get(
+    "/api/flashcards/retencao-real",
+    summary="Retenção real (true retention) + carga futura",
+    description="Mede a retenção real a partir do revlog (acerto em reviews de cards maduros) e projeta a carga de revisões dos próximos dias.",
+)
+def get_retencao_real(dias_forecast: int = 14, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Retenção real (à la Anki) + forecast de carga.
+
+    - true_retention: % de reviews com rating >= 3 (Good/Easy) em cards que
+      estavam MADUROS (elapsed_days >= MATURE_INTERVAL_DAYS) — mede memória de
+      longo prazo, não o desempenho em cards novos/aprendendo.
+    - retention_geral: % de acerto em TODOS os reviews (referência).
+    - por_dia: reviews e acertos agrupados por dia (últimos 30 dias) para heatmap.
+    - forecast: quantos cards vencem por dia nos próximos `dias_forecast` dias.
+    - leech_count / suspensos: contagem de cards problemáticos.
+    """
+    from constants import MATURE_INTERVAL_DAYS
+
+    # Retenção real: reviews de cards maduros
+    try:
+        maduros = conn.execute(
+            """SELECT COUNT(*) AS total, COALESCE(SUM(CASE WHEN rating >= 3 THEN 1 ELSE 0 END), 0) AS acertos
+               FROM flashcard_revlog WHERE user_id = ? AND elapsed_days >= ?""",
+            (user_id, MATURE_INTERVAL_DAYS),
+        ).fetchone()
+        total_maduros = maduros[0] or 0
+        acertos_maduros = maduros[1] or 0
+
+        geral = conn.execute(
+            """SELECT COUNT(*) AS total, COALESCE(SUM(CASE WHEN rating >= 3 THEN 1 ELSE 0 END), 0) AS acertos
+               FROM flashcard_revlog WHERE user_id = ?""",
+            (user_id,),
+        ).fetchone()
+        total_geral = geral[0] or 0
+        acertos_geral = geral[1] or 0
+
+        por_dia = [
+            {"data": r[0], "reviews": r[1], "acertos": r[2]}
+            for r in conn.execute(
+                """SELECT substr(revisado_em, 1, 10) AS dia, COUNT(*) AS reviews,
+                          COALESCE(SUM(CASE WHEN rating >= 3 THEN 1 ELSE 0 END), 0) AS acertos
+                   FROM flashcard_revlog
+                   WHERE user_id = ? AND revisado_em >= date('now', '-30 days')
+                   GROUP BY dia ORDER BY dia""",
+                (user_id,),
+            ).fetchall()
+        ]
+    except Exception:
+        # Schema antigo sem revlog — retorna zerado sem quebrar
+        total_maduros = acertos_maduros = total_geral = acertos_geral = 0
+        por_dia = []
+
+    # Forecast: cards que vencem por dia (a partir de proxima_revisao)
+    dias = max(1, min(60, dias_forecast))
+    forecast = [
+        {"data": r[0], "cards": r[1]}
+        for r in conn.execute(
+            """SELECT proxima_revisao AS dia, COUNT(*) AS cards
+               FROM flashcards
+               WHERE user_id = ? AND COALESCE(suspenso, 0) = 0
+                 AND proxima_revisao > date('now') AND proxima_revisao <= date('now', ?)
+               GROUP BY dia ORDER BY dia""",
+            (user_id, f"+{dias} days"),
+        ).fetchall()
+    ]
+
+    # Contagem de leech/suspensos
+    try:
+        lc = conn.execute(
+            "SELECT COALESCE(SUM(CASE WHEN is_leech=1 THEN 1 ELSE 0 END),0), COALESCE(SUM(CASE WHEN suspenso=1 THEN 1 ELSE 0 END),0) FROM flashcards WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+        leech_count, suspensos = lc[0] or 0, lc[1] or 0
+    except Exception:
+        leech_count = suspensos = 0
+
+    def _pct(ac, tot):
+        return round(ac / tot * 100, 1) if tot else None
+
+    return {
+        "true_retention": _pct(acertos_maduros, total_maduros),
+        "reviews_maduros": total_maduros,
+        "retention_geral": _pct(acertos_geral, total_geral),
+        "reviews_total": total_geral,
+        "mature_interval_days": MATURE_INTERVAL_DAYS,
+        "por_dia": por_dia,
+        "forecast": forecast,
+        "leech_count": leech_count,
+        "suspensos": suspensos,
+    }
+
+
 @router.get("/api/flashcards/aleatorio", summary="Flashcards aleatórios para estudo")
-def get_flashcards_aleatorio(materia: str = "", quantidade: int = 10, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+def get_flashcards_aleatorio(
+    materia: str = "", quantidade: int = 10, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)
+):
     """Retorna flashcards aleatórios para sessão de estudo (por disciplina ou todas)"""
     if materia:
         rows = conn.execute(
             "SELECT id, pergunta, resposta, materia, fsrs_state FROM flashcards WHERE materia = ? AND user_id = ? ORDER BY RANDOM() LIMIT ?",
-            (materia, user_id, quantidade)
+            (materia, user_id, quantidade),
         ).fetchall()
     else:
         rows = conn.execute(
             "SELECT id, pergunta, resposta, materia, fsrs_state FROM flashcards WHERE user_id = ? ORDER BY RANDOM() LIMIT ?",
-            (user_id, quantidade)
+            (user_id, quantidade),
         ).fetchall()
     result = []
     for r in rows:
@@ -153,20 +267,26 @@ def get_flashcards_aleatorio(materia: str = "", quantidade: int = 10, conn=Depen
 @router.post("/api/flashcards", summary="Criar flashcard", description="Cria um novo flashcard com revisão SRS")
 def create_flashcard(body: FlashcardCreate, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     from plans import enforce_plan_limit
+
     enforce_plan_limit(conn, user_id, "flashcards")
 
     pergunta = sanitize_input(body.pergunta, max_length=2000)
     resposta = sanitize_input(body.resposta, max_length=5000)
-    materia = sanitize_input(getattr(body, 'materia', ''))
+    materia = sanitize_input(getattr(body, "materia", ""))
     cur = conn.execute(
         "INSERT INTO flashcards (pergunta, resposta, proxima_revisao, materia, user_id) VALUES (?, ?, ?, ?, ?)",
-        (pergunta, resposta, today_str(), materia, user_id)
+        (pergunta, resposta, today_str(), materia, user_id),
     )
     conn.commit()
     new_id = cur.lastrowid
     log.info(f"Flashcard created: id={new_id}")
-    return {"id": new_id, "pergunta": pergunta, "resposta": resposta,
-            "proxima_revisao": today_str(), "intervalo_dias": 1}
+    return {
+        "id": new_id,
+        "pergunta": pergunta,
+        "resposta": resposta,
+        "proxima_revisao": today_str(),
+        "intervalo_dias": 1,
+    }
 
 
 @router.post("/api/flashcards/{id}/review", response_model=FlashcardReviewResponse)
@@ -176,13 +296,20 @@ def review_flashcard(id: int, body: FlashcardReview, conn=Depends(get_db_session
         raise HTTPException(status_code=404, detail="Flashcard não encontrado")
     new_intervalo = row[0] * 2 if body.acertou else 1
     proxima = (date.today() + timedelta(days=new_intervalo)).isoformat()
-    conn.execute("UPDATE flashcards SET intervalo_dias = ?, proxima_revisao = ?, ultima_revisao = ? WHERE id = ? AND user_id = ?",
-                 (new_intervalo, proxima, today_str(), id, user_id))
+    conn.execute(
+        "UPDATE flashcards SET intervalo_dias = ?, proxima_revisao = ?, ultima_revisao = ? WHERE id = ? AND user_id = ?",
+        (new_intervalo, proxima, today_str(), id, user_id),
+    )
     update_streak(conn, "flashcards_revisados", user_id=user_id)
     conn.commit()
 
     # A3: Suggest elaboration when user got it wrong
-    result = {"id": id, "intervalo_dias": new_intervalo, "proxima_revisao": proxima, "elaboration_suggested": not body.acertou}
+    result = {
+        "id": id,
+        "intervalo_dias": new_intervalo,
+        "proxima_revisao": proxima,
+        "elaboration_suggested": not body.acertou,
+    }
     if not body.acertou:
         flash_row = conn.execute(
             "SELECT pergunta, resposta, materia FROM flashcards WHERE id = ? AND user_id = ?", (id, user_id)
@@ -195,12 +322,15 @@ def review_flashcard(id: int, body: FlashcardReview, conn=Depends(get_db_session
 
 
 @router.post("/api/flashcards/{id}/review-sm2", response_model=FlashcardReviewSM2Response)
-def review_flashcard_sm2(id: int, body: FlashcardReviewSM2, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+def review_flashcard_sm2(
+    id: int, body: FlashcardReviewSM2, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)
+):
     """Revisão de flashcard usando algoritmo SM-2 (SuperMemo 2).
     quality: 0-5 (0=esqueceu, 3=correto com dificuldade, 5=perfeito)
     """
     row = conn.execute(
-        "SELECT intervalo_dias, easiness_factor, repetitions FROM flashcards WHERE id = ? AND user_id = ?", (id, user_id)
+        "SELECT intervalo_dias, easiness_factor, repetitions FROM flashcards WHERE id = ? AND user_id = ?",
+        (id, user_id),
     ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Flashcard não encontrado")
@@ -231,7 +361,7 @@ def review_flashcard_sm2(id: int, body: FlashcardReviewSM2, conn=Depends(get_db_
 
     conn.execute(
         "UPDATE flashcards SET intervalo_dias = ?, proxima_revisao = ?, easiness_factor = ?, repetitions = ?, ultima_revisao = ? WHERE id = ? AND user_id = ?",
-        (intervalo, proxima, round(ef, 4), reps, today_str(), id, user_id)
+        (intervalo, proxima, round(ef, 4), reps, today_str(), id, user_id),
     )
     update_streak(conn, "flashcards_revisados", user_id=user_id)
     conn.commit()
@@ -262,18 +392,22 @@ def review_flashcard_sm2(id: int, body: FlashcardReviewSM2, conn=Depends(get_db_
 
 
 @router.post("/api/flashcards/{id}/review-fsrs", summary="Revisão FSRS")
-def review_flashcard_fsrs(id: int, body: FlashcardReviewSM2, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+def review_flashcard_fsrs(
+    id: int, body: FlashcardReviewSM2, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)
+):
     """Revisão de flashcard usando algoritmo FSRS-5.
     quality: 0-5 (mapeado internamente para rating 1-4 do FSRS)
     """
     import sys
     import os
+
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from fsrs import FSRSCard, review_card, sm2_to_fsrs_rating
     from constants import FSRS_DEFAULT_RETENTION
 
     row = conn.execute(
-        "SELECT intervalo_dias, easiness_factor, repetitions FROM flashcards WHERE id = ? AND user_id = ?", (id, user_id)
+        "SELECT intervalo_dias, easiness_factor, repetitions FROM flashcards WHERE id = ? AND user_id = ?",
+        (id, user_id),
     ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Flashcard não encontrado")
@@ -296,9 +430,7 @@ def review_flashcard_fsrs(id: int, body: FlashcardReviewSM2, conn=Depends(get_db
     # Get desired_retention from user's metas_config
     desired_retention = FSRS_DEFAULT_RETENTION
     try:
-        meta_row = conn.execute(
-            "SELECT desired_retention FROM metas_config WHERE user_id = ?", (user_id,)
-        ).fetchone()
+        meta_row = conn.execute("SELECT desired_retention FROM metas_config WHERE user_id = ?", (user_id,)).fetchone()
         if meta_row and meta_row[0]:
             desired_retention = meta_row[0]
     except Exception:
@@ -306,12 +438,7 @@ def review_flashcard_fsrs(id: int, body: FlashcardReviewSM2, conn=Depends(get_db
 
     # Build FSRS card state
     reps = row[2] if row[2] is not None else 0
-    card = FSRSCard(
-        stability=stability,
-        difficulty=difficulty,
-        state=fsrs_state,
-        reps=reps
-    )
+    card = FSRSCard(stability=stability, difficulty=difficulty, state=fsrs_state, reps=reps)
 
     # Map SM-2 quality (0-5) to FSRS rating (1-4)
     rating = sm2_to_fsrs_rating(body.quality)
@@ -322,6 +449,7 @@ def review_flashcard_fsrs(id: int, body: FlashcardReviewSM2, conn=Depends(get_db
     # === LAG EFFECT (Exam-Aware Spacing) — centralizado em study_techniques ===
     # Cepeda et al. (2006): comprime o intervalo conforme a proximidade da prova.
     from study_techniques import apply_lag_effect
+
     adjusted_interval = apply_lag_effect(conn, user_id, output.interval)
 
     proxima = (date.today() + timedelta(days=adjusted_interval)).isoformat()
@@ -333,20 +461,49 @@ def review_flashcard_fsrs(id: int, body: FlashcardReviewSM2, conn=Depends(get_db
             """UPDATE flashcards SET intervalo_dias = ?, proxima_revisao = ?,
                stability = ?, difficulty = ?, fsrs_state = ?, repetitions = ?, ultima_revisao = ?
                WHERE id = ? AND user_id = ?""",
-            (adjusted_interval, proxima, round(output.stability, 6),
-             round(output.difficulty, 4), output.state, new_reps, today_str(), id, user_id)
+            (
+                adjusted_interval,
+                proxima,
+                round(output.stability, 6),
+                round(output.difficulty, 4),
+                output.state,
+                new_reps,
+                today_str(),
+                id,
+                user_id,
+            ),
         )
     except Exception:
         # Fallback if FSRS columns don't exist - just update interval and next review
         conn.execute(
             "UPDATE flashcards SET intervalo_dias = ?, proxima_revisao = ? WHERE id = ? AND user_id = ?",
-            (adjusted_interval, proxima, id, user_id)
+            (adjusted_interval, proxima, id, user_id),
         )
 
     update_streak(conn, "flashcards_revisados", user_id=user_id)
+
+    # === REVLOG + LEECH DETECTION (fundação Anki-like) ===
+    # Grava uma linha por revisão (base para retenção real e otimização FSRS) e
+    # detecta cards problemáticos ("leech"): esquecidos (rating Again) repetidas
+    # vezes. Aditivo e tolerante — nunca deve quebrar o fluxo de revisão.
+    intervalo_anterior = row[0] if row[0] is not None else 0
+    leech_info = _registrar_revlog_e_leech(
+        conn,
+        id,
+        user_id,
+        rating,
+        body.quality,
+        fsrs_state,
+        output,
+        adjusted_interval,
+        intervalo_anterior,
+    )
+
     conn.commit()
 
-    log.info(f"Flashcard FSRS review: id={id} rating={rating} S={output.stability:.4f} D={output.difficulty:.4f} I={output.interval} adj_I={adjusted_interval}")
+    log.info(
+        f"Flashcard FSRS review: id={id} rating={rating} S={output.stability:.4f} D={output.difficulty:.4f} I={output.interval} adj_I={adjusted_interval}"
+    )
 
     # A3: Suggest elaboration when rating is low (FSRS rating 1 = Again, 2 = Hard)
     elaboration_suggested = rating <= 2
@@ -361,6 +518,10 @@ def review_flashcard_fsrs(id: int, body: FlashcardReviewSM2, conn=Depends(get_db
         "rating": rating,
         "retrievability": round(output.retrievability, 4) if output.retrievability else None,
         "elaboration_suggested": elaboration_suggested,
+        "lapses": leech_info.get("lapses", 0),
+        "is_leech": leech_info.get("is_leech", False),
+        "suspenso": leech_info.get("suspenso", False),
+        "leech_now": leech_info.get("leech_now", False),
     }
     if elaboration_suggested:
         flash_row = conn.execute(
@@ -373,8 +534,11 @@ def review_flashcard_fsrs(id: int, body: FlashcardReviewSM2, conn=Depends(get_db
     return result
 
 
-@router.post("/api/flashcards/migrate-to-fsrs", summary="Migrar cards SM-2 para FSRS",
-             description="Migra todos os flashcards que ainda usam SM-2 para estado FSRS equivalente.")
+@router.post(
+    "/api/flashcards/migrate-to-fsrs",
+    summary="Migrar cards SM-2 para FSRS",
+    description="Migra todos os flashcards que ainda usam SM-2 para estado FSRS equivalente.",
+)
 def migrate_flashcards_to_fsrs(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Migra cards existentes de SM-2 para FSRS-5.
 
@@ -388,19 +552,20 @@ def migrate_flashcards_to_fsrs(conn=Depends(get_db_session), user_id: int = Depe
     # Obter desired_retention do user
     desired_retention = FSRS_DEFAULT_RETENTION
     try:
-        meta_row = conn.execute(
-            "SELECT desired_retention FROM metas_config WHERE user_id = ?", (user_id,)
-        ).fetchone()
+        meta_row = conn.execute("SELECT desired_retention FROM metas_config WHERE user_id = ?", (user_id,)).fetchone()
         if meta_row and meta_row[0]:
             desired_retention = meta_row[0]
     except Exception:
         pass
 
     # Buscar cards que ainda não foram migrados (stability = 0 indica não-migrado)
-    rows = conn.execute("""
+    rows = conn.execute(
+        """
         SELECT id, easiness_factor, repetitions, intervalo_dias, proxima_revisao
         FROM flashcards WHERE user_id = ? AND (stability IS NULL OR stability = 0)
-    """, (user_id,)).fetchall()
+    """,
+        (user_id,),
+    ).fetchall()
 
     migrated = 0
     for r in rows:
@@ -410,10 +575,13 @@ def migrate_flashcards_to_fsrs(conn=Depends(get_db_session), user_id: int = Depe
 
         if reps == 0:
             # Card novo: manter como STATE_NEW, será agendado no primeiro review
-            conn.execute("""
+            conn.execute(
+                """
                 UPDATE flashcards SET stability = 0, difficulty = 0, fsrs_state = 0
                 WHERE id = ? AND user_id = ?
-            """, (r["id"], user_id))
+            """,
+                (r["id"], user_id),
+            )
         else:
             # Card já revisado: converter SM-2 → FSRS
             fsrs_card = migrate_sm2_to_fsrs(ef, reps, interval)
@@ -424,12 +592,22 @@ def migrate_flashcards_to_fsrs(conn=Depends(get_db_session), user_id: int = Depe
             if not proxima or proxima <= date.today().isoformat():
                 proxima = (date.today() + timedelta(days=1)).isoformat()
 
-            conn.execute("""
+            conn.execute(
+                """
                 UPDATE flashcards SET stability = ?, difficulty = ?, fsrs_state = ?,
                        intervalo_dias = ?, proxima_revisao = ?
                 WHERE id = ? AND user_id = ?
-            """, (round(fsrs_card.stability, 6), round(fsrs_card.difficulty, 4),
-                  fsrs_card.state, new_interval, proxima, r["id"], user_id))
+            """,
+                (
+                    round(fsrs_card.stability, 6),
+                    round(fsrs_card.difficulty, 4),
+                    fsrs_card.state,
+                    new_interval,
+                    proxima,
+                    r["id"],
+                    user_id,
+                ),
+            )
         migrated += 1
 
     conn.commit()
@@ -437,7 +615,11 @@ def migrate_flashcards_to_fsrs(conn=Depends(get_db_session), user_id: int = Depe
     return {"ok": True, "migrated": migrated, "total": len(rows)}
 
 
-@router.put("/api/flashcards/{id}", summary="Editar flashcard", description="Atualiza pergunta, resposta e/ou matéria de um flashcard")
+@router.put(
+    "/api/flashcards/{id}",
+    summary="Editar flashcard",
+    description="Atualiza pergunta, resposta e/ou matéria de um flashcard",
+)
 def update_flashcard(id: int, body: FlashcardUpdate, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     row = conn.execute("SELECT id FROM flashcards WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
     if not row:
@@ -461,14 +643,17 @@ def update_flashcard(id: int, body: FlashcardUpdate, conn=Depends(get_db_session
     conn.commit()
     updated = conn.execute(
         "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia FROM flashcards WHERE id = ? AND user_id = ?",
-        (id, user_id)
+        (id, user_id),
     ).fetchone()
     log.info(f"Flashcard updated: id={id}")
     return dict(updated)
 
 
-@router.get("/api/edital/materias-disponiveis", summary="Listar disciplinas do edital",
-            description="Retorna todas as disciplinas distintas cadastradas no edital para vincular a flashcards")
+@router.get(
+    "/api/edital/materias-disponiveis",
+    summary="Listar disciplinas do edital",
+    description="Retorna todas as disciplinas distintas cadastradas no edital para vincular a flashcards",
+)
 def list_materias_disponiveis(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     rows = conn.execute("SELECT DISTINCT materia FROM edital WHERE user_id = ? ORDER BY materia", (user_id,)).fetchall()
     return [r[0] for r in rows if r[0]]
@@ -485,12 +670,15 @@ def delete_flashcard(id: int, conn=Depends(get_db_session), user_id: int = Depen
 @router.get("/api/speed-review")
 def speed_review(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Retorna flashcards para revisão relâmpago (modo rápido)"""
-    rows = conn.execute("""
+    rows = conn.execute(
+        """
         SELECT id, pergunta, resposta FROM flashcards
         WHERE proxima_revisao <= ? AND user_id = ?
         ORDER BY intervalo_dias ASC
         LIMIT ?
-    """, (today_str(), user_id, SPEED_REVIEW_LIMIT)).fetchall()
+    """,
+        (today_str(), user_id, SPEED_REVIEW_LIMIT),
+    ).fetchall()
     return [{"id": r[0], "pergunta": r[1], "resposta": r[2]} for r in rows]
 
 
@@ -504,13 +692,16 @@ import json
 from fastapi.responses import Response
 
 
-@router.get("/api/flashcards/exportar", summary="Exportar flashcards",
-            description="Exporta flashcards em formato JSON, CSV ou Anki (TSV)")
+@router.get(
+    "/api/flashcards/exportar",
+    summary="Exportar flashcards",
+    description="Exporta flashcards em formato JSON, CSV ou Anki (TSV)",
+)
 def exportar_flashcards(formato: str = "json", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Formatos: json, csv, anki"""
     rows = conn.execute(
         "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions FROM flashcards WHERE user_id = ? ORDER BY id",
-        (user_id,)
+        (user_id,),
     ).fetchall()
     items = [dict(r) for r in rows]
 
@@ -524,7 +715,7 @@ def exportar_flashcards(formato: str = "json", conn=Depends(get_db_session), use
         return Response(
             content=content,
             media_type="text/csv",
-            headers={"Content-Disposition": "attachment; filename=flashcards.csv"}
+            headers={"Content-Disposition": "attachment; filename=flashcards.csv"},
         )
 
     if formato == "anki":
@@ -540,7 +731,7 @@ def exportar_flashcards(formato: str = "json", conn=Depends(get_db_session), use
         return Response(
             content=content,
             media_type="text/tab-separated-values",
-            headers={"Content-Disposition": "attachment; filename=flashcards_anki.txt"}
+            headers={"Content-Disposition": "attachment; filename=flashcards_anki.txt"},
         )
 
     # JSON (default)
@@ -548,7 +739,7 @@ def exportar_flashcards(formato: str = "json", conn=Depends(get_db_session), use
     return Response(
         content=content,
         media_type="application/json",
-        headers={"Content-Disposition": "attachment; filename=flashcards.json"}
+        headers={"Content-Disposition": "attachment; filename=flashcards.json"},
     )
 
 
@@ -834,9 +1025,14 @@ def _parse_apkg(content: bytes) -> list[dict]:
                 pass
 
 
-@router.post("/api/flashcards/importar", summary="Importar flashcards",
-             description="Importa flashcards de JSON, CSV, formato Anki (TSV) ou pacote .apkg do Anki")
-def importar_flashcards(file: UploadFile = File(...), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+@router.post(
+    "/api/flashcards/importar",
+    summary="Importar flashcards",
+    description="Importa flashcards de JSON, CSV, formato Anki (TSV) ou pacote .apkg do Anki",
+)
+def importar_flashcards(
+    file: UploadFile = File(...), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)
+):
     """Aceita JSON, CSV (colunas: pergunta, resposta, [materia]), Anki TSV (pergunta<TAB>resposta) ou .apkg (Anki)"""
     content = file.file.read()
     filename = (file.filename or "").lower()
@@ -880,11 +1076,13 @@ def importar_flashcards(file: UploadFile = File(...), conn=Depends(get_db_sessio
             delimiter = ";" if first_line.count(";") > first_line.count(",") else ","
         reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
         for row in reader:
-            items.append({
-                "pergunta": _pick(row, "pergunta", "front", "question"),
-                "resposta": _pick(row, "resposta", "back", "answer"),
-                "materia": _pick(row, "materia", "matéria", "disciplina", "subject"),
-            })
+            items.append(
+                {
+                    "pergunta": _pick(row, "pergunta", "front", "question"),
+                    "resposta": _pick(row, "resposta", "back", "answer"),
+                    "materia": _pick(row, "materia", "matéria", "disciplina", "subject"),
+                }
+            )
     elif filename.endswith(".txt") or filename.endswith(".tsv"):
         # Formato Anki: TSV (pergunta<TAB>resposta)
         for line in text.strip().split("\n"):
@@ -904,11 +1102,14 @@ def importar_flashcards(file: UploadFile = File(...), conn=Depends(get_db_sessio
         try:
             data = json.loads(text)
             if isinstance(data, list):
-                items = [{
-                    "pergunta": d.get("pergunta", ""),
-                    "resposta": d.get("resposta", ""),
-                    "materia": d.get("materia", "") or d.get("disciplina", ""),
-                } for d in data]
+                items = [
+                    {
+                        "pergunta": d.get("pergunta", ""),
+                        "resposta": d.get("resposta", ""),
+                        "materia": d.get("materia", "") or d.get("disciplina", ""),
+                    }
+                    for d in data
+                ]
             else:
                 raise HTTPException(status_code=400, detail="Formato inválido") from None
         except json.JSONDecodeError:
@@ -932,15 +1133,14 @@ def _inserir_flashcards_importados(conn, user_id: int, items: list[dict]) -> dic
     def _dedup_key(pergunta: str, resposta: str) -> str:
         """Chave de deduplicação: pergunta+resposta normalizadas (trim + lower + espaços colapsados)."""
         import re
+
         p = re.sub(r"\s+", " ", pergunta).strip().lower()
         r = re.sub(r"\s+", " ", resposta).strip().lower()
         return f"{p}\x1f{r}"
 
     # Chaves já existentes no banco (por usuário) para evitar duplicidade em re-imports
     seen: set[str] = set()
-    for row in conn.execute(
-        "SELECT pergunta, resposta FROM flashcards WHERE user_id = ?", (user_id,)
-    ).fetchall():
+    for row in conn.execute("SELECT pergunta, resposta FROM flashcards WHERE user_id = ?", (user_id,)).fetchall():
         seen.add(_dedup_key(row[0] or "", row[1] or ""))
 
     for item in items:
@@ -960,28 +1160,122 @@ def _inserir_flashcards_importados(conn, user_id: int, items: list[dict]) -> dic
         revisao_date = (date.today() + timedelta(days=dia_offset)).isoformat()
         conn.execute(
             "INSERT INTO flashcards (pergunta, resposta, materia, proxima_revisao, intervalo_dias, easiness_factor, repetitions, user_id) VALUES (?, ?, ?, ?, 1, 2.5, 0, ?)",
-            (pergunta, resposta, materia, revisao_date, user_id)
+            (pergunta, resposta, materia, revisao_date, user_id),
         )
         count += 1
     conn.commit()
     dias_distribuidos = (count // max_por_dia) + 1
-    log.info(f"Flashcards imported: {count} items ({duplicados} duplicates skipped) distributed over {dias_distribuidos} days")
-    return {"ok": True, "importados": count, "duplicados_ignorados": duplicados, "distribuidos_em_dias": dias_distribuidos}
+    log.info(
+        f"Flashcards imported: {count} items ({duplicados} duplicates skipped) distributed over {dias_distribuidos} days"
+    )
+    return {
+        "ok": True,
+        "importados": count,
+        "duplicados_ignorados": duplicados,
+        "distribuidos_em_dias": dias_distribuidos,
+    }
+
+
+# ============================================================
+# HELPER: Revlog + Leech detection (fundação Anki-like)
+# ============================================================
+
+
+def _registrar_revlog_e_leech(
+    conn, flashcard_id, user_id, rating, quality, estado_antes, output, intervalo_novo, intervalo_anterior
+):
+    """Grava a revisão no revlog e atualiza a detecção de leech.
+
+    - revlog: 1 linha por revisão (base para retenção real e otimização FSRS).
+    - leech: rating Again (1) incrementa `lapses`; ao atingir LEECH_THRESHOLD marca
+      is_leech; a cada múltiplo de LEECH_THRESHOLD*LEECH_SUSPEND_MULTIPLE suspende.
+
+    Tolerante a falhas: se as tabelas/colunas não existirem (schema antigo), não
+    quebra o fluxo de revisão. Retorna dict com lapses/is_leech/suspenso/leech_now.
+    """
+    from datetime import datetime, timezone
+
+    from constants import LEECH_SUSPEND_MULTIPLE, LEECH_THRESHOLD
+
+    now = datetime.now(timezone.utc).isoformat()
+    elapsed = max(0, int(intervalo_anterior or 0))
+
+    # 1) Grava no revlog (best-effort)
+    try:
+        conn.execute(
+            """INSERT INTO flashcard_revlog
+               (flashcard_id, user_id, rating, quality, estado_antes, estado_depois,
+                stability, difficulty, intervalo_dias, elapsed_days, tempo_ms, revisado_em)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                flashcard_id,
+                user_id,
+                rating,
+                quality,
+                estado_antes,
+                output.state,
+                round(output.stability, 6),
+                round(output.difficulty, 4),
+                intervalo_novo,
+                elapsed,
+                0,
+                now,
+            ),
+        )
+    except Exception:
+        pass  # revlog não existe em schema antigo — não bloqueia a revisão
+
+    # 2) Leech: só rating Again (esqueceu) conta como lapse
+    info = {"lapses": 0, "is_leech": False, "suspenso": False, "leech_now": False}
+    try:
+        r = conn.execute(
+            "SELECT COALESCE(lapses,0), COALESCE(is_leech,0), COALESCE(suspenso,0) FROM flashcards WHERE id = ? AND user_id = ?",
+            (flashcard_id, user_id),
+        ).fetchone()
+        lapses = r[0] if r else 0
+        is_leech = bool(r[1]) if r else False
+        suspenso = bool(r[2]) if r else False
+
+        if rating == 1:  # Again
+            lapses += 1
+            virou_leech = (not is_leech) and lapses >= LEECH_THRESHOLD
+            if lapses >= LEECH_THRESHOLD:
+                is_leech = True
+            # Suspende em múltiplos de LEECH_THRESHOLD*LEECH_SUSPEND_MULTIPLE
+            if (
+                lapses >= LEECH_THRESHOLD * LEECH_SUSPEND_MULTIPLE
+                and lapses % (LEECH_THRESHOLD * LEECH_SUSPEND_MULTIPLE) == 0
+            ):
+                suspenso = True
+            conn.execute(
+                "UPDATE flashcards SET lapses = ?, is_leech = ?, suspenso = ? WHERE id = ? AND user_id = ?",
+                (lapses, 1 if is_leech else 0, 1 if suspenso else 0, flashcard_id, user_id),
+            )
+            info["leech_now"] = virou_leech
+        info.update({"lapses": lapses, "is_leech": is_leech, "suspenso": suspenso})
+    except Exception:
+        pass  # colunas de leech não existem em schema antigo
+
+    return info
 
 
 # ============================================================
 # HELPER: Build elaboration prompts inline (used by review endpoints)
 # ============================================================
 
+
 def _build_elaboration_prompts(pergunta: str, resposta: str, materia: str) -> list:
     """Generates 2-3 quick elaboration prompts for inline use in review responses."""
     materia_lower = materia.lower()
     prompts = [
-        {"tipo": "por_que", "prompt": f"Por que \"{resposta}\" é verdade/correto?"},
+        {"tipo": "por_que", "prompt": f'Por que "{resposta}" é verdade/correto?'},
         {"tipo": "exemplo_pratico", "prompt": f"Dê um exemplo prático onde isso se aplica."},
     ]
     # Add domain-specific prompt
-    if any(j in materia_lower for j in ["direito", "lei", "penal", "civil", "constitucional", "administrativo", "tributário"]):
+    if any(
+        j in materia_lower
+        for j in ["direito", "lei", "penal", "civil", "constitucional", "administrativo", "tributário"]
+    ):
         prompts.append({"tipo": "fundamento_legal", "prompt": "Qual artigo/dispositivo legal fundamenta isso?"})
     elif any(e in materia_lower for e in ["matemática", "lógic", "contab", "estatística"]):
         prompts.append({"tipo": "metodo_alternativo", "prompt": "Resolva/explique usando outro método."})
@@ -996,27 +1290,46 @@ def _build_elaboration_prompts(pergunta: str, resposta: str, materia: str) -> li
 
 # Matérias jurídicas conhecidas
 _MATERIAS_JURIDICAS = {
-    "direito constitucional", "direito administrativo", "direito penal",
-    "direito civil", "direito processual civil", "direito processual penal",
-    "direito do trabalho", "direito tributário", "direito empresarial",
-    "direito ambiental", "direito previdenciário", "legislação",
-    "direito eleitoral", "direito internacional", "direitos humanos",
-    "criminologia", "medicina legal", "ética profissional",
+    "direito constitucional",
+    "direito administrativo",
+    "direito penal",
+    "direito civil",
+    "direito processual civil",
+    "direito processual penal",
+    "direito do trabalho",
+    "direito tributário",
+    "direito empresarial",
+    "direito ambiental",
+    "direito previdenciário",
+    "legislação",
+    "direito eleitoral",
+    "direito internacional",
+    "direitos humanos",
+    "criminologia",
+    "medicina legal",
+    "ética profissional",
 }
 
 _MATERIAS_EXATAS = {
-    "matemática", "raciocínio lógico", "estatística", "contabilidade",
-    "matemática financeira", "informática", "tecnologia da informação",
+    "matemática",
+    "raciocínio lógico",
+    "estatística",
+    "contabilidade",
+    "matemática financeira",
+    "informática",
+    "tecnologia da informação",
 }
 
 
-@router.get("/api/flashcards/{id}/elaboration-prompts", summary="Prompts elaborativos",
-            description="Gera prompts elaborativos contextuais para um flashcard, baseado na matéria e conteúdo.")
+@router.get(
+    "/api/flashcards/{id}/elaboration-prompts",
+    summary="Prompts elaborativos",
+    description="Gera prompts elaborativos contextuais para um flashcard, baseado na matéria e conteúdo.",
+)
 def get_elaboration_prompts(id: int, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Gera 3-4 prompts elaborativos contextuais para um flashcard."""
     row = conn.execute(
-        "SELECT id, pergunta, resposta, materia FROM flashcards WHERE id = ? AND user_id = ?",
-        (id, user_id)
+        "SELECT id, pergunta, resposta, materia FROM flashcards WHERE id = ? AND user_id = ?", (id, user_id)
     ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Flashcard não encontrado")
@@ -1029,66 +1342,86 @@ def get_elaboration_prompts(id: int, conn=Depends(get_db_session), user_id: int 
     prompts = []
 
     # Tipo 1: Por que é verdade?
-    prompts.append({
-        "tipo": "por_que",
-        "icone": "🤔",
-        "prompt": f"Por que \"{resposta}\" é verdade/correto?",
-        "instrucao": "Explique o fundamento lógico ou legal por trás da resposta.",
-    })
+    prompts.append(
+        {
+            "tipo": "por_que",
+            "icone": "🤔",
+            "prompt": f'Por que "{resposta}" é verdade/correto?',
+            "instrucao": "Explique o fundamento lógico ou legal por trás da resposta.",
+        }
+    )
 
     # Tipo 2: Diferenciação
-    prompts.append({
-        "tipo": "diferenciacao",
-        "icone": "⚖️",
-        "prompt": f"Como isso se diferencia de conceitos semelhantes na mesma área?",
-        "instrucao": f"Compare com outro conceito de '{materia}' que poderia ser confundido.",
-    })
+    prompts.append(
+        {
+            "tipo": "diferenciacao",
+            "icone": "⚖️",
+            "prompt": f"Como isso se diferencia de conceitos semelhantes na mesma área?",
+            "instrucao": f"Compare com outro conceito de '{materia}' que poderia ser confundido.",
+        }
+    )
 
     # Tipo 3: Exemplo prático
-    prompts.append({
-        "tipo": "exemplo_pratico",
-        "icone": "💡",
-        "prompt": f"Dê um exemplo prático onde \"{resposta}\" se aplica.",
-        "instrucao": "Pense em uma situação real (caso concreto, jurisprudência, notícia) onde isso acontece.",
-    })
+    prompts.append(
+        {
+            "tipo": "exemplo_pratico",
+            "icone": "💡",
+            "prompt": f'Dê um exemplo prático onde "{resposta}" se aplica.',
+            "instrucao": "Pense em uma situação real (caso concreto, jurisprudência, notícia) onde isso acontece.",
+        }
+    )
 
     # Tipo 4: Consequência
-    prompts.append({
-        "tipo": "consequencia",
-        "icone": "⚡",
-        "prompt": f"Qual a consequência de violar/ignorar isso?",
-        "instrucao": "O que acontece se essa regra/conceito for descumprido ou desconsiderado?",
-    })
+    prompts.append(
+        {
+            "tipo": "consequencia",
+            "icone": "⚡",
+            "prompt": f"Qual a consequência de violar/ignorar isso?",
+            "instrucao": "O que acontece se essa regra/conceito for descumprido ou desconsiderado?",
+        }
+    )
 
     # Prompts específicos para matérias jurídicas
-    if materia_lower in _MATERIAS_JURIDICAS or any(j in materia_lower for j in ["direito", "lei", "penal", "civil", "constitucional"]):
-        prompts.append({
-            "tipo": "fundamento_legal",
-            "icone": "📜",
-            "prompt": "Qual artigo/dispositivo legal fundamenta essa resposta?",
-            "instrucao": "Cite o artigo de lei, súmula ou jurisprudência que embasa o conceito.",
-        })
-        prompts.append({
-            "tipo": "excecao",
-            "icone": "🚫",
-            "prompt": "Existe exceção a essa regra? Quando NÃO se aplica?",
-            "instrucao": "Identifique situações em que a regra não vale ou é mitigada.",
-        })
+    if materia_lower in _MATERIAS_JURIDICAS or any(
+        j in materia_lower for j in ["direito", "lei", "penal", "civil", "constitucional"]
+    ):
+        prompts.append(
+            {
+                "tipo": "fundamento_legal",
+                "icone": "📜",
+                "prompt": "Qual artigo/dispositivo legal fundamenta essa resposta?",
+                "instrucao": "Cite o artigo de lei, súmula ou jurisprudência que embasa o conceito.",
+            }
+        )
+        prompts.append(
+            {
+                "tipo": "excecao",
+                "icone": "🚫",
+                "prompt": "Existe exceção a essa regra? Quando NÃO se aplica?",
+                "instrucao": "Identifique situações em que a regra não vale ou é mitigada.",
+            }
+        )
 
     # Prompts específicos para matérias exatas
-    elif materia_lower in _MATERIAS_EXATAS or any(e in materia_lower for e in ["matemática", "lógic", "contab", "estatística"]):
-        prompts.append({
-            "tipo": "metodo_alternativo",
-            "icone": "🔢",
-            "prompt": "Resolva/explique usando outro método ou abordagem.",
-            "instrucao": "Tente chegar ao mesmo resultado por um caminho diferente.",
-        })
-        prompts.append({
-            "tipo": "simplificacao",
-            "icone": "✂️",
-            "prompt": "Simplifique: explique em uma frase curta e direta.",
-            "instrucao": "Resuma o conceito core em no máximo 15 palavras.",
-        })
+    elif materia_lower in _MATERIAS_EXATAS or any(
+        e in materia_lower for e in ["matemática", "lógic", "contab", "estatística"]
+    ):
+        prompts.append(
+            {
+                "tipo": "metodo_alternativo",
+                "icone": "🔢",
+                "prompt": "Resolva/explique usando outro método ou abordagem.",
+                "instrucao": "Tente chegar ao mesmo resultado por um caminho diferente.",
+            }
+        )
+        prompts.append(
+            {
+                "tipo": "simplificacao",
+                "icone": "✂️",
+                "prompt": "Simplifique: explique em uma frase curta e direta.",
+                "instrucao": "Resuma o conceito core em no máximo 15 palavras.",
+            }
+        )
 
     return {
         "flashcard_id": id,

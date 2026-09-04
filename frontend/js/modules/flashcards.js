@@ -259,16 +259,21 @@ function showCurrentFlashcard() {
   const card = flashcardsToday[currentFlashIndex];
   const isVariation = card._expanding_retrieval;
   const badge = card.materia ? `<span style="font-size:0.7rem;background:#45475a;color:#cba6f7;padding:2px 8px;border-radius:4px;margin-bottom:4px;display:inline-block;">📚 ${card.materia}</span><br>` : '';
+  // Leech (à la Anki): card esquecido muitas vezes. Sinaliza para o aluno
+  // reformular/refazer o card em vez de insistir num card mal formulado.
+  const leechBadge = card.is_leech
+    ? `<span title="Você errou este card muitas vezes. Considere reformulá-lo (dividir, simplificar, criar mnemônico)." style="font-size:0.65rem;background:var(--red);color:var(--bg);padding:2px 8px;border-radius:4px;margin-bottom:4px;display:inline-block;">🩸 Card problemático (leech)</span><br>`
+    : '';
 
   // Variação de Contexto: cards re-inseridos via expanding retrieval são mostrados INVERTIDOS
   // (resposta como pista → lembrar a pergunta/conceito)
   // Evidência: Smith et al. (1978) — Variar contexto de encoding melhora recall em 20-40%
   if (isVariation) {
     const variationBadge = `<span style="font-size:0.65rem;background:var(--peach);color:var(--bg);padding:2px 6px;border-radius:4px;margin-bottom:4px;display:inline-block;">🔄 Variação de Contexto</span><br>`;
-    q.innerHTML = badge + variationBadge + `<div style="font-size:0.72rem;color:var(--text-sub);margin-bottom:6px;">A resposta é a pista — lembre o conceito/pergunta original:</div>` + `<div style="font-weight:600;">${escapeHtml(card.resposta)}</div>`;
+    q.innerHTML = badge + leechBadge + variationBadge + `<div style="font-size:0.72rem;color:var(--text-sub);margin-bottom:6px;">A resposta é a pista — lembre o conceito/pergunta original:</div>` + `<div style="font-weight:600;">${escapeHtml(card.resposta)}</div>`;
     a.textContent = card.pergunta; // Inverte: mostra pergunta como "resposta"
   } else {
-    q.innerHTML = badge + escapeHtml(card.pergunta);
+    q.innerHTML = badge + leechBadge + escapeHtml(card.pergunta);
     a.textContent = card.resposta;
   }
   a.style.display = 'none';
@@ -472,6 +477,14 @@ export async function reviewFlashcard(quality) {
     }
 
     const data = await api(`/api/flashcards/${card.id}/review-fsrs`, { method: 'POST', body: { quality } });
+
+    // Leech (à la Anki): avisa quando o card vira problemático — sugere ação.
+    if (data.leech_now) {
+      toast('🩸 Card marcado como problemático (leech): você já errou várias vezes. Considere reformulá-lo (dividir, simplificar ou criar um mnemônico).', 'warning', 6000);
+    } else if (data.suspenso) {
+      toast('⏸ Card suspenso por excesso de erros. Reformule-o na lista de flashcards para reativá-lo.', 'warning', 6000);
+    }
+
     const intervalLabel = data.intervalo_dias >= 30 ? `${Math.round(data.intervalo_dias / 30)}m` : `${data.intervalo_dias}d`;
     const stateNames = ['Novo', 'Aprendendo', 'Revisão', 'Reaprendendo'];
     const stateLabel = stateNames[data.fsrs_state] || '';
@@ -1460,11 +1473,54 @@ export async function loadLeitnerBoxes() {
       <div style="font-size:0.68rem;color:var(--text-sub);margin-top:8px;text-align:center;">
         Responda corretamente → sobe de caixa | Erre → volta para caixa 1
       </div>
+      <div id="retencao-real-box" style="margin-top:12px;"></div>
     `;
+    loadRetencaoReal();
   } catch(e) { container.style.display = 'none'; }
 }
 
 window.loadLeitnerBoxes = loadLeitnerBoxes;
+
+/**
+ * Retenção real (à la Anki): % de acerto em reviews de cards MADUROS (memória de
+ * longo prazo, não desempenho em cards novos), + contagem de cards problemáticos
+ * (leech). Renderiza dentro do container Leitner (#retencao-real-box).
+ */
+export async function loadRetencaoReal() {
+  const box = document.getElementById('retencao-real-box');
+  if (!box) return;
+  try {
+    const d = await fetch('/api/flashcards/retencao-real').then(r => r.json());
+    const tr = d.true_retention;
+    // Sem reviews maduros ainda: orienta o aluno em vez de mostrar vazio.
+    if (tr === null || tr === undefined) {
+      box.innerHTML = `<div style="font-size:0.68rem;color:var(--text-sub);text-align:center;border-top:1px solid var(--border);padding-top:8px;">
+        📈 Retenção real aparece após revisar cards maduros (intervalo ≥ ${d.mature_interval_days || 21} dias).
+        ${d.leech_count ? `<br>🩸 ${d.leech_count} card(s) problemático(s)${d.suspensos ? `, ${d.suspensos} suspenso(s)` : ''}.` : ''}
+      </div>`;
+      return;
+    }
+    const cor = tr >= 90 ? 'var(--green)' : tr >= 80 ? 'var(--yellow)' : 'var(--red)';
+    const proxDias = (d.forecast || []).slice(0, 7)
+      .map(f => `${f.data.slice(5)}: ${f.cards}`).join(' · ') || 'sem revisões futuras';
+    box.innerHTML = `
+      <div style="border-top:1px solid var(--border);padding-top:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <span style="font-size:0.82rem;font-weight:700;color:var(--text);">📈 Retenção real</span>
+          <span style="font-size:0.65rem;color:var(--text-sub);">cards maduros (≥${d.mature_interval_days}d)</span>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;">
+          <div style="font-size:1.6rem;font-weight:800;color:${cor};">${tr}%</div>
+          <div style="flex:1;font-size:0.68rem;color:var(--text-sub);">
+            ${d.reviews_maduros} revisões maduras · ${d.retention_geral ?? '—'}% geral (${d.reviews_total} total)
+            ${d.leech_count ? `<br>🩸 ${d.leech_count} problemático(s)${d.suspensos ? `, ${d.suspensos} suspenso(s)` : ''}` : ''}
+          </div>
+        </div>
+        <div style="font-size:0.62rem;color:var(--text-sub);margin-top:6px;">📅 Próximos 7 dias: ${proxDias}</div>
+      </div>`;
+  } catch(e) { box.innerHTML = ''; }
+}
+window.loadRetencaoReal = loadRetencaoReal;
 
 // BOSS BATTLE MODE — Gamified Flashcard Review
 // ============================================================

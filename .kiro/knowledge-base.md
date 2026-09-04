@@ -943,3 +943,57 @@ Três erros de ambiente causaram retrabalho nesta sessão. Registrados para nunc
 
 `CACHE_VERSION` avançou v95 → v99 nesta sessão (auth.js, trilha.js, dashboard/main.js são
 precacheados). Regra reforçada: incrementar a cada mudança em JS/CSS listado em `PRECACHE_URLS`.
+
+
+---
+
+## 11. SESSÃO 04/09/2026 — Roadmap "Anki-like" (melhorias graduais)
+
+Análise profunda Anki vs ConcurseiroOS. Veredito: o app já SUPERA o Anki em pedagogia
+(FSRS-5 em flashcards E questões, 29+ técnicas científicas, boss battle, TTS/commuting,
+importação .apkg, viz Leitner). As lacunas do Anki estão na PROFUNDIDADE do modelo de card
+e no RIGOR do agendador. Roadmap priorizado por ROI (implementar gradualmente, sem esquecer
+nenhum ponto):
+
+| # | Melhoria | Impacto | Esforço | Depende de | Status |
+|---|----------|---------|---------|------------|--------|
+| 1 | **Review log (`revlog`) + retenção real** | ⭐⭐⭐ | Médio | — | 🔲 SPRINT 1 |
+| 2 | **Leech detection** (lapses ≥ 8 → suspende/sinaliza) | ⭐⭐⭐ | Baixo | — | 🔲 SPRINT 1 |
+| 3 | **Cloze deletion nativo** (`{{c1::...}}` → múltiplos cards) | ⭐⭐⭐ | Médio | note types | 🔲 |
+| 4 | **Cards reversos / note type básico** (frente↔verso) | ⭐⭐ | Médio | — | 🔲 |
+| 5 | **Filtered / Custom Study** (cram, "só erros de hoje") | ⭐⭐ | Baixo-Médio | — | 🔲 |
+| 6 | **Otimização dos pesos FSRS por usuário** (treina W[0..18]) | ⭐⭐⭐ | Alto | revlog (#1) | 🔲 |
+| 7 | **Image Occlusion** (ocultar regiões de imagem) | ⭐⭐ | Alto | upload mídia | 🔲 |
+| 8 | **Estatísticas visuais** (heatmap reviews, forecast carga) | ⭐⭐ | Médio | revlog (#1) | 🔲 |
+| 9 | **Undo de review** (desfazer última avaliação) | ⭐ | Baixo | revlog (#1) | 🔲 |
+
+**Por que começar por #1 + #2:** aditivos ao FSRS atual (não quebram nada), baixo/médio esforço,
+e o revlog DESTRAVA #6, #8 e alimenta #2. Leech = vitória rápida percebida pelo aluno.
+
+**Estado atual confirmado (código):** tabela `flashcards` é simples (pergunta/resposta/materia +
+campos FSRS). NÃO há: tags de card, mídia/anexo, cloze nativo, card reverso agendável, decks
+hierárquicos, leech, revlog, otimização de pesos FSRS, retenção medida. `_converter_cloze` existe
+só na importação de .apkg (não é card cloze nativo). "Variação de Contexto" mostra invertido como
+técnica, mas não é card reverso agendado.
+
+### 11.1 SPRINT 1 — Fundação (revlog + retenção real + leech)
+
+**Schema (migration aditiva):**
+- Nova tabela `flashcard_revlog`: (id, flashcard_id, user_id, rating 1-4, quality 0-5, estado FSRS
+  antes/depois, stability, difficulty, intervalo_dias, elapsed_days, tempo_ms, revisado_em).
+- Novas colunas em `flashcards`: `lapses INTEGER DEFAULT 0`, `is_leech INTEGER DEFAULT 0`,
+  `suspenso INTEGER DEFAULT 0`.
+- Espelhar em `db/tables.py` (DBs novos) + migration numerada.
+
+**Gravação:** `/api/flashcards/{id}/review-fsrs` insere 1 linha no revlog por review (antes de
+atualizar o card, capturando estado anterior).
+
+**Leech:** rating Again (quality ≤ 1 / rating 1) incrementa `lapses`. Ao atingir `LEECH_THRESHOLD`
+(8, configurável) marca `is_leech=1`; múltiplo do threshold → `suspenso=1` (sai da fila `/today`).
+Técnica: "desirable difficulty tem limite" (Bjork). UI: badge 🩸 no card.
+
+**Retenção real:** endpoint `/api/flashcards/retencao-real` = % de acerto (rating≥3) em reviews de
+cards MADUROS (intervalo prévio ≥ 21d) a partir do revlog, + forecast de carga (quantos cards
+vencem por dia nos próximos N dias) a partir de `proxima_revisao`.
+
+**Constantes:** `LEECH_THRESHOLD = 8`, `LEECH_SUSPEND_MULTIPLE = 2` (suspende no 16º), em `constants.py`.
