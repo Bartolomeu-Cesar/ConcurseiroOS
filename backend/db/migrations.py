@@ -1224,6 +1224,20 @@ def _m78_flashcards_reverso(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_flashcards_note ON flashcards(user_id, note_id)")
 
 
+def _m79_metas_fsrs_weights(conn):
+    """Pesos FSRS personalizados por usuário (otimização à la Anki).
+
+    Coluna `fsrs_weights` (JSON) em metas_config guarda os S0 otimizados por rating
+    ({"w_inicial": {"1":..,"2":..,"3":..,"4":..}, "amostras":..., "atualizado_em":...}).
+    Vazio/NULL → usa os pesos default globais (comportamento inalterado).
+    """
+    try:
+        conn.execute("ALTER TABLE metas_config ADD COLUMN fsrs_weights TEXT DEFAULT ''")
+        log.info("Migration 79: added column fsrs_weights to metas_config")
+    except Exception:
+        pass  # coluna já existe
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -1303,6 +1317,7 @@ MIGRATIONS = [
     (76, _m76_flashcard_revlog_leech),
     (77, _m77_flashcards_cloze),
     (78, _m78_flashcards_reverso),
+    (79, _m79_metas_fsrs_weights),
 ]
 
 

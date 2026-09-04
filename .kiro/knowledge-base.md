@@ -962,7 +962,7 @@ nenhum ponto):
 | 3 | **Cloze deletion nativo** (`{{c1::...}}` → múltiplos cards) | ⭐⭐⭐ | Médio | note types | ✅ SPRINT 2 |
 | 4 | **Cards reversos / note type básico** (frente↔verso) | ⭐⭐ | Médio | — | ✅ SPRINT 3 |
 | 5 | **Filtered / Custom Study** (cram, "só erros de hoje") | ⭐⭐ | Baixo-Médio | — | ✅ SPRINT 4 |
-| 6 | **Otimização dos pesos FSRS por usuário** (treina W[0..18]) | ⭐⭐⭐ | Alto | revlog (#1) | 🔲 |
+| 6 | **Otimização dos pesos FSRS por usuário** (treina W[0..18]) | ⭐⭐⭐ | Alto | revlog (#1) | ✅ SPRINT 5 (S0/W[0..3]) |
 | 7 | **Image Occlusion** (ocultar regiões de imagem) | ⭐⭐ | Alto | upload mídia | 🔲 |
 | 8 | **Estatísticas visuais** (heatmap reviews, forecast carga) | ⭐⭐ | Médio | revlog (#1) | 🔲 |
 | 9 | **Undo de review** (desfazer última avaliação) | ⭐ | Baixo | revlog (#1) | 🔲 |
@@ -1065,3 +1065,38 @@ sessão existente (`showSessaoFlashcard`); `customStudyMateria()` pede a discipl
 
 **Testes:** `test_flashcard_custom_study.py` (10) — cada modo, limite, exclusão de
 suspensos, leech inclui suspenso, tempo_segundos/is_leech, vazio, validações.
+
+### 11.5 SPRINT 5 — Otimização dos pesos FSRS por usuário (#6, parcial)
+
+**Escopo (baixo risco/alto valor):** otimizar os pesos de estabilidade inicial
+S0 = W[0..3] (por rating Again/Hard/Good/Easy) a partir do revlog (Sprint 1).
+NÃO reescreve o FSRS inteiro nem treina os 19 pesos (otimização completa fica
+para uma sprint futura); foca no subconjunto mais impactante e estimável.
+
+**fsrs.py:**
+- `_initial_stability(rating, w_inicial=None)`: usa S0 custom (dict {1..4} ou lista
+  de 4) quando fornecido; senão o default global W[rating-1]. Retrocompat total.
+- `review_card(..., w_inicial=None)`: propaga w_inicial às chamadas de S0.
+- `otimizar_pesos_iniciais(primeiras_revisoes)`: por rating, S0 = MEDIANA da
+  stability observada; exige ≥20 amostras/rating; clampa à faixa sã
+  (_S0_MIN/_S0_MAX) e impõe monotonicidade Again≤Hard≤Good≤Easy. Ratings sem
+  dados usam default.
+
+**Backend:**
+- Migration 79: coluna `fsrs_weights` (JSON) em metas_config.
+- `POST /api/flashcards/fsrs/otimizar`: estima S0 das PRIMEIRAS revisões ESPAÇADAS
+  (elapsed_days>=1 — evita circularidade com o S0 default) de cada card, salva em
+  metas_config. Falha graciosa se histórico insuficiente.
+- `GET /api/flashcards/fsrs/pesos`: retorna pesos atuais (custom ou default) + amostras.
+- `review-fsrs` carrega `_get_fsrs_weights(user)` e passa a review_card.
+
+**Frontend:** botão "🧠 Otimizar meu FSRS" na seção de retenção (loadRetencaoReal),
+`otimizarFSRS()` + `loadFsrsPesos()` exibindo o S0 por rating.
+
+**Testes:** `test_fsrs_otimizacao.py` (11) — função pura (amostras, monotonicidade,
+clamp, sem dados), review_card com/sem w_inicial (dict e lista), endpoints
+(default, sem histórico, com histórico espaçado).
+
+**Nota:** a estimativa usa reviews com espaçamento real (não a 1ª revisão, que já
+usa o S0 default → seria circular). Otimização completa dos 19 pesos (gradient
+descent sobre o revlog) permanece no roadmap como evolução futura.

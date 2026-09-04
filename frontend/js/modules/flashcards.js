@@ -1571,10 +1571,47 @@ export async function loadRetencaoReal() {
           </div>
         </div>
         <div style="font-size:0.62rem;color:var(--text-sub);margin-top:6px;">📅 Próximos 7 dias: ${proxDias}</div>
+        <div style="margin-top:8px;">
+          <button onclick="otimizarFSRS()" title="Ajusta o agendador FSRS ao seu histórico de acertos (à la Anki)" style="background:var(--bg);border:1px solid var(--accent);color:var(--accent);border-radius:6px;padding:5px 10px;font-size:0.72rem;font-weight:600;cursor:pointer;">🧠 Otimizar meu FSRS</button>
+          <div id="fsrs-pesos-box" style="font-size:0.62rem;color:var(--text-sub);margin-top:4px;"></div>
+        </div>
       </div>`;
+    loadFsrsPesos();
   } catch(e) { box.innerHTML = ''; }
 }
 window.loadRetencaoReal = loadRetencaoReal;
+
+/** Mostra o status dos pesos FSRS personalizados (S0 por rating). */
+export async function loadFsrsPesos() {
+  const el = document.getElementById('fsrs-pesos-box');
+  if (!el) return;
+  try {
+    const p = await fetch('/api/flashcards/fsrs/pesos').then(r => r.json());
+    if (p.otimizado) {
+      const wi = p.w_inicial || {};
+      el.innerHTML = `✅ Personalizado — S0 por rating: Errei ${(+wi[1]).toFixed(1)} · Difícil ${(+wi[2]).toFixed(1)} · Bom ${(+wi[3]).toFixed(1)} · Fácil ${(+wi[4]).toFixed(1)} dias`;
+    } else {
+      el.innerHTML = 'Usando pesos padrão. Otimize após acumular revisões espaçadas.';
+    }
+  } catch(e) { el.innerHTML = ''; }
+}
+window.loadFsrsPesos = loadFsrsPesos;
+
+/** Dispara a otimização dos pesos FSRS a partir do histórico do usuário. */
+export async function otimizarFSRS() {
+  try {
+    const r = await api('/api/flashcards/fsrs/otimizar', { method: 'POST', body: {} });
+    if (r.ok) {
+      toast(`🧠 ${r.mensagem}`, 'success', 4000);
+    } else {
+      toast(`ℹ️ ${r.mensagem}`, 'info', 5000);
+    }
+    loadFsrsPesos();
+  } catch(e) {
+    toast('Erro ao otimizar FSRS.', 'error');
+  }
+}
+window.otimizarFSRS = otimizarFSRS;
 
 // BOSS BATTLE MODE — Gamified Flashcard Review
 // ============================================================

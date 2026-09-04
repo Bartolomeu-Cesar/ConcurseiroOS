@@ -325,6 +325,129 @@ def get_custom_study(
     return {"modo": modo, "total": len(result), "cards": result}
 
 
+# ============================================================
+# OTIMIZAÇÃO DOS PESOS FSRS POR USUÁRIO (à la Anki)
+# ============================================================
+
+
+def _get_fsrs_weights(conn, user_id: int):
+    """Carrega o w_inicial (S0 por rating) personalizado do usuário, ou None.
+
+    Retorna dict {1: s0, 2: s0, 3: s0, 4: s0} pronto para review_card(w_inicial=...),
+    ou None se o usuário não otimizou (usa defaults globais).
+    """
+    import json as _json
+
+    try:
+        row = conn.execute("SELECT fsrs_weights FROM metas_config WHERE user_id = ?", (user_id,)).fetchone()
+    except Exception:
+        return None
+    if not row or not row[0]:
+        return None
+    try:
+        data = _json.loads(row[0])
+        wi = data.get("w_inicial") or {}
+        # chaves podem vir como str (JSON) — normaliza para int
+        return {int(k): float(v) for k, v in wi.items()}
+    except (ValueError, TypeError):
+        return None
+
+
+@router.get("/api/flashcards/fsrs/pesos", summary="Pesos FSRS do usuário (S0 por rating)")
+def get_fsrs_pesos(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Retorna os pesos FSRS personalizados do usuário (ou os defaults se não otimizou)."""
+    import json as _json
+
+    from fsrs import W
+
+    defaults = {1: W[0], 2: W[1], 3: W[2], 4: W[3]}
+    row = None
+    try:
+        row = conn.execute("SELECT fsrs_weights FROM metas_config WHERE user_id = ?", (user_id,)).fetchone()
+    except Exception:
+        pass
+    if row and row[0]:
+        try:
+            data = _json.loads(row[0])
+            return {
+                "otimizado": True,
+                "w_inicial": data.get("w_inicial", defaults),
+                "amostras": data.get("amostras", {}),
+                "otimizados": data.get("otimizados", []),
+                "atualizado_em": data.get("atualizado_em"),
+                "default": defaults,
+            }
+        except (ValueError, TypeError):
+            pass
+    return {"otimizado": False, "w_inicial": defaults, "amostras": {}, "otimizados": [], "default": defaults}
+
+
+@router.post(
+    "/api/flashcards/fsrs/otimizar",
+    summary="Otimizar pesos FSRS a partir do histórico",
+    description="Estima os pesos de estabilidade inicial (S0 por rating) do usuário a partir do revlog e os salva.",
+)
+def otimizar_fsrs(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Otimiza os pesos FSRS S0 a partir das PRIMEIRAS revisões de cada card no revlog.
+
+    Usa a estabilidade resultante da primeira revisão de cada card, agrupada por
+    rating. Requer histórico suficiente (mín. de amostras por rating) — ratings
+    sem dados mantêm o default. Salva em metas_config.fsrs_weights (JSON).
+    """
+    import json as _json
+    from datetime import datetime, timezone
+
+    from fsrs import otimizar_pesos_iniciais
+
+    # Estabilidade observada em revisões com ESPAÇAMENTO REAL (elapsed_days >= 1):
+    # a stability aí é recalculada por sucesso/falha (não é o S0 default circular).
+    # Para cada card, usa a primeira revisão espaçada, agrupada por rating.
+    try:
+        rows = conn.execute(
+            """SELECT rating, stability FROM flashcard_revlog r
+               WHERE user_id = ? AND elapsed_days >= 1 AND id = (
+                   SELECT MIN(id) FROM flashcard_revlog
+                   WHERE flashcard_id = r.flashcard_id AND user_id = ? AND elapsed_days >= 1
+               )""",
+            (user_id, user_id),
+        ).fetchall()
+    except Exception:
+        rows = []
+    primeiras = [{"rating": r[0], "stability": r[1]} for r in rows]
+
+    resultado = otimizar_pesos_iniciais(primeiras)
+
+    if not resultado["otimizados"]:
+        return {
+            "ok": False,
+            "mensagem": "Histórico insuficiente para otimizar. Revise mais flashcards e tente novamente.",
+            "amostras": resultado["amostras"],
+            "minimo_por_rating": 20,
+        }
+
+    payload = {
+        "w_inicial": resultado["w_inicial"],
+        "amostras": resultado["amostras"],
+        "otimizados": resultado["otimizados"],
+        "atualizado_em": datetime.now(timezone.utc).isoformat(),
+    }
+    # Upsert em metas_config (a linha do usuário costuma existir; cria se não).
+    existe = conn.execute("SELECT 1 FROM metas_config WHERE user_id = ?", (user_id,)).fetchone()
+    if existe:
+        conn.execute("UPDATE metas_config SET fsrs_weights = ? WHERE user_id = ?", (_json.dumps(payload), user_id))
+    else:
+        conn.execute("INSERT INTO metas_config (user_id, fsrs_weights) VALUES (?, ?)", (user_id, _json.dumps(payload)))
+    conn.commit()
+    log.info(f"FSRS weights optimized for user {user_id}: ratings={resultado['otimizados']}")
+    return {
+        "ok": True,
+        "mensagem": f"Pesos otimizados para os ratings {resultado['otimizados']}.",
+        "w_inicial": resultado["w_inicial"],
+        "amostras": resultado["amostras"],
+        "otimizados": resultado["otimizados"],
+    }
+
+
 @router.get("/api/flashcards/aleatorio", summary="Flashcards aleatórios para estudo")
 def get_flashcards_aleatorio(
     materia: str = "", quantidade: int = 10, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)
@@ -605,7 +728,9 @@ def review_flashcard_fsrs(
     rating = sm2_to_fsrs_rating(body.quality)
 
     # Call FSRS algorithm
-    output = review_card(card, rating, desired_retention=desired_retention)
+    # Pesos FSRS personalizados do usuário (S0 por rating), se otimizou (à la Anki).
+    w_inicial = _get_fsrs_weights(conn, user_id)
+    output = review_card(card, rating, desired_retention=desired_retention, w_inicial=w_inicial)
 
     # === LAG EFFECT (Exam-Aware Spacing) — centralizado em study_techniques ===
     # Cepeda et al. (2006): comprime o intervalo conforme a proximidade da prova.
