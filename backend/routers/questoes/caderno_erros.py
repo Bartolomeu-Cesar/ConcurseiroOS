@@ -1,9 +1,9 @@
 """Caderno de erros: listagem inteligente com FSRS + revisão interativa."""
+from deps import get_user_id
 from fastapi import APIRouter, Depends, HTTPException
+from schemas import RevisarErroRequest
 
 from database import get_db_session
-from deps import get_user_id
-from schemas import RevisarErroRequest
 from utils import today_str
 
 router = APIRouter()
@@ -13,7 +13,8 @@ router = APIRouter()
             description="Retorna questões erradas com repetição espaçada FSRS, agrupadas por padrão de erro.")
 def caderno_erros(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     from datetime import datetime, timedelta
-    from fsrs import FSRSCard, _retrievability, STATE_NEW
+
+    from fsrs import STATE_NEW, _retrievability
 
     hoje = today_str()
 
@@ -46,6 +47,16 @@ def caderno_erros(conn=Depends(get_db_session), user_id: int = Depends(get_user_
         WHERE qr.acertou = 0 AND qr.user_id = ?
         ORDER BY qr.data DESC
     """, (user_id,)).fetchall()
+
+    # Regra nº 2: filtrar apenas por matérias do ciclo ativo (nunca mostrar
+    # matérias de concursos inativos). Aplicado em Python para preservar o
+    # fallback "sem ciclo = todas as matérias".
+    from utils import get_materias_ciclo_ativo
+
+    materias_ativas = get_materias_ciclo_ativo(conn, user_id)
+    if materias_ativas is not None:
+        _ativas = set(materias_ativas)
+        erros = [e for e in erros if e["materia"] in _ativas]
 
     existing_revisoes = conn.execute(
         "SELECT questao_id, resposta_id FROM erros_revisao WHERE user_id = ?", (user_id,)
@@ -167,10 +178,12 @@ def caderno_erros(conn=Depends(get_db_session), user_id: int = Depends(get_user_
 @router.post("/api/questoes/erros/revisar/{id}", summary="Revisar questão errada",
              description="Marca uma questão do caderno de erros como revisada. Usa FSRS para calcular próximo intervalo.")
 def revisar_erro(id: int, body: RevisarErroRequest, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
-    from datetime import datetime, timedelta
     from fsrs import (
-        FSRSCard, review_card, STATE_NEW,
-        RATING_AGAIN, RATING_HARD, RATING_GOOD, RATING_EASY,
+        RATING_AGAIN,
+        RATING_GOOD,
+        STATE_NEW,
+        FSRSCard,
+        review_card,
     )
 
     DESIRED_RETENTION = 0.85
@@ -280,4 +293,101 @@ def revisar_erro(id: int, body: RevisarErroRequest, conn=Depends(get_db_session)
         "stability": round(output.stability, 4),
         "difficulty": round(output.difficulty, 4),
         "recall_estimado": round(output.retrievability, 4),
+    }
+
+
+# Nº de revisões acertadas a partir do qual uma questão é considerada DOMINADA e
+# graduada (removida do caderho de erros). Alinhado ao critério já usado em
+# core._schedule_question_review (reps >= 3) e à noção de "dominada" de
+# _smart_select_questions (3+ acertos). Successive Relearning: a questão saiu do
+# relearning e atingiu retenção durável.
+GRADUACAO_REPS_MIN = 3
+
+
+def atualizar_fsrs_ao_responder(conn, questao_id: int, acertou: bool, user_id: int = 1) -> dict | None:
+    """Atualiza o FSRS de uma questão em `erros_revisao` quando ela é respondida
+    fora do fluxo de revisão dedicado (ex.: desafio diário, simulado).
+
+    Sem isto, questões que entraram no caderno de erros ficam presas com
+    `proxima_revisao` no passado e reaparecem todos os dias, mesmo sendo
+    acertadas repetidamente (não graduavam).
+
+    Comportamento:
+    - Se a questão NÃO está em `erros_revisao`, não faz nada (retorna None).
+    - Acerto → RATING_GOOD; erro → RATING_AGAIN. Avança o card FSRS.
+    - Se acertou e já acumulou >= GRADUACAO_REPS_MIN revisões, a questão GRADUA:
+      a entrada é removida do caderho de erros e para de ser sorteada como
+      pendente (mesmo critério de core._schedule_question_review).
+
+    Returns:
+        dict com o resultado (graduou/novo_intervalo/proxima_revisao) ou None se
+        a questão não estava no caderno de erros.
+    """
+    from fsrs import (
+        RATING_AGAIN,
+        RATING_GOOD,
+        STATE_NEW,
+        FSRSCard,
+        review_card,
+    )
+
+    DESIRED_RETENTION = 0.85
+    hoje = today_str()
+
+    revisao = conn.execute(
+        """SELECT id, intervalo_atual, revisoes_count, stability, difficulty, fsrs_state, reps, last_review
+           FROM erros_revisao WHERE questao_id = ? AND user_id = ? ORDER BY id DESC LIMIT 1""",
+        (questao_id, user_id),
+    ).fetchone()
+
+    if not revisao:
+        return None  # questão não está no caderno de erros → nada a fazer
+
+    rating = RATING_GOOD if acertou else RATING_AGAIN
+    reps_atual = revisao["reps"] if revisao["reps"] is not None else 0
+
+    card = FSRSCard(
+        stability=revisao["stability"] if revisao["stability"] is not None else 0.0,
+        difficulty=revisao["difficulty"] if revisao["difficulty"] is not None else 0.0,
+        state=revisao["fsrs_state"] if revisao["fsrs_state"] is not None else STATE_NEW,
+        last_review=revisao["last_review"] or "",
+        reps=reps_atual,
+    )
+
+    output = review_card(card, rating, desired_retention=DESIRED_RETENTION, review_date=hoje)
+
+    # Graduação: acertou e já tem revisões suficientes → sai do caderno de erros.
+    if acertou and reps_atual >= GRADUACAO_REPS_MIN:
+        conn.execute(
+            "DELETE FROM erros_revisao WHERE questao_id = ? AND user_id = ?",
+            (questao_id, user_id),
+        )
+        return {
+            "graduou": True,
+            "novo_intervalo": output.interval,
+            "proxima_revisao": output.next_review,
+        }
+
+    conn.execute("""
+        UPDATE erros_revisao
+        SET intervalo_atual = ?, proxima_revisao = ?, revisoes_count = ?, updated_at = ?,
+            stability = ?, difficulty = ?, fsrs_state = ?, reps = ?, last_review = ?
+        WHERE id = ? AND user_id = ?
+    """, (
+        output.interval,
+        output.next_review,
+        revisao["revisoes_count"] + 1,
+        hoje,
+        output.stability,
+        output.difficulty,
+        output.state,
+        reps_atual + 1,
+        hoje,
+        revisao["id"],
+        user_id,
+    ))
+    return {
+        "graduou": False,
+        "novo_intervalo": output.interval,
+        "proxima_revisao": output.next_review,
     }

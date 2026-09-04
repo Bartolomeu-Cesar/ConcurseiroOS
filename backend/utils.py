@@ -5,9 +5,6 @@ from typing import Any
 
 from pypdf import PdfReader
 
-
-
-
 # ============================================================
 # TEMPO ADAPTATIVO POR QUESTÃO (mais justo — inclui alternativas)
 # ============================================================
@@ -71,6 +68,34 @@ def calcular_tempo_resposta_questao(
     return max(minimo, min(maximo, tempo))
 def today_str():
     return date.today().isoformat()
+
+
+def get_materias_ciclo_ativo(conn, user_id: int = 1) -> list[str] | None:
+    """Retorna as matérias do ciclo de estudos ativo do usuário.
+
+    Regra do projeto (nº 2): queries de recomendação/treinador/revisão devem
+    filtrar por `ciclo_estudos WHERE ativo = 1` — nunca mostrar matérias de
+    concursos inativos.
+
+    Returns:
+        Lista de nomes de matéria ativas, ou None quando não há ciclo ativo
+        (nesse caso o chamador deve tratar como "sem filtro" = todas as matérias).
+    """
+    try:
+        rows = conn.execute(
+            "SELECT materia FROM ciclo_estudos WHERE ativo = 1 AND user_id = ?",
+            (user_id,),
+        ).fetchall()
+    except Exception:
+        # Schemas antigos podem não ter a coluna user_id
+        try:
+            rows = conn.execute(
+                "SELECT materia FROM ciclo_estudos WHERE ativo = 1"
+            ).fetchall()
+        except Exception:
+            return None
+    materias = [r[0] for r in rows] if rows else []
+    return materias or None
 
 
 def get_pdf_pages(filepath: str) -> int:

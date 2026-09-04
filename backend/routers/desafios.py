@@ -1,15 +1,14 @@
 """Router de Desafios Semanais + Desafio Diário."""
 import json
-import random
 from datetime import datetime
 
+from deps import get_user_id
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from schemas import DesafioCreate
 
 from database import get_db_session
-from deps import get_user_id
 from logger import log
-from schemas import DesafioCreate
 from utils import today_str, update_streak
 
 router = APIRouter(prefix="", tags=["Desafios"])
@@ -391,6 +390,16 @@ def responder_desafio_diario(body: DesafioDiarioResposta, conn=Depends(get_db_se
             INSERT INTO questoes_respostas (questao_id, resposta_usuario, acertou, tempo_segundos, data, user_id)
             VALUES (?, ?, ?, ?, ?, ?)
         """, (questao_id, resposta, acertou, tempo_individual, hoje, user_id))
+
+        # Atualizar FSRS do caderno de erros: se esta questão está em
+        # erros_revisao, avança o agendamento (e gradua/remove se dominada).
+        # Sem isto, questões acertadas repetidamente ficavam presas no ciclo de
+        # revisão e reapareciam todo dia.
+        try:
+            from routers.questoes.caderno_erros import atualizar_fsrs_ao_responder
+            atualizar_fsrs_ao_responder(conn, questao_id, bool(acertou), user_id=user_id)
+        except Exception:
+            pass  # não bloqueia a submissão do desafio se o FSRS falhar
 
         resultados.append({
             "questao_id": questao_id,
