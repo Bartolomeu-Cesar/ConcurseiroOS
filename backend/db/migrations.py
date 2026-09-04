@@ -1204,6 +1204,26 @@ def _m77_flashcards_cloze(conn):
         pass  # coluna já existe
 
 
+def _m78_flashcards_reverso(conn):
+    """Suporte a cards reversos (note type básico, à la Anki).
+
+    - card_tipo: 'normal' (card único), 'frente' (P→R) ou 'verso' (R→P). Cards
+      frente/verso são agendados INDEPENDENTEMENTE pelo FSRS.
+    - note_id: agrupa os cards gerados a partir da MESMA nota (frente + verso).
+      NULL/0 para cards normais antigos. Usa o id do primeiro card como note_id.
+    """
+    for col, ddl in (
+        ("card_tipo", "ALTER TABLE flashcards ADD COLUMN card_tipo TEXT DEFAULT 'normal'"),
+        ("note_id", "ALTER TABLE flashcards ADD COLUMN note_id INTEGER"),
+    ):
+        try:
+            conn.execute(ddl)
+            log.info(f"Migration 78: added column {col} to flashcards")
+        except Exception:
+            pass  # coluna já existe
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_flashcards_note ON flashcards(user_id, note_id)")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -1282,6 +1302,7 @@ MIGRATIONS = [
     (75, _m75_pdf_path_completo),
     (76, _m76_flashcard_revlog_leech),
     (77, _m77_flashcards_cloze),
+    (78, _m78_flashcards_reverso),
 ]
 
 

@@ -934,10 +934,13 @@ export async function addFlashcard() {
   // Verificar limite do plano antes de criar
   if (window.checkPlanLimit && !(await window.checkPlanLimit('flashcards'))) return;
   const materia = document.getElementById('flash-add-materia')?.value || '';
-  await fetch('/api/flashcards', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pergunta: p, resposta: r, materia }) });
+  const reverso = !!document.getElementById('flash-reverso')?.checked;
+  const resp = await fetch('/api/flashcards', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pergunta: p, resposta: r, materia, reverso }) }).then(x => x.json()).catch(() => ({}));
   document.getElementById('flash-pergunta').value = '';
   document.getElementById('flash-resposta').value = '';
-  toast('Flashcard criado!', 'success');
+  const chk = document.getElementById('flash-reverso');
+  if (chk) chk.checked = false;
+  toast(resp && resp.criados === 2 ? '🔄 2 cards criados (frente + verso)!' : 'Flashcard criado!', 'success');
   loadFlashcardsToday();
   loadAllFlashcards();
 }

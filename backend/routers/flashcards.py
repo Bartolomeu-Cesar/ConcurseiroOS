@@ -268,20 +268,41 @@ def get_flashcards_aleatorio(
 def create_flashcard(body: FlashcardCreate, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     from plans import enforce_plan_limit
 
+    # Reverso cria 2 cards → conta 2 no limite do plano.
     enforce_plan_limit(conn, user_id, "flashcards")
+    if bool(getattr(body, "reverso", False)):
+        enforce_plan_limit(conn, user_id, "flashcards")
 
     pergunta = sanitize_input(body.pergunta, max_length=2000)
     resposta = sanitize_input(body.resposta, max_length=5000)
     materia = sanitize_input(getattr(body, "materia", ""))
+    reverso = bool(getattr(body, "reverso", False))
+
+    # Card principal. Se houver reverso, ele é o lado 'frente' (P->R); senão 'normal'.
     cur = conn.execute(
-        "INSERT INTO flashcards (pergunta, resposta, proxima_revisao, materia, user_id) VALUES (?, ?, ?, ?, ?)",
-        (pergunta, resposta, today_str(), materia, user_id),
+        "INSERT INTO flashcards (pergunta, resposta, proxima_revisao, materia, user_id, card_tipo) VALUES (?, ?, ?, ?, ?, ?)",
+        (pergunta, resposta, today_str(), materia, user_id, "frente" if reverso else "normal"),
     )
-    conn.commit()
     new_id = cur.lastrowid
-    log.info(f"Flashcard created: id={new_id}")
+    # note_id agrupa os cards da mesma nota (o próprio id do primeiro card).
+    conn.execute("UPDATE flashcards SET note_id = ? WHERE id = ?", (new_id, new_id))
+
+    criados = [new_id]
+    if reverso:
+        # Card reverso (R->P): pergunta e resposta invertidas, mesmo note_id.
+        cur2 = conn.execute(
+            "INSERT INTO flashcards (pergunta, resposta, proxima_revisao, materia, user_id, card_tipo, note_id) VALUES (?, ?, ?, ?, ?, 'verso', ?)",
+            (resposta, pergunta, today_str(), materia, user_id, new_id),
+        )
+        criados.append(cur2.lastrowid)
+
+    conn.commit()
+    log.info(f"Flashcard(s) created: ids={criados} reverso={reverso}")
     return {
         "id": new_id,
+        "ids": criados,
+        "criados": len(criados),
+        "reverso": reverso,
         "pergunta": pergunta,
         "resposta": resposta,
         "proxima_revisao": today_str(),
@@ -334,7 +355,9 @@ def create_flashcards_cloze(body: dict = Body(...), conn=Depends(get_db_session)
         "ok": True,
         "criados": len(ids),
         "ids": ids,
-        "cards": [{"id": i, "pergunta": c["pergunta"], "resposta": c["resposta"]} for i, c in zip(ids, cards, strict=False)],
+        "cards": [
+            {"id": i, "pergunta": c["pergunta"], "resposta": c["resposta"]} for i, c in zip(ids, cards, strict=False)
+        ],
     }
 
 

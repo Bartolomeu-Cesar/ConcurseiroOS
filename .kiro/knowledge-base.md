@@ -960,7 +960,7 @@ nenhum ponto):
 | 1 | **Review log (`revlog`) + retenção real** | ⭐⭐⭐ | Médio | — | ✅ SPRINT 1 (6c64c94) |
 | 2 | **Leech detection** (lapses ≥ 8 → suspende/sinaliza) | ⭐⭐⭐ | Baixo | — | ✅ SPRINT 1 (6c64c94) |
 | 3 | **Cloze deletion nativo** (`{{c1::...}}` → múltiplos cards) | ⭐⭐⭐ | Médio | note types | ✅ SPRINT 2 |
-| 4 | **Cards reversos / note type básico** (frente↔verso) | ⭐⭐ | Médio | — | 🔲 |
+| 4 | **Cards reversos / note type básico** (frente↔verso) | ⭐⭐ | Médio | — | ✅ SPRINT 3 |
 | 5 | **Filtered / Custom Study** (cram, "só erros de hoje") | ⭐⭐ | Baixo-Médio | — | 🔲 |
 | 6 | **Otimização dos pesos FSRS por usuário** (treina W[0..18]) | ⭐⭐⭐ | Alto | revlog (#1) | 🔲 |
 | 7 | **Image Occlusion** (ocultar regiões de imagem) | ⭐⭐ | Alto | upload mídia | 🔲 |
@@ -1020,3 +1020,27 @@ todo o fluxo FSRS/revlog/leech da Sprint 1.
 **Testes:** `test_flashcard_cloze.py` (10) — parsing (1 lacuna, multi-grupo, repetida,
 dica, sem cloze) + endpoint (cria N, salva cloze_text, valida, aparece no /today).
 **Constantes:** `LEECH_THRESHOLD = 8`, `LEECH_SUSPEND_MULTIPLE = 2` (suspende no 16º), em `constants.py`.
+
+### 11.3 SPRINT 3 — Cards reversos / note type básico (#4)
+
+**Objetivo:** de uma nota (pergunta/resposta) gerar 2 cards independentes: frente
+(P→R) e verso (R→P). Dobra o valor de cada flashcard criado.
+
+**Backend:**
+- Migration 78 (`_m78_flashcards_reverso`): colunas `card_tipo`
+  ('normal'|'frente'|'verso', default 'normal') e `note_id` (agrupa os cards da
+  mesma nota; = id do primeiro card). Índice idx_flashcards_note.
+- `FlashcardCreate.reverso: bool = False` (schemas.py).
+- `create_flashcard`: se reverso, cria card 'frente' (P→R) + card 'verso' (R→P
+  invertido) com o mesmo note_id; senão 1 card 'normal'. Conta 2 no limite do
+  plano quando reverso. Retorna {id, ids, criados, reverso}.
+- Cards são INDEPENDENTES: cada um tem seu próprio FSRS/revlog; excluir/editar um
+  não afeta o irmão (DELETE/PUT por id). Sibling burying (não mostrar irmãos no
+  mesmo dia) ficou para uma sprint futura.
+
+**Frontend:** checkbox "🔄 Criar também o card reverso" no formulário (index.html);
+`addFlashcard` envia `reverso` e mostra toast "2 cards criados" quando aplicável.
+
+**Testes:** `test_flashcard_reverso.py` (8) — cria 2 cards, inverte P/R, note_id
+compartilhado, normal/retrocompat (sem campo reverso), ambos no /today, revisão
+independente, excluir um preserva o irmão.
