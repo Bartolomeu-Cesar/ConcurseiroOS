@@ -6,14 +6,13 @@ Integrates with OpenAI API (GPT-4o-mini) or local Ollama for AI-powered study as
 import json
 import os
 from datetime import date, datetime
-from typing import Optional
 
 import httpx
+from deps import get_user_id
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from database import get_db_session
-from deps import get_user_id
 from logger import log
 
 # ---------------------------------------------------------------------------
@@ -117,11 +116,11 @@ Regras baseadas em evidência:
 
 
 class ExplainErrorRequest(BaseModel):
-    questao_id: Optional[int] = None
-    enunciado: Optional[str] = None
-    resposta_usuario: Optional[str] = None
-    resposta_correta: Optional[str] = None
-    explicacao: Optional[str] = None
+    questao_id: int | None = None
+    enunciado: str | None = None
+    resposta_usuario: str | None = None
+    resposta_correta: str | None = None
+    explicacao: str | None = None
 
 
 class GenerateFlashcardsRequest(BaseModel):
@@ -238,7 +237,7 @@ PROVIDERS = {
     },
     "glm": {
         "url": "https://open.bigmodel.cn/api/paas/v4/chat/completions",
-        "default_model": "glm-4-flash",
+        "default_model": "glm-4.5-flash",  # glm-4-flash foi descontinuado (erro 1211); glm-4.5-flash é o modelo leve/gratuito atual da Zhipu
         "env_key": "GLM_API_KEY",
         "format": "openai",  # ZhipuAI GLM is OpenAI-compatible
     },
@@ -272,6 +271,7 @@ def _get_ai_config() -> dict:
         if not api_key:
             try:
                 import sqlite3 as _sql
+
                 from settings import settings as _settings
                 _conn = _sql.connect(_settings.DB_PATH, check_same_thread=False, timeout=5)
                 _conn.row_factory = _sql.Row
@@ -292,6 +292,7 @@ def _get_ai_config() -> dict:
     # Check user DB config (ai_config table)
     try:
         import sqlite3
+
         from settings import settings
         conn = sqlite3.connect(settings.DB_PATH, check_same_thread=False, timeout=5)
         conn.row_factory = sqlite3.Row
@@ -347,6 +348,69 @@ def _get_ai_config() -> dict:
     return {"provider": "none", "api_key": "", "url": "", "model": "", "format": ""}
 
 
+def _traduzir_erro_provedor(provider: str, status_code: int, corpo: str) -> tuple[int, str]:
+    """Converte um erro HTTP do provedor de IA em (status, mensagem) claros em pt-BR.
+
+    Muitos provedores (GLM/Zhipu, OpenAI, etc.) retornam a causa real no corpo
+    JSON (ex.: saldo insuficiente, modelo inexistente, key inválida). Sem isto, o
+    backend devolvia um 502 genérico "Erro na API glm: 429", escondendo o motivo.
+
+    Returns:
+        (status_code_para_o_cliente, mensagem_amigavel)
+    """
+    import json as _json
+
+    label = provider.upper()
+
+    # Tentar extrair a mensagem/código do corpo JSON do provedor
+    prov_msg = ""
+    prov_code = ""
+    try:
+        parsed = _json.loads(corpo)
+        err = parsed.get("error", parsed) if isinstance(parsed, dict) else {}
+        if isinstance(err, dict):
+            prov_msg = str(err.get("message", "") or "")
+            prov_code = str(err.get("code", "") or "")
+        elif isinstance(err, str):
+            prov_msg = err
+    except Exception:
+        prov_msg = ""
+
+    texto = f"{prov_code} {prov_msg} {corpo}".lower()
+
+    # Saldo/recurso insuficiente (GLM code 1113, ou termos comuns)
+    if (
+        "1113" in texto
+        or "余额不足" in texto  # saldo insuficiente
+        or ("insufficient" in texto and ("balance" in texto or "quota" in texto or "credit" in texto))
+        or "billing" in texto
+    ):
+        return 402, (
+            f"{label}: saldo insuficiente ou sem pacote de recursos na sua conta. "
+            f"Recarregue ou ative um pacote no painel do provedor e tente novamente."
+        )
+
+    # Modelo inexistente/inválido (GLM code 1211)
+    if "1211" in texto or "模型不存在" in texto or ("model" in texto and ("not exist" in texto or "not found" in texto or "does not exist" in texto)):
+        return 400, (
+            f"{label}: o modelo configurado não existe. Verifique o nome do modelo "
+            f"na configuração de IA (ex.: para GLM use 'glm-4.5-flash')."
+        )
+
+    # API key inválida / não autorizada
+    if status_code in (401, 403) or "invalid api key" in texto or "unauthorized" in texto or "认证" in texto:
+        return 401, f"{label}: API key inválida ou sem permissão. Verifique a chave configurada."
+
+    # Rate limit (sem indício de saldo)
+    if status_code == 429:
+        return 429, f"{label}: limite de requisições atingido (rate limit). Aguarde alguns instantes e tente novamente."
+
+    # Fallback: repassa a mensagem do provedor se houver, senão o status
+    if prov_msg:
+        return 502, f"Erro na API {provider}: {prov_msg[:160]}"
+    return 502, f"Erro na API {provider}: {status_code}"
+
+
 def call_llm_sync(messages: list[dict], max_tokens: int = 1000) -> tuple[str, int]:
     """Call LLM synchronously via the detected provider. Returns (response_text, tokens_used)."""
     config = _get_ai_config()
@@ -393,10 +457,8 @@ def call_llm_sync(messages: list[dict], max_tokens: int = 1000) -> tuple[str, in
                 return text, tokens
         except httpx.HTTPStatusError as e:
             log.error(f"[AI:{provider}] HTTP error: {e.response.status_code} - {e.response.text[:200]}")
-            raise HTTPException(
-                status_code=502,
-                detail=f"Erro na API {provider}: {e.response.status_code}",
-            )
+            status, msg = _traduzir_erro_provedor(provider, e.response.status_code, e.response.text)
+            raise HTTPException(status_code=status, detail=msg) from e
         except httpx.RequestError as e:
             log.error(f"[AI:{provider}] Request error: {e}")
             raise HTTPException(
@@ -439,7 +501,8 @@ def call_llm_sync(messages: list[dict], max_tokens: int = 1000) -> tuple[str, in
                 return text, tokens
         except httpx.HTTPStatusError as e:
             log.error(f"[AI:claude] HTTP error: {e.response.status_code} - {e.response.text[:200]}")
-            raise HTTPException(status_code=502, detail=f"Erro na API Claude: {e.response.status_code}")
+            status, msg = _traduzir_erro_provedor("claude", e.response.status_code, e.response.text)
+            raise HTTPException(status_code=status, detail=msg) from e
         except httpx.RequestError as e:
             log.error(f"[AI:claude] Request error: {e}")
             raise HTTPException(status_code=503, detail="Não foi possível conectar à API Anthropic.")
@@ -479,7 +542,8 @@ def call_llm_sync(messages: list[dict], max_tokens: int = 1000) -> tuple[str, in
                 return text, tokens or len(text) // 3
         except httpx.HTTPStatusError as e:
             log.error(f"[AI:cohere] HTTP error: {e.response.status_code} - {e.response.text[:200]}")
-            raise HTTPException(status_code=502, detail=f"Erro na API Cohere: {e.response.status_code}")
+            status, msg = _traduzir_erro_provedor("cohere", e.response.status_code, e.response.text)
+            raise HTTPException(status_code=status, detail=msg) from e
         except httpx.RequestError as e:
             log.error(f"[AI:cohere] Request error: {e}")
             raise HTTPException(status_code=503, detail="Não foi possível conectar à API Cohere.")
@@ -1011,7 +1075,7 @@ def get_ai_usage(
 @router.get("/api/ai/history")
 def get_ai_history(
     limit: int = Query(default=20, ge=1, le=100),
-    tipo: Optional[str] = Query(default=None),
+    tipo: str | None = Query(default=None),
     db=Depends(get_db_session),
     user_id: int = Depends(get_user_id),
 ):
