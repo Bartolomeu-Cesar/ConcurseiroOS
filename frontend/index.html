@@ -362,6 +362,21 @@
       </select>
       <button onclick="addFlashcard()">Adicionar</button>
     </div>
+    <div class="flash-panel flash-add-form">
+      <h2>🧩 Criar Cloze (lacunas)</h2>
+      <p style="font-size:0.75rem;color:var(--text-sub);margin:0 0 8px;">Ideal para lei seca. Selecione o texto e clique em "Inserir lacuna" — ou digite <code>{{c1::resposta}}</code>. Cada número (c1, c2...) vira um card.</p>
+      <textarea id="cloze-texto" placeholder="Ex.: Art. 5º Todos são iguais perante a lei..." aria-label="Texto com lacunas cloze" rows="3"></textarea>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
+        <button type="button" onclick="clozeInserirLacuna(1)" style="flex:1;min-width:90px;background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:0.78rem;cursor:pointer;">➕ Lacuna c1</button>
+        <button type="button" onclick="clozeInserirLacuna(2)" style="flex:1;min-width:90px;background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:0.78rem;cursor:pointer;">➕ Lacuna c2</button>
+        <button type="button" onclick="clozePreview()" style="flex:1;min-width:90px;background:var(--bg-surface);color:var(--accent);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:0.78rem;cursor:pointer;">👁 Prever</button>
+      </div>
+      <select id="cloze-materia" aria-label="Disciplina do cloze" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;margin-bottom:8px;">
+        <option value="">📚 Disciplina (opcional)</option>
+      </select>
+      <div id="cloze-preview" style="display:none;font-size:0.78rem;color:var(--text-sub);background:var(--bg-surface);border-radius:8px;padding:8px;margin-bottom:8px;"></div>
+      <button onclick="criarCloze()">Criar cards Cloze</button>
+    </div>
     <div class="flash-panel">
       <h2>📦 Todos os Flashcards</h2>
       <!-- Modos de Estudo -->

@@ -1,6 +1,6 @@
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile
 
 from constants import SM2_FIRST_INTERVAL, SM2_INITIAL_EF, SM2_MIN_EF, SM2_SECOND_INTERVAL, SPEED_REVIEW_LIMIT
 from database import get_db_session
@@ -286,6 +286,55 @@ def create_flashcard(body: FlashcardCreate, conn=Depends(get_db_session), user_i
         "resposta": resposta,
         "proxima_revisao": today_str(),
         "intervalo_dias": 1,
+    }
+
+
+@router.post(
+    "/api/flashcards/cloze",
+    summary="Criar flashcards Cloze (lacunas)",
+    description="Cria flashcards a partir de um texto com marcações {{c1::resposta}} (estilo Anki). Gera 1 card por número de lacuna.",
+)
+def create_flashcards_cloze(body: dict = Body(...), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Cria cards Cloze nativos.
+
+    body: {texto: "Art. 5º {{c1::todos}} são iguais perante a {{c2::lei}}", materia?: str}
+
+    Gera 1 flashcard por número de lacuna distinto (c1, c2, ...). Cada card guarda
+    o texto-fonte em `cloze_text` para futura reedição. Respeita o limite do plano
+    (conta como N flashcards, um por lacuna).
+    """
+    from plans import enforce_plan_limit
+
+    texto = sanitize_input((body.get("texto") or "").strip(), max_length=5000)
+    materia = sanitize_input((body.get("materia") or "").strip())
+    if not texto:
+        raise HTTPException(status_code=400, detail="Texto é obrigatório.")
+
+    cards = parse_cloze_nativo(texto)
+    if not cards:
+        raise HTTPException(
+            status_code=400,
+            detail="Nenhuma lacuna encontrada. Use o formato {{c1::resposta}} (ex.: 'A capital é {{c1::São Luís}}').",
+        )
+
+    # Limite do plano: cada lacuna vira 1 card.
+    for _ in cards:
+        enforce_plan_limit(conn, user_id, "flashcards")
+
+    ids = []
+    for card in cards:
+        cur = conn.execute(
+            "INSERT INTO flashcards (pergunta, resposta, proxima_revisao, materia, user_id, cloze_text) VALUES (?, ?, ?, ?, ?, ?)",
+            (card["pergunta"], card["resposta"], today_str(), materia, user_id, texto),
+        )
+        ids.append(cur.lastrowid)
+    conn.commit()
+    log.info(f"Cloze flashcards created: {len(ids)} cards (user={user_id})")
+    return {
+        "ok": True,
+        "criados": len(ids),
+        "ids": ids,
+        "cards": [{"id": i, "pergunta": c["pergunta"], "resposta": c["resposta"]} for i, c in zip(ids, cards, strict=False)],
     }
 
 
@@ -807,6 +856,69 @@ def _converter_cloze(texto_bruto: str) -> tuple[str, str]:
     pergunta = _limpar_html_anki(pergunta_raw)
     resposta = _limpar_html_anki(" / ".join(respostas)) if respostas else ""
     return pergunta, resposta
+
+
+# Padrão de lacuna cloze: {{c<N>::resposta}} ou {{c<N>::resposta::dica}}
+_CLOZE_RE = None
+
+
+def _cloze_regex():
+    global _CLOZE_RE
+    if _CLOZE_RE is None:
+        import re as _re
+
+        _CLOZE_RE = _re.compile(r"\{\{c(\d+)::(.*?)\}\}", _re.DOTALL)
+    return _CLOZE_RE
+
+
+def _gerar_card_cloze(texto: str, alvo: int, regex) -> dict | None:
+    """Gera o card do grupo `alvo`: lacunas cN==alvo ocultas, demais reveladas."""
+    respostas: list[str] = []
+
+    def _subst(m):
+        grupo = int(m.group(1))
+        conteudo = m.group(2)
+        partes = conteudo.split("::", 1)
+        resp = partes[0].strip()
+        dica = partes[1].strip() if len(partes) > 1 else ""
+        if grupo == alvo:
+            if resp:
+                respostas.append(resp)
+            return f"[{dica}]" if dica else "[...]"
+        return resp
+
+    pergunta = regex.sub(_subst, texto).strip()
+    resposta = " / ".join(respostas)
+    if pergunta and resposta:
+        return {"numero": alvo, "pergunta": pergunta, "resposta": resposta}
+    return None
+
+
+def parse_cloze_nativo(texto: str) -> list[dict]:
+    """Gera cards cloze no estilo Anki: 1 card por NÚMERO de lacuna (c1, c2, ...).
+
+    No card do grupo N, apenas as lacunas {{cN::...}} viram "[...]" (ou "[dica]");
+    as demais lacunas ficam REVELADAS (mostram o texto). O verso são as respostas
+    do grupo N. Ideal para lei seca: "Art. 5º {{c1::todos}} são {{c1::iguais}}
+    perante a {{c2::lei}}" → card c1 (2 lacunas) + card c2 (1 lacuna).
+
+    Retorna lista de dicts {numero, pergunta, resposta}. Lista vazia se o texto
+    não tiver nenhuma marcação cloze válida.
+    """
+    if not texto:
+        return []
+    regex = _cloze_regex()
+    matches = list(regex.finditer(texto))
+    if not matches:
+        return []
+
+    numeros = sorted({int(m.group(1)) for m in matches})
+    cards = []
+    for n in numeros:
+        card = _gerar_card_cloze(texto, n, regex)
+        if card:
+            cards.append(card)
+    return cards
 
 
 def _parse_apkg(content: bytes) -> list[dict]:

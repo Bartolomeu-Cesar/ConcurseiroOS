@@ -957,9 +957,9 @@ nenhum ponto):
 
 | # | Melhoria | Impacto | Esforço | Depende de | Status |
 |---|----------|---------|---------|------------|--------|
-| 1 | **Review log (`revlog`) + retenção real** | ⭐⭐⭐ | Médio | — | 🔲 SPRINT 1 |
-| 2 | **Leech detection** (lapses ≥ 8 → suspende/sinaliza) | ⭐⭐⭐ | Baixo | — | 🔲 SPRINT 1 |
-| 3 | **Cloze deletion nativo** (`{{c1::...}}` → múltiplos cards) | ⭐⭐⭐ | Médio | note types | 🔲 |
+| 1 | **Review log (`revlog`) + retenção real** | ⭐⭐⭐ | Médio | — | ✅ SPRINT 1 (6c64c94) |
+| 2 | **Leech detection** (lapses ≥ 8 → suspende/sinaliza) | ⭐⭐⭐ | Baixo | — | ✅ SPRINT 1 (6c64c94) |
+| 3 | **Cloze deletion nativo** (`{{c1::...}}` → múltiplos cards) | ⭐⭐⭐ | Médio | note types | ✅ SPRINT 2 |
 | 4 | **Cards reversos / note type básico** (frente↔verso) | ⭐⭐ | Médio | — | 🔲 |
 | 5 | **Filtered / Custom Study** (cram, "só erros de hoje") | ⭐⭐ | Baixo-Médio | — | 🔲 |
 | 6 | **Otimização dos pesos FSRS por usuário** (treina W[0..18]) | ⭐⭐⭐ | Alto | revlog (#1) | 🔲 |
@@ -996,4 +996,27 @@ Técnica: "desirable difficulty tem limite" (Bjork). UI: badge 🩸 no card.
 cards MADUROS (intervalo prévio ≥ 21d) a partir do revlog, + forecast de carga (quantos cards
 vencem por dia nos próximos N dias) a partir de `proxima_revisao`.
 
+
+### 11.2 SPRINT 2 — Cloze deletion nativo (#3)
+
+**Objetivo:** cards de lacuna estilo Anki (`{{c1::resposta}}`), ideal para lei seca.
+
+**Backend:**
+- `parse_cloze_nativo(texto)` em `routers/flashcards.py`: gera 1 card por NÚMERO de
+  lacuna distinto (c1, c2...). No card do grupo N, as lacunas cN viram `[...]` (ou
+  `[dica]` se `{{cN::resp::dica}}`); as demais lacunas ficam REVELADAS. Reusa a
+  ideia do `_converter_cloze` (importação .apkg) mas com a semântica multi-card do Anki.
+  Helper `_gerar_card_cloze` extraído para evitar closure em loop (B023).
+- Migration 77 (`_m77_flashcards_cloze`): coluna `cloze_text` guarda o texto-fonte
+  com marcações (para reedição). pergunta/resposta seguem sendo frente/verso derivadas.
+- Endpoint `POST /api/flashcards/cloze` {texto, materia?}: cria N cards (1/lacuna),
+  valida texto sem lacuna (400), respeita limite do plano (conta N cards), salva cloze_text.
+
+**Frontend (`index.html` + `flashcards.js`):** painel "🧩 Criar Cloze" com textarea,
+botões "Inserir lacuna c1/c2" (envolvem a seleção com `{{cN::}}`), preview local
+(`_parseClozeLocal`) e `criarCloze()`. Cards cloze entram na fila normal e herdam
+todo o fluxo FSRS/revlog/leech da Sprint 1.
+
+**Testes:** `test_flashcard_cloze.py` (10) — parsing (1 lacuna, multi-grupo, repetida,
+dica, sem cloze) + endpoint (cria N, salva cloze_text, valida, aparece no /today).
 **Constantes:** `LEECH_THRESHOLD = 8`, `LEECH_SUSPEND_MULTIPLE = 2` (suspende no 16º), em `constants.py`.

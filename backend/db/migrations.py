@@ -1189,6 +1189,21 @@ def _m76_flashcard_revlog_leech(conn):
     log.info("Migration 76: flashcard_revlog + leech columns ready")
 
 
+def _m77_flashcards_cloze(conn):
+    """Suporte a flashcards Cloze nativos (à la Anki).
+
+    Coluna `cloze_text`: guarda o texto-fonte com marcações {{c1::...}} quando o
+    card foi gerado por cloze. Permite reeditar/reagrupar depois. Cards não-cloze
+    ficam com cloze_text='' (comportamento inalterado). pergunta/resposta seguem
+    sendo a frente/verso já derivadas (compat total com o fluxo de revisão).
+    """
+    try:
+        conn.execute("ALTER TABLE flashcards ADD COLUMN cloze_text TEXT DEFAULT ''")
+        log.info("Migration 77: added column cloze_text to flashcards")
+    except Exception:
+        pass  # coluna já existe
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -1266,6 +1281,7 @@ MIGRATIONS = [
     (74, _m74_flashcards_ultima_revisao),
     (75, _m75_pdf_path_completo),
     (76, _m76_flashcard_revlog_leech),
+    (77, _m77_flashcards_cloze),
 ]
 
 

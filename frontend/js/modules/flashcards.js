@@ -1824,12 +1824,94 @@ export function initFlashcards(deps) {
 async function loadAddMaterias() {
   try {
     const materias = await fetch('/api/edital/materias-disponiveis').then(r => r.json());
+    const opts = '<option value="">📚 Disciplina (opcional)</option>' +
+      materias.map(m => `<option value="${m}">${m}</option>`).join('');
     const sel = document.getElementById('flash-add-materia');
-    if (sel) {
-      sel.innerHTML = '<option value="">📚 Disciplina (opcional)</option>' +
-        materias.map(m => `<option value="${m}">${m}</option>`).join('');
-    }
+    if (sel) sel.innerHTML = opts;
+    const clozeSel = document.getElementById('cloze-materia');
+    if (clozeSel) clozeSel.innerHTML = opts;
   } catch(e) { /* silencioso */ }
+}
+
+// ============================================================
+// CLOZE DELETION NATIVO (estilo Anki) — lacunas {{c1::resposta}}
+// Ideal para lei seca. Cada número (c1, c2...) vira um card.
+// ============================================================
+
+/** Envolve o texto selecionado (ou um placeholder) com {{cN::...}}. */
+export function clozeInserirLacuna(n) {
+  const ta = document.getElementById('cloze-texto');
+  if (!ta) return;
+  const ini = ta.selectionStart ?? ta.value.length;
+  const fim = ta.selectionEnd ?? ta.value.length;
+  const sel = ta.value.slice(ini, fim) || 'resposta';
+  const marcado = `{{c${n}::${sel}}}`;
+  ta.value = ta.value.slice(0, ini) + marcado + ta.value.slice(fim);
+  ta.focus();
+  // Posiciona o cursor logo após a lacuna inserida
+  const pos = ini + marcado.length;
+  ta.setSelectionRange(pos, pos);
+  clozePreview();
+}
+
+/** Mostra quantos cards e quais frentes/versos seriam gerados (parsing local). */
+function _parseClozeLocal(texto) {
+  const re = /\{\{c(\d+)::(.*?)\}\}/gs;
+  const grupos = new Set();
+  let m;
+  while ((m = re.exec(texto)) !== null) grupos.add(parseInt(m[1]));
+  const numeros = [...grupos].sort((a, b) => a - b);
+  return numeros.map(n => {
+    const respostas = [];
+    const pergunta = texto.replace(/\{\{c(\d+)::(.*?)\}\}/gs, (full, g, cont) => {
+      const partes = cont.split('::');
+      const resp = (partes[0] || '').trim();
+      const dica = (partes[1] || '').trim();
+      if (parseInt(g) === n) {
+        if (resp) respostas.push(resp);
+        return dica ? `[${dica}]` : '[...]';
+      }
+      return resp;
+    }).trim();
+    return { numero: n, pergunta, resposta: respostas.join(' / ') };
+  }).filter(c => c.pergunta && c.resposta);
+}
+
+export function clozePreview() {
+  const box = document.getElementById('cloze-preview');
+  const ta = document.getElementById('cloze-texto');
+  if (!box || !ta) return;
+  const cards = _parseClozeLocal(ta.value);
+  if (!cards.length) {
+    box.style.display = 'none';
+    return;
+  }
+  box.style.display = 'block';
+  box.innerHTML = `<strong>${cards.length} card(s):</strong>` + cards.map(c =>
+    `<div style="margin-top:4px;">• <span style="color:var(--text);">${escapeHtml(c.pergunta)}</span> → <span style="color:var(--green);">${escapeHtml(c.resposta)}</span></div>`
+  ).join('');
+}
+
+export async function criarCloze() {
+  const ta = document.getElementById('cloze-texto');
+  const texto = (ta?.value || '').trim();
+  if (!texto) { toast('Escreva o texto com lacunas.', 'warning'); return; }
+  if (!_parseClozeLocal(texto).length) {
+    toast('Nenhuma lacuna válida. Use {{c1::resposta}} ou o botão "Inserir lacuna".', 'warning');
+    return;
+  }
+  if (window.checkPlanLimit && !(await window.checkPlanLimit('flashcards'))) return;
+  const materia = document.getElementById('cloze-materia')?.value || '';
+  try {
+    const data = await api('/api/flashcards/cloze', { method: 'POST', body: { texto, materia } });
+    toast(`🧩 ${data.criados} card(s) Cloze criado(s)!`, 'success');
+    ta.value = '';
+    document.getElementById('cloze-preview').style.display = 'none';
+    loadFlashcardsToday();
+    loadAllFlashcards();
+  } catch(e) {
+    toast('Erro ao criar cards Cloze.', 'error');
+  }
 }
 
 
