@@ -236,6 +236,95 @@ def get_retencao_real(dias_forecast: int = 14, conn=Depends(get_db_session), use
     }
 
 
+@router.get(
+    "/api/flashcards/custom-study",
+    summary="Estudo personalizado (filtered deck, à la Anki)",
+    description="Sessão sob demanda por critério, fora do agendamento SRS: errados_hoje, adiantar, materia (cram), leech, dificeis.",
+)
+def get_custom_study(
+    modo: str = Query("errados_hoje", description="errados_hoje | adiantar | materia | leech | dificeis"),
+    materia: str = "",
+    limite: int = Query(20, ge=1, le=100),
+    dias: int = Query(3, ge=1, le=30, description="janela do modo 'adiantar' (dias)"),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Monta uma fila de estudo avulsa por critério (não altera o agendamento).
+
+    Modos:
+    - errados_hoje: cards que você errou (rating Again) hoje — reforço imediato.
+    - adiantar: cards que vencem nos próximos `dias` (antecipar carga).
+    - materia: TODOS os cards de uma matéria (cram / revisão maratona).
+    - leech: cards problemáticos (is_leech=1), inclusive suspensos, para reformular.
+    - dificeis: maior difficulty FSRS (os que mais custam).
+
+    Todos (exceto leech) excluem cards suspensos. Retorna cards com tempo_segundos
+    e is_leech, prontos para o mesmo fluxo de revisão da sessão.
+    """
+    modo = (modo or "").strip().lower()
+    base_cols = (
+        "id, pergunta, resposta, materia, COALESCE(fsrs_state,0) AS fsrs_state, COALESCE(is_leech,0) AS is_leech"
+    )
+
+    if modo == "errados_hoje":
+        rows = conn.execute(
+            f"""SELECT {base_cols} FROM flashcards f
+                WHERE f.user_id = ? AND COALESCE(f.suspenso,0) = 0
+                  AND f.id IN (
+                    SELECT DISTINCT flashcard_id FROM flashcard_revlog
+                    WHERE user_id = ? AND rating = 1 AND substr(revisado_em,1,10) = date('now')
+                  )
+                LIMIT ?""",
+            (user_id, user_id, limite),
+        ).fetchall()
+    elif modo == "adiantar":
+        rows = conn.execute(
+            f"""SELECT {base_cols} FROM flashcards f
+                WHERE f.user_id = ? AND COALESCE(f.suspenso,0) = 0
+                  AND f.proxima_revisao > date('now')
+                  AND f.proxima_revisao <= date('now', ?)
+                ORDER BY f.proxima_revisao LIMIT ?""",
+            (user_id, f"+{dias} days", limite),
+        ).fetchall()
+    elif modo == "materia":
+        if not materia:
+            raise HTTPException(status_code=400, detail="Informe a matéria para o modo 'materia'.")
+        rows = conn.execute(
+            f"""SELECT {base_cols} FROM flashcards f
+                WHERE f.user_id = ? AND COALESCE(f.suspenso,0) = 0 AND f.materia = ?
+                ORDER BY RANDOM() LIMIT ?""",
+            (user_id, materia, limite),
+        ).fetchall()
+    elif modo == "leech":
+        # Inclui suspensos de propósito: o objetivo é revisar/reformular os leech.
+        rows = conn.execute(
+            f"""SELECT {base_cols} FROM flashcards f
+                WHERE f.user_id = ? AND COALESCE(f.is_leech,0) = 1
+                ORDER BY COALESCE(f.lapses,0) DESC LIMIT ?""",
+            (user_id, limite),
+        ).fetchall()
+    elif modo == "dificeis":
+        rows = conn.execute(
+            f"""SELECT {base_cols} FROM flashcards f
+                WHERE f.user_id = ? AND COALESCE(f.suspenso,0) = 0 AND COALESCE(f.difficulty,0) > 0
+                ORDER BY f.difficulty DESC LIMIT ?""",
+            (user_id, limite),
+        ).fetchall()
+    else:
+        raise HTTPException(status_code=400, detail=f"Modo inválido: {modo}")
+
+    result = []
+    for r in rows:
+        card = dict(r)
+        card["tempo_segundos"] = calcular_tempo_flashcard(
+            card.get("pergunta", ""), card.get("resposta", ""), card.get("fsrs_state") or 0
+        )
+        card.pop("fsrs_state", None)
+        card["is_leech"] = bool(card.get("is_leech"))
+        result.append(card)
+    return {"modo": modo, "total": len(result), "cards": result}
+
+
 @router.get("/api/flashcards/aleatorio", summary="Flashcards aleatórios para estudo")
 def get_flashcards_aleatorio(
     materia: str = "", quantidade: int = 10, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)

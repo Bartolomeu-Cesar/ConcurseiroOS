@@ -394,6 +394,18 @@
           <button class="iobtn" onclick="startCommutingMode()" style="background:var(--peach);color:var(--bg);">🎧 Commuting</button>
         </div>
       </div>
+      <!-- Estudo Personalizado (Custom Study / filtered deck) -->
+      <div style="margin-bottom:12px;padding:12px;background:var(--bg-surface);border-radius:10px;">
+        <div style="font-size:0.85rem;font-weight:600;color:var(--accent);margin-bottom:4px;">🧪 Estudo personalizado</div>
+        <div style="font-size:0.7rem;color:var(--text-sub);margin-bottom:8px;">Sessões sob demanda, fora do agendamento normal.</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="iobtn" onclick="customStudy('errados_hoje')" style="background:var(--red);color:var(--bg);">❌ Errei hoje</button>
+          <button class="iobtn" onclick="customStudy('adiantar')" style="background:var(--blue);color:var(--bg);">⏩ Adiantar</button>
+          <button class="iobtn" onclick="customStudy('dificeis')" style="background:var(--peach);color:var(--bg);">🔥 Mais difíceis</button>
+          <button class="iobtn" onclick="customStudy('leech')" style="background:var(--red);color:var(--bg);">🩸 Leech (reformular)</button>
+          <button class="iobtn" onclick="customStudyMateria()" style="background:var(--yellow);color:var(--bg);">📚 Cram por matéria</button>
+        </div>
+      </div>
       <!-- Filtro por Disciplina -->
       <div style="margin-bottom:10px;">
         <select id="flash-materia-filter" aria-label="Filtrar flashcards por disciplina" onchange="loadAllFlashcards()" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;">

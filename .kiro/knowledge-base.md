@@ -961,7 +961,7 @@ nenhum ponto):
 | 2 | **Leech detection** (lapses ≥ 8 → suspende/sinaliza) | ⭐⭐⭐ | Baixo | — | ✅ SPRINT 1 (6c64c94) |
 | 3 | **Cloze deletion nativo** (`{{c1::...}}` → múltiplos cards) | ⭐⭐⭐ | Médio | note types | ✅ SPRINT 2 |
 | 4 | **Cards reversos / note type básico** (frente↔verso) | ⭐⭐ | Médio | — | ✅ SPRINT 3 |
-| 5 | **Filtered / Custom Study** (cram, "só erros de hoje") | ⭐⭐ | Baixo-Médio | — | 🔲 |
+| 5 | **Filtered / Custom Study** (cram, "só erros de hoje") | ⭐⭐ | Baixo-Médio | — | ✅ SPRINT 4 |
 | 6 | **Otimização dos pesos FSRS por usuário** (treina W[0..18]) | ⭐⭐⭐ | Alto | revlog (#1) | 🔲 |
 | 7 | **Image Occlusion** (ocultar regiões de imagem) | ⭐⭐ | Alto | upload mídia | 🔲 |
 | 8 | **Estatísticas visuais** (heatmap reviews, forecast carga) | ⭐⭐ | Médio | revlog (#1) | 🔲 |
@@ -1044,3 +1044,24 @@ dica, sem cloze) + endpoint (cria N, salva cloze_text, valida, aparece no /today
 **Testes:** `test_flashcard_reverso.py` (8) — cria 2 cards, inverte P/R, note_id
 compartilhado, normal/retrocompat (sem campo reverso), ambos no /today, revisão
 independente, excluir um preserva o irmão.
+
+### 11.4 SPRINT 4 — Filtered / Custom Study (#5)
+
+**Objetivo:** sessões de estudo sob demanda por critério, fora do agendamento SRS
+(úteis na reta final). Não altera o agendamento; respostas seguem indo ao revlog.
+
+**Backend:** `GET /api/flashcards/custom-study?modo=&materia=&limite=&dias=`. Modos:
+- `errados_hoje`: cards com rating Again hoje (via revlog) — reforço imediato.
+- `adiantar`: cards que vencem nos próximos `dias` (default 3) — antecipar carga.
+- `materia`: cram (todos os cards de uma matéria, aleatório).
+- `leech`: cards is_leech=1 (INCLUI suspensos, para reformular), ordenado por lapses.
+- `dificeis`: maior difficulty FSRS.
+Todos (exceto leech) excluem suspensos; retornam tempo_segundos + is_leech.
+Validações: modo inválido → 400; materia sem materia → 400.
+
+**Frontend:** painel "🧪 Estudo personalizado" (index.html) com botões por modo;
+`customStudy(modo, materia)` carrega a fila em `flashSessao` e usa o fluxo de
+sessão existente (`showSessaoFlashcard`); `customStudyMateria()` pede a disciplina.
+
+**Testes:** `test_flashcard_custom_study.py` (10) — cada modo, limite, exclusão de
+suspensos, leech inclui suspenso, tempo_segundos/is_leech, vazio, validações.

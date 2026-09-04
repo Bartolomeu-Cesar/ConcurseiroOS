@@ -996,6 +996,57 @@ async function loadFlashMaterias() {
   } catch(e) {}
 }
 
+// ============================================================
+// CUSTOM STUDY (filtered deck, à la Anki) — sessões sob demanda
+// ============================================================
+
+const _CUSTOM_STUDY_LABELS = {
+  errados_hoje: '❌ Errei hoje',
+  adiantar: '⏩ Adiantar',
+  dificeis: '🔥 Mais difíceis',
+  leech: '🩸 Leech',
+  materia: '📚 Cram',
+};
+
+/** Carrega uma fila de estudo personalizado por critério e inicia a sessão. */
+export async function customStudy(modo, materia = '') {
+  const cfg = _getConfigSessoes();
+  const limite = cfg.flashcards_sessao || 20;
+  let url = `/api/flashcards/custom-study?modo=${encodeURIComponent(modo)}&limite=${limite}`;
+  if (materia) url += `&materia=${encodeURIComponent(materia)}`;
+  try {
+    const data = await fetch(url).then(r => r.json());
+    const cards = (data && data.cards) || [];
+    if (!cards.length) {
+      toast(`Nenhum card para "${_CUSTOM_STUDY_LABELS[modo] || modo}".`, 'info');
+      return;
+    }
+    flashSessao = cards;
+    flashSessaoIndex = 0;
+    flashSessaoMode = `custom:${modo}`;
+    switchTab('tab-flashcards');
+    showSessaoFlashcard();
+    const rotulo = materia ? `${_CUSTOM_STUDY_LABELS[modo] || modo}: ${materia}` : (_CUSTOM_STUDY_LABELS[modo] || modo);
+    toast(`🧪 ${rotulo} (${cards.length} cards)`, 'success');
+  } catch (e) {
+    toast('Erro ao carregar estudo personalizado.', 'error');
+  }
+}
+
+/** Cram por matéria: pede a disciplina e chama customStudy('materia'). */
+export async function customStudyMateria() {
+  try {
+    const mats = await fetch('/api/flashcards/materias').then(r => r.json());
+    const opts = (mats || []).map(m => m.materia).filter(m => m);
+    if (!opts.length) { toast('Nenhuma disciplina disponível.', 'warning'); return; }
+    const escolha = await promptSelect('📚 Cram — escolha a disciplina:', opts);
+    if (!escolha) return;
+    await customStudy('materia', escolha);
+  } catch (e) {
+    toast('Erro ao listar disciplinas.', 'error');
+  }
+}
+
 export async function iniciarSessaoFlash(mode) {
   flashSessaoMode = mode;
   const cfg = _getConfigSessoes();
