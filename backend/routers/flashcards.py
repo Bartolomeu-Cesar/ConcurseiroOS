@@ -129,15 +129,25 @@ def get_flashcards_aleatorio(materia: str = "", quantidade: int = 10, conn=Depen
     """Retorna flashcards aleatórios para sessão de estudo (por disciplina ou todas)"""
     if materia:
         rows = conn.execute(
-            "SELECT id, pergunta, resposta, materia FROM flashcards WHERE materia = ? AND user_id = ? ORDER BY RANDOM() LIMIT ?",
+            "SELECT id, pergunta, resposta, materia, fsrs_state FROM flashcards WHERE materia = ? AND user_id = ? ORDER BY RANDOM() LIMIT ?",
             (materia, user_id, quantidade)
         ).fetchall()
     else:
         rows = conn.execute(
-            "SELECT id, pergunta, resposta, materia FROM flashcards WHERE user_id = ? ORDER BY RANDOM() LIMIT ?",
+            "SELECT id, pergunta, resposta, materia, fsrs_state FROM flashcards WHERE user_id = ? ORDER BY RANDOM() LIMIT ?",
             (user_id, quantidade)
         ).fetchall()
-    return [dict(r) for r in rows]
+    result = []
+    for r in rows:
+        card = dict(r)
+        # Tempo de referência por complexidade (para o timer da sessão),
+        # mesma fórmula da revisão SRS. Calculado antes de remover fsrs_state.
+        card["tempo_segundos"] = calcular_tempo_flashcard(
+            card.get("pergunta", ""), card.get("resposta", ""), card.get("fsrs_state") or 0
+        )
+        card.pop("fsrs_state", None)
+        result.append(card)
+    return result
 
 
 @router.post("/api/flashcards", summary="Criar flashcard", description="Cria um novo flashcard com revisão SRS")

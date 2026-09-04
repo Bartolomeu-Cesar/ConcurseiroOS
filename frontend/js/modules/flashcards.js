@@ -1030,7 +1030,11 @@ function showSessaoFlashcard() {
   a.style.display = 'none';
   rb.style.display = 'inline-block';
   rv.style.display = 'none';
+  // Timer regressivo por complexidade (mesmo da revisão SRS): usa tempo_segundos
+  // calculado no backend por pergunta+resposta+FSRS. Sem isso caía no fallback.
+  _startFlashTimer(card.tempo_segundos);
   rb.onclick = function() {
+    _stopFlashTimer();
     a.style.display = 'block'; rb.style.display = 'none';
     rv.style.display = 'flex';
     // Auto-start global timer if not already running (igual ao fluxo de revisão SRS)
