@@ -1019,6 +1019,83 @@ def _m74_flashcards_ultima_revisao(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_flashcards_ultima_revisao ON flashcards(user_id, ultima_revisao)")
 
 
+def _m75_pdf_path_completo(conn):
+    """Normaliza `pdf_path` curto (só nome) para path completo relativo à raiz.
+
+    Antes desta migration, `build_tree()` gerava `path` relativo à SUBPASTA
+    imediata (bug), então PDFs em subpastas eram registrados só com o nome do
+    arquivo (ex.: 'Ortografia - Parte I.pdf') em pdf_owner/pdf_organizacao/
+    pdf_compartilhamentos. Agora `build_tree()` gera o path completo
+    (ex.: 'FOCUS CONCURSOS/Portugues/Ortografia - Parte I.pdf'), alinhado com
+    `serve_pdf` (PDF_ROOT / path) e com a tabela `progress`.
+
+    Esta migration remapeia as chaves antigas (basename) para o path completo
+    correspondente no disco, corrigindo a visibilidade e a organização virtual.
+    Só remapeia quando há EXATAMENTE um arquivo no disco com aquele basename
+    (evita ambiguidade entre nomes duplicados em pastas diferentes).
+    """
+    try:
+        from settings import settings
+        from utils import build_tree
+        from pathlib import Path as _Path
+    except Exception as e:  # pragma: no cover
+        log.warning(f"Migration 75: imports indisponíveis, pulando: {e}")
+        return
+
+    root = getattr(settings, "PDF_ROOT", None)
+    if not root or not _Path(root).exists():
+        log.info("Migration 75: PDF_ROOT ausente, nada a normalizar")
+        return
+
+    # Coleta paths completos do disco e mapeia basename -> [paths completos]
+    full_paths = []
+
+    def _collect(nodes):
+        for n in nodes:
+            if n.get("type") == "pdf" and n.get("path"):
+                full_paths.append(n["path"])
+            elif n.get("type") == "folder":
+                _collect(n.get("children", []))
+
+    try:
+        _collect(build_tree(root))
+    except Exception as e:  # pragma: no cover
+        log.warning(f"Migration 75: falha ao varrer PDF_ROOT: {e}")
+        return
+
+    from collections import defaultdict
+    by_basename = defaultdict(list)
+    full_set = set(full_paths)
+    for fp in full_paths:
+        by_basename[fp.rsplit("/", 1)[-1]].append(fp)
+
+    tabelas = ("pdf_owner", "pdf_organizacao", "pdf_compartilhamentos")
+    total = 0
+    for tabela in tabelas:
+        try:
+            rows = conn.execute(f"SELECT DISTINCT pdf_path FROM {tabela}").fetchall()
+        except Exception:
+            continue  # tabela pode não existir em bancos antigos
+        for (old_path,) in rows:
+            if not old_path or old_path in full_set:
+                continue  # já é path completo válido
+            candidatos = by_basename.get(old_path.rsplit("/", 1)[-1], [])
+            # Só remapeia se houver correspondência única e não-ambígua
+            if len(candidatos) == 1 and candidatos[0] != old_path:
+                novo = candidatos[0]
+                try:
+                    conn.execute(
+                        f"UPDATE OR IGNORE {tabela} SET pdf_path = ? WHERE pdf_path = ?",
+                        (novo, old_path),
+                    )
+                    # Remove eventuais remanescentes que colidiram com registro já existente
+                    conn.execute(f"DELETE FROM {tabela} WHERE pdf_path = ?", (old_path,))
+                    total += 1
+                except Exception as e:  # pragma: no cover
+                    log.warning(f"Migration 75: falha ao remapear {old_path} em {tabela}: {e}")
+    log.info(f"Migration 75: {total} pdf_path(s) normalizado(s) para path completo")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -1094,6 +1171,7 @@ MIGRATIONS = [
     (72, _m72_ai_token_limit),
     (73, _m73_cadernos_colunas_faltantes),
     (74, _m74_flashcards_ultima_revisao),
+    (75, _m75_pdf_path_completo),
 ]
 
 

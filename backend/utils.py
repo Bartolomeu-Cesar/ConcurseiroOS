@@ -145,16 +145,28 @@ def get_pdf_pages(filepath: str) -> int:
         return 1
 
 
-def build_tree(root: str) -> list:
+def build_tree(root: str, _base_root: str | None = None) -> list:
+    """Monta a árvore de PDFs/pastas a partir de `root`.
+
+    O campo `path` de cada PDF é SEMPRE relativo à raiz original (`_base_root`),
+    não à subpasta imediata. Ex.: um PDF em `Direito/aula1.pdf` recebe
+    `path == "Direito/aula1.pdf"` — a mesma convenção usada por `serve_pdf`
+    (`PDF_ROOT / path`), pela tabela `progress` e pelo overlay de organização.
+
+    `_base_root` é um parâmetro interno propagado pela recursão; chamadores
+    externos usam apenas `build_tree(root)`.
+    """
+    base = Path(_base_root).resolve() if _base_root else Path(root).resolve()
     result = []
-    root_path = Path(root).resolve()
     for entry in sorted(Path(root).iterdir()):
         if entry.is_dir():
-            children = build_tree(str(entry))
+            children = build_tree(str(entry), _base_root=str(base))
             if children:
                 result.append({"type": "folder", "name": entry.name, "children": children})
         elif entry.suffix.lower() == ".pdf" and ":" not in entry.name:
-            rel = str(entry.resolve().relative_to(root_path))
+            # Path completo relativo à raiz global (usa forward slash p/ consistência
+            # com a convenção de URL do viewer e do progress).
+            rel = entry.resolve().relative_to(base).as_posix()
             result.append({"type": "pdf", "name": entry.name, "path": rel})
     return result
 
