@@ -82,6 +82,17 @@ def _e_efemera(nome: str) -> bool:
     return any(nome.startswith(p) for p in _EFEMERAS_PREFIXOS)
 
 
+# Colunas efêmeras (a ignorar no hash de conteúdo): mudam por atividade técnica
+# (login, presença, sincronização) sem representar dado de estudo real.
+# Ex.: users.last_login muda a cada login (inclusive nos testes que autenticam).
+_COLUNAS_EFEMERAS = {
+    "last_login",
+    "last_seen",
+    "updated_at",
+    "atualizado_em",
+}
+
+
 # ---------------------------------------------------------------------------
 # Leitura do banco
 # ---------------------------------------------------------------------------
@@ -103,7 +114,10 @@ def _hash_tabela(conn: sqlite3.Connection, tabela: str) -> tuple[int, str]:
     cols = [r[1] for r in conn.execute(f'PRAGMA table_info("{tabela}")').fetchall()]
     if not cols:
         return (0, "")
-    col_list = ", ".join(f'"{c}"' for c in cols)
+    # Ignora colunas efêmeras (last_login etc.) no conteúdo hasheado — elas mudam
+    # por login/presença/sync, não por estudo real. Mantém pelo menos 1 coluna.
+    cols_significativas = [c for c in cols if c not in _COLUNAS_EFEMERAS] or cols
+    col_list = ", ".join(f'"{c}"' for c in cols_significativas)
     # Bots/oponentes simulados usam user_id negativo (ex.: ranking de ligas). Seu
     # estado (weekly_xp etc.) é gerado pela simulação, não é dado real do
     # estudante — filtramos para não gerar falso positivo de "dado real".
