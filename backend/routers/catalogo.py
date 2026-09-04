@@ -47,7 +47,7 @@ class PublicarItem(BaseModel):
     titulo: str
     descricao: str = ""
     categoria: str = "Geral"
-    origem_uid: int          # de qual conta copiar o recurso
+    origem_uid: int = 0      # de qual conta copiar (0 = própria; só admin pode usar outra)
     ref: str = ""            # identificador do recurso (edital_nome, caderno_id, materia, lei_id)
 
 
@@ -277,8 +277,14 @@ def publicar_item(
     if body.tipo not in TIPOS_VALIDOS:
         raise HTTPException(status_code=400, detail=f"Tipo inválido. Válidos: {list(TIPOS_VALIDOS)}")
 
-    # Admin pode publicar de qualquer conta; premium só da própria
-    origem_uid = body.origem_uid if is_admin else user_id
+    # Admin pode publicar de qualquer conta; premium só da própria.
+    # A página do Catálogo (catalogo.js) envia origem_uid=0 (placeholder "própria
+    # conta"). Para admin, um origem_uid inválido (0/None/negativo) cai na própria
+    # conta em vez de falhar com "usuário de origem não encontrado".
+    if is_admin and body.origem_uid and body.origem_uid > 0:
+        origem_uid = body.origem_uid
+    else:
+        origem_uid = user_id
     origem = conn.execute("SELECT id FROM users WHERE id = ?", (origem_uid,)).fetchone()
     if not origem:
         raise HTTPException(status_code=404, detail="Usuário de origem não encontrado.")

@@ -157,6 +157,38 @@ class TestPublicar:
         })
         assert r.status_code == 403
 
+    def test_publicar_admin_origem_uid_zero_usa_propria_conta(self, client):
+        """Regressão: a página do Catálogo (catalogo.js) envia origem_uid=0.
+        Antes, o admin recebia 404 'Usuário de origem não encontrado' porque o
+        backend respeitava o 0. Agora origem_uid inválido (0) cai na própria conta."""
+        _seed_curador(1)
+        token = _admin_token()
+        r = client.post("/api/catalogo/publicar", headers=_h(token), json={
+            "tipo": "deck_flashcards", "titulo": "Deck via Catálogo",
+            "categoria": "Geral", "origem_uid": 0, "ref": "Direito"
+        })
+        assert r.status_code == 200, r.text
+        assert r.json()["ok"] is True
+
+    def test_publicar_admin_sem_origem_uid_usa_propria_conta(self, client):
+        """origem_uid omitido (default 0) também publica da própria conta."""
+        _seed_curador(1)
+        token = _admin_token()
+        r = client.post("/api/catalogo/publicar", headers=_h(token), json={
+            "tipo": "deck_flashcards", "titulo": "Deck sem origem",
+            "categoria": "Geral", "ref": "Direito"
+        })
+        assert r.status_code == 200, r.text
+
+    def test_publicar_admin_origem_uid_explicito_inexistente_404(self, client):
+        """Se o admin escolhe explicitamente uma conta inexistente (>0), mantém 404."""
+        _seed_curador(1)
+        token = _admin_token()
+        r = client.post("/api/catalogo/publicar", headers=_h(token), json={
+            "tipo": "deck_flashcards", "titulo": "X", "origem_uid": 99999, "ref": "Direito"
+        })
+        assert r.status_code == 404
+
 
 class TestListar:
     def test_listar_catalogo(self, client):
