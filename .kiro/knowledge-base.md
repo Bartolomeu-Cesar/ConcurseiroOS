@@ -1221,3 +1221,34 @@ integração com /today (expõe os campos) e review-fsrs (grava no revlog), isol
 (#1 revlog+retenção, #2 leech, #3 cloze, #4 reverso, #5 custom study, #6 otimização
 FSRS S0, #7 image occlusion, #8 estatísticas visuais, #9 undo). Evoluções futuras
 possíveis: otimização completa dos 19 pesos FSRS (gradient descent) e sibling burying.
+
+
+### 11.9 EVOLUÇÃO — Sibling burying (pós-roadmap)
+
+**Objetivo:** ao revisar um card, "enterrar" (adiar p/ amanhã) os cards IRMÃOS
+(mesmo `note_id`) que venceriam hoje. Evita revisar frente+verso da mesma nota, ou
+várias oclusões da mesma imagem, na MESMA sessão — reduz dica cruzada/interferência
+(um card entrega a resposta do irmão). Comportamento clássico do Anki.
+
+**Backend (sem migration — reusa `note_id` das Sprints 3/8):**
+- Constante `SIBLING_BURY_ENABLED = True` (constants.py) — liga/desliga globalmente.
+- Helper `_bury_siblings(conn, id, user_id)` em flashcards.py: adia `proxima_revisao`
+  p/ amanhã dos cards com o MESMO `note_id` (não-nulo), `id != atual`, do mesmo user,
+  não suspensos e vencendo `<= hoje`. Retorna a contagem. Só altera a DATA — o
+  agendamento FSRS (stability/difficulty/intervalo) do irmão permanece intacto; não
+  incrementa reps nem grava revlog (não é uma revisão). Tolerante a schema antigo.
+- Chamado no `review-fsrs` após o revlog/leech; o retorno inclui `irmaos_enterrados`.
+- `/today` agora também retorna `note_id` (para o front filtrar irmãos localmente).
+
+**Frontend (`flashcards.js`):** quando `irmaos_enterrados > 0`, `reviewFlashcard`
+remove da fila local `flashcardsToday` os cards com o mesmo `note_id` à frente do
+índice atual (não reaparecem nesta sessão) e mostra um toast informativo.
+
+**Testes:** `test_flashcard_sibling_bury.py` (9) — enterra irmão(s) vencido(s) hoje,
+não altera o FSRS do irmão (só a data), múltiplos irmãos, NÃO enterra: outra nota,
+irmão já no futuro, suspenso, card sem note_id, nota de 1 card só, e isolamento por user.
+
+**Nota sobre undo:** desfazer uma revisão (Sprint 6) NÃO "desenterra" os irmãos — é
+uma limitação aceitável (o Anki também não restaura buries perfeitamente no undo). Os
+irmãos voltam naturalmente amanhã. Evolução futura restante: otimização completa dos
+19 pesos FSRS (gradient descent sobre o revlog).

@@ -489,6 +489,22 @@ export async function reviewFlashcard(quality) {
     _lastReview = { cardId: card.id, index: currentFlashIndex, card: { ...card }, quality };
     _renderUndoButton();
 
+    // Sibling burying (à la Anki): o backend adiou p/ amanhã os irmãos (mesmo
+    // note_id) que venceriam hoje. Remove-os da fila local para não aparecerem
+    // nesta sessão e avisa o aluno.
+    if (data.irmaos_enterrados > 0 && card.note_id) {
+      const antes = flashcardsToday.length;
+      for (let i = flashcardsToday.length - 1; i > currentFlashIndex; i--) {
+        if (flashcardsToday[i] && flashcardsToday[i].note_id === card.note_id) {
+          flashcardsToday.splice(i, 1);
+        }
+      }
+      const removidos = antes - flashcardsToday.length;
+      if (removidos > 0) {
+        toast(`🔗 ${removidos} card(s) irmão(s) adiado(s) p/ amanhã (evita ver a mesma nota 2x hoje).`, 'info', 3500);
+      }
+    }
+
     // Leech (à la Anki): avisa quando o card vira problemático — sugere ação.
     if (data.leech_now) {
       toast('🩸 Card marcado como problemático (leech): você já errou várias vezes. Considere reformulá-lo (dividir, simplificar ou criar um mnemônico).', 'warning', 6000);

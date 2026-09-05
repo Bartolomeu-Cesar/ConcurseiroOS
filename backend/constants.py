@@ -61,3 +61,8 @@ LEECH_SUSPEND_MULTIPLE = 2
 # Retenção real: um card é "maduro" quando seu intervalo anterior era >= este valor
 # (em dias). Reviews de cards maduros medem retenção de longo prazo (padrão Anki: 21d).
 MATURE_INTERVAL_DAYS = 21
+
+# Sibling burying (à la Anki): ao revisar um card, adia p/ amanhã os cards IRMÃOS
+# (mesmo note_id) que venceriam hoje. Evita ver frente+verso da mesma nota, ou várias
+# oclusões da mesma imagem, na mesma sessão (reduz dica cruzada / interferência).
+SIBLING_BURY_ENABLED = True

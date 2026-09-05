@@ -75,12 +75,12 @@ def get_flashcards_today(
 
     if materia:
         rows = conn.execute(
-            "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia, fsrs_state, COALESCE(is_leech,0) AS is_leech, COALESCE(lapses,0) AS lapses, COALESCE(card_tipo,'normal') AS card_tipo, COALESCE(imagem_data,'') AS imagem_data, COALESCE(oclusoes,'') AS oclusoes, COALESCE(oclusao_index,-1) AS oclusao_index FROM flashcards WHERE proxima_revisao <= ? AND materia = ? AND user_id = ? AND COALESCE(suspenso, 0) = 0",
+            "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia, fsrs_state, COALESCE(is_leech,0) AS is_leech, COALESCE(lapses,0) AS lapses, COALESCE(card_tipo,'normal') AS card_tipo, COALESCE(imagem_data,'') AS imagem_data, COALESCE(oclusoes,'') AS oclusoes, COALESCE(oclusao_index,-1) AS oclusao_index, note_id FROM flashcards WHERE proxima_revisao <= ? AND materia = ? AND user_id = ? AND COALESCE(suspenso, 0) = 0",
             (today_str(), materia, user_id),
         ).fetchall()
     else:
         rows = conn.execute(
-            "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia, fsrs_state, COALESCE(is_leech,0) AS is_leech, COALESCE(lapses,0) AS lapses, COALESCE(card_tipo,'normal') AS card_tipo, COALESCE(imagem_data,'') AS imagem_data, COALESCE(oclusoes,'') AS oclusoes, COALESCE(oclusao_index,-1) AS oclusao_index FROM flashcards WHERE proxima_revisao <= ? AND user_id = ? AND COALESCE(suspenso, 0) = 0",
+            "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia, fsrs_state, COALESCE(is_leech,0) AS is_leech, COALESCE(lapses,0) AS lapses, COALESCE(card_tipo,'normal') AS card_tipo, COALESCE(imagem_data,'') AS imagem_data, COALESCE(oclusoes,'') AS oclusoes, COALESCE(oclusao_index,-1) AS oclusao_index, note_id FROM flashcards WHERE proxima_revisao <= ? AND user_id = ? AND COALESCE(suspenso, 0) = 0",
             (today_str(), user_id),
         ).fetchall()
     items = [dict(r) for r in rows]
@@ -874,6 +874,12 @@ def review_flashcard_fsrs(
         estado_card_antes,
     )
 
+    # === SIBLING BURYING (à la Anki) ===
+    # Adia p/ amanhã os cards irmãos (mesmo note_id) que venceriam hoje, para não
+    # revisar frente+verso da mesma nota (ou várias oclusões da mesma imagem) na
+    # mesma sessão. Aditivo e tolerante; não bloqueia a revisão.
+    enterrados = _bury_siblings(conn, id, user_id)
+
     conn.commit()
 
     log.info(
@@ -897,6 +903,7 @@ def review_flashcard_fsrs(
         "is_leech": leech_info.get("is_leech", False),
         "suspenso": leech_info.get("suspenso", False),
         "leech_now": leech_info.get("leech_now", False),
+        "irmaos_enterrados": enterrados,
     }
     if elaboration_suggested:
         flash_row = conn.execute(
@@ -1747,6 +1754,44 @@ def _snapshot_estado_card(conn, flashcard_id, user_id):
         "suspenso",
     ]
     return {k: r[i] for i, k in enumerate(keys)}
+
+
+def _bury_siblings(conn, flashcard_id, user_id):
+    """Adia p/ amanhã os cards IRMÃOS (mesmo note_id) que venceriam hoje (à la Anki).
+
+    "Irmãos" = cards da mesma nota (mesmo note_id não-nulo), diferentes do card atual,
+    do mesmo usuário, não suspensos e com proxima_revisao <= hoje. Enterrar = mover a
+    proxima_revisao para amanhã, tirando-os da fila de hoje sem afetar o agendamento
+    FSRS (stability/difficulty/intervalo permanecem). Retorna o nº de irmãos enterrados.
+
+    Tolerante: se a coluna note_id não existir (schema antigo) ou o burying estiver
+    desligado, é um no-op. Não incrementa reps nem grava revlog (não é uma revisão).
+    """
+    from datetime import date, timedelta
+
+    from constants import SIBLING_BURY_ENABLED
+
+    if not SIBLING_BURY_ENABLED:
+        return 0
+    try:
+        row = conn.execute(
+            "SELECT note_id FROM flashcards WHERE id = ? AND user_id = ?", (flashcard_id, user_id)
+        ).fetchone()
+    except Exception:
+        return 0  # coluna note_id inexistente (schema antigo)
+    note_id = row[0] if row else None
+    if not note_id:
+        return 0  # card sem nota agrupada → não há irmãos
+    amanha = (date.today() + timedelta(days=1)).isoformat()
+    cur = conn.execute(
+        """UPDATE flashcards
+           SET proxima_revisao = ?
+           WHERE user_id = ? AND note_id = ? AND id != ?
+             AND COALESCE(suspenso, 0) = 0
+             AND proxima_revisao <= ?""",
+        (amanha, user_id, note_id, flashcard_id, today_str()),
+    )
+    return cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
 
 
 def _registrar_revlog_e_leech(
