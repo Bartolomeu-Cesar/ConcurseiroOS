@@ -5,11 +5,10 @@ entre tópicos. Oferece sugestões automáticas baseadas em heurísticas.
 """
 from datetime import datetime
 
+from deps import get_user_id
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from database import get_db_session
-from deps import get_user_id
-from utils import today_str
 
 router = APIRouter(prefix="/api/knowledge-graph", tags=["Knowledge Graph"])
 

@@ -1,5 +1,7 @@
 """Endpoint consolidado para dados da sidebar — reduz 6 requests para 1."""
+from deps import get_user_id
 from fastapi import APIRouter, Depends
+from services import get_horas_estudadas
 
 from constants import (
     LEVEL_XP,
@@ -12,8 +14,6 @@ from constants import (
     XP_STREAK_WEEKLY_BONUS,
 )
 from database import get_db_session
-from deps import get_user_id
-from services import get_horas_estudadas
 from utils import calculate_streak, today_str
 
 router = APIRouter()

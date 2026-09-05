@@ -16,7 +16,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils import calcular_tempo_resposta_questao as calc
 
-
 _ENUNCIADO_CURTO = "O servidor estável perde o cargo por sentença transitada em julgado."
 
 

@@ -9,13 +9,11 @@ Implementa:
 5. Knowledge Decay Prediction (previsão de esquecimento)
 """
 from datetime import date, timedelta
-from typing import Optional
 
+from deps import get_user_id
 from fastapi import APIRouter, Depends, Query
 
 from database import get_db_session
-from deps import get_user_id
-from logger import log
 from utils import today_str
 
 router = APIRouter(prefix="", tags=["Study Intelligence"])
@@ -54,7 +52,6 @@ def study_intelligence(
     user_id: int = Depends(get_user_id)
 ):
     hoje = date.today()
-    trinta_dias = (hoje - timedelta(days=30)).isoformat()
     sete_dias = (hoje - timedelta(days=7)).isoformat()
 
     # Matérias do ciclo ativo (se houver) — filtra apenas matérias relevantes

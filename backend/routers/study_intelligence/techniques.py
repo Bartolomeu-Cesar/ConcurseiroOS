@@ -1,11 +1,10 @@
 """Técnicas modernas de estudo: pre-testing, self-explanation, calibration, etc."""
 from datetime import date, timedelta
-from typing import Optional
 
-from fastapi import APIRouter, Body, Depends, Query
+from deps import get_user_id
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from database import get_db_session
-from deps import get_user_id
 from logger import log
 from utils import today_str
 
@@ -110,7 +109,6 @@ def save_self_explanation(
     explicacao = body.get("explicacao", "").strip()
 
     if not questao_id or not explicacao:
-        from fastapi import HTTPException
         raise HTTPException(status_code=422, detail="questao_id e explicacao são obrigatórios")
 
     # Criar tabela se não existe
@@ -148,7 +146,7 @@ def get_calibration(
     user_id: int = Depends(get_user_id)
 ):
     """Retorna métricas de calibração metacognitiva.
-    
+
     Calibração perfeita = quando diz 80% confiante, acerta 80% das vezes.
     Overconfidence = confiança > acerto real.
     Underconfidence = confiança < acerto real.
@@ -224,105 +222,6 @@ def _calibration_tips(accuracy: float, trend: float) -> list:
 
     tips.append("🧠 Dica: use o slider de confiança nos flashcards para calibrar sua metacognição")
     return tips
-
-
-# ============================================================
-# GET /api/study-intelligence/sleep-consolidation
-# ============================================================
-
-@router.get("/api/study-intelligence/sleep-consolidation", summary="Sleep consolidation check",
-            description="""Verifica se é hora de uma sessão noturna ou revisão matinal.
-Estudar antes de dormir + revisar ao acordar = +20% consolidação de memória.""")
-def sleep_consolidation(
-    conn=Depends(get_db_session),
-    user_id: int = Depends(get_user_id)
-):
-    """Retorna recomendações de estudo baseadas no horário (consolidação durante sono)."""
-    from datetime import datetime
-
-    now = datetime.now()
-    hora = now.hour
-
-    # Determinar período do dia
-    if 5 <= hora < 9:
-        periodo = "matinal"
-    elif 21 <= hora or hora < 1:
-        periodo = "noturno"
-    else:
-        periodo = "diurno"
-
-    # Buscar itens mais importantes para revisão rápida
-    hoje = today_str()
-    items_revisao = []
-
-    if periodo in ("noturno", "matinal"):
-        # Pegar flashcards mais difíceis revisados hoje (para consolidar)
-        try:
-            # Flashcards com EF baixo (difíceis) que foram revisados recentemente
-            dificeis = conn.execute("""
-                SELECT id, pergunta, resposta, materia
-                FROM flashcards
-                WHERE user_id = ? AND easiness_factor < 2.3 AND easiness_factor > 0
-                ORDER BY easiness_factor ASC
-                LIMIT 5
-            """, (user_id,)).fetchall()
-            for f in dificeis:
-                items_revisao.append({
-                    "tipo": "flashcard",
-                    "id": f["id"],
-                    "pergunta": f["pergunta"],
-                    "materia": f["materia"] or "Geral",
-                })
-        except Exception:
-            pass
-
-        # Pegar questões erradas recentes (últimos 3 dias)
-        try:
-            erros_recentes = conn.execute("""
-                SELECT q.id, q.enunciado, q.materia, q.resposta_correta
-                FROM questoes_respostas qr
-                JOIN questoes q ON q.id = qr.questao_id
-                WHERE qr.user_id = ? AND qr.acertou = 0 AND qr.data >= ?
-                ORDER BY qr.data DESC
-                LIMIT 5
-            """, (user_id, (date.today() - timedelta(days=3)).isoformat())).fetchall()
-            for e in erros_recentes:
-                items_revisao.append({
-                    "tipo": "erro_recente",
-                    "id": e["id"],
-                    "pergunta": e["enunciado"][:100],
-                    "materia": e["materia"] or "Geral",
-                    "resposta_correta": e["resposta_correta"],
-                })
-        except Exception:
-            pass
-
-    mensagens = {
-        "noturno": {
-            "titulo": "🌙 Revisão Noturna (Sleep Consolidation)",
-            "descricao": "Rever material difícil antes de dormir fortalece a consolidação durante o sono. Revise por 5-10 min sem pressão.",
-            "dica": "Não precisa memorizar agora — apenas releia. Seu cérebro fará o trabalho durante a noite.",
-        },
-        "matinal": {
-            "titulo": "☀️ Revisão Matinal (Morning Recall)",
-            "descricao": "Tentar lembrar o que estudou ontem à noite ativa retrieval practice após consolidação do sono.",
-            "dica": "Tente lembrar ANTES de olhar — o esforço de recuperação é o que fortalece a memória.",
-        },
-        "diurno": {
-            "titulo": "📚 Sessão de Estudo Regular",
-            "descricao": "Continue com sua rotina normal. Revisão noturna/matinal será sugerida nos horários ideais.",
-            "dica": "Use interleaving: misture matérias diferentes para melhor retenção.",
-        },
-    }
-
-    return {
-        "periodo": periodo,
-        "hora_atual": now.strftime("%H:%M"),
-        "ativo": periodo in ("noturno", "matinal"),
-        **mensagens[periodo],
-        "items_revisao": items_revisao[:5],
-        "total_items": len(items_revisao),
-    }
 
 
 # ============================================================
@@ -883,7 +782,6 @@ def save_elaboration(
     resposta_usuario = body.get("resposta_usuario", "")
 
     if not prompt_tipo:
-        from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="prompt_tipo é obrigatório")
 
     conn.execute("""
@@ -1085,7 +983,7 @@ def sleep_consolidation(conn=Depends(get_db_session), user_id: int = Depends(get
     ontem = (date.today() - timedelta(days=1)).isoformat()
 
     # Determinar modo: noturno (21h-1h) ou matinal (5h-9h)
-    if 21 <= hora_atual or hora_atual <= 1:
+    if hora_atual >= 21 or hora_atual <= 1:
         modo = "noturno"
     elif 5 <= hora_atual <= 9:
         modo = "matinal"
@@ -1197,7 +1095,6 @@ def overlearning_detection(conn=Depends(get_db_session), user_id: int = Depends(
 
     overlearned_flashcards = []
     overlearned_questoes = []
-    hoje = today_str()
 
     # === FLASHCARDS com stability > 60 dias (já consolidados) ===
     # Se stability > 60 e proxima_revisao > hoje + 30 dias: não precisa mais revisar tão cedo
@@ -1292,7 +1189,6 @@ def transfer_test(
     user_id: int = Depends(get_user_id),
 ):
     """Gera teste de transferência: mesmo conteúdo, formato diferente."""
-    hoje = today_str()
 
     # Detectar formato predominante das últimas 30 respostas
     ultimas = conn.execute("""
@@ -1405,7 +1301,6 @@ def adaptive_break(conn=Depends(get_db_session), user_id: int = Depends(get_user
 
     # Últimas 5 respostas (janela curta para detecção imediata)
     ultimas5 = respostas[-5:]
-    tempo_ultimas5 = sum(r["tempo_segundos"] for r in ultimas5) / 5
     acerto_ultimas5 = sum(1 for r in ultimas5 if r["acertou"]) / 5
 
     # Calcular indicadores de fadiga
@@ -1491,7 +1386,6 @@ Baseado em Goal-Setting Theory (Locke & Latham 2002): marcos intermediários
 com feedback positivo mantêm motivação e senso de progresso.""")
 def progress_milestones(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Retorna conquistas/marcos alcançados e próximos marcos."""
-    hoje = today_str()
 
     milestones_alcancados = []
     proximos_marcos = []
@@ -2471,7 +2365,7 @@ def banca_profile(
         return {
             "banca": None,
             "mensagem": "Informe a banca ou cadastre no edital. Bancas disponíveis: CESPE, FCC, FGV, VUNESP",
-            "bancas_disponiveis": list(k for k in _BANCA_PROFILES.keys() if _BANCA_PROFILES[k] is not None),
+            "bancas_disponiveis": list(k for k in _BANCA_PROFILES if _BANCA_PROFILES[k] is not None),
         }
 
     banca_upper = banca.upper().strip()
@@ -2488,7 +2382,7 @@ def banca_profile(
         return {
             "banca": banca,
             "mensagem": f"Banca '{banca}' não encontrada. Disponíveis: CESPE, FCC, FGV, VUNESP",
-            "bancas_disponiveis": list(k for k in _BANCA_PROFILES.keys() if _BANCA_PROFILES[k] is not None),
+            "bancas_disponiveis": list(k for k in _BANCA_PROFILES if _BANCA_PROFILES[k] is not None),
         }
 
     # Estatísticas do user com essa banca (se tiver questões classificadas por banca)
@@ -2814,7 +2708,6 @@ def peer_teaching_suggestion(
     user_id: int = Depends(get_user_id),
 ):
     """Sugere tópicos ideais para ensinar (domínio suficiente mas não perfeito)."""
-    hoje = today_str()
 
     # Tópicos ideais para ensinar: acerto entre 70-90% (sabe o suficiente mas ensinar consolida)
     materias_para_ensinar = conn.execute("""
@@ -2942,7 +2835,6 @@ def boss_battle_start(
     user_id: int = Depends(get_user_id),
 ):
     """Gera uma boss battle com flashcards pendentes."""
-    import random
     hoje = today_str()
 
     # Buscar flashcards pendentes para revisão
@@ -3221,7 +3113,6 @@ def save_brain_dump(
     topico = body.get("topico", "").strip()
 
     if not materia or not texto:
-        from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="Matéria e texto são obrigatórios")
 
     # Salvar no banco
@@ -3317,7 +3208,6 @@ def testing_boundaries(
 ):
     """Retorna análise da zona ótima de aprendizado."""
     from datetime import date, timedelta
-    hoje = date.today().isoformat()
     uma_semana = (date.today() - timedelta(days=7)).isoformat()
 
     # Buscar flashcards revisados na última semana com quality médio
@@ -3473,6 +3363,7 @@ def spacing_gap(
 ):
     """Sugere o horário ideal para a próxima sessão de estudo."""
     from datetime import datetime, timedelta
+
     from services import get_dias_ate_prova
 
     agora = datetime.now()
@@ -3603,7 +3494,6 @@ def save_expressive_writing(
     """Salva o texto de expressive writing do aluno."""
     texto = body.get("texto", "").strip()
     if not texto:
-        from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="Texto é obrigatório")
 
     conn.execute("""

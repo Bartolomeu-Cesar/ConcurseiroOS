@@ -2,10 +2,10 @@
 import json
 from datetime import datetime, timedelta
 
+from deps import get_user_id
 from fastapi import APIRouter, Body, Depends, HTTPException
 
 from database import get_db_session
-from deps import get_user_id
 from logger import log
 
 from .helpers import get_user_name

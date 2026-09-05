@@ -8,14 +8,13 @@ Fluxo:
 2. Amigos consultam GET /api/social/status/amigos para ver quem está ativo.
 3. Status é derivado do tempo: se atualizado há < 5min = online; senão = offline.
 """
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
+from deps import get_user_id
 from fastapi import APIRouter, Body, Depends
 from pydantic import BaseModel
 
 from database import get_db_session
-from deps import get_user_id
-from logger import log
 
 from .helpers import _get_friend_ids
 

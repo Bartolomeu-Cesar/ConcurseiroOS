@@ -19,9 +19,9 @@ def _decode_user_id(token: str) -> int:
         set_user_id_context(user_id)
         return user_id
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expirado")
+        raise HTTPException(status_code=401, detail="Token expirado") from None
     except (jwt.InvalidTokenError, KeyError, ValueError):
-        raise HTTPException(status_code=401, detail="Token inválido")
+        raise HTTPException(status_code=401, detail="Token inválido") from None
 
 
 async def get_user_id(

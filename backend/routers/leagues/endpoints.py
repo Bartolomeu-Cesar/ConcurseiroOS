@@ -1,22 +1,30 @@
 """League/Liga endpoints: liga semanal, histórico, processar semana, XP."""
-from datetime import date, timedelta, datetime
+from datetime import date, datetime
 
+from deps import get_user_id
 from fastapi import APIRouter, Depends, HTTPException
 
 from database import get_db_session
-from deps import get_user_id
 from logger import log
 
 from .helpers import (
-    TIERS, TIER_LABELS, TIER_ICONS, TIER_XP_RANGES,
-    PROMOTION_ZONE, DEMOTION_ZONE, MIN_LEAGUE_SIZE, MAX_LEAGUE_SIZE,
-    XP_PER_QUESTION, XP_PER_HOUR, XP_PER_FLASHCARD, XP_DESAFIO_DIARIO,
-    XP_BATALHA_VENCIDA, XP_STREAK_DAY, XP_PER_SUMULA, XP_PER_TOPIC_COMPLETED,
-    XP_META_DIARIA, XP_PER_ERRO_CORRIGIDO, XP_SIMULADO_COMPLETO,
-    get_current_week_bounds, get_days_remaining, get_user_tier,
-    calculate_user_weekly_xp, populate_bots, get_bot_display_name,
-    recalculate_rankings, ensure_user_league, _progress_bots,
+    DEMOTION_ZONE,
+    MAX_LEAGUE_SIZE,
+    MIN_LEAGUE_SIZE,
+    PROMOTION_ZONE,
+    TIER_ICONS,
+    TIER_LABELS,
+    TIER_XP_RANGES,
+    TIERS,
+    _progress_bots,
+    calculate_user_weekly_xp,
+    ensure_user_league,
+    get_bot_display_name,
+    get_current_week_bounds,
+    get_days_remaining,
+    get_user_tier,
     migrate_liga_column,
+    recalculate_rankings,
 )
 
 router = APIRouter(prefix="", tags=["Ligas"])
@@ -396,7 +404,6 @@ def get_league_history(
     results = []
     for row in history:
         tier = row[2]
-        tier_idx = TIERS.index(tier) if tier in TIERS else 0
 
         result = "maintained"
         if row[5]:
@@ -438,7 +445,7 @@ def update_league_xp(
     ).fetchone()
 
     if not membership:
-        league_info = ensure_user_league(db, user_id)
+        ensure_user_league(db, user_id)
         membership = db.execute(
             """SELECT lm.id, lm.league_id FROM league_members lm
                JOIN leagues l ON l.id = lm.league_id

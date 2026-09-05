@@ -1,18 +1,23 @@
 import os
 import re
 import tempfile
-from datetime import date, datetime, timedelta
 
+from deps import get_user_id
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile
 from pypdf import PdfReader
-
-from constants import SM2_FIRST_INTERVAL, SM2_INITIAL_EF, SM2_MIN_EF, SM2_SECOND_INTERVAL
-from database import get_db_session
-from deps import get_user_id
-from logger import log
-from schemas import EditalCreate, EditalHoras, EditalPdfLink, EditalReviewSM2, NotaTopicoCreate, OkResponse, ResumoCreate
 from sanitize import sanitize_input
-from schemas import CreateEditalInfoRequest, RenomearEditalRequest, UpdateEditalInfoRequest
+from schemas import (
+    CreateEditalInfoRequest,
+    EditalCreate,
+    EditalHoras,
+    EditalPdfLink,
+    OkResponse,
+    RenomearEditalRequest,
+    UpdateEditalInfoRequest,
+)
+
+from database import get_db_session
+from logger import log
 from utils import sql_paginate, today_str
 
 router = APIRouter(prefix="", tags=["Edital"])
@@ -245,7 +250,6 @@ def link_video_to_edital(id: int, body: dict = Body(...), conn=Depends(get_db_se
 @router.post("/api/edital/{id}/video-session")
 def register_video_session(id: int, body: dict = Body(...), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Registra tempo assistido de vídeo como sessão de estudo."""
-    from datetime import date
     from utils import today_str
 
     minutos = body.get("minutos", 0)
@@ -577,7 +581,7 @@ def gerar_mapa_mental(
     lines = ["mindmap"]
     lines.append(f"  root(({materia}))")
 
-    for grupo_num, items in grupos.items():
+    for _grupo_num, items in grupos.items():
         if len(items) == 1:
             # Item solto: direto como filho do root
             item = items[0]
@@ -598,7 +602,7 @@ def gerar_mapa_mental(
     flow_lines = ["graph TD"]
     flow_lines.append(f'  ROOT["{materia}"]')
 
-    for i, t in enumerate(topicos[:20]):  # Limitar a 20 para não explodir
+    for _i, t in enumerate(topicos[:20]):  # Limitar a 20 para não explodir
         node_id = f"T{t['id']}"
         status = t["status"]
         nome_curto = t["topico"][:40].replace('"', "'")

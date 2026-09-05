@@ -1,22 +1,10 @@
 """Router do Calendário Personalizado e Atividades."""
-import random
-from datetime import date, datetime, timedelta
-from typing import List
+from datetime import date, timedelta
 
-from fastapi import APIRouter, Body, Depends, Query
+from deps import get_user_id
+from fastapi import APIRouter, Body, Depends
 
 from database import get_db_session
-from deps import get_user_id
-from logger import log
-from schemas import CalendarioItem
-from sanitize import sanitize_input
-from schemas import (
-    AtividadeConcluidaRequest,
-    DesmarcarAtividadeRequest,
-    RegistrarAutoavaliacaoRequest,
-    ResetInteligenteRequest,
-    SalvarQuestaoDissertativaRequest,
-)
 from utils import today_str
 
 router = APIRouter(prefix="", tags=["Calendário"])
@@ -89,7 +77,7 @@ def save_study_preferences(
     _ensure_study_prefs_table(conn)
     dias_str = ",".join(str(d) for d in dias_estudo)
     conn.execute("""
-        INSERT INTO study_preferences (user_id, hora_inicio, hora_fim, bloco_min, pausa_min, 
+        INSERT INTO study_preferences (user_id, hora_inicio, hora_fim, bloco_min, pausa_min,
                                        pausa_longa_min, blocos_antes_pausa_longa, dias_estudo, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(user_id) DO UPDATE SET
@@ -127,7 +115,6 @@ def calendario_hoje(conn=Depends(get_db_session), user_id: int = Depends(get_use
     fim_min = h_fim * 60 + m_fim
     if fim_min <= inicio_min:
         fim_min += 24 * 60  # Passa da meia-noite
-    tempo_total_min = fim_min - inicio_min
 
     # === 2. Buscar matérias do ciclo ativo com score ===
     ciclo = conn.execute("SELECT * FROM ciclo_estudos WHERE ativo = 1 AND user_id = ? ORDER BY ordem", (user_id,)).fetchall()

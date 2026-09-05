@@ -40,6 +40,7 @@ _conn_setup.close()
 
 from fastapi.testclient import TestClient
 from main import app
+
 from settings import settings
 
 
@@ -93,6 +94,7 @@ def _get_admin_token(client) -> str:
     geramos o token JWT diretamente — equivalente ao que verify-code faria.
     """
     import jwt as pyjwt
+
     from settings import settings
 
     # Atualizar email do admin seed para um email válido, para permitir login via API em outros testes
@@ -178,13 +180,14 @@ class TestListUsers:
         """GET /api/admin/users — cada usuário traz o objeto validade do plano."""
         token = _get_admin_token(client)
         # Criar um premium com expiração em 30 dias e um expirado
-        from datetime import datetime, timezone, timedelta
+        from datetime import datetime, timedelta, timezone
         conn = sqlite3.connect(_tmp_db.name, check_same_thread=False, timeout=10)
         fut = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
         past = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
         conn.execute("INSERT INTO users (nome, email, plano, plano_expira, created_at) VALUES ('Ativo', 'ativo_val@t.com', 'premium', ?, '2026-01-01')", (fut,))
         conn.execute("INSERT INTO users (nome, email, plano, plano_expira, created_at) VALUES ('Expirado', 'exp_val@t.com', 'premium', ?, '2026-01-01')", (past,))
-        conn.commit(); conn.close()
+        conn.commit()
+        conn.close()
 
         r = client.get("/api/admin/users?limit=100", headers=_auth_header(token))
         assert r.status_code == 200
@@ -206,13 +209,14 @@ class TestListUsers:
     def test_filtro_validade_expirando(self, client):
         """GET /api/admin/users?filtro=expirando — só premium expirando em ≤7 dias."""
         token = _get_admin_token(client)
-        from datetime import datetime, timezone, timedelta
+        from datetime import datetime, timedelta, timezone
         conn = sqlite3.connect(_tmp_db.name, check_same_thread=False, timeout=10)
         soon = (datetime.now(timezone.utc) + timedelta(days=3)).isoformat()
         far = (datetime.now(timezone.utc) + timedelta(days=60)).isoformat()
         conn.execute("INSERT INTO users (nome, email, plano, plano_expira, created_at) VALUES ('Soon', 'soon_f@t.com', 'premium', ?, '2026-01-01')", (soon,))
         conn.execute("INSERT INTO users (nome, email, plano, plano_expira, created_at) VALUES ('Far', 'far_f@t.com', 'premium', ?, '2026-01-01')", (far,))
-        conn.commit(); conn.close()
+        conn.commit()
+        conn.close()
         r = client.get("/api/admin/users?filtro=expirando&limit=100", headers=_auth_header(token))
         assert r.status_code == 200
         emails = [u["email"] for u in r.json()["users"]]
@@ -224,7 +228,8 @@ class TestListUsers:
         token = _get_admin_token(client)
         conn = sqlite3.connect(_tmp_db.name, check_same_thread=False, timeout=10)
         conn.execute("INSERT INTO users (nome, email, plano, plano_expira, created_at) VALUES ('Vit', 'vit_f@t.com', 'ilimitado', 'vitalicio', '2026-01-01')", ())
-        conn.commit(); conn.close()
+        conn.commit()
+        conn.close()
         r = client.get("/api/admin/users?filtro=vitalicio&limit=100", headers=_auth_header(token))
         assert r.status_code == 200
         for u in r.json()["users"]:
@@ -332,9 +337,9 @@ class TestUpdateUser:
         token = _get_admin_token(client)
 
         # Criar dois usuários
-        r1 = client.post("/api/admin/users",
-                         json={"email": "emaila@example.com", "nome": "A", "username": "a"},
-                         headers=_auth_header(token))
+        client.post("/api/admin/users",
+                    json={"email": "emaila@example.com", "nome": "A", "username": "a"},
+                    headers=_auth_header(token))
         r2 = client.post("/api/admin/users",
                          json={"email": "emailb@example.com", "nome": "B", "username": "b"},
                          headers=_auth_header(token))
@@ -491,7 +496,8 @@ class TestMonetizacao:
     def test_update_janela_vitalicio_disponivel(self, client):
         """PUT janela cobrindo hoje → vitalício disponível."""
         token = _get_admin_token(client)
-        from datetime import date, timedelta as _td
+        from datetime import date
+        from datetime import timedelta as _td
         ontem = (date.today() - _td(days=1)).isoformat()
         amanha = (date.today() + _td(days=1)).isoformat()
         r = client.put("/api/admin/monetizacao", headers=_auth_header(token), json={
@@ -845,7 +851,8 @@ class TestMetricas:
         conn.execute("INSERT INTO pagamentos (user_id, payment_id, tipo, creditos, valor, status, created_at) VALUES (1, 'p1', 'pix_vitalicio', 0, 97.0, 'approved', ?)", (now,))
         conn.execute("INSERT INTO pagamentos (user_id, payment_id, tipo, creditos, valor, status, created_at) VALUES (1, 'p2', 'pix_creditos', 10, 34.90, 'approved', ?)", (now,))
         conn.execute("INSERT INTO pagamentos (user_id, payment_id, tipo, creditos, valor, status, created_at) VALUES (1, 'p3', 'pix_creditos', 5, 19.90, 'pending', ?)", (now,))
-        conn.commit(); conn.close()
+        conn.commit()
+        conn.close()
         r = client.get("/api/admin/metricas", headers=_auth_header(token))
         rec = r.json()["receita"]
         assert abs(rec["total"] - 131.90) < 0.01  # 97 + 34.90, pendente excluído

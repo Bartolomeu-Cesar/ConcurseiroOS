@@ -2,8 +2,8 @@
 Seed de Súmulas Vinculantes STF + Súmulas STJ/STF mais cobradas + Flashcards + Questões com mnemônicos.
 Executar: python seed_sumulas.py
 """
-import sqlite3
 import os
+import sqlite3
 from datetime import date
 
 DB_PATH = os.environ.get("DB_PATH", "./progress.db")
@@ -216,10 +216,10 @@ QUESTOES = [
 
 def seed():
     conn = sqlite3.connect(DB_PATH)
-    
+
     # ===== SÚMULAS =====
     count_sumulas = 0
-    
+
     # Vinculantes STF
     for num, enunciado, tema, obs in SUMULAS_VINCULANTES:
         existing = conn.execute("SELECT id FROM sumulas WHERE tribunal = 'STF' AND numero = ? AND vinculante = 1 AND user_id = 1", (num,)).fetchone()
@@ -229,7 +229,7 @@ def seed():
                 VALUES (?, ?, ?, ?, ?, 1, ?, 1)
             """, ("STF", num, enunciado, tema, obs, TODAY))
             count_sumulas += 1
-    
+
     # STJ
     for num, enunciado, tema, obs in SUMULAS_STJ:
         existing = conn.execute("SELECT id FROM sumulas WHERE tribunal = 'STJ' AND numero = ? AND user_id = 1", (num,)).fetchone()
@@ -239,7 +239,7 @@ def seed():
                 VALUES (?, ?, ?, ?, ?, 0, ?, 1)
             """, ("STJ", num, enunciado, tema, obs, TODAY))
             count_sumulas += 1
-    
+
     # STF simples
     for num, enunciado, tema, obs in SUMULAS_STF:
         existing = conn.execute("SELECT id FROM sumulas WHERE tribunal = 'STF' AND numero = ? AND vinculante = 0 AND user_id = 1", (num,)).fetchone()
@@ -249,7 +249,7 @@ def seed():
                 VALUES (?, ?, ?, ?, ?, 0, ?, 1)
             """, ("STF", num, enunciado, tema, obs, TODAY))
             count_sumulas += 1
-    
+
     # ===== FLASHCARDS =====
     count_flash = 0
     for pergunta, resposta, materia in FLASHCARDS:
@@ -260,23 +260,23 @@ def seed():
                 VALUES (?, ?, ?, ?, 1)
             """, (pergunta, resposta, TODAY, materia))
             count_flash += 1
-    
+
     # ===== QUESTÕES =====
     count_quest = 0
     for q in QUESTOES:
         existing = conn.execute("SELECT id FROM questoes WHERE enunciado = ? AND user_id = 1", (q["enunciado"],)).fetchone()
         if not existing:
             conn.execute("""
-                INSERT INTO questoes (materia, topico, enunciado, alternativa_a, alternativa_b, alternativa_c, 
+                INSERT INTO questoes (materia, topico, enunciado, alternativa_a, alternativa_b, alternativa_c,
                     alternativa_d, alternativa_e, resposta_correta, explicacao, dificuldade, banca, created_at, user_id)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
             """, (q["materia"], q["topico"], q["enunciado"], q["a"], q["b"], q["c"],
                   q["d"], q["e"], q["resposta"], q["explicacao"], q["dificuldade"], q["banca"], TODAY))
             count_quest += 1
-    
+
     conn.commit()
     conn.close()
-    
+
     print(f"""
 ✅ Seed concluído!
    📜 Súmulas: {count_sumulas} inseridas

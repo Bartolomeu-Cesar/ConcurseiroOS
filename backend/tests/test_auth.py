@@ -30,6 +30,7 @@ database.init_db()
 
 from fastapi.testclient import TestClient
 from main import app
+
 from settings import settings
 
 
@@ -246,6 +247,7 @@ class TestMe:
     def test_me_token_expirado(self, client):
         """GET /api/auth/me — token expirado. get_optional_user retorna None (fallback)."""
         import jwt
+
         from settings import settings
         # Criar token já expirado
         payload = {
@@ -322,6 +324,7 @@ class TestTokenJWT:
     def test_token_expirado_retorna_401(self, client):
         """Token JWT expirado retorna 401 em endpoints protegidos."""
         import jwt
+
         from settings import settings
         payload = {
             "sub": "1",
@@ -399,7 +402,8 @@ class TestCodigoExpiracao:
 
     def test_login_usa_validade_configurada(self, client):
         """O login respeita a validade em minutos gravada em app_config (config do admin)."""
-        from datetime import datetime as _dt, timezone as _tz
+        from datetime import datetime as _dt
+        from datetime import timezone as _tz
         email = "cfg_expire@example.com"
         client.post("/api/auth/register", json={"email": email, "nome": "Cfg"})
 

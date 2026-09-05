@@ -1,10 +1,10 @@
 """Funcionalidades de estudo: daily challenge, active recall, intercalação, questões vinculadas, template."""
 import random
 
+from deps import get_user_id
 from fastapi import APIRouter, Depends, HTTPException
 
 from database import get_db_session
-from deps import get_user_id
 from utils import today_str
 
 router = APIRouter()

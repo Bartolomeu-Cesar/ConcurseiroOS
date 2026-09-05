@@ -62,7 +62,7 @@ def _validar_oclusoes(raw: str) -> str:
     try:
         data = json.loads(raw)
     except (ValueError, TypeError):
-        raise HTTPException(status_code=422, detail="oclusoes deve ser JSON válido.")
+        raise HTTPException(status_code=422, detail="oclusoes deve ser JSON válido.") from None
     if not isinstance(data, list):
         raise HTTPException(status_code=422, detail="oclusoes deve ser uma lista de retângulos.")
     if len(data) > 60:
@@ -76,8 +76,10 @@ def _validar_oclusoes(raw: str) -> str:
         except (KeyError, TypeError, ValueError):
             continue
         # Clampa em [0,1] para evitar valores absurdos.
-        x = max(0.0, min(1.0, x)); y = max(0.0, min(1.0, y))
-        w = max(0.0, min(1.0, w)); h = max(0.0, min(1.0, h))
+        x = max(0.0, min(1.0, x))
+        y = max(0.0, min(1.0, y))
+        w = max(0.0, min(1.0, w))
+        h = max(0.0, min(1.0, h))
         if w <= 0 or h <= 0:
             continue
         limpo.append({"x": round(x, 4), "y": round(y, 4), "w": round(w, 4), "h": round(h, 4)})

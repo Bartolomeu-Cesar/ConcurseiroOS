@@ -23,11 +23,10 @@ Uso:
 """
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date
 
 # Reexporta o motor de ordenação para ter um ponto único de import.
 from study_ordering import order_items_intelligently  # noqa: F401
-
 
 # ============================================================
 # LAG EFFECT / EXAM-AWARE SPACING

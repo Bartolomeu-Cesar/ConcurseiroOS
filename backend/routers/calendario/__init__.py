@@ -7,8 +7,8 @@ Calendário router package — modularizado em:
 from fastapi import APIRouter
 
 from .core import router as core_router
-from .personalizado import router as personalizado_router
 from .inteligencia import router as inteligencia_router
+from .personalizado import router as personalizado_router
 
 router = APIRouter(prefix="", tags=["Calendário"])
 

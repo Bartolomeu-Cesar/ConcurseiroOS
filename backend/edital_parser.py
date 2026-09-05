@@ -15,10 +15,8 @@ Handles the standard format:
 
 import re
 import unicodedata
-from typing import Optional
 
 from pypdf import PdfReader
-
 
 # ============================================================
 # Regex patterns
@@ -275,9 +273,7 @@ def split_topics(topic_text: str) -> list[str]:
         for s in sentences:
             s = s.strip().rstrip('.')
             # Filter out very short items and items that look like metadata
-            if len(s) > 5 and not re.match(r'^(Lei|Decreto|Art|§|Resolução)\s', s):
-                topics.append(s)
-            elif len(s) > 5:
+            if len(s) > 5 and not re.match(r'^(Lei|Decreto|Art|§|Resolução)\s', s) or len(s) > 5:
                 topics.append(s)
 
     return topics
@@ -364,7 +360,7 @@ def _extract_subjects_from_block(text_block: str) -> list[dict]:
             merged_entries.append((start, end, name, content))
 
     # Now process each entry
-    for start, end, name, content in merged_entries:
+    for _start, _end, name, content in merged_entries:
         name_clean = name.strip()
 
         # Check for EXCETO clause
@@ -659,18 +655,18 @@ def _extract_metadados(pdf_path: str) -> dict:
             cleaned = cleaned[:url_end.start()]
         if len(cleaned) > 10:
             all_links.append(cleaned)
-    
+
     # Strategy 2: Generic concurso URLs
     if not all_links:
         for m in re.finditer(r"(https?://[^\s\"]{20,80}concurso[^\s\"]*)", text_inicio, re.IGNORECASE):
             all_links.append(m.group(1).rstrip(".,;)"))
-    
+
     # Strategy 3: www. without protocol
     if not all_links:
         for m in re.finditer(r"(www\.[^\s,\)]{10,60})", text_inicio):
             link = m.group(1).rstrip(".,;)")
             all_links.append("https://" + link)
-    
+
     if all_links:
         # Pick the longest URL (most complete version)
         best_link = max(all_links, key=len)
@@ -933,8 +929,8 @@ def format_preview(result: dict) -> str:
 # ============================================================
 
 if __name__ == "__main__":
-    import sys
     import json
+    import sys
 
     if len(sys.argv) < 2:
         pdf_path = "pdfs/5FADC380CB030A07F557A9C5EEA6D063017A2CA675E683F39C50B65E6D70F57B.pdf"

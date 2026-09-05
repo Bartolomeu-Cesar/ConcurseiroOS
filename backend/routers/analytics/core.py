@@ -1,17 +1,13 @@
 """Router de Analytics e Relatórios Avançados."""
-import json
 import re
-import tempfile
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
-from fastapi.responses import FileResponse
+from deps import get_user_id
+from fastapi import APIRouter, Depends, Query
+from services import get_acertos_por_materia, get_horas_estudadas
 
 from database import get_db_session
-from deps import get_user_id
-from logger import log
-from services import get_acertos_por_materia, get_horas_estudadas
-from utils import calculate_streak, sql_paginate, today_str
+from utils import today_str
 
 router = APIRouter(prefix="", tags=["Analytics"])
 
@@ -493,11 +489,11 @@ def share_card(
 
     if periodo == "semana":
         inicio = (hoje - timedelta(days=hoje.weekday())).isoformat()
-        titulo = f"Resumo da Semana"
+        titulo = "Resumo da Semana"
         subtitulo = f"{inicio} a {hoje.isoformat()}"
     elif periodo == "mes":
         inicio = hoje.replace(day=1).isoformat()
-        titulo = f"Resumo do Mês"
+        titulo = "Resumo do Mês"
         subtitulo = f"{hoje.strftime('%B %Y')}"
     else:
         inicio = "2000-01-01"

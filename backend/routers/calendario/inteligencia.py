@@ -2,13 +2,13 @@
 import random
 from datetime import date, datetime, timedelta
 
-from fastapi import APIRouter, Body, Depends, Query
+from deps import get_user_id
+from fastapi import APIRouter, Depends
+from sanitize import sanitize_input
+from schemas import RegistrarAutoavaliacaoRequest, ResetInteligenteRequest, SalvarQuestaoDissertativaRequest
 
 from database import get_db_session
-from deps import get_user_id
 from logger import log
-from schemas import RegistrarAutoavaliacaoRequest, ResetInteligenteRequest, SalvarQuestaoDissertativaRequest
-from sanitize import sanitize_input
 from utils import today_str
 
 NOMES_DIAS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
@@ -383,7 +383,7 @@ def o_que_estudar_agora(conn=Depends(get_db_session), user_id: int = Depends(get
                     "tipo": a["tipo"],
                     "tempo_min": a["tempo_min"],
                     "topicos": a["topicos"],
-                    "motivo": f"Adiantando atividade do próximo turno",
+                    "motivo": "Adiantando atividade do próximo turno",
                 }
                 break
 
@@ -655,7 +655,6 @@ def reset_inteligente(body: ResetInteligenteRequest = None, conn=Depends(get_db_
     scored_materias.sort(key=lambda x: -x["peso"])
 
     # ===== 4. Distribute across 7 days with ADVANCED TECHNIQUES =====
-    total_peso = sum(m["peso"] for m in scored_materias) or 1
 
     # --- TECHNIQUE #1: SPACING EFFECT (2-3 days between same subject) ---
     # Determine frequency: top subjects every 2-3 days, lower priority every 3-4 days
@@ -702,20 +701,14 @@ def reset_inteligente(body: ResetInteligenteRequest = None, conn=Depends(get_db_
     tempo_pausa_90min = 15        # #4: ultradian break
     tempo_revisao_pct = 0.15      # Revision block (reduced since we have warm-up)
     tempo_estudo_pct = 0.70       # Main study (includes integrated practice)
-    tempo_questoes_pct = 0.15     # Additional focused question block
 
     tempo_revisao = int(tempo_dia_min * tempo_revisao_pct)
     tempo_estudo = int(tempo_dia_min * tempo_estudo_pct)
-    tempo_questoes = int(tempo_dia_min * tempo_questoes_pct)
 
     # --- TECHNIQUE #10: DAY THEMING ---
     # One day per week = deep dive into hardest subject (if exists)
     deep_dive_day = 3  # Thursday = deep dive
     deep_dive_materia = scored_materias[0]["materia"] if scored_materias else None
-
-    # --- TECHNIQUE #5: FORMAT VARIATION ---
-    # Rotate format per day for same subject: teoria → questões → flashcards → ensinar
-    formatos_rotacao = ["estudo", "questoes", "revisao", "ensinar"]
 
     # Build pool of matérias for assignment
     pool = []
@@ -851,7 +844,6 @@ def reset_inteligente(body: ResetInteligenteRequest = None, conn=Depends(get_db_
 
                 # --- #5 FORMAT VARIATION: rotate format ---
                 last_fmt = materia_last_format.get(a["materia"], 0)
-                current_fmt = formatos_rotacao[last_fmt % len(formatos_rotacao)]
                 materia_last_format[a["materia"]] = last_fmt + 1
 
                 # Get topics for this matéria — na ORDEM da trilha ativa (Opção B),

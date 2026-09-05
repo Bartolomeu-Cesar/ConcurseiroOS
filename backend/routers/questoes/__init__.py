@@ -12,11 +12,11 @@ devem vir ANTES de /api/questoes/{id} para evitar conflito de path params.
 """
 from fastapi import APIRouter
 
-from .stats import router as stats_router
 from .caderno_erros import router as caderno_erros_router
+from .core import router as core_router
 from .estudo import router as estudo_router
 from .importacao import router as importacao_router
-from .core import router as core_router
+from .stats import router as stats_router
 
 router = APIRouter(prefix="", tags=["Questões"])
 

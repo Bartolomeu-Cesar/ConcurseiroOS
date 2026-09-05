@@ -16,8 +16,7 @@ import pytest
 os.environ.setdefault("AUTH_ENABLED", "false")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from fsrs import W, FSRSCard, otimizar_pesos_iniciais, review_card
-
+from fsrs import FSRSCard, W, otimizar_pesos_iniciais, review_card
 
 # ==================== FUNÇÃO PURA ====================
 
@@ -93,10 +92,10 @@ from database import get_db_session
 database.DB_PATH = _tmp_db.name
 database.init_db()
 
-from fastapi.testclient import TestClient
-
 from deps import get_user_id
+from fastapi.testclient import TestClient
 from main import app
+
 from utils import today_str
 
 _UID = 1

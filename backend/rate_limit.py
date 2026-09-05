@@ -5,7 +5,6 @@ Uses a separate rate_limit.db with WAL mode for concurrent access.
 import sqlite3
 import time
 from pathlib import Path
-from typing import Optional
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
@@ -196,7 +195,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
-def _extract_user_identifier(request: StarletteRequest) -> Optional[str]:
+def _extract_user_identifier(request: StarletteRequest) -> str | None:
     """Extract user ID from JWT token in Authorization header.
 
     Returns user_id string or None if no valid token.

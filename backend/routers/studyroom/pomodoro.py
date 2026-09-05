@@ -2,12 +2,11 @@
 import random
 from datetime import datetime
 
+from deps import get_user_id
 from fastapi import APIRouter, Depends, HTTPException
 
 from database import get_db_session
-from deps import get_user_id
 
-from .helpers import get_user_name
 from .tables import ensure_commitment_tables, ensure_studyroom_tables, run_studyroom_migrations
 
 router = APIRouter(prefix="/api/studyroom", tags=["Study Room"])
@@ -34,6 +33,7 @@ def get_break_cards(
     - Limita a 5 para não sobrecarregar a pausa (5min)
     """
     from study_ordering import order_items_intelligently
+
     from utils import today_str
 
     quantidade = min(quantidade, 5)  # Máx 5 na pausa
@@ -233,7 +233,7 @@ def get_mindfulness_exercise(
 
     # 8 ciclos de respiração: Inspire 4s, Segure 4s, Expire 6s = 14s por ciclo
     passos = []
-    for i in range(8):
+    for _i in range(8):
         passos.append({"instrucao": "Inspire profundamente pelo nariz... 🌬️", "duracao_seg": 4})
         passos.append({"instrucao": "Segure o ar suavemente... ⏸️", "duracao_seg": 4})
         passos.append({"instrucao": "Expire lentamente pela boca... 💨", "duracao_seg": 6})

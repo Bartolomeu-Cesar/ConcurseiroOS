@@ -1,8 +1,8 @@
 """Friendships: listar, adicionar, aceitar, rejeitar, remover amigos."""
+from deps import get_user_id
 from fastapi import APIRouter, Depends, HTTPException
 
 from database import get_db_session
-from deps import get_user_id
 from logger import log
 from utils import today_str
 

@@ -19,8 +19,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
 from starlette.responses import Response
 
-from logger import log, get_request_id, set_request_id, set_user_id_context  # noqa: F401 — re-export get_request_id
-
+from logger import get_request_id, log, set_request_id, set_user_id_context  # noqa: F401 — re-export get_request_id
 
 # ============================================================
 # REQUEST ID MIDDLEWARE
@@ -75,9 +74,7 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
             return True
         if any(path.startswith(sp) for sp in self._skip_paths):
             return True
-        if not path.startswith("/api/"):
-            return True
-        return False
+        return bool(not path.startswith("/api/"))
 
     async def dispatch(self, request: StarletteRequest, call_next) -> Response:
         path = request.url.path

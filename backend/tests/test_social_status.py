@@ -10,7 +10,7 @@ import os
 import sqlite3
 import sys
 import tempfile
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 

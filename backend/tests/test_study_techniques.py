@@ -7,10 +7,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from study_techniques import (
     lag_effect_interval,
-    successive_relearning_due,
     retrieval_practice_prompt,
+    successive_relearning_due,
 )
-
 
 # ============================================================
 # LAG EFFECT

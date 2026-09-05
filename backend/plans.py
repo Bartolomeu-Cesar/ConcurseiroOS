@@ -374,7 +374,8 @@ def get_app_config(chave: str, default: str = "") -> str:
 
 def set_app_config(conn, chave: str, valor: str):
     """Grava/atualiza um valor de configuração dinâmica."""
-    from datetime import datetime as _dt, timezone as _tz
+    from datetime import datetime as _dt
+    from datetime import timezone as _tz
     conn.execute("""
         INSERT INTO app_config (chave, valor, updated_at) VALUES (?, ?, ?)
         ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor, updated_at = excluded.updated_at

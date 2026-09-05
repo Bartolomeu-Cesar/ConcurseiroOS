@@ -4,13 +4,12 @@ Contém as 8 camadas de inteligência e helpers compartilhados entre os endpoint
 """
 import re
 from datetime import date, timedelta
-from typing import Optional
+
+from services import get_acertos_por_materia
 
 from constants import WEIGHT_ACCURACY, WEIGHT_CONSISTENCY, WEIGHT_PROGRESS
 from logger import log
-from services import get_acertos_por_materia
 from utils import today_str
-
 
 # ============================================================
 # FUNÇÕES AUXILIARES — DADOS BASE
@@ -85,8 +84,8 @@ def _analyze_error_patterns(conn, user_id: int, limit: int = 5) -> list:
 # INTELIGÊNCIA 2: RITMO ADAPTATIVO
 # ============================================================
 
-def _calculate_adaptive_pace(conn, user_id: int, dias_prova: Optional[int],
-                             edital_nome: str = "", cargo: str = "") -> Optional[dict]:
+def _calculate_adaptive_pace(conn, user_id: int, dias_prova: int | None,
+                             edital_nome: str = "", cargo: str = "") -> dict | None:
     """Calcula se o ritmo atual é suficiente para cobrir o edital antes da prova."""
     if dias_prova is None or dias_prova <= 0:
         return None
@@ -111,13 +110,8 @@ def _calculate_adaptive_pace(conn, user_id: int, dias_prova: Optional[int],
         "SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE data >= ? AND user_id = ?",
         (quatro_semanas, user_id)
     ).fetchone()[0]
-    topicos_concluidos_4sem = conn.execute(
-        "SELECT COUNT(DISTINCT data) FROM streaks WHERE data >= ? AND (horas_estudadas > 0) AND user_id = ?",
-        (quatro_semanas, user_id)
-    ).fetchone()[0]
 
     horas_por_dia_atual = horas_4sem / 28 if horas_4sem > 0 else 0
-    topicos_por_dia_atual = (horas_4sem * 2) / 28  # ~2 tópicos/hora estimativa
 
     # Necessidade
     topicos_por_dia_necessario = topicos_pendentes / max(dias_prova, 1)
@@ -380,7 +374,7 @@ def _generate_micro_goals(conn, user_id: int, materias_foco: list) -> list:
 # INTELIGÊNCIA 7: HORÁRIO ÓTIMO
 # ============================================================
 
-def _detect_optimal_hours(conn, user_id: int) -> Optional[dict]:
+def _detect_optimal_hours(conn, user_id: int) -> dict | None:
     """Analisa horários de estudo para sugerir o melhor período do dia."""
     try:
         # Sessões com created_at (timestamp completo)
@@ -447,8 +441,8 @@ def _detect_optimal_hours(conn, user_id: int) -> Optional[dict]:
 # INTELIGÊNCIA 8: SPRINT MODE (< 30 DIAS)
 # ============================================================
 
-def _get_sprint_mode(conn, user_id: int, dias_prova: Optional[int],
-                     edital_nome: str = "", cargo: str = "") -> Optional[dict]:
+def _get_sprint_mode(conn, user_id: int, dias_prova: int | None,
+                     edital_nome: str = "", cargo: str = "") -> dict | None:
     """Quando prova < 30 dias, gera plano de revisão intensiva."""
     if dias_prova is None or dias_prova > 30:
         return None
@@ -542,7 +536,7 @@ def _get_study_gaps(conn, desempenho: dict, ultima_sessao: dict, materias_ciclo:
 
 
 def _calculate_readiness_score(pct_acerto: float, pct_edital: float, dias_semana: int,
-                               ritmo: Optional[dict] = None, plateaus: list = None) -> tuple:
+                               ritmo: dict | None = None, plateaus: list = None) -> tuple:
     """Score de prontidão enriquecido com ritmo e platôs."""
     score = (pct_acerto * WEIGHT_ACCURACY) + (pct_edital * WEIGHT_PROGRESS) + (dias_semana / 7 * 100 * WEIGHT_CONSISTENCY)
 
@@ -762,7 +756,7 @@ def _distribute_time(conn, top_materias: list, tempo_restante: int, ordem: int,
         if cargo:
             topicos_query += " AND cargo = ?"
             topicos_params.append(cargo)
-        topicos_query += f" LIMIT 3"
+        topicos_query += " LIMIT 3"
         topicos = [r[0] for r in conn.execute(topicos_query, topicos_params).fetchall()]
 
         if tempo_estudo >= 10:

@@ -1,14 +1,19 @@
 """CRUD de questões: listar, obter, criar, editar, deletar, responder, vincular lote."""
-from datetime import date, timedelta
 
+from deps import get_user_id
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from sanitize import sanitize_input
+from schemas import (
+    QuestaoCreate,
+    QuestaoResponse,
+    QuestaoResposta,
+    QuestaoRespostaResponse,
+    QuestionLinkBatch,
+    QuestionUpdate,
+)
 
 from database import get_db_session
-from deps import get_user_id
 from logger import log
-from sanitize import sanitize_input
-from schemas import QuestaoCreate, QuestaoResponse, QuestaoResposta, QuestaoRespostaResponse
-from schemas import QuestionLinkBatch, QuestionUpdate
 from utils import sql_paginate, today_str, update_streak
 
 router = APIRouter()
@@ -103,7 +108,7 @@ def _schedule_question_review(conn, questao_id: int, user_id: int, acertou: int,
     - Se questão já está em erros_revisao e acertou → atualiza com spacing maior
     """
     try:
-        from fsrs import FSRSCard, review_card, RATING_AGAIN, RATING_HARD, RATING_GOOD, RATING_EASY
+        from fsrs import RATING_AGAIN, RATING_EASY, RATING_GOOD, RATING_HARD, FSRSCard, review_card
 
         # Buscar dados existentes de revisão para esta questão
         existing = conn.execute("""

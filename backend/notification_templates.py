@@ -1,6 +1,5 @@
 """Smart notification templates with personality and escalating urgency."""
 import random
-from datetime import date, timedelta
 
 # ============================================================
 # NOTIFICATION PERSONALITY: Motivational study coach

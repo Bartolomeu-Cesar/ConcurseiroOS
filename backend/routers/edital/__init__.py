@@ -7,11 +7,11 @@ Edital router package — modularizado em:
 from fastapi import APIRouter
 
 from .core import router as core_router
-from .revisao import router as revisao_router
-from .mastery import router as mastery_router
 
 # Re-export para compatibilidade: questoes/core.py importa "from routers.edital import _update_single_mastery"
 from .mastery import _update_single_mastery  # noqa: F401
+from .mastery import router as mastery_router
+from .revisao import router as revisao_router
 
 router = APIRouter(prefix="", tags=["Edital"])
 

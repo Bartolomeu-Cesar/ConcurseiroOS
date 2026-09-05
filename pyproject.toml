@@ -22,6 +22,8 @@ ignore = [
     "SIM115", # open file with context handler (tempfile patterns)
     "SIM105", # suppressible exception (try/except pass for migrations)
     "SIM108", # if-else-block-instead-of-if-exp (readability preference)
+    "SIM401", # use dict.get — INCOMPATÍVEL: linhas vêm de sqlite3.Row, que não tem .get()
+    "SIM118", # key in dict — INCOMPATÍVEL: em sqlite3.Row, 'x in row' checa VALORES, não colunas; usar 'x in row.keys()'
 ]
 
 [tool.ruff.lint.isort]

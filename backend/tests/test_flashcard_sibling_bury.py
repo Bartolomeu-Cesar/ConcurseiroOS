@@ -37,10 +37,10 @@ from database import get_db_session
 database.DB_PATH = _tmp_db.name
 database.init_db()
 
-from fastapi.testclient import TestClient
-
 from deps import get_user_id
+from fastapi.testclient import TestClient
 from main import app
+
 from utils import today_str
 
 _UID = 1

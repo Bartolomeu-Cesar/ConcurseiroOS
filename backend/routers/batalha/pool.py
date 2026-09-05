@@ -1,8 +1,8 @@
 """Endpoint de polling global — GET /api/batalha/pendente."""
+from deps import get_user_id
 from fastapi import APIRouter, Depends
 
 from database import get_db_session
-from deps import get_user_id
 
 from .helpers import _ensure_battle_tables
 

@@ -106,7 +106,4 @@ def is_safe_filename(name: str) -> bool:
     # Rejeita nomes que são devices reservados no Windows
     reserved = {"CON", "PRN", "AUX", "NUL"} | {f"COM{i}" for i in range(1, 10)} | {f"LPT{i}" for i in range(1, 10)}
     stem = name.split(".")[0].upper()
-    if stem in reserved:
-        return False
-
-    return True
+    return stem not in reserved

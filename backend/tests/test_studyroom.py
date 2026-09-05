@@ -9,7 +9,6 @@ import os
 import sqlite3
 import sys
 import tempfile
-import time
 from datetime import datetime, timedelta
 
 import pytest

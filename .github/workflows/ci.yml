@@ -24,7 +24,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           grep -v "psycopg2-binary" backend/requirements.txt | pip install -r /dev/stdin
-          pip install ruff pytest
+          pip install ruff==0.16.3 pytest
 
       - name: Lint with ruff
         run: ruff check backend/

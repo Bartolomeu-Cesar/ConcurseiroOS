@@ -20,16 +20,15 @@ os.environ["AUTH_ENABLED"] = "false"
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import database
-from database import get_db_session
 import settings as settings_mod
+from database import get_db_session
 
 database.DB_PATH = _tmp_db.name
 settings_mod.settings.DB_PATH = _tmp_db.name
 database.init_db()
 
-from fastapi.testclient import TestClient
-
 from deps import get_user_id
+from fastapi.testclient import TestClient
 from main import app
 
 

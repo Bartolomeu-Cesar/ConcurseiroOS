@@ -1,13 +1,13 @@
 """Study Groups: CRUD, membros, ranking, desafios."""
 import json
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
-
-from database import get_db_session
 from deps import get_user_id
-from logger import log
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sanitize import sanitize_input
 from schemas import AddMemberRequest, ChangeMemberRoleRequest
+
+from database import get_db_session
+from logger import log
 from utils import today_str
 
 from .helpers import CreateGroupRequest, GroupChallengeRequest, _is_group_admin
@@ -290,7 +290,7 @@ def add_member_to_group(
     db.commit()
 
     log.info(f"[social] member added: user={tid} to group={id} by user={user_id}")
-    return {"message": f"Membro adicionado ao grupo com sucesso.", "user_id": tid, "nome": target["nome"]}
+    return {"message": "Membro adicionado ao grupo com sucesso.", "user_id": tid, "nome": target["nome"]}
 
 
 @router.get("/api/social/groups/{id}/members", summary="Listar membros do grupo")

@@ -1,11 +1,11 @@
 from datetime import date
 
+from deps import get_user_id
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from schemas import CicloCreate, CicloHoras, CicloUpdate
 
 from database import get_db_session
-from deps import get_user_id
 from logger import log
-from schemas import CicloCreate, CicloHoras, CicloUpdate
 from utils import today_str
 
 router = APIRouter(prefix="", tags=["Ciclo de Estudos"])
@@ -360,7 +360,6 @@ def importar_ciclo(file: UploadFile = File(...), conn=Depends(get_db_session), u
             description="Retorna ciclos diário, semanal, mensal e completo com priorização inteligente")
 def ciclo_visao(horas_dia: float = Query(default=3.0), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Gera 4 visões do ciclo: diário, semanal, mensal, completo."""
-    from datetime import timedelta
     import re
 
     ciclo = conn.execute("SELECT * FROM ciclo_estudos WHERE ativo = 1 AND user_id = ? ORDER BY ordem", (user_id,)).fetchall()

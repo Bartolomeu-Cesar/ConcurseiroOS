@@ -11,14 +11,58 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import JSONResponse
-from starlette.exceptions import HTTPException as StarletteHTTPException
-from routers import (
-    adaptive, analytics, auth, bookmarks, cadernos, calendario, ciclo, dashboard,
-    desafios, edital, error_analysis, fatigue, feynman, flashcards, generation, knowledge_graph, milestones, misc, notas, notifications, pagamentos, pdf,
-    planejador, questoes, simulados, spacing, streaks, sumulas, treinador, trilha,
-    leagues, ai_tutor, social, batalha, admin, studyroom, study_intelligence, sidebar, vademecum, catalogo, revisao, destaques
+from middleware import (
+    AccessLogMiddleware,
+    RequestIdMiddleware,
+    generic_exception_handler,
+    http_exception_handler,
+    validation_exception_handler,
 )
+from routers import (
+    adaptive,
+    admin,
+    ai_tutor,
+    analytics,
+    auth,
+    batalha,
+    bookmarks,
+    cadernos,
+    calendario,
+    catalogo,
+    ciclo,
+    dashboard,
+    desafios,
+    destaques,
+    edital,
+    error_analysis,
+    fatigue,
+    feynman,
+    flashcards,
+    generation,
+    knowledge_graph,
+    leagues,
+    milestones,
+    misc,
+    notas,
+    notifications,
+    pagamentos,
+    pdf,
+    planejador,
+    questoes,
+    revisao,
+    sidebar,
+    simulados,
+    social,
+    spacing,
+    streaks,
+    study_intelligence,
+    studyroom,
+    sumulas,
+    treinador,
+    trilha,
+    vademecum,
+)
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
 from starlette.responses import Response
@@ -27,13 +71,6 @@ from starlette.types import Scope
 
 from database import init_db
 from logger import log
-from middleware import (
-    AccessLogMiddleware,
-    RequestIdMiddleware,
-    generic_exception_handler,
-    http_exception_handler,
-    validation_exception_handler,
-)
 from settings import settings
 
 # ============================================================
@@ -188,7 +225,6 @@ if settings.SENTRY_DSN:
 # ============================================================
 
 from rate_limit import RateLimitMiddleware  # noqa: E402
-
 
 # ============================================================
 # SECURITY HEADERS MIDDLEWARE

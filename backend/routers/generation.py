@@ -6,15 +6,14 @@ onde o aluno responde SEM ver alternativas.
 """
 import re
 import unicodedata
-from datetime import date
 from difflib import SequenceMatcher
 
+from deps import get_user_id
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from schemas import ResponderGeracaoRequest
 
 from database import get_db_session
-from deps import get_user_id
 from logger import log
-from schemas import ResponderGeracaoRequest
 from utils import today_str, update_streak
 
 router = APIRouter(prefix="", tags=["Generation Mode"])
@@ -433,9 +432,9 @@ def gerar_questoes_ia(
     # Buscar configuração de IA do usuário
     try:
         from routers.ai_tutor import _get_ai_config, call_llm_sync
-        config = _get_ai_config()
+        _get_ai_config()
     except Exception:
-        raise HTTPException(400, "Configure a IA nas configurações (API key necessária).")
+        raise HTTPException(400, "Configure a IA nas configurações (API key necessária).") from None
 
     # Buscar contexto do edital para melhorar a geração
     contexto_topicos = ""
@@ -503,7 +502,7 @@ REGRAS:
     try:
         resposta = call_llm_sync(prompt)
     except Exception as e:
-        raise HTTPException(500, f"Erro ao chamar IA: {str(e)}")
+        raise HTTPException(500, f"Erro ao chamar IA: {str(e)}") from e
 
     # Parse JSON da resposta
     import json
@@ -517,7 +516,7 @@ REGRAS:
             questoes_geradas = json.loads(resposta)
     except json.JSONDecodeError:
         # Tentar parse linha a linha
-        raise HTTPException(500, "IA retornou formato inválido. Tente novamente.")
+        raise HTTPException(500, "IA retornou formato inválido. Tente novamente.") from None
 
     # Validar e normalizar
     questoes_validas = []
@@ -558,7 +557,6 @@ def salvar_questoes_ia(
     user_id: int = Depends(get_user_id),
 ):
     """Salva questões geradas pela IA no banco de questões do usuário."""
-    from datetime import datetime
     count = 0
     for q in questoes:
         if not q.get("enunciado"):

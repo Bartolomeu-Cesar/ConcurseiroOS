@@ -1,18 +1,13 @@
 """Social helpers: Pydantic models e funções auxiliares."""
-import json
-from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Any
 
 from pydantic import BaseModel
-
-from logger import log
-
 
 # === Pydantic Models ===
 
 class AddFriendRequest(BaseModel):
-    email: Optional[str] = None
-    user_id: Optional[int] = None
+    email: str | None = None
+    user_id: int | None = None
 
 
 class CreateGroupRequest(BaseModel):
@@ -33,7 +28,7 @@ class GroupChallengeRequest(BaseModel):
 class PostActivityRequest(BaseModel):
     tipo: str
     descricao: str
-    dados: Dict[str, Any] = {}
+    dados: dict[str, Any] = {}
 
 
 # ============================================================
@@ -109,7 +104,7 @@ def _can_view_profile(db, viewer_id: int, target_id: int) -> bool:
     return _are_friends(db, viewer_id, target_id) or _share_group(db, viewer_id, target_id)
 
 
-def _get_friend_ids(db, user_id: int) -> List[int]:
+def _get_friend_ids(db, user_id: int) -> list[int]:
     """Get list of friend user IDs for a user."""
     try:
         rows = db.execute(

@@ -1,13 +1,13 @@
 """Router da Técnica Feynman."""
 from datetime import datetime
 
-from fastapi import APIRouter, Depends
-
-from database import get_db_session
 from deps import get_user_id
-from logger import log
+from fastapi import APIRouter, Depends
 from sanitize import sanitize_input
 from schemas import FeynmanCreate
+
+from database import get_db_session
+from logger import log
 
 router = APIRouter(prefix="", tags=["Feynman"])
 

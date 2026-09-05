@@ -1,12 +1,10 @@
 """Metas adaptativas e detecção de platô."""
-from datetime import date, timedelta
+from datetime import date
 
+from deps import get_user_id
 from fastapi import APIRouter, Body, Depends
 
 from database import get_db_session
-from deps import get_user_id
-from logger import log
-from utils import today_str
 
 router = APIRouter(prefix="", tags=["Study Intelligence"])
 
@@ -26,8 +24,8 @@ def meta_adaptativa(conn=Depends(get_db_session), user_id: int = Depends(get_use
     - Projeção: no ritmo atual, cobrirá X% do edital até a prova
     - Sugestão: para 100%, precisa aumentar para Y
     """
-    from datetime import timedelta
     import re
+    from datetime import timedelta
 
     hoje = date.today()
     inicio_semana_passada = (hoje - timedelta(days=hoje.weekday() + 7)).isoformat()

@@ -3,20 +3,20 @@ import json
 import random
 from datetime import datetime
 
-from fastapi import APIRouter, Body, Depends, HTTPException
-
-from database import get_db_session
 from deps import get_user_id
-from logger import log
+from fastapi import APIRouter, Depends, HTTPException
 from sanitize import sanitize_input
 from schemas import CriarBatalhaRequest, EntrarBatalhaRequest, ReconfigurarBatalhaRequest
 
+from database import get_db_session
+from logger import log
+
 from .helpers import (
+    _calcular_tempo_questao_batalha,
     _ensure_battle_tables,
     _generate_code,
     _is_battle_admin,
     _round_difficulty,
-    _calcular_tempo_questao_batalha,
 )
 
 router = APIRouter(prefix="/api/batalha", tags=["Batalha de Questões"])
@@ -38,7 +38,7 @@ def criar_batalha(
     _ensure_battle_tables(conn)
 
     # Verificar plano do usuário
-    from plans import get_limits, check_feature, PLANS, get_plan
+    from plans import PLANS, get_limits, get_plan
     user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
     user_dict = dict(user) if user else {}
     limites = get_limits(user_dict)
@@ -160,7 +160,7 @@ def entrar_batalha(
     conn.commit()
 
     log.info(f"[batalha] {nome} entrou na sala {codigo}")
-    return {"message": f"Bem-vindo à batalha!", "battle_id": battle["id"], "codigo": codigo}
+    return {"message": "Bem-vindo à batalha!", "battle_id": battle["id"], "codigo": codigo}
 
 
 @router.get("/sala/{codigo}", summary="Status da sala",

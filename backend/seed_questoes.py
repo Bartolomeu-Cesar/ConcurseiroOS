@@ -5,8 +5,8 @@ Executar: python3 seed_questoes.py
 Adiciona 50 questões variadas de Direito Constitucional, Administrativo e Português.
 """
 import os
-import sys
 import sqlite3
+import sys
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -618,8 +618,8 @@ def main():
             continue
 
         conn.execute("""
-            INSERT INTO questoes (materia, topico, enunciado, alternativa_a, alternativa_b, 
-                                  alternativa_c, alternativa_d, alternativa_e, resposta_correta, 
+            INSERT INTO questoes (materia, topico, enunciado, alternativa_a, alternativa_b,
+                                  alternativa_c, alternativa_d, alternativa_e, resposta_correta,
                                   dificuldade, banca, user_id, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
         """, (
@@ -637,11 +637,11 @@ def main():
     # Estatísticas finais
     total = conn.execute("SELECT COUNT(*) FROM questoes WHERE user_id = 1").fetchone()[0]
     por_materia = conn.execute("""
-        SELECT materia, COUNT(*) as cnt FROM questoes WHERE user_id = 1 
+        SELECT materia, COUNT(*) as cnt FROM questoes WHERE user_id = 1
         GROUP BY materia ORDER BY cnt DESC
     """).fetchall()
     por_dif = conn.execute("""
-        SELECT dificuldade, COUNT(*) as cnt FROM questoes WHERE user_id = 1 
+        SELECT dificuldade, COUNT(*) as cnt FROM questoes WHERE user_id = 1
         GROUP BY dificuldade ORDER BY cnt DESC
     """).fetchall()
     com_resp = conn.execute("""
@@ -653,10 +653,10 @@ def main():
     print(f"✅ {inserted} questões inseridas (duplicatas ignoradas)")
     print(f"\n📊 Total de questões: {total}")
     print(f"   Com gabarito: {com_resp} ({100*com_resp//total}%)")
-    print(f"\n📚 Por matéria:")
+    print("\n📚 Por matéria:")
     for m in por_materia:
         print(f"   {m[0]}: {m[1]}")
-    print(f"\n🎯 Por dificuldade:")
+    print("\n🎯 Por dificuldade:")
     for d in por_dif:
         print(f"   {d[0] or '(vazio)'}: {d[1]}")
     print(f"\n🎮 Batalhas: prontas para até {com_resp//3} rodadas sem repetição")

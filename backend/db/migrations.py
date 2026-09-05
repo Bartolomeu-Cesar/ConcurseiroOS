@@ -9,7 +9,6 @@ from datetime import datetime
 
 from logger import log
 
-
 # ============================================================
 # REGISTRO DE MIGRATIONS — cada entrada é (número, função)
 # ============================================================
@@ -862,9 +861,10 @@ def _m68_pdf_ownership(conn):
 
     # (b) paths presentes no disco (PDF_ROOT), via build_tree
     try:
+        from pathlib import Path as _Path
+
         from settings import settings
         from utils import build_tree
-        from pathlib import Path as _Path
 
         root = settings.PDF_ROOT
         if root and _Path(root).exists():
@@ -1082,9 +1082,10 @@ def _m75_pdf_path_completo(conn):
     (evita ambiguidade entre nomes duplicados em pastas diferentes).
     """
     try:
+        from pathlib import Path as _Path
+
         from settings import settings
         from utils import build_tree
-        from pathlib import Path as _Path
     except Exception as e:  # pragma: no cover
         log.warning(f"Migration 75: imports indisponíveis, pulando: {e}")
         return

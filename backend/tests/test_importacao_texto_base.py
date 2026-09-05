@@ -31,7 +31,6 @@ from routers.questoes.importacao import (
     _parse_qconcursos,
 )
 
-
 # Amostra representativa do formato Estratégia Concursos (2 questões: múltipla + C/E)
 _ESTRATEGIA_SAMPLE = """
 Questão 1

@@ -8,12 +8,9 @@ Usage:
 
 from __future__ import annotations
 
-from typing import Optional
-
 from pydantic import BaseModel, EmailStr, Field
 
 from constants import SM2_INITIAL_EF
-
 
 # ============================================================
 # PDF Progress
@@ -680,14 +677,14 @@ class AdminCreateUser(BaseModel):
 class AdminUpdateUser(BaseModel):
     """PUT /api/admin/users/{id} body — all fields optional."""
 
-    email: Optional[EmailStr] = None
-    nome: Optional[str] = None
-    username: Optional[str] = None
-    plano: Optional[str] = None
-    plano_expira: Optional[str] = None
-    avatar: Optional[str] = None
-    role: Optional[str] = None
-    password: Optional[str] = None
+    email: EmailStr | None = None
+    nome: str | None = None
+    username: str | None = None
+    plano: str | None = None
+    plano_expira: str | None = None
+    avatar: str | None = None
+    role: str | None = None
+    password: str | None = None
 
 
 class AdminBulkAction(BaseModel):
@@ -724,16 +721,16 @@ class EntrarBatalhaRequest(BaseModel):
     """POST /api/batalha/entrar body."""
 
     codigo: str
-    nome: Optional[str] = None
+    nome: str | None = None
 
 
 class ReconfigurarBatalhaRequest(BaseModel):
     """POST /api/batalha/reconfigurar/{codigo} body."""
 
-    materias: Optional[list[str]] = None
-    total_rodadas: Optional[int] = None
-    tempo_por_questao: Optional[int] = None
-    max_jogadores: Optional[int] = None
+    materias: list[str] | None = None
+    total_rodadas: int | None = None
+    tempo_por_questao: int | None = None
+    max_jogadores: int | None = None
 
 
 class IniciarBatalhaRequest(BaseModel):
@@ -757,7 +754,7 @@ class ResponderRodadaRequest(BaseModel):
 class AtividadeConcluidaRequest(BaseModel):
     """POST /api/calendario/atividade-concluida body."""
 
-    data: Optional[str] = None
+    data: str | None = None
     dia_semana: int = 0
     materia: str = ""
     tipo: str = "estudo"
@@ -769,7 +766,7 @@ class AtividadeConcluidaRequest(BaseModel):
 class DesmarcarAtividadeRequest(BaseModel):
     """DELETE /api/calendario/atividade-concluida body."""
 
-    data: Optional[str] = None
+    data: str | None = None
     materia: str = ""
     tipo: str = "estudo"
     total_atividades: int = 0
@@ -778,7 +775,7 @@ class DesmarcarAtividadeRequest(BaseModel):
 class SalvarQuestaoDissertativaRequest(BaseModel):
     """POST /api/questao-dissertativa/salvar body."""
 
-    edital_id: Optional[int] = None
+    edital_id: int | None = None
     resposta: str = ""
     confianca: int = 3
     materia: str = ""
@@ -795,7 +792,7 @@ class ResetInteligenteRequest(BaseModel):
 
     edital_nome: str = ""
     cargo: str = ""
-    horas_dia: Optional[float] = None
+    horas_dia: float | None = None
 
 
 # ============================================================
@@ -806,20 +803,20 @@ class ResetInteligenteRequest(BaseModel):
 class UpdateEditalInfoRequest(BaseModel):
     """PUT /api/edital/info/{id} body."""
 
-    edital_nome: Optional[str] = None
-    cargo: Optional[str] = None
-    orgao: Optional[str] = None
-    banca: Optional[str] = None
-    vagas: Optional[str] = None
-    subsidio: Optional[str] = None
-    inscricoes: Optional[str] = None
-    data_prova_objetiva: Optional[str] = None
-    data_prova_discursiva: Optional[str] = None
-    horario: Optional[str] = None
-    local_prova: Optional[str] = None
-    taxa_inscricao: Optional[str] = None
-    link_edital: Optional[str] = None
-    observacoes: Optional[str] = None
+    edital_nome: str | None = None
+    cargo: str | None = None
+    orgao: str | None = None
+    banca: str | None = None
+    vagas: str | None = None
+    subsidio: str | None = None
+    inscricoes: str | None = None
+    data_prova_objetiva: str | None = None
+    data_prova_discursiva: str | None = None
+    horario: str | None = None
+    local_prova: str | None = None
+    taxa_inscricao: str | None = None
+    link_edital: str | None = None
+    observacoes: str | None = None
 
 
 class CreateEditalInfoRequest(BaseModel):
@@ -872,7 +869,7 @@ class AddMemberRequest(BaseModel):
     """POST /api/social/groups/{id}/add-member body."""
 
     email: str = ""
-    user_id: Optional[int] = None
+    user_id: int | None = None
     username: str = ""
 
 
@@ -899,7 +896,7 @@ class HeartbeatRequest(BaseModel):
 class StartSessionRequest(BaseModel):
     """POST /api/sessao/iniciar body."""
 
-    materia: Optional[str] = None
+    materia: str | None = None
     tipo: str = "questoes"
 
 
@@ -923,7 +920,7 @@ class ResponderGeracaoRequest(BaseModel):
 class IniciarAdaptativaRequest(BaseModel):
     """POST /api/sessao-adaptativa/iniciar body."""
 
-    materia: Optional[str] = None
+    materia: str | None = None
     total_questoes: int = 20
 
 

@@ -30,7 +30,6 @@ settings_mod.settings.DB_PATH = _tmp_db.name
 database.init_db()
 
 from fastapi.testclient import TestClient
-
 from main import app
 
 

@@ -1,11 +1,11 @@
 """Endpoints de Error Analysis — categorizar por que errou."""
 from datetime import datetime
 
+from deps import get_user_id
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from sanitize import sanitize_input
 
 from database import get_db_session
-from deps import get_user_id
-from sanitize import sanitize_input
 
 router = APIRouter(prefix="", tags=["Error Analysis"])
 

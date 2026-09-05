@@ -5,11 +5,10 @@ marcos em 25%, 50%, 75% e 100% geram motivação e senso de progresso.
 """
 from datetime import datetime
 
+from deps import get_user_id
 from fastapi import APIRouter, Depends
 
 from database import get_db_session
-from deps import get_user_id
-from utils import today_str
 
 router = APIRouter(prefix="", tags=["Progress Milestones"])
 

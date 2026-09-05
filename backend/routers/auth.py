@@ -9,12 +9,19 @@ from email.mime.text import MIMEText
 
 import bcrypt
 import jwt
-from fastapi import APIRouter, Body, Depends, HTTPException, Header, Request
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Request
+from sanitize import sanitize_input
+from schemas import (
+    LoginRequest,
+    ProfileUpdateRequest,
+    RefreshTokenRequest,
+    RegisterRequest,
+    UpgradePlanRequest,
+    VerifyCodeRequest,
+)
 
 from database import get_db_session
 from logger import log
-from sanitize import sanitize_input
-from schemas import LoginRequest, RegisterRequest, VerifyCodeRequest, ProfileUpdateRequest, UpgradePlanRequest, RefreshTokenRequest
 from settings import settings
 
 router = APIRouter(prefix="/api/auth", tags=["Autenticação"])
@@ -64,9 +71,9 @@ def _decode_token(token: str) -> dict:
     try:
         return jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expirado")
+        raise HTTPException(status_code=401, detail="Token expirado") from None
     except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Token inválido")
+        raise HTTPException(status_code=401, detail="Token inválido") from None
 
 
 def _bloquear_se_conta_inativa(conn, email: str):
@@ -393,9 +400,9 @@ def refresh_token(body: RefreshTokenRequest, conn=Depends(get_db_session)):
     try:
         payload = jwt.decode(body.refresh_token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Refresh token expirado. Faça login novamente.")
+        raise HTTPException(status_code=401, detail="Refresh token expirado. Faça login novamente.") from None
     except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Refresh token inválido")
+        raise HTTPException(status_code=401, detail="Refresh token inválido") from None
 
     # Validar que é um refresh token
     if payload.get("type") != "refresh":
@@ -423,7 +430,7 @@ def refresh_token(body: RefreshTokenRequest, conn=Depends(get_db_session)):
             description="Retorna perfil completo do usuário. Se não autenticado, retorna dados do usuário padrão (guest).")
 def get_me(user=Depends(get_optional_user), conn=Depends(get_db_session)):
     """Retorna dados do perfil do usuário autenticado (ou guest fallback)."""
-    from plans import get_plan, check_and_expire_plan
+    from plans import check_and_expire_plan
 
     if not user:
         # Fallback: return guest/default user info
@@ -494,7 +501,7 @@ def auth_status():
 
 # ==================== PLANOS ====================
 
-from plans import PLANS, get_plan, get_plan_info, get_limits, check_limit
+from plans import PLANS, check_limit, get_limits, get_plan, get_plan_info
 
 
 @router.get("/plans")
@@ -745,7 +752,7 @@ def ativar_creditos(
     body: {creditos: int} — quantos créditos gastar (mínimo 1 = 3 dias)
     Créditos residuais (saldo após ativação) ficam para próxima ativação.
     """
-    from plans import CREDIT_CONFIG, calcular_dias_creditos
+    from plans import calcular_dias_creditos
 
     creditos_usar = body.get("creditos", 0)
     if creditos_usar < 1:
@@ -828,7 +835,7 @@ def historico_creditos(user=Depends(get_current_user), conn=Depends(get_db_sessi
 @router.get("/check-limit/{recurso}")
 def check_resource_limit(recurso: str, user=Depends(get_optional_user), conn=Depends(get_db_session)):
     """Verifica se o usuário pode usar mais de um recurso específico."""
-    from deps import get_user_id, DEFAULT_USER_ID
+    from deps import DEFAULT_USER_ID
 
     # Determinar user_id para filtro
     uid = user["id"] if user else DEFAULT_USER_ID

@@ -3,7 +3,6 @@ import sqlite3
 from collections.abc import Generator
 from contextlib import contextmanager
 
-from logger import log
 from settings import settings
 
 DB_PATH = settings.DB_PATH

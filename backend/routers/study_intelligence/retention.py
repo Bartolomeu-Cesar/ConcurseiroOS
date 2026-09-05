@@ -1,13 +1,10 @@
 """Curva de esquecimento: forgetting curve, alerts de retenção, resumo."""
 from datetime import date, timedelta
-from typing import Optional
 
+from deps import get_user_id
 from fastapi import APIRouter, Depends, Query
 
 from database import get_db_session
-from deps import get_user_id
-from logger import log
-from utils import today_str
 
 router = APIRouter(prefix="", tags=["Study Intelligence"])
 
@@ -54,8 +51,8 @@ def _days_since_review(proxima_revisao: str, intervalo_dias: int, hoje: date) ->
 Retorna pontos de retenção projetados para os próximos 30 dias, agrupados por matéria.
 Use para identificar quando a retenção cai abaixo do target (90%).""")
 def forgetting_curve(
-    materia: Optional[str] = Query(None, description="Filtrar por matéria específica"),
-    topico_id: Optional[int] = Query(None, description="Filtrar por tópico do edital específico"),
+    materia: str | None = Query(None, description="Filtrar por matéria específica"),
+    topico_id: int | None = Query(None, description="Filtrar por tópico do edital específico"),
     conn=Depends(get_db_session),
     user_id: int = Depends(get_user_id),
 ):

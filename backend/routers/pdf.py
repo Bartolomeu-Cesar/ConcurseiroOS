@@ -2,12 +2,12 @@ import json
 import tempfile
 from pathlib import Path
 
+from deps import get_user_id
 from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
+from schemas import ProgressUpdate
 
 from database import get_db_session
-from deps import get_user_id
-from schemas import ProgressUpdate
 from utils import build_tree, get_pdf_pages
 
 router = APIRouter(prefix="", tags=["PDFs"])
@@ -237,7 +237,7 @@ def serve_pdf(path: str, conn=Depends(get_db_session), user_id: int = Depends(ge
     try:
         full.relative_to(Path(PDF_ROOT))
     except ValueError:
-        raise HTTPException(status_code=403, detail="Acesso negado")
+        raise HTTPException(status_code=403, detail="Acesso negado") from None
     # Resolve for actual file access
     resolved = full.resolve()
     if not resolved.exists() or resolved.suffix.lower() != ".pdf":
@@ -368,7 +368,7 @@ def delete_pdf(path: str, conn=Depends(get_db_session), user_id: int = Depends(g
     try:
         target.relative_to(Path(PDF_ROOT))
     except ValueError:
-        raise HTTPException(status_code=403, detail="Acesso negado")
+        raise HTTPException(status_code=403, detail="Acesso negado") from None
     if target.exists():
         target.unlink()
     conn.execute("DELETE FROM progress WHERE path = ?", (path,))
@@ -642,7 +642,7 @@ def compartilhar_pdf(
         if not is_admin:
             raise HTTPException(status_code=404, detail="PDF não encontrado ou sem dono registrado")
         # Valida que o arquivo existe no disco antes de registrar dono
-        if PDF_ROOT and ".." not in pdf_path and not pdf_path.startswith("/"):
+        if PDF_ROOT and ".." not in pdf_path and not pdf_path.startswith("/"):  # noqa: SIM102 (comentário entre os ifs; fundir reduz clareza)
             if not (Path(PDF_ROOT) / pdf_path).exists():
                 raise HTTPException(status_code=404, detail="Arquivo PDF não encontrado no disco")
         conn.execute(

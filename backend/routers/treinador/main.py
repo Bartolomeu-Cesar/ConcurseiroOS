@@ -1,10 +1,10 @@
 """Endpoint principal do Treinador Inteligente — GET /api/treinador."""
 from datetime import date, timedelta
 
+from deps import get_user_id
 from fastapi import APIRouter, Depends
 
 from database import get_db_session
-from deps import get_user_id
 from logger import log
 from utils import calculate_streak, today_str
 

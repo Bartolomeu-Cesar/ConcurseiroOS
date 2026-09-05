@@ -13,11 +13,16 @@ _DATABASE_URL = os.environ.get("DATABASE_URL", "")
 _USE_PG = _DATABASE_URL.startswith("postgresql://") or _DATABASE_URL.startswith("postgres://")
 
 if _USE_PG:
-    from database_pg import get_db, get_db_session, init_db  # noqa: F811, F401
-    from database_pg import rebuild_search_index, DB_PATH  # noqa: F811, F401
+    from database_pg import (  # noqa: F811, F401  # noqa: F811, F401
+        DB_PATH,
+        get_db,
+        get_db_session,
+        init_db,
+        rebuild_search_index,
+    )
 else:
-    from db import get_db, get_db_session, init_db, rebuild_search_index  # noqa: F401
     import db.connection as _connection
+    from db import get_db, get_db_session, init_db, rebuild_search_index  # noqa: F401
 
     DB_PATH = _connection.DB_PATH
 

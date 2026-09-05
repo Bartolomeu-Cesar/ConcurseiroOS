@@ -13,11 +13,11 @@ import math
 import uuid
 from datetime import datetime
 
+from deps import get_user_id
 from fastapi import APIRouter, Depends, HTTPException
+from schemas import IniciarAdaptativaRequest, ResponderAdaptativaRequest
 
 from database import get_db_session
-from deps import get_user_id
-from schemas import IniciarAdaptativaRequest, ResponderAdaptativaRequest
 
 router = APIRouter(tags=["Sessão Adaptativa"])
 

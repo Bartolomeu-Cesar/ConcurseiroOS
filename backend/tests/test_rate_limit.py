@@ -6,6 +6,7 @@ os.environ.setdefault("AUTH_ENABLED", "false")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from rate_limit import classify_endpoint
+
 from settings import settings
 
 

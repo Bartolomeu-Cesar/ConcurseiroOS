@@ -3,12 +3,12 @@ import json
 import random
 from datetime import datetime
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from deps import get_user_id
+from fastapi import APIRouter, Depends, HTTPException
+from schemas import IniciarBatalhaRequest, ResponderRodadaRequest
 
 from database import get_db_session
-from deps import get_user_id
 from logger import log
-from schemas import IniciarBatalhaRequest, ResponderRodadaRequest
 from utils import today_str
 
 from .helpers import _calculate_points, _ensure_battle_tables, _is_battle_admin

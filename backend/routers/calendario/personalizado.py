@@ -1,13 +1,13 @@
 """Calendário personalizado: CRUD, atividades concluídas, streak."""
 from datetime import date, datetime, timedelta
 
+from deps import get_user_id
 from fastapi import APIRouter, Body, Depends
+from sanitize import sanitize_input
+from schemas import AtividadeConcluidaRequest, CalendarioItem, DesmarcarAtividadeRequest
 
 from database import get_db_session
-from deps import get_user_id
 from logger import log
-from sanitize import sanitize_input
-from schemas import CalendarioItem, AtividadeConcluidaRequest, DesmarcarAtividadeRequest
 from utils import today_str
 
 router = APIRouter(prefix="", tags=["Calendário"])

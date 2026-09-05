@@ -18,7 +18,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils import calcular_tempo_flashcard as calc
 
-
 # ---------------------------------------------------------------------------
 # Unitários da função de tempo
 # ---------------------------------------------------------------------------

@@ -2,11 +2,11 @@
 import time
 from datetime import date, timedelta
 
+from deps import get_user_id
 from fastapi import APIRouter, Depends
+from schemas import DashboardResponse
 
 from database import get_db_session
-from deps import get_user_id
-from schemas import DashboardResponse
 from utils import today_str
 
 router = APIRouter(prefix="", tags=["Dashboard"])
@@ -80,7 +80,6 @@ def get_dashboard(conn=Depends(get_db_session), user_id: int = Depends(get_user_
         edital_concluido = conn.execute(
             f"SELECT COUNT(*) FROM edital WHERE status = 'Concluído' AND arquivado = 0 AND user_id = ?{cond}", tuple(params)
         ).fetchone()[0]
-        has_ciclo = True  # já resolvido pelo alvo, pula a heurística abaixo
     elif conn.execute("SELECT COUNT(*) FROM ciclo_estudos WHERE ativo = 1 AND user_id = ?", (user_id,)).fetchone()[0]:
         # Matérias do ciclo
         materias_ciclo = [r[0] for r in conn.execute(

@@ -1,9 +1,9 @@
 """Estatísticas de questões: stats gerais, por banca, tempo, listagens de bancas/provas/datas."""
+from deps import get_user_id
 from fastapi import APIRouter, Depends, HTTPException
 
 from constants import DEFAULT_EXAM_DURATION_MIN, DEFAULT_EXAM_QUESTIONS, DEFAULT_TIME_PER_QUESTION_SEC
 from database import get_db_session
-from deps import get_user_id
 from logger import log
 
 router = APIRouter()

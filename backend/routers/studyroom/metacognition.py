@@ -2,10 +2,10 @@
 import random
 from datetime import datetime
 
+from deps import get_user_id
 from fastapi import APIRouter, Body, Depends, HTTPException
 
 from database import get_db_session
-from deps import get_user_id
 from logger import log
 
 from .tables import ensure_intention_tables, ensure_reflection_tables, ensure_studyroom_tables, run_studyroom_migrations
@@ -327,8 +327,8 @@ def get_session_summary(
             pass
 
     # Calcular ciclos completados
-    ciclo_foco = (room.get("ciclo_foco_min") or 25) * 60
-    ciclo_pausa = (room.get("ciclo_pausa_min") or 5) * 60
+    ciclo_foco = ((room["ciclo_foco_min"] if "ciclo_foco_min" in room.keys() else None) or 25) * 60
+    ciclo_pausa = ((room["ciclo_pausa_min"] if "ciclo_pausa_min" in room.keys() else None) or 5) * 60
     ciclo_completo = ciclo_foco + ciclo_pausa
     ciclos_completados = tempo_total // ciclo_completo if ciclo_completo > 0 else 0
 

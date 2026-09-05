@@ -6,10 +6,10 @@ import os
 import re
 import tempfile
 
+from deps import get_user_id
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile
 
 from database import get_db_session
-from deps import get_user_id
 from logger import log
 from utils import today_str
 
@@ -202,8 +202,8 @@ def _extrair_texto_pdf(file_path: str) -> str:
 
     if len(texto.strip()) < 100:
         try:
-            from pdf2image import convert_from_path
             import pytesseract
+            from pdf2image import convert_from_path
             log.info("PDF sem texto selecionável, usando OCR...")
             images = convert_from_path(file_path, dpi=300)
             texto = ""
@@ -570,7 +570,6 @@ def _parse_qconcursos(texto: str, materia_override: str = "") -> list:
             continue
 
         quest_num += 1
-        ano = header_match.group(1)
         banca_q = header_match.group(2).strip().rstrip('Óó')
         banca_q = re.sub(r'[ÓO]rg[ãa]o.*$', '', banca_q, flags=re.IGNORECASE).strip()
 
@@ -639,9 +638,7 @@ def _is_cespe_format(texto: str) -> bool:
     score = sum(1 for p in indicators if re.search(p, texto[:3000]))
     items_numbered = len(re.findall(r'\n\s*\d{1,3}\s+[A-Z]', texto[:5000]))
     alternatives = len(re.findall(r'\n\s*\(?[A-E]\)', texto[:5000]))
-    if score >= 2 or (items_numbered > 5 and alternatives < 3):
-        return True
-    return False
+    return bool(score >= 2 or items_numbered > 5 and alternatives < 3)
 
 
 def _parse_cespe_cebraspe(texto: str, materia: str = "", banca: str = "CESPE") -> list:
@@ -681,7 +678,6 @@ def _parse_cespe_cebraspe(texto: str, materia: str = "", banca: str = "CESPE") -
 
     for i, match in enumerate(items):
         num = int(match.group(1))
-        start = match.start()
         end = items[i + 1].start() if i + 1 < len(items) else len(texto)
 
         bloco = texto[match.start():end].strip()
@@ -1019,7 +1015,7 @@ def _parse_questoes_texto(texto: str, materia: str = "", banca: str = "") -> lis
 
     quest_positions.sort(key=lambda x: x[0])
 
-    for i, (start, num, text_start) in enumerate(quest_positions):
+    for i, (_start, num, text_start) in enumerate(quest_positions):
         end = quest_positions[i + 1][0] if i + 1 < len(quest_positions) else len(texto_questoes)
         bloco = texto_questoes[text_start:end].strip()
 
@@ -1083,7 +1079,7 @@ def _parse_questoes_texto(texto: str, materia: str = "", banca: str = "") -> lis
                 detected_topico = l
                 break
             # Tópico: linhas como "Capacidade Eleitoral Ativa", "Direitos Políticos"
-            if re.match(r'^[A-Z][a-záàâãéèêíïóôõúü]', l) and not re.search(r'[.?!;]', l) and not re.search(r'(Tribunal|Nível|Quest|Técnico|Analista|Auditor|Guarda|Oficial|Prefeitura|FCC|VUNESP|FGV|Concurso)', l):
+            if re.match(r'^[A-Z][a-záàâãéèêíïóôõúü]', l) and not re.search(r'[.?!;]', l) and not re.search(r'(Tribunal|Nível|Quest|Técnico|Analista|Auditor|Guarda|Oficial|Prefeitura|FCC|VUNESP|FGV|Concurso)', l):  # noqa: SIM102 (comentário entre os ifs; fundir reduz clareza)
                 if len(l) < 60 and ' ' in l:
                     detected_topico = l
 
@@ -1136,12 +1132,12 @@ def _parse_questoes_texto(texto: str, materia: str = "", banca: str = "") -> lis
                 continue
             # Linhas curtas (<130 chars) que parecem cargo/órgão/prova
             # Heurística: contém nome de órgão/cargo e NÃO começa com artigo/preposição
-            if len(stripped) < 130 and re.search(r'(Tribunal|Técnico|Analista|Judiciar|Administrativ|Poder|União|Região|Oficial|Eleitoral|Trabalhist|Prefeitura|Município|Concurso|Auditor|Guarda|Procurador|Delegad|Saúde \(|Jurídica)', stripped):
+            if len(stripped) < 130 and re.search(r'(Tribunal|Técnico|Analista|Judiciar|Administrativ|Poder|União|Região|Oficial|Eleitoral|Trabalhist|Prefeitura|Município|Concurso|Auditor|Guarda|Procurador|Delegad|Saúde \(|Jurídica)', stripped):  # noqa: SIM102 (comentário entre os ifs; fundir reduz clareza)
                 # É cargo/órgão se NÃO começa com preposição/artigo/conector de frase
                 if not re.match(r'^(De |A |O |Os |As |No |Na |Nos |Nas |Em |Ao |Para |Com |Se |Que |É |São |Será |Segundo |Conforme |Acerca )', stripped):
                     continue
             # Linhas com "(Pref " ou "(TJ " ou "(TRF " etc — metadata de prova
-            if len(stripped) < 150 and re.search(r'\((?:Pref|TJ|TRF|TRT|TST|STF|STJ|TCU|TCE|CGM|SMF)\b', stripped):
+            if len(stripped) < 150 and re.search(r'\((?:Pref|TJ|TRF|TRT|TST|STF|STJ|TCU|TCE|CGM|SMF)\b', stripped):  # noqa: SIM102 (comentário entre os ifs; fundir reduz clareza)
                 if not re.match(r'^(De |A |O |Os |As |No |Na |Em |Ao |Para |Com |Se |Que |É )', stripped):
                     continue
             # "Essa questão possui comentário..."
@@ -1511,7 +1507,7 @@ async def aplicar_gabarito_pdf(
 
         aplicadas = 0
         anuladas = 0
-        for i, (qid, enunciado) in enumerate(questoes_prova):
+        for i, (qid, _enunciado) in enumerate(questoes_prova):
             num = i + 1
             if num in gabarito:
                 gab = gabarito[num]
@@ -1669,11 +1665,11 @@ async def importar_questoes_url(
                     gabarito_content = resp_gab.content
 
     except httpx.TimeoutException:
-        raise HTTPException(status_code=408, detail="Timeout ao baixar. Tente novamente ou use um link mais rápido.")
+        raise HTTPException(status_code=408, detail="Timeout ao baixar. Tente novamente ou use um link mais rápido.") from None
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro ao baixar: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro ao baixar: {str(e)}") from e
 
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
         tmp.write(prova_content)
@@ -1869,7 +1865,7 @@ def preview_importacao(
             texto = _extrair_texto_pdf(tmp.name)
         except Exception as e:
             os.unlink(tmp.name)
-            raise HTTPException(400, f"Erro ao ler PDF: {e}")
+            raise HTTPException(400, f"Erro ao ler PDF: {e}") from e
         finally:
             try:
                 os.unlink(tmp.name)

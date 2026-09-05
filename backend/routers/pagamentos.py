@@ -11,17 +11,17 @@ Configuração via variáveis de ambiente:
 - MERCADO_PAGO_WEBHOOK_SECRET: Para validar webhooks (opcional)
 - PIX_CHAVE: Chave PIX para recebimento (telefone, email, CPF ou aleatória)
 """
-import os
 import hashlib
 import hmac
-from datetime import datetime, timezone, timedelta
+import os
+from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request
-from database import get_db_session
 from deps import get_user_id
-from logger import log
-from utils import today_str
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from plans import CREDIT_CONFIG
+
+from database import get_db_session
+from logger import log
 
 router = APIRouter(prefix="/api/pagamentos", tags=["Pagamentos"])
 
@@ -155,7 +155,7 @@ def criar_pix_vitalicio(
     Verifica se a janela de venda está aberta antes de permitir a compra.
     body: {email: str (opcional)}
     """
-    from plans import is_vitalicio_disponivel, PLANS, get_vitalicio_preco
+    from plans import get_vitalicio_preco, is_vitalicio_disponivel
 
     # Verificar janela de venda
     janela = is_vitalicio_disponivel()

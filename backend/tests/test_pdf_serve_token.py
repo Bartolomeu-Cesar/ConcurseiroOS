@@ -36,12 +36,12 @@ database.DB_PATH = _tmp_db.name
 database.init_db()
 
 import jwt
+from deps import get_user_id
 from fastapi.testclient import TestClient
-
 from main import app
 from routers import pdf as pdf_module
+
 from settings import settings
-from deps import get_user_id
 
 # AUTH_ENABLED é reafirmado por teste na fixture autouse (_isolar_estado), para
 # não poluir o estado global compartilhado no momento do import.

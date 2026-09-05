@@ -1,16 +1,13 @@
 """Resumos, exportação/importação e mastery."""
 import json
-import os
-import tempfile
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 
-from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile
+from deps import get_user_id
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from schemas import OkResponse, ResumoCreate
 
 from database import get_db_session
-from deps import get_user_id
 from logger import log
-from schemas import OkResponse, ResumoCreate
-from sanitize import sanitize_input
 from utils import today_str
 
 router = APIRouter(prefix="", tags=["Edital"])
@@ -83,7 +80,6 @@ def prompt_resumo(id: int, conn=Depends(get_db_session), user_id: int = Depends(
 # ============================================================
 import csv
 import io
-import json
 
 from fastapi.responses import Response
 

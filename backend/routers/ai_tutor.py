@@ -22,7 +22,7 @@ from logger import log
 DAILY_TOKEN_LIMIT_FREE = 50_000
 
 SYSTEM_PROMPTS = {
-    "explain_error": """Você é um professor especialista em concursos públicos brasileiros. 
+    "explain_error": """Você é um professor especialista em concursos públicos brasileiros.
 O aluno errou uma questão. Explique o erro usando o método socrático:
 1. Identifique a confusão conceitual
 2. Explique o conceito correto de forma simples
@@ -58,7 +58,7 @@ Crie questões no formato de múltipla escolha (A-E).
 Formato JSON: [{"enunciado": "...", "alternativa_a": "...", "alternativa_b": "...", "alternativa_c": "...", "alternativa_d": "...", "alternativa_e": "...", "resposta_correta": "A", "explicacao": "..."}]
 Regras:
 - Questões no estilo CESPE/CEBRASPE ou FCC
-- Enunciados claros e objetivos  
+- Enunciados claros e objetivos
 - Distratores plausíveis
 - Explicação da resposta correta""",
 
@@ -464,7 +464,7 @@ def call_llm_sync(messages: list[dict], max_tokens: int = 1000) -> tuple[str, in
             raise HTTPException(
                 status_code=503,
                 detail=f"Não foi possível conectar ao {provider}.",
-            )
+            ) from e
 
     # --- Anthropic Claude (Messages API) ---
     elif fmt == "anthropic":
@@ -505,7 +505,7 @@ def call_llm_sync(messages: list[dict], max_tokens: int = 1000) -> tuple[str, in
             raise HTTPException(status_code=status, detail=msg) from e
         except httpx.RequestError as e:
             log.error(f"[AI:claude] Request error: {e}")
-            raise HTTPException(status_code=503, detail="Não foi possível conectar à API Anthropic.")
+            raise HTTPException(status_code=503, detail="Não foi possível conectar à API Anthropic.") from e
 
     # --- Cohere (Chat API v2) ---
     elif fmt == "cohere":
@@ -546,7 +546,7 @@ def call_llm_sync(messages: list[dict], max_tokens: int = 1000) -> tuple[str, in
             raise HTTPException(status_code=status, detail=msg) from e
         except httpx.RequestError as e:
             log.error(f"[AI:cohere] Request error: {e}")
-            raise HTTPException(status_code=503, detail="Não foi possível conectar à API Cohere.")
+            raise HTTPException(status_code=503, detail="Não foi possível conectar à API Cohere.") from e
 
     # --- Amazon Bedrock ---
     elif fmt == "bedrock":
@@ -586,10 +586,10 @@ def call_llm_sync(messages: list[dict], max_tokens: int = 1000) -> tuple[str, in
             raise HTTPException(
                 status_code=503,
                 detail="boto3 não instalado. Instale com: pip install boto3",
-            )
+            ) from None
         except Exception as e:
             log.error(f"[AI:bedrock] Error: {e}")
-            raise HTTPException(status_code=502, detail=f"Erro no Amazon Bedrock: {str(e)[:100]}")
+            raise HTTPException(status_code=502, detail=f"Erro no Amazon Bedrock: {str(e)[:100]}") from e
 
     # --- Ollama (local) ---
     elif fmt == "ollama":
@@ -613,7 +613,7 @@ def call_llm_sync(messages: list[dict], max_tokens: int = 1000) -> tuple[str, in
             raise HTTPException(
                 status_code=503,
                 detail="Ollama não está rodando. Inicie com: ollama serve",
-            )
+            ) from e
 
 
 # ---------------------------------------------------------------------------
@@ -1334,7 +1334,8 @@ def test_ai_config_endpoint(
 
         provider_labels = {k: v for k, v in zip(
             PROVIDERS.keys(),
-            ["OpenAI", "Anthropic Claude", "Google Gemini", "xAI Grok", "DeepSeek", "Mistral AI", "Groq", "Together AI", "Cohere", "Perplexity", "Kimi", "GLM", "Amazon Bedrock", "Ollama"]
+            ["OpenAI", "Anthropic Claude", "Google Gemini", "xAI Grok", "DeepSeek", "Mistral AI", "Groq", "Together AI", "Cohere", "Perplexity", "Kimi", "GLM", "Amazon Bedrock", "Ollama"],
+            strict=False,
         )}
 
         return {"ok": True, "provider_label": provider_labels.get(provider, provider), "model": test_model, "response_preview": text[:50], "tokens": tokens}
@@ -1417,9 +1418,8 @@ def _resolver_pdf_path(pdf_path: str, conn=None, user_id: int = None) -> str:
 
     # Autorização de visibilidade (dono ou compartilhado) — após confirmar que o
     # arquivo existe, para não confundir "inexistente" (404) com "sem acesso" (403).
-    if conn is not None and user_id is not None:
-        if not pdf_module.can_access(conn, user_id, rel):
-            raise HTTPException(status_code=403, detail="Acesso negado ao PDF.")
+    if conn is not None and user_id is not None and not pdf_module.can_access(conn, user_id, rel):
+        raise HTTPException(status_code=403, detail="Acesso negado ao PDF.")
 
     return str(resolved)
 

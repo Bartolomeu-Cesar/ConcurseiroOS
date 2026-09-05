@@ -3,15 +3,15 @@ import os
 import uuid
 from datetime import datetime
 
+from deps import get_user_id
 from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
-
-from database import get_db_session
-from deps import get_user_id
-from logger import log
 from sanitize import sanitize_input
 
-from .helpers import _ensure_messages_table, _are_friends, _get_friend_ids
+from database import get_db_session
+from logger import log
+
+from .helpers import _are_friends, _ensure_messages_table, _get_friend_ids
 
 router = APIRouter(prefix="", tags=["Social"])
 

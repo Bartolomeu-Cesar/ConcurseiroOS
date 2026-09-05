@@ -25,9 +25,8 @@ from database import get_db_session
 database.DB_PATH = _tmp_db.name
 database.init_db()
 
+from deps import get_optional_user_id, get_user_id
 from fastapi.testclient import TestClient
-
-from deps import get_user_id, get_optional_user_id
 from main import app
 
 
@@ -211,8 +210,9 @@ def test_auth_code_expire_rejeita_fora_do_limite():
 
 def test_auth_code_expire_helper_aplica_teto_24h():
     """Mesmo com valor absurdo persistido, o helper limita a 1440 min (24h)."""
-    from plans import set_app_config, get_auth_code_expire_minutes, AUTH_CODE_EXPIRE_KEY
     import sqlite3 as _sq
+
+    from plans import AUTH_CODE_EXPIRE_KEY, get_auth_code_expire_minutes, set_app_config
     conn = _sq.connect(_tmp_db.name, timeout=10)
     set_app_config(conn, AUTH_CODE_EXPIRE_KEY, "999999")
     conn.close()

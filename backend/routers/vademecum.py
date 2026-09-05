@@ -1,12 +1,11 @@
 """Vade Mecum Digital — Leis indexadas com busca full-text, anotações e links com questões."""
 from datetime import datetime
 
+from deps import get_user_id
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile
 
 from database import get_db_session
-from deps import get_user_id
 from logger import log
-from utils import today_str
 
 router = APIRouter(prefix="/api/vademecum", tags=["Vade Mecum"])
 
@@ -193,10 +192,7 @@ def _parse_lei_texto(texto: str) -> list[dict]:
             if re.match(r'^(?:§\s*\d+|Parágrafo único)', linha):
                 paragrafos.append(linha)
             # Inciso (I, II, III, IV...)
-            elif re.match(r'^[IVXLCDM]+\s*[-–.]', linha):
-                incisos.append(linha)
-            # Alínea (a), b), c)...)
-            elif re.match(r'^[a-z]\)', linha):
+            elif re.match(r'^[IVXLCDM]+\s*[-–.]', linha) or re.match(r'^[a-z]\)', linha):
                 incisos.append(linha)
             else:
                 caput_linhas.append(linha)

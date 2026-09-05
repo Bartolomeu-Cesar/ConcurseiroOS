@@ -542,7 +542,7 @@ class TestAutoavaliacao:
             resultados.append({
                 "flashcard_id": item["id"],
                 "confianca_pre": 3 if i == 0 else (1 if i == 1 else 2),
-                "acertou": False if i == 0 else True  # Primeiro: superconfiante errou
+                "acertou": i != 0  # Primeiro: superconfiante errou
             })
 
         r = client.post("/api/autoavaliacao/registrar", json={"resultados": resultados})

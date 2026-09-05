@@ -265,7 +265,7 @@ def list_desafios(conn=Depends(get_db_session), user_id: int = Depends(get_user_
             expira = criado + timedelta(days=d["dias"])
             d["dias_restantes"] = max(0, (expira - date.today()).days)
             d["expirado"] = d["dias_restantes"] == 0 and not d["finalizado"]
-        except:
+        except Exception:
             d["dias_restantes"] = d["dias"]
             d["expirado"] = False
         d["pct"] = min(100, round(d["progresso"] / d["meta_valor"] * 100, 1)) if d["meta_valor"] > 0 else 0
@@ -755,6 +755,6 @@ def update_desired_retention(body: dict = Body(...), conn=Depends(get_db_session
         )
         conn.commit()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro ao atualizar desired_retention: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro ao atualizar desired_retention: {str(e)}") from e
 
     return {"ok": True, "desired_retention": round(desired_retention, 4)}

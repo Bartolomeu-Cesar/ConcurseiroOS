@@ -1,8 +1,8 @@
 """Endpoint de Sugestão Rápida — GET /api/treinador/sugestao-rapida."""
+from deps import get_user_id
 from fastapi import APIRouter, Depends
 
 from database import get_db_session
-from deps import get_user_id
 
 router = APIRouter(prefix="", tags=["Treinador Inteligente"])
 

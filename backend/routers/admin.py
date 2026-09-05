@@ -4,14 +4,14 @@ Apenas user_id=1 (admin) pode acessar estes endpoints.
 """
 from datetime import datetime
 
+from deps import get_user_id
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
+from plans import PLANS
+from schemas import AdminChangePlan, AdminCreateUser, AdminUpdateUser
 
 from database import get_db_session
-from deps import get_user_id
 from logger import log
-from plans import PLANS
-from schemas import AdminCreateUser, AdminUpdateUser, AdminBulkAction, AdminChangePlan
 from utils import today_str
 
 router = APIRouter(prefix="/api/admin", tags=["Administração"])
@@ -106,7 +106,7 @@ def list_users(
 ):
     """Lista usuários com paginação, busca, filtro por validade e ordenação."""
     _require_admin(user_id)
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timedelta, timezone
 
     offset = (page - 1) * limit
     agora = datetime.now(timezone.utc)
@@ -708,7 +708,7 @@ def definir_ia_quota(
     try:
         limite = int(limite)
     except (ValueError, TypeError):
-        raise HTTPException(status_code=400, detail="limite deve ser inteiro (0, -1 ou >0).")
+        raise HTTPException(status_code=400, detail="limite deve ser inteiro (0, -1 ou >0).") from None
     if limite < -1:
         raise HTTPException(status_code=400, detail="limite inválido.")
 
@@ -878,7 +878,7 @@ def atualizar_flag(
 def get_auth_code_expire(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Retorna a validade atual do código de login em minutos, com os limites."""
     _require_admin(user_id)
-    from plans import get_auth_code_expire_minutes, AUTH_CODE_EXPIRE_MIN, AUTH_CODE_EXPIRE_MAX
+    from plans import AUTH_CODE_EXPIRE_MAX, AUTH_CODE_EXPIRE_MIN, get_auth_code_expire_minutes
     return {
         "minutes": get_auth_code_expire_minutes(),
         "min": AUTH_CODE_EXPIRE_MIN,
@@ -899,13 +899,15 @@ def set_auth_code_expire(
     """
     _require_admin(user_id)
     from plans import (
-        set_app_config, AUTH_CODE_EXPIRE_KEY,
-        AUTH_CODE_EXPIRE_MIN, AUTH_CODE_EXPIRE_MAX,
+        AUTH_CODE_EXPIRE_KEY,
+        AUTH_CODE_EXPIRE_MAX,
+        AUTH_CODE_EXPIRE_MIN,
+        set_app_config,
     )
     try:
         minutes = int(body.get("minutes"))
     except (ValueError, TypeError):
-        raise HTTPException(status_code=400, detail="minutes deve ser um inteiro")
+        raise HTTPException(status_code=400, detail="minutes deve ser um inteiro") from None
     if minutes < AUTH_CODE_EXPIRE_MIN or minutes > AUTH_CODE_EXPIRE_MAX:
         raise HTTPException(
             status_code=400,
@@ -933,8 +935,9 @@ def impersonate_user(
     `imp` (id do admin) para que o frontend exiba um banner e seja rastreável.
     """
     _require_admin(user_id)
+    from datetime import datetime, timedelta, timezone
+
     import jwt as _jwt
-    from datetime import datetime, timezone, timedelta
 
     from settings import settings as _settings
 
@@ -1144,14 +1147,15 @@ def admin_health(conn=Depends(get_db_session), user_id: int = Depends(get_user_i
     # --- Backups ---
     backups_info = {"total": 0, "ultimo": None, "dir_mb": 0.0}
     try:
-        from pathlib import Path as _P
-        bdir = _P(settings.BACKUP_DIR)
+        from pathlib import Path as _Path
+        bdir = _Path(settings.BACKUP_DIR)
         if bdir.exists():
             arqs = sorted(bdir.glob("*.db*"), key=lambda p: p.stat().st_mtime, reverse=True)
             backups_info["total"] = len(arqs)
             backups_info["dir_mb"] = round(sum(p.stat().st_size for p in arqs) / (1024 * 1024), 2)
             if arqs:
-                from datetime import datetime as _dt, timezone as _tz
+                from datetime import datetime as _dt
+                from datetime import timezone as _tz
                 backups_info["ultimo"] = _dt.fromtimestamp(arqs[0].stat().st_mtime, _tz.utc).isoformat()
     except Exception:
         pass
@@ -1224,7 +1228,7 @@ def global_stats(
 def metricas_negocio(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Dashboard de negócio: receita, assinaturas ativas/expirando, conversão e timeline."""
     _require_admin(user_id)
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timedelta, timezone
 
     agora = datetime.now(timezone.utc)
     agora_iso = agora.isoformat()
@@ -1338,7 +1342,7 @@ def metricas_negocio(conn=Depends(get_db_session), user_id: int = Depends(get_us
 def get_monetizacao(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Retorna a configuração atual de monetização (janela vitalício, preços)."""
     _require_admin(user_id)
-    from plans import _get_vitalicio_window, get_vitalicio_preco, get_creditos_precos, is_vitalicio_disponivel
+    from plans import _get_vitalicio_window, get_creditos_precos, get_vitalicio_preco, is_vitalicio_disponivel
 
     inicio, fim = _get_vitalicio_window()
     return {
@@ -1370,9 +1374,10 @@ def update_monetizacao(
     }
     """
     _require_admin(user_id)
-    from plans import set_app_config
-    from datetime import date
     import json
+    from datetime import date
+
+    from plans import set_app_config
 
     updated = []
 
@@ -1382,7 +1387,7 @@ def update_monetizacao(
             try:
                 date.fromisoformat(val)  # Valida formato
             except ValueError:
-                raise HTTPException(status_code=400, detail="vitalicio_venda_inicio deve ser YYYY-MM-DD")
+                raise HTTPException(status_code=400, detail="vitalicio_venda_inicio deve ser YYYY-MM-DD") from None
         set_app_config(conn, "vitalicio_venda_inicio", val)
         updated.append("vitalicio_venda_inicio")
 
@@ -1392,7 +1397,7 @@ def update_monetizacao(
             try:
                 date.fromisoformat(val)
             except ValueError:
-                raise HTTPException(status_code=400, detail="vitalicio_venda_fim deve ser YYYY-MM-DD")
+                raise HTTPException(status_code=400, detail="vitalicio_venda_fim deve ser YYYY-MM-DD") from None
         set_app_config(conn, "vitalicio_venda_fim", val)
         updated.append("vitalicio_venda_fim")
 
@@ -1402,7 +1407,7 @@ def update_monetizacao(
             if preco < 0:
                 raise ValueError()
         except (ValueError, TypeError):
-            raise HTTPException(status_code=400, detail="vitalicio_preco deve ser número positivo")
+            raise HTTPException(status_code=400, detail="vitalicio_preco deve ser número positivo") from None
         set_app_config(conn, "vitalicio_preco", str(preco))
         updated.append("vitalicio_preco")
 
@@ -1414,7 +1419,7 @@ def update_monetizacao(
         try:
             {int(k): float(v) for k, v in precos.items()}
         except (ValueError, TypeError):
-            raise HTTPException(status_code=400, detail="creditos_precos: chaves int e valores float")
+            raise HTTPException(status_code=400, detail="creditos_precos: chaves int e valores float") from None
         set_app_config(conn, "creditos_precos", json.dumps(precos))
         updated.append("creditos_precos")
 
@@ -1516,7 +1521,7 @@ def ativar_plano_premio(
             if dias < 1:
                 raise ValueError()
         except (ValueError, TypeError):
-            raise HTTPException(status_code=400, detail="dias deve ser inteiro positivo")
+            raise HTTPException(status_code=400, detail="dias deve ser inteiro positivo") from None
 
         # Estender se já tem premium ativo, senão partir de agora
         plano_atual = user["plano"] or "free"
@@ -1674,7 +1679,7 @@ def _copiar_editais(conn, origem_uid: int, destino_uid: int) -> int:
     # Filtrar resets para colunas que existem
     resets = {k: v for k, v in resets.items() if k in insert_cols}
 
-    rows = conn.execute(f"SELECT * FROM edital WHERE user_id = ?", (origem_uid,)).fetchall()
+    rows = conn.execute("SELECT * FROM edital WHERE user_id = ?", (origem_uid,)).fetchall()
     id_map = {}  # edital_id antigo → novo
     placeholders = ", ".join("?" for _ in insert_cols)
     for row in rows:

@@ -1,14 +1,13 @@
 """Exportação, importação, compartilhamento e widgets."""
 import json
 import tempfile
-from datetime import date, datetime, timedelta
+from datetime import datetime
 
+from deps import get_user_id
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 
 from database import get_db_session
-from deps import get_user_id
-from logger import log
 from utils import calculate_streak, sql_paginate, today_str
 
 router = APIRouter(prefix="", tags=["Analytics"])

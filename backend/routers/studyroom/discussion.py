@@ -2,12 +2,12 @@
 import json
 from datetime import datetime
 
+from deps import get_user_id
 from fastapi import APIRouter, Body, Depends, HTTPException
+from sanitize import sanitize_input
 
 from database import get_db_session
-from deps import get_user_id
 from logger import log
-from sanitize import sanitize_input
 
 from .helpers import get_user_name
 from .tables import ensure_discussion_tables

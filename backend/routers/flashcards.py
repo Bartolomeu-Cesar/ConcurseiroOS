@@ -1,12 +1,10 @@
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile
-
-from constants import SM2_FIRST_INTERVAL, SM2_INITIAL_EF, SM2_MIN_EF, SM2_SECOND_INTERVAL, SPEED_REVIEW_LIMIT
-from database import get_db_session
 from deps import get_user_id
-from logger import log
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile
+from sanitize import sanitize_input
 from schemas import (
+    _MAX_IMAGEM_DATA_CHARS,
     FlashcardCreate,
     FlashcardReview,
     FlashcardReviewResponse,
@@ -14,9 +12,11 @@ from schemas import (
     FlashcardReviewSM2Response,
     FlashcardUpdate,
     OkResponse,
-    _MAX_IMAGEM_DATA_CHARS,
 )
-from sanitize import sanitize_input
+
+from constants import SM2_FIRST_INTERVAL, SM2_INITIAL_EF, SM2_MIN_EF, SM2_SECOND_INTERVAL, SPEED_REVIEW_LIMIT
+from database import get_db_session
+from logger import log
 from utils import calcular_tempo_flashcard, sql_paginate, today_str, update_streak
 
 router = APIRouter(prefix="", tags=["Flashcards"])
@@ -765,11 +765,12 @@ def review_flashcard_fsrs(
     """Revisão de flashcard usando algoritmo FSRS-5.
     quality: 0-5 (mapeado internamente para rating 1-4 do FSRS)
     """
-    import sys
     import os
+    import sys
 
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from fsrs import FSRSCard, review_card, sm2_to_fsrs_rating
+
     from constants import FSRS_DEFAULT_RETENTION
 
     row = conn.execute(
@@ -1024,7 +1025,8 @@ def migrate_flashcards_to_fsrs(conn=Depends(get_db_session), user_id: int = Depe
     - Cards novos (reps=0): reseta para estado FSRS New (serão agendados no primeiro review)
     - Recalcula proxima_revisao baseado na stability FSRS
     """
-    from fsrs import migrate_sm2_to_fsrs, _next_interval, STATE_NEW, STATE_REVIEW
+    from fsrs import _next_interval, migrate_sm2_to_fsrs
+
     from constants import FSRS_DEFAULT_RETENTION
 
     # Obter desired_retention do user
@@ -1919,7 +1921,7 @@ def _build_elaboration_prompts(pergunta: str, resposta: str, materia: str) -> li
     materia_lower = materia.lower()
     prompts = [
         {"tipo": "por_que", "prompt": f'Por que "{resposta}" é verdade/correto?'},
-        {"tipo": "exemplo_pratico", "prompt": f"Dê um exemplo prático onde isso se aplica."},
+        {"tipo": "exemplo_pratico", "prompt": "Dê um exemplo prático onde isso se aplica."},
     ]
     # Add domain-specific prompt
     if any(
@@ -2006,7 +2008,7 @@ def get_elaboration_prompts(id: int, conn=Depends(get_db_session), user_id: int 
         {
             "tipo": "diferenciacao",
             "icone": "⚖️",
-            "prompt": f"Como isso se diferencia de conceitos semelhantes na mesma área?",
+            "prompt": "Como isso se diferencia de conceitos semelhantes na mesma área?",
             "instrucao": f"Compare com outro conceito de '{materia}' que poderia ser confundido.",
         }
     )
@@ -2026,7 +2028,7 @@ def get_elaboration_prompts(id: int, conn=Depends(get_db_session), user_id: int 
         {
             "tipo": "consequencia",
             "icone": "⚡",
-            "prompt": f"Qual a consequência de violar/ignorar isso?",
+            "prompt": "Qual a consequência de violar/ignorar isso?",
             "instrucao": "O que acontece se essa regra/conceito for descumprido ou desconsiderado?",
         }
     )

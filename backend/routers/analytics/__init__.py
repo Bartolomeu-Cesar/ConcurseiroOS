@@ -6,9 +6,9 @@ Analytics router package — modularizado em:
 """
 from fastapi import APIRouter
 
+from .advanced import router as advanced_router
 from .core import router as core_router
 from .export import router as export_router
-from .advanced import router as advanced_router
 
 router = APIRouter(prefix="", tags=["Analytics"])
 

@@ -1,32 +1,30 @@
 """Router de Push Notifications para ConcurseiroOS."""
 import json
 import os
-import secrets
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from deps import get_user_id
+from fastapi import APIRouter, Depends, HTTPException
+from notification_templates import (
+    get_challenge_notification,
+    get_exam_notification,
+    get_flashcard_notification,
+    get_inactivity_notification,
+    get_streak_notification,
+    get_study_suggestion,
+)
 from pydantic import BaseModel, Field
 
 from database import get_db_session
-from deps import get_user_id
 from logger import log
-from notification_templates import (
-    get_streak_notification,
-    get_flashcard_notification,
-    get_exam_notification,
-    get_challenge_notification,
-    get_inactivity_notification,
-    get_study_suggestion,
-)
 
 # ============================================================
 # CONDITIONAL IMPORT: pywebpush
 # ============================================================
 
 try:
-    from pywebpush import webpush, WebPushException
+    from pywebpush import WebPushException, webpush
     WEBPUSH_AVAILABLE = True
 except ImportError:
     WEBPUSH_AVAILABLE = False
@@ -62,9 +60,10 @@ def _get_vapid_keys() -> tuple[str, str]:
 
     # Generate new VAPID keys
     try:
-        from py_vapid import Vapid
-        from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
         import base64 as b64
+
+        from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+        from py_vapid import Vapid
 
         vapid = Vapid()
         vapid.generate_keys()
@@ -463,48 +462,46 @@ def check_triggers(conn=Depends(get_db_session)):
                         results["streak_at_risk"] += 1
 
         # --- 2. FLASHCARDS OVERDUE ---
-        if flashcard_enabled:
-            if not _already_sent_today(conn, uid, "flashcards_overdue"):
-                overdue = conn.execute(
-                    "SELECT COUNT(*) as cnt FROM flashcards WHERE proxima_revisao <= ? AND user_id = ?",
-                    (hoje, uid)
-                ).fetchone()
+        if flashcard_enabled and not _already_sent_today(conn, uid, "flashcards_overdue"):
+            overdue = conn.execute(
+                "SELECT COUNT(*) as cnt FROM flashcards WHERE proxima_revisao <= ? AND user_id = ?",
+                (hoje, uid)
+            ).fetchone()
 
-                if overdue and overdue["cnt"] > 10:
-                    notif = get_flashcard_notification(count=overdue["cnt"])
-                    sent = _send_push_to_user(conn, uid, notif["title"], notif["body"], notif["url"], notif["tag"])
-                    if sent > 0:
-                        _log_notification(conn, uid, "flashcards_overdue", notif["title"], notif["body"])
-                        results["flashcards_overdue"] += 1
+            if overdue and overdue["cnt"] > 10:
+                notif = get_flashcard_notification(count=overdue["cnt"])
+                sent = _send_push_to_user(conn, uid, notif["title"], notif["body"], notif["url"], notif["tag"])
+                if sent > 0:
+                    _log_notification(conn, uid, "flashcards_overdue", notif["title"], notif["body"])
+                    results["flashcards_overdue"] += 1
 
         # --- 3. EXAM APPROACHING ---
-        if exam_enabled:
-            if not _already_sent_today(conn, uid, "exam_approaching"):
-                # Check calendario_eventos for upcoming exams
-                threshold = (date.today() + timedelta(days=30)).isoformat()
-                exams = conn.execute(
-                    """SELECT titulo, data_inicio, banca FROM calendario_eventos
+        if exam_enabled and not _already_sent_today(conn, uid, "exam_approaching"):
+            # Check calendario_eventos for upcoming exams
+            threshold = (date.today() + timedelta(days=30)).isoformat()
+            exams = conn.execute(
+                """SELECT titulo, data_inicio, banca FROM calendario_eventos
                        WHERE user_id = ? AND tipo = 'prova' AND data_inicio >= ? AND data_inicio <= ?
                        ORDER BY data_inicio ASC LIMIT 1""",
-                    (uid, hoje, threshold)
-                ).fetchone()
+                (uid, hoje, threshold)
+            ).fetchone()
 
-                if exams:
-                    exam_date = exams["data_inicio"][:10]
-                    days_left = (date.fromisoformat(exam_date) - date.today()).days
-                    banca = exams["banca"] if "banca" in exams.keys() else ""
-                    notif = get_exam_notification(
-                        exam_name=exams["titulo"],
-                        days_until=days_left,
-                        banca=banca or ""
-                    )
-                    sent = _send_push_to_user(conn, uid, notif["title"], notif["body"], notif["url"], notif["tag"])
-                    if sent > 0:
-                        _log_notification(conn, uid, "exam_approaching", notif["title"], notif["body"])
-                        results["exam_approaching"] += 1
+            if exams:
+                exam_date = exams["data_inicio"][:10]
+                days_left = (date.fromisoformat(exam_date) - date.today()).days
+                banca = exams["banca"] if "banca" in exams.keys() else ""
+                notif = get_exam_notification(
+                    exam_name=exams["titulo"],
+                    days_until=days_left,
+                    banca=banca or ""
+                )
+                sent = _send_push_to_user(conn, uid, notif["title"], notif["body"], notif["url"], notif["tag"])
+                if sent > 0:
+                    _log_notification(conn, uid, "exam_approaching", notif["title"], notif["body"])
+                    results["exam_approaching"] += 1
 
         # --- 4. CHALLENGE ABOUT TO EXPIRE ---
-        if challenge_enabled:
+        if challenge_enabled:  # noqa: SIM102 (comentário entre os ifs; fundir reduz clareza)
             if not _already_sent_today(conn, uid, "challenge_expiring"):
                 # Active challenges with <1 day remaining
                 desafios = conn.execute(
@@ -536,7 +533,7 @@ def check_triggers(conn=Depends(get_db_session)):
                         continue
 
         # --- 5. INACTIVITY DETECTION ---
-        if streak_enabled:
+        if streak_enabled:  # noqa: SIM102 (comentário entre os ifs; fundir reduz clareza)
             if not _already_sent_today(conn, uid, "inactivity"):
                 # Check last activity date
                 last_activity = conn.execute(
@@ -556,7 +553,7 @@ def check_triggers(conn=Depends(get_db_session)):
                             results["inactivity"] += 1
 
         # --- 6. SLEEP CONSOLIDATION REMINDER (21h-22h) ---
-        if flashcard_enabled and 21 <= now.hour <= 22:
+        if flashcard_enabled and 21 <= now.hour <= 22:  # noqa: SIM102 (comentário entre os ifs; fundir reduz clareza)
             if not _already_sent_today(conn, uid, "sleep_consolidation"):
                 # Check if user has errors today that need consolidation
                 erros_hoje = conn.execute(
@@ -582,7 +579,7 @@ def check_triggers(conn=Depends(get_db_session)):
                         results["sleep_consolidation"] = results.get("sleep_consolidation", 0) + 1
 
         # --- 7. DAILY META NOT REACHED (20h-21h) ---
-        if streak_enabled and 20 <= now.hour <= 21:
+        if streak_enabled and 20 <= now.hour <= 21:  # noqa: SIM102 (comentário entre os ifs; fundir reduz clareza)
             if not _already_sent_today(conn, uid, "meta_diaria"):
                 try:
                     meta = conn.execute("SELECT meta_horas, meta_questoes FROM metas_config WHERE user_id = ?", (uid,)).fetchone()
@@ -658,7 +655,7 @@ def auto_check_triggers(conn=Depends(get_db_session), user_id: int = Depends(get
         pass
 
     # Sleep consolidation (se 21h-1h)
-    if 21 <= now.hour or now.hour <= 1:
+    if now.hour >= 21 or now.hour <= 1:
         alertas.append({"tipo": "sleep", "icone": "🌙", "msg": "Hora da revisão pré-sono! Revise erros do dia antes de dormir.", "acao": "/"})
 
     # Meta diária

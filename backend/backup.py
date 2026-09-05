@@ -9,8 +9,8 @@ Features:
 - upload_to_s3(backup_path) — upload offsite para S3-compatible storage (opcional)
 """
 import os
-import sqlite3
 import shutil
+import sqlite3
 import threading
 from datetime import datetime
 from pathlib import Path

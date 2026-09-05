@@ -34,6 +34,7 @@ _c.close()
 
 from fastapi.testclient import TestClient
 from main import app
+
 from settings import settings
 
 
@@ -421,7 +422,8 @@ class TestModeracao:
         conn = _conn()
         conn.execute("INSERT OR IGNORE INTO users (id, nome, username, email, password_hash, plano, role, created_at) VALUES (92, 'P92', 'p92', 'p92@t.com', 'h', 'premium', 'user', '2026-01-01')")
         conn.execute("INSERT INTO questoes (materia, topico, enunciado, alternativa_a, alternativa_b, alternativa_c, alternativa_d, alternativa_e, resposta_correta, created_at, user_id) VALUES ('ModMat', 'T', 'Q', 'a','b','c','d','', 'A', '2026-01-01', 92)")
-        conn.commit(); conn.close()
+        conn.commit()
+        conn.close()
         pub = client.post("/api/catalogo/publicar", headers=_h(_token(92, "p92@t.com")), json={
             "tipo": "deck_questoes", "titulo": "Pendente Q", "origem_uid": 0, "ref": "ModMat"
         }).json()

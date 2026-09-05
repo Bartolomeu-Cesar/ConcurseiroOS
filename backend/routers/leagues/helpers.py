@@ -15,10 +15,10 @@ Endpoints:
 """
 
 import random
-from datetime import date, timedelta, datetime
-from fastapi import APIRouter, Depends, HTTPException
-from database import get_db_session
-from deps import get_user_id
+from datetime import date, datetime, timedelta
+
+from fastapi import APIRouter
+
 from logger import log
 
 router = APIRouter(prefix="", tags=["Ligas"])
@@ -255,7 +255,7 @@ def calculate_user_weekly_xp(db, user_id: int, week_start: str, week_end: str) -
         ).fetchone()
         if streak_days and streak_days[0]:
             breakdown["streak"] = streak_days[0] * XP_STREAK_DAY
-    except Exception as e:
+    except Exception:
         # streaks table may not have user_id column in older schemas
         try:
             streak_days = db.execute(
@@ -374,7 +374,7 @@ def populate_bots(db, league_id: int, tier: str):
 
     selected_names = random.sample(BOT_NAMES, min(num_bots, len(BOT_NAMES)))
 
-    for i, name in enumerate(selected_names):
+    for i, _name in enumerate(selected_names):
         bot_user_id = -(i + 1)
         bot_xp = int(random.triangular(xp_min, xp_max, (xp_min + xp_max) // 2))
 

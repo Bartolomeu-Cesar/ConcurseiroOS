@@ -76,7 +76,7 @@ def setup_questoes(client):
             "alternativa_d": "Alternativa D",
             "alternativa_e": "Alternativa E",
             "resposta_correta": "A",
-            "explicacao": f"A alternativa A está correta porque...",
+            "explicacao": "A alternativa A está correta porque...",
             "dificuldade": dificuldade,
         })
         assert r.status_code == 200

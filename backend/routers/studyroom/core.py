@@ -1,10 +1,10 @@
 """Endpoints CRUD principais da Study Room: criar, entrar, status, chat, todo, histórico, minhas."""
 from datetime import datetime
 
+from deps import get_user_id
 from fastapi import APIRouter, Body, Depends, HTTPException
 
 from database import get_db_session
-from deps import get_user_id
 from logger import log
 
 from .helpers import award_focus_xp, flush_focus_time, generate_code, get_user_name, is_focus_cycle

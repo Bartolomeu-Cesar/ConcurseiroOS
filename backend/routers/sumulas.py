@@ -1,11 +1,11 @@
 from datetime import date, timedelta
 
+from deps import get_user_id
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from constants import SM2_FIRST_INTERVAL, SM2_INITIAL_EF, SM2_MIN_EF, SM2_SECOND_INTERVAL
 from database import get_db_session
-from deps import get_user_id
 from logger import log
 from utils import today_str, update_streak
 
@@ -260,10 +260,11 @@ def review_sumula_fsrs(id: int, body: SumulaReviewSM2, conn=Depends(get_db_sessi
     """Revisão de súmula usando algoritmo FSRS-5.
     quality: 0-5 (mapeado internamente para rating 1-4 do FSRS)
     """
-    import sys
     import os
+    import sys
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from fsrs import FSRSCard, review_card, sm2_to_fsrs_rating
+
     from constants import FSRS_DEFAULT_RETENTION
 
     row = conn.execute(

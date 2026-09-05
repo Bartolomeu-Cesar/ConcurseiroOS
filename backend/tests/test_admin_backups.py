@@ -26,8 +26,8 @@ os.environ["AUTH_ENABLED"] = "false"
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import database
-from database import get_db_session
 import settings as settings_mod
+from database import get_db_session
 
 database.DB_PATH = _tmp_db.name
 settings_mod.settings.DB_PATH = _tmp_db.name
@@ -35,13 +35,14 @@ settings_mod.settings.BACKUP_DIR = _bkp_dir
 database.init_db()
 
 # backup.py leu BACKUP_DIR no import — realinhar para o dir de teste
-import backup as backup_mod
-from pathlib import Path as _P
-backup_mod.BACKUP_DIR = _P(_bkp_dir)
+from pathlib import Path as _Path
 
-from fastapi.testclient import TestClient
+import backup as backup_mod
+
+backup_mod.BACKUP_DIR = _Path(_bkp_dir)
 
 from deps import get_user_id
+from fastapi.testclient import TestClient
 from main import app
 
 
@@ -87,7 +88,7 @@ def _ensure():
     database.DB_PATH = _tmp_db.name
     settings_mod.settings.DB_PATH = _tmp_db.name
     settings_mod.settings.BACKUP_DIR = _bkp_dir
-    backup_mod.BACKUP_DIR = _P(_bkp_dir)
+    backup_mod.BACKUP_DIR = _Path(_bkp_dir)
     app.dependency_overrides[get_db_session] = _override_db_session
     _seed()
     yield

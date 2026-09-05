@@ -8,9 +8,9 @@ Study Intelligence router package — modularizado em:
 from fastapi import APIRouter
 
 from .core import router as core_router
-from .techniques import router as techniques_router
-from .retention import router as retention_router
 from .metas import router as metas_router
+from .retention import router as retention_router
+from .techniques import router as techniques_router
 
 router = APIRouter(prefix="", tags=["Study Intelligence"])
 

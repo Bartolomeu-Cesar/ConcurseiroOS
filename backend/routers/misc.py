@@ -4,15 +4,15 @@ import random
 import time
 from datetime import date, datetime, timedelta
 
+from deps import get_optional_user_id, get_user_id
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from schemas import HealthResponse
 
 from backup import create_backup, delete_backup, list_backups, restore_from_backup
 from database import get_db_session, rebuild_search_index
-from deps import get_user_id, get_authenticated_user_id, get_optional_user_id
 from logger import log
-from schemas import HealthResponse, OkResponse
 from settings import settings
 from utils import today_str
 
@@ -264,8 +264,8 @@ def download_backup_endpoint(filename: str, conn=Depends(get_db_session), user_i
     # Path traversal protection
     if ".." in filename or "/" in filename or "\\" in filename:
         raise HTTPException(status_code=400, detail="Nome de arquivo inválido")
-    from pathlib import Path as _P
-    bdir = _P(settings.BACKUP_DIR).resolve()
+    from pathlib import Path as _Path
+    bdir = _Path(settings.BACKUP_DIR).resolve()
     fpath = (bdir / filename).resolve()
     if not fpath.is_relative_to(bdir) or not fpath.exists():
         raise HTTPException(status_code=404, detail="Backup não encontrado")
@@ -584,7 +584,6 @@ def daily_challenge(conn=Depends(get_db_session), user_id: int = Depends(get_use
 def conquistas_diarias(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Retorna missões diárias auto-geradas"""
     missoes = []
-    config = conn.execute("SELECT * FROM metas_config WHERE user_id = ?", (user_id,)).fetchone()
     hoje = conn.execute("SELECT * FROM streaks WHERE data = ? AND user_id = ?", (today_str(), user_id)).fetchone()
 
     horas_hoje = hoje["horas_estudadas"] if hoje else 0

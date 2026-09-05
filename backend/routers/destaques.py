@@ -49,7 +49,7 @@ def _validar_rects(raw: str) -> str:
     try:
         data = json.loads(raw)
     except (ValueError, TypeError):
-        raise HTTPException(status_code=422, detail="rects deve ser JSON válido.")
+        raise HTTPException(status_code=422, detail="rects deve ser JSON válido.") from None
     if not isinstance(data, list):
         raise HTTPException(status_code=422, detail="rects deve ser uma lista de retângulos.")
     if len(data) > _MAX_RECTS:
@@ -62,8 +62,10 @@ def _validar_rects(raw: str) -> str:
             x, y, w, h = float(r["x"]), float(r["y"]), float(r["w"]), float(r["h"])
         except (KeyError, TypeError, ValueError):
             continue
-        x = max(0.0, min(1.0, x)); y = max(0.0, min(1.0, y))
-        w = max(0.0, min(1.0, w)); h = max(0.0, min(1.0, h))
+        x = max(0.0, min(1.0, x))
+        y = max(0.0, min(1.0, y))
+        w = max(0.0, min(1.0, w))
+        h = max(0.0, min(1.0, h))
         if w <= 0 or h <= 0:
             continue
         limpo.append({"x": round(x, 4), "y": round(y, 4), "w": round(w, 4), "h": round(h, 4)})
@@ -156,14 +158,17 @@ def update_destaque(id: int, body: DestaqueUpdate, conn=Depends(get_db_session),
         cor = body.cor.strip().lower()
         if cor not in _CORES_VALIDAS:
             raise HTTPException(status_code=422, detail="Cor inválida.")
-        campos.append("cor = ?"); valores.append(cor)
+        campos.append("cor = ?")
+        valores.append(cor)
     if body.estilo is not None:
         estilo = body.estilo.strip().lower()
         if estilo not in _ESTILOS_VALIDOS:
             raise HTTPException(status_code=422, detail="Estilo inválido.")
-        campos.append("estilo = ?"); valores.append(estilo)
+        campos.append("estilo = ?")
+        valores.append(estilo)
     if body.comentario is not None:
-        campos.append("comentario = ?"); valores.append(sanitize_input(body.comentario, max_length=5000))
+        campos.append("comentario = ?")
+        valores.append(sanitize_input(body.comentario, max_length=5000))
     if campos:
         valores.extend([id, user_id])
         conn.execute(f"UPDATE destaques_pdf SET {', '.join(campos)} WHERE id = ? AND user_id = ?", valores)

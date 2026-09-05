@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import random
 from collections import defaultdict
-from typing import Any, Callable, Optional
+from collections.abc import Callable
 
 
 def order_items_intelligently(
@@ -35,7 +35,7 @@ def order_items_intelligently(
     interval_key: str = "intervalo_dias",
     ef_key: str = "easiness_factor",
     stability_key: str = "stability",
-    importance_fn: Optional[Callable] = None,
+    importance_fn: Callable | None = None,
 ) -> list[dict]:
     """Ordena itens de estudo aplicando todas as técnicas baseadas em evidência.
 
@@ -197,7 +197,7 @@ def _apply_expanding_retrieval(items: list[dict], reforco_items: list[dict]) -> 
     items_to_repeat = reforco_items[:3]
     result = list(items)
 
-    for i, item in enumerate(items_to_repeat):
+    for _i, item in enumerate(items_to_repeat):
         # Encontrar posição original
         try:
             original_pos = result.index(item)

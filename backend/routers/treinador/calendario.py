@@ -1,14 +1,13 @@
 """Endpoint do Calendário Semanal — GET /api/calendario-semanal."""
 from datetime import date, timedelta
 
+from deps import get_user_id
 from fastapi import APIRouter, Depends, Query
 
 from database import get_db_session
-from deps import get_user_id
 from logger import log
 
 from .analise import (
-    _get_last_session_by_subject,
     _get_pending_reviews,
     _get_performance_by_subject,
 )

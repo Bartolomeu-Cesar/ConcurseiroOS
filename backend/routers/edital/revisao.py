@@ -1,13 +1,13 @@
 """Revisão de tópicos: notas, SM2, FSRS, pendentes."""
 from datetime import date, datetime, timedelta
 
+from deps import get_user_id
 from fastapi import APIRouter, Depends, HTTPException
+from schemas import EditalReviewSM2, NotaTopicoCreate, OkResponse
 
 from constants import SM2_FIRST_INTERVAL, SM2_INITIAL_EF, SM2_MIN_EF, SM2_SECOND_INTERVAL
 from database import get_db_session
-from deps import get_user_id
 from logger import log
-from schemas import EditalReviewSM2, NotaTopicoCreate, OkResponse
 from utils import today_str
 
 router = APIRouter(prefix="", tags=["Edital"])
@@ -144,10 +144,11 @@ def revisar_topico_fsrs(id: int, body: EditalReviewSM2, conn=Depends(get_db_sess
     """Revisão de tópico do edital usando algoritmo FSRS-5.
     quality: 0-5 (mapeado internamente para rating 1-4 do FSRS)
     """
-    import sys
     import os
+    import sys
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from fsrs import FSRSCard, review_card, sm2_to_fsrs_rating
+
     from constants import FSRS_DEFAULT_RETENTION
 
     row = conn.execute(

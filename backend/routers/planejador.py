@@ -1,12 +1,12 @@
 """Router do Planejador Semanal."""
 from datetime import date
 
+from deps import get_user_id
 from fastapi import APIRouter, Depends, HTTPException, Query
+from schemas import OkResponse, PlanejadorItem
 
 from database import get_db_session
-from deps import get_user_id
 from logger import log
-from schemas import OkResponse, PlanejadorItem
 
 router = APIRouter(prefix="", tags=["Planejador"])
 

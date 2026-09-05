@@ -1,5 +1,4 @@
 """Testes de robustez do JWT_SECRET (RFC 7518 §3.2 — mínimo 32 bytes)."""
-import importlib
 import os
 import sys
 

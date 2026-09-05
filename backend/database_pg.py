@@ -941,7 +941,7 @@ def _seed_defaults(conn):
         import json
         meta_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'editais_metadados.json')
         if os.path.exists(meta_path):
-            with open(meta_path, 'r', encoding='utf-8') as f:
+            with open(meta_path, encoding='utf-8') as f:
                 metadados = json.load(f)
             for m in metadados:
                 conn.execute("""

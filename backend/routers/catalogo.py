@@ -16,11 +16,11 @@ copiar daquela conta para a do estudante, resetando progresso/SRS.
 """
 from datetime import datetime, timezone
 
+from deps import get_user_id
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from database import get_db_session
-from deps import get_user_id
 from logger import log
 from utils import today_str
 
