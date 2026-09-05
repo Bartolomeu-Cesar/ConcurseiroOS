@@ -1596,6 +1596,116 @@ export async function loadLeitnerBoxes() {
 
 window.loadLeitnerBoxes = loadLeitnerBoxes;
 
+// ============================================================
+// ESTATÍSTICAS VISUAIS (à la Anki): heatmap de reviews + forecast de carga
+// Dados já vêm de /api/flashcards/retencao-real (por_dia e forecast).
+// Vanilla JS, tema Catppuccin, mobile-first. Sem libs externas.
+// ============================================================
+
+// Formata 'YYYY-MM-DD' -> 'DD/MM' (rótulo curto, sem depender de timezone).
+function _diaCurto(iso) {
+  if (!iso || iso.length < 10) return iso || '';
+  return `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+}
+
+/**
+ * Heatmap dos últimos 30 dias de reviews (estilo GitHub contributions).
+ * @param {Array<{data:string, reviews:number, acertos:number}>} porDia
+ * @returns {string} HTML do heatmap (ou '' se não houver dados).
+ * A intensidade da cor é proporcional ao volume de reviews do dia; o tooltip
+ * mostra data, total de reviews e % de acerto. Retorna '' quando não há reviews.
+ */
+export function _renderHeatmap(porDia) {
+  const dados = Array.isArray(porDia) ? porDia : [];
+  const mapa = {};
+  let maxReviews = 0;
+  for (const d of dados) {
+    if (!d || !d.data) continue;
+    const rev = +d.reviews || 0;
+    mapa[d.data] = { reviews: rev, acertos: +d.acertos || 0 };
+    if (rev > maxReviews) maxReviews = rev;
+  }
+  if (maxReviews === 0) return '';
+
+  // Últimos 30 dias, do mais antigo ao mais recente (inclui hoje).
+  const hoje = new Date();
+  const celulas = [];
+  for (let i = 29; i >= 0; i--) {
+    const dt = new Date(hoje);
+    dt.setDate(hoje.getDate() - i);
+    const iso = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+    const info = mapa[iso];
+    const rev = info ? info.reviews : 0;
+    // 5 níveis de intensidade (0..4) para o verde Catppuccin.
+    let nivel = 0;
+    if (rev > 0) {
+      const frac = rev / maxReviews;
+      nivel = frac >= 0.75 ? 4 : frac >= 0.5 ? 3 : frac >= 0.25 ? 2 : 1;
+    }
+    const cores = ['var(--bg-surface)', 'rgba(166,227,161,0.35)', 'rgba(166,227,161,0.6)', 'rgba(166,227,161,0.8)', 'var(--green)'];
+    const pct = info && info.reviews ? Math.round((info.acertos / info.reviews) * 100) : null;
+    const titulo = rev > 0
+      ? `${_diaCurto(iso)}: ${rev} revisão(ões)${pct !== null ? `, ${pct}% acerto` : ''}`
+      : `${_diaCurto(iso)}: sem revisões`;
+    celulas.push(
+      `<span title="${titulo}" aria-label="${titulo}" style="width:100%;aspect-ratio:1;border-radius:3px;background:${cores[nivel]};display:block;"></span>`
+    );
+  }
+
+  return `
+    <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;">
+      <div style="font-size:0.72rem;font-weight:600;color:var(--text);margin-bottom:6px;">🗓️ Atividade (últimos 30 dias)</div>
+      <div style="display:grid;grid-template-columns:repeat(10,1fr);gap:3px;max-width:220px;">
+        ${celulas.join('')}
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:0.58rem;color:var(--text-sub);margin-top:5px;">
+        <span>menos</span>
+        <span style="width:9px;height:9px;border-radius:2px;background:var(--bg-surface);display:inline-block;"></span>
+        <span style="width:9px;height:9px;border-radius:2px;background:rgba(166,227,161,0.6);display:inline-block;"></span>
+        <span style="width:9px;height:9px;border-radius:2px;background:var(--green);display:inline-block;"></span>
+        <span>mais</span>
+      </div>
+    </div>`;
+}
+
+/**
+ * Gráfico de barras da carga futura de revisões (cards que vencem por dia).
+ * @param {Array<{data:string, cards:number}>} forecast
+ * @param {number} maxDias limite de dias a exibir (default 14)
+ * @returns {string} HTML do gráfico (ou '' se não houver revisões futuras).
+ * Barras horizontais proporcionais ao pico; destaca o(s) dia(s) de maior carga.
+ */
+export function _renderForecast(forecast, maxDias = 14) {
+  const dados = (Array.isArray(forecast) ? forecast : []).slice(0, maxDias);
+  if (!dados.length) return '';
+  const maxCards = dados.reduce((m, d) => Math.max(m, +d.cards || 0), 0);
+  if (maxCards === 0) return '';
+  const totalCards = dados.reduce((s, d) => s + (+d.cards || 0), 0);
+
+  const linhas = dados.map(d => {
+    const cards = +d.cards || 0;
+    const largura = Math.max(4, Math.round((cards / maxCards) * 100));
+    const cor = cards === maxCards ? 'var(--peach)' : 'var(--blue)';
+    return `
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;min-width:0;">
+        <span style="font-size:0.6rem;color:var(--text-sub);width:38px;flex-shrink:0;text-align:right;">${_diaCurto(d.data)}</span>
+        <div style="flex:1;background:var(--bg-surface);border-radius:4px;height:14px;overflow:hidden;min-width:0;">
+          <div style="width:${largura}%;height:100%;background:${cor};border-radius:4px;"></div>
+        </div>
+        <span style="font-size:0.6rem;color:var(--text);width:24px;flex-shrink:0;">${cards}</span>
+      </div>`;
+  }).join('');
+
+  return `
+    <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <span style="font-size:0.72rem;font-weight:600;color:var(--text);">📊 Carga futura (${dados.length} dias)</span>
+        <span style="font-size:0.6rem;color:var(--text-sub);">${totalCards} card(s) a vencer</span>
+      </div>
+      ${linhas}
+    </div>`;
+}
+
 /**
  * Retenção real (à la Anki): % de acerto em reviews de cards MADUROS (memória de
  * longo prazo, não desempenho em cards novos), + contagem de cards problemáticos
@@ -1607,17 +1717,18 @@ export async function loadRetencaoReal() {
   try {
     const d = await fetch('/api/flashcards/retencao-real').then(r => r.json());
     const tr = d.true_retention;
-    // Sem reviews maduros ainda: orienta o aluno em vez de mostrar vazio.
+    const heatmapHtml = _renderHeatmap(d.por_dia);
+    const forecastHtml = _renderForecast(d.forecast);
+    // Sem reviews maduros ainda: orienta o aluno, mas já mostra heatmap/forecast
+    // se houver qualquer atividade/carga (estatísticas visuais, item #8).
     if (tr === null || tr === undefined) {
       box.innerHTML = `<div style="font-size:0.68rem;color:var(--text-sub);text-align:center;border-top:1px solid var(--border);padding-top:8px;">
         📈 Retenção real aparece após revisar cards maduros (intervalo ≥ ${d.mature_interval_days || 21} dias).
         ${d.leech_count ? `<br>🩸 ${d.leech_count} card(s) problemático(s)${d.suspensos ? `, ${d.suspensos} suspenso(s)` : ''}.` : ''}
-      </div>`;
+      </div>${heatmapHtml}${forecastHtml}`;
       return;
     }
     const cor = tr >= 90 ? 'var(--green)' : tr >= 80 ? 'var(--yellow)' : 'var(--red)';
-    const proxDias = (d.forecast || []).slice(0, 7)
-      .map(f => `${f.data.slice(5)}: ${f.cards}`).join(' · ') || 'sem revisões futuras';
     box.innerHTML = `
       <div style="border-top:1px solid var(--border);padding-top:10px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
@@ -1631,7 +1742,8 @@ export async function loadRetencaoReal() {
             ${d.leech_count ? `<br>🩸 ${d.leech_count} problemático(s)${d.suspensos ? `, ${d.suspensos} suspenso(s)` : ''}` : ''}
           </div>
         </div>
-        <div style="font-size:0.62rem;color:var(--text-sub);margin-top:6px;">📅 Próximos 7 dias: ${proxDias}</div>
+        ${heatmapHtml}
+        ${forecastHtml}
         <div style="margin-top:8px;">
           <button onclick="otimizarFSRS()" title="Ajusta o agendador FSRS ao seu histórico de acertos (à la Anki)" style="background:var(--bg);border:1px solid var(--accent);color:var(--accent);border-radius:6px;padding:5px 10px;font-size:0.72rem;font-weight:600;cursor:pointer;">🧠 Otimizar meu FSRS</button>
           <div id="fsrs-pesos-box" style="font-size:0.62rem;color:var(--text-sub);margin-top:4px;"></div>

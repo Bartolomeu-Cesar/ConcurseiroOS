@@ -964,7 +964,7 @@ nenhum ponto):
 | 5 | **Filtered / Custom Study** (cram, "só erros de hoje") | ⭐⭐ | Baixo-Médio | — | ✅ SPRINT 4 |
 | 6 | **Otimização dos pesos FSRS por usuário** (treina W[0..18]) | ⭐⭐⭐ | Alto | revlog (#1) | ✅ SPRINT 5 (S0/W[0..3]) |
 | 7 | **Image Occlusion** (ocultar regiões de imagem) | ⭐⭐ | Alto | upload mídia | 🔲 |
-| 8 | **Estatísticas visuais** (heatmap reviews, forecast carga) | ⭐⭐ | Médio | revlog (#1) | 🔲 |
+| 8 | **Estatísticas visuais** (heatmap reviews, forecast carga) | ⭐⭐ | Médio | revlog (#1) | ✅ SPRINT 7 |
 | 9 | **Undo de review** (desfazer última avaliação) | ⭐ | Baixo | revlog (#1) | ✅ SPRINT 6 |
 
 **Por que começar por #1 + #2:** aditivos ao FSRS atual (não quebram nada), baixo/médio esforço,
@@ -1141,3 +1141,39 @@ isolamento entre usuários.
 **Status do roadmap:** faltam apenas #7 Image Occlusion (esforço alto: upload de mídia +
 editor canvas) e #8 Estatísticas visuais (dados prontos em `/api/flashcards/retencao-real`
 — campos `por_dia` e `forecast` —, falta a UI de heatmap/forecast).
+
+
+### 11.7 SPRINT 7 — Estatísticas visuais (#8)
+
+**Objetivo:** transformar os dados já expostos por `/api/flashcards/retencao-real`
+(campos `por_dia` e `forecast`) em visualizações — heatmap de atividade e gráfico
+de carga futura — sem backend novo (os dados já existiam desde a Sprint 1).
+
+**Frontend (`flashcards.js`), funções puras (exportadas, retornam HTML):**
+- `_renderHeatmap(porDia)`: grade estilo GitHub dos últimos 30 dias (10 colunas).
+  Intensidade em 5 níveis de verde Catppuccin proporcional ao volume de reviews do
+  dia; tooltip com data, nº de revisões e % de acerto. Retorna '' se não há reviews.
+- `_renderForecast(forecast, maxDias=14)`: barras horizontais proporcionais ao pico
+  de carga; destaca (peach) o dia de maior carga; mostra total de cards a vencer.
+  Retorna '' se não há revisões futuras.
+- `_diaCurto(iso)`: 'YYYY-MM-DD' → 'DD/MM' sem depender de timezone.
+- Integradas no `loadRetencaoReal`: substituem o antigo texto "Próximos 7 dias".
+  Também aparecem no ramo "sem retenção madura ainda" (basta haver atividade/carga).
+
+**Contrato consumido (de `/api/flashcards/retencao-real`):**
+- `por_dia`: `[{data:'YYYY-MM-DD', reviews:N, acertos:N}]` (últimos 30 dias).
+- `forecast`: `[{data:'YYYY-MM-DD', cards:N}]` (próximos `dias_forecast`, default 14;
+  exclui suspensos e datas passadas; só `proxima_revisao > date('now')`).
+
+**Testes:** `test_flashcard_stats.py` (6) — por_dia (agrupa por dia, reviews/acertos,
+janela 30d, ordenação, vazio) e forecast (agrupa por vencimento, exclui suspensos e
+passado, respeita a janela `dias_forecast`).
+
+**Gotcha (timezone) documentado no teste:** o endpoint compara datas com o
+`date('now')` do SQLite, que é **UTC**; `date.today()` do Python é hora **local**.
+Perto da meia-noite isso diverge 1 dia e quebra asserts de forecast. Solução: os
+helpers `_sql_now/_sql_hoje/_sql_mais` derivam as datas do `date('now')` do próprio
+SQLite, mantendo o teste determinístico independentemente do fuso.
+
+**Status do roadmap:** resta apenas #7 Image Occlusion (esforço alto — upload de
+mídia + editor canvas). Os demais 8 itens estão concluídos.
