@@ -1252,3 +1252,55 @@ irmão já no futuro, suspenso, card sem note_id, nota de 1 card só, e isolamen
 uma limitação aceitável (o Anki também não restaura buries perfeitamente no undo). Os
 irmãos voltam naturalmente amanhã. Evolução futura restante: otimização completa dos
 19 pesos FSRS (gradient descent sobre o revlog).
+
+
+### 11.10 FUNDAÇÃO — Consertar portão de qualidade (CI/lint) + 2 bugs reais
+
+**Contexto:** análise de saúde do projeto revelou que `ruff check backend/` estava
+com 509 erros e exit 1 — o portão de lint do CI estava efetivamente vermelho, e
+entre os erros havia bugs latentes reais (não só estilo).
+
+**Bugs reais corrigidos:**
+- **F821** (`HTTPException` indefinido) em `study_intelligence/techniques.py`: o
+  import estava só dentro de algumas funções, não no módulo. Os ramos "Intenção não
+  encontrada" (404) e "Banca não encontrada" (400) estouravam **500 (NameError)** em
+  vez do HTTP correto. Corrigido com import de módulo + remoção de 4 imports locais.
+- **F811** (`sleep_consolidation` duplicada): duas defs na MESMA rota; a 1ª (versão
+  antiga por easiness_factor) era silenciosamente sombreada pela 2ª (FSRS/Born&Wilhelm).
+  Removida a morta. Novo teste `test_study_intelligence_techniques.py` (6 casos) cobre
+  esses ramos de erro que antes não tinham cobertura.
+
+**⚠️ GOTCHA CRÍTICO (documentar p/ sempre): ruff SIM118 e SIM401 são INCOMPATÍVEIS
+com sqlite3.Row.** O projeto usa `row_factory = sqlite3.Row` em tudo. Os fixes
+automáticos do ruff quebram silenciosamente:
+- **SIM401** (`x["k"] if "k" in x else d` → `x.get("k", d)`): `sqlite3.Row` NÃO tem
+  `.get()` → `AttributeError` em runtime.
+- **SIM118** (`"k" in row.keys()` → `"k" in row`): em `Row`, `__contains__` checa os
+  **VALORES**, não os nomes de coluna → a condição sempre falha e cai no default.
+Aplicar esses fixes quebrou **43 testes** de studyroom (pomodoro lia o default em vez
+do valor custom). **AMBAS as regras estão agora no `ignore` do pyproject** com
+comentário. Regra de ouro: para checar coluna em Row, use SEMPRE `"col" in row.keys()`;
+para default, use `row["col"] if "col" in row.keys() else default` (NUNCA `.get()`).
+
+**Determinismo do portão:** a causa raiz da instabilidade era o CI fazer
+`pip install ruff` sem pin — a versão flutuava e a contagem de erros mudava. Fixado
+**ruff==0.16.3** no `ci.yml` e `rev: v0.16.3` no `.pre-commit-config.yaml`.
+
+**Resultado:** `ruff check backend/` = exit 0 (All checks passed). Suíte: 1099 passed,
+2 skipped, 0 falhas. NOTA: `ruff format --check` reporta 177 arquivos a reformatar,
+mas o CI **só roda `ruff check`** (não o format) — reformatação não aplicada (cosmética,
+fora de escopo, risco de ruído no diff).
+
+**Pendências registradas (não corrigidas — fora do escopo desta tarefa):**
+- Tabela `study_intentions` é criada de forma lazy no POST de criar intenção; o
+  endpoint `concluir` dá 500 se nenhuma intenção foi criada antes. Avaliar migration.
+- 6 casos F841 suspeitos de lógica incompleta (reportados pelo subagente): bloco de
+  questões não distribuído no planejador semanal; format variation calculada mas não
+  aplicada; metas hardcoded em misc.py (deveria usar metas_config); métricas de ritmo
+  de tópicos ignoradas em treinador/analise.py; flag has_ciclo morta; ano descartado
+  na importação de questões.
+- **JWT_SECRET**: a validação de força mínima (≥32 bytes, RFC 7518 §3.2) JÁ EXISTE e é
+  testada (`_get_jwt_secret` + test_settings_jwt.py). Política atual: env var curta é
+  respeitada com AVISO (não sobrescreve config do operador). Ação de DEPLOY, não de
+  código: trocar o JWT_SECRET do ambiente (30 bytes) por `secrets.token_hex(32)` OU
+  remover a env var para usar o arquivo `.jwt_secret` auto-gerado (32 bytes fortes).
