@@ -963,7 +963,7 @@ nenhum ponto):
 | 4 | **Cards reversos / note type básico** (frente↔verso) | ⭐⭐ | Médio | — | ✅ SPRINT 3 |
 | 5 | **Filtered / Custom Study** (cram, "só erros de hoje") | ⭐⭐ | Baixo-Médio | — | ✅ SPRINT 4 |
 | 6 | **Otimização dos pesos FSRS por usuário** (treina W[0..18]) | ⭐⭐⭐ | Alto | revlog (#1) | ✅ SPRINT 5 (S0/W[0..3]) |
-| 7 | **Image Occlusion** (ocultar regiões de imagem) | ⭐⭐ | Alto | upload mídia | 🔲 |
+| 7 | **Image Occlusion** (ocultar regiões de imagem) | ⭐⭐ | Alto | upload mídia | ✅ SPRINT 8 |
 | 8 | **Estatísticas visuais** (heatmap reviews, forecast carga) | ⭐⭐ | Médio | revlog (#1) | ✅ SPRINT 7 |
 | 9 | **Undo de review** (desfazer última avaliação) | ⭐ | Baixo | revlog (#1) | ✅ SPRINT 6 |
 
@@ -1177,3 +1177,47 @@ SQLite, mantendo o teste determinístico independentemente do fuso.
 
 **Status do roadmap:** resta apenas #7 Image Occlusion (esforço alto — upload de
 mídia + editor canvas). Os demais 8 itens estão concluídos.
+
+
+### 11.8 SPRINT 8 — Image Occlusion (#7)
+
+**Objetivo:** flashcards baseados em imagem com regiões ocultas (estilo Anki Image
+Occlusion) — ideais para anatomia, mapas, esquemas e diagramas. Cada máscara vira 1
+card: esconde uma região e revela as demais ("hide one, show rest").
+
+**Reuso-chave:** o modelo de oclusão já existia em `revisao_blocos` (migration 62) —
+retângulos em JSON com coords relativas 0-1. A Sprint reusa o validador
+`_validar_oclusoes` de `routers/revisao.py` (clampa 0-1, máx. 60 regiões) e o teto
+`_MAX_IMAGEM_DATA_CHARS` de `schemas.py`, evitando duplicação.
+
+**Schema (migration aditiva):**
+- Migration 81 (`_m81_flashcards_image_occlusion`): colunas em `flashcards`:
+  `imagem_data` (data URI base64, compartilhado entre os cards da nota), `oclusoes`
+  (JSON com TODAS as máscaras) e `oclusao_index` (0-based; qual máscara ESTE card
+  esconde; -1 = card comum). Cards de oclusão têm `card_tipo='oclusao'`.
+
+**Backend:**
+- `POST /api/flashcards/image-occlusion` {imagem, oclusoes[], materia?}: valida data
+  URI de imagem (só `data:image/`), tamanho (≤ `_MAX_IMAGEM_DATA_CHARS`), e as máscaras
+  (reusa `_validar_oclusoes`; ao menos 1). Cria N cards (1 por máscara) com o mesmo
+  `note_id` (id do primeiro) e a mesma imagem. Respeita o limite do plano (N cards).
+- `/today` agora expõe `card_tipo/imagem_data/oclusoes/oclusao_index`. Cards de oclusão
+  herdam integralmente o fluxo FSRS/revlog/leech/undo (nada muda no review-fsrs).
+
+**Frontend (`index.html` + `flashcards.js`):** painel "🖼️ Image Occlusion" com
+upload de imagem (lida como data URL, limite 2MB) e editor: `img` + overlay onde o
+aluno arrasta para desenhar retângulos (pointer events → coords 0-1). Controles:
+desfazer região, limpar, contador. `criarImageOcclusion()` envia ao endpoint.
+`_renderOcclusion(card, revelar)` desenha a imagem na revisão — na PERGUNTA cobre só
+a máscara-alvo (`oclusao_index`); na RESPOSTA revela a imagem inteira. `showCurrentFlashcard`
+ganhou o branch `card_tipo==='oclusao'`. Funções expostas via window no app.js.
+
+**Testes:** `test_flashcard_image_occlusion.py` (10) — cria 1 card/máscara, note_id/imagem
+compartilhados, oclusao_index 0-based, oclusões como lista ou string JSON, validações
+(imagem obrigatória, data-URI, ≥1 máscara, retângulos degenerados descartados),
+integração com /today (expõe os campos) e review-fsrs (grava no revlog), isolamento por user.
+
+**🎉 ROADMAP CONCLUÍDO:** todos os 9 itens do roadmap "Anki-like" estão implementados
+(#1 revlog+retenção, #2 leech, #3 cloze, #4 reverso, #5 custom study, #6 otimização
+FSRS S0, #7 image occlusion, #8 estatísticas visuais, #9 undo). Evoluções futuras
+possíveis: otimização completa dos 19 pesos FSRS (gradient descent) e sibling burying.

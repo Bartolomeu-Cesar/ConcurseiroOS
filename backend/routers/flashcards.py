@@ -14,6 +14,7 @@ from schemas import (
     FlashcardReviewSM2Response,
     FlashcardUpdate,
     OkResponse,
+    _MAX_IMAGEM_DATA_CHARS,
 )
 from sanitize import sanitize_input
 from utils import calcular_tempo_flashcard, sql_paginate, today_str, update_streak
@@ -74,12 +75,12 @@ def get_flashcards_today(
 
     if materia:
         rows = conn.execute(
-            "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia, fsrs_state, COALESCE(is_leech,0) AS is_leech, COALESCE(lapses,0) AS lapses FROM flashcards WHERE proxima_revisao <= ? AND materia = ? AND user_id = ? AND COALESCE(suspenso, 0) = 0",
+            "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia, fsrs_state, COALESCE(is_leech,0) AS is_leech, COALESCE(lapses,0) AS lapses, COALESCE(card_tipo,'normal') AS card_tipo, COALESCE(imagem_data,'') AS imagem_data, COALESCE(oclusoes,'') AS oclusoes, COALESCE(oclusao_index,-1) AS oclusao_index FROM flashcards WHERE proxima_revisao <= ? AND materia = ? AND user_id = ? AND COALESCE(suspenso, 0) = 0",
             (today_str(), materia, user_id),
         ).fetchall()
     else:
         rows = conn.execute(
-            "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia, fsrs_state, COALESCE(is_leech,0) AS is_leech, COALESCE(lapses,0) AS lapses FROM flashcards WHERE proxima_revisao <= ? AND user_id = ? AND COALESCE(suspenso, 0) = 0",
+            "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia, fsrs_state, COALESCE(is_leech,0) AS is_leech, COALESCE(lapses,0) AS lapses, COALESCE(card_tipo,'normal') AS card_tipo, COALESCE(imagem_data,'') AS imagem_data, COALESCE(oclusoes,'') AS oclusoes, COALESCE(oclusao_index,-1) AS oclusao_index FROM flashcards WHERE proxima_revisao <= ? AND user_id = ? AND COALESCE(suspenso, 0) = 0",
             (today_str(), user_id),
         ).fetchall()
     items = [dict(r) for r in rows]
@@ -570,6 +571,88 @@ def create_flashcards_cloze(body: dict = Body(...), conn=Depends(get_db_session)
         "cards": [
             {"id": i, "pergunta": c["pergunta"], "resposta": c["resposta"]} for i, c in zip(ids, cards, strict=False)
         ],
+    }
+
+
+@router.post(
+    "/api/flashcards/image-occlusion",
+    summary="Criar flashcards de Image Occlusion",
+    description="Cria flashcards a partir de uma imagem com regiões ocultas (máscaras). Gera 1 card por máscara: cada card esconde uma região e revela as demais (estilo Anki Image Occlusion).",
+)
+def create_flashcards_image_occlusion(
+    body: dict = Body(...), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)
+):
+    """Cria cards de Image Occlusion (à la Anki).
+
+    body: {imagem: "data:image/png;base64,...", oclusoes: [{x,y,w,h}, ...], materia?: str}
+
+    Gera 1 flashcard por máscara (modo "hide one, show rest"): no card N, a máscara N
+    fica OCULTA (pergunta = "o que está oculto?") e as demais REVELADAS (resposta mostra
+    a imagem inteira). Todos compartilham a mesma imagem e o mesmo note_id. Reusa o
+    validador de oclusões de revisao.py (retângulos coords 0-1, máx. 60). Respeita o
+    limite do plano (conta N cards, um por máscara). Herdam o fluxo FSRS/revlog/leech/undo.
+    """
+    import json
+
+    from plans import enforce_plan_limit
+
+    from routers.revisao import _validar_oclusoes
+
+    imagem = (body.get("imagem") or body.get("imagem_data") or "").strip()
+    materia = sanitize_input((body.get("materia") or "").strip())
+
+    if not imagem:
+        raise HTTPException(status_code=400, detail="Imagem é obrigatória.")
+    # Aceitar apenas data URI de imagem (evita payload arbitrário / XSS).
+    if not imagem.startswith("data:image/"):
+        raise HTTPException(status_code=422, detail="imagem deve ser um data URI de imagem (data:image/...).")
+    # Limite de tamanho do data URI (mesmo teto dos recortes de revisão).
+    if len(imagem) > _MAX_IMAGEM_DATA_CHARS:
+        raise HTTPException(status_code=413, detail="Imagem muito grande.")
+
+    # Oclusões: aceita lista (JSON nativo) ou string JSON; valida/normaliza.
+    raw_ocl = body.get("oclusoes")
+    if isinstance(raw_ocl, (list, dict)):
+        raw_ocl = json.dumps(raw_ocl)
+    oclusoes = _validar_oclusoes(raw_ocl or "")
+    mascaras = json.loads(oclusoes) if oclusoes else []
+    if not mascaras:
+        raise HTTPException(
+            status_code=400,
+            detail="Defina ao menos uma região de oclusão (retângulo) sobre a imagem.",
+        )
+
+    # Limite do plano: cada máscara vira 1 card.
+    for _ in mascaras:
+        enforce_plan_limit(conn, user_id, "flashcards")
+
+    ids = []
+    note_id = None
+    total = len(mascaras)
+    for idx in range(total):
+        pergunta = f"Oclusão de imagem — o que está sob a região oculta? ({idx + 1}/{total})"
+        resposta = "Veja a região revelada na imagem."
+        cur = conn.execute(
+            """INSERT INTO flashcards
+               (pergunta, resposta, proxima_revisao, materia, user_id, card_tipo,
+                imagem_data, oclusoes, oclusao_index)
+               VALUES (?, ?, ?, ?, ?, 'oclusao', ?, ?, ?)""",
+            (pergunta, resposta, today_str(), materia, user_id, imagem, oclusoes, idx),
+        )
+        cid = cur.lastrowid
+        ids.append(cid)
+        if note_id is None:
+            note_id = cid  # o primeiro card define o note_id do grupo
+        conn.execute("UPDATE flashcards SET note_id = ? WHERE id = ?", (note_id, cid))
+
+    conn.commit()
+    log.info(f"Image occlusion flashcards created: {len(ids)} cards (user={user_id})")
+    return {
+        "ok": True,
+        "criados": len(ids),
+        "ids": ids,
+        "note_id": note_id,
+        "mascaras": total,
     }
 
 

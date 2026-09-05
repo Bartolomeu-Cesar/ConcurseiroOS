@@ -272,6 +272,12 @@ function showCurrentFlashcard() {
     const variationBadge = `<span style="font-size:0.65rem;background:var(--peach);color:var(--bg);padding:2px 6px;border-radius:4px;margin-bottom:4px;display:inline-block;">🔄 Variação de Contexto</span><br>`;
     q.innerHTML = badge + leechBadge + variationBadge + `<div style="font-size:0.72rem;color:var(--text-sub);margin-bottom:6px;">A resposta é a pista — lembre o conceito/pergunta original:</div>` + `<div style="font-weight:600;">${escapeHtml(card.resposta)}</div>`;
     a.textContent = card.pergunta; // Inverte: mostra pergunta como "resposta"
+  } else if (card.card_tipo === 'oclusao' && card.imagem_data) {
+    // Image Occlusion (à la Anki): pergunta = imagem com a região-alvo oculta;
+    // resposta = imagem inteira revelada.
+    const oclBadge = `<span style="font-size:0.65rem;background:var(--accent);color:var(--bg);padding:2px 6px;border-radius:4px;margin-bottom:4px;display:inline-block;">🖼️ Oclusão de imagem</span><br>`;
+    q.innerHTML = badge + leechBadge + oclBadge + _renderOcclusion(card, false);
+    a.innerHTML = _renderOcclusion(card, true);
   } else {
     q.innerHTML = badge + leechBadge + escapeHtml(card.pergunta);
     a.textContent = card.resposta;
@@ -2047,6 +2053,9 @@ export function initFlashcards(deps) {
   // Carregar disciplinas para o select de criação
   loadAddMaterias();
 
+  // Inicializar o editor de Image Occlusion (upload + desenho de máscaras)
+  ioInit();
+
   // Verificar se veio do dashboard com matéria para revisão
   const pendingMateria = sessionStorage.getItem('flash_start_materia');
   if (pendingMateria) {
@@ -2094,6 +2103,8 @@ async function loadAddMaterias() {
     if (sel) sel.innerHTML = opts;
     const clozeSel = document.getElementById('cloze-materia');
     if (clozeSel) clozeSel.innerHTML = opts;
+    const ioSel = document.getElementById('io-materia');
+    if (ioSel) ioSel.innerHTML = opts;
   } catch(e) { /* silencioso */ }
 }
 
@@ -2176,6 +2187,170 @@ export async function criarCloze() {
   } catch(e) {
     toast('Erro ao criar cards Cloze.', 'error');
   }
+}
+
+
+// ============================================================
+// IMAGE OCCLUSION — cards de imagem com regiões ocultas (à la Anki)
+// Reusa o modelo de oclusões (retângulos coords 0-1). O editor deixa o aluno
+// desenhar retângulos sobre a imagem; cada um vira 1 card (esconde a região,
+// revela as demais). Backend: POST /api/flashcards/image-occlusion.
+// ============================================================
+
+let _ioImagem = '';        // data URI da imagem carregada
+let _ioMascaras = [];      // [{x,y,w,h}] em coords relativas 0-1
+let _ioDrag = null;        // estado do arraste em andamento
+
+// Inicializa o editor quando o usuário escolhe um arquivo de imagem.
+export function ioInit() {
+  const input = document.getElementById('io-file');
+  if (!input || input._ioBound) return;
+  input._ioBound = true;
+  input.addEventListener('change', _ioOnFile);
+  const overlay = document.getElementById('io-overlay');
+  if (overlay) {
+    overlay.addEventListener('pointerdown', _ioPointerDown);
+    overlay.addEventListener('pointermove', _ioPointerMove);
+    overlay.addEventListener('pointerup', _ioPointerUp);
+    overlay.addEventListener('pointercancel', _ioPointerUp);
+  }
+}
+
+function _ioOnFile(e) {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) { toast('Selecione um arquivo de imagem.', 'warning'); return; }
+  // Limite ~2MB (o data URI base64 fica ~33% maior; teto do backend é ~2.8M chars).
+  if (file.size > 2 * 1024 * 1024) { toast('Imagem muito grande (máx. 2MB).', 'warning'); return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    _ioImagem = reader.result;
+    _ioMascaras = [];
+    const img = document.getElementById('io-img');
+    img.src = _ioImagem;
+    document.getElementById('io-editor-wrap').style.display = 'block';
+    document.getElementById('io-controls').style.display = 'flex';
+    _ioRenderMascaras();
+  };
+  reader.readAsDataURL(file);
+}
+
+// Converte um evento de ponteiro em coords relativas [0,1] dentro do overlay.
+function _ioRelCoords(ev) {
+  const overlay = document.getElementById('io-overlay');
+  const r = overlay.getBoundingClientRect();
+  const x = (ev.clientX - r.left) / r.width;
+  const y = (ev.clientY - r.top) / r.height;
+  return { x: Math.max(0, Math.min(1, x)), y: Math.max(0, Math.min(1, y)) };
+}
+
+function _ioPointerDown(ev) {
+  if (!_ioImagem) return;
+  ev.preventDefault();
+  const p = _ioRelCoords(ev);
+  _ioDrag = { x0: p.x, y0: p.y, x1: p.x, y1: p.y };
+  try { ev.target.setPointerCapture(ev.pointerId); } catch (e) {}
+}
+
+function _ioPointerMove(ev) {
+  if (!_ioDrag) return;
+  const p = _ioRelCoords(ev);
+  _ioDrag.x1 = p.x; _ioDrag.y1 = p.y;
+  _ioRenderMascaras();
+}
+
+function _ioPointerUp() {
+  if (!_ioDrag) return;
+  const x = Math.min(_ioDrag.x0, _ioDrag.x1);
+  const y = Math.min(_ioDrag.y0, _ioDrag.y1);
+  const w = Math.abs(_ioDrag.x1 - _ioDrag.x0);
+  const h = Math.abs(_ioDrag.y1 - _ioDrag.y0);
+  _ioDrag = null;
+  // Ignora retângulos minúsculos (clique acidental).
+  if (w >= 0.02 && h >= 0.02) {
+    _ioMascaras.push({ x: +x.toFixed(4), y: +y.toFixed(4), w: +w.toFixed(4), h: +h.toFixed(4) });
+  }
+  _ioRenderMascaras();
+}
+
+// Desenha os retângulos (máscaras salvas + a que está sendo arrastada).
+function _ioRenderMascaras() {
+  const overlay = document.getElementById('io-overlay');
+  if (!overlay) return;
+  const rets = _ioMascaras.map((m, i) =>
+    `<div style="position:absolute;left:${m.x * 100}%;top:${m.y * 100}%;width:${m.w * 100}%;height:${m.h * 100}%;background:rgba(203,166,247,0.55);border:2px solid var(--accent);border-radius:3px;box-sizing:border-box;">
+       <span style="position:absolute;top:-2px;left:2px;font-size:0.6rem;color:var(--bg);font-weight:700;">${i + 1}</span>
+     </div>`
+  );
+  if (_ioDrag) {
+    const x = Math.min(_ioDrag.x0, _ioDrag.x1), y = Math.min(_ioDrag.y0, _ioDrag.y1);
+    const w = Math.abs(_ioDrag.x1 - _ioDrag.x0), h = Math.abs(_ioDrag.y1 - _ioDrag.y0);
+    rets.push(`<div style="position:absolute;left:${x * 100}%;top:${y * 100}%;width:${w * 100}%;height:${h * 100}%;background:rgba(203,166,247,0.35);border:2px dashed var(--accent);box-sizing:border-box;"></div>`);
+  }
+  overlay.innerHTML = rets.join('');
+  const cont = document.getElementById('io-contador');
+  if (cont) cont.textContent = `${_ioMascaras.length} região(ões)`;
+}
+
+export function ioUndoMascara() {
+  _ioMascaras.pop();
+  _ioRenderMascaras();
+}
+
+export function ioLimparMascaras() {
+  _ioMascaras = [];
+  _ioRenderMascaras();
+}
+
+export async function criarImageOcclusion() {
+  if (!_ioImagem) { toast('Envie uma imagem primeiro.', 'warning'); return; }
+  if (!_ioMascaras.length) { toast('Desenhe ao menos uma região sobre a imagem.', 'warning'); return; }
+  if (window.checkPlanLimit && !(await window.checkPlanLimit('flashcards'))) return;
+  const materia = document.getElementById('io-materia')?.value || '';
+  try {
+    const data = await api('/api/flashcards/image-occlusion', {
+      method: 'POST',
+      body: { imagem: _ioImagem, oclusoes: _ioMascaras, materia },
+    });
+    toast(`🖼️ ${data.criados} card(s) de oclusão criado(s)!`, 'success');
+    // Limpa o editor.
+    _ioImagem = ''; _ioMascaras = [];
+    const input = document.getElementById('io-file'); if (input) input.value = '';
+    document.getElementById('io-editor-wrap').style.display = 'none';
+    document.getElementById('io-controls').style.display = 'none';
+    _ioRenderMascaras();
+    loadFlashcardsToday();
+    loadAllFlashcards();
+  } catch(e) {
+    toast('Erro ao criar cards de oclusão.', 'error');
+  }
+}
+
+/**
+ * Monta o HTML da imagem com máscaras para a revisão de um card de oclusão.
+ * @param {object} card card com imagem_data, oclusoes (JSON) e oclusao_index.
+ * @param {boolean} revelar se true, mostra a imagem inteira (resposta); se false,
+ *   oculta a máscara-alvo (oclusao_index) e revela as demais (pergunta).
+ * @returns {string} HTML, ou '' se o card não for de oclusão válido.
+ */
+export function _renderOcclusion(card, revelar) {
+  if (!card || !card.imagem_data) return '';
+  let mascaras = [];
+  try { mascaras = JSON.parse(card.oclusoes || '[]'); } catch (e) { mascaras = []; }
+  const alvo = (card.oclusao_index === undefined || card.oclusao_index === null) ? -1 : card.oclusao_index;
+  const overlays = mascaras.map((m, i) => {
+    // Na PERGUNTA: só a máscara-alvo aparece (oculta a região). As demais somem.
+    // Na RESPOSTA: nenhuma máscara (imagem inteira revelada).
+    if (revelar || i !== alvo) return '';
+    return `<div style="position:absolute;left:${m.x * 100}%;top:${m.y * 100}%;width:${m.w * 100}%;height:${m.h * 100}%;background:var(--accent);border-radius:3px;box-sizing:border-box;"></div>`;
+  }).join('');
+  const dica = revelar
+    ? '<div style="font-size:0.7rem;color:var(--green);margin-bottom:6px;">✅ Região revelada</div>'
+    : '<div style="font-size:0.7rem;color:var(--text-sub);margin-bottom:6px;">🖼️ O que está sob a região destacada?</div>';
+  return `${dica}<div style="position:relative;display:inline-block;max-width:100%;">
+    <img src="${card.imagem_data}" alt="Imagem de oclusão" style="display:block;max-width:100%;border-radius:8px;">
+    ${overlays}
+  </div>`;
 }
 
 

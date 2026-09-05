@@ -1255,6 +1255,30 @@ def _m80_revlog_estado_card_antes(conn):
         pass  # coluna já existe
 
 
+def _m81_flashcards_image_occlusion(conn):
+    """Image Occlusion (à la Anki): flashcards baseados em imagem com regiões ocultas.
+
+    Reusa o modelo de oclusões de revisao_blocos (JSON de retângulos coords 0-1).
+    Uma "nota" de imagem gera N cards (1 por máscara): o card N esconde a máscara N
+    e revela as demais (modo "hide one, show rest" do Anki). Colunas em flashcards:
+    - imagem_data: data URI da imagem (base64), compartilhado entre os cards da nota.
+    - oclusoes: JSON com a lista de TODAS as máscaras (retângulos 0-1) da imagem.
+    - oclusao_index: índice (0-based) da máscara que ESTE card esconde; NULL/-1 = card
+      normal (não é oclusão). Cards de oclusão herdam todo o fluxo FSRS/revlog/leech/undo.
+    Vazio/NULL → card comum (comportamento inalterado).
+    """
+    for col, ddl in (
+        ("imagem_data", "ALTER TABLE flashcards ADD COLUMN imagem_data TEXT DEFAULT ''"),
+        ("oclusoes", "ALTER TABLE flashcards ADD COLUMN oclusoes TEXT DEFAULT ''"),
+        ("oclusao_index", "ALTER TABLE flashcards ADD COLUMN oclusao_index INTEGER DEFAULT -1"),
+    ):
+        try:
+            conn.execute(ddl)
+            log.info(f"Migration 81: added column {col} to flashcards")
+        except Exception:
+            pass  # coluna já existe
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -1336,6 +1360,7 @@ MIGRATIONS = [
     (78, _m78_flashcards_reverso),
     (79, _m79_metas_fsrs_weights),
     (80, _m80_revlog_estado_card_antes),
+    (81, _m81_flashcards_image_occlusion),
 ]
 
 

@@ -380,6 +380,24 @@
       <div id="cloze-preview" style="display:none;font-size:0.78rem;color:var(--text-sub);background:var(--bg-surface);border-radius:8px;padding:8px;margin-bottom:8px;"></div>
       <button onclick="criarCloze()">Criar cards Cloze</button>
     </div>
+    <div class="flash-panel flash-add-form">
+      <h2>🖼️ Image Occlusion (ocultar regiões)</h2>
+      <p style="font-size:0.75rem;color:var(--text-sub);margin:0 0 8px;">Ideal para anatomia, mapas, esquemas e diagramas. Envie uma imagem, desenhe retângulos sobre as regiões a ocultar (arraste sobre a imagem). Cada retângulo vira um card: esconde uma região e revela as demais.</p>
+      <input type="file" id="io-file" accept="image/*" aria-label="Imagem para oclusão" style="width:100%;font-size:0.8rem;margin-bottom:8px;color:var(--text);">
+      <div id="io-editor-wrap" style="display:none;position:relative;max-width:100%;overflow:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;background:var(--bg-surface);touch-action:none;">
+        <img id="io-img" alt="Pré-visualização da imagem para oclusão" style="display:block;max-width:100%;user-select:none;pointer-events:none;">
+        <div id="io-overlay" style="position:absolute;inset:0;cursor:crosshair;"></div>
+      </div>
+      <div id="io-controls" style="display:none;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
+        <button type="button" onclick="ioUndoMascara()" style="flex:1;min-width:90px;background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:0.78rem;cursor:pointer;">↩ Desfazer região</button>
+        <button type="button" onclick="ioLimparMascaras()" style="flex:1;min-width:90px;background:var(--bg-surface);color:var(--red);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:0.78rem;cursor:pointer;">🗑 Limpar</button>
+        <span id="io-contador" style="flex:1;min-width:90px;font-size:0.72rem;color:var(--text-sub);align-self:center;text-align:center;">0 região(ões)</span>
+      </div>
+      <select id="io-materia" aria-label="Disciplina da oclusão" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;margin-bottom:8px;">
+        <option value="">📚 Disciplina (opcional)</option>
+      </select>
+      <button onclick="criarImageOcclusion()">Criar cards de Oclusão</button>
+    </div>
     <div class="flash-panel">
       <h2>📦 Todos os Flashcards</h2>
       <!-- Modos de Estudo -->
