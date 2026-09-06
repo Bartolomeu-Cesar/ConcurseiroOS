@@ -1553,3 +1553,46 @@ se quiser unificar. Testes atualizados para enviar a seed (o antigo teste de "de
 do daily virou teste de seed presente + validação). Total: **22 testes** de embaralhamento
 passando (viewer 5, daily 4, studyroom 4, responder 9). Regra geral do contrato: quem serve
 com `seed` DEVE reenviar a MESMA `seed` no `/responder`; sem seed = determinístico legado.
+
+
+---
+
+## 15. SESSÃO 06/09/2026 — Micro-interações, Motion e Progressive Disclosure (M1-M5)
+
+Modernização visual avançada (nível "edtech global"): motion intencional, feedback tátil e
+redução de densidade. TUDO respeitando `prefers-reduced-motion` (o bloco global em main.css
+com `!important` já desliga toda animação/transição para quem prefere). SW v264 → **v269**.
+
+- **M1 Motion de entrada** (`c92f716`): keyframe `fade-in-up` + utilitário `.animate-in`;
+  `.panel`/`.card`/`.stat-card` aparecem com fade-in-up escalonado (stagger por nth-child)
+  na carga. Não reanima em hover (só entrada).
+- **M2 Acerto/erro** (`89934e4`): keyframes `answer-pop` (escala + glow verde) e
+  `answer-shake`; classes `.answer-correct`/`.answer-wrong` aplicadas em `questoes.js`
+  `confirmarResposta` (alternativa correta pulsa, errada treme). Reutilizáveis nos demais fluxos.
+- **M3 Hover/press** (`51d4d8d`): utilitário `.interactive` (hover eleva + press afunda,
+  com override light-theme) e feedback de press (`:active { scale(0.96) }`) em botões-ícone
+  (`.tbtn`, `.iobtn`, itens da sidebar).
+- **M4 Progressive disclosure — Treinador** (`fc2f507`): componente `.collapsible`
+  reutilizável usando `<details>/<summary>` NATIVO (acessível por teclado, sem JS; seta gira
+  ao abrir; corpo com fade-in). No dashboard, todo o bloco de "técnicas avançadas" (CAT,
+  ansiedade, Feynman, elaboração, retrieval, pontos fracos, conexões, tempo, micro-revisão,
+  spacing) foi agrupado num único `<details>` recolhido por padrão — reduz MUITO a densidade
+  inicial da aba, mantendo visíveis Treinador/Trilha/Revisões/Daily Challenge.
+- **M5 Progressive disclosure — Study Room** (`66d4cce`): "Sons Ambiente" e "Participantes"
+  viraram `.collapsible`. Intervenção CIRÚRGICA: só seções ESTÁTICAS e isoladas — as seções
+  mostradas/ocultadas por JS via `.hidden` (elaboration/mindfulness/challenge/break) NÃO
+  foram tocadas para não conflitar com a lógica de show/hide.
+
+**Componente reutilizável para novas telas:**
+```html
+<details class="collapsible">
+  <summary>Título <span class="collapsible-hint">dica opcional</span></summary>
+  <div class="collapsible-body"> ...conteúdo... </div>
+</details>
+```
+Usar `.interactive` em itens de lista clicáveis; `.animate-in` para aparição pontual;
+`.answer-correct`/`.answer-wrong` para feedback de resposta.
+
+Sanity check de chaves do main.css e de tags <div>/<details>/<summary> a cada onda. Nota:
+o dashboard.html tem 1 `<div>` extra pré-existente (225/224 no HEAD) — não introduzido aqui,
+provavelmente `<div` dentro de string JS; tolerado pelo browser, fora do escopo desta sessão.
