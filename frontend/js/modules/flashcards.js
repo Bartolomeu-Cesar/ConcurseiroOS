@@ -2185,6 +2185,192 @@ function _initFlashKeyboard() {
   document.addEventListener('keydown', _handleFlashKey);
 }
 
+// ============================================================
+// MATCH GAME (jogo de pares, cronometrado — estilo Quizlet)
+// Frontend puro: reusa GET /api/flashcards/aleatorio. Pareia termo↔definição.
+// ============================================================
+let _matchState = null;
+let _matchTimerId = null;
+
+const _MATCH_PARES = 6; // pares por rodada (12 cartas)
+
+function _matchShuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function _matchTrunc(txt, max = 90) {
+  const t = (txt || '').trim().replace(/\s+/g, ' ');
+  return t.length > max ? t.slice(0, max - 1) + '…' : t;
+}
+
+export async function startMatchGame() {
+  const area = document.getElementById('match-game-area');
+  if (!area) return;
+  area.style.display = 'block';
+  area.innerHTML = '<div style="text-align:center;color:var(--text-sub);padding:16px;">Carregando jogo…</div>';
+  area.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  let cards = [];
+  try {
+    cards = await fetch(`/api/flashcards/aleatorio?quantidade=${_MATCH_PARES}`).then(r => r.json());
+  } catch (e) {
+    area.innerHTML = '';
+    toast('Erro ao carregar o jogo de pares', 'error');
+    return;
+  }
+  // Precisa de pergunta E resposta textuais; ignora vazios.
+  cards = (cards || []).filter(c => (c.pergunta || '').trim() && (c.resposta || '').trim());
+  if (cards.length < 2) {
+    area.innerHTML = `<div class="flash-empty"><span class="fe-icon">🔗</span>
+      <div class="fe-title">Poucos flashcards para o jogo</div>
+      <div class="fe-sub">Crie ao menos 2 cards com pergunta e resposta para jogar o pareamento.</div>
+      <div class="fe-actions"><button class="fe-btn fe-btn-alt" onclick="closeMatchGame()">Fechar</button></div></div>`;
+    return;
+  }
+
+  // Monta os itens: cada card vira 2 cartas (termo/definição) com o mesmo pairId.
+  const itens = [];
+  cards.forEach((c, i) => {
+    itens.push({ pairId: i, lado: 'q', texto: _matchTrunc(c.pergunta) });
+    itens.push({ pairId: i, lado: 'a', texto: _matchTrunc(c.resposta) });
+  });
+  _matchState = {
+    itens: _matchShuffle(itens),
+    selecionado: null,   // índice do item selecionado
+    restantes: cards.length,
+    total: cards.length,
+    erros: 0,
+    inicio: Date.now(),
+    travado: false,      // trava cliques durante a animação de erro
+  };
+  _renderMatchGame();
+  _matchStartTimer();
+}
+
+function _matchStartTimer() {
+  _matchStopTimer();
+  _matchTimerId = setInterval(() => {
+    const el = document.getElementById('match-timer');
+    if (el && _matchState) {
+      const s = Math.floor((Date.now() - _matchState.inicio) / 1000);
+      el.textContent = `⏱ ${s}s`;
+    }
+  }, 250);
+}
+
+function _matchStopTimer() {
+  if (_matchTimerId) { clearInterval(_matchTimerId); _matchTimerId = null; }
+}
+
+function _renderMatchGame() {
+  const area = document.getElementById('match-game-area');
+  if (!area || !_matchState) return;
+  const cartas = _matchState.itens.map((it, idx) => {
+    if (it.resolvido) {
+      return `<div class="match-card match-done" aria-hidden="true"></div>`;
+    }
+    const sel = _matchState.selecionado === idx ? ' match-sel' : '';
+    const ladoIco = it.lado === 'q' ? '❓' : '💡';
+    return `<button type="button" class="match-card${sel}" data-idx="${idx}"
+      onclick="matchPick(${idx})" aria-label="${it.lado === 'q' ? 'Termo' : 'Definição'}: ${escapeHtml(it.texto)}">
+      <span class="match-ico">${ladoIco}</span><span class="match-text">${escapeHtml(it.texto)}</span></button>`;
+  }).join('');
+
+  area.innerHTML = `
+    <div class="match-wrap">
+      <div class="match-header">
+        <span class="match-title">🔗 Jogo de Pares</span>
+        <span id="match-timer" class="match-timer">⏱ 0s</span>
+        <span class="match-progress">${_matchState.total - _matchState.restantes}/${_matchState.total}</span>
+        <button type="button" class="match-close" onclick="closeMatchGame()" aria-label="Fechar jogo">✕</button>
+      </div>
+      <div class="match-hint">Clique num termo e na sua definição para parear. Pares certos somem; seja rápido!</div>
+      <div class="match-grid">${cartas}</div>
+    </div>`;
+}
+
+export function matchPick(idx) {
+  if (!_matchState || _matchState.travado) return;
+  const it = _matchState.itens[idx];
+  if (!it || it.resolvido) return;
+
+  // Clicar no já selecionado = desmarcar
+  if (_matchState.selecionado === idx) {
+    _matchState.selecionado = null;
+    _renderMatchGame();
+    return;
+  }
+
+  // Primeiro clique da dupla
+  if (_matchState.selecionado === null) {
+    _matchState.selecionado = idx;
+    _renderMatchGame();
+    return;
+  }
+
+  // Segundo clique: avalia o par
+  const prevIdx = _matchState.selecionado;
+  const prev = _matchState.itens[prevIdx];
+  // Só parear lados diferentes (termo com definição) do MESMO card
+  const acertou = prev.pairId === it.pairId && prev.lado !== it.lado;
+
+  if (acertou) {
+    prev.resolvido = true;
+    it.resolvido = true;
+    _matchState.selecionado = null;
+    _matchState.restantes -= 1;
+    _renderMatchGame();
+    if (_matchState.restantes === 0) _finishMatchGame();
+  } else {
+    // Erro: pisca os dois em vermelho e desmarca
+    _matchState.erros += 1;
+    _matchState.travado = true;
+    _renderMatchGame();
+    const els = document.querySelectorAll(`.match-card[data-idx="${prevIdx}"], .match-card[data-idx="${idx}"]`);
+    els.forEach(e => e.classList.add('match-wrong'));
+    setTimeout(() => {
+      if (!_matchState) return;
+      _matchState.selecionado = null;
+      _matchState.travado = false;
+      _renderMatchGame();
+    }, 550);
+  }
+}
+
+function _finishMatchGame() {
+  _matchStopTimer();
+  const area = document.getElementById('match-game-area');
+  if (!area || !_matchState) return;
+  const segs = Math.max(1, Math.floor((Date.now() - _matchState.inicio) / 1000));
+  const erros = _matchState.erros;
+  const perfeito = erros === 0;
+  area.innerHTML = `
+    <div class="match-wrap">
+      <div class="flash-empty" style="padding:20px;">
+        <span class="fe-icon">${perfeito ? '🏆' : '✅'}</span>
+        <div class="fe-title">${perfeito ? 'Perfeito!' : 'Concluído!'}</div>
+        <div class="fe-sub">Você pareou ${_matchState.total} pares em <strong>${segs}s</strong>${erros ? ` · ${erros} erro(s)` : ' · sem erros'}.</div>
+        <div class="fe-actions">
+          <button class="fe-btn" onclick="startMatchGame()">🔄 Jogar de novo</button>
+          <button class="fe-btn fe-btn-alt" onclick="closeMatchGame()">Fechar</button>
+        </div>
+      </div>
+    </div>`;
+  _matchState = null;
+}
+
+export function closeMatchGame() {
+  _matchStopTimer();
+  _matchState = null;
+  const area = document.getElementById('match-game-area');
+  if (area) { area.style.display = 'none'; area.innerHTML = ''; }
+}
+
 export function initFlashcards(deps) {
   _loadMetas = deps.loadMetas;
   _loadStreakBadge = deps.loadStreakBadge;

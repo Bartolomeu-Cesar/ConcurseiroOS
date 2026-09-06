@@ -844,6 +844,45 @@ select#timer-select { background: #313244; color: #cdd6f4; border: 1px solid #45
   overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
 }
 
+/* ===== Match Game (jogo de pares) ===== */
+.match-wrap { background: #313244; border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+.match-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+.match-title { font-size: 1rem; font-weight: 700; color: var(--accent); }
+.match-timer { font-size: 0.85rem; font-weight: 700; color: var(--blue); font-variant-numeric: tabular-nums; }
+.match-progress { font-size: 0.78rem; color: var(--text-sub); }
+.match-close { margin-left: auto; background: none; border: none; color: var(--text-sub); font-size: 1.1rem; cursor: pointer; min-height: 32px; min-width: 32px; border-radius: 6px; }
+.match-close:hover { color: var(--red); background: var(--bg-surface); }
+.match-hint { font-size: 0.72rem; color: var(--text-sub); margin-bottom: 12px; }
+.match-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.match-card {
+  display: flex; align-items: center; gap: 8px; text-align: left;
+  min-height: 56px; padding: 10px 12px;
+  background: var(--bg); border: 2px solid var(--border); border-radius: 10px;
+  color: var(--text); font-size: 0.8rem; line-height: 1.3; cursor: pointer;
+  transition: border-color 0.12s, background 0.12s, transform 0.08s, opacity 0.25s;
+}
+.match-card:hover { border-color: var(--accent); }
+.match-card:active { transform: scale(0.98); }
+.match-card:focus-visible { outline: 3px solid var(--text); outline-offset: 2px; }
+.match-card .match-ico { flex-shrink: 0; font-size: 0.95rem; opacity: 0.8; }
+.match-card .match-text { min-width: 0; overflow: hidden; }
+.match-card.match-sel { border-color: var(--accent); background: rgba(203, 166, 247, 0.15); }
+.match-card.match-wrong { border-color: var(--red); background: rgba(243, 139, 168, 0.18); animation: match-shake 0.4s; }
+.match-card.match-done { visibility: hidden; pointer-events: none; }
+@keyframes match-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .match-card { transition: opacity 0.25s; }
+  .match-card.match-wrong { animation: none; }
+}
+@media (max-width: 480px) {
+  .match-card { font-size: 0.74rem; min-height: 60px; padding: 8px 10px; }
+  .match-grid { gap: 8px; }
+}
+
 /* ===== Acordeão "Criar cards" (colapsa formulários de criação) ===== */
 /* Deixa a Revisão em destaque; criação (ação ocasional) fica recolhida. */
 .flash-create-accordion { margin-bottom: 16px; }
