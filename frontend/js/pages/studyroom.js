@@ -947,12 +947,13 @@ async function showSrQuestao() {
     return;
   }
   let q = srQuestoes[srQIdx];
-  // Serve as alternativas EMBARALHADAS sob demanda (mesmo padrão de showQuestao):
-  // busca a versão embaralhada por user+questão e cacheia no array para o answer.
-  // Fallback: mantém a ordem original se o fetch falhar (comportamento antigo).
+  // Serve as alternativas EMBARALHADAS sob demanda. Modo NÃO-determinístico: gera uma
+  // seed aleatória por abertura, serve com ela e cacheia no array (com a seed) para o
+  // answer reenviar. Fallback: mantém a ordem original se o fetch falhar.
   if (!q._embaralhado) {
     try {
-      const emb = await fetch(`/api/questoes/${q.id}?embaralhar=true`, { headers }).then(r => r.ok ? r.json() : null);
+      const seed = Math.floor(Math.random() * 2147483647);
+      const emb = await fetch(`/api/questoes/${q.id}?embaralhar=true&seed=${seed}`, { headers }).then(r => r.ok ? r.json() : null);
       if (emb && emb.id) { emb._embaralhado = true; q = srQuestoes[srQIdx] = emb; }
     } catch (e) { /* mantém ordem original */ }
   }
@@ -980,7 +981,7 @@ async function answerSrQuestao(resposta) {
 
   try {
     const res = await fetch(`/api/questoes/${q.id}/responder`, {
-      method: 'POST', headers, body: JSON.stringify({ resposta, embaralhada: !!q.embaralhada })
+      method: 'POST', headers, body: JSON.stringify({ resposta, embaralhada: !!q.embaralhada, seed: q.seed ?? null })
     });
     const data = await res.json();
     const acertou = data.acertou;

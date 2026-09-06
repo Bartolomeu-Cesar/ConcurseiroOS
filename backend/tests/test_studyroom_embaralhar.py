@@ -130,6 +130,26 @@ def test_studyroom_responder_errada_erra(client):
     assert r.json()["acertou"] is False
 
 
+def test_studyroom_seed_por_abertura_valida(client):
+    """Modo não-determinístico: serve com seed aleatória e responde enviando a MESMA
+    seed (como o showSrQuestao/answerSrQuestao fazem). Valida na ordem exibida."""
+    qid, textos = _reset_e_criar(correta="A")
+    seed = 424242
+    q = client.get(f"/api/questoes/{qid}?embaralhar=true&seed={seed}").json()
+    assert q.get("embaralhada") is True
+    assert q.get("seed") == seed
+    letra_exibida = q["resposta_correta"]
+    assert q[f"alternativa_{letra_exibida.lower()}"] == textos["A"]
+    r = client.post(
+        f"/api/questoes/{qid}/responder",
+        json={"resposta": letra_exibida, "embaralhada": True, "seed": seed},
+    )
+    assert r.status_code == 200
+    assert r.json()["acertou"] is True
+    grav = _resposta_gravada(qid)
+    assert grav["resposta_usuario"].upper() == "A"
+
+
 def teardown_module():
     try:
         os.unlink(_tmp_db.name)
