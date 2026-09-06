@@ -96,6 +96,21 @@ a {
   text-decoration: none;
 }
 
+/* ===== SCROLLBAR TEMÁTICA GLOBAL ===== */
+/* Firefox */
+html { scrollbar-color: var(--bg-elevated) transparent; scrollbar-width: thin; }
+/* WebKit/Blink (Chrome, Edge, Safari) */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--bg-elevated);
+  border-radius: 8px;
+  border: 2px solid var(--bg);
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--ctp-surface2); background-clip: padding-box; }
+body.light-theme ::-webkit-scrollbar-thumb:hover { background: #acb0be; background-clip: padding-box; }
+
 a:hover {
   text-decoration: underline;
 }
