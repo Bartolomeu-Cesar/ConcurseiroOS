@@ -938,7 +938,7 @@ async function loadSrQuestoes() {
   }
 }
 
-function showSrQuestao() {
+async function showSrQuestao() {
   const container = document.getElementById('sr-q-container');
   if (srQIdx >= srQuestoes.length) {
     container.innerHTML = srQuestoes.length > 0
@@ -946,7 +946,16 @@ function showSrQuestao() {
       : `<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:0.82rem;">Nenhuma questão disponível. Importe questões primeiro.</div>`;
     return;
   }
-  const q = srQuestoes[srQIdx];
+  let q = srQuestoes[srQIdx];
+  // Serve as alternativas EMBARALHADAS sob demanda (mesmo padrão de showQuestao):
+  // busca a versão embaralhada por user+questão e cacheia no array para o answer.
+  // Fallback: mantém a ordem original se o fetch falhar (comportamento antigo).
+  if (!q._embaralhado) {
+    try {
+      const emb = await fetch(`/api/questoes/${q.id}?embaralhar=true`, { headers }).then(r => r.ok ? r.json() : null);
+      if (emb && emb.id) { emb._embaralhado = true; q = srQuestoes[srQIdx] = emb; }
+    } catch (e) { /* mantém ordem original */ }
+  }
   const letters = ['A', 'B', 'C', 'D', 'E'];
   const alts = letters.filter(l => q['alternativa_' + l.toLowerCase()]);
   container.innerHTML = `
@@ -971,7 +980,7 @@ async function answerSrQuestao(resposta) {
 
   try {
     const res = await fetch(`/api/questoes/${q.id}/responder`, {
-      method: 'POST', headers, body: JSON.stringify({ resposta })
+      method: 'POST', headers, body: JSON.stringify({ resposta, embaralhada: !!q.embaralhada })
     });
     const data = await res.json();
     const acertou = data.acertou;
