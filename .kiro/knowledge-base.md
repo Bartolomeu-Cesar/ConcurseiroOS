@@ -1633,3 +1633,19 @@ respeitando prefers-reduced-motion. SW v269 → **v274**.
 **Limite honesto documentado:** ilustrações são geométricas/SVG (não mascote artístico
 desenhado à mão) — o "último 10%" de identidade artística e polimento fino de produto
 exige ilustrador/designer humano, fora do alcance de código.
+
+### Extensão (mesma sessão) — mais marcos + ilustrações propagadas (SW v274 → v276)
+- **Milestones adicionais** (`aefec91`): `primeiro_flashcard` (flashcards.js após review),
+  `primeiro_simulado` (simulado-cronometrado.js após showResults), `streak_7`/`streak_30`
+  (sidebar.js, usando o valor REAL de `data.streak` de /api/sidebar-data, com guarda
+  `typeof window.celebrateMilestone === 'function'`). Não disparei `subiu_liga` nem
+  `nivel_100_questoes` por falta de sinal confiável no frontend (evita falso-positivo).
+- **Ilustrações propagadas** (`8b263b3`): caderno-erros (revisão pendente → troféu),
+  viewer painel lateral (sem questões → prancheta) e vademecum (busca vazia → lupa; sem leis
+  → documento). raio-x NÃO recebeu (é script clássico, não módulo — exigiria carregar o
+  módulo no HTML; fica para depois).
+
+**Nota de conformidade (direitos autorais):** todo o conteúdo produzido é original — SVGs
+geométricos desenhados do zero, código e textos autorais. Dependências usam licenças
+permissivas já presentes (Catppuccin MIT, Chart.js MIT, PDF.js Apache). Nenhuma arte,
+mascote, ícone ou fonte proprietária de terceiros foi copiada.
