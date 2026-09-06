@@ -1596,3 +1596,40 @@ Usar `.interactive` em itens de lista clicáveis; `.animate-in` para aparição 
 Sanity check de chaves do main.css e de tags <div>/<details>/<summary> a cada onda. Nota:
 o dashboard.html tem 1 `<div>` extra pré-existente (225/224 no HEAD) — não introduzido aqui,
 provavelmente `<div` dentro de string JS; tolerado pelo browser, fora do escopo desta sessão.
+
+
+---
+
+## 16. SESSÃO 06/09/2026 — Onboarding gamificado + Identidade visual + Calibragem (G1-G5)
+
+Fechando o gap de "design/produto" percebido vs. líderes globais. Tudo via código,
+respeitando prefers-reduced-motion. SW v269 → **v274**.
+
+- **G1 Onboarding wizard** (`3c12eb7`): `checkFirstUse` (ui.js) reescrito de modal único
+  para WIZARD de 4 etapas (boas-vindas, ciência/FSRS, gamificação, atalhos) com barra de
+  progresso (dots animados), navegação Voltar/Próximo/Pular e confete ao concluir
+  (`launchConfetti`). Funções `onbNext`/`onbPrev` expostas via app.js. CSS `.onboarding-*`
+  dedicado. Dispara uma vez (localStorage `concurseiro_onboarded`).
+- **G2 Milestones** (`625d1f7`): `celebrateMilestone(key)` em xp-notify.js — banner especial
+  (topo, ícone em círculo, título+msg) + confete, UMA vez por marco (localStorage
+  `milestone_<key>`). Catálogo: primeira_questao, primeiro_flashcard, streak_7/30,
+  subiu_liga, primeiro_simulado, nivel_100_questoes. Já disparando `primeira_questao` em
+  questoes.js. Para adicionar: `celebrateMilestone('streak_7')` no ponto adequado.
+- **G3 Identidade** (`d5b6d1c`): logo SVG coeso (capelo mauve + tassel azul) na sidebar
+  (brand-icon) e no login; wordmark com gradiente de marca; tokens `--brand`,
+  `--brand-accent`, `--brand-bg`, `--brand-gradient`.
+- **G4 Ilustrações** (`e825254`): módulo `illustrations.js` com SVGs geométricos coesos
+  (questoes, pdfs, dados, concluido, busca) — `illustration('questoes')`. Aplicado nos empty
+  states de Resolver Questões e PDFs recentes. CSS `.empty-illustration`. Adicionado ao precache.
+- **G5 Calibragem** (`cd23dc0`): tokens de motion `--dur-fast/base/slow` e
+  `--ease-out/--ease-standard`; padronizadas as animações/transições (fade-in-up,
+  collapsible, onboarding, hovers de card/panel/stat) para usar os tokens.
+
+**Componentes reutilizáveis novos:**
+- `celebrateMilestone(key, {force, confetti})` — celebração de marco.
+- `illustration(tipo)` — SVG para empty state.
+- Tokens: `--brand-*`, `--dur-*`, `--ease-*`.
+
+**Limite honesto documentado:** ilustrações são geométricas/SVG (não mascote artístico
+desenhado à mão) — o "último 10%" de identidade artística e polimento fino de produto
+exige ilustrador/designer humano, fora do alcance de código.
