@@ -1333,6 +1333,40 @@ def _m83_questoes_discursivas(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_questoes_tipo ON questoes(user_id, tipo)")
 
 
+def _m84_jol_predictions(conn):
+    """Judgment of Learning (JOL) preditivo — metacognição.
+
+    O usuário PREVÊ, antes/depois de estudar um item, a probabilidade de lembrá-lo
+    no futuro (0-100%). Depois, o resultado real é confrontado com a previsão para
+    medir calibração PREDITIVA (distinta da retrospectiva já existente em
+    /calibration). Evidência: JOLs melhoram a autorregulação quando confrontados
+    com desempenho real, reduzindo a "ilusão de competência".
+
+    - item_tipo: 'flashcard' | 'questao' | 'topico'
+    - item_ref: id do item (ou o nome do tópico quando 'topico')
+    - predicao: probabilidade prevista de acerto/lembrança (0-100)
+    - resultado: 1 acertou / 0 errou / NULL ainda não confrontado
+    - erro_calibracao: |predicao/100 - resultado| * 100 (preenchido ao confrontar)
+    """
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS jol_predictions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            item_tipo TEXT NOT NULL,
+            item_ref TEXT NOT NULL DEFAULT '',
+            materia TEXT DEFAULT '',
+            predicao INTEGER NOT NULL,
+            resultado INTEGER DEFAULT NULL,
+            erro_calibracao REAL DEFAULT NULL,
+            created_at TEXT NOT NULL DEFAULT '',
+            resolved_at TEXT DEFAULT ''
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_jol_user ON jol_predictions(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_jol_pendente ON jol_predictions(user_id, resultado)")
+    log.info("Migration 84: created jol_predictions table")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -1417,6 +1451,7 @@ MIGRATIONS = [
     (81, _m81_flashcards_image_occlusion),
     (82, _m82_filtros_salvos),
     (83, _m83_questoes_discursivas),
+    (84, _m84_jol_predictions),
 ]
 
 
