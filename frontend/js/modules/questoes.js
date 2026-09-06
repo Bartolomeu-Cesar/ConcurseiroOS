@@ -37,6 +37,23 @@ export async function carregarQuestoesDia() {
 
 export function showQuestaoDia() {
   const card = document.getElementById('questao-dia-card');
+  // Aleatorização das alternativas: antes de qualquer render/timer, garante que a
+  // questão atual foi servida embaralhada (sob demanda). Substitui no array e
+  // re-renderiza uma única vez. A checagem de acerto usa q.resposta_correta (já
+  // remapeada) e o /responder recebe embaralhada=true. Ignora a tela de conclusão.
+  if (qDiaIdx < questoesDia.length) {
+    const _q = questoesDia[qDiaIdx];
+    if (_q && _q.id && !_q._embaralhado) {
+      fetch(`/api/questoes/${_q.id}?embaralhar=true`)
+        .then(r => r.ok ? r.json() : null)
+        .then(emb => {
+          questoesDia[qDiaIdx] = emb ? { ...emb, _embaralhado: true } : { ..._q, _embaralhado: true };
+          showQuestaoDia();
+        })
+        .catch(() => { questoesDia[qDiaIdx] = { ..._q, _embaralhado: true }; showQuestaoDia(); });
+      return;
+    }
+  }
   const total = questoesDia.length;
   const pct = Math.round((qDiaIdx / total) * 100);
   document.getElementById('qdia-progress-text').textContent = `${qDiaIdx}/${total} respondidas`;
@@ -173,7 +190,7 @@ export async function responderQuestaoDia(letra) {
       </div>`;
   }
   try {
-    const resp = await fetch(`/api/questoes/${q.id}/responder`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ resposta: letra, tempo_segundos: tempoSegundos }) });
+    const resp = await fetch(`/api/questoes/${q.id}/responder`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ resposta: letra, tempo_segundos: tempoSegundos, embaralhada: !!q.embaralhada }) });
     if (resp.status === 403) {
       const err = await resp.json().catch(() => ({}));
       toast(err.detail || 'Limite de questões do dia atingido. Faça upgrade!', 'warning');
