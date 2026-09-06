@@ -244,43 +244,108 @@ export function launchConfetti(duration = 2000) {
   draw();
 }
 
-// ==================== ONBOARDING / FIRST USE ====================
+// ==================== ONBOARDING / FIRST USE (wizard gamificado) ====================
+const _ONB_STEPS = [
+  {
+    icon: '🎓',
+    title: 'Bem-vindo ao ConcurseiroOS!',
+    body: 'Seu sistema completo de estudos para concursos. Vamos te mostrar o essencial em 30 segundos.',
+    highlight: 'Leitura de PDFs · Editais · Flashcards · Questões · Simulados · Batalhas',
+  },
+  {
+    icon: '🧠',
+    title: 'Ciência por trás dos estudos',
+    body: 'Usamos FSRS (repetição espaçada de última geração) e 30+ técnicas científicas comprovadas para você reter mais em menos tempo.',
+    highlight: 'Repetição espaçada · Prática de recuperação · Interleaving · Prática deliberada',
+  },
+  {
+    icon: '🎮',
+    title: 'Estude jogando',
+    body: 'Ganhe XP, mantenha seu streak diário, suba de liga e desafie outros candidatos em batalhas de questões.',
+    highlight: 'XP · Streak · Ligas · Batalhas PvP · Conquistas',
+  },
+  {
+    icon: '🚀',
+    title: 'Atalhos que aceleram',
+    body: 'Ctrl+K abre a busca rápida · Alt+1 a 5 troca de aba · Shift+? mostra todos os atalhos. O timer registra suas horas automaticamente.',
+    highlight: 'Pronto para começar sua aprovação?',
+  },
+];
+let _onbIndex = 0;
+
 export function checkFirstUse() {
   if (localStorage.getItem('concurseiro_onboarded')) return;
+  _onbIndex = 0;
   const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay';
+  overlay.className = 'modal-overlay onboarding-modal';
   overlay.style.display = 'flex';
   overlay.id = 'onboarding-overlay';
   overlay.setAttribute('role', 'dialog');
   overlay.setAttribute('aria-modal', 'true');
+  overlay.setAttribute('aria-labelledby', 'onb-title');
   overlay.innerHTML = `
-    <div class="modal-box" style="max-width:500px;text-align:center;">
-      <div style="font-size:3rem;margin-bottom:12px;">🎓</div>
-      <h2 style="color:#cba6f7;margin-bottom:12px;">Bem-vindo ao ConcurseiroOS!</h2>
-      <p style="color:#9399b2;margin-bottom:20px;line-height:1.6;">
-        Seu sistema completo de estudos para concursos públicos.<br>
-        Aqui você pode ler PDFs, gerenciar editais, criar flashcards,<br>
-        resolver questões e acompanhar seu progresso.
-      </p>
-      <div style="text-align:left;background:#1e1e2e;border-radius:8px;padding:16px;margin-bottom:20px;font-size:0.85rem;">
-        <div style="margin-bottom:8px;"><strong>🚀 Dicas rápidas:</strong></div>
-        <div style="margin-bottom:6px;">• <kbd>Ctrl+K</kbd> — Busca rápida em tópicos</div>
-        <div style="margin-bottom:6px;">• <kbd>Alt+1-5</kbd> — Trocar entre abas</div>
-        <div style="margin-bottom:6px;">• <kbd>Shift+?</kbd> — Ver todos os atalhos</div>
-        <div>• O timer registra horas de estudo automaticamente</div>
+    <div class="onboarding-card">
+      <button class="onb-skip" onclick="dismissOnboarding()" aria-label="Pular introdução">Pular</button>
+      <div class="onb-illustration" id="onb-icon" aria-hidden="true"></div>
+      <h2 id="onb-title" class="onb-title"></h2>
+      <p class="onb-body" id="onb-body"></p>
+      <div class="onb-highlight" id="onb-highlight"></div>
+      <div class="onb-dots" id="onb-dots" role="tablist" aria-label="Progresso do tour"></div>
+      <div class="onb-actions">
+        <button class="onb-btn onb-btn-ghost" id="onb-prev" onclick="onbPrev()">← Voltar</button>
+        <button class="onb-btn onb-btn-primary" id="onb-next" onclick="onbNext()"></button>
       </div>
-      <button class="iobtn" style="background:#cba6f7;color:#1e1e2e;padding:10px 32px;font-size:1rem;" onclick="dismissOnboarding()">Começar a Estudar! 💪</button>
     </div>
   `;
   document.body.appendChild(overlay);
+  _onbRender();
   trapFocus(overlay);
 }
 
-export function dismissOnboarding() {
+function _onbRender() {
+  const s = _ONB_STEPS[_onbIndex];
+  const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  setTxt('onb-icon', s.icon);
+  setTxt('onb-title', s.title);
+  setTxt('onb-body', s.body);
+  setTxt('onb-highlight', s.highlight);
+  const prev = document.getElementById('onb-prev');
+  const next = document.getElementById('onb-next');
+  if (prev) prev.style.visibility = _onbIndex === 0 ? 'hidden' : 'visible';
+  const isLast = _onbIndex === _ONB_STEPS.length - 1;
+  if (next) next.textContent = isLast ? 'Começar a Estudar! 💪' : 'Próximo →';
+  // Dots de progresso
+  const dots = document.getElementById('onb-dots');
+  if (dots) {
+    dots.innerHTML = _ONB_STEPS.map((_, i) =>
+      `<span class="onb-dot ${i === _onbIndex ? 'active' : ''} ${i < _onbIndex ? 'done' : ''}"></span>`
+    ).join('');
+  }
+  // Re-anima o cartão a cada passo
+  const card = document.querySelector('.onboarding-card');
+  if (card) { card.classList.remove('animate-in'); void card.offsetWidth; card.classList.add('animate-in'); }
+}
+
+export function onbNext() {
+  if (_onbIndex >= _ONB_STEPS.length - 1) { dismissOnboarding(true); return; }
+  _onbIndex++;
+  _onbRender();
+}
+
+export function onbPrev() {
+  if (_onbIndex > 0) { _onbIndex--; _onbRender(); }
+}
+
+export function dismissOnboarding(completed = false) {
   localStorage.setItem('concurseiro_onboarded', '1');
   const el = document.getElementById('onboarding-overlay');
   if (el) el.remove();
-  toast('Bons estudos! Use Shift+? para ver os atalhos.', 'info', 5000);
+  if (completed) {
+    try { launchConfetti(1800); } catch (e) {}
+    toast('🎉 Tudo pronto! Bons estudos — use Shift+? para ver os atalhos.', 'success', 5000);
+  } else {
+    toast('Você pode rever o tour limpando os dados do app. Bons estudos!', 'info', 4000);
+  }
 }
 
 export function initUI() {

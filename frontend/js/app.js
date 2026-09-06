@@ -15,7 +15,7 @@ import { carregarQuestoesDia, showQuestaoDia, responderQuestaoDia, advanceQuesta
 import { loadMetas, salvarMetas, getConfigSessoes, salvarConfigSessoes, loadConfigSessoes, loadStreakBadge, initMetas } from './modules/metas.js';
 import { openSelectModal, selectModalChoice, closeSelectModal, initModalSelecao } from './modules/modal-selecao.js';
 import { linkPdfToTopic, linkPdfToMateria, unlinkPdf, linkPdfToDisc, openNoteModal, closeNoteModal, saveNote, deleteNote, initVincularPdf } from './modules/vincular-pdf.js';
-import { toggleTheme, enterFocusMode, exitFocusMode, launchConfetti, dismissOnboarding, trapFocus, initUI } from './modules/ui.js';
+import { toggleTheme, enterFocusMode, exitFocusMode, launchConfetti, dismissOnboarding, onbNext, onbPrev, trapFocus, initUI } from './modules/ui.js';
 import { exportarEdital, exportarCiclo, exportarFlashcards, importarEditalFile, importarCicloFile, importarFlashcardsFile } from './modules/export-import.js';
 import { handleAuthNav, logout, isLoggedIn, getToken, getUser, getUserPlan, showUpgradeModal, doUpgrade, checkPlanLimit, showEditProfileModal, saveProfile, initAuth, comprarCreditos, ativarCreditos } from './modules/auth.js';
 
@@ -66,7 +66,7 @@ Object.assign(window, {
   // Vincular PDF + Notas
   linkPdfToTopic, linkPdfToMateria, unlinkPdf, linkPdfToDisc, openNoteModal, closeNoteModal, saveNote, deleteNote,
   // UI
-  toggleTheme, enterFocusMode, exitFocusMode, launchConfetti, dismissOnboarding, trapFocus,
+  toggleTheme, enterFocusMode, exitFocusMode, launchConfetti, dismissOnboarding, onbNext, onbPrev, trapFocus,
   // Export/Import
   exportarEdital, exportarCiclo, exportarFlashcards, importarEditalFile, importarCicloFile, importarFlashcardsFile,
   // Auth

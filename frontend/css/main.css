@@ -1162,6 +1162,50 @@ body.light-theme .collapsible > summary:hover { background: rgba(136,57,239,0.06
 .collapsible-body { padding: 0 var(--space-5) var(--space-5); }
 .collapsible[open] > .collapsible-body { animation: fade-in-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) both; }
 
+/* ===== ONBOARDING WIZARD (gamificado) ===== */
+.onboarding-modal { backdrop-filter: blur(6px); }
+.onboarding-card {
+  position: relative;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-8) var(--space-6) var(--space-6);
+  max-width: 460px; width: 92%;
+  text-align: center;
+}
+.onb-skip {
+  position: absolute; top: 12px; right: 14px;
+  background: none; border: none; color: var(--text-muted);
+  font-size: 0.8rem; cursor: pointer; padding: 4px 8px; border-radius: var(--radius-sm);
+  transition: color 0.2s, background 0.2s;
+}
+.onb-skip:hover { color: var(--text); background: var(--bg-elevated); }
+.onb-illustration {
+  font-size: 3.2rem; line-height: 1; margin-bottom: var(--space-4);
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 96px; height: 96px; border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, rgba(203,166,247,0.22), rgba(137,180,250,0.12));
+  margin-inline: auto;
+}
+.onb-title { color: var(--accent); font-size: 1.35rem; margin-bottom: var(--space-3); }
+.onb-body { color: var(--text-sub); line-height: 1.6; font-size: 0.92rem; margin-bottom: var(--space-4); }
+.onb-highlight {
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4); font-size: 0.8rem; color: var(--text);
+  margin-bottom: var(--space-5); line-height: 1.5;
+}
+.onb-dots { display: flex; gap: 8px; justify-content: center; margin-bottom: var(--space-5); }
+.onb-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bg-elevated); transition: all 0.25s ease; }
+.onb-dot.active { background: var(--accent); width: 22px; border-radius: var(--radius-pill); }
+.onb-dot.done { background: color-mix(in srgb, var(--accent) 55%, transparent); }
+.onb-actions { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.onb-btn { border: none; border-radius: var(--radius-md); padding: 10px 20px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: transform 0.12s ease, box-shadow 0.15s ease, background 0.2s; }
+.onb-btn-primary { background: var(--accent); color: var(--bg); box-shadow: var(--shadow-sm); flex: 1; }
+.onb-btn-primary:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.onb-btn-ghost { background: transparent; color: var(--text-sub); }
+.onb-btn-ghost:hover { color: var(--text); background: var(--bg-elevated); }
+
 /* Painéis e cards aparecem suavemente ao carregar a página, com leve escalonamento
    (stagger) para criar ritmo. Aplica-se apenas na entrada — hover/estado não reanima. */
 .panel, .card, .stat-card { animation: fade-in-up 0.42s cubic-bezier(0.16, 1, 0.3, 1) both; }
