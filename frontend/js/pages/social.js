@@ -22,11 +22,24 @@ if (localStorage.getItem('auth_token')) {
 }
 
 // ===== TAB SWITCHING =====
-function switchTab(tab) {
+function switchTab(tab, ev) {
   document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-  document.getElementById('tab-' + tab).classList.add('active');
-  event.target.classList.add('active');
+  document.querySelectorAll('.tab-btn').forEach(el => {
+    el.classList.remove('active');
+    el.setAttribute('aria-selected', 'false');
+  });
+  const content = document.getElementById('tab-' + tab);
+  if (content) content.classList.add('active');
+  // Ativa o botão correspondente pelo data-tab (funciona tanto no clique quanto
+  // em chamadas programáticas, ex.: restaurar aba salva). Antes dependia de
+  // event.target global, que quebrava fora de um handler de clique e só existia
+  // no Chromium.
+  const btn = (ev && ev.currentTarget)
+    || document.querySelector(`.tab-btn[data-tab="${tab}"]`);
+  if (btn) {
+    btn.classList.add('active');
+    btn.setAttribute('aria-selected', 'true');
+  }
 }
 window.switchTab = switchTab;
 
