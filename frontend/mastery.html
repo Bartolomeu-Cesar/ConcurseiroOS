@@ -173,7 +173,9 @@
   <script type="module">
     import { confirmModal, alertModal, promptModal } from '/js/modules/utils.js';
     import { toast } from '/js/modules/toast.js';
-    Object.assign(window, { confirmModal, alertModal, promptModal, toast });
+    import { toggleTheme, initTheme } from '/js/modules/theme.js';
+    Object.assign(window, { confirmModal, alertModal, promptModal, toast, toggleTheme });
+    initTheme();
   </script>
 </body>
 </html>

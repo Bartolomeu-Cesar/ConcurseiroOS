@@ -596,6 +596,7 @@
   <script type="module">
     import { confirmModal, alertModal, promptModal } from '/js/modules/utils.js';
     import { toast } from '/js/modules/toast.js';
+    import { toggleTheme, initTheme } from '/js/modules/theme.js';
     // Menu de perfil ÚNICO (mesmo do "Meu Dia"): o avatar chama handleAuthNav()
     // → showProfileMenu() do auth.js. Expomos as funções que os botões do menu
     // e seus modais (upgrade/editar perfil/créditos) usam via onclick inline.
@@ -605,11 +606,12 @@
       comprarVitalicio, loadCreditosSaldo, initAuth,
     } from '/js/modules/auth.js';
     Object.assign(window, {
-      confirmModal, alertModal, promptModal, toast,
+      confirmModal, alertModal, promptModal, toast, toggleTheme,
       handleAuthNav, logout, showUpgradeModal, doUpgrade, checkPlanLimit,
       showEditProfileModal, saveProfile, comprarCreditos, ativarCreditos,
       comprarVitalicio, loadCreditosSaldo,
     });
+    initTheme();
     // Garante que o estado de auth (avatar/plano) esteja carregado nesta página.
     try { initAuth?.(); } catch (e) { /* best-effort */ }
   </script>
