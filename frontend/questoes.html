@@ -226,6 +226,11 @@
           <option value="Médio">Médio</option>
           <option value="Difícil">Difícil</option>
         </select>
+        <select id="filtro-tipo" aria-label="Filtrar por tipo de questão" onchange="loadQuestoesResolver()">
+          <option value="">Todos os tipos</option>
+          <option value="objetiva">Objetivas</option>
+          <option value="discursiva">Discursivas</option>
+        </select>
         <select id="filtro-status" aria-label="Filtrar por status" onchange="loadQuestoesResolver()">
           <option value="">Todas</option>
           <option value="acertadas">Só acertadas</option>
@@ -233,6 +238,19 @@
           <option value="nao_respondidas">Não respondidas</option>
         </select>
         <button class="btn btn-primary" onclick="loadQuestoesResolver()">🔄 Nova Questão</button>
+      </div>
+      <!-- Buscar questão pelo código + filtros salvos (inspirado no QConcursos) -->
+      <div class="filter-bar" style="margin-top:8px;">
+        <input type="text" id="busca-codigo" placeholder="Buscar pelo código (ex: Q123)"
+               aria-label="Buscar questão pelo código" style="max-width:220px;"
+               onkeydown="if(event.key==='Enter'){event.preventDefault();buscarPorCodigo();}">
+        <button class="btn btn-secondary" onclick="buscarPorCodigo()" title="Ir direto a uma questão pelo código">🔎 Buscar código</button>
+        <span style="flex:1;"></span>
+        <select id="filtros-salvos-select" aria-label="Aplicar filtro salvo" onchange="aplicarFiltroSalvo(this.value)" style="max-width:220px;">
+          <option value="">💾 Filtros salvos…</option>
+        </select>
+        <button class="btn btn-secondary" onclick="salvarFiltroAtual()" title="Salvar os filtros atuais">💾 Salvar filtro</button>
+        <button class="btn btn-secondary" onclick="excluirFiltroSalvo()" title="Excluir o filtro selecionado">🗑</button>
       </div>
       <div id="resolver-area">
         <p style="color:var(--text-sub);">Selecione uma matéria ou clique em "Nova Questão" para começar.</p>
@@ -447,10 +465,15 @@
           <option value="Médio" selected>Médio</option>
           <option value="Difícil">Difícil</option>
         </select>
+        <select id="cad-tipo" aria-label="Tipo de questão" onchange="toggleTipoCadastro()">
+          <option value="objetiva" selected>Objetiva</option>
+          <option value="discursiva">Discursiva</option>
+        </select>
       </div>
       <div class="form-row">
         <textarea id="cad-enunciado" placeholder="Enunciado da questão *" aria-label="Enunciado da questão" rows="3"></textarea>
       </div>
+      <div id="cad-bloco-objetiva">
       <div class="form-row">
         <input type="text" id="cad-a" placeholder="A) Alternativa A *" aria-label="Alternativa A">
       </div>
@@ -475,6 +498,12 @@
           <option value="D">D</option>
           <option value="E">E</option>
         </select>
+      </div>
+      </div>
+      <div id="cad-bloco-discursiva" style="display:none;">
+      <div class="form-row">
+        <textarea id="cad-resposta-esperada" placeholder="Resposta esperada / gabarito modelo (para autoavaliação)" aria-label="Resposta esperada" rows="4"></textarea>
+      </div>
       </div>
       <div class="form-row">
         <textarea id="cad-explicacao" placeholder="Explicação (inclua mnemônicos, macetes e dicas para fixação)" aria-label="Explicação da questão" rows="2"></textarea>

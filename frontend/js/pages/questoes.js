@@ -152,6 +152,7 @@ async function loadQuestoesResolver() {
   const banca = document.getElementById('filtro-banca').value;
   const status = document.getElementById('filtro-status').value;
   const dificuldade = document.getElementById('filtro-dificuldade').value;
+  const tipo = (document.getElementById('filtro-tipo') || {}).value || '';
 
   // Buscar IDs já respondidos hoje (não repetir no mesmo dia)
   if (!window._questoesRespondidasHoje) {
@@ -165,7 +166,7 @@ async function loadQuestoesResolver() {
   }
 
   // Se nenhum filtro ativo, usar seleção inteligente (prática deliberada)
-  if (!materia && !banca && !status && !dificuldade) {
+  if (!materia && !banca && !status && !dificuldade && !tipo) {
     try {
       const smart = await fetch('/api/pratica-deliberada').then(r => r.json());
       const focoMaterias = (smart.materias_para_focar || []).map(m => m.materia);
@@ -212,6 +213,7 @@ async function loadQuestoesResolver() {
   if (materia) url += `materia=${encodeURIComponent(materia)}&`;
   if (banca) url += `banca=${encodeURIComponent(banca)}&`;
   if (status) url += `status=${encodeURIComponent(status)}&`;
+  if (tipo) url += `tipo=${encodeURIComponent(tipo)}&`;
   questoesPool = await fetch(url).then(r => r.json());
 
   if (dificuldade) {
@@ -240,6 +242,11 @@ async function loadQuestoesResolver() {
 window.loadQuestoesResolver = loadQuestoesResolver;
 
 function showQuestao(q) {
+  // Questões DISCURSIVAS: sem alternativas — renderiza textarea + autoavaliação.
+  if (q && (q.tipo === 'discursiva')) {
+    showQuestaoDiscursiva(q);
+    return;
+  }
   // Aleatorização das alternativas (anti-decoreba de letra). Modo NÃO-determinístico:
   // geramos uma semente aleatória A CADA ABERTURA, servimos embaralhado com ela e
   // guardamos a semente para reenviar no /responder (o backend valida na mesma ordem).
@@ -326,6 +333,172 @@ function showQuestao(q) {
     </div>
   `;
 }
+
+// ============================================================
+// Questões DISCURSIVAS (inspirado no QConcursos)
+// ============================================================
+function showQuestaoDiscursiva(q) {
+  currentQuestao = q;
+  respondida = false;
+  questaoStartTime = Date.now();
+  if (window._questaoTimerInterval) clearInterval(window._questaoTimerInterval);
+
+  const area = document.getElementById('resolver-area');
+  area.innerHTML = `
+    <div class="questao-card">
+      <div class="questao-meta">
+        <span>${escapeHtml(q.materia || '')}</span>
+        ${q.topico ? `<span>${escapeHtml(q.topico)}</span>` : ''}
+        <span>${escapeHtml(q.dificuldade || '')}</span>
+        <span style="background:var(--accent);color:var(--bg);padding:1px 8px;border-radius:10px;font-size:0.72rem;font-weight:700;">✍️ Discursiva</span>
+      </div>
+      ${textoBaseHtml(q)}
+      <div class="questao-enunciado">${q.enunciado || ''}</div>
+      <textarea id="disc-resposta" aria-label="Sua resposta discursiva" rows="8"
+        placeholder="Escreva sua resposta aqui…"
+        style="width:100%;margin-top:10px;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:0.9rem;resize:vertical;"></textarea>
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-primary" id="btn-revelar" onclick="revelarGabaritoDiscursiva()">👁 Ver resposta esperada</button>
+        <button class="btn btn-primary" id="btn-proxima-disc" style="display:none;" onclick="loadQuestoesResolver()">Próxima →</button>
+      </div>
+      <div id="disc-gabarito-box" style="display:none;margin-top:12px;padding:12px;border-radius:8px;background:var(--bg-surface);border:1px solid var(--border);">
+        <strong>📋 Resposta esperada:</strong>
+        <div style="margin-top:6px;white-space:pre-wrap;">${(q.resposta_esperada && q.resposta_esperada.trim()) ? escapeHtml(q.resposta_esperada) : 'Sem resposta modelo cadastrada.'}</div>
+        <div style="margin-top:14px;">
+          <label for="disc-autoaval" style="font-size:0.85rem;font-weight:600;">Como você avalia sua resposta? <strong id="disc-autoaval-val">70</strong>/100</label>
+          <input type="range" id="disc-autoaval" min="0" max="100" value="70" step="5"
+                 oninput="document.getElementById('disc-autoaval-val').textContent=this.value"
+                 style="width:100%;margin-top:6px;">
+          <button class="btn btn-success" style="margin-top:8px;" onclick="salvarRespostaDiscursiva()">Salvar autoavaliação</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+window.showQuestaoDiscursiva = showQuestaoDiscursiva;
+
+function revelarGabaritoDiscursiva() {
+  const box = document.getElementById('disc-gabarito-box');
+  if (box) box.style.display = 'block';
+}
+window.revelarGabaritoDiscursiva = revelarGabaritoDiscursiva;
+
+async function salvarRespostaDiscursiva() {
+  if (respondida) return;
+  const texto = (document.getElementById('disc-resposta') || {}).value || '';
+  if (!texto.trim()) { toast('Escreva sua resposta antes de salvar.', 'warning'); return; }
+  const autoaval = parseInt((document.getElementById('disc-autoaval') || {}).value || '0', 10);
+  const tempoSegundos = questaoStartTime ? Math.round((Date.now() - questaoStartTime) / 1000) : 0;
+
+  const resp = await fetch(`/api/questoes/${currentQuestao.id}/responder-discursiva`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ resposta_texto: texto, autoavaliacao: autoaval, tempo_segundos: tempoSegundos })
+  });
+  if (resp.status === 403) {
+    const err = await resp.json().catch(() => ({}));
+    toast(err.detail || 'Limite diário atingido!', 'warning');
+    if (window.showUpgradeModal) window.showUpgradeModal();
+    return;
+  }
+  if (!resp.ok) { toast('Não foi possível salvar a resposta.', 'error'); return; }
+  const res = await resp.json();
+  respondida = true;
+  try { showQuestionXp(res.acertou); } catch (e) {}
+  try { emit('questao:respondida', { materia: currentQuestao?.materia, acertou: res.acertou, tempo_seg: tempoSegundos }); } catch (e) {}
+  toast(res.acertou ? '✅ Registrado! Bom desempenho.' : '📝 Registrado. Revise os pontos fracos.', res.acertou ? 'success' : 'info', 4000);
+  const btnRevelar = document.getElementById('btn-revelar');
+  const btnProx = document.getElementById('btn-proxima-disc');
+  if (btnRevelar) btnRevelar.style.display = 'none';
+  if (btnProx) btnProx.style.display = 'inline-block';
+}
+window.salvarRespostaDiscursiva = salvarRespostaDiscursiva;
+
+// ============================================================
+// Buscar questão pelo código (inspirado no QConcursos)
+// ============================================================
+async function buscarPorCodigo() {
+  const el = document.getElementById('busca-codigo');
+  const codigo = (el ? el.value : '').trim();
+  if (!codigo) { toast('Digite o código da questão (ex: Q123).', 'warning'); return; }
+  const resp = await fetch(`/api/questoes/codigo/${encodeURIComponent(codigo)}`);
+  if (resp.status === 404) { toast('Questão não encontrada.', 'warning'); return; }
+  if (resp.status === 400) { toast('Código inválido. Use apenas números (ex: 123 ou Q123).', 'warning'); return; }
+  if (!resp.ok) { toast('Erro ao buscar a questão.', 'error'); return; }
+  const q = await resp.json();
+  showQuestao(q);
+}
+window.buscarPorCodigo = buscarPorCodigo;
+
+// ============================================================
+// Filtros de questões salvos (inspirado no QConcursos)
+// ============================================================
+function _filtrosAtuais() {
+  return {
+    materia: (document.getElementById('filtro-materia') || {}).value || '',
+    banca: (document.getElementById('filtro-banca') || {}).value || '',
+    dificuldade: (document.getElementById('filtro-dificuldade') || {}).value || '',
+    tipo: (document.getElementById('filtro-tipo') || {}).value || '',
+    status: (document.getElementById('filtro-status') || {}).value || '',
+  };
+}
+
+async function carregarFiltrosSalvos() {
+  const sel = document.getElementById('filtros-salvos-select');
+  if (!sel) return;
+  try {
+    const lista = await fetch('/api/questoes/filtros-salvos').then(r => r.ok ? r.json() : []);
+    window._filtrosSalvos = lista;
+    sel.innerHTML = '<option value="">💾 Filtros salvos…</option>' +
+      lista.map(f => `<option value="${f.id}">${escapeHtml(f.nome)}</option>`).join('');
+  } catch (e) { /* silencioso */ }
+}
+window.carregarFiltrosSalvos = carregarFiltrosSalvos;
+
+async function salvarFiltroAtual() {
+  const nome = await promptModal('Nome para este filtro:', { title: 'Salvar filtro', placeholder: 'Ex: Direito Constitucional difícil' });
+  if (nome === null) return;
+  if (!nome.trim()) { toast('Informe um nome.', 'warning'); return; }
+  const resp = await fetch('/api/questoes/filtros-salvos', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nome: nome.trim(), filtros: _filtrosAtuais() })
+  });
+  if (!resp.ok) { toast('Não foi possível salvar o filtro.', 'error'); return; }
+  toast('💾 Filtro salvo!', 'success');
+  await carregarFiltrosSalvos();
+}
+window.salvarFiltroAtual = salvarFiltroAtual;
+
+function aplicarFiltroSalvo(id) {
+  if (!id) return;
+  const f = (window._filtrosSalvos || []).find(x => String(x.id) === String(id));
+  if (!f) return;
+  const filtros = f.filtros || {};
+  const setVal = (elId, val) => { const el = document.getElementById(elId); if (el) el.value = val || ''; };
+  setVal('filtro-materia', filtros.materia);
+  setVal('filtro-banca', filtros.banca);
+  setVal('filtro-dificuldade', filtros.dificuldade);
+  setVal('filtro-tipo', filtros.tipo);
+  setVal('filtro-status', filtros.status);
+  toast(`Filtro "${f.nome}" aplicado.`, 'info');
+  loadQuestoesResolver();
+}
+window.aplicarFiltroSalvo = aplicarFiltroSalvo;
+
+async function excluirFiltroSalvo() {
+  const sel = document.getElementById('filtros-salvos-select');
+  const id = sel ? sel.value : '';
+  if (!id) { toast('Selecione um filtro salvo para excluir.', 'warning'); return; }
+  const f = (window._filtrosSalvos || []).find(x => String(x.id) === String(id));
+  const ok = await confirmModal('Excluir filtro', `Excluir o filtro "${f ? f.nome : ''}"?`, { type: 'danger', confirmText: 'Excluir' });
+  if (!ok) return;
+  const resp = await fetch(`/api/questoes/filtros-salvos/${id}`, { method: 'DELETE' });
+  if (!resp.ok) { toast('Não foi possível excluir.', 'error'); return; }
+  toast('🗑 Filtro excluído.', 'success');
+  await carregarFiltrosSalvos();
+}
+window.excluirFiltroSalvo = excluirFiltroSalvo;
 
 function selecionarAlternativa(el, letter) {
   if (respondida) return;
@@ -1196,8 +1369,15 @@ async function cadastrarQuestao(btn) {
   const c = document.getElementById('cad-c').value.trim();
   const d = document.getElementById('cad-d').value.trim();
   const resposta = document.getElementById('cad-resposta').value;
+  const tipo = (document.getElementById('cad-tipo') || {}).value || 'objetiva';
+  const respostaEsperada = (document.getElementById('cad-resposta-esperada') || {}).value.trim();
 
-  if (!materia || !enunciado || !a || !b || !c || !d || !resposta) {
+  if (tipo === 'discursiva') {
+    if (!materia || !enunciado) {
+      toast('Discursiva: preencha ao menos matéria e enunciado.', 'warning');
+      return;
+    }
+  } else if (!materia || !enunciado || !a || !b || !c || !d || !resposta) {
     toast('Preencha todos os campos obrigatórios (*).', 'warning');
     return;
   }
@@ -1214,14 +1394,16 @@ async function cadastrarQuestao(btn) {
         materia,
         topico: document.getElementById('cad-topico').value.trim(),
         enunciado,
-        alternativa_a: a,
-        alternativa_b: b,
-        alternativa_c: c,
-        alternativa_d: d,
-        alternativa_e: document.getElementById('cad-e').value.trim(),
-        resposta_correta: resposta,
+        alternativa_a: tipo === 'discursiva' ? '' : a,
+        alternativa_b: tipo === 'discursiva' ? '' : b,
+        alternativa_c: tipo === 'discursiva' ? '' : c,
+        alternativa_d: tipo === 'discursiva' ? '' : d,
+        alternativa_e: tipo === 'discursiva' ? '' : document.getElementById('cad-e').value.trim(),
+        resposta_correta: tipo === 'discursiva' ? '' : resposta,
         explicacao: document.getElementById('cad-explicacao').value.trim(),
-        dificuldade: document.getElementById('cad-dificuldade').value
+        dificuldade: document.getElementById('cad-dificuldade').value,
+        tipo,
+        resposta_esperada: tipo === 'discursiva' ? respostaEsperada : ''
       })
     });
 
@@ -1236,8 +1418,8 @@ async function cadastrarQuestao(btn) {
 
     toast('Questão cadastrada com sucesso!', 'success');
     // Limpar form apenas após sucesso confirmado
-    ['cad-materia', 'cad-topico', 'cad-enunciado', 'cad-a', 'cad-b', 'cad-c', 'cad-d', 'cad-e', 'cad-explicacao'].forEach(id => {
-      document.getElementById(id).value = '';
+    ['cad-materia', 'cad-topico', 'cad-enunciado', 'cad-a', 'cad-b', 'cad-c', 'cad-d', 'cad-e', 'cad-explicacao', 'cad-resposta-esperada'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.value = '';
     });
     document.getElementById('cad-resposta').value = '';
     loadMaterias();
@@ -1248,6 +1430,15 @@ async function cadastrarQuestao(btn) {
   }
 }
 window.cadastrarQuestao = cadastrarQuestao;
+
+function toggleTipoCadastro() {
+  const tipo = (document.getElementById('cad-tipo') || {}).value || 'objetiva';
+  const obj = document.getElementById('cad-bloco-objetiva');
+  const disc = document.getElementById('cad-bloco-discursiva');
+  if (obj) obj.style.display = tipo === 'discursiva' ? 'none' : '';
+  if (disc) disc.style.display = tipo === 'discursiva' ? '' : 'none';
+}
+window.toggleTipoCadastro = toggleTipoCadastro;
 
 // ==================== PROVAS IMPORTADAS ====================
 async function loadProvas() {
@@ -1735,6 +1926,7 @@ loadBanco();
 loadProvas();
 loadLoteOptions();
 loadQuestoesResolver();
+carregarFiltrosSalvos();
 
 // Load user profile in header
 (async function() {
