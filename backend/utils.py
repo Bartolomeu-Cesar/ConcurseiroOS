@@ -5,6 +5,8 @@ from typing import Any
 
 from pypdf import PdfReader
 
+from logger import log
+
 # ============================================================
 # TEMPO ADAPTATIVO POR QUESTÃO (mais justo — inclui alternativas)
 # ============================================================
@@ -168,16 +170,30 @@ def build_tree(root: str, _base_root: str | None = None) -> list:
     externos usam apenas `build_tree(root)`.
     """
     base = Path(_base_root).resolve() if _base_root else Path(root).resolve()
+    # Base lógica (sem resolver symlinks): usada para derivar o caminho relativo
+    # quando o arquivo é um link/atalho que aponta para fora de PDF_ROOT — nesses
+    # casos entry.resolve() cai fora de `base` e relative_to() lançaria ValueError.
+    base_logica = Path(_base_root) if _base_root else Path(root)
     result = []
     for entry in sorted(Path(root).iterdir()):
         if entry.is_dir():
-            children = build_tree(str(entry), _base_root=str(base))
+            children = build_tree(str(entry), _base_root=str(base_logica))
             if children:
                 result.append({"type": "folder", "name": entry.name, "children": children})
         elif entry.suffix.lower() == ".pdf" and ":" not in entry.name:
             # Path completo relativo à raiz global (usa forward slash p/ consistência
             # com a convenção de URL do viewer e do progress).
-            rel = entry.resolve().relative_to(base).as_posix()
+            try:
+                rel = entry.resolve().relative_to(base).as_posix()
+            except ValueError:
+                # Symlink/atalho apontando para fora de PDF_ROOT: usa o caminho
+                # LÓGICO (relativo à raiz, sem resolver o link) para não perder o
+                # PDF da árvore nem derrubar o endpoint.
+                try:
+                    rel = entry.relative_to(base_logica).as_posix()
+                except ValueError:
+                    log.warning(f"build_tree: ignorando '{entry}' (fora de PDF_ROOT e sem caminho relativo válido)")
+                    continue
             result.append({"type": "pdf", "name": entry.name, "path": rel})
     return result
 
