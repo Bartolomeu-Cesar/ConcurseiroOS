@@ -1097,6 +1097,26 @@ select#timer-select { background: #313244; color: #cdd6f4; border: 1px solid #45
 }
 .animate-in { animation: fade-in-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }
 
+/* ===== MICRO-INTERAÇÕES: FEEDBACK DE ACERTO/ERRO ===== */
+/* Classes reutilizáveis para dar feedback tátil ao responder questões. */
+@keyframes answer-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+@keyframes answer-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+.answer-correct {
+  animation: answer-pop 0.4s ease;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 45%, transparent);
+}
+.answer-wrong { animation: answer-shake 0.4s ease; }
+
 /* Painéis e cards aparecem suavemente ao carregar a página, com leve escalonamento
    (stagger) para criar ritmo. Aplica-se apenas na entrada — hover/estado não reanima. */
 .panel, .card, .stat-card { animation: fade-in-up 0.42s cubic-bezier(0.16, 1, 0.3, 1) both; }

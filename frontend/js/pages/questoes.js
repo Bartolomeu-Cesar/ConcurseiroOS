@@ -420,7 +420,7 @@ async function confirmarResposta() {
     a.style.cursor = 'default';
     a.onclick = null;
     if (a.dataset.letter === res.resposta_correta) {
-      a.classList.add('correct');
+      a.classList.add('correct', 'answer-correct');
       if (isCertoErrado) {
         a.style.border = '3px solid #a6e3a1';
         a.style.background = '#a6e3a1';
@@ -430,7 +430,7 @@ async function confirmarResposta() {
       }
     }
     if (a.dataset.letter === letra && !res.acertou) {
-      a.classList.add('wrong');
+      a.classList.add('wrong', 'answer-wrong');
       if (isCertoErrado) {
         a.style.border = '3px solid #f38ba8';
         a.style.background = '#f38ba833';
