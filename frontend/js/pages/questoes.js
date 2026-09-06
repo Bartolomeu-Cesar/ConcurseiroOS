@@ -273,11 +273,14 @@ function showQuestao(q) {
 
   const altsHtml = isCertoErrado
     ? `<div style="display:flex;gap:16px;justify-content:center;max-width:280px;margin:0 auto;">
-        <div class="alternativa ce-btn" data-letter="A" onclick="selecionarAlternativa(this, 'A')" style="flex:1;text-align:center;padding:10px 16px;border:2px solid #a6e3a1;border-radius:8px;cursor:pointer;font-weight:700;font-size:0.85rem;color:#a6e3a1;">✓ CERTO</div>
-        <div class="alternativa ce-btn" data-letter="B" onclick="selecionarAlternativa(this, 'B')" style="flex:1;text-align:center;padding:10px 16px;border:2px solid #f38ba8;border-radius:8px;cursor:pointer;font-weight:700;font-size:0.85rem;color:#f38ba8;">✗ ERRADO</div>
+        <div class="alternativa ce-btn" role="button" tabindex="0" aria-pressed="false" aria-label="Julgar como CERTO" data-letter="A" onclick="selecionarAlternativa(this, 'A')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selecionarAlternativa(this,'A');}" style="flex:1;text-align:center;padding:12px 16px;min-height:44px;border:2px solid #a6e3a1;border-radius:8px;cursor:pointer;font-weight:700;font-size:0.85rem;color:#a6e3a1;">✓ CERTO</div>
+        <div class="alternativa ce-btn" role="button" tabindex="0" aria-pressed="false" aria-label="Julgar como ERRADO" data-letter="B" onclick="selecionarAlternativa(this, 'B')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selecionarAlternativa(this,'B');}" style="flex:1;text-align:center;padding:12px 16px;min-height:44px;border:2px solid #f38ba8;border-radius:8px;cursor:pointer;font-weight:700;font-size:0.85rem;color:#f38ba8;">✗ ERRADO</div>
       </div>`
     : alternativas.map(a => `
-        <div class="alternativa" data-letter="${a.letter}" onclick="selecionarAlternativa(this, '${a.letter}')">
+        <div class="alternativa" role="button" tabindex="0" aria-pressed="false" data-letter="${a.letter}"
+             onclick="selecionarAlternativa(this, '${a.letter}')"
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selecionarAlternativa(this,'${a.letter}');}"
+             aria-label="Alternativa ${a.letter}: ${(a.text || '').replace(/"/g, '&quot;')}">
           <span class="alt-letter">${a.letter})</span>
           <span class="alt-text">${a.text}</span>
         </div>
@@ -300,6 +303,7 @@ function showQuestao(q) {
         <button class="btn btn-success" id="btn-confirmar" onclick="confirmarResposta()">Confirmar Resposta</button>
         <button class="btn btn-primary" id="btn-proxima" style="display:none;" onclick="loadQuestoesResolver()">Próxima →</button>
       </div>
+      <div style="font-size:0.68rem;color:#9399b2;margin-top:8px;opacity:0.8;">⌨️ Atalhos: <strong>${isCertoErrado ? 'C/E' : 'A–E'}</strong> ou <strong>${isCertoErrado ? '1/2' : '1–5'}</strong> selecionam · <strong>Enter</strong> confirma/avança</div>
       <div class="explicacao-box" id="explicacao-box">
         <strong>Explicação:</strong> ${q.explicacao || 'Sem explicação cadastrada.'}
       </div>
@@ -311,6 +315,7 @@ function selecionarAlternativa(el, letter) {
   if (respondida) return;
   document.querySelectorAll('.alternativa').forEach(a => {
     a.classList.remove('selected');
+    a.setAttribute('aria-pressed', 'false');
     // Reset CE button styles to default
     if (a.classList.contains('ce-btn')) {
       if (a.dataset.letter === 'A') {
@@ -329,6 +334,7 @@ function selecionarAlternativa(el, letter) {
     }
   });
   el.classList.add('selected');
+  el.setAttribute('aria-pressed', 'true');
   // Highlight selected CE button
   if (el.classList.contains('ce-btn')) {
     if (letter === 'A') {
@@ -2348,3 +2354,61 @@ window.encerrarCaderno = encerrarCaderno;
 window.adicionarAoCaderno = adicionarAoCaderno;
 window.doAddToCaderno = doAddToCaderno;
 window.loadCadernos = loadCadernos;
+
+
+// ============================================================
+// ATALHOS DE TECLADO (resolver questão) — espelha os flashcards
+// A-E (ou 1-5) selecionam a alternativa; Enter confirma (ou avança se já respondida).
+// Certo/Errado: C/1 = CERTO, E/2 = ERRADO. Ignora quando digitando num campo.
+// ============================================================
+function _digitandoEmCampoQ(target) {
+  if (!target) return false;
+  const tag = (target.tagName || '').toUpperCase();
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable;
+}
+
+function _handleQuestaoKey(e) {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (_digitandoEmCampoQ(e.target)) return;
+  // Só atua quando há uma questão em tela (área de resolver com alternativas).
+  const area = document.getElementById('resolver-area');
+  if (!area || !area.querySelector('.questao-card .alternativa')) return;
+
+  const alternativas = Array.from(area.querySelectorAll('.alternativa'));
+  if (!alternativas.length) return;
+  const isCertoErrado = alternativas.length === 2 && alternativas.every(a => a.classList.contains('ce-btn'));
+
+  // Enter: confirma (se não respondida e há seleção) ou avança (se já respondida).
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    if (respondida) {
+      const prox = document.getElementById('btn-proxima');
+      if (prox && prox.style.display !== 'none') prox.click();
+    } else if (area.querySelector('.alternativa.selected')) {
+      confirmarResposta();
+    }
+    return;
+  }
+
+  if (respondida) return; // após responder, só Enter (avançar) atua
+
+  // Mapear a tecla para uma letra de alternativa.
+  const key = (e.key || '').toUpperCase();
+  let letra = null;
+  if (isCertoErrado) {
+    if (key === 'C' || key === '1') letra = 'A';       // CERTO
+    else if (key === 'E' || key === '2') letra = 'B';  // ERRADO
+  } else {
+    if (key >= 'A' && key <= 'E') letra = key;
+    else if (key >= '1' && key <= '5') letra = String.fromCharCode(64 + parseInt(key, 10)); // 1->A ... 5->E
+  }
+  if (!letra) return;
+
+  const alvo = alternativas.find(a => a.dataset.letter === letra);
+  if (alvo) {
+    e.preventDefault();
+    selecionarAlternativa(alvo, letra);
+  }
+}
+
+document.addEventListener('keydown', _handleQuestaoKey);

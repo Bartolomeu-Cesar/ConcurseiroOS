@@ -31,10 +31,11 @@
     .questao-alternativas { display: flex; flex-direction: column; gap: 8px; }
     .alternativa {
       display: flex; align-items: center; gap: 10px;
-      padding: 10px 14px; background: #313244; border-radius: 8px;
+      padding: 12px 14px; min-height: 44px; background: #313244; border-radius: 8px;
       cursor: pointer; border: 2px solid transparent; transition: all 0.15s;
     }
     .alternativa:hover { border-color: #89b4fa; }
+    .alternativa:focus-visible { outline: 3px solid #cdd6f4; outline-offset: 2px; }
     .alternativa.selected { border-color: #cba6f7; background: #45475a; }
     .alternativa.correct { border-color: #a6e3a1; background: #a6e3a133; }
     .alternativa.wrong { border-color: #f38ba8; background: #f38ba833; }
@@ -149,6 +150,16 @@
     body.light-theme .form-row input, body.light-theme .form-row select, body.light-theme .form-row textarea { background: #dce0e8; border-color: #bcc0cc; color: #4c4f69; }
     body.light-theme .form-row input::placeholder, body.light-theme .form-row textarea::placeholder { color: #8c8fa1; }
     body.light-theme .filter-bar select, body.light-theme .filter-bar input { background: #dce0e8; border-color: #bcc0cc; color: #4c4f69; }
+
+    /* Responsividade mobile-first da tela de resolver questão */
+    @media (max-width: 480px) {
+      .questao-card { padding: 14px; }
+      .questao-enunciado { font-size: 0.95rem; line-height: 1.5; }
+      .alternativa { padding: 12px; min-height: 48px; }
+      .alt-text { font-size: 0.88rem; }
+      .questao-meta { flex-wrap: wrap; gap: 6px; }
+      .qtab-btn { padding: 10px 10px; font-size: 0.82rem; }
+    }
   </style>
 </head>
 <body>
