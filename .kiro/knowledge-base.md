@@ -1362,3 +1362,72 @@ busca `?embaralhar=true`, marca `_embaralhado=true`, re-renderiza com fallback �
 original; `confirmarResposta` envia `embaralhada:!!currentQuestao.embaralhada`. O backend
 já é retrocompatível (flag default False). Simulado (`/api/simulados/{id}/responder`) usa
 endpoint próprio e ficou fora do escopo — avaliar separadamente se fizer sentido.
+
+
+---
+
+## 12. SESSÃO 06/09/2026 — Auditoria de Usabilidade + 14 Ondas de Melhoria UX/UX/Segurança
+
+Auditoria das 15 telas do frontend (heurísticas de Nielsen + acessibilidade + mobile +
+regras do projeto), seguida de correções progressivas em ondas (implementar → validar
+com `node --check`/`pytest` → commit → push). SW final: **v251**.
+
+### Ondas concluídas (cada uma = 1 commit)
+
+- **1.1 Falso sucesso no cadastro de questão** (`questoes.js` `cadastrarQuestao`): faltava
+  `res.ok`/`try-catch`; o toast de sucesso disparava sempre e o form era limpo mesmo em
+  falha (perda de dados). Agora tem disabled+loading, checa `res.ok`, toast de erro com
+  `detail` e preserva o form em falha. `questoes.html` passa `this`.
+- **1.2 XSS no simulado** (`simulado-cronometrado.js`): enunciado/alternativas/matéria/
+  explicação iam ao `innerHTML` sem escape (única tela sem escape). Importado `escapeHtml`
+  de utils e aplicado em todos os pontos (render, grid de matérias, barra e card de resultado).
+- **1.3 Injeção via onclick inline**: adicionados `escapeAttr` (HTML entities completas) e
+  `escapeJsString` (barra/aspas/`<` para string JS em onclick) em `utils.js`. Corrigidos
+  `caderno-erros.js` (chip de matéria + `renderPadroes`), `vademecum.js` (escapeAttr local
+  agora delega a escapeJsString), `catalogo.js` (abrirAvaliacoes). `social.js` já estava
+  seguro (nomes com escapeHtml, onclicks só com IDs numéricos).
+- **2.1 Tema claro quebrado em 5 telas**: `batalha/social/catalogo/mastery/raio-x.html` não
+  chamavam `initTheme()` → a preferência salva não era respeitada. Adicionado import de
+  `theme.js` + `initTheme()` + expõe `toggleTheme` no bloco module inline.
+- **2.2 switchTab dependente de event.target global** (`social.js`): quebrava ao restaurar
+  aba salva (chamada programática) e só funcionava no Chromium. Agora `switchTab(tab, ev)`
+  localiza o botão por `data-tab` (fallback), seta `aria-selected`; `social.html` botões
+  ganharam `data-tab` e passam `event`.
+- **3.1 Toolbar do viewer responsiva**: `#toolbar` tinha 14+ controles sem `flex-wrap` →
+  estourava em 375px. Adicionado `flex-wrap`, `#title{min-width:120px}` e media(≤640px) que
+  joga o título para a 1ª linha (order:-1, flex 1 0 100%) e compacta os study-tools.
+- **3.2 Loading/disabled em fetch**: `iniciarSimulado(btn)` ganhou disabled+"⏳ Gerando
+  prova..."+finally (`simulado-cronometrado.html` passa `this`); `viewer.js`
+  `loadSidePanelQuestions` mostra "⏳ Carregando questões…". `sincronizar()` já tinha.
+- **3.3 Truncamento por JS (regra 2)**: `dashboard/main.js` item do planejador trocou o
+  toggle CSS `nowrap+ellipsis` por truncamento por JS (`data-full`/`data-short` +
+  `toggleTruncatePlan`, slice 22), corrigindo também um `style=` duplicado; `viewer.js`
+  bookmark trocou `nowrap+ellipsis` por `-webkit-line-clamp:2`+title completo; `.acc-name`
+  em `questoes.js` passou a escapar `key`.
+- **3.4 Modais/toasts padronizados**: `showStudyToast` (viewer) e `showBatalhaToast`
+  (batalha) agora delegam ao `toast()` central (utils/toast.js). Modais artesanais com
+  formulários próprios (ex.: showNoQuestionsModal) NÃO migrados — risco alto, refino futuro.
+- **4.1 Acessibilidade**: `login.html` — `#msg` com `role=status aria-live=polite`; Enter
+  no email/nome dispara login; `handleResend` com cooldown de 30s; contraste do `.skip-link`
+  melhorado. Canvases de gráficos (dashboard 6 + raio-x 3) ganharam `role=img`+`aria-label`.
+- **4.2 Confirmação em ação em massa**: `aplicarLote` (questoes.js) agora pede `confirmModal`
+  antes de vincular disciplina em lote. As ações destrutivas de calendário já tinham confirm.
+- **5.1 Chart.js offline**: era carregado via CDN jsdelivr em dashboard/raio-x (quebra o PWA
+  offline). Self-hosted em `frontend/vendor/chart.umd.min.js` (v4.4.7), referências trocadas
+  para `/vendor/...` e adicionado ao PRECACHE. `/vendor` é servido pelo StaticFiles do frontend.
+- **5.2 N+1 no Vade Mecum**: novo endpoint backend `GET /api/vademecum/artigos/{id}` (JOIN
+  em `vademecum_leis` → `lei_nome`/`lei_sigla`) elimina o loop que varria TODAS as leis para
+  abrir 1 artigo. `vademecum.js` `openArtigoDetail` usa o endpoint direto com fallback ao
+  método antigo. +2 testes (`test_vademecum.py`). Suíte: **1127 passed, 2 skipped**.
+- **6 Ajustes baixos**: polling de `social.js` (presence + unread) e `studyroom.js`
+  (focusScore) pausa quando `document.hidden` (economia rede/bateria); `index.js` PDFs
+  recentes ganharam estado de erro visível + escape de nome/path; contraste do botão
+  excluir-nota (`#f38ba855` → cor sólida com opacity).
+
+### Padrões reforçados nesta sessão
+- Escape correto por contexto: `escapeHtml` (conteúdo HTML), `escapeAttr` (atributos),
+  `escapeJsString` (string JS dentro de onclick inline) — todos em `utils.js`.
+- Bump `CACHE_VERSION` a cada onda que toca arquivo do PRECACHE (HTML das telas + `utils.js`
+  estão no precache; `js/pages/*.js` NÃO estão). Faixa desta sessão: v243 → v251.
+- Toda alteração de fetch: disabled+loading no botão, `res.ok`, toast de erro, e preservar
+  input do usuário em caso de falha.
