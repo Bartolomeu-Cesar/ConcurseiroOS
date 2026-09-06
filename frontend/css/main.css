@@ -672,11 +672,11 @@ body.sidebar-collapsed .main-content { margin-left: 60px; width: calc(100% - 60p
 }
 .tab-btn {
   flex: 1; padding: 12px 10px; border: none; background: transparent;
-  color: #9399b2; font-size: 0.88rem; font-weight: 600; cursor: pointer;
-  border-bottom: 3px solid transparent; transition: all 0.2s;
+  color: var(--text-sub); font-size: 0.88rem; font-weight: 600; cursor: pointer;
+  border-bottom: 3px solid transparent; transition: color 0.2s, background 0.2s, border-color 0.2s;
 }
-.tab-btn:hover { color: #cdd6f4; background: #45475a; }
-.tab-btn.active { color: #cdd6f4; border-bottom-color: #cba6f7; background: #45475a; }
+.tab-btn:hover { color: var(--text); background: rgba(203,166,247,0.08); }
+.tab-btn.active { color: var(--text); border-bottom-color: var(--accent); background: rgba(203,166,247,0.12); }
 .tab-content { display: none; opacity: 0; transform: translateY(8px); transition: opacity 0.25s ease, transform 0.25s ease; }
 .tab-content.active { display: block; opacity: 1; transform: translateY(0); width: 100%; }
 
@@ -1341,8 +1341,8 @@ body.light-theme .loading-spinner { color: #6c6f85; }
 /* Light theme — social / league */
 body.light-theme .tabs { background: #dce0e8; }
 body.light-theme .tab-btn { color: #6c6f85; }
-body.light-theme .tab-btn:hover { color: #4c4f69; background: #e6e9ef; }
-body.light-theme .tab-btn.active { background: #e6e9ef; color: #8839ef; }
+body.light-theme .tab-btn:hover { color: #4c4f69; background: rgba(136,57,239,0.08); }
+body.light-theme .tab-btn.active { background: rgba(136,57,239,0.12); color: #8839ef; border-bottom-color: #8839ef; }
 body.light-theme .tier-badge { background: #dce0e8; }
 body.light-theme .leaderboard td { border-top-color: #bcc0cc; }
 body.light-theme .leaderboard .xp { color: #df8e1d; }
@@ -1437,8 +1437,8 @@ body.light-theme .tree-status.status-concluido { background: #40a02b; color: #ff
 /* Light theme — tabs */
 body.light-theme #tab-bar { background: #e6e9ef; }
 body.light-theme .tab-btn { color: #5c5f77; }
-body.light-theme .tab-btn:hover { color: #4c4f69; background: #ccd0da; }
-body.light-theme .tab-btn.active { color: #4c4f69; background: #dce0e8; border-bottom-color: #8839ef; }
+body.light-theme .tab-btn:hover { color: #4c4f69; background: rgba(136,57,239,0.08); }
+body.light-theme .tab-btn.active { color: #8839ef; background: rgba(136,57,239,0.12); border-bottom-color: #8839ef; }
 
 /* Light theme — edital form */
 body.light-theme .edital-form input, body.light-theme .edital-form select { background: #dce0e8; border-color: #bcc0cc; color: #4c4f69; }
