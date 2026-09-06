@@ -21,6 +21,7 @@ from .banca import router as banca_router
 from .closedbook import router as closedbook_router
 from .encoding import router as encoding_router
 from .intentions import router as intentions_router
+from .interpolated import router as interpolated_router
 from .jol import router as jol_router
 from .mastery import router as mastery_router
 from .metacognition import router as metacognition_router
@@ -40,3 +41,4 @@ router.include_router(banca_router)
 router.include_router(social_challenge_router)
 router.include_router(jol_router)
 router.include_router(closedbook_router)
+router.include_router(interpolated_router)
