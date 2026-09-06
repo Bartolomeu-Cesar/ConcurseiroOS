@@ -1184,7 +1184,7 @@ async function aplicarGabaritoTexto() {
 window.aplicarGabaritoTexto = aplicarGabaritoTexto;
 
 // ==================== CADASTRAR ====================
-async function cadastrarQuestao() {
+async function cadastrarQuestao(btn) {
   const materia = document.getElementById('cad-materia').value.trim();
   const enunciado = document.getElementById('cad-enunciado').value.trim();
   const a = document.getElementById('cad-a').value.trim();
@@ -1198,31 +1198,50 @@ async function cadastrarQuestao() {
     return;
   }
 
-  await fetch('/api/questoes', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      materia,
-      topico: document.getElementById('cad-topico').value.trim(),
-      enunciado,
-      alternativa_a: a,
-      alternativa_b: b,
-      alternativa_c: c,
-      alternativa_d: d,
-      alternativa_e: document.getElementById('cad-e').value.trim(),
-      resposta_correta: resposta,
-      explicacao: document.getElementById('cad-explicacao').value.trim(),
-      dificuldade: document.getElementById('cad-dificuldade').value
-    })
-  });
+  // Feedback visual: desabilita o botão durante o fetch (regra UX: disabled em fetch).
+  const btnTexto = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Salvando...'; }
 
-  toast('Questão cadastrada com sucesso!', 'success');
-  // Limpar form
-  ['cad-materia', 'cad-topico', 'cad-enunciado', 'cad-a', 'cad-b', 'cad-c', 'cad-d', 'cad-e', 'cad-explicacao'].forEach(id => {
-    document.getElementById(id).value = '';
-  });
-  document.getElementById('cad-resposta').value = '';
-  loadMaterias();
+  try {
+    const res = await fetch('/api/questoes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        materia,
+        topico: document.getElementById('cad-topico').value.trim(),
+        enunciado,
+        alternativa_a: a,
+        alternativa_b: b,
+        alternativa_c: c,
+        alternativa_d: d,
+        alternativa_e: document.getElementById('cad-e').value.trim(),
+        resposta_correta: resposta,
+        explicacao: document.getElementById('cad-explicacao').value.trim(),
+        dificuldade: document.getElementById('cad-dificuldade').value
+      })
+    });
+
+    // Só considera sucesso se a resposta HTTP foi OK. Antes, o toast de sucesso
+    // disparava incondicionalmente e o form era limpo mesmo em falha (perda de dados).
+    if (!res.ok) {
+      let msg = 'Erro ao cadastrar questão. Tente novamente.';
+      try { const err = await res.json(); if (err && err.detail) msg = err.detail; } catch (e) {}
+      toast(msg, 'error');
+      return; // preserva o formulário para o usuário corrigir/reenviar
+    }
+
+    toast('Questão cadastrada com sucesso!', 'success');
+    // Limpar form apenas após sucesso confirmado
+    ['cad-materia', 'cad-topico', 'cad-enunciado', 'cad-a', 'cad-b', 'cad-c', 'cad-d', 'cad-e', 'cad-explicacao'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+    document.getElementById('cad-resposta').value = '';
+    loadMaterias();
+  } catch (e) {
+    toast('Falha de conexão ao cadastrar. Verifique a rede e tente novamente.', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = btnTexto; }
+  }
 }
 window.cadastrarQuestao = cadastrarQuestao;
 
