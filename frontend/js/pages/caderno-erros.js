@@ -1,5 +1,6 @@
 // caderno-erros.js — ES module extracted from caderno-erros.html
 import { escapeJsString } from '/js/modules/utils.js';
+import { illustration } from '/js/modules/illustrations.js';
 
 const API_BASE = '';
 let dadosCaderno = null;
@@ -101,8 +102,8 @@ function renderRevisao(pendentes) {
   if (filtered.length === 0) {
     container.innerHTML = `
       <div class="empty-state">
-        <div class="empty-icon">🎉</div>
-        <p>${filtroMateria ? 'Nenhuma revisão pendente nesta matéria!' : 'Nenhuma revisão pendente hoje! Volte amanhã.'}</p>
+        ${illustration('concluido')}
+        <p class="empty-msg">${filtroMateria ? 'Nenhuma revisão pendente nesta matéria!' : 'Nenhuma revisão pendente hoje! Volte amanhã.'}</p>
       </div>`;
     return;
   }

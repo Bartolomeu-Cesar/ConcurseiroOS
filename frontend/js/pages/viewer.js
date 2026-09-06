@@ -1,6 +1,7 @@
 // viewer.js — extracted from viewer.html inline script
 // ES module (strict mode by default)
 import { confirmModal, promptModal, toast } from '../modules/utils.js';
+import { illustration } from '../modules/illustrations.js';
 import { isLocalPath, obterArquivoLocalPorPath } from '../modules/local-pdfs.js';
 
 const API = '';
@@ -655,7 +656,7 @@ async function loadSidePanelQuestions() {
     sidePanelQuestions = questoes;
 
     if (questoes.length === 0) {
-      body.innerHTML = `<div class="sp-empty">Nenhuma questão encontrada${sidePanelMateria ? ' para "'+sidePanelMateria+'"' : ''}.<br><br><a href="/questoes.html" style="color:#89b4fa;">Cadastrar questões →</a></div>`;
+      body.innerHTML = `<div class="empty-state">${illustration('questoes')}<p class="empty-msg">Nenhuma questão encontrada${sidePanelMateria ? ' para "'+sidePanelMateria+'"' : ''}.</p><a href="/questoes.html" style="color:var(--blue);font-size:0.85rem;">Cadastrar questões →</a></div>`;
       return;
     }
 

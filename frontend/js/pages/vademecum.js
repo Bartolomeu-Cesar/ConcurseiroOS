@@ -2,6 +2,7 @@
 // ES module
 import { toast } from '../modules/toast.js';
 import { confirmModal, escapeJsString } from '../modules/utils.js';
+import { illustration } from '../modules/illustrations.js';
 import { handleAuthNav } from '../modules/auth.js';
 window.handleAuthNav = handleAuthNav;
 
@@ -43,7 +44,7 @@ async function vmBuscar() {
     const data = await res.json();
 
     if (!data.length) {
-      container.innerHTML = `<div class="vm-empty"><div class="vm-empty-icon">🤷</div><p>Nenhum resultado para "<strong>${escapeHtml(q)}</strong>".</p></div>`;
+      container.innerHTML = `<div class="vm-empty">${illustration('busca')}<p>Nenhum resultado para "<strong>${escapeHtml(q)}</strong>".</p></div>`;
       return;
     }
 
@@ -81,7 +82,7 @@ async function loadLeis() {
 function renderLeis() {
   const container = document.getElementById('vm-leis-list');
   if (!leisCache.length) {
-    container.innerHTML = `<div class="vm-empty"><div class="vm-empty-icon">📚</div><p>Nenhuma lei cadastrada. Clique em "+ Nova Lei" para começar.</p></div>`;
+    container.innerHTML = `<div class="vm-empty">${illustration('pdfs')}<p>Nenhuma lei cadastrada. Clique em "+ Nova Lei" para começar.</p></div>`;
     return;
   }
   container.innerHTML = leisCache.map(lei => `
