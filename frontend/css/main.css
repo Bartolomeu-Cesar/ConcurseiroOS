@@ -55,6 +55,20 @@
   --radius-lg: 12px;
   --radius-xl: 16px;
   --radius-pill: 20px;
+
+  /* Escala de espaçamento (ritmo vertical/horizontal consistente) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Elevação (sombras sutis para cards flutuantes) */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.18);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.22);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.28);
 }
 
 * {
@@ -459,12 +473,12 @@ body.sidebar-collapsed .main-content { margin-left: 60px; width: calc(100% - 60p
 
 /* ===== GRID & CARDS ===== */
 
-.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px; }
-.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 20px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--space-4); margin-bottom: var(--space-6); }
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--space-3); margin-bottom: var(--space-5); }
 
 .card {
   background: var(--bg-surface); border-radius: var(--radius-lg);
-  padding: 16px; display: flex; flex-direction: column; gap: 4px;
+  padding: var(--space-5); display: flex; flex-direction: column; gap: var(--space-1);
 }
 .card-label { font-size: 0.78rem; color: var(--text-sub); text-transform: uppercase; font-weight: 600; }
 .card-value { font-size: 1.6rem; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
@@ -482,7 +496,7 @@ body.sidebar-collapsed .main-content { margin-left: 60px; width: calc(100% - 60p
 
 .panel {
   background: var(--bg-surface); border-radius: var(--radius-lg);
-  padding: 20px; margin-bottom: 16px;
+  padding: var(--space-6); margin-bottom: var(--space-4);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 .panel:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
