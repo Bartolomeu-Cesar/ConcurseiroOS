@@ -18,6 +18,7 @@ Submódulos:
 from fastapi import APIRouter
 
 from .banca import router as banca_router
+from .closedbook import router as closedbook_router
 from .encoding import router as encoding_router
 from .intentions import router as intentions_router
 from .jol import router as jol_router
@@ -38,3 +39,4 @@ router.include_router(intentions_router)
 router.include_router(banca_router)
 router.include_router(social_challenge_router)
 router.include_router(jol_router)
+router.include_router(closedbook_router)

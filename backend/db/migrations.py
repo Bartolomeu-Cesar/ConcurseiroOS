@@ -1367,6 +1367,31 @@ def _m84_jol_predictions(conn):
     log.info("Migration 84: created jol_predictions table")
 
 
+def _m85_closed_book_log(conn):
+    """Closed-book antes de open-book — tentativa de recall sem consulta.
+
+    Evidência (Agarwal et al.; field experiment Frontiers 2019): fazer uma tentativa
+    de "livro fechado" ANTES de liberar a consulta ao material supera consultar direto,
+    por forçar retrieval practice. Cada linha registra uma tentativa closed-book:
+    - materia/topico: alvo do recall
+    - auto_recall: quanto o usuário achou que lembrou (0-100, autoavaliação)
+    - abriu_material: 1 depois que liberou o open-book (fluxo completo)
+    """
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS closed_book_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            materia TEXT NOT NULL,
+            topico TEXT DEFAULT '',
+            auto_recall INTEGER DEFAULT NULL,
+            abriu_material INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT ''
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_closed_book_user ON closed_book_log(user_id)")
+    log.info("Migration 85: created closed_book_log table")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -1452,6 +1477,7 @@ MIGRATIONS = [
     (82, _m82_filtros_salvos),
     (83, _m83_questoes_discursivas),
     (84, _m84_jol_predictions),
+    (85, _m85_closed_book_log),
 ]
 
 
