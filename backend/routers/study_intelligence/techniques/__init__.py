@@ -26,6 +26,7 @@ from .jol import router as jol_router
 from .mastery import router as mastery_router
 from .metacognition import router as metacognition_router
 from .retrieval import router as retrieval_router
+from .rif import router as rif_router
 from .social_challenge import router as social_challenge_router
 from .wellbeing import router as wellbeing_router
 
@@ -42,3 +43,4 @@ router.include_router(social_challenge_router)
 router.include_router(jol_router)
 router.include_router(closedbook_router)
 router.include_router(interpolated_router)
+router.include_router(rif_router)
