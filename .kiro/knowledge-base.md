@@ -1490,3 +1490,17 @@ ritmo de espaçamento consistente. SW: v251 → **v256** (main.css está no PREC
   em círculo suave (`64px`, fundo `var(--bg-elevated)`), mensagem com `max-width` e line-height.
 
 Total layout até aqui: **L1–L9**, SW **v243 → v260**. Tudo via `main.css`, sem tocar em HTML.
+
+### Continuação (mesma sessão) — Ondas L10-L11 (SW v260 → v262)
+- **L10 Top-bar/busca** (`4435b0e`): `.top-bar` sticky com fundo translúcido
+  (`color-mix(bg 85%)`) + `backdrop-filter: blur(8px)` + `--shadow-sm`; campo de busca
+  migrado para tokens com anel de foco (`box-shadow 0 0 0 3px color-mix(accent 22%)`).
+  Light-theme ganhou o mesmo blur translúcido.
+- **L11 Tabelas** (`3e07c9c`): `.users-table` com borda+sombra, zebra striping
+  (`nth-child(even)` com `color-mix(bg-elevated 30%)`) e hover em accent translúcido;
+  criada base reutilizável **`.data-table`** (header STICKY, zebra, hover, tabular-nums)
+  para listas densas futuras. Removida duplicação antiga de `.users-table tr:hover`.
+
+Total layout até aqui: **L1–L11**, SW **v243 → v262**. Sempre via `main.css`, sem tocar HTML.
+Padrão de destaque adotado: hover/ativo em `rgba(203,166,247,0.08–0.14)` (mauve) no dark e
+`rgba(136,57,239,...)` no light; foco com anel `color-mix(var(--accent) ~22-25%)`.
