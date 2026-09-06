@@ -5,6 +5,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sanitize import sanitize_input
 from schemas import (
     QuestaoCreate,
+    QuestaoDiscursivaResposta,
     QuestaoResponse,
     QuestaoResposta,
     QuestaoRespostaResponse,
@@ -47,7 +48,7 @@ def _embaralhar_alternativas(questao: dict, user_id: int, seed: int | None = Non
     # Coletar alternativas não-vazias
     letras_originais = []
     textos = []
-    for letra in ['A', 'B', 'C', 'D', 'E']:
+    for letra in ["A", "B", "C", "D", "E"]:
         key = f"alternativa_{letra.lower()}"
         texto = questao.get(key, "")
         if texto and texto.strip():
@@ -62,12 +63,13 @@ def _embaralhar_alternativas(questao: dict, user_id: int, seed: int | None = Non
 
     # Criar permutação usando Fisher-Yates com a semente escolhida
     import random
+
     rng = random.Random(seed_val)
     indices = list(range(len(letras_originais)))
     rng.shuffle(indices)
 
     # Remontar alternativas na nova ordem
-    novas_letras = ['A', 'B', 'C', 'D', 'E'][:len(letras_originais)]
+    novas_letras = ["A", "B", "C", "D", "E"][: len(letras_originais)]
     mapeamento = {}  # nova_letra -> letra_original
 
     for nova_pos, original_pos in enumerate(indices):
@@ -80,7 +82,7 @@ def _embaralhar_alternativas(questao: dict, user_id: int, seed: int | None = Non
 
     # Limpar alternativas extras se houver (usa a lista completa de letras,
     # pois `novas_letras` foi truncada ao número de alternativas reais).
-    todas_letras = ['A', 'B', 'C', 'D', 'E']
+    todas_letras = ["A", "B", "C", "D", "E"]
     for i in range(len(letras_originais), 5):
         questao[f"alternativa_{todas_letras[i].lower()}"] = ""
 
@@ -122,10 +124,13 @@ def _schedule_question_review(conn, questao_id: int, user_id: int, acertou: int,
         from fsrs import RATING_AGAIN, RATING_EASY, RATING_GOOD, RATING_HARD, FSRSCard, review_card
 
         # Buscar dados existentes de revisão para esta questão
-        existing = conn.execute("""
+        existing = conn.execute(
+            """
             SELECT id, stability, difficulty, fsrs_state, reps, last_review
             FROM erros_revisao WHERE questao_id = ? AND user_id = ?
-        """, (questao_id, user_id)).fetchone()
+        """,
+            (questao_id, user_id),
+        ).fetchone()
 
         # Determinar rating FSRS baseado no resultado + confiança
         if not acertou:
@@ -133,8 +138,7 @@ def _schedule_question_review(conn, questao_id: int, user_id: int, acertou: int,
         else:
             # Verificar se foi chute (tempo muito baixo)
             dificuldade = conn.execute(
-                "SELECT dificuldade FROM questoes WHERE id = ? AND user_id = ?",
-                (questao_id, user_id)
+                "SELECT dificuldade FROM questoes WHERE id = ? AND user_id = ?", (questao_id, user_id)
             ).fetchone()
             dif_nome = dificuldade[0] if dificuldade else "Médio"
             threshold = _CONFIDENCE_THRESHOLDS.get(dif_nome, 12)
@@ -167,42 +171,64 @@ def _schedule_question_review(conn, questao_id: int, user_id: int, acertou: int,
             if acertou and rating >= RATING_GOOD and (existing["reps"] or 0) >= 3:
                 conn.execute("DELETE FROM erros_revisao WHERE id = ? AND user_id = ?", (existing["id"], user_id))
             else:
-                conn.execute("""
+                conn.execute(
+                    """
                     UPDATE erros_revisao SET
                         stability = ?, difficulty = ?, fsrs_state = ?,
                         reps = ?, last_review = ?, proxima_revisao = ?,
                         intervalo_atual = ?, revisoes_count = revisoes_count + 1,
                         updated_at = ?
                     WHERE id = ? AND user_id = ?
-                """, (
-                    round(output.stability, 6), round(output.difficulty, 4),
-                    output.state, (existing["reps"] or 0) + 1,
-                    today_str(), output.next_review, output.interval,
-                    today_str(), existing["id"], user_id
-                ))
+                """,
+                    (
+                        round(output.stability, 6),
+                        round(output.difficulty, 4),
+                        output.state,
+                        (existing["reps"] or 0) + 1,
+                        today_str(),
+                        output.next_review,
+                        output.interval,
+                        today_str(),
+                        existing["id"],
+                        user_id,
+                    ),
+                )
         elif not acertou or (acertou and rating == RATING_HARD):
             # Criar nova entrada de revisão (errou ou chutou)
             card = FSRSCard(stability=0.0, difficulty=0.0, state=0, reps=0)
             output = review_card(card, rating)
 
             # Buscar resposta_id mais recente
-            resp_row = conn.execute("""
+            resp_row = conn.execute(
+                """
                 SELECT id FROM questoes_respostas
                 WHERE questao_id = ? AND user_id = ?
                 ORDER BY id DESC LIMIT 1
-            """, (questao_id, user_id)).fetchone()
+            """,
+                (questao_id, user_id),
+            ).fetchone()
             resposta_id = resp_row[0] if resp_row else 0
 
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT INTO erros_revisao
                 (user_id, questao_id, resposta_id, intervalo_atual, proxima_revisao,
                  revisoes_count, stability, difficulty, fsrs_state, reps, last_review, created_at)
                 VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, 1, ?, ?)
-            """, (
-                user_id, questao_id, resposta_id, output.interval,
-                output.next_review, round(output.stability, 6),
-                round(output.difficulty, 4), output.state, today_str(), today_str()
-            ))
+            """,
+                (
+                    user_id,
+                    questao_id,
+                    resposta_id,
+                    output.interval,
+                    output.next_review,
+                    round(output.stability, 6),
+                    round(output.difficulty, 4),
+                    output.state,
+                    today_str(),
+                    today_str(),
+                ),
+            )
 
         conn.commit()
     except Exception as e:
@@ -214,12 +240,17 @@ def _schedule_question_review(conn, questao_id: int, user_id: int, acertou: int,
             pass
 
 
-@router.get("/api/questoes", summary="Listar questões", description="Lista todas as questões do banco, com filtros por matéria/tópico e paginação opcional")
+@router.get(
+    "/api/questoes",
+    summary="Listar questões",
+    description="Lista todas as questões do banco, com filtros por matéria/tópico e paginação opcional",
+)
 def list_questoes(
     materia: str = "",
     topico: str = "",
     dificuldade: str = "",
     banca: str = "",
+    tipo: str = "",
     acertou: int | None = Query(None),
     respondidas: int | None = Query(None),
     sem_gabarito: int | None = Query(None),
@@ -238,9 +269,10 @@ def list_questoes(
     if needs_not_in:
         query = "SELECT q.* FROM questoes q WHERE q.user_id = ? AND q.id NOT IN (SELECT questao_id FROM questoes_respostas WHERE user_id = ?)"
         params = [user_id, user_id]
-        # Excluir sem gabarito (a menos que explicitamente pedido)
+        # Excluir sem gabarito (a menos que explicitamente pedido).
+        # Discursivas não têm resposta_correta — nunca excluir por isso.
         if not sem_gabarito:
-            query += " AND q.resposta_correta != '' AND q.resposta_correta IS NOT NULL"
+            query += " AND (q.tipo = 'discursiva' OR (q.resposta_correta != '' AND q.resposta_correta IS NOT NULL))"
         if materia:
             query += " AND q.materia = ?"
             params.append(materia)
@@ -253,6 +285,9 @@ def list_questoes(
         if banca:
             query += " AND q.banca = ?"
             params.append(banca)
+        if tipo:
+            query += " AND q.tipo = ?"
+            params.append(tipo)
         if sem_gabarito:
             query += " AND (q.resposta_correta = '' OR q.resposta_correta IS NULL)"
     elif needs_join or respondidas == 1:
@@ -270,6 +305,9 @@ def list_questoes(
         if banca:
             query += " AND q.banca = ?"
             params.append(banca)
+        if tipo:
+            query += " AND q.tipo = ?"
+            params.append(tipo)
         if acertou is not None:
             query += " AND qr.acertou = ?"
             params.append(acertou)
@@ -284,9 +322,10 @@ def list_questoes(
     else:
         query = "SELECT * FROM questoes WHERE user_id = ?"
         params = [user_id]
-        # Excluir sem gabarito por padrão (a menos que explicitamente pedido)
+        # Excluir sem gabarito por padrão (a menos que explicitamente pedido).
+        # Discursivas não têm resposta_correta — nunca excluir por isso.
         if not sem_gabarito:
-            query += " AND resposta_correta != '' AND resposta_correta IS NOT NULL"
+            query += " AND (tipo = 'discursiva' OR (resposta_correta != '' AND resposta_correta IS NOT NULL))"
         if materia:
             query += " AND materia = ?"
             params.append(materia)
@@ -299,6 +338,9 @@ def list_questoes(
         if banca:
             query += " AND banca = ?"
             params.append(banca)
+        if tipo:
+            query += " AND tipo = ?"
+            params.append(tipo)
         if sem_gabarito:
             query += " AND (resposta_correta = '' OR resposta_correta IS NULL)"
 
@@ -307,70 +349,120 @@ def list_questoes(
     return sql_paginate(conn, query, tuple(params), page, limit)
 
 
-@router.get("/api/questoes/materias", summary="Listar matérias disponíveis",
-            description="Retorna lista de matérias distintas presentes no banco de questões do usuário.")
+@router.get(
+    "/api/questoes/materias",
+    summary="Listar matérias disponíveis",
+    description="Retorna lista de matérias distintas presentes no banco de questões do usuário.",
+)
 def list_questoes_materias(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
-    rows = conn.execute("SELECT DISTINCT materia FROM questoes WHERE user_id = ? ORDER BY materia", (user_id,)).fetchall()
-    return [r[0] for r in rows]
-
-
-@router.get("/api/questoes/respondidas-hoje", summary="IDs das questões respondidas hoje",
-            description="Retorna IDs de questões já respondidas hoje (para evitar repetição no mesmo dia).")
-def questoes_respondidas_hoje(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
-    from utils import today_str
     rows = conn.execute(
-        "SELECT DISTINCT questao_id FROM questoes_respostas WHERE user_id = ? AND data = ?",
-        (user_id, today_str())
+        "SELECT DISTINCT materia FROM questoes WHERE user_id = ? ORDER BY materia", (user_id,)
     ).fetchall()
     return [r[0] for r in rows]
 
 
-@router.get("/api/questoes/similar", summary="Questão similar para Errorful Learning",
-            description="""Busca uma questão da mesma matéria/tópico para teste imediato após erro.
+@router.get(
+    "/api/questoes/respondidas-hoje",
+    summary="IDs das questões respondidas hoje",
+    description="Retorna IDs de questões já respondidas hoje (para evitar repetição no mesmo dia).",
+)
+def questoes_respondidas_hoje(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    from utils import today_str
+
+    rows = conn.execute(
+        "SELECT DISTINCT questao_id FROM questoes_respostas WHERE user_id = ? AND data = ?", (user_id, today_str())
+    ).fetchall()
+    return [r[0] for r in rows]
+
+
+@router.get(
+    "/api/questoes/codigo/{codigo}",
+    summary="Buscar questão pelo código",
+    description="""Busca uma questão diretamente pelo seu código/ID (inspirado no QConcursos).
+Aceita o número puro (ex: 123) ou prefixado com Q (ex: Q123). Atalho de UX para ir
+direto a uma questão específica sem navegar pelos filtros.""",
+)
+def get_questao_por_codigo(
+    codigo: str,
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    # Normaliza: aceita "Q123", "q123", "123", "#123" e espaços.
+    raw = (codigo or "").strip().lstrip("Qq#").strip()
+    if not raw.isdigit():
+        raise HTTPException(status_code=400, detail="Código inválido. Use apenas números (ex: 123 ou Q123).")
+    qid = int(raw)
+    row = conn.execute("SELECT * FROM questoes WHERE id = ? AND user_id = ?", (qid, user_id)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Questão Q{qid} não encontrada.")
+    return dict(row)
+
+
+@router.get(
+    "/api/questoes/similar",
+    summary="Questão similar para Errorful Learning",
+    description="""Busca uma questão da mesma matéria/tópico para teste imediato após erro.
 Evidência: Kornell et al. (2009) — Errar + feedback + teste imediato do mesmo conceito
-consolida a correção e reduz repetição do erro em 30-50%.""")
+consolida a correção e reduz repetição do erro em 30-50%.""",
+)
 def get_questao_similar(
     materia: str,
     excluir_id: int = 0,
     topico: str = "",
     conn=Depends(get_db_session),
-    user_id: int = Depends(get_user_id)
+    user_id: int = Depends(get_user_id),
 ):
     """Retorna uma questão similar (mesma matéria/tópico) que o aluno não respondeu recentemente."""
     from utils import today_str
 
     # Primeiro tentar pelo mesmo tópico
     if topico:
-        row = conn.execute("""
+        row = conn.execute(
+            """
             SELECT id, enunciado, alternativa_a, alternativa_b, alternativa_c, alternativa_d, alternativa_e,
                    resposta_correta, materia, topico
             FROM questoes
             WHERE user_id = ? AND materia = ? AND topico = ? AND id != ?
             AND id NOT IN (SELECT questao_id FROM questoes_respostas WHERE user_id = ? AND data = ?)
             ORDER BY RANDOM() LIMIT 1
-        """, (user_id, materia, topico, excluir_id, user_id, today_str())).fetchone()
+        """,
+            (user_id, materia, topico, excluir_id, user_id, today_str()),
+        ).fetchone()
         if row:
             return dict(row)
 
     # Fallback: mesma matéria
-    row = conn.execute("""
+    row = conn.execute(
+        """
         SELECT id, enunciado, alternativa_a, alternativa_b, alternativa_c, alternativa_d, alternativa_e,
                resposta_correta, materia, topico
         FROM questoes
         WHERE user_id = ? AND materia = ? AND id != ?
         AND id NOT IN (SELECT questao_id FROM questoes_respostas WHERE user_id = ? AND data = ?)
         ORDER BY RANDOM() LIMIT 1
-    """, (user_id, materia, excluir_id, user_id, today_str())).fetchone()
+    """,
+        (user_id, materia, excluir_id, user_id, today_str()),
+    ).fetchone()
 
     if row:
         return dict(row)
     return {}
 
 
-@router.get("/api/questoes/{id}", response_model=QuestaoResponse, summary="Obter questão por ID",
-            description="Retorna os dados completos de uma questão específica.",
-            responses={404: {"description": "Questão não encontrada"}})
-def get_questao(id: int, embaralhar: bool = False, seed: int | None = None, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+@router.get(
+    "/api/questoes/{id}",
+    response_model=QuestaoResponse,
+    summary="Obter questão por ID",
+    description="Retorna os dados completos de uma questão específica.",
+    responses={404: {"description": "Questão não encontrada"}},
+)
+def get_questao(
+    id: int,
+    embaralhar: bool = False,
+    seed: int | None = None,
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
     row = conn.execute("SELECT * FROM questoes WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Questão não encontrada")
@@ -387,31 +479,126 @@ def get_questao(id: int, embaralhar: bool = False, seed: int | None = None, conn
 @router.post("/api/questoes", summary="Criar questão", description="Adiciona uma nova questão ao banco de questões")
 def create_questao(body: QuestaoCreate, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     from plans import enforce_plan_limit
+
     enforce_plan_limit(conn, user_id, "questoes_banco")
 
-    cur = conn.execute("""
+    cur = conn.execute(
+        """
         INSERT INTO questoes (materia, topico, enunciado, alternativa_a, alternativa_b,
-            alternativa_c, alternativa_d, alternativa_e, resposta_correta, explicacao, dificuldade, banca, created_at, user_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (sanitize_input(body.materia), sanitize_input(body.topico),
-          sanitize_input(body.enunciado, max_length=5000),
-          sanitize_input(body.alternativa_a, max_length=2000),
-          sanitize_input(body.alternativa_b, max_length=2000),
-          sanitize_input(body.alternativa_c, max_length=2000),
-          sanitize_input(body.alternativa_d, max_length=2000),
-          sanitize_input(body.alternativa_e, max_length=2000),
-          sanitize_input(body.resposta_correta),
-          sanitize_input(body.explicacao, max_length=5000),
-          sanitize_input(body.dificuldade), sanitize_input(body.banca), today_str(), user_id))
+            alternativa_c, alternativa_d, alternativa_e, resposta_correta, explicacao, dificuldade, banca, tipo, resposta_esperada, created_at, user_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """,
+        (
+            sanitize_input(body.materia),
+            sanitize_input(body.topico),
+            sanitize_input(body.enunciado, max_length=5000),
+            sanitize_input(body.alternativa_a, max_length=2000),
+            sanitize_input(body.alternativa_b, max_length=2000),
+            sanitize_input(body.alternativa_c, max_length=2000),
+            sanitize_input(body.alternativa_d, max_length=2000),
+            sanitize_input(body.alternativa_e, max_length=2000),
+            sanitize_input(body.resposta_correta),
+            sanitize_input(body.explicacao, max_length=5000),
+            sanitize_input(body.dificuldade),
+            sanitize_input(body.banca),
+            sanitize_input(body.tipo),
+            sanitize_input(body.resposta_esperada, max_length=10000),
+            today_str(),
+            user_id,
+        ),
+    )
     conn.commit()
     new_id = cur.lastrowid
     log.info(f"Questão created: id={new_id} materia={body.materia}")
     return {"id": new_id, "ok": True}
 
 
-@router.post("/api/questoes/{id}/responder", response_model=QuestaoRespostaResponse, summary="Responder questão", description="Registra a resposta do usuário e retorna se acertou ou errou")
-def responder_questao(id: int, body: QuestaoResposta, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+@router.post(
+    "/api/questoes/{id}/responder-discursiva",
+    summary="Responder questão discursiva",
+    description="""Registra a resposta em TEXTO LIVRE de uma questão discursiva e a
+autoavaliação (0-100) que o usuário dá à própria resposta comparando com a resposta esperada.
+Não há correção automática — segue a técnica de Self-Explanation/Retrieval Practice.
+Retorna a resposta esperada (gabarito) para o usuário comparar.""",
+)
+def responder_discursiva(
+    id: int, body: QuestaoDiscursivaResposta, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)
+):
     from plans import enforce_plan_limit
+
+    enforce_plan_limit(conn, user_id, "questoes_dia")
+
+    questao = conn.execute("SELECT * FROM questoes WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
+    if not questao:
+        raise HTTPException(status_code=404, detail="Questão não encontrada")
+
+    if (questao["tipo"] or "objetiva") != "discursiva":
+        raise HTTPException(status_code=400, detail="Esta questão não é discursiva. Use /responder.")
+
+    resposta_texto = sanitize_input(body.resposta_texto, max_length=10000)
+    if not resposta_texto.strip():
+        raise HTTPException(status_code=400, detail="A resposta não pode estar vazia.")
+
+    # Autoavaliação (0-100): normaliza/clampa. None = ainda não avaliada.
+    autoaval = body.autoavaliacao
+    if autoaval is not None:
+        autoaval = max(0, min(100, int(autoaval)))
+
+    # Numa discursiva "acertou" é derivado da autoavaliação (>= 60 = acerto).
+    # Se ainda não houve autoavaliação, gravamos acertou=0 sem penalizar streak de acerto.
+    acertou = 1 if (autoaval is not None and autoaval >= 60) else 0
+
+    conn.execute(
+        """
+        INSERT INTO questoes_respostas
+            (questao_id, resposta_usuario, resposta_texto, autoavaliacao, acertou, tempo_segundos, data, user_id)
+        VALUES (?, '', ?, ?, ?, ?, ?, ?)
+    """,
+        (id, resposta_texto, autoaval, acertou, body.tempo_segundos, today_str(), user_id),
+    )
+    update_streak(conn, "questoes_resolvidas", user_id=user_id)
+
+    # Registrar tempo como sessão de estudo (se > 10 segundos)
+    if body.tempo_segundos > 10:
+        horas = body.tempo_segundos / 3600
+        materia = questao["materia"] or "Questões"
+        existing = conn.execute(
+            "SELECT id, horas FROM sessoes_estudo WHERE data = ? AND materia = ? AND tipo = 'questoes' AND user_id = ?",
+            (today_str(), materia, user_id),
+        ).fetchone()
+        if existing:
+            conn.execute(
+                "UPDATE sessoes_estudo SET horas = horas + ? WHERE id = ? AND user_id = ?",
+                (horas, existing["id"], user_id),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO sessoes_estudo (materia, horas, data, tipo, user_id) VALUES (?, ?, ?, 'questoes', ?)",
+                (materia, horas, today_str(), user_id),
+            )
+        update_streak(conn, "horas_estudadas", horas, user_id=user_id)
+
+    conn.commit()
+
+    return {
+        "ok": True,
+        "acertou": bool(acertou),
+        "autoavaliacao": autoaval,
+        "resposta_esperada": questao["resposta_esperada"] or "",
+    }
+
+
+@router.post(
+    "/api/questoes/{id}/responder",
+    response_model=QuestaoRespostaResponse,
+    summary="Responder questão",
+    description="Registra a resposta do usuário e retorna se acertou ou errou",
+)
+def responder_questao(
+    id: int, body: QuestaoResposta, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)
+):
+    from plans import enforce_plan_limit
+
     enforce_plan_limit(conn, user_id, "questoes_dia")
 
     questao = conn.execute("SELECT * FROM questoes WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
@@ -446,10 +633,13 @@ def responder_questao(id: int, body: QuestaoResposta, conn=Depends(get_db_sessio
             resposta_usuario = (mapeamento.get(resposta_usuario) or resposta_usuario).upper()
 
     acertou = 1 if body.resposta.upper() == gabarito else 0
-    conn.execute("""
+    conn.execute(
+        """
         INSERT INTO questoes_respostas (questao_id, resposta_usuario, acertou, tempo_segundos, confianca, data, user_id)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (id, resposta_usuario, acertou, body.tempo_segundos, body.confianca, today_str(), user_id))
+    """,
+        (id, resposta_usuario, acertou, body.tempo_segundos, body.confianca, today_str(), user_id),
+    )
     update_streak(conn, "questoes_resolvidas", user_id=user_id)
 
     # Registrar tempo como sessão de estudo (se > 10 segundos)
@@ -458,17 +648,17 @@ def responder_questao(id: int, body: QuestaoResposta, conn=Depends(get_db_sessio
         materia = questao["materia"] or "Questões"
         existing = conn.execute(
             "SELECT id, horas FROM sessoes_estudo WHERE data = ? AND materia = ? AND tipo = 'questoes' AND user_id = ?",
-            (today_str(), materia, user_id)
+            (today_str(), materia, user_id),
         ).fetchone()
         if existing:
             conn.execute(
                 "UPDATE sessoes_estudo SET horas = horas + ? WHERE id = ? AND user_id = ?",
-                (horas, existing["id"], user_id)
+                (horas, existing["id"], user_id),
             )
         else:
             conn.execute(
                 "INSERT INTO sessoes_estudo (materia, horas, data, tipo, user_id) VALUES (?, ?, ?, 'questoes', ?)",
-                (materia, horas, today_str(), user_id)
+                (materia, horas, today_str(), user_id),
             )
         update_streak(conn, "horas_estudadas", horas, user_id=user_id)
 
@@ -482,14 +672,17 @@ def responder_questao(id: int, body: QuestaoResposta, conn=Depends(get_db_sessio
 
     # Update mastery for the relevant topic
     try:
-        questao_full = conn.execute("SELECT materia, topico FROM questoes WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
+        questao_full = conn.execute(
+            "SELECT materia, topico FROM questoes WHERE id = ? AND user_id = ?", (id, user_id)
+        ).fetchone()
         if questao_full and questao_full["topico"]:
             edital_topic = conn.execute(
                 "SELECT id FROM edital WHERE (topico LIKE ? OR materia = ?) AND user_id = ? LIMIT 1",
-                (f'%{questao_full["topico"]}%', questao_full["materia"], user_id)
+                (f"%{questao_full['topico']}%", questao_full["materia"], user_id),
             ).fetchone()
             if edital_topic:
                 from routers.edital import _update_single_mastery
+
                 _update_single_mastery(conn, edital_topic["id"], user_id)
                 conn.commit()
     except Exception:
@@ -499,21 +692,27 @@ def responder_questao(id: int, body: QuestaoResposta, conn=Depends(get_db_sessio
     # Check if user is studying in blocks (8+ same subject in a row)
     blocked_alert = None
     try:
-        ultimas_mats = conn.execute("""
+        ultimas_mats = conn.execute(
+            """
             SELECT q.materia FROM questoes_respostas qr
             JOIN questoes q ON q.id = qr.questao_id
             WHERE qr.user_id = ? AND qr.data = ?
             ORDER BY qr.id DESC LIMIT 10
-        """, (user_id, today_str())).fetchall()
+        """,
+            (user_id, today_str()),
+        ).fetchall()
         if len(ultimas_mats) >= 8:
             current_mat = ultimas_mats[0]["materia"]
             streak = sum(1 for r in ultimas_mats if r["materia"] == current_mat)
             if streak >= 8:
-                outra = conn.execute("""
+                outra = conn.execute(
+                    """
                     SELECT materia FROM ciclo_estudos
                     WHERE user_id = ? AND ativo = 1 AND materia != ?
                     ORDER BY horas_cumpridas / horas_alvo ASC LIMIT 1
-                """, (user_id, current_mat)).fetchone()
+                """,
+                    (user_id, current_mat),
+                ).fetchone()
                 blocked_alert = {
                     "tipo": "blocked_practice",
                     "streak": streak,
@@ -531,8 +730,11 @@ def responder_questao(id: int, body: QuestaoResposta, conn=Depends(get_db_sessio
     return result
 
 
-@router.put("/api/questoes/vincular-lote", summary="Vincular disciplina em lote",
-            description="Atualiza matéria/tópico/banca de todas as questões que correspondem ao filtro")
+@router.put(
+    "/api/questoes/vincular-lote",
+    summary="Vincular disciplina em lote",
+    description="Atualiza matéria/tópico/banca de todas as questões que correspondem ao filtro",
+)
 def vincular_questoes_lote(body: QuestionLinkBatch, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     filtro = body.filtro
     atualizar = body.atualizar.model_dump(exclude_unset=True)
@@ -581,9 +783,12 @@ def vincular_questoes_lote(body: QuestionLinkBatch, conn=Depends(get_db_session)
     return {"ok": True, "atualizadas": count}
 
 
-@router.put("/api/questoes/{id}", summary="Editar questão",
-            description="Atualiza campos de uma questão existente. Campos não enviados permanecem inalterados.",
-            responses={404: {"description": "Questão não encontrada"}, 400: {"description": "Nenhum campo para atualizar"}})
+@router.put(
+    "/api/questoes/{id}",
+    summary="Editar questão",
+    description="Atualiza campos de uma questão existente. Campos não enviados permanecem inalterados.",
+    responses={404: {"description": "Questão não encontrada"}, 400: {"description": "Nenhum campo para atualizar"}},
+)
 def update_questao(id: int, body: QuestionUpdate, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     row = conn.execute("SELECT id FROM questoes WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
     if not row:
@@ -594,9 +799,20 @@ def update_questao(id: int, body: QuestionUpdate, conn=Depends(get_db_session), 
     if not data:
         raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
 
-    text_fields = {"materia", "topico", "enunciado", "alternativa_a", "alternativa_b",
-                   "alternativa_c", "alternativa_d", "alternativa_e", "resposta_correta",
-                   "explicacao", "dificuldade", "banca"}
+    text_fields = {
+        "materia",
+        "topico",
+        "enunciado",
+        "alternativa_a",
+        "alternativa_b",
+        "alternativa_c",
+        "alternativa_d",
+        "alternativa_e",
+        "resposta_correta",
+        "explicacao",
+        "dificuldade",
+        "banca",
+    }
     updates = []
     params = []
     for campo, valor in data.items():
@@ -617,8 +833,11 @@ def update_questao(id: int, body: QuestionUpdate, conn=Depends(get_db_session), 
     return dict(updated)
 
 
-@router.delete("/api/questoes/{id}", summary="Excluir questão",
-              description="Remove permanentemente uma questão e todas as respostas associadas.")
+@router.delete(
+    "/api/questoes/{id}",
+    summary="Excluir questão",
+    description="Remove permanentemente uma questão e todas as respostas associadas.",
+)
 def delete_questao(id: int, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     conn.execute("DELETE FROM questoes_respostas WHERE questao_id = ? AND user_id = ?", (id, user_id))
     conn.execute("DELETE FROM questoes WHERE id = ? AND user_id = ?", (id, user_id))
@@ -630,6 +849,7 @@ def delete_questao(id: int, conn=Depends(get_db_session), user_id: int = Depends
 # ============================================================
 # COMENTÁRIOS EM QUESTÕES — explicações + IA auto-comment
 # ============================================================
+
 
 @router.get("/api/questoes/{id}/comentarios", summary="Listar comentários de uma questão")
 def listar_comentarios(id: int, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
@@ -648,12 +868,15 @@ def listar_comentarios(id: int, conn=Depends(get_db_session), user_id: int = Dep
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_comentarios_questao ON comentarios_questoes(questao_id)")
 
-    rows = conn.execute("""
+    rows = conn.execute(
+        """
         SELECT id, conteudo, tipo, votos, created_at
         FROM comentarios_questoes
         WHERE questao_id = ? AND (user_id = ? OR tipo = 'ia')
         ORDER BY votos DESC, created_at DESC
-    """, (id, user_id)).fetchall()
+    """,
+        (id, user_id),
+    ).fetchall()
     return [dict(r) for r in rows]
 
 
@@ -666,6 +889,7 @@ def adicionar_comentario(
 ):
     """Adiciona comentário/explicação a uma questão."""
     from datetime import datetime
+
     conn.execute("""
         CREATE TABLE IF NOT EXISTS comentarios_questoes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -679,10 +903,13 @@ def adicionar_comentario(
         )
     """)
     conteudo_limpo = sanitize_input(conteudo, max_length=3000)
-    cur = conn.execute("""
+    cur = conn.execute(
+        """
         INSERT INTO comentarios_questoes (questao_id, user_id, conteudo, tipo, created_at)
         VALUES (?, ?, ?, 'user', ?)
-    """, (id, user_id, conteudo_limpo, datetime.now().isoformat()))
+    """,
+        (id, user_id, conteudo_limpo, datetime.now().isoformat()),
+    )
     conn.commit()
     return {"id": cur.lastrowid, "ok": True}
 
@@ -717,11 +944,14 @@ def gerar_comentario_ia(
         return {"id": existing["id"], "conteudo": existing["conteudo"], "cached": True}
 
     # Buscar dados da questão
-    questao = conn.execute("""
+    questao = conn.execute(
+        """
         SELECT enunciado, alternativa_a, alternativa_b, alternativa_c, alternativa_d,
                alternativa_e, resposta_correta, materia, explicacao
         FROM questoes WHERE id = ? AND user_id = ?
-    """, (id, user_id)).fetchone()
+    """,
+        (id, user_id),
+    ).fetchone()
     if not questao:
         raise HTTPException(status_code=404, detail="Questão não encontrada")
 
@@ -746,10 +976,13 @@ def gerar_comentario_ia(
         )
 
     # Salvar comentário IA
-    cur = conn.execute("""
+    cur = conn.execute(
+        """
         INSERT INTO comentarios_questoes (questao_id, user_id, conteudo, tipo, created_at)
         VALUES (?, ?, ?, 'ia', ?)
-    """, (id, user_id, conteudo, datetime.now().isoformat()))
+    """,
+        (id, user_id, conteudo, datetime.now().isoformat()),
+    )
     conn.commit()
 
     return {"id": cur.lastrowid, "conteudo": conteudo, "cached": False}
@@ -764,8 +997,7 @@ def votar_comentario(
 ):
     """Incrementa voto num comentário útil."""
     conn.execute(
-        "UPDATE comentarios_questoes SET votos = votos + 1 WHERE id = ? AND questao_id = ?",
-        (comentario_id, id)
+        "UPDATE comentarios_questoes SET votos = votos + 1 WHERE id = ? AND questao_id = ?", (comentario_id, id)
     )
     conn.commit()
     return {"ok": True}

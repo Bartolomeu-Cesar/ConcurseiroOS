@@ -91,6 +91,8 @@ class QuestaoCreate(BaseModel):
     explicacao: str = ""
     dificuldade: str = "Médio"
     banca: str = ""
+    tipo: str = "objetiva"  # 'objetiva' ou 'discursiva'
+    resposta_esperada: str = ""  # gabarito esperado para discursivas
 
 
 class QuestaoResposta(BaseModel):
@@ -106,6 +108,19 @@ class QuestaoResposta(BaseModel):
     # ?embaralhar=true&seed=N, envia a MESMA seed aqui para o backend reconstruir a
     # permutação exibida e validar. None = usa a semente determinística (legado).
     seed: int | None = None
+
+
+class QuestaoDiscursivaResposta(BaseModel):
+    """Resposta de uma questão DISCURSIVA (texto livre + autoavaliação).
+
+    O usuário escreve a resposta e depois compara com a resposta esperada,
+    atribuindo uma nota 0-100 a si mesmo (autoavaliação — técnica de
+    Self-Explanation / Retrieval Practice). Não há correção automática.
+    """
+
+    resposta_texto: str
+    autoavaliacao: int | None = None  # nota 0-100 dada pelo próprio usuário
+    tempo_segundos: int = 0
 
 
 # ============================================================

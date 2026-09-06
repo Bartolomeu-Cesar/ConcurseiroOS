@@ -15,6 +15,7 @@ from fastapi import APIRouter
 from .caderno_erros import router as caderno_erros_router
 from .core import router as core_router
 from .estudo import router as estudo_router
+from .filtros import router as filtros_router
 from .importacao import router as importacao_router
 from .stats import router as stats_router
 
@@ -23,6 +24,7 @@ router = APIRouter(prefix="", tags=["Questões"])
 # Rotas específicas PRIMEIRO (evita que /api/questoes/{id} capture /bancas, /stats, etc)
 router.include_router(stats_router)
 router.include_router(caderno_erros_router)
+router.include_router(filtros_router)
 router.include_router(importacao_router)
 router.include_router(estudo_router)
 # CRUD com /{id} por último

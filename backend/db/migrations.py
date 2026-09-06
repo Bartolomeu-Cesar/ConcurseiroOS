@@ -1280,6 +1280,59 @@ def _m81_flashcards_image_occlusion(conn):
             pass  # coluna já existe
 
 
+def _m82_filtros_salvos(conn):
+    """Filtros de questões salvos (inspirado no QConcursos).
+
+    Permite salvar um conjunto de filtros (matéria, tópico, banca, dificuldade,
+    tipo, etc.) sob um nome e reaplicá-lo depois. `filtros_json` guarda o objeto
+    de filtros serializado. Multi-tenant: sempre filtra por user_id.
+    """
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS filtros_salvos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            nome TEXT NOT NULL,
+            filtros_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL DEFAULT ''
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_filtros_salvos_user ON filtros_salvos(user_id)")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_filtros_salvos_unique ON filtros_salvos(user_id, nome)")
+    log.info("Migration 82: created filtros_salvos table")
+
+
+def _m83_questoes_discursivas(conn):
+    """Questões discursivas (inspirado no QConcursos).
+
+    - questoes.tipo: 'objetiva' (default, comportamento legado) ou 'discursiva'.
+    - questoes.resposta_esperada: gabarito/rascunho de resposta esperada (discursivas).
+    - questoes_respostas.resposta_texto: texto livre da resposta do usuário.
+    - questoes_respostas.autoavaliacao: nota 0-100 que o usuário dá à própria resposta
+      comparando com a resposta esperada (autoavaliação — Self-Explanation/Retrieval).
+    Colunas NULL/vazias → questão objetiva (comportamento inalterado).
+    """
+    for tabela, col, ddl in (
+        ("questoes", "tipo", "ALTER TABLE questoes ADD COLUMN tipo TEXT DEFAULT 'objetiva'"),
+        ("questoes", "resposta_esperada", "ALTER TABLE questoes ADD COLUMN resposta_esperada TEXT DEFAULT ''"),
+        (
+            "questoes_respostas",
+            "resposta_texto",
+            "ALTER TABLE questoes_respostas ADD COLUMN resposta_texto TEXT DEFAULT ''",
+        ),
+        (
+            "questoes_respostas",
+            "autoavaliacao",
+            "ALTER TABLE questoes_respostas ADD COLUMN autoavaliacao INTEGER DEFAULT NULL",
+        ),
+    ):
+        try:
+            conn.execute(ddl)
+            log.info(f"Migration 83: added column {col} to {tabela}")
+        except Exception:
+            pass  # coluna já existe
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_questoes_tipo ON questoes(user_id, tipo)")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -1362,6 +1415,8 @@ MIGRATIONS = [
     (79, _m79_metas_fsrs_weights),
     (80, _m80_revlog_estado_card_antes),
     (81, _m81_flashcards_image_occlusion),
+    (82, _m82_filtros_salvos),
+    (83, _m83_questoes_discursivas),
 ]
 
 
