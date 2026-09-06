@@ -436,14 +436,15 @@ export function revealAnswer() {
   const rv = document.getElementById('flash-review-btns');
   rv.style.display = 'flex';
   rv.innerHTML = metacogHtml + `
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;width:100%;">
-      <button onclick="reviewFlashcard(0)" style="background:var(--red);color:var(--bg);border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">0•Esqueci</button>
-      <button onclick="reviewFlashcard(1)" style="background:var(--red);color:var(--bg);border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">1•Errei</button>
-      <button onclick="reviewFlashcard(2)" style="background:var(--peach);color:var(--bg);border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">2•Quase</button>
-      <button onclick="reviewFlashcard(3)" style="background:var(--yellow);color:var(--bg);border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">3•Difícil</button>
-      <button onclick="reviewFlashcard(4)" style="background:var(--green);color:var(--bg);border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">4•Bom</button>
-      <button onclick="reviewFlashcard(5)" style="background:var(--green);color:var(--bg);border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">5•Fácil</button>
+    <div class="flash-rate-grid" role="group" aria-label="Como você se saiu? (teclas 1 a 6)">
+      <button class="flash-rate-btn rate-0" onclick="reviewFlashcard(0)" title="Esqueci completamente (tecla 1)" aria-label="Esqueci — nota 0, tecla 1"><span class="rate-key">1</span><span class="rate-label">Esqueci</span></button>
+      <button class="flash-rate-btn rate-1" onclick="reviewFlashcard(1)" title="Errei (tecla 2)" aria-label="Errei — nota 1, tecla 2"><span class="rate-key">2</span><span class="rate-label">Errei</span></button>
+      <button class="flash-rate-btn rate-2" onclick="reviewFlashcard(2)" title="Quase acertei (tecla 3)" aria-label="Quase — nota 2, tecla 3"><span class="rate-key">3</span><span class="rate-label">Quase</span></button>
+      <button class="flash-rate-btn rate-3" onclick="reviewFlashcard(3)" title="Acertei com dificuldade (tecla 4)" aria-label="Difícil — nota 3, tecla 4"><span class="rate-key">4</span><span class="rate-label">Difícil</span></button>
+      <button class="flash-rate-btn rate-4" onclick="reviewFlashcard(4)" title="Acertei bem (tecla 5)" aria-label="Bom — nota 4, tecla 5"><span class="rate-key">5</span><span class="rate-label">Bom</span></button>
+      <button class="flash-rate-btn rate-5" onclick="reviewFlashcard(5)" title="Acertei com facilidade (tecla 6)" aria-label="Fácil — nota 5, tecla 6"><span class="rate-key">6</span><span class="rate-label">Fácil</span></button>
     </div>
+    <div style="font-size:0.62rem;color:var(--text-sub);text-align:center;margin-top:6px;opacity:0.75;">⌨️ Atalhos: <strong>Espaço</strong> revela · <strong>1–6</strong> avaliam</div>
   `;
 }
 
@@ -2056,6 +2057,55 @@ export async function startFlashByMateria(materia) {
   }
 }
 
+// ============================================================
+// ATALHOS DE TECLADO (à la Anki/RemNote)
+// Espaço/Enter = revelar; teclas 1-6 = avaliar (quality 0-5).
+// Só atua na aba de flashcards, com card ativo, e nunca durante digitação.
+// ============================================================
+let _flashKeyboardBound = false;
+
+function _flashScreenAtiva() {
+  const tab = document.getElementById('tab-flashcards');
+  return !!(tab && tab.classList.contains('active'));
+}
+
+function _digitandoEmCampo(target) {
+  if (!target) return false;
+  const tag = (target.tagName || '').toUpperCase();
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable;
+}
+
+function _handleFlashKey(e) {
+  // Ignora se: fora da aba de flashcards, digitando num campo, ou com modificadores.
+  if (!_flashScreenAtiva() || _digitandoEmCampo(e.target)) return;
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+  const rb = document.getElementById('flash-reveal-btn');
+  const rv = document.getElementById('flash-review-btns');
+  const respostaVisivel = rv && rv.style.display !== 'none' && rv.querySelector('.flash-rate-btn');
+  const podeRevelar = rb && rb.style.display !== 'none';
+
+  // Espaço/Enter → revelar a resposta (quando ainda oculta)
+  if ((e.key === ' ' || e.key === 'Enter' || e.code === 'Space') && podeRevelar && !respostaVisivel) {
+    e.preventDefault();
+    revealAnswer();
+    return;
+  }
+
+  // Teclas 1-6 → avaliar (mapeadas para quality 0-5), só com a resposta visível
+  if (respostaVisivel && e.key >= '1' && e.key <= '6') {
+    e.preventDefault();
+    const quality = parseInt(e.key, 10) - 1; // '1'→0 (Esqueci) ... '6'→5 (Fácil)
+    reviewFlashcard(quality);
+  }
+}
+
+function _initFlashKeyboard() {
+  if (_flashKeyboardBound) return;
+  _flashKeyboardBound = true;
+  document.addEventListener('keydown', _handleFlashKey);
+}
+
 export function initFlashcards(deps) {
   _loadMetas = deps.loadMetas;
   _loadStreakBadge = deps.loadStreakBadge;
@@ -2071,6 +2121,9 @@ export function initFlashcards(deps) {
 
   // Inicializar o editor de Image Occlusion (upload + desenho de máscaras)
   ioInit();
+
+  // Atalhos de teclado da revisão (Espaço=revelar, 1-6=avaliar)
+  _initFlashKeyboard();
 
   // Verificar se veio do dashboard com matéria para revisão
   const pendingMateria = sessionStorage.getItem('flash_start_materia');

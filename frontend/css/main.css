@@ -766,6 +766,46 @@ select#timer-select { background: #313244; color: #cdd6f4; border: 1px solid #45
 .flash-review-btns button { border: none; border-radius: 8px; padding: 10px 24px; font-size: 0.95rem; font-weight: 600; cursor: pointer; }
 #flash-btn-wrong { background: #f38ba8; color: #1e1e2e; }
 #flash-btn-right { background: #a6e3a1; color: #1e1e2e; }
+
+/* ===== Botões de avaliação FSRS (acessíveis, à la Anki) ===== */
+/* Grade responsiva; cada botão respeita área de toque mínima de 44px (WCAG/HIG). */
+.flash-rate-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  width: 100%;
+}
+.flash-rate-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 48px;
+  padding: 8px 4px;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--bg);
+  cursor: pointer;
+  transition: transform 0.08s ease, filter 0.12s ease, box-shadow 0.12s ease;
+}
+.flash-rate-btn .rate-key { font-size: 0.68rem; opacity: 0.85; font-weight: 800; }
+.flash-rate-btn .rate-label { font-size: 0.82rem; line-height: 1; }
+.flash-rate-btn:hover { filter: brightness(1.08); }
+.flash-rate-btn:active { transform: translateY(1px) scale(0.98); }
+.flash-rate-btn:focus-visible { outline: 3px solid var(--text); outline-offset: 2px; }
+/* Variantes por rating (mesma semântica de cor da escala vermelho→verde) */
+.flash-rate-btn.rate-0, .flash-rate-btn.rate-1 { background: var(--red); }
+.flash-rate-btn.rate-2 { background: var(--peach); }
+.flash-rate-btn.rate-3 { background: var(--yellow); }
+.flash-rate-btn.rate-4, .flash-rate-btn.rate-5 { background: var(--green); }
+@media (prefers-reduced-motion: reduce) {
+  .flash-rate-btn { transition: none; }
+  .flash-rate-btn:active { transform: none; }
+}
+
 .flash-add-form { text-align: left; }
 .flash-add-form textarea { width: 100%; background: #1e1e2e; border: 1px solid #45475a; border-radius: 8px; padding: 10px 12px; color: #cdd6f4; font-size: 0.9rem; resize: vertical; min-height: 60px; margin-bottom: 8px; font-family: sans-serif; }
 .flash-add-form textarea::placeholder { color: #9399b2; }
