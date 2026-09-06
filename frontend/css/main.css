@@ -69,6 +69,12 @@
   --shadow-sm: 0 1px 2px rgba(0,0,0,0.18);
   --shadow-md: 0 4px 12px rgba(0,0,0,0.22);
   --shadow-lg: 0 8px 24px rgba(0,0,0,0.28);
+
+  /* Tokens de MARCA (identidade visual ConcurseiroOS) */
+  --brand: var(--ctp-mauve);          /* cor primária da marca */
+  --brand-accent: var(--ctp-blue);    /* cor secundária/acento */
+  --brand-bg: var(--ctp-base);        /* fundo do selo do logo */
+  --brand-gradient: linear-gradient(135deg, var(--ctp-mauve), var(--ctp-blue));
 }
 
 * {
@@ -260,8 +266,12 @@ body.light-theme *:focus-visible { outline-color: #8839ef; }
   gap: 10px;
   border-bottom: 1px solid #313244;
 }
-.sidebar-brand .brand-icon { font-size: 1.5rem; }
-.sidebar-brand .brand-text { font-size: 1rem; font-weight: 700; color: #cba6f7; }
+.sidebar-brand .brand-icon { font-size: 1.5rem; display: inline-flex; align-items: center; }
+.sidebar-brand .brand-text {
+  font-size: 1.05rem; font-weight: 800; letter-spacing: -0.01em;
+  background: var(--brand-gradient); -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: var(--ctp-mauve);
+}
 
 .sidebar-section { padding: 8px 0 2px; }
 .sidebar-section-title {

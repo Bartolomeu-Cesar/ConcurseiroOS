@@ -51,7 +51,7 @@
     <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
     <aside class="sidebar ${collapsed ? 'collapsed' : ''}" id="sidebar">
       <div class="sidebar-brand">
-        <span class="brand-icon">📚</span>
+        <span class="brand-icon" aria-hidden="true"><svg viewBox="0 0 32 32" width="26" height="26" role="img" aria-label="ConcurseiroOS"><rect width="32" height="32" rx="7" fill="var(--brand-bg, #1e1e2e)"/><polygon points="16,6 4,12 16,18 28,12" fill="var(--brand, #cba6f7)"/><path d="M9,14 L9,20 Q16,24 23,20 L23,14 L16,18 Z" fill="var(--brand, #cba6f7)" opacity="0.85"/><line x1="26" y1="12" x2="26" y2="20" stroke="var(--brand-accent, #89b4fa)" stroke-width="1.4" stroke-linecap="round"/><circle cx="26" cy="20.5" r="1.4" fill="var(--brand-accent, #89b4fa)"/></svg></span>
         <span class="brand-text">ConcurseiroOS</span>
         <button class="sidebar-collapse-btn" onclick="toggleCollapse()" title="Recolher menu" aria-label="Recolher/expandir menu">◀</button>
       </div>

@@ -14,8 +14,8 @@
     .login-container { width: 100%; max-width: 400px; }
     .login-card { background: #313244; border-radius: 16px; padding: 32px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); border: 1px solid #45475a; }
     .login-header { text-align: center; margin-bottom: 24px; }
-    .login-header .logo { font-size: 2.5rem; margin-bottom: 8px; }
-    .login-header h1 { font-size: 1.4rem; color: #cba6f7; margin-bottom: 4px; }
+    .login-header .logo { margin-bottom: 8px; display: inline-flex; }
+    .login-header h1 { font-size: 1.5rem; font-weight: 800; margin-bottom: 4px; background: linear-gradient(135deg, #cba6f7, #89b4fa); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: #cba6f7; }
     .login-header p { font-size: 0.85rem; color: #9399b2; }
     .btn { width: 100%; padding: 12px; font-size: 0.95rem; }
     .btn-primary { background: #cba6f7; color: #1e1e2e; }
@@ -39,7 +39,7 @@
   <div class="login-container">
     <div class="login-card">
       <div class="login-header">
-        <div class="logo">📚</div>
+        <div class="logo" aria-hidden="true"><svg viewBox="0 0 32 32" width="56" height="56" role="img" aria-label="ConcurseiroOS"><rect width="32" height="32" rx="7" fill="#1e1e2e"/><polygon points="16,6 4,12 16,18 28,12" fill="#cba6f7"/><path d="M9,14 L9,20 Q16,24 23,20 L23,14 L16,18 Z" fill="#cba6f7" opacity="0.85"/><line x1="26" y1="12" x2="26" y2="20" stroke="#89b4fa" stroke-width="1.4" stroke-linecap="round"/><circle cx="26" cy="20.5" r="1.4" fill="#89b4fa"/></svg></div>
         <h1>ConcurseiroOS</h1>
         <p>Entre para salvar seu progresso</p>
       </div>
