@@ -1474,3 +1474,19 @@ ritmo de espaçamento consistente. SW: v251 → **v256** (main.css está no PREC
   batalha (`.battle-container`), viewer (leitor PDF).
 - Tokens disponíveis agora: `--space-1..8`, `--shadow-sm/md/lg`, além dos `--radius-*` e
   cores semânticas. Preferir tokens a valores soltos em novas telas.
+
+### Continuação (mesma sessão) — Ondas L6-L9 (SW v256 → v260)
+- **L6 Scrollbar temática** (`b674a52`): `::-webkit-scrollbar` global (track transparente,
+  thumb `var(--bg-elevated)` com borda que cria "respiro", hover mais claro) + `scrollbar-color`
+  (Firefox). A sidebar continua escondendo a própria scrollbar (regra específica vence).
+- **L7 Sidebar** (`4400977`): item ativo e hover usam accent translúcido
+  (`rgba(203,166,247,0.08–0.14)` no dark; `rgba(136,57,239,...)` no light) em vez de fundo
+  sólido — destaque mais elegante mantendo a borda-esquerda como indicador.
+- **L8 Tabs** (`32d8a1d`): `.tab-btn` migrado para tokens (`var(--text-sub)`, `var(--accent)`)
+  com hover/ativo translúcido. Corrigida DUPLICAÇÃO de `body.light-theme .tab-btn` (havia dois
+  blocos conflitantes) — ambos harmonizados para o accent translúcido.
+- **L9 Badges/Empty-states** (`0a1f2b2`): `.badge` vira `inline-flex` com padding/altura/
+  line-height consistentes e `radius-pill`; `.empty-state` com espaçamento por tokens e ícone
+  em círculo suave (`64px`, fundo `var(--bg-elevated)`), mensagem com `max-width` e line-height.
+
+Total layout até aqui: **L1–L9**, SW **v243 → v260**. Tudo via `main.css`, sem tocar em HTML.
