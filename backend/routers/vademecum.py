@@ -107,6 +107,33 @@ def remover_lei(lei_id: int, conn=Depends(get_db_session), user_id: int = Depend
 # CRUD ARTIGOS
 # ============================================================
 
+@router.get("/artigos/{artigo_id}", summary="Obter um artigo pelo ID")
+def obter_artigo(
+    artigo_id: int,
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Retorna um único artigo (com o nome da lei) pelo seu ID.
+
+    Elimina o N+1 do frontend: antes, para abrir o detalhe de um artigo, o
+    vademecum.js varria TODAS as leis (`GET /leis/{id}/artigos` em loop) até achar
+    o artigo. Agora basta uma consulta direta com JOIN em vademecum_leis.
+    """
+    _ensure_tables(conn)
+    row = conn.execute(
+        """
+        SELECT a.*, l.nome AS lei_nome, l.sigla AS lei_sigla
+        FROM vademecum_artigos a
+        JOIN vademecum_leis l ON l.id = a.lei_id
+        WHERE a.id = ? AND a.user_id = ?
+        """,
+        (artigo_id, user_id),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Artigo não encontrado")
+    return dict(row)
+
+
 @router.get("/leis/{lei_id}/artigos", summary="Listar artigos de uma lei")
 def listar_artigos(
     lei_id: int,

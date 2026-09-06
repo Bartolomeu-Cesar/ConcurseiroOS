@@ -380,20 +380,22 @@ async function openArtigoDetail(artigoId, leiNome) {
   // Alternative: use the data from the calling context
 
   try {
-    // Try using busca with the article number — but we don't have it reliably
-    // Instead, search destaques and full-text to get article info
-    // Simplest: use the GET busca endpoint with a generic search
-    // Actually the safest is to call destaques + all leis artigos
-    // Let's try a different approach — get from DOM data or re-fetch
-    const res = await fetch(`/api/vademecum/busca?q=&lei_id=0`);
+    // Busca DIRETA pelo ID (endpoint dedicado). Elimina o N+1 anterior, que varria
+    // busca + destaques + TODAS as leis em loop até achar o artigo.
     let artigo = null;
+    try {
+      const resArt = await fetch(`/api/vademecum/artigos/${artigoId}`);
+      if (resArt.ok) artigo = await resArt.json();
+    } catch (e) { /* cai no fallback abaixo */ }
 
-    if (res.ok) {
-      const all = await res.json();
-      artigo = all.find(a => a.id === artigoId);
+    // Fallback (compatibilidade): se o endpoint dedicado falhar, tenta busca/destaques.
+    if (!artigo) {
+      const res = await fetch(`/api/vademecum/busca?q=&lei_id=0`);
+      if (res.ok) {
+        const all = await res.json();
+        artigo = all.find(a => a.id === artigoId);
+      }
     }
-
-    // If not found via busca, try destaques
     if (!artigo) {
       const resD = await fetch('/api/vademecum/destaques');
       if (resD.ok) {

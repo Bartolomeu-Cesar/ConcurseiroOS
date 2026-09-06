@@ -158,3 +158,29 @@ def test_importar_pdf_rejeita_nao_pdf(client):
         files={"file": ("lei.txt", b"conteudo", "text/plain")},
     )
     assert r.status_code == 400
+
+
+# ============================================================
+# GET /artigos/{id} — artigo único (elimina N+1 no frontend)
+# ============================================================
+
+def test_obter_artigo_por_id_inclui_lei_nome(client):
+    lei_id = _criar_lei(client, nome="Constituição Federal")
+    client.post(f"/api/vademecum/leis/{lei_id}/importar-texto", json={"texto": TEXTO_EXEMPLO})
+    artigos = client.get(f"/api/vademecum/leis/{lei_id}/artigos").json()
+    assert len(artigos) >= 1
+    art_id = artigos[0]["id"]
+
+    r = client.get(f"/api/vademecum/artigos/{art_id}")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["id"] == art_id
+    # JOIN traz o nome/sigla da lei para o frontend exibir sem varrer todas as leis.
+    assert data["lei_nome"] == "Constituição Federal"
+    assert data["lei_sigla"] == "CF"
+    assert "República Federativa" in data["caput"]
+
+
+def test_obter_artigo_inexistente_404(client):
+    r = client.get("/api/vademecum/artigos/999999")
+    assert r.status_code == 404
