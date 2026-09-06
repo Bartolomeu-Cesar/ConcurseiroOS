@@ -75,6 +75,13 @@
   --brand-accent: var(--ctp-blue);    /* cor secundária/acento */
   --brand-bg: var(--ctp-base);        /* fundo do selo do logo */
   --brand-gradient: linear-gradient(135deg, var(--ctp-mauve), var(--ctp-blue));
+
+  /* Tokens de MOTION (durações e curvas consistentes) */
+  --dur-fast: 0.12s;
+  --dur-base: 0.2s;
+  --dur-slow: 0.4s;
+  --ease-out: var(--ease-out);   /* saída suave (entradas/expansões) */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1); /* padrão material */
 }
 
 * {
@@ -523,7 +530,7 @@ body.sidebar-collapsed .main-content { margin-left: 60px; width: calc(100% - 60p
   padding: var(--space-5); display: flex; flex-direction: column; gap: var(--space-1);
   border: 1px solid var(--border);
   box-shadow: var(--shadow-sm);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform var(--dur-base) var(--ease-standard), box-shadow var(--dur-base) var(--ease-standard);
 }
 .card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
 .card-label { font-size: 0.78rem; color: var(--text-sub); text-transform: uppercase; font-weight: 600; }
@@ -534,7 +541,7 @@ body.sidebar-collapsed .main-content { margin-left: 60px; width: calc(100% - 60p
 .card-value.peach { color: var(--peach); }
 .card-sub { font-size: 0.78rem; color: var(--text-muted); }
 
-.stat-card { background: var(--bg-surface); border-radius: 10px; padding: var(--space-4); text-align: center; border: 1px solid var(--border); box-shadow: var(--shadow-sm); transition: transform 0.2s ease, box-shadow 0.2s ease; }
+.stat-card { background: var(--bg-surface); border-radius: 10px; padding: var(--space-4); text-align: center; border: 1px solid var(--border); box-shadow: var(--shadow-sm); transition: transform var(--dur-base) var(--ease-standard), box-shadow var(--dur-base) var(--ease-standard); }
 .stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
 .stat-value, .stat-card .stat-num { font-size: 1.5rem; font-weight: 700; color: var(--blue); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
 .stat-label, .stat-card .stat-lbl { font-size: 0.72rem; color: var(--text-sub); margin-top: 2px; }
@@ -546,7 +553,7 @@ body.sidebar-collapsed .main-content { margin-left: 60px; width: calc(100% - 60p
   padding: var(--space-6); margin-bottom: var(--space-4);
   border: 1px solid var(--border);
   box-shadow: var(--shadow-sm);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform var(--dur-base) var(--ease-standard), box-shadow var(--dur-base) var(--ease-standard);
 }
 .panel:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
 .panel h2 { font-size: 1.05rem; color: var(--accent); margin-bottom: 12px; }
@@ -1106,7 +1113,7 @@ select#timer-select { background: #313244; color: #cdd6f4; border: 1px solid #45
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
-.animate-in { animation: fade-in-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-in { animation: fade-in-up 0.4s var(--ease-out) both; }
 
 /* ===== MICRO-INTERAÇÕES: FEEDBACK DE ACERTO/ERRO ===== */
 /* Classes reutilizáveis para dar feedback tátil ao responder questões. */
@@ -1171,7 +1178,7 @@ body.light-theme .collapsible > summary:hover { background: rgba(136,57,239,0.06
 .collapsible[open] > summary::before { transform: rotate(90deg); }
 .collapsible > summary .collapsible-hint { margin-left: auto; font-size: 0.72rem; color: var(--text-muted); font-weight: 500; }
 .collapsible-body { padding: 0 var(--space-5) var(--space-5); }
-.collapsible[open] > .collapsible-body { animation: fade-in-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.collapsible[open] > .collapsible-body { animation: fade-in-up 0.3s var(--ease-out) both; }
 
 /* ===== ONBOARDING WIZARD (gamificado) ===== */
 .onboarding-modal { backdrop-filter: blur(6px); }
@@ -1219,7 +1226,7 @@ body.light-theme .collapsible > summary:hover { background: rgba(136,57,239,0.06
 
 /* Painéis e cards aparecem suavemente ao carregar a página, com leve escalonamento
    (stagger) para criar ritmo. Aplica-se apenas na entrada — hover/estado não reanima. */
-.panel, .card, .stat-card { animation: fade-in-up 0.42s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.panel, .card, .stat-card { animation: fade-in-up 0.42s var(--ease-out) both; }
 .panel:nth-child(1), .card:nth-child(1), .stat-card:nth-child(1) { animation-delay: 0.02s; }
 .panel:nth-child(2), .card:nth-child(2), .stat-card:nth-child(2) { animation-delay: 0.06s; }
 .panel:nth-child(3), .card:nth-child(3), .stat-card:nth-child(3) { animation-delay: 0.10s; }
