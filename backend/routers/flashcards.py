@@ -917,6 +917,72 @@ def review_flashcard_fsrs(
     return result
 
 
+@router.get(
+    "/api/flashcards/{id}/preview-intervalos",
+    summary="Prever intervalos por rating (sem persistir)",
+    description="Simula, para o estado atual do card, o intervalo que cada nota (0-5) produziria no FSRS — para exibir 'Bom +5d' nos botões, à la Anki. Não altera o card.",
+)
+def preview_intervalos_flashcard(id: int, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Retorna o intervalo previsto (em dias) por quality (0-5), sem gravar nada.
+
+    Reusa exatamente a mesma montagem do review-fsrs (estado FSRS do card, retenção
+    desejada do usuário, pesos S0 personalizados e Lag Effect), garantindo que o número
+    exibido no botão corresponda ao que a avaliação realmente agendaria.
+    """
+    import os
+    import sys
+
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from fsrs import FSRSCard, review_card, sm2_to_fsrs_rating
+
+    from constants import FSRS_DEFAULT_RETENTION
+
+    row = conn.execute(
+        "SELECT repetitions FROM flashcards WHERE id = ? AND user_id = ?",
+        (id, user_id),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Flashcard não encontrado")
+
+    stability = 0.0
+    difficulty = 0.0
+    fsrs_state = 0
+    try:
+        fsrs_row = conn.execute(
+            "SELECT stability, difficulty, fsrs_state FROM flashcards WHERE id = ? AND user_id = ?", (id, user_id)
+        ).fetchone()
+        if fsrs_row:
+            stability = fsrs_row[0] or 0.0
+            difficulty = fsrs_row[1] or 0.0
+            fsrs_state = fsrs_row[2] or 0
+    except Exception:
+        pass
+
+    desired_retention = FSRS_DEFAULT_RETENTION
+    try:
+        meta_row = conn.execute("SELECT desired_retention FROM metas_config WHERE user_id = ?", (user_id,)).fetchone()
+        if meta_row and meta_row[0]:
+            desired_retention = meta_row[0]
+    except Exception:
+        pass
+
+    reps = row[0] if row[0] is not None else 0
+    w_inicial = _get_fsrs_weights(conn, user_id)
+
+    from study_techniques import apply_lag_effect
+
+    intervalos = {}
+    for quality in range(6):
+        # Card recriado a cada simulação (review_card não muta o card de entrada,
+        # mas garantimos isolamento total entre as notas simuladas).
+        card = FSRSCard(stability=stability, difficulty=difficulty, state=fsrs_state, reps=reps)
+        rating = sm2_to_fsrs_rating(quality)
+        output = review_card(card, rating, desired_retention=desired_retention, w_inicial=w_inicial)
+        intervalos[quality] = apply_lag_effect(conn, user_id, output.interval)
+
+    return {"id": id, "intervalos": intervalos}
+
+
 @router.post(
     "/api/flashcards/{id}/undo-review",
     summary="Desfazer última revisão",

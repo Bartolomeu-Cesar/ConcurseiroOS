@@ -332,6 +332,7 @@ function showCurrentFlashcard() {
     _flashCardStart = Date.now();
     if (!_flashSessionStart) _flashSessionStart = Date.now();
     _startFlashTimer(card.tempo_segundos);
+    _focusCard();
     return;
   }
 
@@ -383,6 +384,19 @@ function showCurrentFlashcard() {
   _flashCardStart = Date.now();
   if (!_flashSessionStart) _flashSessionStart = Date.now();
   _startFlashTimer(card.tempo_segundos);
+  _focusCard();
+}
+
+// Move o foco para a área do card ao avançar (acessibilidade + fluxo de teclado:
+// leitores de tela anunciam o novo card; atalhos Espaço/1-6 ficam no contexto).
+// Não rouba o foco de quem está digitando num campo (input/textarea/select).
+function _focusCard() {
+  const area = document.getElementById('flash-card-area');
+  if (!area) return;
+  const ativo = document.activeElement;
+  const tag = (ativo && ativo.tagName || '').toUpperCase();
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (ativo && ativo.isContentEditable)) return;
+  try { area.focus({ preventScroll: true }); } catch (e) { area.focus(); }
 }
 
 function _segmentText(text) {
@@ -478,15 +492,39 @@ export function revealAnswer() {
   rv.style.display = 'flex';
   rv.innerHTML = metacogHtml + `
     <div class="flash-rate-grid" role="group" aria-label="Como você se saiu? (teclas 1 a 6)">
-      <button class="flash-rate-btn rate-0" onclick="reviewFlashcard(0)" title="Esqueci completamente (tecla 1)" aria-label="Esqueci — nota 0, tecla 1"><span class="rate-key">1</span><span class="rate-label">Esqueci</span></button>
-      <button class="flash-rate-btn rate-1" onclick="reviewFlashcard(1)" title="Errei (tecla 2)" aria-label="Errei — nota 1, tecla 2"><span class="rate-key">2</span><span class="rate-label">Errei</span></button>
-      <button class="flash-rate-btn rate-2" onclick="reviewFlashcard(2)" title="Quase acertei (tecla 3)" aria-label="Quase — nota 2, tecla 3"><span class="rate-key">3</span><span class="rate-label">Quase</span></button>
-      <button class="flash-rate-btn rate-3" onclick="reviewFlashcard(3)" title="Acertei com dificuldade (tecla 4)" aria-label="Difícil — nota 3, tecla 4"><span class="rate-key">4</span><span class="rate-label">Difícil</span></button>
-      <button class="flash-rate-btn rate-4" onclick="reviewFlashcard(4)" title="Acertei bem (tecla 5)" aria-label="Bom — nota 4, tecla 5"><span class="rate-key">5</span><span class="rate-label">Bom</span></button>
-      <button class="flash-rate-btn rate-5" onclick="reviewFlashcard(5)" title="Acertei com facilidade (tecla 6)" aria-label="Fácil — nota 5, tecla 6"><span class="rate-key">6</span><span class="rate-label">Fácil</span></button>
+      <button class="flash-rate-btn rate-0" onclick="reviewFlashcard(0)" title="Esqueci completamente (tecla 1)" aria-label="Esqueci — nota 0, tecla 1"><span class="rate-key">1</span><span class="rate-label">Esqueci</span><span class="rate-interval" data-q="0"></span></button>
+      <button class="flash-rate-btn rate-1" onclick="reviewFlashcard(1)" title="Errei (tecla 2)" aria-label="Errei — nota 1, tecla 2"><span class="rate-key">2</span><span class="rate-label">Errei</span><span class="rate-interval" data-q="1"></span></button>
+      <button class="flash-rate-btn rate-2" onclick="reviewFlashcard(2)" title="Quase acertei (tecla 3)" aria-label="Quase — nota 2, tecla 3"><span class="rate-key">3</span><span class="rate-label">Quase</span><span class="rate-interval" data-q="2"></span></button>
+      <button class="flash-rate-btn rate-3" onclick="reviewFlashcard(3)" title="Acertei com dificuldade (tecla 4)" aria-label="Difícil — nota 3, tecla 4"><span class="rate-key">4</span><span class="rate-label">Difícil</span><span class="rate-interval" data-q="3"></span></button>
+      <button class="flash-rate-btn rate-4" onclick="reviewFlashcard(4)" title="Acertei bem (tecla 5)" aria-label="Bom — nota 4, tecla 5"><span class="rate-key">5</span><span class="rate-label">Bom</span><span class="rate-interval" data-q="4"></span></button>
+      <button class="flash-rate-btn rate-5" onclick="reviewFlashcard(5)" title="Acertei com facilidade (tecla 6)" aria-label="Fácil — nota 5, tecla 6"><span class="rate-key">6</span><span class="rate-label">Fácil</span><span class="rate-interval" data-q="5"></span></button>
     </div>
     <div style="font-size:0.62rem;color:var(--text-sub);text-align:center;margin-top:6px;opacity:0.75;">⌨️ Atalhos: <strong>Espaço</strong> revela · <strong>1–6</strong> avaliam</div>
   `;
+  // Preview dos intervalos (à la Anki): preenche "+Xd" em cada botão sem persistir.
+  if (card && card.id) _carregarPreviewIntervalos(card.id);
+}
+
+// Formata dias em rótulo curto: 1d, 3d, 21d, 1.5m (meses), 1.2a (anos).
+function _fmtIntervalo(dias) {
+  const d = Math.max(1, Math.round(dias));
+  if (d < 30) return `${d}d`;
+  if (d < 365) { const m = d / 30; return `${m >= 10 ? Math.round(m) : m.toFixed(1).replace('.0', '')}m`; }
+  const a = d / 365;
+  return `${a >= 10 ? Math.round(a) : a.toFixed(1).replace('.0', '')}a`;
+}
+
+// Busca os intervalos previstos por rating e injeta em cada botão. Falha silenciosa.
+async function _carregarPreviewIntervalos(cardId) {
+  try {
+    const data = await fetch(`/api/flashcards/${cardId}/preview-intervalos`).then(r => r.ok ? r.json() : null);
+    if (!data || !data.intervalos) return;
+    document.querySelectorAll('#flash-review-btns .rate-interval').forEach(el => {
+      const q = el.getAttribute('data-q');
+      const dias = data.intervalos[q];
+      if (dias !== undefined && dias !== null) el.textContent = `+${_fmtIntervalo(dias)}`;
+    });
+  } catch (e) { /* mantém botões sem intervalo se o preview falhar */ }
 }
 
 export async function reviewFlashcard(quality) {

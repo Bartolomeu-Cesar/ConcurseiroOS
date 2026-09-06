@@ -758,6 +758,8 @@ select#timer-select { background: #313244; color: #cdd6f4; border: 1px solid #45
 .flash-panel { background: #313244; border-radius: 12px; padding: 24px; margin-bottom: 16px; text-align: center; }
 .flash-panel h2 { font-size: 1.05rem; color: #cba6f7; margin-bottom: 16px; text-align: left; }
 #flash-card-area { min-height: 180px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+#flash-card-area:focus { outline: none; }
+#flash-card-area:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 8px; }
 #flash-question { font-size: 1.3rem; font-weight: 600; color: #cdd6f4; margin-bottom: 16px; line-height: 1.5; }
 #flash-answer { font-size: 1.1rem; color: #a6e3a1; margin-bottom: 20px; padding: 12px 20px; background: #1e1e2e; border-radius: 8px; display: none; line-height: 1.5; }
 #flash-reveal-btn { background: #89b4fa; color: #1e1e2e; border: none; border-radius: 8px; padding: 10px 24px; font-size: 0.95rem; font-weight: 600; cursor: pointer; }
@@ -793,6 +795,7 @@ select#timer-select { background: #313244; color: #cdd6f4; border: 1px solid #45
 }
 .flash-rate-btn .rate-key { font-size: 0.68rem; opacity: 0.85; font-weight: 800; }
 .flash-rate-btn .rate-label { font-size: 0.82rem; line-height: 1; }
+.flash-rate-btn .rate-interval { font-size: 0.62rem; font-weight: 700; opacity: 0.85; min-height: 0.7em; }
 .flash-rate-btn:hover { filter: brightness(1.08); }
 .flash-rate-btn:active { transform: translateY(1px) scale(0.98); }
 .flash-rate-btn:focus-visible { outline: 3px solid var(--text); outline-offset: 2px; }
