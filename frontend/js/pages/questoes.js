@@ -4,6 +4,7 @@ import { toast } from '../modules/toast.js';
 import { confirmModal, alertModal, promptModal, escapeHtml } from '../modules/utils.js';
 import { handleAuthNav } from '../modules/auth.js';
 import { showQuestionXp, celebrateMilestone } from '../modules/xp-notify.js';
+import { illustration } from '../modules/illustrations.js';
 import { startFatigueSession, sendHeartbeat, hasActiveSession } from '../modules/fatigue-tracker.js';
 import { emit } from '../modules/event-bus.js';
 window.handleAuthNav = handleAuthNav;
@@ -218,14 +219,14 @@ async function loadQuestoesResolver() {
   }
 
   if (questoesPool.length === 0) {
-    document.getElementById('resolver-area').innerHTML = '<p style="color:#9399b2;">Nenhuma questão encontrada. Cadastre questões na aba "Cadastrar".</p>';
+    document.getElementById('resolver-area').innerHTML = `<div class="empty-state">${illustration('questoes')}<p class="empty-msg">Nenhuma questão encontrada.<br>Cadastre questões na aba <strong>Cadastrar</strong>.</p></div>`;
     return;
   }
 
   // Excluir respondidas hoje + priorizar: nunca respondidas > erradas antigas > resto
   const disponiveis = questoesPool.filter(q => !window._questoesRespondidasHoje.has(q.id));
   if (disponiveis.length === 0) {
-    document.getElementById('resolver-area').innerHTML = '<p style="color:#a6e3a1;text-align:center;padding:20px;">🎉 Todas as questões disponíveis já foram respondidas hoje!<br><span style="font-size:0.82rem;color:#9399b2;">Volte amanhã ou adicione mais questões ao banco.</span></p>';
+    document.getElementById('resolver-area').innerHTML = `<div class="empty-state">${illustration('concluido')}<p class="empty-msg" style="color:var(--green);font-weight:600;">🎉 Todas as questões disponíveis já foram respondidas hoje!</p><p class="empty-msg" style="font-size:0.82rem;">Volte amanhã ou adicione mais questões ao banco.</p></div>`;
     return;
   }
   const nuncaResp = disponiveis.filter(q => q.ultimo_resultado === null || q.ultimo_resultado === undefined);

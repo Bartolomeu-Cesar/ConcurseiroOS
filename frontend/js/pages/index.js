@@ -1,5 +1,6 @@
 // index.js - Extracted from index.html inline scripts
 import { alertModal, escapeHtml, escapeAttr } from '../modules/utils.js';
+import { illustration } from '../modules/illustrations.js';
 
 // ===== Sidebar navigation =====
 function navigateTo(tabId, btn) {
@@ -186,7 +187,7 @@ function loadRecentPdfs() {
       const count = document.getElementById('recent-pdfs-count');
       if (!list) return;
       if (!data || !data.length) {
-        list.innerHTML = '<div style="color:var(--text-muted, #6c7086);font-size:0.82rem;">Nenhum PDF lido ainda. Abra um PDF para começar!</div>';
+        list.innerHTML = `<div class="empty-state" style="padding:24px 12px;">${illustration('pdfs')}<p class="empty-msg">Nenhum PDF lido ainda.<br>Abra um PDF para começar!</p></div>`;
         return;
       }
       if (count) count.textContent = data.length + ' recentes';
