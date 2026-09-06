@@ -157,6 +157,24 @@ def test_viewer_certo_errado_nao_embaralha(client):
     assert r.json()["acertou"] is True
 
 
+def test_viewer_seed_por_questao_valida(client):
+    """Modo não-determinístico do viewer: serve com seed (vai para data-seed), o
+    backend devolve a seed e responder com ela valida na ordem exibida."""
+    qid, textos = _reset_e_criar_4alt(correta="A")
+    seed = 777001
+    q = client.get(f"/api/questoes/{qid}?embaralhar=true&seed={seed}").json()
+    assert q.get("embaralhada") is True
+    assert q.get("seed") == seed
+    data_correct = q["resposta_correta"]
+    assert q[f"alternativa_{data_correct.lower()}"] == textos["A"]
+    r = client.post(
+        f"/api/questoes/{qid}/responder",
+        json={"resposta": data_correct, "tempo_segundos": 20, "embaralhada": True, "seed": seed},
+    )
+    assert r.status_code == 200
+    assert r.json()["acertou"] is True
+
+
 def teardown_module():
     try:
         os.unlink(_tmp_db.name)

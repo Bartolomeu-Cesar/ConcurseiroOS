@@ -661,13 +661,14 @@ async function loadSidePanelQuestions() {
 
     // Sortear 5 questões aleatórias
     const shuffled = questoes.sort(() => Math.random() - 0.5).slice(0, 5);
-    // Servir cada questão com alternativas EMBARALHADAS (mesmo padrão dos demais
-    // fluxos): o backend remapeia resposta_correta para a ordem exibida, então o
-    // data-correct e a correção client-side já ficam consistentes. Fallback: mantém
-    // a ordem original da questão se o fetch falhar.
+    // Servir cada questão EMBARALHADA. Modo NÃO-determinístico: gera uma seed
+    // aleatória por questão ao servir; o backend devolve essa seed (campo `seed`),
+    // que é gravada em data-seed e reenviada no /responder para validar na ordem
+    // exibida. Fallback: mantém a ordem original se o fetch falhar.
     const embaralhadas = await Promise.all(shuffled.map(async (q) => {
       try {
-        const emb = await fetch(`/api/questoes/${q.id}?embaralhar=true`).then(r => r.ok ? r.json() : null);
+        const seed = Math.floor(Math.random() * 2147483647);
+        const emb = await fetch(`/api/questoes/${q.id}?embaralhar=true&seed=${seed}`).then(r => r.ok ? r.json() : null);
         return (emb && emb.id) ? emb : q;
       } catch (e) { return q; }
     }));
@@ -688,7 +689,7 @@ function renderSidePanelQuestions(questoes) {
     ];
     if (q.alternativa_e) alts.push({ letter: 'E', text: q.alternativa_e });
 
-    return `<div class="sp-question" data-id="${q.id}" data-correct="${q.resposta_correta}" data-embaralhada="${q.embaralhada ? '1' : ''}" data-start="${Date.now()}">
+    return `<div class="sp-question" data-id="${q.id}" data-correct="${q.resposta_correta}" data-embaralhada="${q.embaralhada ? '1' : ''}" data-seed="${q.seed ?? ''}" data-start="${Date.now()}">
       <div class="sp-meta">
         ${q.materia}${q.topico ? ' • '+q.topico : ''}
         <span class="sp-timer" id="sp-timer-${q.id}" style="float:right;font-family:monospace;font-size:0.78rem;color:#89b4fa;">⏱ 0:00</span>
@@ -726,6 +727,7 @@ async function selectSideAlt(el) {
   const correct = question.dataset.correct;
   const qId = question.dataset.id;
   const embaralhada = question.dataset.embaralhada === '1';
+  const seed = question.dataset.seed !== '' ? parseInt(question.dataset.seed, 10) : null;
   const startTime = parseInt(question.dataset.start || '0');
   const tempoSegundos = startTime ? Math.round((Date.now() - startTime) / 1000) : 0;
 
@@ -736,7 +738,7 @@ async function selectSideAlt(el) {
   const res = await fetch(`/api/questoes/${qId}/responder`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ resposta: letter, tempo_segundos: tempoSegundos, embaralhada })
+    body: JSON.stringify({ resposta: letter, tempo_segundos: tempoSegundos, embaralhada, seed })
   }).then(r => r.json());
 
   // Mostrar resultado
