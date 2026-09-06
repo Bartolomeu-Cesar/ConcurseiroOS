@@ -1133,6 +1133,35 @@ body.light-theme .interactive:hover { background: rgba(136,57,239,0.06); }
    ao clicar, um leve "afundar" dá resposta tátil. Não altera o layout. */
 .tbtn:active, .iobtn:active, .sidebar-nav a:active, .sidebar-nav button:active { transform: scale(0.96); }
 
+/* ===== PROGRESSIVE DISCLOSURE (seções colapsáveis) ===== */
+/* <details class="collapsible"><summary>Título</summary> ...conteúdo... </details>
+   Usa o elemento nativo <details> (acessível por teclado, sem JS). Reduz densidade
+   agrupando conteúdo secundário/avançado que o usuário abre sob demanda. */
+.collapsible {
+  background: var(--bg-surface); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-sm);
+  margin-bottom: var(--space-4); overflow: hidden;
+}
+.collapsible > summary {
+  cursor: pointer; list-style: none; user-select: none;
+  padding: var(--space-4) var(--space-5);
+  font-size: 0.95rem; font-weight: 600; color: var(--accent);
+  display: flex; align-items: center; gap: var(--space-2);
+  transition: background 0.15s ease;
+}
+.collapsible > summary::-webkit-details-marker { display: none; }
+.collapsible > summary:hover { background: rgba(203,166,247,0.06); }
+body.light-theme .collapsible > summary:hover { background: rgba(136,57,239,0.06); }
+/* Seta indicadora que gira ao abrir */
+.collapsible > summary::before {
+  content: "▶"; font-size: 0.7rem; color: var(--text-sub);
+  transition: transform 0.2s ease; display: inline-block;
+}
+.collapsible[open] > summary::before { transform: rotate(90deg); }
+.collapsible > summary .collapsible-hint { margin-left: auto; font-size: 0.72rem; color: var(--text-muted); font-weight: 500; }
+.collapsible-body { padding: 0 var(--space-5) var(--space-5); }
+.collapsible[open] > .collapsible-body { animation: fade-in-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
 /* Painéis e cards aparecem suavemente ao carregar a página, com leve escalonamento
    (stagger) para criar ritmo. Aplica-se apenas na entrada — hover/estado não reanima. */
 .panel, .card, .stat-card { animation: fade-in-up 0.42s cubic-bezier(0.16, 1, 0.3, 1) both; }
