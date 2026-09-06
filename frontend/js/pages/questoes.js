@@ -1,7 +1,7 @@
 // questoes.js — extracted from questoes.html inline scripts
 // ES module (strict mode by default)
 import { toast } from '../modules/toast.js';
-import { confirmModal, alertModal, promptModal } from '../modules/utils.js';
+import { confirmModal, alertModal, promptModal, escapeHtml } from '../modules/utils.js';
 import { handleAuthNav } from '../modules/auth.js';
 import { showQuestionXp } from '../modules/xp-notify.js';
 import { startFatigueSession, sendHeartbeat, hasActiveSession } from '../modules/fatigue-tracker.js';
@@ -1427,7 +1427,7 @@ async function loadBanco() {
     html += `<div class="acc-group">
       <div class="acc-header" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
         <span class="acc-chevron">▶</span>
-        <span class="acc-name">${key}</span>
+        <span class="acc-name">${escapeHtml(key)}</span>
         <span class="acc-count">${items.length} questão(ões)</span>
         ${semGabarito ? `<button onclick="event.stopPropagation();deleteGroupSemGabarito('${safeKey}')" title="Excluir este grupo" style="background:none;border:none;color:#f38ba8;cursor:pointer;font-size:0.9rem;margin-left:8px;">🗑️ Excluir grupo</button>` : ''}
       </div>

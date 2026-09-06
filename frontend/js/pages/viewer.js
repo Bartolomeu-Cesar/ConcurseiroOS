@@ -854,9 +854,10 @@ async function loadBookmarksPanel() {
     body.innerHTML = bms.map(b => {
       const cor = _BM_CORES[b.cor] || _BM_CORES.blue;
       const label = b.label && b.label.trim() ? _escHtml(b.label) : `Página ${b.pagina}`;
+      const labelPlain = b.label && b.label.trim() ? b.label : `Página ${b.pagina}`;
       return `<div style="display:flex;align-items:center;gap:8px;background:var(--bg,#1e1e2e);border-left:3px solid ${cor};border-radius:8px;padding:10px 12px;margin-bottom:8px;">
-        <div style="flex:1;min-width:0;cursor:pointer;" onclick="goToPage(${b.pagina});toggleBookmarksPanel();" title="Ir para a página ${b.pagina}">
-          <div style="font-size:0.85rem;color:var(--text,#cdd6f4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${label}</div>
+        <div style="flex:1;min-width:0;cursor:pointer;" onclick="goToPage(${b.pagina});toggleBookmarksPanel();" title="${_escHtml(labelPlain).replace(/"/g, '&quot;')} — ir para a página ${b.pagina}">
+          <div style="font-size:0.85rem;color:var(--text,#cdd6f4);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${label}</div>
           <div style="font-size:0.72rem;color:var(--text-sub,#9399b2);">📄 Página ${b.pagina}${b.created_at ? ' · ' + (b.created_at.split('T')[0]) : ''}</div>
         </div>
         <button onclick="goToPage(${b.pagina});toggleBookmarksPanel();" title="Ir" style="background:var(--bg-elevated,#45475a);border:none;color:${cor};border-radius:6px;padding:5px 9px;font-size:0.75rem;cursor:pointer;" aria-label="Ir para a página do marcador">↪</button>

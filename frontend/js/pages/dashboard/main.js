@@ -23,7 +23,7 @@ import { loadDesafioDiarioCard } from './desafio.js';
 import { handleAuthNav } from '../../modules/auth.js';
 import { renderCatStartCard } from '../../modules/cat-session.js';
 import { renderAnxietyCard } from '../../modules/anxiety-exposure.js';
-import { confirmModal, alertModal, toast, escapeHtml } from '../../modules/utils.js';
+import { confirmModal, alertModal, toast, escapeHtml, escapeAttr } from '../../modules/utils.js';
 
 // ===== Dashboard Tab Navigation =====
 document.querySelectorAll('.dash-tab').forEach(tab => {
@@ -404,8 +404,16 @@ async function loadPlanejadorSemanal() {
       } else {
         for (const it of diaItems) {
           materiasSet.add(it.materia);
+          // Truncamento controlado por JS (regra do projeto: NÃO usar
+          // white-space:nowrap + ellipsis via CSS em elemento com expansão por clique).
+          // Texto completo em data-full; exibição inicial cortada por slice; o clique
+          // alterna entre versão curta e completa via toggleTruncatePlan.
+          const full = `${it.materia}${it.topicos ? ' (' + it.topicos + ')' : ''}`;
+          const LIMITE = 22;
+          const curto = full.length > LIMITE ? full.slice(0, LIMITE) + '…' : full;
+          const clickable = full.length > LIMITE;
           html += `<div style="display:flex;align-items:center;gap:4px;padding:3px 0;border-bottom:1px solid var(--border);font-size:0.72rem;">
-            <span style="flex:1;color:var(--text);cursor:pointer;" onclick="this.style.whiteSpace = this.style.whiteSpace === 'normal' ? 'nowrap' : 'normal'; this.style.overflow = this.style.whiteSpace === 'nowrap' ? 'hidden' : 'visible'; this.style.textOverflow = this.style.whiteSpace === 'nowrap' ? 'ellipsis' : 'unset';" title="${it.materia}${it.topicos ? ' — ' + it.topicos : ''}" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${it.materia}${it.topicos ? ' <span style=&quot;color:var(--text-sub);font-size:0.65rem;&quot;>(' + it.topicos + ')</span>' : ''}</span>
+            <span style="flex:1;min-width:0;color:var(--text);${clickable ? 'cursor:pointer;' : ''}" ${clickable ? `onclick="toggleTruncatePlan(this)"` : ''} data-full="${escapeAttr(full)}" data-short="${escapeAttr(curto)}" title="${escapeAttr(full)}">${escapeHtml(curto)}</span>
             <span style="color:var(--blue);font-size:0.68rem;white-space:nowrap;">${it.horas}h</span>
             ${planMode === 'manual' && it.id ? `<button onclick="removePlanejadorItem(${it.id})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:0.7rem;padding:0 2px;" title="Remover">&#10005;</button>` : ''}
           </div>`;
@@ -1181,6 +1189,18 @@ window.loadPlanejadorSemanal = loadPlanejadorSemanal;
 window.regenerarPlanejador = regenerarPlanejador;
 window.addPlanejadorItem = addPlanejadorItem;
 window.removePlanejadorItem = removePlanejadorItem;
+
+// Alterna entre versão truncada (data-short) e completa (data-full) do rótulo do
+// planejador. Truncamento por JS conforme regra do projeto (sem ellipsis via CSS).
+function toggleTruncatePlan(el) {
+  if (!el) return;
+  const full = el.dataset.full || '';
+  const short = el.dataset.short || full;
+  const expanded = el.dataset.expanded === '1';
+  el.textContent = expanded ? short : full;
+  el.dataset.expanded = expanded ? '0' : '1';
+}
+window.toggleTruncatePlan = toggleTruncatePlan;
 window.limparPlanejador = limparPlanejador;
 window.requestPushPermission = requestPushPermission;
 window.toggleCalCollapse = function(dateKey) {
