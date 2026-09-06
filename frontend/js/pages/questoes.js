@@ -3,7 +3,7 @@
 import { toast } from '../modules/toast.js';
 import { confirmModal, alertModal, promptModal, escapeHtml } from '../modules/utils.js';
 import { handleAuthNav } from '../modules/auth.js';
-import { showQuestionXp } from '../modules/xp-notify.js';
+import { showQuestionXp, celebrateMilestone } from '../modules/xp-notify.js';
 import { startFatigueSession, sendHeartbeat, hasActiveSession } from '../modules/fatigue-tracker.js';
 import { emit } from '../modules/event-bus.js';
 window.handleAuthNav = handleAuthNav;
@@ -399,6 +399,9 @@ async function confirmarResposta() {
 
   // XP real-time feedback
   showQuestionXp(res.acertou);
+
+  // Celebração de marco: primeira questão respondida (dispara uma única vez).
+  celebrateMilestone('primeira_questao');
 
   // Fatigue tracking — enviar heartbeat
   if (hasActiveSession()) {
