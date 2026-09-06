@@ -30,11 +30,11 @@ def daily_challenge(conn=Depends(get_db_session), user_id: int = Depends(get_use
         return {"message": "Parabéns! Você já respondeu todas as questões disponíveis hoje.", "questao": None}
 
     chosen = random.choice(rows)
-    # Embaralha as alternativas de forma determinística por user+questão (mesmo
-    # padrão de `showQuestao`/GET /api/questoes/{id}?embaralhar=true). O frontend
-    # envia `embaralhada:true` ao responder, e o backend reaplica a mesma semente
-    # para corrigir na ordem que o usuário viu.
-    questao = _embaralhar_alternativas(dict(chosen), user_id)
+    # Embaralhamento NÃO-determinístico: gera uma seed aleatória por REQUEST (muda a
+    # cada abertura do desafio). A seed vai no objeto da questão (campo `seed`) e o
+    # frontend a reenvia no POST /responder para o backend validar na ordem exibida.
+    seed = random.randint(1, 2147483647)
+    questao = _embaralhar_alternativas(dict(chosen), user_id, seed=seed)
     return {"questao": questao}
 
 

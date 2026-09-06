@@ -110,10 +110,11 @@ def test_daily_challenge_responder_letra_exibida_acerta(client):
     qid, _ = _reset_e_criar_uma_questao(correta="A")
     q = client.get("/api/daily-challenge").json()["questao"]
     letra_exibida = q["resposta_correta"]
+    seed = q["seed"]  # o backend gera seed aleatória por request e a devolve
 
     r = client.post(
         f"/api/questoes/{qid}/responder",
-        json={"resposta": letra_exibida, "tempo_segundos": 15, "embaralhada": True},
+        json={"resposta": letra_exibida, "tempo_segundos": 15, "embaralhada": True, "seed": seed},
     )
     assert r.status_code == 200
     assert r.json()["acertou"] is True
@@ -127,23 +128,31 @@ def test_daily_challenge_responder_letra_errada_erra(client):
     qid, _ = _reset_e_criar_uma_questao(correta="A")
     q = client.get("/api/daily-challenge").json()["questao"]
     letra_exibida_correta = q["resposta_correta"]
+    seed = q["seed"]
     outra = next(L for L in ["A", "B", "C", "D"] if L != letra_exibida_correta)
 
     r = client.post(
         f"/api/questoes/{qid}/responder",
-        json={"resposta": outra, "tempo_segundos": 15, "embaralhada": True},
+        json={"resposta": outra, "tempo_segundos": 15, "embaralhada": True, "seed": seed},
     )
     assert r.status_code == 200
     assert r.json()["acertou"] is False
 
 
-def test_daily_challenge_determinismo(client):
-    """Duas chamadas ao endpoint devem remapear o gabarito para a MESMA letra."""
-    qid, _ = _reset_e_criar_uma_questao(correta="B")
-    q1 = client.get("/api/daily-challenge").json()["questao"]
-    q2 = client.get("/api/daily-challenge").json()["questao"]
-    assert q1["resposta_correta"] == q2["resposta_correta"]
-    assert q1["alternativa_a"] == q2["alternativa_a"]
+def test_daily_challenge_seed_presente_e_valida(client):
+    """O endpoint devolve uma seed por request; responder com ela valida na ordem
+    exibida (modo não-determinístico). A seed exibida aponta para o texto correto."""
+    qid, textos = _reset_e_criar_uma_questao(correta="A")
+    q = client.get("/api/daily-challenge").json()["questao"]
+    assert q.get("embaralhada") is True
+    assert isinstance(q.get("seed"), int)
+    letra_exibida = q["resposta_correta"]
+    assert q[f"alternativa_{letra_exibida.lower()}"] == textos["A"]
+    r = client.post(
+        f"/api/questoes/{qid}/responder",
+        json={"resposta": letra_exibida, "tempo_segundos": 5, "embaralhada": True, "seed": q["seed"]},
+    )
+    assert r.json()["acertou"] is True
 
 
 def teardown_module():

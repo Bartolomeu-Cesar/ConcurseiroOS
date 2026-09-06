@@ -194,16 +194,16 @@ export async function loadDailyChallenge() {
     const el = document.getElementById('daily-challenge');
     if (!data.questao) { el.innerHTML = `<p style="color:var(--green);font-size:0.9rem;">${data.message}</p>`; return; }
     const q = data.questao;
-    el.innerHTML = `<div style="font-size:0.88rem;line-height:1.5;margin-bottom:10px;">${q.enunciado}</div><div style="font-size:0.78rem;color:var(--text-sub);margin-bottom:10px;">${q.materia}${q.topico ? ' • '+q.topico : ''}</div><div style="display:flex;flex-direction:column;gap:6px;">${['A','B','C','D','E'].filter(l => q['alternativa_'+l.toLowerCase()]).map(l => `<button onclick="responderDailyChallenge(${q.id},'${l}',this)" style="background:var(--bg-elevated);border:none;color:var(--text);padding:8px 12px;border-radius:6px;cursor:pointer;font-size:0.82rem;text-align:left;"><strong>${l})</strong> ${q['alternativa_'+l.toLowerCase()]}</button>`).join('')}</div><div id="daily-feedback" style="margin-top:10px;display:none;"></div>`;
+    el.innerHTML = `<div style="font-size:0.88rem;line-height:1.5;margin-bottom:10px;">${q.enunciado}</div><div style="font-size:0.78rem;color:var(--text-sub);margin-bottom:10px;">${q.materia}${q.topico ? ' • '+q.topico : ''}</div><div style="display:flex;flex-direction:column;gap:6px;">${['A','B','C','D','E'].filter(l => q['alternativa_'+l.toLowerCase()]).map(l => `<button onclick="responderDailyChallenge(${q.id},'${l}',this,${q.seed ?? 'null'})" style="background:var(--bg-elevated);border:none;color:var(--text);padding:8px 12px;border-radius:6px;cursor:pointer;font-size:0.82rem;text-align:left;"><strong>${l})</strong> ${q['alternativa_'+l.toLowerCase()]}</button>`).join('')}</div><div id="daily-feedback" style="margin-top:10px;display:none;"></div>`;
   } catch(e) {}
 }
 
-export async function responderDailyChallenge(qId, letra, btn) {
+export async function responderDailyChallenge(qId, letra, btn, seed = null) {
   try {
     const res = await fetch(`/api/questoes/${qId}/responder`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({resposta: letra, tempo_segundos: 0, embaralhada: true})
+      body: JSON.stringify({resposta: letra, tempo_segundos: 0, embaralhada: true, seed})
     }).then(r => r.json());
     const fb = document.getElementById('daily-feedback');
     fb.style.display = 'block';
