@@ -1306,9 +1306,32 @@ fora de escopo, risco de ruído no diff).
   remover a env var para usar o arquivo `.jwt_secret` auto-gerado (32 bytes fortes).
 
 
-### 11.11 AGENDADO — Estender embaralhamento de alternativas aos fluxos restantes
+### 11.11 CONCLUÍDO — Estender embaralhamento de alternativas aos fluxos restantes
 
-**Contexto:** a aleatorização de alternativas (Opção A — servir embaralhado via
+**✅ RESOLVIDO (sessão 06/09/2026).** Os 3 fluxos pendentes agora servem alternativas
+embaralhadas (mesmo padrão determinístico por user+questão) e corrigem na ordem exibida:
+
+1. **Daily Challenge** — `estudo.py` (endpoint ativo, registrado antes de `misc.py`)
+   aplica `_embaralhar_alternativas` na questão sorteada; `dashboard/treinador.js`
+   (`responderDailyChallenge`) envia `embaralhada:true`. Teste:
+   `tests/test_daily_challenge_embaralhar.py` (4).
+2. **Study Room** — `pages/studyroom.js`: `showSrQuestao` virou async e busca
+   `GET /api/questoes/{id}?embaralhar=true` sob demanda (cacheia em `srQuestoes[idx]`,
+   fallback à ordem original); `answerSrQuestao` envia `embaralhada:!!q.embaralhada`.
+   Teste: `tests/test_studyroom_embaralhar.py` (3).
+3. **Viewer/PDF** — `pages/viewer.js`: `loadSidePanelQuestions` busca a versão
+   embaralhada das 5 sorteadas via `Promise.all` (fallback à original);
+   `renderSidePanelQuestions` grava `data-correct` (letra EXIBIDA) + `data-embaralhada`;
+   `selectSideAlt` envia `embaralhada` conforme o data-attribute. A correção client-side
+   via `data-correct` continua correta (letra exibida). Questões Certo/Errado (2
+   alternativas) NÃO embaralham. Teste: `tests/test_viewer_embaralhar.py` (4).
+
+Commits: `feat(daily-challenge)...`, `feat(studyroom)...`, `feat(viewer)...`.
+CACHE_VERSION bumpado (v243→v244). Simulado permanece fora de escopo (endpoint próprio).
+
+---
+
+**Contexto original (mantido para histórico):** a aleatorização de alternativas (Opção A — servir embaralhado via
 `GET /api/questoes/{id}?embaralhar=true` + validar com a flag `embaralhada` no
 `POST /api/questoes/{id}/responder`, que reaplica `_embaralhar_alternativas` de forma
 determinística por user+questão) já está ATIVA em: **Resolver questões**
