@@ -1087,6 +1087,25 @@ select#timer-select { background: #313244; color: #cdd6f4; border: 1px solid #45
 
 .spinner { width: 24px; height: 24px; border: 3px solid #45475a; border-top-color: #cba6f7; border-radius: 50%; animation: spin 0.7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ===== MOTION: ENTRADA SUAVE (fade-in-up) ===== */
+/* Animação de aparição única (na carga) para dar profundidade sem cansar. Já é
+   automaticamente desligada por prefers-reduced-motion (regra global com !important). */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-in { animation: fade-in-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+/* Painéis e cards aparecem suavemente ao carregar a página, com leve escalonamento
+   (stagger) para criar ritmo. Aplica-se apenas na entrada — hover/estado não reanima. */
+.panel, .card, .stat-card { animation: fade-in-up 0.42s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.panel:nth-child(1), .card:nth-child(1), .stat-card:nth-child(1) { animation-delay: 0.02s; }
+.panel:nth-child(2), .card:nth-child(2), .stat-card:nth-child(2) { animation-delay: 0.06s; }
+.panel:nth-child(3), .card:nth-child(3), .stat-card:nth-child(3) { animation-delay: 0.10s; }
+.panel:nth-child(4), .card:nth-child(4), .stat-card:nth-child(4) { animation-delay: 0.14s; }
+.panel:nth-child(5), .card:nth-child(5), .stat-card:nth-child(5) { animation-delay: 0.18s; }
+.panel:nth-child(n+6), .card:nth-child(n+6), .stat-card:nth-child(n+6) { animation-delay: 0.22s; }
 .spinner-wrapper { display: flex; align-items: center; justify-content: center; padding: 32px; }
 .spinner-overlay { position: absolute; inset: 0; background: rgba(30, 30, 46, 0.7); display: flex; align-items: center; justify-content: center; border-radius: 12px; z-index: 100; }
 .loading-fade { opacity: 0.5; transition: opacity 0.3s ease; }
