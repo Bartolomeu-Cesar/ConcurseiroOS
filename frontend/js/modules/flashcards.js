@@ -257,7 +257,7 @@ function showCurrentFlashcard() {
           <div class="fe-title">Nenhum flashcard para revisar hoje</div>
           <div class="fe-sub">Crie novos cards ou faça uma sessão avulsa para praticar agora.</div>
           <div class="fe-actions">
-            <button class="fe-btn" onclick="document.getElementById('flash-pergunta')?.scrollIntoView({behavior:'smooth',block:'center'});document.getElementById('flash-pergunta')?.focus();">➕ Criar flashcard</button>
+            <button class="fe-btn" onclick="document.querySelector('.flash-create-accordion')?.setAttribute('open','');document.getElementById('flash-pergunta')?.scrollIntoView({behavior:'smooth',block:'center'});document.getElementById('flash-pergunta')?.focus();">➕ Criar flashcard</button>
             <button class="fe-btn fe-btn-alt" onclick="iniciarSessaoFlash('aleatorio')">🎲 Estudar todos</button>
           </div>
         </div>`;
