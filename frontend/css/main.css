@@ -656,11 +656,24 @@ body.sidebar-collapsed .main-content { margin-left: 60px; width: calc(100% - 60p
 
 /* ===== TABLES ===== */
 
-.users-table { width: 100%; border-collapse: collapse; background: var(--bg-surface); border-radius: 10px; overflow: hidden; }
-.users-table th { background: var(--bg-elevated); padding: 10px 12px; text-align: left; font-size: 0.75rem; color: var(--text-sub); text-transform: uppercase; }
+.users-table { width: 100%; border-collapse: collapse; background: var(--bg-surface); border-radius: 10px; overflow: hidden; border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
+.users-table th { background: var(--bg-elevated); padding: 10px 12px; text-align: left; font-size: 0.75rem; color: var(--text-sub); text-transform: uppercase; letter-spacing: 0.03em; }
 .users-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 0.82rem; }
-.users-table tr:hover td { background: rgba(69,71,90,0.27); }
+.users-table tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--bg-elevated) 30%, transparent); }
+.users-table tr:hover td { background: rgba(203,166,247,0.08); }
 .users-table tr:last-child td { border-bottom: none; }
+
+/* Tabela genérica reutilizável (header sticky + zebra + hover) para listas densas */
+.data-table { width: 100%; border-collapse: collapse; background: var(--bg-surface); border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
+.data-table th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--bg-elevated); padding: 10px 12px; text-align: left;
+  font-size: 0.75rem; color: var(--text-sub); text-transform: uppercase; letter-spacing: 0.03em;
+}
+.data-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 0.85rem; color: var(--text); font-variant-numeric: tabular-nums; }
+.data-table tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--bg-elevated) 30%, transparent); }
+.data-table tbody tr:hover td { background: rgba(203,166,247,0.08); }
+.data-table tr:last-child td { border-bottom: none; }
 
 /* ===== TOOLBAR & FILTERS ===== */
 
