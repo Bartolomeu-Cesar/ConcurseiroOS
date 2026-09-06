@@ -1537,3 +1537,19 @@ SW v262 → v263.
 
 **Se quiser estender o não-determinístico** aos outros fluxos (Daily/StudyRoom/Viewer):
 basta gerar seed no frontend e enviá-la no GET e no POST, igual ao Resolver Questões.
+
+### Extensão (mesma sessão) — não-determinístico em TODOS os fluxos (SW v263 → v264)
+Estendido o embaralhamento não-determinístico aos 3 fluxos restantes:
+- **Daily Challenge** (`7fa2f2f`): `estudo.py` gera `seed = random.randint(1, 2147483647)` por
+  REQUEST e passa a `_embaralhar_alternativas`; a questão retorna `seed`. `treinador.js`
+  `responderDailyChallenge(qId, letra, btn, seed)` recebe a seed via onclick e a envia.
+- **Study Room** (`48c6b15`): `studyroom.js` `showSrQuestao` gera seed por abertura, serve
+  `?embaralhar=true&seed=`, cacheia em `srQuestoes[idx]`; `answerSrQuestao` envia `seed`.
+- **Viewer/PDF** (`d703a98`): `viewer.js` `loadSidePanelQuestions` gera seed por questão ao
+  servir; render grava `data-seed`; `selectSideAlt` lê `data-seed` e envia no `/responder`.
+
+Batalha PvP tem embaralhamento próprio (gameplay.py/crud.py) e ficou fora — avaliar depois
+se quiser unificar. Testes atualizados para enviar a seed (o antigo teste de "determinismo"
+do daily virou teste de seed presente + validação). Total: **22 testes** de embaralhamento
+passando (viewer 5, daily 4, studyroom 4, responder 9). Regra geral do contrato: quem serve
+com `seed` DEVE reenviar a MESMA `seed` no `/responder`; sem seed = determinístico legado.
