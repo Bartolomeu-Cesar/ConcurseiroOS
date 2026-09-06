@@ -1117,6 +1117,22 @@ select#timer-select { background: #313244; color: #cdd6f4; border: 1px solid #45
 }
 .answer-wrong { animation: answer-shake 0.4s ease; }
 
+/* ===== MICRO-INTERAÇÕES: HOVER/PRESS EM ITENS INTERATIVOS ===== */
+/* Utilitário reutilizável: item de lista/linha clicável com feedback de hover
+   (elevação sutil + fundo) e press (afunda levemente). Aplicar em elementos com
+   onclick. Ex.: <div class="interactive" onclick=...>. */
+.interactive {
+  transition: transform 0.12s ease, background 0.15s ease, box-shadow 0.15s ease;
+  cursor: pointer;
+}
+.interactive:hover { background: rgba(203,166,247,0.06); transform: translateY(-1px); }
+.interactive:active { transform: translateY(0) scale(0.99); }
+body.light-theme .interactive:hover { background: rgba(136,57,239,0.06); }
+
+/* Feedback de press universal para botões-ícone comuns (sidebar/toolbar/study-tools):
+   ao clicar, um leve "afundar" dá resposta tátil. Não altera o layout. */
+.tbtn:active, .iobtn:active, .sidebar-nav a:active, .sidebar-nav button:active { transform: scale(0.96); }
+
 /* Painéis e cards aparecem suavemente ao carregar a página, com leve escalonamento
    (stagger) para criar ritmo. Aplica-se apenas na entrada — hover/estado não reanima. */
 .panel, .card, .stat-card { animation: fade-in-up 0.42s cubic-bezier(0.16, 1, 0.3, 1) both; }
