@@ -5,6 +5,9 @@ __pycache__/
 venv/
 .env
 
+# Backups locais de rollback (não versionar)
+*.bak
+
 # JWT Secret (persisted)
 backend/.jwt_secret
 
