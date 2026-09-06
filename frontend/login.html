@@ -31,8 +31,8 @@
     .resend { text-align: center; margin-top: 12px; font-size: 0.8rem; color: #9399b2; }
     .resend a { color: #89b4fa; cursor: pointer; }
     .dev-code { text-align: center; margin-top: 8px; font-size: 0.8rem; padding: 8px; background: #1e1e2e; border-radius: 6px; color: #f9e2af; display: none; }
-    .skip-link { display: block; text-align: center; margin-top: 16px; font-size: 0.82rem; color: #585b70; }
-    .skip-link:hover { color: #9399b2; }
+    .skip-link { display: block; text-align: center; margin-top: 16px; font-size: 0.82rem; color: #9399b2; }
+    .skip-link:hover { color: #cdd6f4; }
   </style>
 </head>
 <body>
@@ -44,17 +44,17 @@
         <p>Entre para salvar seu progresso</p>
       </div>
 
-      <div id="msg" class="message"></div>
+      <div id="msg" class="message" role="status" aria-live="polite"></div>
 
       <!-- STEP 1: Email -->
       <div id="step-email" class="step active">
         <div class="form-group">
           <label for="email">Email</label>
-          <input type="email" id="email" placeholder="seu@email.com" autocomplete="email" autofocus>
+          <input type="email" id="email" placeholder="seu@email.com" autocomplete="email" autofocus onkeydown="if(event.key==='Enter'){event.preventDefault();handleLogin();}">
         </div>
         <div class="form-group" id="nome-group" style="display:none;">
           <label for="nome">Nome (opcional)</label>
-          <input type="text" id="nome" placeholder="Como quer ser chamado?">
+          <input type="text" id="nome" placeholder="Como quer ser chamado?" onkeydown="if(event.key==='Enter'){event.preventDefault();handleLogin();}">
         </div>
         <button class="btn btn-primary" id="btn-login" onclick="handleLogin()">Entrar</button>
         <div class="toggle-link">
@@ -76,7 +76,7 @@
         </div>
         <button class="btn btn-primary" id="btn-verify" onclick="handleVerify()">Verificar</button>
         <button class="btn btn-secondary" onclick="goBackToEmail()">← Voltar</button>
-        <div class="resend">Não recebeu? <a onclick="handleResend()">Reenviar código</a></div>
+        <div class="resend">Não recebeu? <a id="resend-link" onclick="handleResend()">Reenviar código</a></div>
         <div class="dev-code" id="dev-code"></div>
       </div>
 
@@ -248,8 +248,31 @@
       btn.textContent = 'Verificar';
     }
 
+    let resendCooldown = 0;
+    let resendTimer = null;
     async function handleResend() {
+      // Cooldown de 30s para evitar reenvios repetidos (rate limit no backend + UX).
+      if (resendCooldown > 0) return;
       hideMsg();
+      const link = document.getElementById('resend-link');
+      const startCooldown = () => {
+        resendCooldown = 30;
+        const tick = () => {
+          if (!link) return;
+          if (resendCooldown > 0) {
+            link.textContent = `Reenviar código (${resendCooldown}s)`;
+            link.style.pointerEvents = 'none';
+            link.style.opacity = '0.5';
+            resendCooldown--;
+            resendTimer = setTimeout(tick, 1000);
+          } else {
+            link.textContent = 'Reenviar código';
+            link.style.pointerEvents = '';
+            link.style.opacity = '';
+          }
+        };
+        tick();
+      };
       try {
         const res = await fetch('/api/auth/login', {
           method: 'POST',
@@ -262,6 +285,7 @@
           document.getElementById('dev-code').textContent = '🔑 Código (dev): ' + data.code;
         }
         showMsg('Novo código enviado!', 'success');
+        startCooldown();
       } catch(e) {
         showMsg('Erro ao reenviar.', 'error');
       }
