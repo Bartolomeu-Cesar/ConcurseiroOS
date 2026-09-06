@@ -19,21 +19,30 @@ from utils import sql_paginate, today_str, update_streak
 router = APIRouter()
 
 
-def _embaralhar_alternativas(questao: dict, user_id: int) -> dict:
-    """Embaralha as alternativas de uma questão de forma determinística por user+questão.
+def _embaralhar_alternativas(questao: dict, user_id: int, seed: int | None = None) -> dict:
+    """Embaralha as alternativas de uma questão.
 
-    Usa hash(user_id + questao_id) como seed para garantir que o mesmo usuário
-    sempre vê a mesma ordem (consistência), mas usuários diferentes veem ordens diferentes.
+    Modo DETERMINÍSTICO (seed=None): usa hash(user_id + questao_id) como semente —
+    o mesmo usuário sempre vê a mesma ordem para a mesma questão (retrocompatível).
 
-    Retorna a questão com alternativas reordenadas + campo 'mapeamento' que permite
-    traduzir a letra selecionada de volta para a letra original.
+    Modo NÃO-DETERMINÍSTICO (seed fornecida): usa a semente recebida — permite ordem
+    diferente a cada abertura. O frontend gera a seed, embaralha ao servir e envia a
+    MESMA seed no POST /responder para o backend reconstruir a permutação e validar
+    a resposta na ordem exibida (a validação continua 100% server-side).
+
+    Retorna a questão com alternativas reordenadas + 'mapeamento' (nova_letra ->
+    letra_original) + 'seed' (a semente efetivamente usada).
     """
     import hashlib
 
     q_id = questao.get("id", 0)
-    # Seed determinístico por user + questão
-    seed_str = f"{user_id}-{q_id}"
-    seed = int(hashlib.md5(seed_str.encode()).hexdigest()[:8], 16)
+    # Semente: usa a recebida (modo não-determinístico) ou deriva de user+questão
+    # (modo determinístico, comportamento legado).
+    if seed is not None:
+        seed_val = int(seed)
+    else:
+        seed_str = f"{user_id}-{q_id}"
+        seed_val = int(hashlib.md5(seed_str.encode()).hexdigest()[:8], 16)
 
     # Coletar alternativas não-vazias
     letras_originais = []
@@ -48,11 +57,12 @@ def _embaralhar_alternativas(questao: dict, user_id: int) -> dict:
     # Se <= 2 alternativas (Certo/Errado), não embaralhar
     if len(letras_originais) <= 2:
         questao["embaralhada"] = False
+        questao["seed"] = seed_val
         return questao
 
-    # Criar permutação determinística usando Fisher-Yates com seed
+    # Criar permutação usando Fisher-Yates com a semente escolhida
     import random
-    rng = random.Random(seed)
+    rng = random.Random(seed_val)
     indices = list(range(len(letras_originais)))
     rng.shuffle(indices)
 
@@ -85,6 +95,7 @@ def _embaralhar_alternativas(questao: dict, user_id: int) -> dict:
     questao["resposta_correta"] = nova_resp
     questao["mapeamento"] = mapeamento  # nova_letra -> letra_original
     questao["embaralhada"] = True
+    questao["seed"] = seed_val
 
     return questao
 
@@ -359,14 +370,16 @@ def get_questao_similar(
 @router.get("/api/questoes/{id}", response_model=QuestaoResponse, summary="Obter questão por ID",
             description="Retorna os dados completos de uma questão específica.",
             responses={404: {"description": "Questão não encontrada"}})
-def get_questao(id: int, embaralhar: bool = False, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+def get_questao(id: int, embaralhar: bool = False, seed: int | None = None, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     row = conn.execute("SELECT * FROM questoes WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Questão não encontrada")
     result = dict(row)
 
     if embaralhar:
-        result = _embaralhar_alternativas(result, user_id)
+        # seed opcional: se enviada, embaralhamento NÃO-determinístico (muda a cada
+        # abertura); sem seed, mantém o determinístico por user+questão (legado).
+        result = _embaralhar_alternativas(result, user_id, seed=seed)
 
     return result
 
@@ -424,7 +437,9 @@ def responder_questao(id: int, body: QuestaoResposta, conn=Depends(get_db_sessio
     # (b) traduzir a letra escolhida de volta para a letra ORIGINAL antes de gravar
     # (mantém o banco/relatórios coerentes com a ordem canônica das alternativas).
     if getattr(body, "embaralhada", False):
-        emb = _embaralhar_alternativas(dict(questao), user_id)
+        # Reaplica a MESMA permutação que o usuário viu. Se veio `seed` (modo
+        # não-determinístico), reconstrói com ela; senão usa a semente determinística.
+        emb = _embaralhar_alternativas(dict(questao), user_id, seed=getattr(body, "seed", None))
         if emb.get("embaralhada"):
             gabarito = (emb.get("resposta_correta") or "").strip().upper()
             mapeamento = emb.get("mapeamento", {})  # nova_letra -> letra_original

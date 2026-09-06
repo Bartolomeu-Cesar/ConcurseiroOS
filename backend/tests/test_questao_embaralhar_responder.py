@@ -155,3 +155,81 @@ def test_retorno_resposta_correta_reflete_ordem_exibida(client):
         json={"resposta": letra_exibida, "tempo_segundos": 10, "embaralhada": True},
     ).json()
     assert r["resposta_correta"].upper() == letra_exibida.upper()
+
+
+# ============================================================
+# MODO NÃO-DETERMINÍSTICO (seed enviada pelo frontend)
+# ============================================================
+
+def _ordem_textos(d):
+    """Sequência de textos das alternativas na ordem exibida (A,B,C,D...)."""
+    out = []
+    for L in ["a", "b", "c", "d", "e"]:
+        t = d.get(f"alternativa_{L}")
+        if t:
+            out.append(t)
+    return out
+
+
+def test_seed_diferente_gera_ordem_diferente(client):
+    """Servir a MESMA questão com seeds diferentes deve produzir ordens diferentes
+    (pelo menos em uma das comparações), provando o modo não-determinístico."""
+    qid, _ = _criar_questao_4alt(correta="A")
+    ordens = set()
+    for seed in (1, 2, 3, 4, 5, 6, 7, 8):
+        d = client.get(f"/api/questoes/{qid}?embaralhar=true&seed={seed}").json()
+        assert d.get("embaralhada") is True
+        assert d.get("seed") == seed  # o backend devolve a seed usada
+        ordens.add(tuple(_ordem_textos(d)))
+    # Com 8 seeds distintas, devemos ver mais de uma ordem (não fixa).
+    assert len(ordens) > 1
+
+
+def test_responder_com_seed_valida_na_ordem_exibida(client):
+    """Servir com uma seed e responder enviando a MESMA seed acerta ao escolher a
+    letra correta EXIBIDA; a letra gravada é a ORIGINAL."""
+    qid, textos = _criar_questao_4alt(correta="A")
+    seed = 123456
+    d = client.get(f"/api/questoes/{qid}?embaralhar=true&seed={seed}").json()
+    letra_exibida = d["resposta_correta"]
+    # a letra correta exibida deve apontar para o texto da alternativa A original
+    assert d[f"alternativa_{letra_exibida.lower()}"] == textos["A"]
+
+    r = client.post(
+        f"/api/questoes/{qid}/responder",
+        json={"resposta": letra_exibida, "tempo_segundos": 12, "embaralhada": True, "seed": seed},
+    )
+    assert r.status_code == 200
+    assert r.json()["acertou"] is True
+    grav = _resposta_gravada(qid)
+    assert grav["acertou"] == 1
+    assert grav["resposta_usuario"].upper() == "A"
+
+
+def test_responder_com_seed_errada_letra_errada_erra(client):
+    qid, _ = _criar_questao_4alt(correta="A")
+    seed = 987654
+    d = client.get(f"/api/questoes/{qid}?embaralhar=true&seed={seed}").json()
+    correta_exibida = d["resposta_correta"]
+    outra = next(L for L in ["A", "B", "C", "D"] if L != correta_exibida)
+    r = client.post(
+        f"/api/questoes/{qid}/responder",
+        json={"resposta": outra, "tempo_segundos": 12, "embaralhada": True, "seed": seed},
+    )
+    assert r.status_code == 200
+    assert r.json()["acertou"] is False
+
+
+def test_retrocompat_sem_seed_continua_deterministico(client):
+    """Sem seed (seed=None), duas chamadas devem produzir a MESMA ordem (legado)."""
+    qid, _ = _criar_questao_4alt(correta="B")
+    d1 = client.get(f"/api/questoes/{qid}?embaralhar=true").json()
+    d2 = client.get(f"/api/questoes/{qid}?embaralhar=true").json()
+    assert _ordem_textos(d1) == _ordem_textos(d2)
+    # E responder sem seed (só embaralhada=true) continua validando corretamente.
+    letra_exibida = d1["resposta_correta"]
+    r = client.post(
+        f"/api/questoes/{qid}/responder",
+        json={"resposta": letra_exibida, "tempo_segundos": 8, "embaralhada": True},
+    )
+    assert r.json()["acertou"] is True

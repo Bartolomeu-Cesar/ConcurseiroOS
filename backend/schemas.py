@@ -102,6 +102,10 @@ class QuestaoResposta(BaseModel):
     # comparar a resposta com o gabarito NA ORDEM QUE O USUÁRIO VIU. Default False
     # preserva o comportamento de todos os fluxos que servem na ordem original.
     embaralhada: bool = False
+    # Semente do embaralhamento NÃO-determinístico. Se o frontend serviu com
+    # ?embaralhar=true&seed=N, envia a MESMA seed aqui para o backend reconstruir a
+    # permutação exibida e validar. None = usa a semente determinística (legado).
+    seed: int | None = None
 
 
 # ============================================================
@@ -369,6 +373,7 @@ class QuestaoResponse(BaseModel):
     # Quando a questão é servida com ?embaralhar=true (alternativas reordenadas):
     embaralhada: bool = False
     mapeamento: dict = {}  # nova_letra -> letra_original (para o cliente, se precisar)
+    seed: int | None = None  # semente usada (o cliente reenvia no /responder)
 
 
 class QuestaoRespostaResponse(BaseModel):

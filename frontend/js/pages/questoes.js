@@ -239,18 +239,18 @@ async function loadQuestoesResolver() {
 window.loadQuestoesResolver = loadQuestoesResolver;
 
 function showQuestao(q) {
-  // Aleatorização das alternativas (anti-decoreba de letra): busca a versão com
-  // alternativas embaralhadas de forma determinística (semente user+questão). O
-  // backend também valida a resposta nessa mesma ordem (flag embaralhada no POST).
-  // Fallback: se a busca falhar, usa a questão original (ordem do banco).
+  // Aleatorização das alternativas (anti-decoreba de letra). Modo NÃO-determinístico:
+  // geramos uma semente aleatória A CADA ABERTURA, servimos embaralhado com ela e
+  // guardamos a semente para reenviar no /responder (o backend valida na mesma ordem).
   if (q && q.id && !q._embaralhado) {
-    fetch(`/api/questoes/${q.id}?embaralhar=true`)
+    const seed = Math.floor(Math.random() * 2147483647);
+    fetch(`/api/questoes/${q.id}?embaralhar=true&seed=${seed}`)
       .then(r => r.ok ? r.json() : null)
       .then(emb => {
-        const alvo = emb ? { ...emb, _embaralhado: true } : { ...q, _embaralhado: true };
+        const alvo = emb ? { ...emb, _embaralhado: true } : { ...q, _embaralhado: true, seed };
         showQuestao(alvo);
       })
-      .catch(() => showQuestao({ ...q, _embaralhado: true }));
+      .catch(() => showQuestao({ ...q, _embaralhado: true, seed }));
     return;
   }
 
@@ -379,7 +379,7 @@ async function confirmarResposta() {
   const resp = await fetch(`/api/questoes/${currentQuestao.id}/responder`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ resposta: letra, tempo_segundos: tempoSegundos, embaralhada: !!currentQuestao.embaralhada })
+    body: JSON.stringify({ resposta: letra, tempo_segundos: tempoSegundos, embaralhada: !!currentQuestao.embaralhada, seed: currentQuestao.seed ?? null })
   });
   if (resp.status === 403) {
     const err = await resp.json().catch(() => ({}));
