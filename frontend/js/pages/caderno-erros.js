@@ -1,4 +1,5 @@
 // caderno-erros.js — ES module extracted from caderno-erros.html
+import { escapeJsString } from '/js/modules/utils.js';
 
 const API_BASE = '';
 let dadosCaderno = null;
@@ -74,7 +75,7 @@ function renderMateriasChips(por_materia) {
   let html = `<button class="materia-chip ${!filtroMateria ? 'active' : ''}" onclick="setFiltroMateria('')">Todas</button>`;
   for (const [mat, count] of sorted) {
     const active = filtroMateria === mat ? 'active' : '';
-    html += `<button class="materia-chip ${active}" onclick="setFiltroMateria('${mat.replace(/'/g, "\\'")}')">${mat} (${count})</button>`;
+    html += `<button class="materia-chip ${active}" onclick="setFiltroMateria('${escapeJsString(mat)}')">${escapeAttr(mat)} (${count})</button>`;
   }
   container.innerHTML = html;
 }
@@ -273,11 +274,11 @@ function renderPadroes(padroes) {
     html += `
       <div class="padrao-card">
         <div class="padrao-header">
-          <span class="padrao-text">${p.padrao}</span>
+          <span class="padrao-text">${escapeAttr(p.padrao)}</span>
           <span class="padrao-count">${p.count}x</span>
         </div>
         <div class="padrao-detail">
-          ${p.materia} → ${p.topico} | Resposta errada frequente: "${p.resposta_errada}"
+          ${escapeAttr(p.materia)} → ${escapeAttr(p.topico)} | Resposta errada frequente: "${escapeAttr(p.resposta_errada)}"
         </div>
       </div>`;
   }

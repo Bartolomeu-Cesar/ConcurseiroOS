@@ -1,7 +1,7 @@
 // vademecum.js — Vade Mecum Digital page logic
 // ES module
 import { toast } from '../modules/toast.js';
-import { confirmModal } from '../modules/utils.js';
+import { confirmModal, escapeJsString } from '../modules/utils.js';
 import { handleAuthNav } from '../modules/auth.js';
 window.handleAuthNav = handleAuthNav;
 
@@ -573,9 +573,11 @@ function escapeHtml(str) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+// Escape para uso como string JS dentro de onclick inline. Delega ao helper
+// centralizado (escapeJsString) que escapa barra, aspas e < de forma robusta —
+// a implementação antiga só cobria a aspa simples e podia quebrar com aspas duplas.
 function escapeAttr(str) {
-  if (!str) return '';
-  return str.replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/\\/g, '\\\\');
+  return escapeJsString(str);
 }
 
 function highlightTerm(text, term) {

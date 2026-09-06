@@ -11,6 +11,35 @@ export function escapeHtml(text) {
   return div.innerHTML;
 }
 
+// Escapa um valor para uso DENTRO DE UM ATRIBUTO HTML (title, value, aria-*).
+// Cobre todos os caracteres que poderiam quebrar o atributo ou injetar markup:
+// & < > " '. Use quando interpolar dados do usuário em atributos.
+export function escapeAttr(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+// Escapa um valor para uso como STRING LITERAL JS dentro de um handler inline,
+// ex.: onclick="minhaFuncao('${escapeJsString(valor)}')". Escapa a barra, as
+// aspas (simples e duplas) e caracteres de nova linha, evitando que o valor
+// quebre a string ou o atributo. NÃO substitui a migração para addEventListener,
+// mas remove o vetor de injeção quando o onclick inline é mantido.
+export function escapeJsString(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '\\x3C')
+    .replace(/\r/g, '\\r')
+    .replace(/\n/g, '\\n');
+}
+
 // ==================== MODAL ACCESSIBILITY HELPER ====================
 // Aplica semântica de diálogo (role/aria-modal/aria-labelledby), trap de foco,
 // fechamento com Esc e restauração do foco ao elemento anterior.
