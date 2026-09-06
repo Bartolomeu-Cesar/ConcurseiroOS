@@ -318,24 +318,28 @@
               </div>
             </div>
 
-            <!-- Ambient Sounds -->
-            <div class="ambient-section">
-              <h2>🎧 Sons Ambiente</h2>
-              <div class="ambient-buttons" id="ambient-buttons">
-                <button class="ambient-btn" data-sound="rain" onclick="toggleAmbient('rain')">🌧 Chuva</button>
-                <button class="ambient-btn" data-sound="cafe" onclick="toggleAmbient('cafe')">☕ Café</button>
-                <button class="ambient-btn" data-sound="waves" onclick="toggleAmbient('waves')">🌊 Ondas</button>
-                <button class="ambient-btn" data-sound="lofi" onclick="toggleAmbient('lofi')">🎵 Lo-fi</button>
-                <button class="ambient-btn silence" data-sound="silence" onclick="toggleAmbient('silence')">🔇 Silêncio</button>
+            <!-- Ambient Sounds (colapsável: secundário, recolhido por padrão) -->
+            <details class="collapsible">
+              <summary>🎧 Sons Ambiente <span class="collapsible-hint">chuva, café, ondas, lo-fi</span></summary>
+              <div class="collapsible-body">
+                <div class="ambient-buttons" id="ambient-buttons">
+                  <button class="ambient-btn" data-sound="rain" onclick="toggleAmbient('rain')">🌧 Chuva</button>
+                  <button class="ambient-btn" data-sound="cafe" onclick="toggleAmbient('cafe')">☕ Café</button>
+                  <button class="ambient-btn" data-sound="waves" onclick="toggleAmbient('waves')">🌊 Ondas</button>
+                  <button class="ambient-btn" data-sound="lofi" onclick="toggleAmbient('lofi')">🎵 Lo-fi</button>
+                  <button class="ambient-btn silence" data-sound="silence" onclick="toggleAmbient('silence')">🔇 Silêncio</button>
+                </div>
+                <input type="range" class="ambient-volume" id="ambient-volume" min="0" max="100" value="40" aria-label="Volume dos sons ambiente" oninput="setAmbientVolume(this.value)">
               </div>
-              <input type="range" class="ambient-volume" id="ambient-volume" min="0" max="100" value="40" aria-label="Volume dos sons ambiente" oninput="setAmbientVolume(this.value)">
-            </div>
+            </details>
 
-            <!-- Participantes -->
-            <div class="room-card">
-              <h2>👥 Participantes</h2>
-              <div class="participants-grid" id="participants-grid"></div>
-            </div>
+            <!-- Participantes (colapsável) -->
+            <details class="collapsible">
+              <summary>👥 Participantes</summary>
+              <div class="collapsible-body">
+                <div class="participants-grid" id="participants-grid"></div>
+              </div>
+            </details>
 
             <!-- Todo List -->
             <div class="todo-section">
