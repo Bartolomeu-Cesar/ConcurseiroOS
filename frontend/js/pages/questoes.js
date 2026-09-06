@@ -1688,6 +1688,19 @@ async function aplicarLote() {
   if (materia) atualizar.materia = materia;
   if (topico) atualizar.topico = topico;
 
+  // Ação em MASSA: confirma antes de aplicar, informando o alvo da alteração.
+  const alvoTxt = [materia && `disciplina "${materia}"`, topico && `tópico "${topico}"`]
+    .filter(Boolean).join(' e ');
+  const filtroTxt = tipo === 'sem_materia'
+    ? 'todas as questões SEM disciplina'
+    : 'as questões da data selecionada' + (banca ? ` (banca ${banca})` : '');
+  const ok = await confirmModal(
+    'Aplicar vinculação em lote',
+    `Isto vai definir ${alvoTxt} em ${filtroTxt}. A alteração afeta várias questões de uma vez. Deseja continuar?`,
+    { type: 'warning', confirmText: 'Aplicar', cancelText: 'Cancelar' }
+  );
+  if (!ok) return;
+
   try {
     const res = await fetch('/api/questoes/vincular-lote', {
       method: 'PUT',
