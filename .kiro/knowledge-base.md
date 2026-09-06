@@ -1504,3 +1504,36 @@ Total layout até aqui: **L1–L9**, SW **v243 → v260**. Tudo via `main.css`, 
 Total layout até aqui: **L1–L11**, SW **v243 → v262**. Sempre via `main.css`, sem tocar HTML.
 Padrão de destaque adotado: hover/ativo em `rgba(203,166,247,0.08–0.14)` (mauve) no dark e
 `rgba(136,57,239,...)` no light; foco com anel `color-mix(var(--accent) ~22-25%)`.
+
+
+---
+
+## 14. SESSÃO 06/09/2026 — Embaralhamento NÃO-determinístico (muda a cada abertura)
+
+**Mudança de comportamento (a pedido):** em "Resolver Questões", o embaralhamento de
+alternativas agora muda A CADA ABERTURA (antes era fixo por `hash(user_id-questao_id)`).
+
+**Como funciona (validação continua 100% server-side):**
+1. `_embaralhar_alternativas(questao, user_id, seed=None)` — se `seed` é fornecida, usa
+   `random.Random(seed)`; se None, usa a semente determinística legada. Retorna também a
+   `seed` efetivamente usada.
+2. `GET /api/questoes/{id}?embaralhar=true&seed=N` propaga a seed; o retorno inclui `seed`.
+3. `POST /api/questoes/{id}/responder` — `QuestaoResposta` ganhou `seed:int|None`; quando
+   `embaralhada=true`, o backend reconstrói a MESMA permutação com a `seed` recebida para
+   remapear a letra escolhida → letra original e validar. **Nunca confia em `resposta_correta`
+   do cliente.**
+4. Frontend `questoes.js` `showQuestao`: gera `seed = Math.floor(Math.random()*2147483647)`
+   por abertura, busca `?embaralhar=true&seed=`, guarda `currentQuestao.seed`;
+   `confirmarResposta` envia `seed`.
+
+**Retrocompatível:** sem `seed`, tudo mantém o comportamento determinístico anterior — os
+demais fluxos (Daily Challenge, Study Room, Viewer, Batalha) continuam servindo/validando
+sem seed e passaram nos testes sem alteração.
+
+**Testes** (`test_questao_embaralhar_responder.py`): seeds diferentes → ordens diferentes;
+responder com a seed valida na ordem exibida (grava letra original); letra errada erra;
+sem seed permanece determinístico. Total 20 testes de embaralhamento passando (9+4+3+4).
+SW v262 → v263.
+
+**Se quiser estender o não-determinístico** aos outros fluxos (Daily/StudyRoom/Viewer):
+basta gerar seed no frontend e enviá-la no GET e no POST, igual ao Resolver Questões.
