@@ -23,6 +23,7 @@ import { loadDesafioDiarioCard } from './desafio.js';
 import { handleAuthNav } from '../../modules/auth.js';
 import { renderCatStartCard } from '../../modules/cat-session.js';
 import { renderAnxietyCard } from '../../modules/anxiety-exposure.js';
+import { renderTecnicasEvidencia } from '../../modules/tecnicas-evidencia.js';
 import { confirmModal, alertModal, toast, escapeHtml, escapeAttr } from '../../modules/utils.js';
 
 // ===== Dashboard Tab Navigation =====
@@ -1075,6 +1076,7 @@ function loadActivePanel() {
       // Render Anxiety Management card
       const anxietyContainer = document.getElementById('anxiety-container');
       if (anxietyContainer) renderAnxietyCard(anxietyContainer);
+      renderTecnicasEvidencia();
       loadFeynmanMaterias();
       loadPontosFragcos();
       loadConexoes();
