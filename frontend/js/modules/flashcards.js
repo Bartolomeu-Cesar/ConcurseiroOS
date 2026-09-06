@@ -160,9 +160,30 @@ export function setFlashConfidence(level) {
   });
 }
 
+// Mostra um skeleton de carregamento na área do card enquanto a fila é buscada.
+function _showFlashSkeleton() {
+  const q = document.getElementById('flash-question');
+  const a = document.getElementById('flash-answer');
+  const rb = document.getElementById('flash-reveal-btn');
+  const rv = document.getElementById('flash-review-btns');
+  if (a) a.style.display = 'none';
+  if (rb) rb.style.display = 'none';
+  if (rv) rv.style.display = 'none';
+  if (q) {
+    q.innerHTML = `
+      <div class="flash-skeleton" aria-hidden="true">
+        <div class="sk-line"></div>
+        <div class="sk-line sk-short"></div>
+        <div class="sk-btn"></div>
+      </div>
+      <span class="sr-only" role="status" aria-live="polite">Carregando revisão…</span>`;
+  }
+}
+
 export async function loadFlashcardsToday() {
   try {
     _currentFilterMateria = ''; // Reset filtro de matéria
+    _showFlashSkeleton();
     flashcardsToday = await fetch('/api/flashcards/today').then(r => r.json());
     currentFlashIndex = 0;
 
@@ -225,6 +246,26 @@ function showCurrentFlashcard() {
   } else if (progressEl) { progressEl.style.display = 'none'; }
   if (currentFlashIndex >= pendentes) {
     const doneAll = _flashReviewedToday + currentFlashIndex;
+
+    // Empty state real: nunca houve card para revisar hoje (fila vazia e nada
+    // revisado) e não é uma sessão filtrada por matéria. Em vez de "Parabéns, 0
+    // revisados" (confuso), orienta o aluno com ações claras.
+    if (doneAll === 0 && !_currentFilterMateria) {
+      q.innerHTML = `
+        <div class="flash-empty">
+          <span class="fe-icon">🗂️</span>
+          <div class="fe-title">Nenhum flashcard para revisar hoje</div>
+          <div class="fe-sub">Crie novos cards ou faça uma sessão avulsa para praticar agora.</div>
+          <div class="fe-actions">
+            <button class="fe-btn" onclick="document.getElementById('flash-pergunta')?.scrollIntoView({behavior:'smooth',block:'center'});document.getElementById('flash-pergunta')?.focus();">➕ Criar flashcard</button>
+            <button class="fe-btn fe-btn-alt" onclick="iniciarSessaoFlash('aleatorio')">🎲 Estudar todos</button>
+          </div>
+        </div>`;
+      a.style.display = 'none'; rb.style.display = 'none'; rv.style.display = 'none';
+      if (progressEl) progressEl.style.display = 'none';
+      return;
+    }
+
     // Distributed Summary: prompt de 1 frase ao final da sessão
     // Evidência: Rawson & Dunlosky (2022) — Resumir distribuído consolida mais que resumir uma vez
     const summaryPrompt = doneAll >= 3 ? `
