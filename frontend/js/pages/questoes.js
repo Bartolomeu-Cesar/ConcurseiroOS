@@ -239,6 +239,21 @@ async function loadQuestoesResolver() {
 window.loadQuestoesResolver = loadQuestoesResolver;
 
 function showQuestao(q) {
+  // Aleatorização das alternativas (anti-decoreba de letra): busca a versão com
+  // alternativas embaralhadas de forma determinística (semente user+questão). O
+  // backend também valida a resposta nessa mesma ordem (flag embaralhada no POST).
+  // Fallback: se a busca falhar, usa a questão original (ordem do banco).
+  if (q && q.id && !q._embaralhado) {
+    fetch(`/api/questoes/${q.id}?embaralhar=true`)
+      .then(r => r.ok ? r.json() : null)
+      .then(emb => {
+        const alvo = emb ? { ...emb, _embaralhado: true } : { ...q, _embaralhado: true };
+        showQuestao(alvo);
+      })
+      .catch(() => showQuestao({ ...q, _embaralhado: true }));
+    return;
+  }
+
   currentQuestao = q;
   respondida = false;
   questaoStartTime = Date.now();
@@ -364,7 +379,7 @@ async function confirmarResposta() {
   const resp = await fetch(`/api/questoes/${currentQuestao.id}/responder`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ resposta: letra, tempo_segundos: tempoSegundos })
+    body: JSON.stringify({ resposta: letra, tempo_segundos: tempoSegundos, embaralhada: !!currentQuestao.embaralhada })
   });
   if (resp.status === 403) {
     const err = await resp.json().catch(() => ({}));

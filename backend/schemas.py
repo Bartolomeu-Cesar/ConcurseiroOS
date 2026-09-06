@@ -97,6 +97,11 @@ class QuestaoResposta(BaseModel):
     resposta: str
     tempo_segundos: int = 0
     confianca: int | None = None  # 1=chutei, 2=acho que sei, 3=certeza
+    # Se True, a questão foi servida com alternativas EMBARALHADAS (mesma semente
+    # determinística por user+questão). O backend reaplica o embaralhamento para
+    # comparar a resposta com o gabarito NA ORDEM QUE O USUÁRIO VIU. Default False
+    # preserva o comportamento de todos os fluxos que servem na ordem original.
+    embaralhada: bool = False
 
 
 # ============================================================
@@ -361,6 +366,9 @@ class QuestaoResponse(BaseModel):
     dificuldade: str = "Médio"
     banca: str = ""
     created_at: str
+    # Quando a questão é servida com ?embaralhar=true (alternativas reordenadas):
+    embaralhada: bool = False
+    mapeamento: dict = {}  # nova_letra -> letra_original (para o cliente, se precisar)
 
 
 class QuestaoRespostaResponse(BaseModel):

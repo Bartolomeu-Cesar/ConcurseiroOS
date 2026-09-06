@@ -401,11 +401,11 @@ def responder_questao(id: int, body: QuestaoResposta, conn=Depends(get_db_sessio
     from plans import enforce_plan_limit
     enforce_plan_limit(conn, user_id, "questoes_dia")
 
-    questao = conn.execute("SELECT resposta_correta, materia FROM questoes WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
+    questao = conn.execute("SELECT * FROM questoes WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
     if not questao:
         raise HTTPException(status_code=404, detail="Questão não encontrada")
 
-    gabarito = (questao[0] or "").strip().upper()
+    gabarito = (questao["resposta_correta"] or "").strip().upper()
     # Sem gabarito cadastrado: NÃO registrar resposta nem contabilizar como erro.
     # Antes, a comparação com string vazia marcava SEMPRE "errou", independente da
     # alternativa escolhida. Retorna sinal explícito para o frontend avisar.
@@ -417,11 +417,24 @@ def responder_questao(id: int, body: QuestaoResposta, conn=Depends(get_db_sessio
             "mensagem": "Esta questão está sem gabarito cadastrado, então não é possível corrigir. Importe o gabarito para respondê-la.",
         }
 
+    resposta_usuario = body.resposta.upper()
+    # Se a questão foi servida EMBARALHADA (Opção A), o usuário viu as alternativas
+    # numa ordem determinística (semente user+questão). Reaplicamos o mesmo
+    # embaralhamento para: (a) comparar a resposta com o gabarito NA ORDEM EXIBIDA e
+    # (b) traduzir a letra escolhida de volta para a letra ORIGINAL antes de gravar
+    # (mantém o banco/relatórios coerentes com a ordem canônica das alternativas).
+    if getattr(body, "embaralhada", False):
+        emb = _embaralhar_alternativas(dict(questao), user_id)
+        if emb.get("embaralhada"):
+            gabarito = (emb.get("resposta_correta") or "").strip().upper()
+            mapeamento = emb.get("mapeamento", {})  # nova_letra -> letra_original
+            resposta_usuario = (mapeamento.get(resposta_usuario) or resposta_usuario).upper()
+
     acertou = 1 if body.resposta.upper() == gabarito else 0
     conn.execute("""
         INSERT INTO questoes_respostas (questao_id, resposta_usuario, acertou, tempo_segundos, confianca, data, user_id)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (id, body.resposta, acertou, body.tempo_segundos, body.confianca, today_str(), user_id))
+    """, (id, resposta_usuario, acertou, body.tempo_segundos, body.confianca, today_str(), user_id))
     update_streak(conn, "questoes_resolvidas", user_id=user_id)
 
     # Registrar tempo como sessão de estudo (se > 10 segundos)
@@ -495,7 +508,9 @@ def responder_questao(id: int, body: QuestaoResposta, conn=Depends(get_db_sessio
     except Exception:
         pass
 
-    result = {"acertou": bool(acertou), "resposta_correta": questao[0]}
+    # `gabarito` já reflete a ordem EXIBIDA (remapeado quando embaralhada; original
+    # caso contrário) — o frontend usa para destacar a alternativa correta na tela.
+    result = {"acertou": bool(acertou), "resposta_correta": gabarito}
     if blocked_alert:
         result["alerta"] = blocked_alert
     return result
