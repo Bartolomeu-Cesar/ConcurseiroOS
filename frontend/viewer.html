@@ -10,13 +10,23 @@
     /* Page-specific: viewer — override base body styles */
     body { padding: 0; display: flex; flex-direction: column; height: 100vh; }
     #toolbar {
-      display: flex; align-items: center; gap: 12px;
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
       padding: 8px 16px; background: var(--bg-surface); flex-shrink: 0;
     }
     #toolbar a { color: var(--blue); text-decoration: none; font-size: 0.9rem; }
     #toolbar a:hover { text-decoration: underline; }
-    #title { flex: 1; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #title { flex: 1; min-width: 120px; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     #page-info { font-size: 0.85rem; color: var(--green); white-space: nowrap; }
+    #study-tools { flex-wrap: wrap; }
+    /* Mobile: a toolbar tem 14+ controles; sem wrap estourava a largura em 375px.
+       Aqui compactamos gaps/paddings e deixamos o título ocupar a 1ª linha inteira,
+       com os controles fluindo em linhas seguintes. */
+    @media (max-width: 640px) {
+      #toolbar { gap: 6px; padding: 6px 10px; }
+      #title { flex: 1 0 100%; order: -1; }
+      #study-tools { gap: 4px; }
+      #study-tools button, #study-tools select { padding: 4px 6px !important; }
+    }
     #timer-display {
       font-size: 0.95rem; font-weight: 700; color: var(--red);
       min-width: 72px; text-align: center;
