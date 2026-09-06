@@ -1,7 +1,7 @@
 // ==================== TAB 4: FLASHCARDS ====================
 import { escapeHtml, toast, showLoading, showEmpty, api, undoableDelete, confirmModal } from './utils.js';
 import { switchTab } from './tabs.js';
-import { showFlashcardXp } from './xp-notify.js';
+import { showFlashcardXp, celebrateMilestone } from './xp-notify.js';
 import { emit } from './event-bus.js';
 
 let flashcardsToday = [], currentFlashIndex = 0;
@@ -634,6 +634,9 @@ export async function reviewFlashcard(quality) {
 
     // XP real-time feedback
     showFlashcardXp(quality);
+
+    // Celebração de marco: primeiro flashcard revisado (uma única vez).
+    celebrateMilestone('primeiro_flashcard');
 
     // Emitir evento para integração cross-module
     emit('flashcard:revisado', { materia: card.materia, quality, acertou: quality >= 3 });

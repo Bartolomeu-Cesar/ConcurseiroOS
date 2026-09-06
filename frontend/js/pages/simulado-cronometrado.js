@@ -2,6 +2,7 @@
 
 import { confirmModal, alertModal, promptModal, escapeHtml } from '../modules/utils.js';
 import { toast } from '../modules/toast.js';
+import { celebrateMilestone } from '../modules/xp-notify.js';
 
 // ==================== STATE ====================
 let examState = {
@@ -357,6 +358,8 @@ async function finalizarProva() {
 
     const data = await res.json();
     showResults(data);
+    // Celebração de marco: primeiro simulado concluído (uma única vez).
+    celebrateMilestone('primeiro_simulado');
   } catch (e) {
     toast('Erro de conexão: ' + e.message, 'error');
   }

@@ -221,6 +221,14 @@
     const elStreak = document.getElementById('sidebar-streak');
     if (elStreak) elStreak.textContent = data.streak || 0;
 
+    // Celebração de marcos de streak (uma vez cada, via localStorage no helper).
+    // Usa o valor REAL vindo do backend (/api/sidebar-data).
+    if (typeof window.celebrateMilestone === 'function') {
+      const st = data.streak || 0;
+      if (st >= 30) window.celebrateMilestone('streak_30');
+      else if (st >= 7) window.celebrateMilestone('streak_7');
+    }
+
     // Level
     const elXp = document.getElementById('sidebar-xp');
     if (elXp) elXp.textContent = `⭐ Nv.${data.nivel || 1}`;
