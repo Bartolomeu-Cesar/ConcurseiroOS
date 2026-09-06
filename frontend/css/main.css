@@ -479,7 +479,11 @@ body.sidebar-collapsed .main-content { margin-left: 60px; width: calc(100% - 60p
 .card {
   background: var(--bg-surface); border-radius: var(--radius-lg);
   padding: var(--space-5); display: flex; flex-direction: column; gap: var(--space-1);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
+.card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
 .card-label { font-size: 0.78rem; color: var(--text-sub); text-transform: uppercase; font-weight: 600; }
 .card-value { font-size: 1.6rem; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
 .card-value.green { color: var(--green); }
@@ -488,7 +492,8 @@ body.sidebar-collapsed .main-content { margin-left: 60px; width: calc(100% - 60p
 .card-value.peach { color: var(--peach); }
 .card-sub { font-size: 0.78rem; color: var(--text-muted); }
 
-.stat-card { background: var(--bg-surface); border-radius: 10px; padding: 14px; text-align: center; }
+.stat-card { background: var(--bg-surface); border-radius: 10px; padding: var(--space-4); text-align: center; border: 1px solid var(--border); box-shadow: var(--shadow-sm); transition: transform 0.2s ease, box-shadow 0.2s ease; }
+.stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
 .stat-value, .stat-card .stat-num { font-size: 1.5rem; font-weight: 700; color: var(--blue); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
 .stat-label, .stat-card .stat-lbl { font-size: 0.72rem; color: var(--text-sub); margin-top: 2px; }
 
@@ -497,9 +502,11 @@ body.sidebar-collapsed .main-content { margin-left: 60px; width: calc(100% - 60p
 .panel {
   background: var(--bg-surface); border-radius: var(--radius-lg);
   padding: var(--space-6); margin-bottom: var(--space-4);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
-.panel:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+.panel:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
 .panel h2 { font-size: 1.05rem; color: var(--accent); margin-bottom: 12px; }
 .panel h3 { font-size: 0.95rem; color: var(--blue); margin-bottom: 8px; }
 
