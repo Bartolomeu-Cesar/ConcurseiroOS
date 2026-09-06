@@ -1431,3 +1431,46 @@ com `node --check`/`pytest` → commit → push). SW final: **v251**.
   estão no precache; `js/pages/*.js` NÃO estão). Faixa desta sessão: v243 → v251.
 - Toda alteração de fetch: disabled+loading no botão, `res.ok`, toast de erro, e preservar
   input do usuário em caso de falha.
+
+
+---
+
+## 13. SESSÃO 06/09/2026 — Refino de Layout Global (design system via main.css)
+
+Melhoria de layout aplicada 100% no `frontend/css/main.css` (tokens + classes
+existentes), sem reescrever HTML das telas — todas as 15 telas melhoram juntas.
+Estética: cards flutuantes com elevação sutil, mais respiro, tipografia de sistema,
+ritmo de espaçamento consistente. SW: v251 → **v256** (main.css está no PRECACHE).
+
+### Ondas (cada uma = 1 commit)
+- **L1 Tipografia** (`8070553`): `body` com stack `system-ui, -apple-system, "Segoe UI"…`,
+  `font-size:15px`, `line-height:1.55`, antialiasing/optimizeLegibility. Escala de títulos
+  reforçada (h1 1.6rem/700, h2 1.2rem/700, h3 1rem/600 com letter-spacing negativo sutil).
+  `font-variant-numeric: tabular-nums` em `.card-value` e `.stat-value`/`.stat-num`
+  (métricas e contadores não "dançam").
+- **L2 Espaçamento** (`be25db2`): tokens `--space-1..8` e `--shadow-sm/md/lg` no `:root`.
+  `.cards`/`.stats-grid`/`.card`/`.panel` passaram a usar `--space-*` (mais respiro);
+  `stats-grid` min subiu para 160px.
+- **L3 Elevação** (`3dfd169`): `.panel`, `.card` e `.stat-card` ganharam `border:1px solid
+  var(--border)` + `box-shadow: var(--shadow-sm)` em repouso e `translateY(-2px)` +
+  `--shadow-md` no hover — "cards flutuantes" que se destacam do fundo. No light-theme
+  `--border:#bcc0cc` deixa a borda bem visível; sombras suaves funcionam nos dois temas.
+- **L4 Telas grandes** (`5a76305`): `@media (min-width:1600px)` aumenta padding do conteúdo
+  e o `min` das grids (cards 220px, stats 180px). **Decisão importante:** NÃO usei
+  `max-width` centralizado em `#page-content` porque `.main-content` tem DUPLO USO — é o
+  container flex do shell (index) E o wrapper de página em dashboard/questoes/vademecum/
+  simulado/studyroom. Centralizar filhos ali causaria layout inconsistente. A abordagem por
+  grids é segura e resolve o "esticado" em monitores largos.
+- **L5 Botões/Inputs/Modais** (`b10dfa1`): `.btn` com `--shadow-sm` + hover
+  `translateY(-1px)`+`--shadow-md` + active (feedback de profundidade). `.form-group
+  input/select/textarea` com anel de foco `box-shadow: 0 0 0 3px color-mix(in srgb,
+  var(--accent) 25%, transparent)`. `.modal` com borda + `--shadow-lg`.
+
+### Notas para futuras mudanças de layout
+- Sanity check a cada edição: contagem de chaves `{` == `}` no main.css (estava 858/858).
+- `main.css` está no PRECACHE do SW → SEMPRE bump `CACHE_VERSION` ao editá-lo.
+- CUIDADO com `.main-content`/`#page-content`: têm duplo papel (shell vs. wrapper de página).
+  Evitar regras que assumam um único papel. Telas full-width: simulado (`.crono-app`),
+  batalha (`.battle-container`), viewer (leitor PDF).
+- Tokens disponíveis agora: `--space-1..8`, `--shadow-sm/md/lg`, além dos `--radius-*` e
+  cores semânticas. Preferir tokens a valores soltos em novas telas.
