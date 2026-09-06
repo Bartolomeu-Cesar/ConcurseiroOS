@@ -1,6 +1,6 @@
 // simulado-cronometrado.js — ES module extracted from simulado-cronometrado.html
 
-import { confirmModal, alertModal, promptModal } from '../modules/utils.js';
+import { confirmModal, alertModal, promptModal, escapeHtml } from '../modules/utils.js';
 import { toast } from '../modules/toast.js';
 
 // ==================== STATE ====================
@@ -29,8 +29,8 @@ async function loadMaterias() {
     }
     grid.innerHTML = materias.map(m => `
       <label>
-        <input type="checkbox" class="cfg-mat-cb" value="${m}" checked>
-        ${m}
+        <input type="checkbox" class="cfg-mat-cb" value="${escapeHtml(m)}" checked>
+        ${escapeHtml(m)}
       </label>
     `).join('');
   } catch (e) {
@@ -233,17 +233,17 @@ function showQuestion(index) {
   const html = `
     <div class="exam-q-header">
       <span class="exam-q-num">#${q.num}</span>
-      <span class="exam-q-materia">${q.materia || 'Geral'}</span>
+      <span class="exam-q-materia">${escapeHtml(q.materia || 'Geral')}</span>
       <button class="exam-q-flag ${flagged ? 'active' : ''}" onclick="toggleFlag(${q.id})" title="Marcar para revisão">
         🚩 ${flagged ? 'Marcada' : 'Revisar'}
       </button>
     </div>
-    <div class="exam-enunciado">${q.enunciado}</div>
+    <div class="exam-enunciado">${escapeHtml(q.enunciado)}</div>
     <div class="exam-alternativas">
       ${q.alternativas.map(a => `
         <div class="exam-alt ${selected === a.letra ? 'selected' : ''}" onclick="selectAnswer(${q.id}, '${a.letra}', this)">
-          <span class="exam-alt-letter">${a.letra})</span>
-          <span class="exam-alt-text">${a.texto}</span>
+          <span class="exam-alt-letter">${escapeHtml(a.letra)})</span>
+          <span class="exam-alt-text">${escapeHtml(a.texto)}</span>
         </div>
       `).join('')}
     </div>
@@ -389,7 +389,7 @@ function showResults(data) {
     const color = pct >= 70 ? 'var(--crono-green)' : pct >= 50 ? 'var(--crono-yellow)' : 'var(--crono-red)';
     return `
       <div class="materia-bar">
-        <span class="mat-name" title="${m.materia}">${m.materia}</span>
+        <span class="mat-name" title="${escapeHtml(m.materia)}">${escapeHtml(m.materia)}</span>
         <div class="mat-bar-bg">
           <div class="mat-bar-fill" style="width:${pct}%;background:${color};"></div>
         </div>
@@ -498,15 +498,15 @@ function showGabarito(questoes) {
       <div style="background:var(--crono-surface);border-radius:10px;padding:16px;margin-bottom:10px;border-left:4px solid ${borderColor};">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
           <span style="font-weight:700;color:var(--crono-accent);">#${q.num}</span>
-          <span style="font-size:0.78rem;background:var(--crono-elevated);padding:2px 8px;border-radius:10px;color:var(--crono-text-sub);">${q.materia}</span>
+          <span style="font-size:0.78rem;background:var(--crono-elevated);padding:2px 8px;border-radius:10px;color:var(--crono-text-sub);">${escapeHtml(q.materia)}</span>
           <span style="margin-left:auto;font-size:0.85rem;">${icon}</span>
         </div>
-        <p style="font-size:0.88rem;line-height:1.5;margin-bottom:8px;color:var(--crono-text);">${q.enunciado.substring(0, 200)}${q.enunciado.length > 200 ? '...' : ''}</p>
+        <p style="font-size:0.88rem;line-height:1.5;margin-bottom:8px;color:var(--crono-text);">${escapeHtml(q.enunciado.substring(0, 200))}${q.enunciado.length > 200 ? '...' : ''}</p>
         <div style="font-size:0.82rem;display:flex;gap:14px;color:var(--crono-text-sub);">
           <span>Sua: <strong style="color:${acertou ? 'var(--crono-green)' : 'var(--crono-red)'};">${respondeu}</strong></span>
           <span>Correta: <strong style="color:var(--crono-green);">${correta}</strong></span>
         </div>
-        ${q.explicacao ? `<p style="font-size:0.8rem;color:var(--crono-text-sub);margin-top:8px;padding-top:8px;border-top:1px solid var(--crono-border);"><em>💡 ${q.explicacao}</em></p>` : ''}
+        ${q.explicacao ? `<p style="font-size:0.8rem;color:var(--crono-text-sub);margin-top:8px;padding-top:8px;border-top:1px solid var(--crono-border);"><em>💡 ${escapeHtml(q.explicacao)}</em></p>` : ''}
       </div>
     `;
   });
