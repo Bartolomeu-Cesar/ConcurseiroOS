@@ -51,7 +51,7 @@ function getSelectedMaterias() {
 }
 
 // ==================== START EXAM ====================
-window.iniciarSimulado = async function() {
+window.iniciarSimulado = async function(btn) {
   const titulo = document.getElementById('cfg-titulo').value.trim() || `Simulado Cronometrado ${new Date().toLocaleDateString('pt-BR')}`;
   const tempo = parseInt(document.getElementById('cfg-tempo').value);
   const questoes = parseInt(document.getElementById('cfg-questoes').value);
@@ -68,6 +68,8 @@ window.iniciarSimulado = async function() {
     dificuldade_mix: { facil, medio, dificil },
   };
 
+  const prevHtml = btn ? btn.innerHTML : null;
+  if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Gerando prova...'; }
   try {
     const res = await fetch('/api/simulados/cronometrado', {
       method: 'POST',
@@ -85,6 +87,8 @@ window.iniciarSimulado = async function() {
     startExam(data);
   } catch (e) {
     toast('Erro de conexão: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = prevHtml; }
   }
 };
 

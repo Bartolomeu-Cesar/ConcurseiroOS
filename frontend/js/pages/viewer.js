@@ -622,7 +622,10 @@ function toggleSidePanel() {
 
 async function loadSidePanelQuestions() {
   const body = document.getElementById('side-panel-body');
-  
+  // Feedback de carregamento enquanto busca vínculos + questões (pode envolver
+  // várias requisições, incluindo o embaralhamento por questão).
+  if (body) body.innerHTML = '<div class="sp-empty" style="text-align:center;padding:20px;color:var(--text-sub);">⏳ Carregando questões…</div>';
+
   // Tentar identificar a matéria pelo nome do PDF
   const pdfName = name.toLowerCase();
   
