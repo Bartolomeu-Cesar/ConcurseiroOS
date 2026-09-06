@@ -1304,3 +1304,38 @@ fora de escopo, risco de ruído no diff).
   respeitada com AVISO (não sobrescreve config do operador). Ação de DEPLOY, não de
   código: trocar o JWT_SECRET do ambiente (30 bytes) por `secrets.token_hex(32)` OU
   remover a env var para usar o arquivo `.jwt_secret` auto-gerado (32 bytes fortes).
+
+
+### 11.11 AGENDADO — Estender embaralhamento de alternativas aos fluxos restantes
+
+**Contexto:** a aleatorização de alternativas (Opção A — servir embaralhado via
+`GET /api/questoes/{id}?embaralhar=true` + validar com a flag `embaralhada` no
+`POST /api/questoes/{id}/responder`, que reaplica `_embaralhar_alternativas` de forma
+determinística por user+questão) já está ATIVA em: **Resolver questões**
+(`pages/questoes.js`), **Questões do Dia** (`modules/questoes.js`) e **Batalha PvP**
+(que já tinha embaralhamento próprio em `batalha/gameplay.py` e `crud.py`).
+
+**Pendente (agendado para próxima sessão)** — 3 fluxos que servem/corrigem a questão de
+forma própria e por isso NÃO foram alterados (cada um exige abordagem distinta e mais
+cuidado para não regredir):
+
+1. **Daily Challenge** (`dashboard/treinador.js` → `responderDailyChallenge`): a questão
+   vem embutida na resposta do endpoint `/api/daily-challenge` (não via `/api/questoes/{id}`).
+   Correção usa `res.resposta_correta` do backend. Abordagem sugerida: embaralhar NO
+   BACKEND do endpoint `/api/daily-challenge` (reusar `_embaralhar_alternativas`) e, ao
+   responder, enviar `embaralhada:true`. Simples e o mais recomendado como próximo passo.
+
+2. **Study Room** (`pages/studyroom.js` → `answerSrQuestao`): usa array interno
+   `srQuestoes[srQIdx]`, render próprio das opções, correção via `data.acertou`.
+   Abordagem: servir embaralhado sob demanda (padrão do `showQuestao`/`showQuestaoDia`) e
+   enviar `embaralhada:true`. Verificar de onde `srQuestoes` é populado.
+
+3. **Viewer / questões no PDF** (`pages/viewer.js`): a correção é client-side via
+   `question.dataset.correct` (data-attribute). Precisa remapear o `data-correct` para a
+   ordem embaralhada além de servir embaralhado. É o mais acoplado dos três.
+
+**Padrão de referência já implementado** (copiar): `showQuestao` em `pages/questoes.js`
+busca `?embaralhar=true`, marca `_embaralhado=true`, re-renderiza com fallback à ordem
+original; `confirmarResposta` envia `embaralhada:!!currentQuestao.embaralhada`. O backend
+já é retrocompatível (flag default False). Simulado (`/api/simulados/{id}/responder`) usa
+endpoint próprio e ficou fora do escopo — avaliar separadamente se fizer sentido.
