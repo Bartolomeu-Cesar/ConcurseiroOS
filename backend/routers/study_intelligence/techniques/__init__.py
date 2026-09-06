@@ -19,6 +19,7 @@ from fastapi import APIRouter
 
 from .banca import router as banca_router
 from .closedbook import router as closedbook_router
+from .elaborative_chain import router as elaborative_chain_router
 from .encoding import router as encoding_router
 from .intentions import router as intentions_router
 from .interpolated import router as interpolated_router
@@ -44,3 +45,4 @@ router.include_router(jol_router)
 router.include_router(closedbook_router)
 router.include_router(interpolated_router)
 router.include_router(rif_router)
+router.include_router(elaborative_chain_router)
