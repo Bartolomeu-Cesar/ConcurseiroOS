@@ -1,5 +1,5 @@
 // index.js - Extracted from index.html inline scripts
-import { alertModal } from '../modules/utils.js';
+import { alertModal, escapeHtml, escapeAttr } from '../modules/utils.js';
 
 // ===== Sidebar navigation =====
 function navigateTo(tabId, btn) {
@@ -193,10 +193,10 @@ function loadRecentPdfs() {
       list.innerHTML = data.map(pdf => {
         const pct = pdf.progresso_pct;
         const barColor = pct >= 80 ? 'var(--green, #a6e3a1)' : pct >= 40 ? 'var(--blue, #89b4fa)' : 'var(--yellow, #f9e2af)';
-        return `<a href="viewer.html?path=${encodeURIComponent(pdf.path)}" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg, #1e1e2e);border-radius:8px;text-decoration:none;transition:background 0.2s;cursor:pointer;" onmouseover="this.style.background='var(--bg-elevated, #45475a)'" onmouseout="this.style.background='var(--bg, #1e1e2e)'">
+        return `<a href="viewer.html?path=${encodeURIComponent(pdf.path)}" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg, #1e1e2e);border-radius:8px;text-decoration:none;transition:background 0.2s;cursor:pointer;" title="${escapeAttr(pdf.nome)}" onmouseover="this.style.background='var(--bg-elevated, #45475a)'" onmouseout="this.style.background='var(--bg, #1e1e2e)'">
           <div style="font-size:1.2rem;">📄</div>
           <div style="flex:1;min-width:0;">
-            <div style="font-size:0.82rem;font-weight:600;color:var(--text, #cdd6f4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${pdf.nome}</div>
+            <div style="font-size:0.82rem;font-weight:600;color:var(--text, #cdd6f4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(pdf.nome)}</div>
             <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
               <div style="flex:1;height:4px;background:var(--bg-elevated, #45475a);border-radius:2px;overflow:hidden;">
                 <div style="height:100%;width:${pct}%;background:${barColor};border-radius:2px;"></div>
@@ -207,7 +207,10 @@ function loadRecentPdfs() {
         </a>`;
       }).join('');
     })
-    .catch(() => {});
+    .catch(() => {
+      const list = document.getElementById('recent-pdfs-list');
+      if (list) list.innerHTML = '<div style="color:var(--text-muted, #6c7086);font-size:0.82rem;">Não foi possível carregar os PDFs recentes. Verifique a conexão.</div>';
+    });
 }
 
 function loadUserAvatar() {

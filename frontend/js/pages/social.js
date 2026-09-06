@@ -18,7 +18,8 @@ async function _loadPresenceWidget() {
 if (localStorage.getItem('auth_token')) {
   startPresence();
   _loadPresenceWidget();
-  setInterval(_loadPresenceWidget, 60 * 1000); // Atualiza o widget a cada 60s
+  // Não faz polling quando a aba está em segundo plano (economia de rede/bateria).
+  setInterval(() => { if (!document.hidden) _loadPresenceWidget(); }, 60 * 1000);
 }
 
 // ===== TAB SWITCHING =====
@@ -1091,6 +1092,7 @@ function stopChatPolling() {
 
 // Poll for unread messages badge (every 30s)
 let _unreadPollInterval = setInterval(async () => {
+  if (document.hidden) return; // pausa polling em segundo plano
   try {
     const res = await fetch('/api/social/chat/unread/count');
     const data = await res.json();

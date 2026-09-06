@@ -119,7 +119,7 @@ function enterRoomView(codigo) {
   loadSrFlashcards(); // Load study activities
   updateFocusMode();
   // Refresh focus score every 60s
-  setInterval(() => { if (currentRoom) loadFocusScore(); }, 60000);
+  setInterval(() => { if (currentRoom && !document.hidden) loadFocusScore(); }, 60000);
 }
 
 function sairSala() {
