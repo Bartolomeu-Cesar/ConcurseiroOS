@@ -291,13 +291,8 @@ window.iniciarBatalha = async function() {
 };
 
 function showBatalhaToast(msg, type = 'info') {
-  const t = document.createElement('div');
-  t.style.cssText = 'position:fixed;top:20px;right:20px;padding:12px 20px;border-radius:10px;font-size:0.88rem;z-index:99999;animation:fadeIn 0.3s;max-width:320px;box-shadow:0 4px 12px rgba(0,0,0,0.4);';
-  t.style.background = type === 'error' ? '#f38ba8' : type === 'success' ? '#a6e3a1' : '#89b4fa';
-  t.style.color = '#1e1e2e';
-  t.textContent = msg;
-  document.body.appendChild(t);
-  setTimeout(() => t.remove(), 4000);
+  // Delega ao toast central (toast.js) para consistência visual/tema/acessibilidade.
+  toast(msg, type);
 }
 
 function showNoQuestionsModal(detail) {

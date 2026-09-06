@@ -1,6 +1,6 @@
 // viewer.js — extracted from viewer.html inline script
 // ES module (strict mode by default)
-import { confirmModal, promptModal } from '../modules/utils.js';
+import { confirmModal, promptModal, toast } from '../modules/utils.js';
 import { isLocalPath, obterArquivoLocalPorPath } from '../modules/local-pdfs.js';
 
 const API = '';
@@ -1105,11 +1105,9 @@ function goToPage(page) {
 
 // --- Toast for study tools ---
 function showStudyToast(msg) {
-  const toast = document.createElement('div');
-  toast.style.cssText = 'position:fixed;top:50px;left:50%;transform:translateX(-50%);background:#313244;color:#cdd6f4;padding:10px 20px;border-radius:8px;font-size:0.85rem;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.3);animation:fadeIn 0.3s;';
-  toast.textContent = msg;
-  document.body.appendChild(toast);
-  setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; setTimeout(() => toast.remove(), 300); }, 2500);
+  // Usa o toast central (utils/toast.js) em vez de um toast artesanal, para
+  // manter consistência visual, tema e acessibilidade em todo o app.
+  toast(msg, 'info');
 }
 
 // --- Keyboard shortcuts ---
