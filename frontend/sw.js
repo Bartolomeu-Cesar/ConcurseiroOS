@@ -1,5 +1,5 @@
 // ==================== ConcurseiroOS — Service Worker v6 ====================
-const CACHE_VERSION = 'v250';
+const CACHE_VERSION = 'v251';
 const CACHE_NAME = `concurseiro-${CACHE_VERSION}`;
 const CDN_CACHE = `concurseiro-cdn-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `concurseiro-runtime-${CACHE_VERSION}`;
@@ -22,6 +22,7 @@ const PRECACHE_URLS = [
   '/admin.html',
   '/catalogo.html',
   '/offline.html',
+  '/vendor/chart.umd.min.js',
   '/css/main.css',
   '/js/app.js',
   '/js/modules/auth.js',
