@@ -203,7 +203,7 @@ export async function responderDailyChallenge(qId, letra, btn) {
     const res = await fetch(`/api/questoes/${qId}/responder`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({resposta: letra, tempo_segundos: 0})
+      body: JSON.stringify({resposta: letra, tempo_segundos: 0, embaralhada: true})
     }).then(r => r.json());
     const fb = document.getElementById('daily-feedback');
     fb.style.display = 'block';

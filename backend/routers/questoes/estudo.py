@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from database import get_db_session
 from utils import today_str
 
+from .core import _embaralhar_alternativas
+
 router = APIRouter()
 
 
@@ -28,7 +30,12 @@ def daily_challenge(conn=Depends(get_db_session), user_id: int = Depends(get_use
         return {"message": "Parabéns! Você já respondeu todas as questões disponíveis hoje.", "questao": None}
 
     chosen = random.choice(rows)
-    return {"questao": dict(chosen)}
+    # Embaralha as alternativas de forma determinística por user+questão (mesmo
+    # padrão de `showQuestao`/GET /api/questoes/{id}?embaralhar=true). O frontend
+    # envia `embaralhada:true` ao responder, e o backend reaplica a mesma semente
+    # para corrigir na ordem que o usuário viu.
+    questao = _embaralhar_alternativas(dict(chosen), user_id)
+    return {"questao": questao}
 
 
 @router.get("/api/active-recall/{materia}")
