@@ -1052,6 +1052,15 @@ kbd { display: inline-block; background: #1e1e2e; border: 1px solid #45475a; bor
   .metas-mini { display: none; }
   .cards { grid-template-columns: 1fr; }
   .header { flex-direction: column; align-items: flex-start; gap: 12px; }
+
+  /* Flashcards: tela de revisão confortável no celular (mobile-first, 375px) */
+  #flash-question { font-size: 1.12rem; margin-bottom: 12px; }
+  #flash-answer { font-size: 1rem; padding: 10px 14px; }
+  #flash-card-area { min-height: 150px; }
+  .flash-rate-grid { gap: 6px; }
+  .flash-rate-btn { min-height: 52px; font-size: 0.78rem; }
+  .flash-rate-btn .rate-label { font-size: 0.78rem; }
+  .flash-panel h2 { font-size: 0.98rem; margin-bottom: 12px; }
 }
 
 /* ===== LIGHT THEME (Catppuccin Latte) ===== */
