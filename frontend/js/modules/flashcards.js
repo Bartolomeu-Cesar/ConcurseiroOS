@@ -1899,13 +1899,21 @@ export async function loadRetencaoReal() {
     const tr = d.true_retention;
     const heatmapHtml = _renderHeatmap(d.por_dia);
     const forecastHtml = _renderForecast(d.forecast);
+    // Atividade (30d) + Carga futura (14d) ficam num <details> COLAPSADO por padrão,
+    // para não empurrar o baralho/cards para baixo. Só renderiza se houver conteúdo.
+    const estatColapsavel = (heatmapHtml || forecastHtml)
+      ? `<details class="leitner-estatisticas" style="margin-top:10px;border-top:1px solid var(--border);padding-top:6px;">
+           <summary style="cursor:pointer;font-size:0.72rem;font-weight:600;color:var(--accent);list-style:none;">📈 Estatísticas (atividade e carga futura)</summary>
+           <div style="margin-top:6px;">${heatmapHtml}${forecastHtml}</div>
+         </details>`
+      : '';
     // Sem reviews maduros ainda: orienta o aluno, mas já mostra heatmap/forecast
     // se houver qualquer atividade/carga (estatísticas visuais, item #8).
     if (tr === null || tr === undefined) {
       box.innerHTML = `<div style="font-size:0.68rem;color:var(--text-sub);text-align:center;border-top:1px solid var(--border);padding-top:8px;">
         📈 Retenção real aparece após revisar cards maduros (intervalo ≥ ${d.mature_interval_days || 21} dias).
         ${d.leech_count ? `<br>🩸 ${d.leech_count} card(s) problemático(s)${d.suspensos ? `, ${d.suspensos} suspenso(s)` : ''}.` : ''}
-      </div>${heatmapHtml}${forecastHtml}`;
+      </div>${estatColapsavel}`;
       return;
     }
     const cor = tr >= 90 ? 'var(--green)' : tr >= 80 ? 'var(--yellow)' : 'var(--red)';
@@ -1922,8 +1930,7 @@ export async function loadRetencaoReal() {
             ${d.leech_count ? `<br>🩸 ${d.leech_count} problemático(s)${d.suspensos ? `, ${d.suspensos} suspenso(s)` : ''}` : ''}
           </div>
         </div>
-        ${heatmapHtml}
-        ${forecastHtml}
+        ${estatColapsavel}
         <div style="margin-top:8px;">
           <button onclick="otimizarFSRS()" title="Ajusta o agendador FSRS ao seu histórico de acertos (à la Anki)" style="background:var(--bg);border:1px solid var(--accent);color:var(--accent);border-radius:6px;padding:5px 10px;font-size:0.72rem;font-weight:600;cursor:pointer;">🧠 Otimizar meu FSRS</button>
           <div id="fsrs-pesos-box" style="font-size:0.62rem;color:var(--text-sub);margin-top:4px;"></div>

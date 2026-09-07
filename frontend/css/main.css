@@ -960,6 +960,11 @@ select#timer-select { background: #313244; color: #cdd6f4; border: 1px solid #45
 }
 
 .flash-review-btns { display: flex; gap: 12px; justify-content: center; margin-top: 8px; }
+/* Estatísticas colapsáveis dentro do Sistema Leitner (não empurram o baralho). */
+.leitner-estatisticas > summary { position: relative; padding-left: 16px; }
+.leitner-estatisticas > summary::-webkit-details-marker { display: none; }
+.leitner-estatisticas > summary::before { content: '▸'; position: absolute; left: 0; transition: transform 0.15s; }
+.leitner-estatisticas[open] > summary::before { transform: rotate(90deg); }
 .flash-review-btns button { border: none; border-radius: 8px; padding: 10px 24px; font-size: 0.95rem; font-weight: 600; cursor: pointer; }
 #flash-btn-wrong { background: #f38ba8; color: #1e1e2e; }
 #flash-btn-right { background: #a6e3a1; color: #1e1e2e; }
