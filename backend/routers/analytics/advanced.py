@@ -477,22 +477,93 @@ def raio_x(banca: str = "", materia: str = "", conn=Depends(get_db_session), use
 
 @router.get("/api/analytics/raio-x/prioridades")
 def raio_x_prioridades(banca: str = "", edital_nome: str = "", cargo: str = "", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Prioridades de estudo com score HIGH-YIELD (multi-fator).
+
+    Combina 4 sinais em vez de só frequência+mastery:
+      prioridade = incidência_banca × recência(ano) × (1 − domínio) × peso_erro × risco_esquecimento
+
+    - incidência_banca: quanto a BANCA cobra o tópico (contagem no banco de questões,
+      independente de o usuário ter respondido) — corrige o viés de disponibilidade.
+    - recência: questões de anos recentes pesam mais (tendência atual da banca).
+    - domínio: mastery_level do edital (FSRS) — quanto menos domina, mais prioriza.
+    - peso_erro: taxa de erro do usuário no tópico (se já respondeu).
+    - risco_esquecimento: se a revisão do tópico está vencida/próxima (proxima_revisao).
+
+    Também retorna a TENDÊNCIA temporal (subindo/estável/caindo) por tópico quando há
+    `ano` nas questões. Sem `ano`, cai para incidência simples (fallback transparente).
     """
-    Combines Raio-X frequency data with edital topics to suggest study priorities.
-    Topics that are frequently tested but have low mastery get highest priority.
-    """
-    # Get question frequency per topic from this banca
-    freq_query = "SELECT q.materia, q.topico, COUNT(*) as freq FROM questoes q WHERE q.user_id = ?"
-    freq_params = [user_id]
+    from datetime import date as _date
+
+    ano_atual = _date.today().year
+
+    def _peso_recencia(ano_str):
+        """Peso 0.3..1.0 conforme a recência do ano da questão (janela ~5 anos)."""
+        try:
+            ano = int(str(ano_str)[:4])
+        except (ValueError, TypeError):
+            return None  # sem ano → sinaliza ausência (não distorce)
+        delta = ano_atual - ano
+        if delta <= 0:
+            return 1.0
+        return max(0.3, 1.0 - delta * 0.15)
+
+    # --- Incidência da banca + recência + tendência por (materia, topico) ---
+    inc_query = "SELECT q.materia, q.topico, q.ano FROM questoes q WHERE q.user_id = ?"
+    inc_params = [user_id]
     if banca:
-        freq_query += " AND q.banca = ?"
-        freq_params.append(banca)
-    freq_query += " GROUP BY q.materia, q.topico"
+        inc_query += " AND q.banca = ?"
+        inc_params.append(banca)
+    rows = conn.execute(inc_query, inc_params).fetchall()
 
-    freq_data = conn.execute(freq_query, freq_params).fetchall()
-    freq_map = {(r[0], r[1]): r[2] for r in freq_data}
+    # Estruturas: contagem total, soma ponderada por recência, e por-ano (tendência).
+    incidencia = {}          # (mat,top) -> total de questões (incidência crua)
+    incidencia_recente = {}  # (mat,top) -> soma dos pesos de recência
+    por_ano = {}             # (mat,top) -> {ano: contagem}
+    tem_ano = False
+    for r in rows:
+        key = (r["materia"], r["topico"])
+        incidencia[key] = incidencia.get(key, 0) + 1
+        peso = _peso_recencia(r["ano"])
+        if peso is not None:
+            tem_ano = True
+            incidencia_recente[key] = incidencia_recente.get(key, 0.0) + peso
+            try:
+                ano_i = int(str(r["ano"])[:4])
+                _d_ano = por_ano.setdefault(key, {})
+                _d_ano[ano_i] = _d_ano.get(ano_i, 0) + 1
+            except (ValueError, TypeError):
+                pass
 
-    # Get edital topics with mastery — filter by ciclo ativo if available
+    # --- Desempenho do usuário por (materia, topico) ---
+    perf_rows = conn.execute("""
+        SELECT q.materia, q.topico, COUNT(*) AS respondidas, SUM(qr.acertou) AS acertos
+        FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id
+        WHERE qr.user_id = ?
+        GROUP BY q.materia, q.topico
+    """, (user_id,)).fetchall()
+    perf = {(p["materia"], p["topico"]): (p["respondidas"], p["acertos"] or 0) for p in perf_rows}
+
+    def _tendencia(key):
+        """Classifica subindo/estável/caindo comparando 1ª e 2ª metades dos anos."""
+        anos = por_ano.get(key)
+        if not anos or len(anos) < 2:
+            return "sem_dados"
+        itens = sorted(anos.items())
+        meio = len(itens) // 2
+        antiga = sum(c for _, c in itens[:meio]) or 0
+        recente = sum(c for _, c in itens[meio:]) or 0
+        # Normaliza por nº de anos em cada metade para comparar taxas.
+        na = max(1, meio)
+        nr = max(1, len(itens) - meio)
+        taxa_antiga = antiga / na
+        taxa_recente = recente / nr
+        if taxa_recente > taxa_antiga * 1.2:
+            return "subindo"
+        if taxa_recente < taxa_antiga * 0.8:
+            return "caindo"
+        return "estavel"
+
+    # --- Tópicos do edital (com mastery e revisão) filtrando por ciclo ativo ---
     materias_ciclo = [r[0] for r in conn.execute(
         "SELECT materia FROM ciclo_estudos WHERE ativo = 1 AND user_id = ?", (user_id,)
     ).fetchall()]
@@ -511,29 +582,67 @@ def raio_x_prioridades(banca: str = "", edital_nome: str = "", cargo: str = "", 
         edital_params.extend(materias_ciclo)
 
     topics = conn.execute(f"""
-        SELECT id, materia, topico, status, mastery_level
+        SELECT id, materia, topico, status, mastery_level, proxima_revisao
         FROM edital WHERE {edital_where}
         GROUP BY materia, topico
         ORDER BY materia, topico
     """, edital_params).fetchall()
 
-    # Calculate priority score for each topic
+    max_inc = max(incidencia.values(), default=1) or 1
+    max_inc_rec = max(incidencia_recente.values(), default=1) or 1
+    hoje_iso = today_str()
+
+    def _match_incidencia(materia, topico):
+        """Casa o tópico do edital com as questões (match exato + substring)."""
+        crua = 0.0
+        recente = 0.0
+        for (mat, top), count in incidencia.items():
+            if mat == materia and top and topico and (top == topico or topico.lower() in top.lower() or top.lower() in topico.lower()):
+                crua += count
+                recente += incidencia_recente.get((mat, top), 0.0)
+        # Fallback: se nada casou no tópico, usa a incidência da matéria inteira.
+        if crua == 0:
+            for (mat, top), count in incidencia.items():
+                if mat == materia:
+                    crua += count
+                    recente += incidencia_recente.get((mat, top), 0.0)
+        return crua, recente
+
     priorities = []
     for t in topics:
         mastery = t["mastery_level"] or 0
-        # Find frequency match (fuzzy: check if edital topic appears in question topics)
-        freq = 0
-        for (mat, top), count in freq_map.items():
-            if mat == t["materia"] or (t["topico"] and t["topico"].lower() in top.lower()):
-                freq += count
+        crua, recente = _match_incidencia(t["materia"], t["topico"])
 
-        # Priority formula: high frequency + low mastery = high priority
-        # Normalize: freq_score (0-100), mastery_gap (0-100)
-        max_freq = max((v for v in freq_map.values()), default=1)
-        freq_score = (freq / max_freq) * 100 if max_freq > 0 else 0
+        # Incidência normalizada 0-100 (usa a ponderada por recência quando há ano).
+        if tem_ano:
+            incidencia_score = (recente / max_inc_rec) * 100 if max_inc_rec > 0 else 0
+        else:
+            incidencia_score = (crua / max_inc) * 100 if max_inc > 0 else 0
+
+        # Gap de domínio 0-100.
         mastery_gap = 100 - mastery
 
-        priority_score = round(freq_score * 0.6 + mastery_gap * 0.4, 1)
+        # Peso de erro (0.5..1.0): erra muito → prioriza mais. Sem respostas → 0.75 neutro.
+        key = (t["materia"], t["topico"])
+        respondidas, acertos = perf.get(key, (0, 0))
+        if respondidas > 0:
+            taxa_acerto = acertos / respondidas
+            peso_erro = 0.5 + (1 - taxa_acerto) * 0.5  # 0.5 (acerta tudo) .. 1.0 (erra tudo)
+        else:
+            peso_erro = 0.75
+
+        # Risco de esquecimento (1.0..1.3): revisão vencida sobe a prioridade.
+        risco = 1.0
+        prox = t["proxima_revisao"]
+        if prox and prox <= hoje_iso:
+            risco = 1.3
+        elif prox and prox <= (_date.today() + timedelta(days=3)).isoformat():
+            risco = 1.15
+
+        # Score high-yield: incidência (peso maior) + gap de domínio, modulado por
+        # erro e risco de esquecimento.
+        base = incidencia_score * 0.55 + mastery_gap * 0.45
+        priority_score = round(base * peso_erro * risco, 1)
 
         priorities.append({
             "id": t["id"],
@@ -541,19 +650,25 @@ def raio_x_prioridades(banca: str = "", edital_nome: str = "", cargo: str = "", 
             "topico": t["topico"],
             "status": t["status"],
             "mastery_level": mastery,
-            "frequencia": freq,
+            "frequencia": int(crua),               # incidência crua (retrocompat)
+            "incidencia_banca": int(crua),         # cobrança da banca (independe de respostas)
+            "incidencia_score": round(incidencia_score, 1),
+            "respondidas": respondidas,
+            "taxa_acerto": round((acertos / respondidas * 100), 1) if respondidas > 0 else None,
+            "tendencia": _tendencia(key),
+            "revisao_vencida": bool(prox and prox <= hoje_iso),
             "priority_score": priority_score,
             "recomendacao": "URGENTE" if priority_score >= 70 else "IMPORTANTE" if priority_score >= 40 else "NORMAL"
         })
 
-    # Sort by priority (highest first)
     priorities.sort(key=lambda x: x["priority_score"], reverse=True)
 
     return {
         "prioridades": priorities[:50],  # Top 50
         "total_topicos": len(priorities),
         "banca": banca,
-        "edital_nome": edital_nome
+        "edital_nome": edital_nome,
+        "tem_dados_ano": tem_ano,  # frontend usa para exibir/ocultar tendência
     }
 
 
@@ -574,6 +689,84 @@ def raio_x_bancas(conn=Depends(get_db_session), user_id: int = Depends(get_user_
     """, (user_id,)).fetchall()
 
     return [dict(r) for r in stats]
+
+
+@router.get("/api/analytics/raio-x/insights")
+def raio_x_insights(banca: str = "", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Insights ACIONÁVEIS do Raio-X: transforma os dados em recomendações em texto.
+
+    Gera frases curtas e priorizadas (ex.: tópico de alta incidência e baixo domínio,
+    tendência subindo, revisão vencida, volume alto com retenção caindo). Read-only.
+    Reusa a lógica de prioridades para não duplicar regra de negócio.
+    """
+    prio = raio_x_prioridades(banca=banca, conn=conn, user_id=user_id)
+    prioridades = prio["prioridades"]
+    insights = []
+
+    # 1) Top foco imediato: alta prioridade + baixo domínio.
+    for p in prioridades[:5]:
+        if p["priority_score"] >= 70 and (p["mastery_level"] or 0) < 50:
+            trend_txt = {"subindo": " e está SUBINDO na banca 📈", "caindo": "", "estavel": "", "sem_dados": ""}.get(p["tendencia"], "")
+            insights.append({
+                "tipo": "foco_imediato",
+                "prioridade": "alta",
+                "texto": f"🎯 Foque em **{p['materia']} › {p['topico']}**: alta incidência e você domina só {round(p['mastery_level'] or 0)}%{trend_txt}.",
+            })
+
+    # 2) Tendências de alta (tópicos subindo que você não domina).
+    subindo = [p for p in prioridades if p["tendencia"] == "subindo" and (p["mastery_level"] or 0) < 60]
+    for p in subindo[:3]:
+        insights.append({
+            "tipo": "tendencia",
+            "prioridade": "media",
+            "texto": f"📈 **{p['materia']} › {p['topico']}** vem sendo MAIS cobrado nas provas recentes — e seu domínio está em {round(p['mastery_level'] or 0)}%. Vale antecipar.",
+        })
+
+    # 3) Revisões vencidas de tópicos de alta incidência (risco de esquecer o que cai).
+    vencidas = [p for p in prioridades if p["revisao_vencida"] and p["incidencia_score"] >= 40]
+    for p in vencidas[:3]:
+        insights.append({
+            "tipo": "revisao",
+            "prioridade": "alta",
+            "texto": f"⏰ Revisão VENCIDA de **{p['materia']} › {p['topico']}** — tópico muito cobrado. Revise antes de esquecer.",
+        })
+
+    # 4) Volume alto x retenção caindo (últimos 30 dias) — desacelerar e espaçar.
+    from datetime import date as _d
+    ini = (_d.today() - timedelta(days=30)).isoformat()
+    mid = (_d.today() - timedelta(days=15)).isoformat()
+    vol = conn.execute(
+        "SELECT COUNT(*) AS total, COALESCE(SUM(acertou),0) AS ac FROM questoes_respostas WHERE user_id = ? AND data >= ?",
+        (user_id, ini),
+    ).fetchone()
+    if vol and vol["total"] >= 100:
+        h1 = conn.execute(
+            "SELECT COUNT(*) t, COALESCE(SUM(acertou),0) a FROM questoes_respostas WHERE user_id=? AND data>=? AND data<?",
+            (user_id, ini, mid),
+        ).fetchone()
+        h2 = conn.execute(
+            "SELECT COUNT(*) t, COALESCE(SUM(acertou),0) a FROM questoes_respostas WHERE user_id=? AND data>=?",
+            (user_id, mid),
+        ).fetchone()
+        pct1 = (h1["a"] / h1["t"] * 100) if h1["t"] else 0
+        pct2 = (h2["a"] / h2["t"] * 100) if h2["t"] else 0
+        if h1["t"] and h2["t"] and pct2 < pct1 - 5:
+            insights.append({
+                "tipo": "volume",
+                "prioridade": "media",
+                "texto": f"⚠️ Você fez {vol['total']} questões em 30 dias, mas seu acerto caiu de {round(pct1)}% para {round(pct2)}%. Reduza o volume e aumente o espaçamento/revisão (volume ≠ retenção).",
+            })
+
+    if not insights:
+        insights.append({
+            "tipo": "ok",
+            "prioridade": "baixa",
+            "texto": "✅ Sem alertas críticos. Continue seguindo a tabela de prioridades e mantenha a revisão em dia.",
+        })
+
+    ordem = {"alta": 0, "media": 1, "baixa": 2}
+    insights.sort(key=lambda x: ordem.get(x["prioridade"], 3))
+    return {"insights": insights, "total": len(insights), "banca": banca}
 
 
 # ============================================================
