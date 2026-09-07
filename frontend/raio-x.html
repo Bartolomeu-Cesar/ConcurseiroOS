@@ -307,6 +307,14 @@
       <div class="balance-tags" id="balance-tags"></div>
     </div>
 
+    <!-- Insights acionáveis -->
+    <div class="priorities-section" id="insights-section" style="margin-bottom:24px;">
+      <h3>💡 Insights Acionáveis</h3>
+      <div id="insights-container">
+        <div class="loading-spinner">Analisando...</div>
+      </div>
+    </div>
+
     <!-- Charts Grid -->
     <div class="charts-grid">
       <div class="chart-card">
@@ -331,6 +339,15 @@
           <div class="loading-spinner">Carregando...</div>
         </div>
         <canvas id="chart-bancas" style="display:none;" role="img" aria-label="Gráfico de desempenho por banca"></canvas>
+      </div>
+
+      <div class="chart-card">
+        <h3>🧭 Esforço × Retorno (onde focar)</h3>
+        <p style="font-size:0.75rem;color:var(--text-sub);margin:-8px 0 8px;">Canto inferior-direito = alta incidência + baixo domínio = foco imediato.</p>
+        <div id="quadrant-chart-container">
+          <div class="loading-spinner">Carregando...</div>
+        </div>
+        <canvas id="chart-quadrant" style="display:none;" role="img" aria-label="Quadrante esforço versus retorno"></canvas>
       </div>
     </div>
 

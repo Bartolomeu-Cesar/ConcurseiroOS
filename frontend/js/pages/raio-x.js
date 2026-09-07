@@ -87,7 +87,7 @@
     const params = new URLSearchParams({ banca: banca, edital_nome: '', cargo: '' });
     try {
       const data = await fetchJSON('/api/analytics/raio-x/prioridades?' + params.toString());
-      renderPrioridades(data.prioridades || []);
+      renderPrioridades(data.prioridades || [], !!data.tem_dados_ano);
     } catch (e) {
       console.error('Erro prioridades:', e);
       document.getElementById('priorities-container').innerHTML =
@@ -311,17 +311,27 @@
 
   // ==================== Priorities Table ====================
 
-  function renderPrioridades(prioridades) {
+  function renderPrioridades(prioridades, temDadosAno) {
     var container = document.getElementById('priorities-container');
 
     if (!prioridades.length) {
       container.innerHTML = '<div class="empty-state"><div class="icon">✅</div><p>Nenhuma prioridade identificada — continue praticando!</p></div>';
+      renderQuadrant([]);
       return;
+    }
+
+    function tendenciaHtml(t) {
+      if (t === 'subindo') return '<span title="Cobrança subindo nas provas recentes" style="color:var(--red);font-weight:700;">↑ subindo</span>';
+      if (t === 'caindo') return '<span title="Cobrança caindo" style="color:var(--green);">↓ caindo</span>';
+      if (t === 'estavel') return '<span title="Cobrança estável" style="color:var(--text-sub);">→ estável</span>';
+      return '<span style="color:var(--text-muted);">—</span>';
     }
 
     var html = '<table class="priorities-table">';
     html += '<thead><tr>';
-    html += '<th>Matéria</th><th>Tópico</th><th>Domínio</th><th>Frequência</th><th>Score</th><th>Recomendação</th>';
+    html += '<th>Matéria</th><th>Tópico</th><th>Domínio</th><th>Incidência (banca)</th><th>Seu acerto</th>';
+    if (temDadosAno) html += '<th>Tendência</th>';
+    html += '<th>Score</th><th>Recomendação</th>';
     html += '</tr></thead><tbody>';
 
     prioridades.forEach(function(p) {
@@ -330,11 +340,18 @@
       if (rec.indexOf('URGENTE') !== -1) badgeClass = 'urgente';
       else if (rec.indexOf('IMPORTANTE') !== -1) badgeClass = 'importante';
 
+      var dominio = (p.mastery_level != null ? Math.round(p.mastery_level) + '%' : '-');
+      var incid = (p.incidencia_banca != null ? p.incidencia_banca : (p.frequencia || 0));
+      var acerto = (p.taxa_acerto != null ? p.taxa_acerto + '%' : '<span style="color:var(--text-muted);">n/r</span>');
+      var vencidaBadge = p.revisao_vencida ? ' <span title="Revisão vencida" style="color:var(--red);">⏰</span>' : '';
+
       html += '<tr>';
       html += '<td>' + escapeHtml(p.materia) + '</td>';
-      html += '<td>' + escapeHtml(p.topico) + '</td>';
-      html += '<td>' + escapeHtml(p.mastery_level || '-') + '</td>';
-      html += '<td>' + (p.frequencia || 0) + '</td>';
+      html += '<td>' + escapeHtml(p.topico) + vencidaBadge + '</td>';
+      html += '<td>' + dominio + '</td>';
+      html += '<td>' + incid + '</td>';
+      html += '<td>' + acerto + '</td>';
+      if (temDadosAno) html += '<td>' + tendenciaHtml(p.tendencia) + '</td>';
       html += '<td>' + (p.priority_score != null ? p.priority_score.toFixed(1) : '-') + '</td>';
       html += '<td><span class="rec-badge ' + badgeClass + '">' + escapeHtml(p.recomendacao) + '</span></td>';
       html += '</tr>';
@@ -342,6 +359,93 @@
 
     html += '</tbody></table>';
     container.innerHTML = html;
+
+    renderQuadrant(prioridades);
+  }
+
+  // Quadrante esforço × retorno: X = incidência (o quanto a banca cobra),
+  // Y = domínio (o quanto você sabe). Foco imediato = alta incidência + baixo domínio.
+  var chartQuadrant = null;
+  function renderQuadrant(prioridades) {
+    var container = document.getElementById('quadrant-chart-container');
+    var canvas = document.getElementById('chart-quadrant');
+    if (!canvas) return;
+
+    var pts = (prioridades || []).filter(function(p) {
+      return (p.incidencia_score || 0) > 0 || (p.mastery_level || 0) > 0;
+    });
+    if (!pts.length) {
+      if (container) container.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>Sem dados suficientes</p></div>';
+      canvas.style.display = 'none';
+      return;
+    }
+
+    var dados = pts.slice(0, 40).map(function(p) {
+      return {
+        x: p.incidencia_score || 0,
+        y: p.mastery_level || 0,
+        label: (p.materia || '') + ' › ' + (p.topico || ''),
+        rec: p.recomendacao
+      };
+    });
+    var cores = dados.map(function(d) {
+      // Alta incidência (x>=50) + baixo domínio (y<50) → vermelho (foco).
+      if (d.x >= 50 && d.y < 50) return '#f38ba8';
+      if (d.x >= 50) return '#f9e2af';
+      return '#89b4fa';
+    });
+
+    if (container) container.style.display = 'none';
+    canvas.style.display = 'block';
+    if (chartQuadrant) chartQuadrant.destroy();
+
+    chartQuadrant = new Chart(canvas, {
+      type: 'scatter',
+      data: { datasets: [{ data: dados, backgroundColor: cores, pointRadius: 6, pointHoverRadius: 9 }] },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) {
+                var d = ctx.raw;
+                return d.label + ' — incidência ' + Math.round(d.x) + ', domínio ' + Math.round(d.y) + '%';
+              }
+            }
+          }
+        },
+        scales: {
+          x: { title: { display: true, text: 'Incidência na banca →', color: '#a6adc8' }, min: 0, max: 100, ticks: { color: '#a6adc8' }, grid: { color: 'rgba(69,71,90,0.3)' } },
+          y: { title: { display: true, text: 'Seu domínio →', color: '#a6adc8' }, min: 0, max: 100, ticks: { color: '#a6adc8' }, grid: { color: 'rgba(69,71,90,0.3)' } }
+        }
+      }
+    });
+  }
+
+  // ==================== Insights acionáveis ====================
+  async function loadInsights() {
+    var container = document.getElementById('insights-container');
+    if (!container) return;
+    try {
+      var banca = filterBanca.value;
+      var data = await fetchJSON('/api/analytics/raio-x/insights?banca=' + encodeURIComponent(banca));
+      var insights = data.insights || [];
+      if (!insights.length) {
+        container.innerHTML = '<div class="empty-state"><div class="icon">✅</div><p>Sem alertas.</p></div>';
+        return;
+      }
+      var cor = { alta: 'var(--red)', media: 'var(--yellow)', baixa: 'var(--green)' };
+      container.innerHTML = insights.map(function(i) {
+        var borda = cor[i.prioridade] || 'var(--border)';
+        // Converte **negrito** simples em <strong>.
+        var txt = escapeHtml(i.texto).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        return '<div style="border-left:3px solid ' + borda + ';padding:8px 12px;margin-bottom:8px;background:var(--bg);border-radius:6px;font-size:0.88rem;color:var(--text);">' + txt + '</div>';
+      }).join('');
+    } catch (e) {
+      container.innerHTML = '<div class="empty-state"><div class="icon">⚠️</div><p>Erro ao carregar insights</p></div>';
+    }
   }
 
   function escapeHtml(str) {
@@ -356,6 +460,7 @@
   filterBanca.addEventListener('change', function() {
     loadRaioX();
     loadPrioridades();
+    loadInsights();
   });
 
   filterMateria.addEventListener('change', function() {
@@ -373,6 +478,7 @@
     loadBancas();
     loadPrioridades();
     loadBalance();
+    loadInsights();
   }
 
   init();
