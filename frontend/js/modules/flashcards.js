@@ -39,6 +39,44 @@ function _stopFlashTimer() {
 }
 
 /**
+ * Contabiliza o tempo do card em andamento (se houver) no acumulado da sessão e,
+ * se passar do limiar, registra a sessão no backend. Idempotente: zera o
+ * acumulado após registrar. Usado ao sair da aba / esconder a página, para não
+ * perder o tempo estudado quando o usuário não avaliou o último card.
+ */
+function _flushFlashSession() {
+  if (_flashCardStart) {
+    const elapsed = Math.round((Date.now() - _flashCardStart) / 1000);
+    _flashSessionSeconds += Math.min(elapsed, 300); // cap 5min/card
+    _flashCardStart = null;
+  }
+  if (_flashSessionSeconds > 30) {
+    const horas = Math.round(_flashSessionSeconds / 3600 * 100) / 100;
+    try {
+      fetch('/api/sessoes-estudo/registrar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ horas, materia: 'Flashcards (Revisão)', tipo: 'flashcard' }),
+        keepalive: true, // garante envio mesmo se a aba estiver sendo fechada
+      }).then(() => {
+        emit('sessao:horas', { materia: 'Flashcards (Revisão)', horas, tipo: 'flashcard' });
+      }).catch(() => {});
+    } catch (e) {}
+    _flashSessionSeconds = 0;
+  }
+}
+
+/**
+ * Encerra os timers de flashcard e registra o tempo pendente. Chamado ao trocar
+ * de aba (navigateTo) e no visibilitychange (aba oculta). Sem isso, a barra por
+ * card continuava contando em segundo plano após o usuário sair da revisão.
+ */
+export function _cleanupFlashTimers() {
+  _stopFlashTimer();
+  _flushFlashSession();
+}
+
+/**
  * Timer de revisão de flashcard em duas fases:
  *  1) Regressiva: parte do tempo previsto (card.tempo_segundos, calculado no
  *     backend a partir de enunciado + resposta + estado FSRS) e decresce até 0.
@@ -114,21 +152,14 @@ function _resumoTempoCard() {
   return { previsto, total, extra, dentroDoPrevisto };
 }
 
-/**
- * Inicia o timer global automaticamente se não estiver ativo.
- * Usa um Pomodoro de 25 min para a matéria indicada.
- */
-function _autoStartTimerIfNeeded(materia) {
-  try {
-    const timerState = localStorage.getItem('pomo_timer');
-    if (timerState) return; // Timer já está rodando
-    if (typeof window.startGlobalTimer === 'function') {
-      window.startGlobalTimer(materia, 25, 'flashcard');
-    } else if (typeof startGlobalTimer === 'function') {
-      startGlobalTimer(materia, 25, 'flashcard');
-    }
-  } catch(e) {}
-}
+// NOTA (timer): O Pomodoro global NÃO é mais iniciado automaticamente nos
+// flashcards. A barra de tempo POR CARD (_startFlashTimer), calibrada pela
+// complexidade real do card (texto + FSRS difficulty/lapses), é a métrica da
+// sessão. O tempo estudado é registrado de forma independente via
+// _flashSessionSeconds em _advanceAfterReview (POST /api/sessoes-estudo/registrar,
+// tipo 'flashcard'). Isso elimina a dupla contagem e o bug do Pomodoro global
+// que continuava rodando ao sair da aba. O timer por card é encerrado ao trocar
+// de card, ao avaliar acerto/erro, e ao sair da aba (_cleanupFlashTimers).
 
 // Metacognition state
 let _currentConfidence = 0;
@@ -550,9 +581,6 @@ export function revealAnswer() {
       ansEl.parentElement.insertBefore(hint, ansEl.nextSibling);
     }
   }
-
-  // Auto-start global timer if not already running
-  _autoStartTimerIfNeeded('Flashcards (Revisão)');
 
   // Show metacognition feedback if confidence was recorded
   let metacogHtml = '';
@@ -1346,8 +1374,6 @@ function showSessaoFlashcard() {
     // NÃO para o timer ao revelar: segue até o estudante avaliar em sessaoNext().
     a.style.display = 'block'; rb.style.display = 'none';
     rv.style.display = 'flex';
-    // Auto-start global timer if not already running (igual ao fluxo de revisão SRS)
-    _autoStartTimerIfNeeded(card.materia ? `Flashcards: ${card.materia}` : 'Flashcards (Sessão)');
     rv.innerHTML = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;width:100%;">
       <button onclick="sessaoNext(0)" style="background:#f38ba8;color:#1e1e2e;border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">0•Esqueci</button>
       <button onclick="sessaoNext(1)" style="background:#f38ba8;color:#1e1e2e;border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">1•Errei</button>
@@ -2504,7 +2530,12 @@ export function initFlashcards(deps) {
       const obs = new MutationObserver(() => {
         const ativaAgora = flashTab.classList.contains('active');
         const acabouDeAbrir = ativaAgora && !_eraAtiva;
+        const acabouDeSair = !ativaAgora && _eraAtiva;
         _eraAtiva = ativaAgora;
+        // Ao SAIR da aba de flashcards: encerra o timer por card e registra o
+        // tempo pendente (garante o stop mesmo se a navegação não passar por
+        // navigateTo — ex.: código que troca a classe diretamente).
+        if (acabouDeSair) { _cleanupFlashTimers(); return; }
         if (!acabouDeAbrir) return;
         const sessaoEmAndamento = _currentFilterMateria || currentFlashIndex > 0;
         if (!sessaoEmAndamento) loadFlashcardsToday();
@@ -2512,6 +2543,13 @@ export function initFlashcards(deps) {
       obs.observe(flashTab, { attributes: true, attributeFilter: ['class'] });
     }
   } catch (e) { /* observer é best-effort */ }
+
+  // Aba do navegador oculta (troca de aba do SO, minimizar, fechar): para o
+  // timer por card e registra o tempo pendente. keepalive no fetch garante o
+  // envio mesmo durante o fechamento da página.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') _cleanupFlashTimers();
+  });
 }
 
 async function loadAddMaterias() {

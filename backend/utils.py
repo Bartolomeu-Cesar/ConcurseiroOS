@@ -84,8 +84,10 @@ def calcular_tempo_flashcard(
     pergunta: str,
     resposta: str,
     fsrs_state: int = 0,
+    difficulty: float = 0,
+    lapses: int = 0,
     minimo: int = 10,
-    maximo: int = 120,
+    maximo: int = 180,
 ) -> int:
     """Tempo (segundos) de referência para revisar um flashcard, por complexidade.
 
@@ -93,16 +95,26 @@ def calcular_tempo_flashcard(
     desafio), adaptada ao recall ativo de flashcards. No desafio, o tempo escala
     com o conteúdo (texto + nº de alternativas × 4s) — aqui o esforço de recall
     escala com a COMPLEXIDADE DA RESPOSTA (quantos "pontos" precisam ser
-    lembrados), em vez de uma constante fixa que achatava tudo perto de ~18s.
+    lembrados) E com a dificuldade REAL do card medida pelo FSRS, em vez de só
+    contar palavras (que achatava cards curtos-porém-difíceis perto de ~18s).
 
     Componentes:
     - Leitura da pergunta a 130 wpm (compreensão de prova).
     - Recuperação ativa PROPORCIONAL: 3s por "conceito" da resposta (aprox. 1
       conceito a cada 6 palavras), análogo aos 4s/alternativa do desafio. Faixa
-      de 4s (resposta trivial) a 40s (resposta muito densa).
+      de 4s (resposta trivial) a 60s (resposta muito densa).
     - Leitura/conferência da resposta a 130 wpm.
     - Fator por estado FSRS (novo/relearning exigem mais esforço).
-    - Faixa 10s–120s (flashcards são mais rápidos que questões).
+    - Fator por DIFICULDADE FSRS (D, escala ~1–10): cards que o algoritmo
+      considera difíceis exigem mais tempo de recuperação, independentemente do
+      tamanho do texto. Mapeia D∈[1,10] para um multiplicador ~[0.9, 1.6].
+    - Bônus por LAPSES (nº de vezes que o card já foi esquecido): +8% por lapse,
+      até +40%. Cards "leech" (muito esquecidos) tomam mais tempo de recall.
+    - Faixa 10s–180s.
+
+    `difficulty` e `lapses` são opcionais (default 0) para manter compatibilidade
+    com chamadores antigos; quando 0/ausentes, o cálculo recai apenas no texto +
+    fsrs_state (comportamento anterior, porém com teto de recuperação maior).
     """
     palavras_pergunta = len(pergunta.split()) if pergunta else 4
     palavras_resposta = len(resposta.split()) if resposta else 4
@@ -112,12 +124,30 @@ def calcular_tempo_flashcard(
 
     # Recuperação ativa proporcional à densidade da resposta (análogo ao tempo de
     # avaliar cada alternativa no desafio). ~1 conceito a cada 6 palavras; 3s por
-    # conceito; limitado a [4s, 40s] para não explodir nem virar constante.
+    # conceito; limitado a [4s, 60s] para não explodir nem virar constante.
     conceitos = max(1, round(palavras_resposta / 6))
-    tempo_recuperacao = min(40, max(4, conceitos * 3))
+    tempo_recuperacao = min(60, max(4, conceitos * 3))
 
-    fator = _FATOR_FSRS_FLASHCARD.get(fsrs_state if fsrs_state is not None else 0, 1.15)
-    tempo = int((tempo_leitura_pergunta + tempo_recuperacao + tempo_leitura_resposta) * fator)
+    fator_estado = _FATOR_FSRS_FLASHCARD.get(fsrs_state if fsrs_state is not None else 0, 1.15)
+
+    # Dificuldade FSRS (D): escala ~1–10. Quando ausente (0), não penaliza.
+    # D=1 → 0.9 ; D=5.5 (neutro inicial) → ~1.13 ; D=10 → ~1.6.
+    d = difficulty or 0
+    if d and d > 0:
+        d = max(1.0, min(10.0, float(d)))
+        fator_dificuldade = 0.9 + (d - 1) * (0.7 / 9.0)
+    else:
+        fator_dificuldade = 1.0
+
+    # Lapses: +8% por esquecimento, até +40%.
+    fator_lapses = 1.0 + min(0.4, max(0, int(lapses or 0)) * 0.08)
+
+    tempo = int(
+        (tempo_leitura_pergunta + tempo_recuperacao + tempo_leitura_resposta)
+        * fator_estado
+        * fator_dificuldade
+        * fator_lapses
+    )
     return max(minimo, min(maximo, tempo))
 def today_str():
     return date.today().isoformat()

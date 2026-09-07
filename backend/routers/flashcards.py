@@ -75,12 +75,12 @@ def get_flashcards_today(
 
     if materia:
         rows = conn.execute(
-            "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia, fsrs_state, COALESCE(is_leech,0) AS is_leech, COALESCE(lapses,0) AS lapses, COALESCE(card_tipo,'normal') AS card_tipo, COALESCE(imagem_data,'') AS imagem_data, COALESCE(oclusoes,'') AS oclusoes, COALESCE(oclusao_index,-1) AS oclusao_index, note_id FROM flashcards WHERE proxima_revisao <= ? AND materia = ? AND user_id = ? AND COALESCE(suspenso, 0) = 0",
+            "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia, fsrs_state, COALESCE(difficulty,0) AS difficulty, COALESCE(is_leech,0) AS is_leech, COALESCE(lapses,0) AS lapses, COALESCE(card_tipo,'normal') AS card_tipo, COALESCE(imagem_data,'') AS imagem_data, COALESCE(oclusoes,'') AS oclusoes, COALESCE(oclusao_index,-1) AS oclusao_index, note_id FROM flashcards WHERE proxima_revisao <= ? AND materia = ? AND user_id = ? AND COALESCE(suspenso, 0) = 0",
             (today_str(), materia, user_id),
         ).fetchall()
     else:
         rows = conn.execute(
-            "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia, fsrs_state, COALESCE(is_leech,0) AS is_leech, COALESCE(lapses,0) AS lapses, COALESCE(card_tipo,'normal') AS card_tipo, COALESCE(imagem_data,'') AS imagem_data, COALESCE(oclusoes,'') AS oclusoes, COALESCE(oclusao_index,-1) AS oclusao_index, note_id FROM flashcards WHERE proxima_revisao <= ? AND user_id = ? AND COALESCE(suspenso, 0) = 0",
+            "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia, fsrs_state, COALESCE(difficulty,0) AS difficulty, COALESCE(is_leech,0) AS is_leech, COALESCE(lapses,0) AS lapses, COALESCE(card_tipo,'normal') AS card_tipo, COALESCE(imagem_data,'') AS imagem_data, COALESCE(oclusoes,'') AS oclusoes, COALESCE(oclusao_index,-1) AS oclusao_index, note_id FROM flashcards WHERE proxima_revisao <= ? AND user_id = ? AND COALESCE(suspenso, 0) = 0",
             (today_str(), user_id),
         ).fetchall()
     items = [dict(r) for r in rows]
@@ -111,7 +111,8 @@ def get_flashcards_today(
         # Tempo de referência por complexidade (para o timer regressivo na revisão),
         # análogo ao das questões. Calculado antes de remover fsrs_state.
         card["tempo_segundos"] = calcular_tempo_flashcard(
-            card.get("pergunta", ""), card.get("resposta", ""), card.get("fsrs_state") or 0
+            card.get("pergunta", ""), card.get("resposta", ""), card.get("fsrs_state") or 0,
+            difficulty=card.get("difficulty") or 0, lapses=card.get("lapses") or 0,
         )
         card.pop("fsrs_state", None)
         # Leech: expõe como booleano para o badge 🩸 na UI de revisão.
@@ -264,7 +265,9 @@ def get_custom_study(
     """
     modo = (modo or "").strip().lower()
     base_cols = (
-        "id, pergunta, resposta, materia, COALESCE(fsrs_state,0) AS fsrs_state, COALESCE(is_leech,0) AS is_leech"
+        "id, pergunta, resposta, materia, COALESCE(fsrs_state,0) AS fsrs_state, "
+        "COALESCE(difficulty,0) AS difficulty, COALESCE(lapses,0) AS lapses, "
+        "COALESCE(is_leech,0) AS is_leech"
     )
 
     if modo == "errados_hoje":
@@ -318,7 +321,8 @@ def get_custom_study(
     for r in rows:
         card = dict(r)
         card["tempo_segundos"] = calcular_tempo_flashcard(
-            card.get("pergunta", ""), card.get("resposta", ""), card.get("fsrs_state") or 0
+            card.get("pergunta", ""), card.get("resposta", ""), card.get("fsrs_state") or 0,
+            difficulty=card.get("difficulty") or 0, lapses=card.get("lapses") or 0,
         )
         card.pop("fsrs_state", None)
         card["is_leech"] = bool(card.get("is_leech"))
@@ -456,12 +460,12 @@ def get_flashcards_aleatorio(
     """Retorna flashcards aleatórios para sessão de estudo (por disciplina ou todas)"""
     if materia:
         rows = conn.execute(
-            "SELECT id, pergunta, resposta, materia, fsrs_state FROM flashcards WHERE materia = ? AND user_id = ? ORDER BY RANDOM() LIMIT ?",
+            "SELECT id, pergunta, resposta, materia, fsrs_state, COALESCE(difficulty,0) AS difficulty, COALESCE(lapses,0) AS lapses FROM flashcards WHERE materia = ? AND user_id = ? ORDER BY RANDOM() LIMIT ?",
             (materia, user_id, quantidade),
         ).fetchall()
     else:
         rows = conn.execute(
-            "SELECT id, pergunta, resposta, materia, fsrs_state FROM flashcards WHERE user_id = ? ORDER BY RANDOM() LIMIT ?",
+            "SELECT id, pergunta, resposta, materia, fsrs_state, COALESCE(difficulty,0) AS difficulty, COALESCE(lapses,0) AS lapses FROM flashcards WHERE user_id = ? ORDER BY RANDOM() LIMIT ?",
             (user_id, quantidade),
         ).fetchall()
     result = []
@@ -470,7 +474,8 @@ def get_flashcards_aleatorio(
         # Tempo de referência por complexidade (para o timer da sessão),
         # mesma fórmula da revisão SRS. Calculado antes de remover fsrs_state.
         card["tempo_segundos"] = calcular_tempo_flashcard(
-            card.get("pergunta", ""), card.get("resposta", ""), card.get("fsrs_state") or 0
+            card.get("pergunta", ""), card.get("resposta", ""), card.get("fsrs_state") or 0,
+            difficulty=card.get("difficulty") or 0, lapses=card.get("lapses") or 0,
         )
         card.pop("fsrs_state", None)
         result.append(card)

@@ -4,6 +4,11 @@ import { illustration } from '../modules/illustrations.js';
 
 // ===== Sidebar navigation =====
 function navigateTo(tabId, btn) {
+  // Encerra o timer por card dos flashcards e registra o tempo pendente ao sair
+  // da aba. No-op se não havia timer ativo (interval/cardStart nulos).
+  if (tabId !== 'tab-flashcards') {
+    try { window._cleanupFlashTimers?.(); } catch (e) {}
+  }
   // Hide all tabs
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
   // Show target

@@ -23,12 +23,12 @@ from utils import calcular_tempo_flashcard as calc
 # ---------------------------------------------------------------------------
 
 def test_respeita_faixa_minima_e_maxima():
-    """Card minúsculo cai no piso; card gigante cai no teto (10s–120s)."""
+    """Card minúsculo cai no piso; card gigante cai no teto (10s–180s)."""
     t_min = calc("a", "b", 2)
     assert t_min == 10
     grande = " ".join(["palavra"] * 500)
     t_max = calc(grande, grande, 0)
-    assert t_max == 120
+    assert t_max == 180
 
 
 def test_texto_maior_aumenta_o_tempo():
@@ -56,7 +56,7 @@ def test_fator_fsrs_relearning_maior_que_review():
 def test_fsrs_state_none_nao_quebra():
     """fsrs_state None (schemas antigos) usa fallback sem erro."""
     t = calc("pergunta media aqui", "resposta media aqui", None)
-    assert 10 <= t <= 120
+    assert 10 <= t <= 180
 
 
 def test_recuperacao_escala_com_densidade_da_resposta():
@@ -89,6 +89,74 @@ def test_nao_e_constante_para_conteudos_diferentes():
         calc(" ".join(["q"] * 30), " ".join(["a"] * 50), 3),
     }
     assert len(amostras) >= 3, f"tempos colapsaram: {amostras}"
+
+
+def test_dificuldade_fsrs_aumenta_o_tempo():
+    """Complexidade REAL (FSRS difficulty D) eleva o tempo, mesmo com texto igual.
+
+    Este é o cerne da melhoria: um card curto porém DIFÍCIL (D alto) deve exigir
+    mais tempo de recall que um card curto e fácil (D baixo), coisa que o cálculo
+    baseado só em contagem de palavras não capturava.
+    """
+    p = "Qual o prazo e o fundamento?"
+    r = " ".join(["conceito"] * 14)
+    facil = calc(p, r, 2, difficulty=1)
+    dificil = calc(p, r, 2, difficulty=10)
+    assert dificil > facil, (facil, dificil)
+
+
+def test_lapses_aumentam_o_tempo():
+    """Cards já esquecidos várias vezes (lapses altos) tomam mais tempo de recall."""
+    p = "Defina o instituto."
+    r = " ".join(["conceito"] * 12)
+    sem_lapse = calc(p, r, 2, difficulty=5, lapses=0)
+    com_lapses = calc(p, r, 2, difficulty=5, lapses=5)
+    assert com_lapses > sem_lapse, (sem_lapse, com_lapses)
+
+
+def test_lapses_tem_teto():
+    """O bônus por lapses satura (+40%), não cresce indefinidamente."""
+    p = "P?"
+    r = " ".join(["x"] * 10)
+    t5 = calc(p, r, 2, difficulty=5, lapses=5)
+    t50 = calc(p, r, 2, difficulty=5, lapses=50)
+    assert t5 == t50, (t5, t50)
+
+
+def test_difficulty_ausente_mantem_compatibilidade():
+    """Sem difficulty/lapses (chamadores antigos), o resultado é o mesmo de quando
+    esses fatores são neutros (=1.0)."""
+    p = "Pergunta de tamanho médio para teste."
+    r = " ".join(["palavra"] * 15)
+    base = calc(p, r, 2)
+    com_neutro = calc(p, r, 2, difficulty=0, lapses=0)
+    assert base == com_neutro
+
+
+def test_card_curto_dificil_supera_card_curto_facil_via_payload(client):
+    """Integração: dois cards com MESMO texto curto, mas difficulty diferente,
+    devem receber tempo_segundos diferentes no payload de /today."""
+    from utils import today_str
+
+    conn = sqlite3.connect(_tmp_db.name, timeout=10)
+    conn.execute("DELETE FROM flashcards WHERE 1=1")
+    conn.execute(
+        "INSERT INTO flashcards (pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia, fsrs_state, difficulty, lapses, user_id) "
+        "VALUES ('Prazo?', '5 dias.', ?, 1, 2.5, 3, 'Facil', 2, 1.5, 0, 1)",
+        (today_str(),),
+    )
+    conn.execute(
+        "INSERT INTO flashcards (pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia, fsrs_state, difficulty, lapses, user_id) "
+        "VALUES ('Prazo?', '5 dias.', ?, 1, 2.5, 3, 'Dificil', 2, 9.5, 4, 1)",
+        (today_str(),),
+    )
+    conn.commit()
+    conn.close()
+
+    cards = client.get("/api/flashcards/today").json()
+    by_mat = {c["materia"]: c["tempo_segundos"] for c in cards}
+    assert "Facil" in by_mat and "Dificil" in by_mat
+    assert by_mat["Dificil"] > by_mat["Facil"], by_mat
 
 
 # ---------------------------------------------------------------------------
@@ -155,7 +223,7 @@ def test_today_expoe_tempo_segundos(client):
     for c in cards:
         assert "tempo_segundos" in c, "payload do flashcard precisa expor tempo_segundos"
         assert isinstance(c["tempo_segundos"], int)
-        assert 10 <= c["tempo_segundos"] <= 120
+        assert 10 <= c["tempo_segundos"] <= 180
 
 
 def test_aleatorio_expoe_tempo_segundos(client):
@@ -177,7 +245,7 @@ def test_aleatorio_expoe_tempo_segundos(client):
     assert len(cards) >= 1
     for c in cards:
         assert "tempo_segundos" in c, "aleatorio precisa expor tempo_segundos"
-        assert 10 <= c["tempo_segundos"] <= 120
+        assert 10 <= c["tempo_segundos"] <= 180
         assert "fsrs_state" not in c  # campo interno removido do payload
 
 
