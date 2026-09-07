@@ -134,9 +134,10 @@ function _autoStartTimerIfNeeded(materia) {
 let _currentConfidence = 0;
 let _metacogHistory = []; // {cardId, confidence, quality, gap}
 let _generationMode = localStorage.getItem('flash_generation_mode') === 'true';
-// Flip 3D (carta de baralho): opt-in, persistido. Ao virar, a carta gira em 3D e
-// a resposta é revelada por partes. Preserva o fluxo científico chamando revealAnswer().
-let _flipMode = localStorage.getItem('flash_flip_mode') === 'true';
+// Flip 3D (carta de baralho): LIGADO por padrão. Fica desligado apenas se o
+// usuário desmarcou explicitamente (localStorage === 'false'). Ao virar, a carta
+// gira em 3D e a resposta é revelada por partes, preservando o fluxo científico.
+let _flipMode = localStorage.getItem('flash_flip_mode') !== 'false';
 let _isFlipped = false; // estado atual da carta (frente/verso)
 
 // Toggle generation mode
