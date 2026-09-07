@@ -201,6 +201,10 @@
             <input type="number" id="input-max" value="10" min="2" max="50" aria-label="Máximo de pessoas">
           </div>
           <input type="text" class="input-goal" id="input-goal-criar" placeholder="🎯 O que vou estudar hoje?" aria-label="O que vou estudar hoje" maxlength="120">
+          <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:0.85rem;cursor:pointer;">
+            <input type="checkbox" id="input-publica" aria-label="Tornar sala pública">
+            🌐 Tornar pública (aparece no lobby para qualquer estudante entrar)
+          </label>
           <button class="btn-room" onclick="criarSala()" style="margin-top:12px;">Criar Sala</button>
         </div>
 
@@ -212,6 +216,12 @@
           <input type="text" class="input-goal" id="input-goal-entrar" placeholder="🎯 O que vou estudar hoje?" aria-label="O que vou estudar hoje" maxlength="120">
           <button class="btn-room secondary" onclick="entrarSala()" style="margin-top:12px;">Entrar</button>
         </div>
+
+        <div class="section-divider"><span>🌐 salas públicas ativas</span></div>
+        <div id="salas-publicas-list" class="rooms-list"><p style="color:var(--text-sub);font-size:0.85rem;">Carregando salas públicas...</p></div>
+
+        <div class="section-divider"><span>🏆 ranking de foco em sala</span></div>
+        <div id="studyroom-ranking" class="room-card"><p style="color:var(--text-sub);font-size:0.85rem;">Carregando ranking...</p></div>
 
         <div class="section-divider"><span>suas salas recentes</span></div>
 

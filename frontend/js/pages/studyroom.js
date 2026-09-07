@@ -63,8 +63,9 @@ async function criarSala() {
     const duracao_min = parseInt(document.getElementById('input-duracao').value) || 50;
     const max_participantes = parseInt(document.getElementById('input-max').value) || 10;
     const meta = document.getElementById('input-goal-criar').value.trim() || '';
+    const publica = !!(document.getElementById('input-publica') && document.getElementById('input-publica').checked);
 
-    const data = await apiPost('/criar', { titulo, tecnica, duracao_min, max_participantes, meta });
+    const data = await apiPost('/criar', { titulo, tecnica, duracao_min, max_participantes, meta, publica });
     currentRoom = data.codigo;
     roomTecnica = tecnica;
     modoFoco = tecnica === 'pomodoro';
@@ -143,6 +144,8 @@ function sairSala() {
   document.getElementById('view-room').classList.add('hidden');
   document.getElementById('view-lobby').classList.remove('hidden');
   loadMinhasSalas();
+  loadSalasPublicas();
+  loadStudyroomRanking();
 }
 window.sairSala = sairSala;
 
@@ -805,6 +808,72 @@ function rejoinRoom(codigo) {
   enterRoomView(codigo);
 }
 window.rejoinRoom = rejoinRoom;
+
+// ============================================================
+// SALAS PÚBLICAS (lobby de descoberta)
+// ============================================================
+async function loadSalasPublicas() {
+  const container = document.getElementById('salas-publicas-list');
+  if (!container) return;
+  try {
+    const data = await apiGet('/publicas');
+    if (!data.salas || data.salas.length === 0) {
+      container.innerHTML = '<div style="text-align:center;color:var(--text-muted);font-size:0.82rem;padding:16px;">Nenhuma sala pública ativa. Crie uma e marque como pública! 🌐</div>';
+      return;
+    }
+    container.innerHTML = data.salas.map(s => {
+      const tecLabel = s.tecnica === 'pomodoro' ? '🍅 Pomodoro' : '⏱️ Livre';
+      const cheia = s.vagas <= 0;
+      return `<div class="room-item" ${cheia ? '' : `onclick="entrarSalaPublica('${s.codigo}')"`} style="${cheia ? 'opacity:0.55;cursor:not-allowed;' : ''}">
+        <div class="room-item-info">
+          <div class="room-item-title">${escHtml(s.titulo)}</div>
+          <div class="room-item-meta">${tecLabel} • 👥 ${s.participantes}/${s.max_participantes} • 🟢 ${s.focando} focando • por ${escHtml(s.criador)}</div>
+        </div>
+        <div class="room-item-badge">${cheia ? 'Cheia' : 'Entrar'}</div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    container.innerHTML = '<div style="color:var(--text-sub);font-size:0.82rem;">Não foi possível carregar salas públicas.</div>';
+  }
+}
+window.loadSalasPublicas = loadSalasPublicas;
+
+async function entrarSalaPublica(codigo) {
+  try {
+    await apiPost('/entrar', { codigo, meta: '' });
+    currentRoom = codigo;
+    enterRoomView(codigo);
+  } catch (e) {
+    toast('Erro ao entrar: ' + e.message, 'error');
+  }
+}
+window.entrarSalaPublica = entrarSalaPublica;
+
+// ============================================================
+// RANKING PERSISTENTE DE FOCO EM SALA
+// ============================================================
+async function loadStudyroomRanking() {
+  const container = document.getElementById('studyroom-ranking');
+  if (!container) return;
+  try {
+    const data = await apiGet('/ranking');
+    const linhas = (data.semana || []).slice(0, 10).map(p => {
+      const medalha = p.posicao === 1 ? '🥇' : p.posicao === 2 ? '🥈' : p.posicao === 3 ? '🥉' : `${p.posicao}.`;
+      const destaque = p.is_me ? 'font-weight:700;color:var(--accent);' : '';
+      return `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:0.85rem;${destaque}">
+        <span>${medalha} ${escHtml(p.nome)}${p.is_me ? ' (você)' : ''}</span>
+        <span>${p.horas}h</span>
+      </div>`;
+    }).join('');
+    const streakBadge = `<div style="font-size:0.82rem;color:var(--text-sub);margin-bottom:8px;">🔥 Seu streak de sala: <strong style="color:var(--peach,#fab387);">${data.streak_sala} dia(s)</strong></div>`;
+    container.innerHTML = `${streakBadge}
+      <div style="font-size:0.78rem;color:var(--text-sub);margin-bottom:4px;">Esta semana (tempo focado em salas):</div>
+      ${linhas || '<div style="color:var(--text-sub);font-size:0.82rem;">Ainda sem foco registrado esta semana. Entre numa sala e comece! 💪</div>'}`;
+  } catch (e) {
+    container.innerHTML = '<div style="color:var(--text-sub);font-size:0.82rem;">Não foi possível carregar o ranking.</div>';
+  }
+}
+window.loadStudyroomRanking = loadStudyroomRanking;
 
 // ============================================================
 // UTILS
@@ -1502,6 +1571,8 @@ if ('Notification' in window && Notification.permission === 'default') {
   Notification.requestPermission();
 }
 loadMinhasSalas();
+loadSalasPublicas();
+loadStudyroomRanking();
 loadGoalSuggestion();
 loadMindfulness();
 

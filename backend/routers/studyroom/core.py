@@ -30,6 +30,7 @@ def criar_sala(
     ciclos_total: int = Body(4),
     pausa_longa_min: int = Body(15),
     modo_foco: bool = Body(False),
+    publica: bool = Body(False),
     user_id: int = Depends(get_user_id),
     conn=Depends(get_db_session),
 ):
@@ -54,10 +55,10 @@ def criar_sala(
 
     cursor = conn.execute("""
         INSERT INTO study_rooms (codigo, criador_id, titulo, max_participantes, tecnica, duracao_min,
-                                 ciclo_foco_min, ciclo_pausa_min, ciclos_total, pausa_longa_min, modo_foco, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                 ciclo_foco_min, ciclo_pausa_min, ciclos_total, pausa_longa_min, modo_foco, publica, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (codigo, user_id, titulo.strip() or "Sala de Estudos", max_participantes, tecnica, duracao_min,
-          ciclo_foco_min, ciclo_pausa_min, ciclos_total, pausa_longa_min, int(modo_foco), now))
+          ciclo_foco_min, ciclo_pausa_min, ciclos_total, pausa_longa_min, int(modo_foco), int(publica), now))
     room_id = cursor.lastrowid
 
     # Criador entra automaticamente
@@ -80,8 +81,104 @@ def criar_sala(
         "ciclos_total": ciclos_total,
         "pausa_longa_min": pausa_longa_min,
         "modo_foco": modo_foco,
+        "publica": publica,
         "criador_id": user_id,
         "created_at": now,
+    }
+
+
+@router.get("/publicas")
+def listar_salas_publicas(
+    user_id: int = Depends(get_user_id),
+    conn=Depends(get_db_session),
+):
+    """Lista salas públicas ATIVAS para o lobby de descoberta (efeito de rede).
+
+    Retorna nome, título, técnica, contagem de participantes e vagas.
+    Só expõe salas marcadas como públicas e com status 'ativa'.
+    """
+    ensure_studyroom_tables(conn)
+    run_studyroom_migrations(conn)
+
+    rooms = conn.execute("""
+        SELECT r.id, r.codigo, r.titulo, r.tecnica, r.max_participantes, r.criador_id, r.created_at,
+               (SELECT COUNT(*) FROM study_room_participants p WHERE p.room_id = r.id) AS participantes,
+               (SELECT COUNT(*) FROM study_room_participants p WHERE p.room_id = r.id AND p.status = 'focando') AS focando
+        FROM study_rooms r
+        WHERE r.status = 'ativa' AND r.publica = 1
+        ORDER BY participantes DESC, r.created_at DESC
+        LIMIT 50
+    """).fetchall()
+
+    salas = []
+    for r in rooms:
+        salas.append({
+            "codigo": r["codigo"],
+            "titulo": r["titulo"],
+            "tecnica": r["tecnica"],
+            "participantes": r["participantes"],
+            "focando": r["focando"],
+            "max_participantes": r["max_participantes"],
+            "vagas": max(0, r["max_participantes"] - r["participantes"]),
+            "criador": get_user_name(conn, r["criador_id"]),
+        })
+    return {"salas": salas, "total": len(salas)}
+
+
+@router.get("/ranking")
+def ranking_studyroom(
+    user_id: int = Depends(get_user_id),
+    conn=Depends(get_db_session),
+):
+    """Leaderboard PERSISTENTE de tempo focado em salas de estudo.
+
+    Fonte: sessoes_estudo WHERE tipo='studyroom' (alimentado por award_focus_xp).
+    Retorna ranking da SEMANA (segunda a hoje) e ALL-TIME + streak de dias do
+    usuário com sessão de sala. Expõe apenas nome + horas (placar público).
+    """
+    from datetime import date, timedelta
+
+    ensure_studyroom_tables(conn)
+
+    hoje = date.today()
+    inicio_semana = (hoje - timedelta(days=hoje.weekday())).isoformat()
+
+    def _leaderboard(desde):
+        params = []
+        q = "SELECT s.user_id, COALESCE(SUM(s.horas), 0) AS horas FROM sessoes_estudo s WHERE s.tipo = 'studyroom'"
+        if desde:
+            q += " AND s.data >= ?"
+            params.append(desde)
+        q += " GROUP BY s.user_id HAVING horas > 0 ORDER BY horas DESC LIMIT 20"
+        rows = conn.execute(q, params).fetchall()
+        return [
+            {
+                "posicao": i + 1,
+                "user_id": r["user_id"],
+                "nome": get_user_name(conn, r["user_id"]),
+                "horas": round(r["horas"], 2),
+                "is_me": r["user_id"] == user_id,
+            }
+            for i, r in enumerate(rows)
+        ]
+
+    # Streak de dias com sessão de sala (dias distintos consecutivos até hoje/ontem).
+    dias = conn.execute(
+        "SELECT DISTINCT data FROM sessoes_estudo WHERE tipo = 'studyroom' AND user_id = ?",
+        (user_id,)
+    ).fetchall()
+    dias_set = {d["data"] for d in dias}
+    streak = 0
+    cursor_dia = hoje if hoje.isoformat() in dias_set else hoje - timedelta(days=1)
+    while cursor_dia.isoformat() in dias_set:
+        streak += 1
+        cursor_dia -= timedelta(days=1)
+
+    return {
+        "semana": _leaderboard(inicio_semana),
+        "all_time": _leaderboard(None),
+        "streak_sala": streak,
+        "inicio_semana": inicio_semana,
     }
 
 
@@ -215,6 +312,7 @@ def status_sala(
         "ciclos_total": ciclos_total,
         "pausa_longa_min": pausa_longa_min,
         "modo_foco": modo_foco,
+        "publica": bool(room["publica"]) if "publica" in room.keys() else False,
         "created_at": room["created_at"],
         "participantes": participantes,
         "chat_messages": chat_messages,

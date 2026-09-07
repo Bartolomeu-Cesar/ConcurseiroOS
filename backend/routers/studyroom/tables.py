@@ -73,6 +73,7 @@ def run_studyroom_migrations(conn):
         ("study_rooms", "ciclos_total", "ALTER TABLE study_rooms ADD COLUMN ciclos_total INTEGER DEFAULT 4"),
         ("study_rooms", "pausa_longa_min", "ALTER TABLE study_rooms ADD COLUMN pausa_longa_min INTEGER DEFAULT 15"),
         ("study_rooms", "modo_foco", "ALTER TABLE study_rooms ADD COLUMN modo_foco INTEGER DEFAULT 0"),
+        ("study_rooms", "publica", "ALTER TABLE study_rooms ADD COLUMN publica INTEGER DEFAULT 0"),
     ]
     for _table, _col, sql in migrations:
         try:
