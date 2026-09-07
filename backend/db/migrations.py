@@ -1392,6 +1392,29 @@ def _m85_closed_book_log(conn):
     log.info("Migration 85: created closed_book_log table")
 
 
+def _m86_notif_prefs_anti_relaxamento(conn):
+    """Novas preferências de notificação anti-relaxamento.
+
+    - study_time_reminder / study_time_hour: lembrete diário de "hora de estudar".
+    - edital_review_reminders: revisões espaçadas do edital (FSRS) vencidas.
+    - pace_drop_alerts: queda de ritmo semanal (horas caíram vs semana anterior).
+    - milestone_celebrations: comemoração de marcos de streak (reforço positivo).
+    Todas ligadas por padrão (1); study_time_hour default 19 (19h).
+    """
+    for col, ddl in (
+        ("study_time_reminder", "ALTER TABLE notification_preferences ADD COLUMN study_time_reminder INTEGER DEFAULT 1"),
+        ("study_time_hour", "ALTER TABLE notification_preferences ADD COLUMN study_time_hour INTEGER DEFAULT 19"),
+        ("edital_review_reminders", "ALTER TABLE notification_preferences ADD COLUMN edital_review_reminders INTEGER DEFAULT 1"),
+        ("pace_drop_alerts", "ALTER TABLE notification_preferences ADD COLUMN pace_drop_alerts INTEGER DEFAULT 1"),
+        ("milestone_celebrations", "ALTER TABLE notification_preferences ADD COLUMN milestone_celebrations INTEGER DEFAULT 1"),
+    ):
+        try:
+            conn.execute(ddl)
+            log.info(f"Migration 86: added column {col} to notification_preferences")
+        except Exception:
+            pass  # coluna já existe
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -1478,6 +1501,7 @@ MIGRATIONS = [
     (83, _m83_questoes_discursivas),
     (84, _m84_jol_predictions),
     (85, _m85_closed_book_log),
+    (86, _m86_notif_prefs_anti_relaxamento),
 ]
 
 

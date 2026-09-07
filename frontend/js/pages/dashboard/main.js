@@ -2406,6 +2406,25 @@ window.showNotificationPrefs = async function() {
             <div><div style="font-size:0.85rem;color:var(--text);">🎯 Desafios Expirando</div><div style="font-size:0.72rem;color:var(--text-sub);">Avisa quando desafio expira em <1 dia</div></div>
           </label>
 
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+            <input type="checkbox" id="pref-studytime" ${prefs.study_time_reminder ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--accent);">
+            <div style="flex:1;"><div style="font-size:0.85rem;color:var(--text);">📚 Hora de Estudar</div><div style="font-size:0.72rem;color:var(--text-sub);">Lembrete diário se ainda não estudou</div></div>
+            <input type="number" id="pref-studytime-hour" value="${prefs.study_time_hour != null ? prefs.study_time_hour : 19}" min="0" max="23" aria-label="Horário do lembrete de estudo" title="Hora do lembrete" style="width:48px;padding:5px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.8rem;text-align:center;">
+            <span style="color:var(--text-sub);font-size:0.75rem;">h</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+            <input type="checkbox" id="pref-edital-review" ${prefs.edital_review_reminders ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--accent);">
+            <div><div style="font-size:0.85rem;color:var(--text);">📌 Revisões do Edital</div><div style="font-size:0.72rem;color:var(--text-sub);">Avisa tópicos do edital com revisão vencida</div></div>
+          </label>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+            <input type="checkbox" id="pref-pace-drop" ${prefs.pace_drop_alerts ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--accent);">
+            <div><div style="font-size:0.85rem;color:var(--text);">📉 Queda de Ritmo</div><div style="font-size:0.72rem;color:var(--text-sub);">Alerta se as horas caírem vs semana anterior</div></div>
+          </label>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+            <input type="checkbox" id="pref-milestone" ${prefs.milestone_celebrations ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--accent);">
+            <div><div style="font-size:0.85rem;color:var(--text);">🏆 Marcos de Streak</div><div style="font-size:0.72rem;color:var(--text-sub);">Comemora 7, 30, 100... dias seguidos</div></div>
+          </label>
+
           <div style="border-top:1px solid var(--border);margin-top:4px;padding-top:12px;">
             <div style="font-size:0.82rem;font-weight:600;color:var(--text);margin-bottom:8px;">🌙 Horário Silencioso</div>
             <div style="display:flex;align-items:center;gap:8px;">
@@ -2435,6 +2454,11 @@ window._saveNotifPrefs = async function() {
     flashcard_reminders: document.getElementById('pref-flashcard').checked,
     exam_reminders: document.getElementById('pref-exam').checked,
     challenge_reminders: document.getElementById('pref-challenge').checked,
+    study_time_reminder: document.getElementById('pref-studytime').checked,
+    study_time_hour: parseInt(document.getElementById('pref-studytime-hour').value) || 19,
+    edital_review_reminders: document.getElementById('pref-edital-review').checked,
+    pace_drop_alerts: document.getElementById('pref-pace-drop').checked,
+    milestone_celebrations: document.getElementById('pref-milestone').checked,
     quiet_hours_start: parseInt(document.getElementById('pref-quiet-start').value) || 22,
     quiet_hours_end: parseInt(document.getElementById('pref-quiet-end').value) || 7,
   };

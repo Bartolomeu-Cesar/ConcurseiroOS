@@ -125,6 +125,12 @@ class NotificationPreferences(BaseModel):
     challenge_reminders: bool = True
     quiet_hours_start: int = Field(default=22, ge=0, le=23)
     quiet_hours_end: int = Field(default=7, ge=0, le=23)
+    # Novas preferências anti-relaxamento
+    study_time_reminder: bool = True
+    study_time_hour: int = Field(default=19, ge=0, le=23)
+    edital_review_reminders: bool = True
+    pace_drop_alerts: bool = True
+    milestone_celebrations: bool = True
 
 
 # ============================================================
@@ -155,6 +161,18 @@ def _ensure_tables(conn):
             quiet_hours_end INTEGER DEFAULT 7
         )
     """)
+    # Novas preferências anti-relaxamento (idempotente — ALTER se faltar a coluna).
+    for _col, _ddl in (
+        ("study_time_reminder", "ALTER TABLE notification_preferences ADD COLUMN study_time_reminder INTEGER DEFAULT 1"),
+        ("study_time_hour", "ALTER TABLE notification_preferences ADD COLUMN study_time_hour INTEGER DEFAULT 19"),
+        ("edital_review_reminders", "ALTER TABLE notification_preferences ADD COLUMN edital_review_reminders INTEGER DEFAULT 1"),
+        ("pace_drop_alerts", "ALTER TABLE notification_preferences ADD COLUMN pace_drop_alerts INTEGER DEFAULT 1"),
+        ("milestone_celebrations", "ALTER TABLE notification_preferences ADD COLUMN milestone_celebrations INTEGER DEFAULT 1"),
+    ):
+        try:
+            conn.execute(_ddl)
+        except Exception:
+            pass  # coluna já existe
     conn.execute("""
         CREATE TABLE IF NOT EXISTS notification_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -419,6 +437,22 @@ def check_triggers(conn=Depends(get_db_session)):
         exam_enabled = prefs["exam_reminders"] if prefs else 1
         challenge_enabled = prefs["challenge_reminders"] if prefs else 1
 
+        def _pref(col, default=1, _prefs=prefs):
+            """Lê uma preferência nova com fallback (rows antigas podem não ter a coluna)."""
+            if not _prefs:
+                return default
+            try:
+                v = _prefs[col]
+                return default if v is None else v
+            except (IndexError, KeyError):
+                return default
+
+        study_time_enabled = _pref("study_time_reminder")
+        study_time_hour = _pref("study_time_hour", 19)
+        edital_review_enabled = _pref("edital_review_reminders")
+        pace_drop_enabled = _pref("pace_drop_alerts")
+        milestone_enabled = _pref("milestone_celebrations")
+
         # Skip if in quiet hours
         if _is_quiet_hours(conn, uid):
             continue
@@ -629,6 +663,86 @@ def check_triggers(conn=Depends(get_db_session)):
             except Exception:
                 pass
 
+        # --- 9. LEMBRETE DE HORÁRIO DE ESTUDO (rotina anti-relaxamento) ---
+        # No horário configurado (study_time_hour), se ainda não estudou hoje,
+        # dá um empurrão para começar a sessão. Reforça o hábito diário.
+        if study_time_enabled and now.hour == study_time_hour:  # noqa: SIM102
+            if not _already_sent_today(conn, uid, "study_time"):
+                atividade = conn.execute(
+                    "SELECT 1 FROM streaks WHERE data = ? AND user_id = ? AND (horas_estudadas > 0 OR questoes_resolvidas > 0 OR flashcards_revisados > 0)",
+                    (hoje, uid),
+                ).fetchone()
+                if not atividade:
+                    sugestao = get_study_suggestion(conn, uid)
+                    msg = f"Hora de estudar! ⏰ Que tal {sugestao}? Começar é o mais difícil — 25 min já contam."
+                    sent = _send_push_to_user(conn, uid, "📚 Hora de estudar", msg, "/", "study_time")
+                    if sent > 0:
+                        _log_notification(conn, uid, "study_time", "📚 Hora de estudar", msg)
+                        results["study_time"] = results.get("study_time", 0) + 1
+
+        # --- 10. REVISÕES DO EDITAL VENCIDAS (FSRS, além dos flashcards) ---
+        if edital_review_enabled and now.hour >= 17:  # noqa: SIM102
+            if not _already_sent_today(conn, uid, "edital_review"):
+                vencidas = conn.execute(
+                    "SELECT COUNT(*) AS cnt FROM edital WHERE user_id = ? AND arquivado = 0 "
+                    "AND proxima_revisao != '' AND proxima_revisao IS NOT NULL AND proxima_revisao <= ?",
+                    (uid, hoje),
+                ).fetchone()
+                if vencidas and vencidas["cnt"] > 0:
+                    n = vencidas["cnt"]
+                    msg = f"Você tem {n} tópico(s) do edital com revisão VENCIDA. Revisar no prazo evita reaprender do zero (curva do esquecimento)."
+                    sent = _send_push_to_user(conn, uid, "📌 Revisões do edital", msg, "/", "edital_review")
+                    if sent > 0:
+                        _log_notification(conn, uid, "edital_review", "📌 Revisões do edital", msg)
+                        results["edital_review"] = results.get("edital_review", 0) + 1
+
+        # --- 11. QUEDA DE RITMO SEMANAL (compara horas vs semana anterior) ---
+        # Domingo à noite (ou início da semana) alerta se as horas caíram muito.
+        if pace_drop_enabled and now.weekday() == 6 and now.hour >= 18:  # noqa: SIM102 (domingo)
+            if not _already_sent_today(conn, uid, "pace_drop"):
+                ini_semana = (date.today() - timedelta(days=date.today().weekday())).isoformat()
+                ini_ant = (date.today() - timedelta(days=date.today().weekday() + 7)).isoformat()
+                fim_ant = (date.today() - timedelta(days=date.today().weekday() + 1)).isoformat()
+                h_atual = conn.execute(
+                    "SELECT COALESCE(SUM(horas_estudadas),0) AS h FROM streaks WHERE user_id = ? AND data >= ?",
+                    (uid, ini_semana),
+                ).fetchone()["h"] or 0
+                h_ant = conn.execute(
+                    "SELECT COALESCE(SUM(horas_estudadas),0) AS h FROM streaks WHERE user_id = ? AND data >= ? AND data <= ?",
+                    (uid, ini_ant, fim_ant),
+                ).fetchone()["h"] or 0
+                # Só alerta se a semana anterior teve ritmo relevante e caiu >40%.
+                if h_ant >= 3 and h_atual < h_ant * 0.6:
+                    queda = round((1 - (h_atual / h_ant)) * 100)
+                    msg = f"Seu ritmo caiu {queda}% esta semana ({h_atual:.1f}h vs {h_ant:.1f}h). Não deixe o esforço acumulado esfriar — retome amanhã!"
+                    sent = _send_push_to_user(conn, uid, "📉 Ritmo caindo", msg, "/", "pace_drop")
+                    if sent > 0:
+                        _log_notification(conn, uid, "pace_drop", "📉 Ritmo caindo", msg)
+                        results["pace_drop"] = results.get("pace_drop", 0) + 1
+
+        # --- 12. COMEMORAÇÃO DE MARCO DE STREAK (reforço positivo) ---
+        # Reforço positivo sustenta o hábito tanto quanto a cobrança. Dispara ao
+        # atingir marcos (7, 14, 30, 60, 100, 200, 365 dias) e SÓ se estudou hoje.
+        if milestone_enabled:  # noqa: SIM102
+            if not _already_sent_today(conn, uid, "milestone"):
+                estudou_hoje = conn.execute(
+                    "SELECT 1 FROM streaks WHERE data = ? AND user_id = ? AND (horas_estudadas > 0 OR questoes_resolvidas > 0 OR flashcards_revisados > 0)",
+                    (hoje, uid),
+                ).fetchone()
+                if estudou_hoje:
+                    from utils import calculate_streak
+                    try:
+                        streak_atual = calculate_streak(conn, user_id=uid)
+                    except Exception:
+                        streak_atual = 0
+                    marcos = {7, 14, 30, 60, 100, 200, 365}
+                    if streak_atual in marcos:
+                        msg = f"🎉 {streak_atual} dias seguidos de estudo! Consistência é o que aprova. Continue firme — o hábito está sólido!"
+                        sent = _send_push_to_user(conn, uid, "🏆 Marco alcançado!", msg, "/", "milestone")
+                        if sent > 0:
+                            _log_notification(conn, uid, "milestone", "🏆 Marco alcançado!", msg)
+                            results["milestone"] = results.get("milestone", 0) + 1
+
     return {"ok": True, "notifications_sent": results}
 
 
@@ -695,7 +809,26 @@ def get_preferences(conn=Depends(get_db_session), user_id: int = Depends(get_use
             "challenge_reminders": True,
             "quiet_hours_start": 22,
             "quiet_hours_end": 7,
+            "study_time_reminder": True,
+            "study_time_hour": 19,
+            "edital_review_reminders": True,
+            "pace_drop_alerts": True,
+            "milestone_celebrations": True,
         }
+
+    def _b(col, default):
+        try:
+            v = row[col]
+            return bool(v) if v is not None else bool(default)
+        except (IndexError, KeyError):
+            return bool(default)
+
+    def _i(col, default):
+        try:
+            v = row[col]
+            return int(v) if v is not None else int(default)
+        except (IndexError, KeyError, ValueError, TypeError):
+            return int(default)
 
     return {
         "streak_reminders": bool(row["streak_reminders"]),
@@ -704,6 +837,11 @@ def get_preferences(conn=Depends(get_db_session), user_id: int = Depends(get_use
         "challenge_reminders": bool(row["challenge_reminders"]),
         "quiet_hours_start": row["quiet_hours_start"],
         "quiet_hours_end": row["quiet_hours_end"],
+        "study_time_reminder": _b("study_time_reminder", 1),
+        "study_time_hour": _i("study_time_hour", 19),
+        "edital_review_reminders": _b("edital_review_reminders", 1),
+        "pace_drop_alerts": _b("pace_drop_alerts", 1),
+        "milestone_celebrations": _b("milestone_celebrations", 1),
     }
 
 
@@ -713,15 +851,21 @@ def update_preferences(body: NotificationPreferences, conn=Depends(get_db_sessio
     _ensure_tables(conn)
 
     conn.execute("""
-        INSERT INTO notification_preferences (user_id, streak_reminders, flashcard_reminders, exam_reminders, challenge_reminders, quiet_hours_start, quiet_hours_end)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO notification_preferences (user_id, streak_reminders, flashcard_reminders, exam_reminders, challenge_reminders, quiet_hours_start, quiet_hours_end,
+            study_time_reminder, study_time_hour, edital_review_reminders, pace_drop_alerts, milestone_celebrations)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(user_id) DO UPDATE SET
             streak_reminders = excluded.streak_reminders,
             flashcard_reminders = excluded.flashcard_reminders,
             exam_reminders = excluded.exam_reminders,
             challenge_reminders = excluded.challenge_reminders,
             quiet_hours_start = excluded.quiet_hours_start,
-            quiet_hours_end = excluded.quiet_hours_end
+            quiet_hours_end = excluded.quiet_hours_end,
+            study_time_reminder = excluded.study_time_reminder,
+            study_time_hour = excluded.study_time_hour,
+            edital_review_reminders = excluded.edital_review_reminders,
+            pace_drop_alerts = excluded.pace_drop_alerts,
+            milestone_celebrations = excluded.milestone_celebrations
     """, (
         user_id,
         int(body.streak_reminders),
@@ -730,6 +874,11 @@ def update_preferences(body: NotificationPreferences, conn=Depends(get_db_sessio
         int(body.challenge_reminders),
         body.quiet_hours_start,
         body.quiet_hours_end,
+        int(body.study_time_reminder),
+        body.study_time_hour,
+        int(body.edital_review_reminders),
+        int(body.pace_drop_alerts),
+        int(body.milestone_celebrations),
     ))
     conn.commit()
 
