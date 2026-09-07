@@ -329,8 +329,18 @@
         </div>
       </div>
       <div id="flash-card-area" tabindex="-1" role="region" aria-label="Card de revisão">
-        <div id="flash-question"></div>
-        <div id="flash-answer"></div>
+        <div id="flash-flip-scene">
+          <div id="flash-flip-card">
+            <div class="flash-flip-face flash-flip-front">
+              <button type="button" class="flash-flip-arrow flash-flip-arrow-next" onclick="flipCard()" title="Virar carta (Espaço)" aria-label="Virar carta e revelar resposta">▶</button>
+              <div id="flash-question"></div>
+            </div>
+            <div class="flash-flip-face flash-flip-back">
+              <button type="button" class="flash-flip-arrow flash-flip-arrow-back" onclick="unflipCard()" title="Voltar para a pergunta" aria-label="Voltar para a pergunta">◀</button>
+              <div id="flash-answer"></div>
+            </div>
+          </div>
+        </div>
         <button id="flash-reveal-btn" style="display:none;" onclick="revealAnswer()" title="Revelar resposta (Espaço)" aria-keyshortcuts="Space">Revelar Resposta <span style="opacity:0.7;font-size:0.8em;font-weight:400;">(Espaço)</span></button>
         <div class="flash-review-btns" id="flash-review-btns" style="display:none;">
         </div>

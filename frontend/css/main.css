@@ -866,6 +866,93 @@ select#timer-select { background: #313244; color: #cdd6f4; border: 1px solid #45
 #flash-answer { font-size: 1.1rem; color: #a6e3a1; margin-bottom: 20px; padding: 12px 20px; background: #1e1e2e; border-radius: 8px; display: none; line-height: 1.5; }
 #flash-reveal-btn { background: #89b4fa; color: #1e1e2e; border: none; border-radius: 8px; padding: 10px 24px; font-size: 0.95rem; font-weight: 600; cursor: pointer; }
 #flash-reveal-btn:hover { background: #b4befe; }
+
+/* ===== Flip 3D de flashcard (opt-in via .flip-mode em #flash-card-area) ===== */
+/* Sem .flip-mode: scene/card/faces são transparentes ao layout — o comportamento
+   de revelação (reveal) segue idêntico ao legado. */
+#flash-flip-scene { width: 100%; display: contents; }
+#flash-flip-card { display: contents; }
+.flash-flip-face { display: contents; }
+.flash-flip-arrow { display: none; }
+
+/* Com .flip-mode: ativa a carta 3D real. */
+#flash-card-area.flip-mode #flash-flip-scene {
+  display: block;
+  width: 100%;
+  max-width: 460px;
+  margin: 0 auto 16px;
+  perspective: 1200px;
+}
+#flash-card-area.flip-mode #flash-flip-card {
+  display: block;
+  position: relative;
+  width: 100%;
+  min-height: var(--fc-height, 220px);
+  transform-style: preserve-3d;
+  transition: transform 0.55s cubic-bezier(0.4, 0.2, 0.2, 1);
+}
+#flash-card-area.flip-mode.flipped #flash-flip-card { transform: rotateY(180deg); }
+#flash-card-area.flip-mode .flash-flip-face {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 24px 20px;
+  box-sizing: border-box;
+  border-radius: 14px;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  overflow-y: auto;
+}
+#flash-card-area.flip-mode .flash-flip-front {
+  background: linear-gradient(135deg, var(--bg-surface, #313244), var(--bg, #1e1e2e));
+  border: 1px solid var(--border, #45475a);
+}
+#flash-card-area.flip-mode .flash-flip-back {
+  background: linear-gradient(135deg, var(--bg, #1e1e2e), rgba(166,227,161,0.08));
+  border: 1px solid var(--green, #a6e3a1);
+  transform: rotateY(180deg);
+}
+/* No flip, o #flash-answer não usa o card interno de fundo (a face traseira já é
+   o "verso"). A visibilidade continua controlada pelo JS (revealAnswer). */
+#flash-card-area.flip-mode #flash-answer {
+  background: transparent;
+  padding: 0;
+  margin: 0;
+}
+/* Setas de virar/desvirar */
+#flash-card-area.flip-mode .flash-flip-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: var(--accent, #cba6f7);
+  color: var(--bg, #1e1e2e);
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  opacity: 0.85;
+  z-index: 2;
+}
+#flash-card-area.flip-mode .flash-flip-arrow:hover { opacity: 1; }
+#flash-card-area.flip-mode .flash-flip-arrow-next { right: 10px; }
+#flash-card-area.flip-mode .flash-flip-arrow-back { left: 10px; }
+
+/* Respeita usuários com movimento reduzido: sem rotação (fade simples). */
+@media (prefers-reduced-motion: reduce) {
+  #flash-card-area.flip-mode #flash-flip-card { transition: none; }
+}
+
 .flash-review-btns { display: flex; gap: 12px; justify-content: center; margin-top: 8px; }
 .flash-review-btns button { border: none; border-radius: 8px; padding: 10px 24px; font-size: 0.95rem; font-weight: 600; cursor: pointer; }
 #flash-btn-wrong { background: #f38ba8; color: #1e1e2e; }

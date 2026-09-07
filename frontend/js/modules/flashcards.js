@@ -134,12 +134,61 @@ function _autoStartTimerIfNeeded(materia) {
 let _currentConfidence = 0;
 let _metacogHistory = []; // {cardId, confidence, quality, gap}
 let _generationMode = localStorage.getItem('flash_generation_mode') === 'true';
+// Flip 3D (carta de baralho): opt-in, persistido. Ao virar, a carta gira em 3D e
+// a resposta é revelada por partes. Preserva o fluxo científico chamando revealAnswer().
+let _flipMode = localStorage.getItem('flash_flip_mode') === 'true';
+let _isFlipped = false; // estado atual da carta (frente/verso)
 
 // Toggle generation mode
 export function toggleGenerationMode() {
   _generationMode = !_generationMode;
   localStorage.setItem('flash_generation_mode', _generationMode);
   showCurrentFlashcard();
+}
+
+// Toggle flip 3D (carta que vira)
+export function toggleFlipMode() {
+  _flipMode = !_flipMode;
+  localStorage.setItem('flash_flip_mode', _flipMode);
+  showCurrentFlashcard();
+}
+window.toggleFlipMode = toggleFlipMode;
+
+// Vira a carta (frente → verso) e revela a resposta, preservando os ganchos
+// científicos (timer, segmenting, production, confiança) via revealAnswer().
+export function flipCard() {
+  const area = document.getElementById('flash-card-area');
+  if (!area || !area.classList.contains('flip-mode')) { revealAnswer(); return; }
+  if (_isFlipped) return;
+  _isFlipped = true;
+  // Revela o conteúdo do verso ANTES de girar (dispara toda a lógica de reveal).
+  revealAnswer();
+  _ajustarAlturaFlip();
+  area.classList.add('flipped');
+}
+window.flipCard = flipCard;
+
+// Desvira (verso → frente) sem re-disparar reveal (mantém estado revelado).
+export function unflipCard() {
+  const area = document.getElementById('flash-card-area');
+  if (!area) return;
+  _isFlipped = false;
+  area.classList.remove('flipped');
+}
+window.unflipCard = unflipCard;
+
+// Mede a face mais alta e fixa a altura da carta (evita "pulo" de layout no flip).
+function _ajustarAlturaFlip() {
+  const card = document.getElementById('flash-flip-card');
+  if (!card) return;
+  const faces = card.querySelectorAll('.flash-flip-face');
+  let maxH = 220;
+  faces.forEach(f => {
+    // scrollHeight ignora o position:absolute para medir o conteúdo real.
+    const h = f.scrollHeight;
+    if (h > maxH) maxH = h;
+  });
+  card.style.setProperty('--fc-height', `${Math.min(maxH + 8, 560)}px`);
 }
 
 // Set confidence level (metacognition)
@@ -215,6 +264,13 @@ function showCurrentFlashcard() {
   _stopFlashTimer();
   // Limpar hint de leitura em voz alta ao trocar de card (evita acúmulo no DOM)
   document.getElementById('production-hint')?.remove();
+  // Flip 3D: aplica/limpa a classe do modo e reseta a carta para a FRENTE ao trocar.
+  const _area = document.getElementById('flash-card-area');
+  if (_area) {
+    _area.classList.toggle('flip-mode', _flipMode && !_examMode);
+    _area.classList.remove('flipped');
+  }
+  _isFlipped = false;
   const progressEl = document.getElementById('flash-progress');
   const pendentes = flashcardsToday.length;
   const totalOriginal = _flashOriginalTotal || pendentes;
@@ -337,7 +393,10 @@ function showCurrentFlashcard() {
   }
 
   // Add metacognition confidence slider + generation mode BEFORE reveal button
-  const genModeToggle = `<div style="display:flex;justify-content:flex-end;margin-bottom:6px;">
+  const genModeToggle = `<div style="display:flex;justify-content:flex-end;gap:12px;margin-bottom:6px;">
+    <label style="font-size:0.68rem;color:var(--text-sub);cursor:pointer;display:flex;align-items:center;gap:4px;">
+      <input type="checkbox" ${_flipMode ? 'checked' : ''} onchange="toggleFlipMode()" style="width:14px;height:14px;"> 🃏 Virar carta (3D)
+    </label>
     <label style="font-size:0.68rem;color:var(--text-sub);cursor:pointer;display:flex;align-items:center;gap:4px;">
       <input type="checkbox" ${_generationMode ? 'checked' : ''} onchange="toggleGenerationMode()" style="width:14px;height:14px;"> ✍️ Escrever resposta
     </label>
@@ -379,7 +438,11 @@ function showCurrentFlashcard() {
   insertDiv.innerHTML = genModeToggle + generationHtml + confidenceHtml;
   rb.parentElement.insertBefore(insertDiv, rb);
 
-  rb.style.display = 'inline-block';
+  // No flip 3D, a revelação acontece ao VIRAR a carta (seta ▶ ou Espaço), então o
+  // botão "Revelar Resposta" fica oculto para não duplicar a ação.
+  rb.style.display = (_flipMode && !_examMode) ? 'none' : 'inline-block';
+  // Ajusta a altura da carta 3D à maior face (frente/verso) antes de qualquer flip.
+  if (_flipMode && !_examMode) _ajustarAlturaFlip();
   // Track time per card
   _flashCardStart = Date.now();
   if (!_flashSessionStart) _flashSessionStart = Date.now();
@@ -425,9 +488,11 @@ export function revealNextSegment() {
   if (idx < parts.length) {
     let html = parts.slice(0, idx + 1).map(p => `<div style="font-size:0.82rem;color:var(--text);margin-bottom:4px;">${p}</div>`).join('');
     if (idx + 1 < parts.length) {
-      html += `<button id="seg-more-btn" onclick="revealNextSegment()" style="margin-top:4px;background:var(--bg-surface);border:1px solid var(--border);border-radius:6px;padding:4px 10px;color:var(--accent);font-size:0.72rem;cursor:pointer;">Parte ${idx + 2}/${parts.length} ▼</button>`;
+      html += `<button id="seg-more-btn" onclick="revealNextSegment()" style="margin-top:4px;background:var(--bg-surface);border:1px solid var(--border);border-radius:6px;padding:4px 10px;color:var(--accent);font-size:0.72rem;cursor:pointer;">▼ Próxima parte ${idx + 2}/${parts.length}</button>`;
     }
     answerEl.innerHTML = html;
+    // No flip 3D, cada parte revelada pode aumentar a altura → reajusta a carta.
+    if (typeof _ajustarAlturaFlip === 'function') _ajustarAlturaFlip();
   }
 }
 
@@ -440,18 +505,27 @@ export function revealAnswer() {
   _currentConfidence = 0; // Reset
 
   // === COGNITIVE LOAD SEGMENTING (Mayer 2009) ===
-  // Respostas longas (>120 chars) são reveladas em partes para reduzir carga cognitiva
+  // Respostas são reveladas em partes para reduzir carga cognitiva. Fora do flip,
+  // só segmenta respostas longas (>120). No flip 3D, segmenta SEMPRE que houver
+  // mais de uma parte (a resposta "vai aparecendo por partes" ao virar a carta).
   const answerEl = document.getElementById('flash-answer');
   const card = flashcardsToday[currentFlashIndex];
-  if (!_examMode && card && card.resposta && card.resposta.length > 120) {
+  const _segEligivel = !_examMode && card && card.resposta
+    && (card.resposta.length > 120 || (_flipMode && card.card_tipo !== 'oclusao'));
+  if (_segEligivel) {
     const parts = _segmentText(card.resposta);
-    let currentPart = 0;
-    answerEl.innerHTML = `<div style="font-size:0.82rem;color:var(--text);">${parts[0]}</div>`
-      + (parts.length > 1 ? `<button id="seg-more-btn" onclick="revealNextSegment()" style="margin-top:6px;background:var(--bg-surface);border:1px solid var(--border);border-radius:6px;padding:4px 10px;color:var(--accent);font-size:0.72rem;cursor:pointer;">Parte ${currentPart + 2}/${parts.length} ▼</button>` : '')
-      + `<div style="font-size:0.6rem;color:var(--text-sub);margin-top:4px;">Segmenting (Mayer, 2009): revelar em partes reduz cognitive overload</div>`;
+    const currentPart = 0;
+    if (parts.length > 1) {
+      answerEl.innerHTML = `<div style="font-size:0.82rem;color:var(--text);">${parts[0]}</div>`
+        + `<button id="seg-more-btn" onclick="revealNextSegment()" style="margin-top:6px;background:var(--bg-surface);border:1px solid var(--border);border-radius:6px;padding:4px 10px;color:var(--accent);font-size:0.72rem;cursor:pointer;">▼ Próxima parte ${currentPart + 2}/${parts.length}</button>`
+        + `<div style="font-size:0.6rem;color:var(--text-sub);margin-top:4px;">Segmenting (Mayer, 2009): revelar em partes reduz cognitive overload</div>`;
+      window._segParts = parts;
+      window._segCurrent = 0;
+    } else {
+      answerEl.innerHTML = `<div style="font-size:0.82rem;color:var(--text);">${parts[0]}</div>`;
+      window._segParts = null;
+    }
     answerEl.style.display = 'block';
-    window._segParts = parts;
-    window._segCurrent = 0;
   } else {
     answerEl.style.display = 'block';
   }
@@ -2167,10 +2241,11 @@ function _handleFlashKey(e) {
   const respostaVisivel = rv && rv.style.display !== 'none' && rv.querySelector('.flash-rate-btn');
   const podeRevelar = rb && rb.style.display !== 'none';
 
-  // Espaço/Enter → revelar a resposta (quando ainda oculta)
+  // Espaço/Enter → virar a carta (flip 3D) ou revelar a resposta (quando ainda oculta)
   if ((e.key === ' ' || e.key === 'Enter' || e.code === 'Space') && podeRevelar && !respostaVisivel) {
     e.preventDefault();
-    revealAnswer();
+    if (_flipMode && !_examMode) flipCard();
+    else revealAnswer();
     return;
   }
 
