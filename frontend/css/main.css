@@ -901,7 +901,7 @@ select#timer-select { background: #313244; color: #cdd6f4; border: 1px solid #45
   inset: 0;
   width: 100%;
   height: 100%;
-  padding: 24px 20px;
+  padding: 20px 20px 52px;
   box-sizing: border-box;
   border-radius: 14px;
   backface-visibility: hidden;
@@ -917,6 +917,10 @@ select#timer-select { background: #313244; color: #cdd6f4; border: 1px solid #45
   border: 1px solid var(--green, #a6e3a1);
   transform: rotateY(180deg);
 }
+/* Só a face VISÍVEL recebe cliques — evita a face oculta (girada) interceptar o
+   clique da seta. É a correção do bug em que ◀ (desvirar) não respondia. */
+#flash-card-area.flip-mode:not(.flipped) .flash-flip-back { pointer-events: none; }
+#flash-card-area.flip-mode.flipped .flash-flip-front { pointer-events: none; }
 /* No flip, o #flash-answer não usa o card interno de fundo (a face traseira já é
    o "verso"). A visibilidade continua controlada pelo JS (revealAnswer). */
 #flash-card-area.flip-mode #flash-answer {
@@ -924,29 +928,31 @@ select#timer-select { background: #313244; color: #cdd6f4; border: 1px solid #45
   padding: 0;
   margin: 0;
 }
-/* Setas de virar/desvirar */
+/* Setas de virar/desvirar — na PARTE INFERIOR da carta, centralizadas, para não
+   sobrepor o conteúdo (pergunta/resposta ficam acima). */
 #flash-card-area.flip-mode .flash-flip-arrow {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  gap: 6px;
+  min-width: 120px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 16px;
   border: none;
   background: var(--accent, #cba6f7);
   color: var(--bg, #1e1e2e);
-  font-size: 1rem;
+  font-size: 0.8rem;
   font-weight: 700;
   cursor: pointer;
-  opacity: 0.85;
-  z-index: 2;
+  opacity: 0.9;
+  z-index: 3;
 }
 #flash-card-area.flip-mode .flash-flip-arrow:hover { opacity: 1; }
-#flash-card-area.flip-mode .flash-flip-arrow-next { right: 10px; }
-#flash-card-area.flip-mode .flash-flip-arrow-back { left: 10px; }
 
 /* Respeita usuários com movimento reduzido: sem rotação (fade simples). */
 @media (prefers-reduced-motion: reduce) {
