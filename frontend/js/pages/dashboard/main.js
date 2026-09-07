@@ -6,7 +6,7 @@ import {
   renderChartHoras, renderChartAcertos, renderChartMaterias, renderChartEdital,
   loadRadar, loadEvolucao, loadHeatmapErros, loadMetasRealizado, loadHeatmap,
   loadProjecaoNota, loadRaioX, loadAnaliseErros, renderPratica, renderRelatorio,
-  loadVelocidade, loadConsistencia, loadRankingMaterias
+  loadVelocidade, loadConsistencia, loadRankingMaterias, showResumoDiaModal
 } from './charts.js';
 import { renderMetas } from './metas.js';
 import {
@@ -1145,6 +1145,7 @@ setTimeout(initPushPermissionBanner, 2000);
 
 // ===== Window assignments for HTML onclick/onchange =====
 window.exportStats = exportStats;
+window.showResumoDiaModal = showResumoDiaModal;
 window.setCalMode = setCalMode;
 window.regenerarCalendario = regenerarCalendario;
 window.regenerarInteligente = regenerarInteligente;

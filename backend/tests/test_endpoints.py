@@ -678,6 +678,41 @@ class TestDashboard:
         r = client.get("/api/resumo-diario")
         assert r.status_code == 200
         assert "data" in r.json()
+        assert r.json()["is_hoje"] is True
+
+    def test_resumo_diario_data_especifica(self, client):
+        """Com ?data=AAAA-MM-DD, retorna as sessões daquele dia (não hoje)."""
+        conn = sqlite3.connect(_tmp_db.name)
+        conn.execute(
+            "INSERT INTO sessoes_estudo (materia, horas, data, tipo, user_id) VALUES (?, ?, ?, 'leitura', 1)",
+            ("Historia Dia Passado", 1.25, "2024-01-15"),
+        )
+        conn.commit()
+        conn.close()
+
+        r = client.get("/api/resumo-diario", params={"data": "2024-01-15"})
+        assert r.status_code == 200
+        data = r.json()
+        assert data["data"] == "2024-01-15"
+        assert data["is_hoje"] is False
+        alvo = next((s for s in data["sessoes"] if s["materia"] == "Historia Dia Passado"), None)
+        assert alvo is not None, "sessão do dia passado não apareceu"
+        assert alvo["horas"] == 1.25
+
+    def test_resumo_diario_data_sem_atividade(self, client):
+        """Dia sem atividade retorna zeros e mensagem apropriada."""
+        r = client.get("/api/resumo-diario", params={"data": "2020-06-01"})
+        assert r.status_code == 200
+        data = r.json()
+        assert data["is_hoje"] is False
+        assert data["horas"] == 0
+        assert data["sessoes"] == []
+        assert "Nenhuma atividade" in data["mensagem"]
+
+    def test_resumo_diario_data_invalida(self, client):
+        """Formato/valor de data inválido retorna 400."""
+        assert client.get("/api/resumo-diario", params={"data": "15/01/2024"}).status_code == 400
+        assert client.get("/api/resumo-diario", params={"data": "2024-13-40"}).status_code == 400
 
     def test_resumo_diario_sessao_curta_nao_vira_zero(self, client):
         """Sessão curta (ex: 2min de questões) não deve aparecer como 0h.

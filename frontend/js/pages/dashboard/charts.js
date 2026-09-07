@@ -1,5 +1,6 @@
 // charts.js — Chart.js related rendering (horas, acertos, materias, edital, radar, evolucao, heatmap-erros, metas-realizado)
 import { getCSSVar, COLORS } from './helpers.js';
+import { escapeHtml, escapeAttr } from '../../modules/utils.js';
 
 export function renderChartHoras(data) {
   if (typeof Chart === 'undefined') { setTimeout(() => renderChartHoras(data), 200); return; }
@@ -239,8 +240,11 @@ export async function loadHeatmap() {
     const data = await fetch('/api/heatmap').then(r => r.json());
     const el = document.getElementById('heatmap-box');
     if (!data.length) { el.innerHTML = '<p style="color:var(--text-sub);font-size:0.85rem;">Estude para gerar o heatmap.</p>'; return; }
+    // Guarda o registro completo do dia (não só a intensidade) para tooltip
+    // detalhado e para o modal de resumo ao clicar.
     const dateMap = {};
-    data.forEach(d => { dateMap[d.data] = d.intensidade; });
+    data.forEach(d => { dateMap[d.data] = d; });
+    const hFmt = (h) => { h = h || 0; const hrs = Math.floor(h); const mins = Math.round((h - hrs) * 60); if (hrs === 0) return `${mins}min`; if (mins === 0) return `${hrs}h`; return `${hrs}h ${mins}min`; };
     let html = '<div class="heatmap-grid">';
     const today = new Date();
     // Janela deslizante de 1 ano (últimos 365 dias até hoje) — alinhada ao backend
@@ -256,12 +260,76 @@ export async function loadHeatmap() {
       const mm = String(d.getMonth() + 1).padStart(2, '0');
       const dd = String(d.getDate()).padStart(2, '0');
       const key = `${yyyy}-${mm}-${dd}`;  // data local (evita shift de fuso do toISOString)
-      const level = dateMap[key] || 0;
-      html += `<div class="heatmap-cell ${level > 0 ? 'l'+level : ''}" title="${key}: ${level > 0 ? 'estudou' : 'sem estudo'}"></div>`;
+      const info = dateMap[key];
+      const level = info ? info.intensidade : 0;
+      // Tooltip detalhado usando os números que já vêm do backend.
+      let tip;
+      if (info && level > 0) {
+        const partes = [];
+        if (info.horas) partes.push(`⏱ ${hFmt(info.horas)}`);
+        if (info.questoes) partes.push(`❓ ${info.questoes} questões`);
+        if (info.flashcards) partes.push(`🧠 ${info.flashcards} flashcards`);
+        tip = `${key} — ${partes.length ? partes.join(' · ') : 'estudou'}`;
+      } else {
+        tip = `${key}: sem estudo`;
+      }
+      const clickable = level > 0;
+      html += `<div class="heatmap-cell ${level > 0 ? 'l'+level : ''}" title="${escapeAttr(tip)}"${clickable ? ` style="cursor:pointer;" onclick="showResumoDiaModal('${key}')"` : ''}></div>`;
     }
     html += '</div>';
     el.innerHTML = html;
   } catch(e) {}
+}
+
+// ===== Modal de Resumo de um dia (clique numa célula do heatmap) =====
+// Reaproveita o endpoint /api/resumo-diario?data=AAAA-MM-DD (agora parametrizável).
+export async function showResumoDiaModal(dataISO) {
+  const titleId = `rd-title-${Date.now()}`;
+  const overlay = document.createElement('div');
+  overlay.id = 'resumo-dia-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:99999;display:flex;align-items:center;justify-content:center;animation:fadeIn 0.15s;';
+  overlay.innerHTML = `<div role="dialog" aria-modal="true" aria-labelledby="${titleId}" style="background:#313244;border-radius:16px;padding:24px;max-width:460px;width:90%;max-height:80vh;overflow:auto;box-shadow:0 8px 32px rgba(0,0,0,0.5);border:1px solid #45475a;animation:scaleIn 0.15s;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <h3 id="${titleId}" style="color:#89b4fa;font-size:1.05rem;margin:0;">📅 ${escapeHtml(dataISO)}</h3>
+      <button id="rd-close" aria-label="Fechar" style="background:none;border:none;color:#cdd6f4;font-size:1.3rem;cursor:pointer;line-height:1;">×</button>
+    </div>
+    <div id="rd-body" style="font-size:0.88rem;color:#cdd6f4;line-height:1.6;">Carregando…</div>
+  </div>`;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.querySelector('#rd-close').onclick = close;
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  const onEsc = (e) => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onEsc); } };
+  document.addEventListener('keydown', onEsc);
+
+  const hFmt = (h) => { h = h || 0; const hrs = Math.floor(h); const mins = Math.round((h - hrs) * 60); if (hrs === 0) return `${mins}min`; if (mins === 0) return `${hrs}h`; return `${hrs}h ${mins}min`; };
+  const body = overlay.querySelector('#rd-body');
+  try {
+    const data = await fetch(`/api/resumo-diario?data=${encodeURIComponent(dataISO)}`).then(r => r.json());
+    let html = `<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px;">
+      <div>⏱ <strong>${hFmt(data.horas)}</strong> estudadas</div>
+      <div>❓ <strong>${data.questoes || 0}</strong> questões</div>
+      <div>🧠 <strong>${data.flashcards || 0}</strong> flashcards</div>
+    </div>`;
+    if (data.sessoes && data.sessoes.length) {
+      html += `<div style="font-weight:600;margin-bottom:6px;">📚 Tempo por matéria</div>`;
+      html += data.sessoes.map(s => `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #45475a;"><span>${escapeHtml(s.materia || '—')}</span><span style="color:#89b4fa;">${hFmt(s.horas)}</span></div>`).join('');
+    }
+    if (data.questoes_detalhes && data.questoes_detalhes.length) {
+      html += `<div style="font-weight:600;margin:12px 0 6px;">❓ Questões por matéria</div>`;
+      html += data.questoes_detalhes.map(q => {
+        const pct = q.total ? Math.round((q.acertos / q.total) * 100) : 0;
+        const cor = pct >= 60 ? '#a6e3a1' : '#f38ba8';
+        return `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #45475a;"><span>${escapeHtml(q.materia || '—')}</span><span style="color:${cor};">${q.acertos}/${q.total} (${pct}%)</span></div>`;
+      }).join('');
+    }
+    if ((!data.sessoes || !data.sessoes.length) && (!data.questoes_detalhes || !data.questoes_detalhes.length)) {
+      html += `<p style="color:#a6adc8;">${escapeHtml(data.mensagem || 'Nenhuma atividade registrada nesse dia.')}</p>`;
+    }
+    body.innerHTML = html;
+  } catch (e) {
+    body.innerHTML = '<p style="color:#f38ba8;">Erro ao carregar o resumo do dia.</p>';
+  }
 }
 
 export async function loadProjecaoNota() {

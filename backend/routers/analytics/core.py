@@ -3,7 +3,7 @@ import re
 from datetime import date, timedelta
 
 from deps import get_user_id
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from services import get_acertos_por_materia, get_horas_estudadas
 
 from database import get_db_session
@@ -51,37 +51,69 @@ def relatorio_semanal(conn=Depends(get_db_session), user_id: int = Depends(get_u
     }
 
 
-@router.get("/api/resumo-diario")
-def resumo_diario(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
-    hoje = conn.execute("SELECT * FROM streaks WHERE data = ? AND user_id = ?", (today_str(), user_id)).fetchone()
-    sessoes = conn.execute("SELECT materia, SUM(horas) FROM sessoes_estudo WHERE data = ? AND user_id = ? GROUP BY materia", (today_str(), user_id)).fetchall()
-    q_hoje = conn.execute("""
+@router.get("/api/resumo-diario", summary="Resumo detalhado de um dia (padrão: hoje)")
+def resumo_diario(
+    data: str = Query(None, description="Data no formato AAAA-MM-DD. Se omitido, usa hoje."),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    # Data alvo: hoje por padrão; se fornecida, valida o formato AAAA-MM-DD.
+    alvo = today_str()
+    if data:
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", data or ""):
+            raise HTTPException(status_code=400, detail="Formato de data inválido. Use AAAA-MM-DD.")
+        try:
+            date.fromisoformat(data)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Data inválida.") from None
+        alvo = data
+
+    is_hoje = alvo == today_str()
+
+    registro = conn.execute("SELECT * FROM streaks WHERE data = ? AND user_id = ?", (alvo, user_id)).fetchone()
+    sessoes = conn.execute("SELECT materia, SUM(horas) FROM sessoes_estudo WHERE data = ? AND user_id = ? GROUP BY materia", (alvo, user_id)).fetchall()
+    q_dia = conn.execute("""
         SELECT q.materia, COUNT(*) as total, SUM(qr.acertou) as acertos
         FROM questoes_respostas qr JOIN questoes q ON q.id=qr.questao_id
         WHERE qr.data = ? AND qr.user_id = ? GROUP BY q.materia
-    """, (today_str(), user_id)).fetchall()
+    """, (alvo, user_id)).fetchall()
     menos_estudada = conn.execute("""
         SELECT materia, SUM(horas_estudadas) as h FROM edital
         WHERE status != 'Concluído' AND user_id = ? GROUP BY materia ORDER BY h ASC LIMIT 3
     """, (user_id,)).fetchall()
 
-    # Fonte de verdade para "questões de hoje": a tabela real questoes_respostas
-    # (soma de q_hoje), não o contador streaks.questoes_resolvidas — que também é
+    # Fonte de verdade para "questões do dia": a tabela real questoes_respostas
+    # (soma de q_dia), não o contador streaks.questoes_resolvidas — que também é
     # incrementado por revisões do caderno de erros e divergia do dashboard.
-    questoes_hoje_total = sum(r[1] for r in q_hoje)
+    questoes_dia_total = sum(r[1] for r in q_dia)
+
+    tem_atividade = bool(registro) or bool(sessoes) or bool(q_dia)
+
+    # Mensagem contextualizada: só fala em "amanhã" quando o dia consultado é hoje.
+    if is_hoje:
+        mensagem = (
+            "Continue assim! Amanhã foque nas matérias sugeridas."
+            if registro else "Você não estudou hoje. Começar é o mais difícil!"
+        )
+    else:
+        mensagem = (
+            "Resumo do dia selecionado."
+            if tem_atividade else "Nenhuma atividade registrada nesse dia."
+        )
 
     return {
-        "data": today_str(),
-        "horas": hoje["horas_estudadas"] if hoje else 0,
-        "questoes": questoes_hoje_total,
-        "flashcards": hoje["flashcards_revisados"] if hoje else 0,
+        "data": alvo,
+        "is_hoje": is_hoje,
+        "horas": registro["horas_estudadas"] if registro else 0,
+        "questoes": questoes_dia_total,
+        "flashcards": registro["flashcards_revisados"] if registro else 0,
         "sessoes": [
             {"materia": r[0], "horas": round(r[1], 2), "minutos": round((r[1] or 0) * 60)}
             for r in sessoes
         ],
-        "questoes_detalhes": [{"materia": r[0], "total": r[1], "acertos": r[2] or 0} for r in q_hoje],
+        "questoes_detalhes": [{"materia": r[0], "total": r[1], "acertos": r[2] or 0} for r in q_dia],
         "sugestao_amanha": [r[0] for r in menos_estudada],
-        "mensagem": "Continue assim! Amanhã foque nas matérias sugeridas." if hoje else "Você não estudou hoje. Começar é o mais difícil!"
+        "mensagem": mensagem,
     }
 
 
