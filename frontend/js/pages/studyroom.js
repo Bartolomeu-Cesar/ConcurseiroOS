@@ -11,6 +11,12 @@ if (token) headers['Authorization'] = `Bearer ${token}`;
 let currentRoom = null;
 let pollInterval = null;
 let heartbeatInterval = null;
+// WebSocket real-time
+let roomWS = null;
+let wsConnected = false;
+let wsReconnectTimer = null;
+let wsReconnectAttempts = 0;
+let seenChatIds = new Set();
 let pomodoroTimer = null;
 let pomodoroSeconds = 0;
 let pomodoroPhase = 'focus'; // 'focus' or 'break'
@@ -111,6 +117,7 @@ function enterRoomView(codigo) {
   srSessionMetrics = { flashcards: 0, questoes: 0, sumulas: 0, acertos: 0 };
   updateStatusButtons();
   startPolling();
+  connectRoomWS(codigo);
   startHeartbeat();
   startPomodoro();
   loadTodos();
@@ -138,6 +145,7 @@ function sairSala() {
   stopHeartbeat();
   stopPomodoro();
   stopAmbient();
+  disconnectRoomWS();
   currentRoom = null;
   todos = [];
   breakCardsLoaded = false;
@@ -212,12 +220,117 @@ window.copiarCodigo = copiarCodigo;
 
 function startPolling() {
   pollRoom();
-  pollInterval = setInterval(pollRoom, 3000);
+  // WS entrega chat/presença em ~1s; o polling vira rede de segurança mais lenta.
+  // Se o WS cair, restauramos o polling rápido (ver scheduleReconnectWS).
+  pollInterval = setInterval(pollRoom, wsConnected ? 15000 : 3000);
 }
 
 function stopPolling() {
   if (pollInterval) clearInterval(pollInterval);
   pollInterval = null;
+}
+
+function restartPolling() {
+  stopPolling();
+  startPolling();
+}
+
+// ============================================================
+// WEBSOCKET REAL-TIME (chat/presença) — fallback: polling
+// ============================================================
+function connectRoomWS(codigo) {
+  disconnectRoomWS();
+  try {
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const tk = localStorage.getItem('auth_token');
+    const qs = tk ? `?token=${encodeURIComponent(tk)}` : '';
+    roomWS = new WebSocket(`${proto}://${location.host}/api/studyroom/ws/${codigo}${qs}`);
+
+    roomWS.onopen = () => {
+      wsConnected = true;
+      wsReconnectAttempts = 0;
+      restartPolling(); // reduz frequência do polling (rede de segurança)
+      // ping periódico para manter viva a conexão através de proxies
+      roomWS._ping = setInterval(() => {
+        if (roomWS && roomWS.readyState === WebSocket.OPEN) roomWS.send(JSON.stringify({ type: 'ping' }));
+      }, 25000);
+    };
+
+    roomWS.onmessage = (ev) => {
+      let msg;
+      try { msg = JSON.parse(ev.data); } catch { return; }
+      if (msg.type === 'chat' && Array.isArray(msg.mensagens)) {
+        appendChatMessages(msg.mensagens);
+      } else if (msg.type === 'presenca' && Array.isArray(msg.participantes)) {
+        updatePresenca(msg.participantes);
+      }
+    };
+
+    roomWS.onclose = () => {
+      wsConnected = false;
+      if (roomWS && roomWS._ping) clearInterval(roomWS._ping);
+      restartPolling(); // volta ao polling rápido enquanto reconecta
+      scheduleReconnectWS(codigo);
+    };
+
+    roomWS.onerror = () => { try { roomWS.close(); } catch {} };
+  } catch (e) {
+    wsConnected = false;
+  }
+}
+
+function scheduleReconnectWS(codigo) {
+  if (!currentRoom || currentRoom !== codigo) return; // saiu da sala
+  if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
+  // Backoff exponencial limitado (2s, 4s, 8s ... máx 30s).
+  const delay = Math.min(30000, 2000 * Math.pow(2, wsReconnectAttempts));
+  wsReconnectAttempts++;
+  wsReconnectTimer = setTimeout(() => {
+    if (currentRoom === codigo) connectRoomWS(codigo);
+  }, delay);
+}
+
+function disconnectRoomWS() {
+  if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
+  if (roomWS) {
+    try { if (roomWS._ping) clearInterval(roomWS._ping); roomWS.onclose = null; roomWS.close(); } catch {}
+    roomWS = null;
+  }
+  wsConnected = false;
+  seenChatIds = new Set();
+}
+
+// Anexa mensagens novas de chat sem re-renderizar tudo (evita flicker).
+function appendChatMessages(mensagens) {
+  const container = document.getElementById('chat-messages');
+  if (!container) return;
+  const wasAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 40;
+  let added = false;
+  for (const m of mensagens) {
+    if (m.id != null && seenChatIds.has(m.id)) continue;
+    if (m.id != null) seenChatIds.add(m.id);
+    const time = m.created_at ? new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+    const div = document.createElement('div');
+    div.className = 'chat-msg';
+    div.innerHTML = `<div class="chat-msg-name">${escHtml(m.nome)}</div><div class="chat-msg-text">${escHtml(m.mensagem)}</div><div class="chat-msg-time">${time}</div>`;
+    container.appendChild(div);
+    added = true;
+  }
+  if (added && wasAtBottom) container.scrollTop = container.scrollHeight;
+}
+
+// Atualiza o status/tempo dos participantes ao vivo (presença via WS).
+// Presença via WS: dispara um refresh COMPLETO (throttled) para reaproveitar o
+// render canônico de renderRoom (com is_me, meta, nudge etc.), evitando divergência
+// de markup. O chat continua sendo aplicado incrementalmente (instantâneo).
+let _presencaRefreshPending = false;
+function updatePresenca(_participantes) {
+  if (_presencaRefreshPending || !currentRoom) return;
+  _presencaRefreshPending = true;
+  setTimeout(() => {
+    _presencaRefreshPending = false;
+    if (currentRoom) pollRoom();
+  }, 800);
 }
 
 async function pollRoom() {
@@ -262,8 +375,9 @@ function renderRoom(data) {
   // Real-time ranking
   renderRanking(data.participantes);
 
-  // Chat
-  renderChat(data.chat_messages);
+  // Chat — quando o WebSocket está ativo, ele é a fonte do chat (append
+  // incremental). O poll só renderiza o chat como fallback (WS desconectado).
+  if (!wsConnected) renderChat(data.chat_messages);
 
   // Timer phase label (for livre mode)
   if (data.tecnica === 'livre') {
@@ -371,8 +485,13 @@ async function enviarMsg() {
   if (!mensagem || !currentRoom) return;
   input.value = '';
   try {
-    await apiPost(`/chat/${currentRoom}`, { mensagem });
-    pollRoom(); // refresh immediately
+    if (wsConnected && roomWS && roomWS.readyState === WebSocket.OPEN) {
+      // Envia via WS; o tailer devolve a mensagem (com id) para todos, inclusive nós.
+      roomWS.send(JSON.stringify({ type: 'chat', mensagem }));
+    } else {
+      await apiPost(`/chat/${currentRoom}`, { mensagem });
+      pollRoom(); // refresh immediately (fallback)
+    }
   } catch (e) {
     toast('Erro: ' + e.message, 'error');
   }

@@ -11,6 +11,7 @@ from .discussion import router as discussion_router
 from .gamification import router as gamification_router
 from .metacognition import router as metacognition_router
 from .pomodoro import router as pomodoro_router
+from .ws import router as ws_router
 
 # Router combinado — mantém a mesma interface que o monolítico anterior
 router = APIRouter()
@@ -19,3 +20,4 @@ router.include_router(pomodoro_router)
 router.include_router(gamification_router)
 router.include_router(metacognition_router)
 router.include_router(discussion_router)
+router.include_router(ws_router)
