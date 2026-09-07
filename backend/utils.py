@@ -116,22 +116,55 @@ def calcular_tempo_flashcard(
     com chamadores antigos; quando 0/ausentes, o cálculo recai apenas no texto +
     fsrs_state (comportamento anterior, porém com teto de recuperação maior).
     """
+    return detalhar_tempo_flashcard(
+        pergunta, resposta, fsrs_state, difficulty, lapses, minimo, maximo
+    )["tempo_segundos"]
+
+
+# Rótulos legíveis do estado FSRS (para o badge de transparência na UI).
+_LABEL_FSRS_FLASHCARD = {
+    0: "novo",
+    1: "aprendendo",
+    2: "maduro",
+    3: "reaprendendo",
+}
+
+
+def detalhar_tempo_flashcard(
+    pergunta: str,
+    resposta: str,
+    fsrs_state: int = 0,
+    difficulty: float = 0,
+    lapses: int = 0,
+    minimo: int = 10,
+    maximo: int = 180,
+) -> dict:
+    """Igual a `calcular_tempo_flashcard`, mas retorna o TOTAL e o detalhamento
+    dos fatores, para exibir na UI de revisão um badge transparente do tipo
+    "⏱ 42s · difícil ×1.4 · 2 recaídas ×1.16".
+
+    Retorna dict:
+      {
+        "tempo_segundos": int,
+        "tempo_base": int,            # antes dos multiplicadores
+        "fatores": {"estado": {...}, "dificuldade": {...}, "lapses": {...}},
+        "motivos": [str, ...],        # rótulos curtos prontos p/ exibir
+      }
+    """
     palavras_pergunta = len(pergunta.split()) if pergunta else 4
     palavras_resposta = len(resposta.split()) if resposta else 4
 
     tempo_leitura_pergunta = (palavras_pergunta / _WPM_COMPREENSAO) * 60
     tempo_leitura_resposta = (palavras_resposta / _WPM_COMPREENSAO) * 60
 
-    # Recuperação ativa proporcional à densidade da resposta (análogo ao tempo de
-    # avaliar cada alternativa no desafio). ~1 conceito a cada 6 palavras; 3s por
-    # conceito; limitado a [4s, 60s] para não explodir nem virar constante.
     conceitos = max(1, round(palavras_resposta / 6))
     tempo_recuperacao = min(60, max(4, conceitos * 3))
 
-    fator_estado = _FATOR_FSRS_FLASHCARD.get(fsrs_state if fsrs_state is not None else 0, 1.15)
+    tempo_base = tempo_leitura_pergunta + tempo_recuperacao + tempo_leitura_resposta
 
-    # Dificuldade FSRS (D): escala ~1–10. Quando ausente (0), não penaliza.
-    # D=1 → 0.9 ; D=5.5 (neutro inicial) → ~1.13 ; D=10 → ~1.6.
+    estado_key = fsrs_state if fsrs_state is not None else 0
+    fator_estado = _FATOR_FSRS_FLASHCARD.get(estado_key, 1.15)
+
     d = difficulty or 0
     if d and d > 0:
         d = max(1.0, min(10.0, float(d)))
@@ -139,16 +172,34 @@ def calcular_tempo_flashcard(
     else:
         fator_dificuldade = 1.0
 
-    # Lapses: +8% por esquecimento, até +40%.
-    fator_lapses = 1.0 + min(0.4, max(0, int(lapses or 0)) * 0.08)
+    n_lapses = max(0, int(lapses or 0))
+    fator_lapses = 1.0 + min(0.4, n_lapses * 0.08)
 
-    tempo = int(
-        (tempo_leitura_pergunta + tempo_recuperacao + tempo_leitura_resposta)
-        * fator_estado
-        * fator_dificuldade
-        * fator_lapses
-    )
-    return max(minimo, min(maximo, tempo))
+    tempo = int(tempo_base * fator_estado * fator_dificuldade * fator_lapses)
+    tempo = max(minimo, min(maximo, tempo))
+
+    # Monta rótulos curtos apenas para os fatores que efetivamente pesam (>1.0),
+    # em ordem de relevância. O estado só aparece quando é diferente de "maduro".
+    motivos = []
+    if fator_dificuldade > 1.0:
+        rotulo_dif = "difícil" if fator_dificuldade >= 1.25 else "acima da média"
+        motivos.append(f"{rotulo_dif} ×{round(fator_dificuldade, 2)}")
+    if fator_lapses > 1.0:
+        rec = "recaída" if n_lapses == 1 else "recaídas"
+        motivos.append(f"{n_lapses} {rec} ×{round(fator_lapses, 2)}")
+    if fator_estado > 1.0:
+        motivos.append(f"{_LABEL_FSRS_FLASHCARD.get(estado_key, 'novo')} ×{round(fator_estado, 2)}")
+
+    return {
+        "tempo_segundos": tempo,
+        "tempo_base": int(round(tempo_base)),
+        "fatores": {
+            "estado": {"valor": round(fator_estado, 2), "label": _LABEL_FSRS_FLASHCARD.get(estado_key, "novo")},
+            "dificuldade": {"valor": round(fator_dificuldade, 2), "d": round(float(d), 1) if d else 0},
+            "lapses": {"valor": round(fator_lapses, 2), "n": n_lapses},
+        },
+        "motivos": motivos,
+    }
 def today_str():
     return date.today().isoformat()
 

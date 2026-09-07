@@ -17,6 +17,7 @@ os.environ.setdefault("AUTH_ENABLED", "false")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils import calcular_tempo_flashcard as calc
+from utils import detalhar_tempo_flashcard as detalhar
 
 # ---------------------------------------------------------------------------
 # Unitários da função de tempo
@@ -123,6 +124,21 @@ def test_lapses_tem_teto():
     assert t5 == t50, (t5, t50)
 
 
+def test_detalhar_retorna_total_e_motivos_coerentes():
+    """detalhar_tempo_flashcard: total bate com calc(); motivos citam os fatores
+    que pesaram; card neutro (maduro, D baixo, sem lapses) não lista motivos."""
+    p = "Enuncie o princípio da legalidade."
+    r = " ".join(["conceito"] * 14)
+    det = detalhar(p, r, 2, difficulty=9.0, lapses=2)
+    assert det["tempo_segundos"] == calc(p, r, 2, difficulty=9.0, lapses=2)
+    joined = " ".join(det["motivos"]).lower()
+    assert "difícil" in joined
+    assert "recaída" in joined or "recaídas" in joined
+    # Neutro: maduro (estado ×1.0), sem dificuldade nem lapses → sem motivos.
+    det_neutro = detalhar(p, r, 2, difficulty=0, lapses=0)
+    assert det_neutro["motivos"] == []
+
+
 def test_difficulty_ausente_mantem_compatibilidade():
     """Sem difficulty/lapses (chamadores antigos), o resultado é o mesmo de quando
     esses fatores são neutros (=1.0)."""
@@ -157,6 +173,34 @@ def test_card_curto_dificil_supera_card_curto_facil_via_payload(client):
     by_mat = {c["materia"]: c["tempo_segundos"] for c in cards}
     assert "Facil" in by_mat and "Dificil" in by_mat
     assert by_mat["Dificil"] > by_mat["Facil"], by_mat
+
+
+def test_today_expoe_tempo_detalhe_com_motivos(client):
+    """O payload de /today deve trazer `tempo_detalhe` com `motivos` para o badge
+    de transparência. Card difícil e com recaídas deve listar esses fatores."""
+    from utils import today_str
+
+    conn = sqlite3.connect(_tmp_db.name, timeout=10)
+    conn.execute("DELETE FROM flashcards WHERE 1=1")
+    conn.execute(
+        "INSERT INTO flashcards (pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia, fsrs_state, difficulty, lapses, user_id) "
+        "VALUES ('Enuncie o princípio.', 'Resposta razoavelmente densa com varios conceitos aqui.', ?, 1, 2.5, 3, 'DConst', 2, 9.0, 3, 1)",
+        (today_str(),),
+    )
+    conn.commit()
+    conn.close()
+
+    cards = client.get("/api/flashcards/today").json()
+    assert len(cards) >= 1
+    card = cards[0]
+    assert "tempo_detalhe" in card, "payload precisa expor tempo_detalhe para o badge"
+    det = card["tempo_detalhe"]
+    assert det["tempo_segundos"] == card["tempo_segundos"]
+    assert isinstance(det.get("motivos"), list)
+    # Card difícil (D=9) e com 3 recaídas → deve listar ambos os fatores.
+    joined = " ".join(det["motivos"]).lower()
+    assert "difícil" in joined or "×" in joined, det["motivos"]
+    assert "recaída" in joined, det["motivos"]
 
 
 # ---------------------------------------------------------------------------

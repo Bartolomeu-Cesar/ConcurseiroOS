@@ -17,7 +17,7 @@ from schemas import (
 from constants import SM2_FIRST_INTERVAL, SM2_INITIAL_EF, SM2_MIN_EF, SM2_SECOND_INTERVAL, SPEED_REVIEW_LIMIT
 from database import get_db_session
 from logger import log
-from utils import calcular_tempo_flashcard, sql_paginate, today_str, update_streak
+from utils import detalhar_tempo_flashcard, sql_paginate, today_str, update_streak
 
 router = APIRouter(prefix="", tags=["Flashcards"])
 
@@ -110,10 +110,12 @@ def get_flashcards_today(
         card.pop("_expanding_retrieval", None)
         # Tempo de referência por complexidade (para o timer regressivo na revisão),
         # análogo ao das questões. Calculado antes de remover fsrs_state.
-        card["tempo_segundos"] = calcular_tempo_flashcard(
+        _det = detalhar_tempo_flashcard(
             card.get("pergunta", ""), card.get("resposta", ""), card.get("fsrs_state") or 0,
             difficulty=card.get("difficulty") or 0, lapses=card.get("lapses") or 0,
         )
+        card["tempo_segundos"] = _det["tempo_segundos"]
+        card["tempo_detalhe"] = _det
         card.pop("fsrs_state", None)
         # Leech: expõe como booleano para o badge 🩸 na UI de revisão.
         card["is_leech"] = bool(card.get("is_leech"))
@@ -320,10 +322,12 @@ def get_custom_study(
     result = []
     for r in rows:
         card = dict(r)
-        card["tempo_segundos"] = calcular_tempo_flashcard(
+        _det = detalhar_tempo_flashcard(
             card.get("pergunta", ""), card.get("resposta", ""), card.get("fsrs_state") or 0,
             difficulty=card.get("difficulty") or 0, lapses=card.get("lapses") or 0,
         )
+        card["tempo_segundos"] = _det["tempo_segundos"]
+        card["tempo_detalhe"] = _det
         card.pop("fsrs_state", None)
         card["is_leech"] = bool(card.get("is_leech"))
         result.append(card)
@@ -473,10 +477,12 @@ def get_flashcards_aleatorio(
         card = dict(r)
         # Tempo de referência por complexidade (para o timer da sessão),
         # mesma fórmula da revisão SRS. Calculado antes de remover fsrs_state.
-        card["tempo_segundos"] = calcular_tempo_flashcard(
+        _det = detalhar_tempo_flashcard(
             card.get("pergunta", ""), card.get("resposta", ""), card.get("fsrs_state") or 0,
             difficulty=card.get("difficulty") or 0, lapses=card.get("lapses") or 0,
         )
+        card["tempo_segundos"] = _det["tempo_segundos"]
+        card["tempo_detalhe"] = _det
         card.pop("fsrs_state", None)
         result.append(card)
     return result

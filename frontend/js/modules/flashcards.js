@@ -77,6 +77,30 @@ export function _cleanupFlashTimers() {
 }
 
 /**
+ * Renderiza o badge de transparência do timer: tempo previsto + os fatores de
+ * complexidade que pesaram (dificuldade FSRS, recaídas/lapses, estado). Recebe
+ * o objeto `card.tempo_detalhe` vindo do backend (opcional). Sem detalhe, mostra
+ * apenas o tempo previsto; sem fatores relevantes, idem.
+ */
+function _renderFlashTimerBadge(detalhe, previstoSeg) {
+  const badge = document.getElementById('flash-timer-badge');
+  if (!badge) return;
+  const seg = Math.max(0, Math.round(previstoSeg || 0));
+  const motivos = (detalhe && Array.isArray(detalhe.motivos)) ? detalhe.motivos : [];
+  if (motivos.length) {
+    const txt = `🎯 previsto ${seg}s · ${motivos.join(' · ')}`;
+    badge.textContent = txt;
+    badge.title = `Tempo estimado pela complexidade do card: ${motivos.join(', ')}. É uma referência, não um limite.`;
+    badge.style.display = '';
+  } else {
+    // Card sem fatores extras (ex.: novo/maduro simples): só o tempo previsto.
+    badge.textContent = `🎯 previsto ${seg}s`;
+    badge.title = 'Tempo estimado pela complexidade do card (leitura + recall). É uma referência, não um limite.';
+    badge.style.display = '';
+  }
+}
+
+/**
  * Timer de revisão de flashcard em duas fases:
  *  1) Regressiva: parte do tempo previsto (card.tempo_segundos, calculado no
  *     backend a partir de enunciado + resposta + estado FSRS) e decresce até 0.
@@ -84,7 +108,7 @@ export function _cleanupFlashTimers() {
  *     estudante ainda leva até indicar acertou/errou (revelar a resposta chama
  *     _stopFlashTimer). Assim medimos o tempo real completo no card.
  */
-function _startFlashTimer(segundos) {
+function _startFlashTimer(segundos, detalhe) {
   _stopFlashTimer();
   _flashTimerMax = Math.max(1, segundos || 20);
   _flashTimerSeg = _flashTimerMax;
@@ -96,6 +120,11 @@ function _startFlashTimer(segundos) {
   const fill = document.getElementById('flash-timer-fill');
   const label = document.getElementById('flash-timer-label');
   if (!timer || !fill || !label) return;
+
+  // Badge de transparência: mostra o tempo previsto e POR QUÊ (fatores de
+  // complexidade que pesaram: dificuldade FSRS, recaídas, estado). Ex.:
+  // "🎯 previsto 42s · difícil ×1.4 · 2 recaídas ×1.16".
+  _renderFlashTimerBadge(detalhe, _flashTimerMax);
 
   timer.style.display = 'block';
   fill.style.width = '100%';
@@ -419,7 +448,7 @@ function showCurrentFlashcard() {
     rb.style.display = 'inline-block';
     _flashCardStart = Date.now();
     if (!_flashSessionStart) _flashSessionStart = Date.now();
-    _startFlashTimer(card.tempo_segundos);
+    _startFlashTimer(card.tempo_segundos, card.tempo_detalhe);
     _focusCard();
     return;
   }
@@ -478,7 +507,7 @@ function showCurrentFlashcard() {
   // Track time per card
   _flashCardStart = Date.now();
   if (!_flashSessionStart) _flashSessionStart = Date.now();
-  _startFlashTimer(card.tempo_segundos);
+  _startFlashTimer(card.tempo_segundos, card.tempo_detalhe);
   _focusCard();
 }
 
@@ -1369,7 +1398,7 @@ function showSessaoFlashcard() {
   rv.style.display = 'none';
   // Timer regressivo por complexidade (mesmo da revisão SRS): usa tempo_segundos
   // calculado no backend por pergunta+resposta+FSRS. Sem isso caía no fallback.
-  _startFlashTimer(card.tempo_segundos);
+  _startFlashTimer(card.tempo_segundos, card.tempo_detalhe);
   rb.onclick = function() {
     // NÃO para o timer ao revelar: segue até o estudante avaliar em sessaoNext().
     a.style.display = 'block'; rb.style.display = 'none';
