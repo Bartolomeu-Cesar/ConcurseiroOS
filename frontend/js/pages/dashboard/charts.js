@@ -2,6 +2,14 @@
 import { getCSSVar, COLORS } from './helpers.js';
 import { escapeHtml, escapeAttr } from '../../modules/utils.js';
 
+// Formata uma data ISO (YYYY-MM-DD) como DD-MM para os eixos dos gráficos.
+// O backend envia no padrão ISO; exibir 09-07 (MM-DD) confundia com o dia. Se o
+// valor não for ISO reconhecível, devolve-o intacto (não quebra outros labels).
+function fmtDiaMes(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+  return m ? `${m[3]}-${m[2]}` : String(iso ?? '');
+}
+
 export function renderChartHoras(data) {
   if (typeof Chart === 'undefined') { setTimeout(() => renderChartHoras(data), 200); return; }
   if (!data || data.length === 0) {
@@ -13,7 +21,7 @@ export function renderChartHoras(data) {
   new Chart(ctx, {
     type: 'bar',
     data: {
-      labels: data.map(d => d.data.slice(5)),
+      labels: data.map(d => fmtDiaMes(d.data)),
       datasets: [{
         label: 'Horas',
         data: data.map(d => d.total_horas),
@@ -39,7 +47,7 @@ export function renderChartAcertos(data) {
   new Chart(ctx, {
     type: 'line',
     data: {
-      labels: data.map(d => d.data.slice(5)),
+      labels: data.map(d => fmtDiaMes(d.data)),
       datasets: [{
         label: '% Acerto',
         data: data.map(d => d.total > 0 ? Math.round(d.acertos / d.total * 100) : 0),
