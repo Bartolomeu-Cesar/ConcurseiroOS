@@ -55,7 +55,7 @@ def _ensure_db():
 
 
 _NOVOS = ["study_time_reminder", "study_time_hour", "edital_review_reminders",
-          "pace_drop_alerts", "milestone_celebrations"]
+          "pace_drop_alerts", "milestone_celebrations", "balance_alerts"]
 
 
 def test_defaults_incluem_novos_campos(client):
@@ -69,6 +69,7 @@ def test_defaults_incluem_novos_campos(client):
     assert data["edital_review_reminders"] is True
     assert data["pace_drop_alerts"] is True
     assert data["milestone_celebrations"] is True
+    assert data["balance_alerts"] is True
     assert data["study_time_hour"] == 19
 
 
@@ -85,6 +86,7 @@ def test_update_persiste_novos_campos(client):
         "edital_review_reminders": False,
         "pace_drop_alerts": False,
         "milestone_celebrations": False,
+        "balance_alerts": False,
     }
     r = client.put("/api/push/preferences", json=payload)
     assert r.status_code == 200
@@ -96,6 +98,7 @@ def test_update_persiste_novos_campos(client):
     assert got["edital_review_reminders"] is False
     assert got["pace_drop_alerts"] is False
     assert got["milestone_celebrations"] is False
+    assert got["balance_alerts"] is False
 
 
 def test_study_time_hour_fora_do_range_422(client):
@@ -120,3 +123,88 @@ def test_check_triggers_roda_sem_erro(client):
     r = client.post("/api/push/check-triggers")
     assert r.status_code == 200
     assert isinstance(r.json(), dict)
+
+
+# ---------------------------------------------------------------------------
+# Detecção de DEFASAGEM (desequilíbrio entre teoria/questões/flashcards)
+# ---------------------------------------------------------------------------
+
+def _limpa_dados(uid=1):
+    c = sqlite3.connect(_tmp_db.name, timeout=10)
+    c.execute("DELETE FROM sessoes_estudo WHERE user_id = ?", (uid,))
+    c.execute("DELETE FROM questoes_respostas WHERE user_id = ?", (uid,))
+    c.execute("DELETE FROM streaks WHERE user_id = ?", (uid,))
+    c.commit()
+    return c
+
+
+def test_defasagem_sem_atividade_retorna_none(client):
+    from routers.notifications import _detectar_defasagem
+    c = _limpa_dados()
+    try:
+        assert _detectar_defasagem(c, 1) is None
+    finally:
+        c.close()
+
+
+def test_defasagem_muita_questao_sem_teoria_sugere_teoria(client):
+    from routers.notifications import _detectar_defasagem
+
+    from utils import today_str
+    c = _limpa_dados()
+    try:
+        # 25 questões hoje, zero teoria → deve sugerir teoria.
+        for _ in range(25):
+            c.execute(
+                "INSERT INTO questoes_respostas (questao_id, resposta_usuario, acertou, tempo_segundos, data, user_id) "
+                "VALUES (1, 'A', 1, 20, ?, 1)",
+                (today_str(),),
+            )
+        c.commit()
+        d = _detectar_defasagem(c, 1)
+        assert d is not None and d["tipo"] == "balance_teoria", d
+    finally:
+        c.close()
+
+
+def test_defasagem_muita_teoria_sem_questao_sugere_questoes(client):
+    from routers.notifications import _detectar_defasagem
+
+    from utils import today_str
+    c = _limpa_dados()
+    try:
+        # 4h de teoria (edital), zero questões → deve sugerir questões.
+        c.execute(
+            "INSERT INTO sessoes_estudo (materia, horas, data, tipo, user_id) VALUES ('Dir Const', 4.0, ?, 'edital', 1)",
+            (today_str(),),
+        )
+        c.commit()
+        d = _detectar_defasagem(c, 1)
+        assert d is not None and d["tipo"] == "balance_questoes", d
+    finally:
+        c.close()
+
+
+def test_defasagem_flashcards_vencidos_sugere_flashcards(client):
+    from routers.notifications import _detectar_defasagem
+
+    from utils import today_str
+    c = _limpa_dados()
+    try:
+        # Alguma atividade + 25 flashcards vencidos e poucas revisões.
+        c.execute(
+            "INSERT INTO sessoes_estudo (materia, horas, data, tipo, user_id) VALUES ('X', 0.2, ?, 'edital', 1)",
+            (today_str(),),
+        )
+        ontem = today_str()
+        for i in range(25):
+            c.execute(
+                "INSERT INTO flashcards (pergunta, resposta, proxima_revisao, intervalo_dias, user_id) "
+                "VALUES (?, 'r', ?, 1, 1)",
+                (f"fc {i}", ontem),
+            )
+        c.commit()
+        d = _detectar_defasagem(c, 1)
+        assert d is not None and d["tipo"] == "balance_flashcards", d
+    finally:
+        c.close()

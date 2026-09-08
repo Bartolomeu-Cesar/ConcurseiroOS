@@ -131,6 +131,9 @@ class NotificationPreferences(BaseModel):
     edital_review_reminders: bool = True
     pace_drop_alerts: bool = True
     milestone_celebrations: bool = True
+    # Alerta de DEFASAGEM/desequilíbrio: sugere focar no pilar negligenciado
+    # (teoria, questões ou flashcards) para não perder o foco nos estudos.
+    balance_alerts: bool = True
 
 
 # ============================================================
@@ -168,6 +171,7 @@ def _ensure_tables(conn):
         ("edital_review_reminders", "ALTER TABLE notification_preferences ADD COLUMN edital_review_reminders INTEGER DEFAULT 1"),
         ("pace_drop_alerts", "ALTER TABLE notification_preferences ADD COLUMN pace_drop_alerts INTEGER DEFAULT 1"),
         ("milestone_celebrations", "ALTER TABLE notification_preferences ADD COLUMN milestone_celebrations INTEGER DEFAULT 1"),
+        ("balance_alerts", "ALTER TABLE notification_preferences ADD COLUMN balance_alerts INTEGER DEFAULT 1"),
     ):
         try:
             conn.execute(_ddl)
@@ -391,6 +395,94 @@ def send_notification(body: PushSendRequest, conn=Depends(get_db_session)):
 # ============================================================
 
 
+def _detectar_defasagem(conn, user_id: int) -> dict | None:
+    """Detecta DESEQUILÍBRIO entre os pilares de estudo nos últimos 7 dias e sugere
+    focar no que está sendo negligenciado, para o estudante não perder o foco.
+
+    Pilares e sinais (janela de 7 dias):
+      - Teoria: horas em sessoes_estudo de tipos de estudo (edital/ciclo/leitura/
+        timer/studyroom/video/revisao_edital).
+      - Questões: nº de questões respondidas.
+      - Flashcards: nº de flashcards revisados + backlog vencido.
+
+    Evidência: aprendizado eficaz alterna teoria (codificação) com prática de
+    recuperação (questões/flashcards). Só teoria vira leitura passiva; só
+    questões sem base vira decoreba; flashcards vencidos acumulados = curva do
+    esquecimento. Retorna o desequilíbrio MAIS relevante (um por vez) ou None.
+
+    Retorna dict {tipo, title, body, url} pronto para enviar, ou None.
+    """
+    hoje = date.today()
+    ini_7d = (hoje - timedelta(days=6)).isoformat()
+
+    # Tipos de sessão considerados "teoria/estudo" (exclui questões/simulado).
+    tipos_teoria = ("edital", "ciclo", "leitura", "timer", "studyroom", "video", "revisao_edital", "feynman", "sumulas")
+    ph = ",".join("?" for _ in tipos_teoria)
+    horas_teoria = conn.execute(
+        f"SELECT COALESCE(SUM(horas),0) FROM sessoes_estudo WHERE user_id = ? AND data >= ? AND tipo IN ({ph})",
+        (user_id, ini_7d, *tipos_teoria),
+    ).fetchone()[0] or 0
+
+    n_questoes = conn.execute(
+        "SELECT COUNT(*) FROM questoes_respostas WHERE user_id = ? AND data >= ?",
+        (user_id, ini_7d),
+    ).fetchone()[0] or 0
+
+    fc_revisados = conn.execute(
+        "SELECT COALESCE(SUM(flashcards_revisados),0) FROM streaks WHERE user_id = ? AND data >= ?",
+        (user_id, ini_7d),
+    ).fetchone()[0] or 0
+
+    fc_vencidos = conn.execute(
+        "SELECT COUNT(*) FROM flashcards WHERE user_id = ? AND proxima_revisao <= ?",
+        (user_id, hoje.isoformat()),
+    ).fetchone()[0] or 0
+
+    # Só faz sentido alertar sobre desequilíbrio se houve ALGUMA atividade na
+    # semana (não confundir com inatividade total, já coberta por outro trigger).
+    ativo = (horas_teoria > 0) or (n_questoes > 0) or (fc_revisados > 0)
+    if not ativo:
+        return None
+
+    # 1) Flashcards vencidos acumulando e pouca revisão → priorizar revisão.
+    if fc_vencidos >= 20 and fc_revisados < 10:
+        return {
+            "tipo": "balance_flashcards",
+            "title": "🧠 Flashcards acumulando",
+            "body": (
+                f"Você tem {fc_vencidos} flashcards vencidos e revisou pouco esta semana. "
+                "Revisar no prazo trava a curva do esquecimento — 10 min já ajudam muito."
+            ),
+            "url": "/#flashcards",
+        }
+
+    # 2) Muita prática (questões) mas SEM teoria nova → risco de decorar sem base.
+    if n_questoes >= 20 and horas_teoria < 0.5:
+        return {
+            "tipo": "balance_teoria",
+            "title": "📖 Hora de reforçar a teoria",
+            "body": (
+                f"Você resolveu {n_questoes} questões, mas quase não estudou teoria esta semana. "
+                "Sem base conceitual, o acerto vira sorte — intercale teoria para fixar de verdade."
+            ),
+            "url": "/#edital",
+        }
+
+    # 3) Muita teoria mas QUASE sem questões → falta prática de recuperação.
+    if horas_teoria >= 3 and n_questoes < 5:
+        return {
+            "tipo": "balance_questoes",
+            "title": "✍️ Pratique com questões",
+            "body": (
+                f"Você estudou {horas_teoria:.1f}h de teoria, mas resolveu poucas questões. "
+                "Resolver questões (retrieval practice) fixa muito mais do que reler — teste-se hoje!"
+            ),
+            "url": "/questoes.html",
+        }
+
+    return None
+
+
 @router.post("/api/push/check-triggers", summary="Verificar e disparar notificações agendadas")
 def check_triggers(conn=Depends(get_db_session)):
     """Verifica todas as condições de notificação e envia para usuários elegíveis.
@@ -452,6 +544,7 @@ def check_triggers(conn=Depends(get_db_session)):
         edital_review_enabled = _pref("edital_review_reminders")
         pace_drop_enabled = _pref("pace_drop_alerts")
         milestone_enabled = _pref("milestone_celebrations")
+        balance_enabled = _pref("balance_alerts")
 
         # Skip if in quiet hours
         if _is_quiet_hours(conn, uid):
@@ -743,6 +836,22 @@ def check_triggers(conn=Depends(get_db_session)):
                             _log_notification(conn, uid, "milestone", "🏆 Marco alcançado!", msg)
                             results["milestone"] = results.get("milestone", 0) + 1
 
+        # --- 13. DEFASAGEM / DESEQUILÍBRIO DE ESTUDO (foco por pilar) ---
+        # Percebe quando o estudante está negligenciando teoria, questões ou
+        # flashcards e sugere focar no pilar defasado (sem perder o foco geral).
+        # Roda à tarde/noite, 1x/dia, e não durante quiet hours (já filtrado acima).
+        if balance_enabled and now.hour >= 16:  # noqa: SIM102
+            if not _already_sent_today(conn, uid, "balance_alert"):
+                defasagem = _detectar_defasagem(conn, uid)
+                if defasagem:
+                    # Um alerta de balanceamento por dia (qualquer que seja o pilar).
+                    sent = _send_push_to_user(
+                        conn, uid, defasagem["title"], defasagem["body"], defasagem["url"], defasagem["tipo"]
+                    )
+                    if sent > 0:
+                        _log_notification(conn, uid, "balance_alert", defasagem["title"], defasagem["body"])
+                        results["balance_alert"] = results.get("balance_alert", 0) + 1
+
     return {"ok": True, "notifications_sent": results}
 
 
@@ -814,6 +923,7 @@ def get_preferences(conn=Depends(get_db_session), user_id: int = Depends(get_use
             "edital_review_reminders": True,
             "pace_drop_alerts": True,
             "milestone_celebrations": True,
+            "balance_alerts": True,
         }
 
     def _b(col, default):
@@ -842,6 +952,7 @@ def get_preferences(conn=Depends(get_db_session), user_id: int = Depends(get_use
         "edital_review_reminders": _b("edital_review_reminders", 1),
         "pace_drop_alerts": _b("pace_drop_alerts", 1),
         "milestone_celebrations": _b("milestone_celebrations", 1),
+        "balance_alerts": _b("balance_alerts", 1),
     }
 
 
@@ -852,8 +963,8 @@ def update_preferences(body: NotificationPreferences, conn=Depends(get_db_sessio
 
     conn.execute("""
         INSERT INTO notification_preferences (user_id, streak_reminders, flashcard_reminders, exam_reminders, challenge_reminders, quiet_hours_start, quiet_hours_end,
-            study_time_reminder, study_time_hour, edital_review_reminders, pace_drop_alerts, milestone_celebrations)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            study_time_reminder, study_time_hour, edital_review_reminders, pace_drop_alerts, milestone_celebrations, balance_alerts)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(user_id) DO UPDATE SET
             streak_reminders = excluded.streak_reminders,
             flashcard_reminders = excluded.flashcard_reminders,
@@ -865,7 +976,8 @@ def update_preferences(body: NotificationPreferences, conn=Depends(get_db_sessio
             study_time_hour = excluded.study_time_hour,
             edital_review_reminders = excluded.edital_review_reminders,
             pace_drop_alerts = excluded.pace_drop_alerts,
-            milestone_celebrations = excluded.milestone_celebrations
+            milestone_celebrations = excluded.milestone_celebrations,
+            balance_alerts = excluded.balance_alerts
     """, (
         user_id,
         int(body.streak_reminders),
@@ -879,6 +991,7 @@ def update_preferences(body: NotificationPreferences, conn=Depends(get_db_sessio
         int(body.edital_review_reminders),
         int(body.pace_drop_alerts),
         int(body.milestone_celebrations),
+        int(body.balance_alerts),
     ))
     conn.commit()
 

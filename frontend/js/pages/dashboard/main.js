@@ -2425,6 +2425,10 @@ window.showNotificationPrefs = async function() {
             <input type="checkbox" id="pref-milestone" ${prefs.milestone_celebrations ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--accent);">
             <div><div style="font-size:0.85rem;color:var(--text);">🏆 Marcos de Streak</div><div style="font-size:0.72rem;color:var(--text-sub);">Comemora 7, 30, 100... dias seguidos</div></div>
           </label>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+            <input type="checkbox" id="pref-balance" ${prefs.balance_alerts !== false ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--accent);">
+            <div><div style="font-size:0.85rem;color:var(--text);">🎯 Foco nos Estudos</div><div style="font-size:0.72rem;color:var(--text-sub);">Avisa quando faltar teoria, questões ou flashcards</div></div>
+          </label>
 
           <div style="border-top:1px solid var(--border);margin-top:4px;padding-top:12px;">
             <div style="font-size:0.82rem;font-weight:600;color:var(--text);margin-bottom:8px;">🌙 Horário Silencioso</div>
@@ -2460,6 +2464,7 @@ window._saveNotifPrefs = async function() {
     edital_review_reminders: document.getElementById('pref-edital-review').checked,
     pace_drop_alerts: document.getElementById('pref-pace-drop').checked,
     milestone_celebrations: document.getElementById('pref-milestone').checked,
+    balance_alerts: document.getElementById('pref-balance').checked,
     quiet_hours_start: parseInt(document.getElementById('pref-quiet-start').value) || 22,
     quiet_hours_end: parseInt(document.getElementById('pref-quiet-end').value) || 7,
   };
