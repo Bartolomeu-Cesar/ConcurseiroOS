@@ -207,11 +207,19 @@ async function submitDesafioRespostas() {
   body.innerHTML = '<div style="text-align:center;padding:30px;"><div style="font-size:2rem;margin-bottom:8px;">⏳</div><div style="color:var(--text-sub);">Calculando resultados...</div></div>';
 
   try {
-    const result = await fetch('/api/desafio-diario/responder', {
+    const resp = await fetch('/api/desafio-diario/responder', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ respostas: desafioRespostas })
-    }).then(r => r.json());
+    });
+    const result = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      // Backend retornou erro (ex.: 400 "já completado", 404 "sem desafio").
+      // Mostra a mensagem do detail em vez de quebrar ao tentar ler .resultados.
+      const msg = (result && result.detail) ? result.detail : `Erro ${resp.status}`;
+      body.innerHTML = `<div style="text-align:center;color:var(--red);padding:20px;">${msg}</div>`;
+      return;
+    }
 
     // Adicionar tempo real ao resultado para exibição
     result.tempo_real_seg = tempoRealSeg;
@@ -258,7 +266,7 @@ function showDesafioResults(result) {
       <div style="font-size:0.8rem;color:var(--text-sub);margin-top:4px;">⏱ Tempo: ${tempoFmt}</div>
       ${result.streak_bonus > 0 ? `<div class="desafio-results-detail">🔥 Streak bonus: +${result.streak_bonus} pts</div>` : ''}
       <div style="margin-top:16px;text-align:left;">
-        ${result.resultados.map((r, i) => `
+        ${(result.resultados || []).map((r, i) => `
           <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:0.82rem;">
             <span style="font-size:1rem;">${r.acertou ? '✅' : '❌'}</span>
             <span style="flex:1;color:var(--text);">Questão ${i + 1}</span>
