@@ -587,11 +587,40 @@ def _parse_qconcursos(texto: str, materia_override: str = "") -> list:
         if len(alt_matches) < 4:
             continue
 
-        first_alt_re = re.search(r'(?:^|\n)\s*A\s+', corpo, re.MULTILINE)
-        if first_alt_re:
-            enunciado = corpo[:first_alt_re.start()].strip()
+        # Correção de falso-positivo: enunciados que começam com artigo maiúsculo
+        # ("A sociedade...", "A fim de...", "A Unidade...") faziam o "A " inicial ser
+        # confundido com a alternativa A — jogando o resto do enunciado para dentro
+        # de `alternativa_a` e deslocando as alternativas reais (b→a, c→b, ...).
+        # Heurística: se a alternativa A é MUITO mais longa que a média das demais
+        # (é texto de enunciado, não alternativa) e existe um bloco B–E contíguo,
+        # reancoramos na alternativa B: tudo antes do "B" vira enunciado e B–E são
+        # as alternativas reais (a questão passa a ter 4 alternativas: A=B, B=C...).
+        enunciado_override = None
+        if len(alt_matches) >= 5 and alt_matches[0][0].upper() == 'A':
+            a_texto = alt_matches[0][1].strip()
+            demais = [m[1].strip() for m in alt_matches[1:5]]
+            max_demais = max((len(x) for x in demais), default=0)
+            # A "alternativa A" é, na verdade, o enunciado quando é claramente mais
+            # longa que qualquer alternativa real (>1.5x a maior) e tem tamanho de
+            # frase de enunciado (>70). Alternativas reais tendem a ser curtas/uniformes.
+            if len(a_texto) > 70 and len(a_texto) > 1.5 * max(1, max_demais):
+                b_re = re.search(r'(?:^|\n)\s*B\s+', corpo, re.MULTILINE)
+                if b_re:
+                    enun = corpo[:b_re.start()]
+                    enun = re.sub(r'(?:^|\n)\s*A\s+', ' A ', enun, count=1)
+                    enunciado_override = re.sub(r'\s+', ' ', enun).strip()
+                    novas = re.findall(alt_pattern, corpo[b_re.start():], re.DOTALL)
+                    destino = ['A', 'B', 'C', 'D', 'E']
+                    alt_matches = [(destino[i], txt) for i, (_, txt) in enumerate(novas[:5])]
+
+        if enunciado_override is not None:
+            enunciado = enunciado_override
         else:
-            enunciado = corpo.split('\n')[0].strip()
+            first_alt_re = re.search(r'(?:^|\n)\s*A\s+', corpo, re.MULTILINE)
+            if first_alt_re:
+                enunciado = corpo[:first_alt_re.start()].strip()
+            else:
+                enunciado = corpo.split('\n')[0].strip()
 
         enunciado = re.sub(r'\s*\n\s*', ' ', enunciado).strip()
         if len(enunciado) < 15:
