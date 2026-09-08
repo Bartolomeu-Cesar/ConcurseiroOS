@@ -3,6 +3,10 @@
  * ConcurseiroOS
  */
 import { showToast } from '../modules/toast.js';
+import { getFavoritoCache, syncFavorito } from '../modules/favorito.js';
+
+// Sincroniza o favorito do banco para o cache local assim que a página carrega.
+syncFavorito();
 
 // Expose showToast globally for legacy usage
 window.showToast = showToast;
@@ -64,7 +68,7 @@ window.showToast = showToast;
 
     // Auto-select favorito on first load (same as countdown/treinador)
     if (!editalNome && !cargo && !fetchMastery._loaded) {
-      var favorito = localStorage.getItem('countdown_favorito') || '';
+      var favorito = getFavoritoCache();
       if (favorito) {
         var parts = favorito.split('|');
         if (parts[0]) editalNome = parts[0];
@@ -103,7 +107,7 @@ window.showToast = showToast;
 
   // Extract unique editais/cargos for filters (from first load only)
   function extractFilters(materias) {
-    var favorito = localStorage.getItem('countdown_favorito') || '';
+    var favorito = getFavoritoCache();
     var favParts = favorito.split('|');
     var favEdital = favParts[0] || '';
     var favCargo = favParts[1] || '';

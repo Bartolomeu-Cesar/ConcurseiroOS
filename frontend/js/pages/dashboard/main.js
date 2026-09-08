@@ -25,6 +25,7 @@ import { renderCatStartCard } from '../../modules/cat-session.js';
 import { renderAnxietyCard } from '../../modules/anxiety-exposure.js';
 import { renderTecnicasEvidencia } from '../../modules/tecnicas-evidencia.js';
 import { confirmModal, alertModal, toast, escapeHtml, escapeAttr } from '../../modules/utils.js';
+import { getFavoritoCache, setFavorito, syncFavorito } from '../../modules/favorito.js';
 
 // ===== Dashboard Tab Navigation =====
 document.querySelectorAll('.dash-tab').forEach(tab => {
@@ -44,7 +45,7 @@ async function loadDashCountdown() {
     const el = document.getElementById('dash-countdown');
     if (!el) return;
     const now = new Date();
-    const favorito = localStorage.getItem('countdown_favorito');
+    const favorito = getFavoritoCache();
     const futuras = provas.map(p => {
       if (!p.data_objetiva) return null;
       const parts = p.data_objetiva.match(/(\d+)[-\/](\d+)[-\/](\d+)/);
@@ -119,7 +120,7 @@ function _renderCountdownModal(allProvas) {
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
   overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
 
-  const favorito = localStorage.getItem('countdown_favorito') || '';
+  const favorito = getFavoritoCache();
 
   let html = '<div style="background:var(--bg-surface);border-radius:12px;padding:20px;max-width:440px;width:95%;max-height:80vh;display:flex;flex-direction:column;">';
   html += `<h3 style="color:var(--accent);margin:0 0 12px;">⏳ Escolher Prova (${allProvas.length} cargos)</h3>`;
@@ -176,16 +177,16 @@ function _buildCountdownItems(provas, favorito) {
 }
 
 window.selectCountdownFavorito = function(key) {
-  if (key) {
-    localStorage.setItem('countdown_favorito', key);
-  } else {
-    localStorage.removeItem('countdown_favorito');
-  }
+  // Persiste no banco (sincroniza entre estações) e atualiza o cache local.
+  const [edital, cargo] = (key || '').split('|');
+  setFavorito(edital || '', cargo || '');
   document.getElementById('countdown-selector-modal')?.remove();
   loadDashCountdown();
 };
 
-loadDashCountdown();
+// Sincroniza o favorito do BANCO para o cache local e então renderiza o countdown.
+// (migra automaticamente um valor antigo do localStorage, se existir.)
+syncFavorito().then(() => loadDashCountdown());
 
 document.getElementById('date-label').textContent = new Date().toLocaleDateString('pt-BR', {
   weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'

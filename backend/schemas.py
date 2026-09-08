@@ -38,6 +38,13 @@ class EditalHoras(BaseModel):
     horas: float
 
 
+class EditalFavoritoSet(BaseModel):
+    """Define o edital favorito de estudos do usuário (persistido no banco).
+    Vazio (edital_nome e cargo) = limpar o favorito (volta ao automático)."""
+    edital_nome: str = ""
+    cargo: str = ""
+
+
 class EditalItemUpdate(BaseModel):
     """Edita o nome do tópico e/ou a matéria de UM item do edital."""
     materia: str | None = None

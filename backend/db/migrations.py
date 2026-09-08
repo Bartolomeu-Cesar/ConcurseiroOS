@@ -1415,6 +1415,25 @@ def _m86_notif_prefs_anti_relaxamento(conn):
             pass  # coluna já existe
 
 
+def _m87_user_prefs(conn):
+    """Preferências por usuário (key-value), ex.: edital favorito de estudos.
+
+    Substitui o uso exclusivo do localStorage para o `countdown_favorito`, que
+    ficava restrito a um navegador. Agora o favorito é persistido no banco e
+    sincroniza entre estações (projeto multi-contribuidor).
+    """
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS user_prefs (
+            user_id INTEGER NOT NULL,
+            chave TEXT NOT NULL,
+            valor TEXT NOT NULL DEFAULT '',
+            updated_at TEXT NOT NULL DEFAULT '',
+            PRIMARY KEY (user_id, chave)
+        )
+    """)
+    log.info("Migration 87: created user_prefs table")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -1502,6 +1521,7 @@ MIGRATIONS = [
     (84, _m84_jol_predictions),
     (85, _m85_closed_book_log),
     (86, _m86_notif_prefs_anti_relaxamento),
+    (87, _m87_user_prefs),
 ]
 
 

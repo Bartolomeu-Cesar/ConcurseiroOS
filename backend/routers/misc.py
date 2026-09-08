@@ -8,7 +8,7 @@ from deps import get_optional_user_id, get_user_id
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from schemas import HealthResponse
+from schemas import EditalFavoritoSet, HealthResponse
 
 from backup import create_backup, delete_backup, list_backups, restore_from_backup
 from constants import SQL_QUESTAO_COM_GABARITO
@@ -579,6 +579,57 @@ def daily_challenge(conn=Depends(get_db_session), user_id: int = Depends(get_use
     if not row:
         return {"message": "Nenhuma questão disponível para o desafio do dia"}
     return dict(row)
+
+
+# ============================================================
+# EDITAL FAVORITO DE ESTUDOS (persistido no banco, por usuário)
+# ============================================================
+_PREF_EDITAL_FAVORITO = "edital_favorito"
+
+
+@router.get("/api/config/edital-favorito", summary="Obter edital favorito de estudos")
+def get_edital_favorito(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Retorna o edital favorito do usuário no formato {edital_nome, cargo, valor}.
+
+    `valor` é a string "edital|cargo" (compatível com o antigo localStorage).
+    Vazio quando não há favorito definido (modo automático)."""
+    row = conn.execute(
+        "SELECT valor FROM user_prefs WHERE user_id = ? AND chave = ?",
+        (user_id, _PREF_EDITAL_FAVORITO),
+    ).fetchone()
+    valor = (row["valor"] if row else "") or ""
+    edital_nome, _, cargo = valor.partition("|")
+    return {"valor": valor, "edital_nome": edital_nome, "cargo": cargo}
+
+
+@router.put("/api/config/edital-favorito", summary="Definir edital favorito de estudos")
+def set_edital_favorito(
+    body: EditalFavoritoSet,
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Persiste o edital favorito do usuário. edital_nome/cargo vazios = limpar
+    (volta ao modo automático). Formato armazenado: "edital|cargo"."""
+    edital_nome = (body.edital_nome or "").strip()
+    cargo = (body.cargo or "").strip()
+    if not edital_nome:
+        # Limpar o favorito (modo automático).
+        conn.execute(
+            "DELETE FROM user_prefs WHERE user_id = ? AND chave = ?",
+            (user_id, _PREF_EDITAL_FAVORITO),
+        )
+        conn.commit()
+        return {"ok": True, "valor": "", "edital_nome": "", "cargo": ""}
+
+    valor = f"{edital_nome}|{cargo}"
+    conn.execute(
+        """INSERT INTO user_prefs (user_id, chave, valor, updated_at) VALUES (?, ?, ?, ?)
+           ON CONFLICT(user_id, chave) DO UPDATE SET valor = excluded.valor, updated_at = excluded.updated_at""",
+        (user_id, _PREF_EDITAL_FAVORITO, valor, today_str()),
+    )
+    conn.commit()
+    log.info(f"Edital favorito definido: user={user_id} valor={valor}")
+    return {"ok": True, "valor": valor, "edital_nome": edital_nome, "cargo": cargo}
 
 
 @router.get("/api/conquistas-diarias")

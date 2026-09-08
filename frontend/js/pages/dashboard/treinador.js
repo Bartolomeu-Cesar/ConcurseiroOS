@@ -1,6 +1,7 @@
 // treinador.js — Treinador/recomendações panel and study technique helpers
 import { getCSSVar, COLORS } from './helpers.js';
 import { toast } from '../../modules/utils.js';
+import { getFavoritoCache } from '../../modules/favorito.js';
 
 // IDs dos flashcards atualmente em "Risco de Esquecimento", usados para abrir a
 // sessão filtrada (Revisar Todos) exatamente nesses cards.
@@ -8,7 +9,7 @@ let _riscoFlashcardIds = [];
 
 export async function loadTreinador() {
   try {
-    const favorito = localStorage.getItem('countdown_favorito') || '';
+    const favorito = getFavoritoCache();
     let url = '/api/treinador';
     if (favorito) {
       const [edital, cargo] = favorito.split('|');

@@ -2,6 +2,7 @@
 // PWA, countdown, theme, gamification, notifications, focus mode, accessibility, confetti, onboarding
 import { escapeHtml, toast, confirmModal } from './utils.js';
 import { openSelectModal } from './modal-selecao.js';
+import { getFavoritoCache, setFavorito, syncFavorito } from './favorito.js';
 
 // ==================== PWA ====================
 export function initPwa() {
@@ -16,7 +17,8 @@ export async function loadCountdown() {
     const provas = await fetch('/api/countdown').then(r => r.json());
     if (!provas.length) return;
     const now = new Date();
-    const favorito = localStorage.getItem('countdown_favorito');
+    // Favorito vem do BANCO (sincroniza entre estações); cache local é atualizado.
+    const favorito = await syncFavorito();
     const parsed = provas.map(p => {
       if (!p.data_objetiva) return null;
       let parts = p.data_objetiva.match(/(\d+)[\/\-](\d+)[\/\-](\d+)/);
@@ -80,8 +82,8 @@ async function showCountdownPicker(provasFuturas) {
 
   openSelectModal(`⏳ Escolher prova (${allProvas.length} cargos)`, items, (choice) => {
     if (choice.value === -2) return; // header item, ignore
-    if (choice.value === -1) { localStorage.removeItem('countdown_favorito'); }
-    else { const p = allProvas[choice.value]; localStorage.setItem('countdown_favorito', `${p.edital}|${p.cargo}`); }
+    if (choice.value === -1) { setFavorito('', ''); }
+    else { const p = allProvas[choice.value]; setFavorito(p.edital, p.cargo); }
     loadCountdown();
   });
 }

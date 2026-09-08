@@ -3,6 +3,16 @@
 
 def _create_tables(conn):
     """Cria todas as tabelas do sistema."""
+    # Preferências por usuário (key-value): ex. edital favorito de estudos.
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS user_prefs (
+            user_id INTEGER NOT NULL,
+            chave TEXT NOT NULL,
+            valor TEXT NOT NULL DEFAULT '',
+            updated_at TEXT NOT NULL DEFAULT '',
+            PRIMARY KEY (user_id, chave)
+        )
+    """)
     # Log de auditoria de ações administrativas
     conn.execute("""
         CREATE TABLE IF NOT EXISTS admin_audit (
