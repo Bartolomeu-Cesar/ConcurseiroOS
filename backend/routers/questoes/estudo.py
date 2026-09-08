@@ -1,6 +1,7 @@
 """Funcionalidades de estudo: daily challenge, active recall, intercalação, questões vinculadas, template."""
 import random
 
+from constants import SQL_QUESTAO_COM_GABARITO
 from deps import get_user_id
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -22,9 +23,9 @@ def daily_challenge(conn=Depends(get_db_session), user_id: int = Depends(get_use
 
     if ids_hoje:
         placeholders = ','.join('?' * len(ids_hoje))
-        rows = conn.execute(f"SELECT * FROM questoes WHERE user_id = ? AND id NOT IN ({placeholders})", [user_id] + ids_hoje).fetchall()
+        rows = conn.execute(f"SELECT * FROM questoes WHERE user_id = ? AND {SQL_QUESTAO_COM_GABARITO} AND id NOT IN ({placeholders})", [user_id] + ids_hoje).fetchall()
     else:
-        rows = conn.execute("SELECT * FROM questoes WHERE user_id = ?", (user_id,)).fetchall()
+        rows = conn.execute(f"SELECT * FROM questoes WHERE user_id = ? AND {SQL_QUESTAO_COM_GABARITO}", (user_id,)).fetchall()
 
     if not rows:
         return {"message": "Parabéns! Você já respondeu todas as questões disponíveis hoje.", "questao": None}
@@ -41,7 +42,7 @@ def daily_challenge(conn=Depends(get_db_session), user_id: int = Depends(get_use
 @router.get("/api/active-recall/{materia}")
 def active_recall_session(materia: str, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Gera uma sessão de active recall: questões aleatórias de uma matéria"""
-    rows = conn.execute("SELECT * FROM questoes WHERE materia = ? AND user_id = ?", (materia, user_id)).fetchall()
+    rows = conn.execute(f"SELECT * FROM questoes WHERE materia = ? AND user_id = ? AND {SQL_QUESTAO_COM_GABARITO}", (materia, user_id)).fetchall()
     if not rows:
         return {"questoes": [], "message": "Nenhuma questão disponível para esta matéria."}
     sample = random.sample([dict(r) for r in rows], min(5, len(rows)))

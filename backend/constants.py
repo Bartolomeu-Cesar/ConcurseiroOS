@@ -66,3 +66,20 @@ MATURE_INTERVAL_DAYS = 21
 # (mesmo note_id) que venceriam hoje. Evita ver frente+verso da mesma nota, ou várias
 # oclusões da mesma imagem, na mesma sessão (reduz dica cruzada / interferência).
 SIBLING_BURY_ENABLED = True
+
+# Questões "respondíveis": só entram em simulado/estudo/desafio se tiverem gabarito.
+# Uma questão é respondível quando é discursiva (não tem resposta_correta por design)
+# OU quando resposta_correta está preenchida. Questões objetivas SEM gabarito não
+# podem ser corrigidas — não devem ser sorteadas (senão o app "erra" o aluno).
+# Fragmentos SQL para reuso; use o alias correto conforme a query (com/sem "q.").
+SQL_QUESTAO_COM_GABARITO = (
+    "(resposta_correta IS NOT NULL AND TRIM(resposta_correta) != '')"
+)
+SQL_QUESTAO_RESPONDIVEL = (
+    "(tipo = 'discursiva' OR "
+    "(resposta_correta IS NOT NULL AND TRIM(resposta_correta) != ''))"
+)
+SQL_QUESTAO_RESPONDIVEL_Q = (
+    "(q.tipo = 'discursiva' OR "
+    "(q.resposta_correta IS NOT NULL AND TRIM(q.resposta_correta) != ''))"
+)

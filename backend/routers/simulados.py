@@ -1,6 +1,7 @@
 import random
 from datetime import date, datetime
 
+from constants import SQL_QUESTAO_RESPONDIVEL, SQL_QUESTAO_RESPONDIVEL_Q
 from deps import get_user_id
 from fastapi import APIRouter, Body, Depends, HTTPException
 from schemas import (
@@ -163,6 +164,10 @@ def _smart_select_questions(
     # === Build base query com filtros ===
     base_where = "WHERE q.user_id = ?"
     base_params = [user_id]
+
+    # Só questões respondíveis (com gabarito, ou discursivas). Objetivas sem
+    # gabarito não podem ser corrigidas — excluídas de todos os pools.
+    base_where += f" AND {SQL_QUESTAO_RESPONDIVEL_Q}"
 
     if materias:
         placeholders = ",".join("?" * len(materias))
@@ -558,7 +563,7 @@ def simulado_prova_real(body: SimuladoProvaReal, conn=Depends(get_db_session), u
 
         # Buscar questões disponíveis dessa matéria
         rows = conn.execute(
-            "SELECT id FROM questoes WHERE materia = ? AND user_id = ? ORDER BY RANDOM() LIMIT ?",
+            f"SELECT id FROM questoes WHERE materia = ? AND user_id = ? AND {SQL_QUESTAO_RESPONDIVEL} ORDER BY RANDOM() LIMIT ?",
             (mat, user_id, qtd_alvo)
         ).fetchall()
 
@@ -619,7 +624,7 @@ def simulado_inteligente(qtd: int = 10, conn=Depends(get_db_session), user_id: i
 
     if not questoes:
         # Fallback: aleatório se não tem histórico
-        rows = conn.execute("SELECT id FROM questoes WHERE user_id = ? ORDER BY RANDOM() LIMIT ?", (user_id, qtd)).fetchall()
+        rows = conn.execute(f"SELECT id FROM questoes WHERE user_id = ? AND {SQL_QUESTAO_RESPONDIVEL} ORDER BY RANDOM() LIMIT ?", (user_id, qtd)).fetchall()
         return {"questao_ids": [r[0] for r in rows], "total": len(rows), "estrategia": "aleatório (sem histórico)"}
 
     ids = [q["id"] for q in questoes]
@@ -655,7 +660,7 @@ def simulado_adaptativo(materia: str = "", qtd: int = 10, conn=Depends(get_db_se
     else:
         dificuldades = ['Fácil', 'Médio', 'Fácil']
 
-    query = "SELECT id FROM questoes WHERE user_id = ?"
+    query = f"SELECT id FROM questoes WHERE user_id = ? AND {SQL_QUESTAO_RESPONDIVEL}"
     params = [user_id]
     if materia:
         query += " AND materia = ?"

@@ -17,6 +17,7 @@ from deps import get_user_id
 from fastapi import APIRouter, Depends, HTTPException
 from schemas import IniciarAdaptativaRequest, ResponderAdaptativaRequest
 
+from constants import SQL_QUESTAO_COM_GABARITO
 from database import get_db_session
 
 router = APIRouter(tags=["Sessão Adaptativa"])
@@ -176,8 +177,8 @@ def _buscar_questao(conn, materia: str, dificuldade: str, ids_respondidas: list,
     placeholders = ""
     params = []
 
-    # Base query
-    query = "SELECT * FROM questoes WHERE 1=1"
+    # Base query — só questões com gabarito (a sessão adaptativa corrige a resposta)
+    query = f"SELECT * FROM questoes WHERE 1=1 AND {SQL_QUESTAO_COM_GABARITO}"
 
     # Filtro de matéria (se especificada)
     if materia:

@@ -9,6 +9,33 @@ from logger import log
 router = APIRouter()
 
 
+@router.get(
+    "/api/questoes/stats/sem-gabarito",
+    summary="Questões sem gabarito (para curadoria)",
+    description="Conta as questões OBJETIVAS sem resposta_correta (não corrigíveis, "
+                "excluídas de simulado/estudo) agrupadas por matéria. Útil para curadoria.",
+)
+def questoes_sem_gabarito(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    # Objetivas (não discursivas) com resposta_correta vazia/nula.
+    total = conn.execute(
+        """SELECT COUNT(*) FROM questoes
+           WHERE user_id = ? AND COALESCE(tipo,'objetiva') != 'discursiva'
+           AND (resposta_correta IS NULL OR TRIM(resposta_correta) = '')""",
+        (user_id,),
+    ).fetchone()[0]
+    por_materia = conn.execute(
+        """SELECT materia, COUNT(*) as qtd FROM questoes
+           WHERE user_id = ? AND COALESCE(tipo,'objetiva') != 'discursiva'
+           AND (resposta_correta IS NULL OR TRIM(resposta_correta) = '')
+           GROUP BY materia ORDER BY qtd DESC""",
+        (user_id,),
+    ).fetchall()
+    return {
+        "total": total,
+        "por_materia": [{"materia": r["materia"], "qtd": r["qtd"]} for r in por_materia],
+    }
+
+
 @router.get("/api/questoes/stats/geral", summary="Estatísticas gerais de questões",
             description="Retorna total de questões resolvidas, acertos, percentual e desempenho por matéria.")
 def questoes_stats(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):

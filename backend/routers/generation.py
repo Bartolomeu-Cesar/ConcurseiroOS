@@ -12,6 +12,7 @@ from deps import get_user_id
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from schemas import ResponderGeracaoRequest
 
+from constants import SQL_QUESTAO_COM_GABARITO
 from database import get_db_session
 from logger import log
 from utils import today_str, update_streak
@@ -189,6 +190,10 @@ def get_questoes_geracao(
         where_materia = " AND q.materia = ?"
         params_base.append(materia)
 
+    # Só questões com gabarito: o modo geração corrige a resposta digitada contra
+    # resposta_correta; objetivas sem gabarito não podem ser avaliadas.
+    q_gab = SQL_QUESTAO_COM_GABARITO.replace("resposta_correta", "q.resposta_correta")
+
     questoes = []
 
     # 1) Prioridade: questões já erradas no modo geração
@@ -196,7 +201,7 @@ def get_questoes_geracao(
         SELECT DISTINCT q.id, q.enunciado, q.materia, q.topico, q.dificuldade
         FROM questoes q
         INNER JOIN generation_responses gr ON gr.questao_id = q.id AND gr.user_id = ?
-        WHERE q.user_id = ? AND gr.acertou = 0{where_materia}
+        WHERE q.user_id = ? AND gr.acertou = 0 AND {q_gab}{where_materia}
         ORDER BY RANDOM()
         LIMIT ?
     """
@@ -219,6 +224,7 @@ def get_questoes_geracao(
         WHERE q.user_id = ?
           AND q.id NOT IN (SELECT questao_id FROM generation_responses WHERE user_id = ?)
           AND q.id NOT IN ({placeholders})
+          AND {q_gab}
           {where_materia.replace('q.materia', 'q.materia')}
         ORDER BY RANDOM()
         LIMIT ?
@@ -241,6 +247,7 @@ def get_questoes_geracao(
         FROM questoes q
         WHERE q.user_id = ?
           AND q.id NOT IN ({placeholders})
+          AND {q_gab}
           {where_materia.replace('q.materia', 'q.materia')}
         ORDER BY RANDOM()
         LIMIT ?

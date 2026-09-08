@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from schemas import HealthResponse
 
 from backup import create_backup, delete_backup, list_backups, restore_from_backup
+from constants import SQL_QUESTAO_COM_GABARITO
 from database import get_db_session, rebuild_search_index
 from logger import log
 from settings import settings
@@ -574,7 +575,7 @@ def excluir_sessao_estudo_hoje(
 @router.get("/api/daily-challenge")
 def daily_challenge(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Retorna uma questão aleatória como desafio do dia"""
-    row = conn.execute("SELECT * FROM questoes WHERE user_id = ? ORDER BY RANDOM() LIMIT 1", (user_id,)).fetchone()
+    row = conn.execute(f"SELECT * FROM questoes WHERE user_id = ? AND {SQL_QUESTAO_COM_GABARITO} ORDER BY RANDOM() LIMIT 1", (user_id,)).fetchone()
     if not row:
         return {"message": "Nenhuma questão disponível para o desafio do dia"}
     return dict(row)

@@ -1249,6 +1249,7 @@ async def importar_csv(
 
     imported = 0
     duplicates = 0
+    sem_gabarito = 0  # objetivas importadas sem resposta_correta (precisam curadoria)
     errors = []
     row_num = 0
     MAX_ROWS = 5000
@@ -1294,20 +1295,33 @@ async def importar_csv(
                 today_str(), user_id,
             ))
             imported += 1
+            # Sinaliza objetivas sem gabarito: importadas, mas não entram em
+            # simulado/estudo até serem curadas (ver SQL_QUESTAO_RESPONDIVEL).
+            _tipo = (questao.get("tipo") or "objetiva").strip().lower()
+            if _tipo != "discursiva" and not (questao.get("resposta_correta") or "").strip():
+                sem_gabarito += 1
 
         except Exception as e:
             errors.append(f"Linha {row_num + 1}: {str(e)}")
 
     conn.commit()
-    log.info(f"CSV import: {imported} questões importadas de {file.filename} (formato={detected_format}, duplicatas={duplicates})")
+    log.info(f"CSV import: {imported} questões importadas de {file.filename} (formato={detected_format}, duplicatas={duplicates}, sem_gabarito={sem_gabarito})")
 
-    return {
+    resultado = {
         "imported": imported,
         "duplicates": duplicates,
+        "sem_gabarito": sem_gabarito,
         "errors": errors[:50],
         "format_detected": detected_format,
         "total_rows": row_num,
     }
+    if sem_gabarito:
+        resultado["aviso"] = (
+            f"{sem_gabarito} questão(ões) foram importadas SEM gabarito e não "
+            f"entrarão em simulados/estudo até receberem a resposta correta "
+            f"(edite-as ou use a curadoria)."
+        )
+    return resultado
 
 
 # ============================================================
