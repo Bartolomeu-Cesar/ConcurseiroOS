@@ -241,17 +241,30 @@ window.toggleFlipMode = toggleFlipMode;
 
 // Vira a carta (frente → verso) e revela a resposta, preservando os ganchos
 // científicos (timer, segmenting, production, confiança) via revealAnswer().
+//
+// Nas sessões avulsas (Risco de Esquecimento por-IDs, disciplina, aleatório),
+// o reveal é feito por _revealSessaoAnswer() (fluxo flashSessao/sessaoNext), não
+// por revealAnswer() (fluxo flashcardsToday/reviewFlashcard). flipCard() detecta
+// a sessão ativa e roteia para o reveal correto, mas o giro 3D é idêntico.
 export function flipCard() {
   const area = document.getElementById('flash-card-area');
-  if (!area || !area.classList.contains('flip-mode')) { revealAnswer(); return; }
+  const revelar = _sessaoAtiva() ? _revealSessaoAnswer : revealAnswer;
+  if (!area || !area.classList.contains('flip-mode')) { revelar(); return; }
   if (_isFlipped) return;
   _isFlipped = true;
   // Revela o conteúdo do verso ANTES de girar (dispara toda a lógica de reveal).
-  revealAnswer();
+  revelar();
   _ajustarAlturaFlip();
   area.classList.add('flipped');
 }
 window.flipCard = flipCard;
+
+// Sessão avulsa em andamento (por-IDs/risco, disciplina, aleatório): há cards na
+// fila e ainda não chegou ao fim. Usado para rotear reveal/flip para o fluxo certo.
+function _sessaoAtiva() {
+  return !!flashSessaoMode && Array.isArray(flashSessao)
+    && flashSessaoIndex < flashSessao.length;
+}
 
 // Desvira (verso → frente) sem re-disparar reveal (mantém estado revelado).
 export function unflipCard() {
@@ -1412,6 +1425,11 @@ function showSessaoFlashcard() {
   const rb = document.getElementById('flash-reveal-btn'), rv = document.getElementById('flash-review-btns');
   _stopFlashTimer();
   if (flashSessaoIndex >= flashSessao.length) {
+    // Desvira a carta e sai do modo flip para exibir a mensagem de conclusão na
+    // face frontal (sem isso, a mensagem cairia no verso girado da última carta).
+    const _areaFim = document.getElementById('flash-card-area');
+    if (_areaFim) { _areaFim.classList.remove('flipped'); }
+    _isFlipped = false;
     q.innerHTML = '<span style="color:#a6e3a1;font-size:1.3rem;font-weight:600;">🎉 Sessão concluída! Parabéns!</span>';
     a.style.display = 'none'; rb.style.display = 'none'; rv.style.display = 'none';
     flashSessao = []; flashSessaoMode = '';
@@ -1425,6 +1443,15 @@ function showSessaoFlashcard() {
   document.getElementById('flash-generation-area')?.remove();
   document.getElementById('flash-confidence-area')?.remove();
   document.getElementById('production-hint')?.remove();
+  // Flip 3D: mesmo mecanismo de showCurrentFlashcard(). Ativa/limpa a classe do
+  // modo e reseta a carta para a FRENTE ao trocar de card. Assim as sessões
+  // avulsas (Risco de Esquecimento, disciplina, aleatório) ganham a animação 3D.
+  const _area = document.getElementById('flash-card-area');
+  if (_area) {
+    _area.classList.toggle('flip-mode', _flipMode && !_examMode);
+    _area.classList.remove('flipped');
+  }
+  _isFlipped = false;
   const badge = card.materia ? `<span style="font-size:0.7rem;background:#45475a;color:#cba6f7;padding:2px 8px;border-radius:4px;margin-bottom:6px;display:inline-block;">📚 ${card.materia}</span><br>` : '';
   q.innerHTML = badge + `<span>${flashSessaoIndex + 1}/${flashSessao.length}</span> — ${escapeHtml(card.pergunta)}`;
   a.textContent = card.resposta;
@@ -1437,19 +1464,32 @@ function showSessaoFlashcard() {
   _flashCardMateria = card.materia || 'Geral';
   if (!_flashSessionStart) _flashSessionStart = Date.now();
   _startFlashTimer(card.tempo_segundos, card.tempo_detalhe);
-  rb.onclick = function() {
-    // NÃO para o timer ao revelar: segue até o estudante avaliar em sessaoNext().
-    a.style.display = 'block'; rb.style.display = 'none';
-    rv.style.display = 'flex';
-    rv.innerHTML = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;width:100%;">
-      <button onclick="sessaoNext(0)" style="background:#f38ba8;color:#1e1e2e;border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">0•Esqueci</button>
-      <button onclick="sessaoNext(1)" style="background:#f38ba8;color:#1e1e2e;border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">1•Errei</button>
-      <button onclick="sessaoNext(2)" style="background:#fab387;color:#1e1e2e;border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">2•Quase</button>
-      <button onclick="sessaoNext(3)" style="background:#f9e2af;color:#1e1e2e;border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">3•Difícil</button>
-      <button onclick="sessaoNext(4)" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">4•Bom</button>
-      <button onclick="sessaoNext(5)" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">5•Fácil</button>
-    </div>`;
-  };
+  // O botão plano "Revelar Resposta" (usado quando o flip 3D está desligado ou no
+  // Modo Prova) revela pelo mesmo caminho da sessão. No flip 3D, quem dispara é a
+  // seta "Ver resposta ▶" (onclick=flipCard → _revealSessaoAnswer via _sessaoAtiva).
+  rb.onclick = _revealSessaoAnswer;
+}
+
+// Revela a resposta na sessão avulsa (flashSessao) e monta os botões de avaliação
+// que chamam sessaoNext(). Equivale a revealAnswer() do fluxo de hoje, mas usa o
+// estado da sessão. Chamado tanto pelo botão plano quanto pelo flip 3D (flipCard).
+function _revealSessaoAnswer() {
+  const a = document.getElementById('flash-answer');
+  const rb = document.getElementById('flash-reveal-btn');
+  const rv = document.getElementById('flash-review-btns');
+  if (!a || !rv) return;
+  // NÃO para o timer ao revelar: segue até o estudante avaliar em sessaoNext().
+  a.style.display = 'block';
+  if (rb) rb.style.display = 'none';
+  rv.style.display = 'flex';
+  rv.innerHTML = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;width:100%;">
+    <button class="flash-rate-btn" onclick="sessaoNext(0)" style="background:#f38ba8;color:#1e1e2e;border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">0•Esqueci</button>
+    <button class="flash-rate-btn" onclick="sessaoNext(1)" style="background:#f38ba8;color:#1e1e2e;border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">1•Errei</button>
+    <button class="flash-rate-btn" onclick="sessaoNext(2)" style="background:#fab387;color:#1e1e2e;border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">2•Quase</button>
+    <button class="flash-rate-btn" onclick="sessaoNext(3)" style="background:#f9e2af;color:#1e1e2e;border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">3•Difícil</button>
+    <button class="flash-rate-btn" onclick="sessaoNext(4)" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">4•Bom</button>
+    <button class="flash-rate-btn" onclick="sessaoNext(5)" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:6px;padding:8px 4px;font-size:0.75rem;font-weight:600;cursor:pointer;">5•Fácil</button>
+  </div>`;
 }
 
 export async function sessaoNext(quality) {
