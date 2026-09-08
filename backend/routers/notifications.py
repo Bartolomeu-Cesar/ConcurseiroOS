@@ -480,7 +480,78 @@ def _detectar_defasagem(conn, user_id: int) -> dict | None:
             "url": "/questoes.html",
         }
 
+    # 4) MATÉRIA específica do ciclo ATIVO parada há muitos dias → retomar.
+    # Filtra pelo ciclo ativo (regra do projeto: recomendações nunca mostram
+    # matérias de concursos inativos). Escolhe a mais tempo sem ser estudada.
+    materia_defasada = _detectar_materia_defasada(conn, user_id, dias_limite=7)
+    if materia_defasada:
+        return materia_defasada
+
     return None
+
+
+def _detectar_materia_defasada(conn, user_id: int, dias_limite: int = 7) -> dict | None:
+    """Acha a matéria do CICLO ATIVO parada há mais dias (>= dias_limite) e sugere
+    retomá-la, para o estudo não ficar desbalanceado entre disciplinas.
+
+    Regra do projeto: filtra por ciclo_estudos WHERE ativo = 1 (nunca sugere
+    matéria de concurso inativo). Retorna dict pronto ou None.
+    """
+    try:
+        materias_ciclo = [
+            r[0]
+            for r in conn.execute(
+                "SELECT DISTINCT materia FROM ciclo_estudos WHERE ativo = 1 AND user_id = ?",
+                (user_id,),
+            ).fetchall()
+        ]
+    except Exception:
+        materias_ciclo = []
+    if not materias_ciclo:
+        return None
+
+    hoje = date.today()
+    ultima = {
+        r[0]: r[1]
+        for r in conn.execute(
+            "SELECT materia, MAX(data) FROM sessoes_estudo WHERE user_id = ? GROUP BY materia",
+            (user_id,),
+        ).fetchall()
+    }
+
+    pior_materia = None
+    pior_dias = -1
+    for materia in materias_ciclo:
+        u = ultima.get(materia)
+        try:
+            dias = (hoje - date.fromisoformat(u)).days if u else 999
+        except (ValueError, TypeError):
+            dias = 999
+        # 999 = nunca estudada: só alerta se houver histórico geral (evita
+        # spammar quem acabou de montar o ciclo). Tratado pelo 'ativo' externo.
+        if dias >= dias_limite and dias > pior_dias:
+            pior_dias = dias
+            pior_materia = materia
+
+    if not pior_materia:
+        return None
+
+    if pior_dias >= 999:
+        corpo = (
+            f"Você ainda não estudou '{pior_materia}' (está no seu ciclo ativo). "
+            "Não deixe nenhuma disciplina para trás — comece com 25 min hoje."
+        )
+    else:
+        corpo = (
+            f"Faz {pior_dias} dias que você não estuda '{pior_materia}' (do seu ciclo ativo). "
+            "Retome antes que a curva do esquecimento apague o que já viu — 25 min ajudam."
+        )
+    return {
+        "tipo": "balance_materia",
+        "title": "🔄 Matéria em atraso",
+        "body": corpo,
+        "url": "/#ciclo",
+    }
 
 
 @router.post("/api/push/check-triggers", summary="Verificar e disparar notificações agendadas")

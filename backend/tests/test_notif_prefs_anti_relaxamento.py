@@ -208,3 +208,40 @@ def test_defasagem_flashcards_vencidos_sugere_flashcards(client):
         assert d is not None and d["tipo"] == "balance_flashcards", d
     finally:
         c.close()
+
+
+def test_materia_do_ciclo_ativo_parada_sugere_retomar(client):
+    """Matéria do ciclo ATIVO sem estudo há muitos dias → alerta balance_materia,
+    filtrando por ciclo ativo (regra do projeto)."""
+    import datetime
+
+    from routers.notifications import _detectar_materia_defasada
+    c = _limpa_dados()
+    try:
+        c.execute("DELETE FROM ciclo_estudos WHERE user_id = 1")
+        # Ciclo ativo com 'Raciocínio Lógico'; inativo com 'Inglês' (não deve entrar).
+        c.execute("INSERT INTO ciclo_estudos (materia, ativo, user_id) VALUES ('Raciocínio Lógico', 1, 1)")
+        c.execute("INSERT INTO ciclo_estudos (materia, ativo, user_id) VALUES ('Inglês', 0, 1)")
+        d12 = (datetime.date.today() - datetime.timedelta(days=12)).isoformat()
+        c.execute(
+            "INSERT INTO sessoes_estudo (materia, horas, data, tipo, user_id) VALUES ('Raciocínio Lógico', 1.0, ?, 'edital', 1)",
+            (d12,),
+        )
+        c.commit()
+        d = _detectar_materia_defasada(c, 1, dias_limite=7)
+        assert d is not None and d["tipo"] == "balance_materia", d
+        assert "Raciocínio Lógico" in d["body"]
+        assert "Inglês" not in d["body"]  # matéria de ciclo inativo é ignorada
+    finally:
+        c.close()
+
+
+def test_materia_defasada_sem_ciclo_ativo_retorna_none(client):
+    from routers.notifications import _detectar_materia_defasada
+    c = _limpa_dados()
+    try:
+        c.execute("DELETE FROM ciclo_estudos WHERE user_id = 1")
+        c.commit()
+        assert _detectar_materia_defasada(c, 1) is None
+    finally:
+        c.close()
