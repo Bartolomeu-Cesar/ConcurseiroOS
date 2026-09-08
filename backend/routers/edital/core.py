@@ -20,7 +20,7 @@ from schemas import (
 
 from database import get_db_session
 from logger import log
-from utils import sql_paginate, today_str
+from utils import renomear_materia_cascata, sql_paginate, today_str
 
 router = APIRouter(prefix="", tags=["Edital"])
 
@@ -179,34 +179,29 @@ def renomear_materia(body: RenomearMateriaRequest, conn=Depends(get_db_session),
     edital_nome = sanitize_input(body.edital_nome).strip()
     cargo = sanitize_input(body.cargo).strip()
 
-    # Escopo no edital: renomeia a matéria nos tópicos (opcionalmente restrito a edital/cargo).
-    q = "UPDATE edital SET materia = ? WHERE materia = ? AND user_id = ?"
-    params = [nova, antiga, user_id]
-    if edital_nome:
-        q += " AND edital_nome = ?"
-        params.append(edital_nome)
-    if cargo:
-        q += " AND cargo = ?"
-        params.append(cargo)
-    topicos_afetados = conn.execute(q, params).rowcount
-
-    if topicos_afetados == 0:
-        raise HTTPException(status_code=404, detail=f"Nenhum tópico com a matéria '{antiga}'.")
-
-    propagados = {}
     if body.propagar:
-        # Propaga para tabelas ligadas por NOME de matéria (mantém histórico coerente).
-        # Estas tabelas não têm edital_nome/cargo, então a propagação é por matéria+user.
-        for tabela in ("sessoes_estudo", "questoes", "ciclo_estudos"):
-            try:
-                r = conn.execute(
-                    f"UPDATE {tabela} SET materia = ? WHERE materia = ? AND user_id = ?",
-                    (nova, antiga, user_id),
-                )
-                propagados[tabela] = r.rowcount
-            except Exception as e:
-                # Tabela pode não existir em bancos antigos — não é fatal.
-                log.warning(f"Não foi possível propagar renomear matéria em {tabela}: {e}")
+        # Cascata completa (mesmo helper neutro usado pelo banco de questões):
+        # renomeia em todas as tabelas da taxonomia, mantendo os nomes consistentes.
+        afetados = renomear_materia_cascata(conn, user_id, antiga, nova, edital_nome, cargo)
+        topicos_afetados = afetados.get("edital", 0)
+        if topicos_afetados == 0 and sum(afetados.values()) == 0:
+            raise HTTPException(status_code=404, detail=f"Nenhum tópico com a matéria '{antiga}'.")
+        # Remove a tabela edital do dict de "propagados" (é reportada à parte).
+        propagados = {k: v for k, v in afetados.items() if k != "edital"}
+    else:
+        # Sem propagar: renomeia SOMENTE na tabela edital (respeita o escopo).
+        q = "UPDATE edital SET materia = ? WHERE materia = ? AND user_id = ?"
+        params = [nova, antiga, user_id]
+        if edital_nome:
+            q += " AND edital_nome = ?"
+            params.append(edital_nome)
+        if cargo:
+            q += " AND cargo = ?"
+            params.append(cargo)
+        topicos_afetados = conn.execute(q, params).rowcount
+        if topicos_afetados == 0:
+            raise HTTPException(status_code=404, detail=f"Nenhum tópico com a matéria '{antiga}'.")
+        propagados = {}
 
     conn.commit()
     log.info(f"Matéria renomeada: '{antiga}' -> '{nova}' ({topicos_afetados} tópicos, propagar={body.propagar})")

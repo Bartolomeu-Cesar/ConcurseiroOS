@@ -232,6 +232,68 @@ def get_materias_ciclo_ativo(conn, user_id: int = 1) -> list[str] | None:
     return materias or None
 
 
+# Tabelas cuja coluna `materia` compõe a "taxonomia de matérias" do estudante e,
+# portanto, devem ser renomeadas em conjunto (cascata) para não criar divergência
+# de nomes entre as telas (edital, questões, flashcards, ciclo, calendário, etc.).
+# NÃO inclui tabelas efêmeras/snapshot de eventos (battle_rounds, sessao_adaptativa,
+# study_room_discussions, user_status) — seu `materia` é um registro histórico do
+# momento do evento, não a taxonomia editável.
+MATERIA_TABELAS_CASCATA = (
+    "edital",
+    "questoes",
+    "flashcards",
+    "sessoes_estudo",
+    "ciclo_estudos",
+    "calendario_atividades",
+    "calendario_personalizado",
+    "planejador_semanal",
+    "trilha_etapas",
+    "desafios",
+    "brain_dump_log",
+)
+
+
+def renomear_materia_cascata(
+    conn,
+    user_id: int,
+    materia_antiga: str,
+    materia_nova: str,
+    edital_nome: str = "",
+    cargo: str = "",
+) -> dict:
+    """Renomeia uma matéria em cascata por todas as tabelas da taxonomia.
+
+    Neutro: pode ser chamado pela tela do edital ou pelo banco de questões — o
+    nome fica consistente em todo o sistema. O escopo `edital_nome`/`cargo`, quando
+    informado, restringe APENAS a tabela `edital` (as demais tabelas não têm essas
+    colunas e são renomeadas por matéria+user). NÃO faz commit — o chamador decide.
+
+    Returns:
+        dict {tabela: linhas_afetadas} com o que foi alterado em cada tabela.
+        A tabela `edital` respeita o escopo; as demais são globais por matéria.
+    """
+    afetados: dict[str, int] = {}
+    for tabela in MATERIA_TABELAS_CASCATA:
+        try:
+            q = f"UPDATE {tabela} SET materia = ? WHERE materia = ? AND user_id = ?"
+            params = [materia_nova, materia_antiga, user_id]
+            # O escopo edital_nome/cargo só se aplica à tabela `edital`.
+            if tabela == "edital":
+                if edital_nome:
+                    q += " AND edital_nome = ?"
+                    params.append(edital_nome)
+                if cargo:
+                    q += " AND cargo = ?"
+                    params.append(cargo)
+            r = conn.execute(q, params)
+            if r.rowcount:
+                afetados[tabela] = r.rowcount
+        except Exception:
+            # Tabela pode não existir/ter a coluna em bancos antigos — não é fatal.
+            continue
+    return afetados
+
+
 def get_pdf_pages(filepath: str) -> int:
     try:
         return len(PdfReader(filepath).pages)

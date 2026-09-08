@@ -58,6 +58,17 @@ class RenomearMateriaRequest(BaseModel):
     propagar: bool = True
 
 
+class RenomearMateriaGlobalRequest(BaseModel):
+    """Renomeia uma matéria em CASCATA por todo o sistema (edital, questões,
+    flashcards, sessões, ciclo, calendário, etc.). Endpoint neutro, usado tanto
+    pela tela do edital quanto pelo banco de questões. O escopo edital_nome/cargo,
+    quando informado, restringe apenas a tabela edital."""
+    materia_antiga: str
+    materia_nova: str
+    edital_nome: str = ""
+    cargo: str = ""
+
+
 class EditalPdfLink(BaseModel):
     pdf_link: str
     pdf_pagina: int = 1

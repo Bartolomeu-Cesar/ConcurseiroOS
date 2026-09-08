@@ -1703,6 +1703,47 @@ async function loadBanco() {
 }
 window.loadBanco = loadBanco;
 
+/** Renomeia a matéria selecionada no filtro do banco de questões, em cascata
+ *  por todo o sistema (edital, questões, flashcards, sessões, ciclo, etc.). */
+async function renomearMateriaBanco() {
+  const sel = document.getElementById('banco-filtro-materia');
+  const atual = sel ? sel.value : '';
+  if (!atual) { toast('Selecione uma matéria no filtro para renomear.', 'warning'); return; }
+
+  const nova = await promptModal(
+    `Renomear a matéria "${atual}" em todo o sistema:`,
+    { title: '✏️ Renomear matéria', defaultValue: atual, placeholder: 'Novo nome da matéria' },
+  );
+  if (nova === null) return;
+  const nome = nova.trim();
+  if (!nome) { toast('O nome não pode ficar vazio.', 'warning'); return; }
+  if (nome === atual.trim()) return;
+
+  const ok = await confirmModal(
+    'Renomear matéria',
+    `Renomear <strong>"${escapeHtml(atual)}"</strong> para <strong>"${escapeHtml(nome)}"</strong> em <strong>todo o sistema</strong>?<br><br>` +
+    `Isso corrige o nome no banco de questões, no edital, flashcards, sessões de estudo, ciclo e demais telas (para manter tudo consistente).`,
+    { confirmText: 'Renomear', type: 'info', icon: '✏️' },
+  );
+  if (!ok) return;
+
+  try {
+    const res = await fetch('/api/materias/renomear', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ materia_antiga: atual, materia_nova: nome }),
+    });
+    const data = await res.json();
+    if (!res.ok) { toast(data.detail || 'Erro ao renomear.', 'error'); return; }
+    toast(`Matéria renomeada em ${data.total} registro(s)!`, 'success');
+    if (sel) sel.value = nome;
+    await loadMaterias();
+    if (sel) sel.value = nome;
+    loadBanco();
+  } catch (e) { toast('Erro de conexão ao renomear.', 'error'); }
+}
+window.renomearMateriaBanco = renomearMateriaBanco;
+
 async function deleteQuestao(id) {
   if (!await confirmModal('Excluir questão', 'Excluir esta questão?', { type: 'danger', confirmText: 'Excluir' })) return;
   await fetch(`/api/questoes/${id}`, { method: 'DELETE' });

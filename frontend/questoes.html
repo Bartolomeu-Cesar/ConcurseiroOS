@@ -567,6 +567,7 @@
         <select id="banco-filtro-materia" aria-label="Filtrar por matéria" onchange="loadBanco()">
           <option value="">Todas as matérias</option>
         </select>
+        <button type="button" onclick="renomearMateriaBanco()" title="Renomear a matéria selecionada em todo o sistema" aria-label="Renomear matéria selecionada" style="background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:0.82rem;cursor:pointer;">✏️ Renomear matéria</button>
         <label style="font-size:0.82rem;color:var(--text-sub);display:flex;align-items:center;gap:4px;cursor:pointer;">
           <input type="checkbox" id="banco-filtro-sem-gabarito" onchange="loadBanco()"> Apenas sem gabarito
         </label>

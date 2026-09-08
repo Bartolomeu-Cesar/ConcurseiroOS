@@ -43,6 +43,7 @@ from routers import (
     leagues,
     milestones,
     misc,
+    materias,
     notas,
     notifications,
     pagamentos,
@@ -398,6 +399,7 @@ app.include_router(study_intelligence.router)
 app.include_router(fatigue.router)
 app.include_router(adaptive.router)
 app.include_router(misc.router)
+app.include_router(materias.router)
 app.include_router(sidebar.router)
 app.include_router(vademecum.router)
 app.include_router(error_analysis.router)
