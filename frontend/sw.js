@@ -1,5 +1,5 @@
 // ==================== ConcurseiroOS — Service Worker v6 ====================
-const CACHE_VERSION = 'v295';
+const CACHE_VERSION = 'v296';
 const CACHE_NAME = `concurseiro-${CACHE_VERSION}`;
 const CDN_CACHE = `concurseiro-cdn-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `concurseiro-runtime-${CACHE_VERSION}`;
@@ -50,6 +50,17 @@ const PRECACHE_URLS = [
   '/js/modules/markdown.js',
   '/js/modules/illustrations.js',
   '/js/pages/index.js',
+  '/js/pages/questoes.js',
+  '/js/pages/viewer.js',
+  '/js/pages/studyroom.js',
+  '/js/pages/caderno-erros.js',
+  '/js/pages/simulado-cronometrado.js',
+  '/js/pages/social.js',
+  '/js/pages/batalha.js',
+  '/js/pages/catalogo.js',
+  '/js/pages/mastery.js',
+  '/js/pages/raio-x.js',
+  '/js/pages/vademecum.js',
   '/js/pages/dashboard/main.js',
   '/js/pages/dashboard/gamification.js',
   '/js/pages/dashboard/treinador.js',
@@ -256,7 +267,11 @@ self.addEventListener('fetch', (event) => {
 async function networkFirst(request) {
   try {
     const response = await fetch(request);
-    if (response.ok && request.method === 'GET') {
+    // NÃO cachear respostas de embaralhamento: cada abertura usa uma seed
+    // aleatória e a ordem precisa ser sempre nova (anti-decoreba de letra).
+    // Cachear serviria uma ordem fixa e reintroduziria o problema.
+    const isEmbaralhar = new URL(request.url).searchParams.get("embaralhar") === "true";
+    if (response.ok && request.method === "GET" && !isEmbaralhar) {
       const cache = await caches.open(RUNTIME_CACHE);
       cache.put(request, response.clone());
     }

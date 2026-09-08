@@ -241,6 +241,43 @@ async function loadQuestoesResolver() {
 }
 window.loadQuestoesResolver = loadQuestoesResolver;
 
+// FALLBACK: embaralha as alternativas no cliente quando o backend não pôde
+// servir embaralhado (offline/erro). Redistribui os textos entre os rótulos
+// A..E, recalcula a letra correta exibida e guarda um mapa displayed->original
+// para traduzir a resposta do usuário no /responder (grava a letra ORIGINAL).
+function _embaralharQuestaoLocal(q) {
+  const marca = { ...q, _embaralhado: true };
+  const letras = ['A', 'B', 'C', 'D', 'E'].filter(L => (q['alternativa_' + L.toLowerCase()] || '').trim());
+  // Certo/Errado (<=2 alternativas): não embaralha.
+  if (letras.length <= 2) { marca.embaralhada = false; marca.seed = null; return marca; }
+
+  const orig = {};
+  letras.forEach(L => { orig[L] = q['alternativa_' + L.toLowerCase()]; });
+  const correta = (q.resposta_correta || '').toUpperCase();
+  const textoCorreto = orig[correta];
+
+  const textos = letras.map(L => orig[L]);
+  for (let i = textos.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [textos[i], textos[j]] = [textos[j], textos[i]];
+  }
+
+  const mapDisplayToOrig = {}; // rótulo exibido -> letra original
+  let novaCorreta = correta;
+  letras.forEach((label, idx) => {
+    marca['alternativa_' + label.toLowerCase()] = textos[idx];
+    const origLetra = letras.find(L => orig[L] === textos[idx]);
+    mapDisplayToOrig[label] = origLetra;
+    if (textos[idx] === textoCorreto) novaCorreta = label;
+  });
+
+  marca.resposta_correta = novaCorreta;
+  marca.embaralhada = false;          // backend valida na ordem ORIGINAL
+  marca.seed = null;
+  marca._mapLocal = mapDisplayToOrig; // usado no confirmarResposta p/ traduzir
+  return marca;
+}
+
 function showQuestao(q) {
   // Questões DISCURSIVAS: sem alternativas — renderiza textarea + autoavaliação.
   if (q && (q.tipo === 'discursiva')) {
@@ -255,10 +292,12 @@ function showQuestao(q) {
     fetch(`/api/questoes/${q.id}?embaralhar=true&seed=${seed}`)
       .then(r => r.ok ? r.json() : null)
       .then(emb => {
-        const alvo = emb ? { ...emb, _embaralhado: true } : { ...q, _embaralhado: true, seed };
+        // Se o backend embaralhou, usa a ordem dele. Caso contrário (offline/erro),
+        // embaralha localmente para NUNCA cair na ordem fixa original (anti-decoreba).
+        const alvo = emb ? { ...emb, _embaralhado: true } : _embaralharQuestaoLocal({ ...q });
         showQuestao(alvo);
       })
-      .catch(() => showQuestao({ ...q, _embaralhado: true, seed }));
+      .catch(() => showQuestao(_embaralharQuestaoLocal({ ...q })));
     return;
   }
 
@@ -550,10 +589,13 @@ async function confirmarResposta() {
 
   const letra = selected.dataset.letter;
   const tempoSegundos = questaoStartTime ? Math.round((Date.now() - questaoStartTime) / 1000) : 0;
+  // Se foi embaralhado LOCALMENTE (fallback offline), traduz a letra exibida de
+  // volta para a original e envia embaralhada:false (backend valida no original).
+  const letraEnviar = (currentQuestao._mapLocal && currentQuestao._mapLocal[letra]) || letra;
   const resp = await fetch(`/api/questoes/${currentQuestao.id}/responder`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ resposta: letra, tempo_segundos: tempoSegundos, embaralhada: !!currentQuestao.embaralhada, seed: currentQuestao.seed ?? null })
+    body: JSON.stringify({ resposta: letraEnviar, tempo_segundos: tempoSegundos, embaralhada: !!currentQuestao.embaralhada, seed: currentQuestao.seed ?? null })
   });
   if (resp.status === 403) {
     const err = await resp.json().catch(() => ({}));
@@ -562,6 +604,13 @@ async function confirmarResposta() {
     return;
   }
   const res = await resp.json();
+
+  // No embaralhamento LOCAL (fallback), o backend valida no original e devolve a
+  // letra ORIGINAL; para o destaque visual bater com a tela, usamos a letra
+  // correta EXIBIDA (currentQuestao.resposta_correta já está na ordem exibida).
+  if (currentQuestao._mapLocal && res && !res.sem_gabarito) {
+    res.resposta_correta = currentQuestao.resposta_correta;
+  }
 
   // Questão sem gabarito cadastrado: não penaliza o usuário. Informa e permite seguir.
   if (res.sem_gabarito) {

@@ -211,7 +211,7 @@ def test_responder_com_seed_errada_letra_errada_erra(client):
     seed = 987654
     d = client.get(f"/api/questoes/{qid}?embaralhar=true&seed={seed}").json()
     correta_exibida = d["resposta_correta"]
-    outra = next(L for L in ["A", "B", "C", "D"] if L != correta_exibida)
+    outra = next(L for L in ["A", "B", "C", "D"] if correta_exibida != L)
     r = client.post(
         f"/api/questoes/{qid}/responder",
         json={"resposta": outra, "tempo_segundos": 12, "embaralhada": True, "seed": seed},
@@ -233,3 +233,19 @@ def test_retrocompat_sem_seed_continua_deterministico(client):
         json={"resposta": letra_exibida, "tempo_segundos": 8, "embaralhada": True},
     )
     assert r.json()["acertou"] is True
+
+
+def test_posicao_da_correta_varia_entre_seeds(client):
+    """Anti-decoreba: a MESMA questão servida com seeds diferentes deve colocar a
+    alternativa correta em posições variadas (não fixa a letra)."""
+    qid, textos = _criar_questao_4alt(correta="A")
+    posicoes = set()
+    for seed in range(1, 40):
+        q = client.get(f"/api/questoes/{qid}?embaralhar=true&seed={seed}").json()
+        # Em que letra ficou o texto originalmente correto (A = 'Texto ALFA')?
+        for L in ("a", "b", "c", "d"):
+            if q.get(f"alternativa_{L}") == textos["A"]:
+                posicoes.add(L.upper())
+                break
+    # Com 39 seeds e 4 posições, deve variar (>= 3 posições distintas na prática).
+    assert len(posicoes) >= 3, f"correta ficou presa em poucas posições: {posicoes}"
