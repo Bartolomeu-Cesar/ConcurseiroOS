@@ -106,10 +106,14 @@ export function showQuestaoDia() {
         {letra: 'D', texto: q.alternativa_d},
         ...(q.alternativa_e ? [{letra: 'E', texto: q.alternativa_e}] : []),
       ];
+  const ceBtns = [
+    { letra: 'A', label: '✓ CERTO', cor: '#a6e3a1' },
+    { letra: 'B', label: '✗ ERRADO', cor: '#f38ba8' },
+  ];
+  if (isCertoErrado && Math.random() < 0.5) ceBtns.reverse();
   const altsHtml = isCertoErrado
     ? `<div style="display:flex;gap:12px;justify-content:center;margin-top:12px;max-width:280px;margin-left:auto;margin-right:auto;">
-        <button class="qdia-alt" onclick="responderQuestaoDia('A')" style="flex:1;padding:10px 16px;background:#313244;border:2px solid #a6e3a1;border-radius:8px;color:#a6e3a1;cursor:pointer;font-size:0.82rem;font-weight:700;text-align:center;">✓ CERTO</button>
-        <button class="qdia-alt" onclick="responderQuestaoDia('B')" style="flex:1;padding:10px 16px;background:#313244;border:2px solid #f38ba8;border-radius:8px;color:#f38ba8;cursor:pointer;font-size:0.82rem;font-weight:700;text-align:center;">✗ ERRADO</button>
+        ${ceBtns.map(b => `<button class="qdia-alt" onclick="responderQuestaoDia('${b.letra}')" style="flex:1;padding:10px 16px;background:#313244;border:2px solid ${b.cor};border-radius:8px;color:${b.cor};cursor:pointer;font-size:0.82rem;font-weight:700;text-align:center;">${b.label}</button>`).join('')}
       </div>`
     : alts.map(a => `<button class="qdia-alt" onclick="responderQuestaoDia('${a.letra}')" style="display:block;width:100%;text-align:left;padding:8px 12px;margin-bottom:6px;background:#313244;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;cursor:pointer;font-size:0.82rem;"><strong>${a.letra})</strong> ${escapeHtml(a.texto)}</button>`).join('');
   card.innerHTML = `<div style="padding:12px;background:#1e1e2e;border-radius:8px;">
