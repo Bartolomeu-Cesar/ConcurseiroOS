@@ -252,7 +252,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "font-src 'self' https://cdn.jsdelivr.net; "
             "connect-src 'self' http://localhost:* ws://localhost:* https://cdn.jsdelivr.net; "
             "worker-src 'self' blob:; "
-            "frame-src 'self' blob:"
+            "frame-src 'self' blob: https://www.youtube.com https://www.youtube-nocookie.com"
         )
         response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
         response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
