@@ -558,9 +558,9 @@ def responder_discursiva(
     )
     update_streak(conn, "questoes_resolvidas", user_id=user_id)
 
-    # Registrar tempo como sessão de estudo (se > 10 segundos)
-    if body.tempo_segundos > 10:
-        horas = body.tempo_segundos / 3600
+    # Registrar tempo como sessão de estudo (qualquer tempo > 0; cap 10min/questão).
+    if body.tempo_segundos and body.tempo_segundos > 0:
+        horas = min(body.tempo_segundos, 600) / 3600
         materia = questao["materia"] or "Questões"
         existing = conn.execute(
             "SELECT id, horas FROM sessoes_estudo WHERE data = ? AND materia = ? AND tipo = 'questoes' AND user_id = ?",
@@ -642,9 +642,12 @@ def responder_questao(
     )
     update_streak(conn, "questoes_resolvidas", user_id=user_id)
 
-    # Registrar tempo como sessão de estudo (se > 10 segundos)
-    if body.tempo_segundos > 10:
-        horas = body.tempo_segundos / 3600
+    # Registrar tempo como sessão de estudo. Antes o limiar era > 10s POR QUESTÃO,
+    # o que descartava silenciosamente todo o tempo de respostas rápidas (uma
+    # sessão de 28 questões podia perder metade do tempo real). Agora conta
+    # qualquer tempo > 0, com cap de 10min/questão (evita timer abandonado).
+    if body.tempo_segundos and body.tempo_segundos > 0:
+        horas = min(body.tempo_segundos, 600) / 3600
         materia = questao["materia"] or "Questões"
         existing = conn.execute(
             "SELECT id, horas FROM sessoes_estudo WHERE data = ? AND materia = ? AND tipo = 'questoes' AND user_id = ?",

@@ -294,6 +294,38 @@ class TestQuestoes:
         assert r.json()["acertou"] is False
         assert r.json()["resposta_correta"] == "D"
 
+    def test_responder_tempo_curto_registra_sessao(self, client):
+        """Resposta rápida (<= 10s) DEVE contabilizar tempo em sessoes_estudo.
+
+        Regressão: o limiar `> 10s` por questão descartava o tempo de respostas
+        rápidas, então uma sessão de muitas questões perdia parte do tempo real.
+        """
+        from utils import today_str
+
+        conn = sqlite3.connect(_tmp_db.name, timeout=10)
+        conn.execute(
+            "INSERT INTO questoes (materia, topico, enunciado, alternativa_a, alternativa_b, "
+            "alternativa_c, alternativa_d, resposta_correta, created_at, user_id) "
+            "VALUES ('MatRapida', '', 'q rapida?', 'a', 'b', 'c', 'd', 'A', '2024-01-01', 1)"
+        )
+        conn.commit()
+        qid = conn.execute("SELECT id FROM questoes WHERE materia = 'MatRapida'").fetchone()[0]
+
+        def _tempo_questoes():
+            row = conn.execute(
+                "SELECT COALESCE(SUM(horas), 0) FROM sessoes_estudo WHERE data = ? AND tipo = 'questoes' AND user_id = 1",
+                (today_str(),),
+            ).fetchone()
+            return row[0]
+
+        base = _tempo_questoes()
+        r = client.post(f"/api/questoes/{qid}/responder", json={"resposta": "A", "tempo_segundos": 5})
+        assert r.status_code == 200
+        depois = _tempo_questoes()
+        conn.close()
+        # 5s = 5/3600 h ≈ 0.00139 h — deve ter sido somado (antes ficava 0).
+        assert depois > base, (base, depois)
+
     def test_questoes_stats(self, client):
         r = client.get("/api/questoes/stats/geral")
         assert r.status_code == 200
