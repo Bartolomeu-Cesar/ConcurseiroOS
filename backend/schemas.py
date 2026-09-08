@@ -38,6 +38,26 @@ class EditalHoras(BaseModel):
     horas: float
 
 
+class EditalItemUpdate(BaseModel):
+    """Edita o nome do tópico e/ou a matéria de UM item do edital."""
+    materia: str | None = None
+    topico: str | None = None
+
+
+class RenomearMateriaRequest(BaseModel):
+    """Renomeia uma matéria em todos os tópicos daquela disciplina.
+
+    Se `propagar` for True, atualiza também as tabelas ligadas por nome de matéria
+    (sessoes_estudo, questoes, ciclo_estudos) para manter estatísticas coerentes.
+    Escopo opcional por edital_nome/cargo (vazio = todos os editais do usuário).
+    """
+    materia_antiga: str
+    materia_nova: str
+    edital_nome: str = ""
+    cargo: str = ""
+    propagar: bool = True
+
+
 class EditalPdfLink(BaseModel):
     pdf_link: str
     pdf_pagina: int = 1

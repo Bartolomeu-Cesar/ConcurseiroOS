@@ -10,9 +10,11 @@ from schemas import (
     CreateEditalInfoRequest,
     EditalCreate,
     EditalHoras,
+    EditalItemUpdate,
     EditalPdfLink,
     OkResponse,
     RenomearEditalRequest,
+    RenomearMateriaRequest,
     UpdateEditalInfoRequest,
 )
 
@@ -161,6 +163,87 @@ def create_edital(body: EditalCreate, conn=Depends(get_db_session), user_id: int
     log.info(f"Edital topic created: id={new_id} materia={body.materia}")
     return {"id": new_id, "edital_nome": body.edital_nome, "cargo": body.cargo, "materia": body.materia,
             "topico": body.topico, "status": "Não Iniciado", "horas_estudadas": 0.0}
+
+
+@router.put("/api/edital/materia/renomear", summary="Renomear matéria",
+            description="Renomeia uma matéria em todos os tópicos daquela disciplina, "
+                        "propagando (opcional) para sessões, questões e ciclo de estudos.")
+def renomear_materia(body: RenomearMateriaRequest, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    antiga = sanitize_input(body.materia_antiga).strip()
+    nova = sanitize_input(body.materia_nova).strip()
+    if not antiga or not nova:
+        raise HTTPException(status_code=400, detail="Informe a matéria antiga e a nova.")
+    if antiga == nova:
+        raise HTTPException(status_code=400, detail="O novo nome é igual ao atual.")
+
+    edital_nome = sanitize_input(body.edital_nome).strip()
+    cargo = sanitize_input(body.cargo).strip()
+
+    # Escopo no edital: renomeia a matéria nos tópicos (opcionalmente restrito a edital/cargo).
+    q = "UPDATE edital SET materia = ? WHERE materia = ? AND user_id = ?"
+    params = [nova, antiga, user_id]
+    if edital_nome:
+        q += " AND edital_nome = ?"
+        params.append(edital_nome)
+    if cargo:
+        q += " AND cargo = ?"
+        params.append(cargo)
+    topicos_afetados = conn.execute(q, params).rowcount
+
+    if topicos_afetados == 0:
+        raise HTTPException(status_code=404, detail=f"Nenhum tópico com a matéria '{antiga}'.")
+
+    propagados = {}
+    if body.propagar:
+        # Propaga para tabelas ligadas por NOME de matéria (mantém histórico coerente).
+        # Estas tabelas não têm edital_nome/cargo, então a propagação é por matéria+user.
+        for tabela in ("sessoes_estudo", "questoes", "ciclo_estudos"):
+            try:
+                r = conn.execute(
+                    f"UPDATE {tabela} SET materia = ? WHERE materia = ? AND user_id = ?",
+                    (nova, antiga, user_id),
+                )
+                propagados[tabela] = r.rowcount
+            except Exception as e:
+                # Tabela pode não existir em bancos antigos — não é fatal.
+                log.warning(f"Não foi possível propagar renomear matéria em {tabela}: {e}")
+
+    conn.commit()
+    log.info(f"Matéria renomeada: '{antiga}' -> '{nova}' ({topicos_afetados} tópicos, propagar={body.propagar})")
+    return {
+        "ok": True,
+        "materia_antiga": antiga,
+        "materia_nova": nova,
+        "topicos_afetados": topicos_afetados,
+        "propagados": propagados,
+    }
+
+
+@router.put("/api/edital/{id:int}", summary="Editar tópico",
+            description="Edita o nome do tópico e/ou a matéria de um item do edital.")
+def update_edital_item(id: int, body: EditalItemUpdate, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    row = conn.execute("SELECT materia, topico FROM edital WHERE id = ? AND user_id = ?", (id, user_id)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Tópico do edital não encontrado")
+
+    nova_materia = row[0]
+    novo_topico = row[1]
+    if body.materia is not None:
+        m = sanitize_input(body.materia).strip()
+        if not m:
+            raise HTTPException(status_code=400, detail="A matéria não pode ficar vazia.")
+        nova_materia = m
+    if body.topico is not None:
+        t = sanitize_input(body.topico).strip()
+        if not t:
+            raise HTTPException(status_code=400, detail="O tópico não pode ficar vazio.")
+        novo_topico = t
+
+    conn.execute("UPDATE edital SET materia = ?, topico = ? WHERE id = ? AND user_id = ?",
+                 (nova_materia, novo_topico, id, user_id))
+    conn.commit()
+    log.info(f"Edital topic updated: id={id} materia={nova_materia}")
+    return {"id": id, "materia": nova_materia, "topico": novo_topico}
 
 
 @router.put("/api/edital/{id}/status")

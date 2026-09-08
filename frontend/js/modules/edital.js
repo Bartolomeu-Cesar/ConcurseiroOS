@@ -1,6 +1,6 @@
 // ==================== TAB 2: EDITAL ====================
 import { state } from './state.js';
-import { escapeHtml, toast, showLoading, undoableDelete, confirmModal, formatHours } from './utils.js';
+import { escapeHtml, toast, showLoading, undoableDelete, confirmModal, promptModal, formatHours } from './utils.js';
 import { openSelectModal } from './modal-selecao.js';
 import { switchTab } from './tabs.js';
 
@@ -214,6 +214,7 @@ function renderEditalTree() {
             <span class="tree-label">${escapeHtml(matNome)}</span>
             <span class="tree-stats">${matDone}/${items.length}${matHoras > 0 ? ' • ' + formatHours(matHoras) : ''}</span>
             <div class="tree-bar"><div class="tree-bar-fill" style="width:${matPct}%"></div></div>
+            <button class="tree-archive-btn" style="font-size:0.7rem;" onclick="event.stopPropagation();renomearMateria('${matNome.replace(/'/g, "\\\\'")}','${concurso.replace(/'/g, "\\\\'")}','${cargo.replace(/'/g, "\\\\'")}')" title="Renomear matéria (corrige em todos os tópicos)" aria-label="Renomear matéria">✏️</button>
             <button class="tree-pdf-link-btn" style="font-size:0.7rem;" onclick="event.stopPropagation();linkPdfToMateria('${matNome.replace(/'/g, "\\\\'")}','${concurso}','${cargo}')" title="Vincular PDF à matéria" aria-label="Vincular PDF à matéria">🔗</button>
           </div>
           <div class="tree-children ${matOpen ? 'open' : ''}">`;
@@ -234,6 +235,7 @@ function renderEditalTree() {
             ${pdfBtn}
             ${videoBtn}
             <button class="tree-note" onclick="event.stopPropagation();openNoteModal(${item.id})" title="Notas" aria-label="Abrir notas do tópico">📝</button>
+            <button class="tree-note" onclick="event.stopPropagation();editarTopico(${item.id},'${safeTopico}')" title="Editar nome do tópico" aria-label="Editar nome do tópico">✏️</button>
             <button class="tree-del" onclick="event.stopPropagation();deleteEditalItem(${item.id})" aria-label="Excluir item do edital">×</button>
           </div>`;
         }
@@ -482,6 +484,69 @@ export async function addEdital() {
   document.getElementById('edital-materia-input').value = '';
   document.getElementById('edital-topico-input').value = '';
   loadEdital();
+}
+
+/** Edita inline o nome de um tópico do edital (lápis na folha da árvore). */
+export async function editarTopico(id, topicoAtual) {
+  const novo = await promptModal('Editar o nome do tópico:', {
+    title: '✏️ Editar tópico',
+    defaultValue: topicoAtual || '',
+    placeholder: 'Nome do tópico',
+    multiline: true,
+  });
+  if (novo === null) return; // cancelado
+  const t = novo.trim();
+  if (!t) { toast('O tópico não pode ficar vazio.', 'warning'); return; }
+  if (t === (topicoAtual || '').trim()) return; // sem mudança
+  try {
+    const res = await fetch(`/api/edital/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topico: t }),
+    });
+    if (!res.ok) throw new Error('falha');
+    toast('Tópico atualizado!', 'success');
+    loadEdital();
+  } catch (e) { toast('Erro ao atualizar o tópico.', 'error'); }
+}
+
+/** Renomeia uma matéria em TODOS os tópicos daquela disciplina (botão no
+ *  cabeçalho da matéria). Propaga para sessões/questões/ciclo por padrão. */
+export async function renomearMateria(materiaAtual, editalNome, cargo) {
+  const nova = await promptModal(
+    `Renomear a matéria "${materiaAtual}" em todos os tópicos desta disciplina:`,
+    { title: '✏️ Renomear matéria', defaultValue: materiaAtual || '', placeholder: 'Novo nome da matéria' },
+  );
+  if (nova === null) return;
+  const nome = nova.trim();
+  if (!nome) { toast('O nome não pode ficar vazio.', 'warning'); return; }
+  if (nome === (materiaAtual || '').trim()) return;
+
+  const ok = await confirmModal(
+    'Renomear matéria',
+    `Renomear <strong>"${escapeHtml(materiaAtual)}"</strong> para <strong>"${escapeHtml(nome)}"</strong>?<br><br>` +
+    `Isso corrige o nome em todos os tópicos e também nas suas sessões de estudo, questões e ciclo (para manter o histórico coerente).`,
+    { confirmText: 'Renomear', type: 'info', icon: '✏️' },
+  );
+  if (!ok) return;
+
+  try {
+    const res = await fetch('/api/edital/materia/renomear', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        materia_antiga: materiaAtual,
+        materia_nova: nome,
+        edital_nome: editalNome || '',
+        cargo: cargo || '',
+        propagar: true,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) { toast(data.detail || 'Erro ao renomear.', 'error'); return; }
+    toast(`Matéria renomeada em ${data.topicos_afetados} tópico(s)!`, 'success');
+    loadEdital();
+  } catch (e) { toast('Erro de conexão ao renomear.', 'error'); }
 }
 
 export async function importEditalPdf(input) {
