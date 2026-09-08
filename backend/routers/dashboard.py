@@ -49,15 +49,19 @@ def get_dashboard(conn=Depends(get_db_session), user_id: int = Depends(get_user_
         FROM sessoes_estudo WHERE user_id = ? GROUP BY tipo
     """, (user_id,)).fetchall()
     horas_tipo_map = {r[0]: round(r[1], 1) for r in horas_por_tipo}
-    horas_estudo = round(
-        horas_tipo_map.get("edital", 0) + horas_tipo_map.get("ciclo", 0) + horas_tipo_map.get("timer", 0), 1
-    )
-    # Revisão do caderno de erros é atividade de questões → soma em horas_questoes
+    # Questões: resolução + simulado + revisão do caderno de erros.
     horas_questoes = round(
         horas_tipo_map.get("questoes", 0)
         + horas_tipo_map.get("simulado", 0)
         + horas_tipo_map.get("caderno_erros", 0), 1
     )
+    # Estudo: TODO o resto (leitura/edital/ciclo/timer/flashcard/sumulas/
+    # studyroom/feynman/desafio/batalha/pomodoro/vídeo/...). Definir por exclusão
+    # (total − questões) garante que o cartão "Horas de Estudo" feche com o total
+    # do dia e que tipos novos não fiquem silenciosamente de fora. Antes, flashcard
+    # e outros tipos não entravam em nenhum dos dois agregados.
+    horas_todas = round(sum(horas_tipo_map.values()), 1)
+    horas_estudo = round(max(0.0, horas_todas - horas_questoes), 1)
 
     # Progresso do edital — prioriza o CARGO ALVO explícito do usuário; se não
     # houver, cai na heurística de melhor overlap com o ciclo ativo.

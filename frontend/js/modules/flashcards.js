@@ -11,7 +11,11 @@ let _flashReviewedToday = 0; // Total revisados hoje (persiste na sessão)
 let _flashOriginalTotal = 0; // Total original (pendentes + já revisados)
 let _flashSessionStart = null; // Timestamp início da sessão de revisão
 let _flashCardStart = null; // Timestamp início do card atual
-let _flashSessionSeconds = 0; // Segundos acumulados na sessão
+let _flashCardMateria = null; // Matéria do card atual (para registrar tempo por disciplina)
+// Tempo acumulado na sessão POR MATÉRIA (segundos). Permite registrar o tempo de
+// flashcards discriminado por disciplina real (ex.: "Flashcards: Direito Const.")
+// em vez de uma matéria genérica. Cards sem matéria caem em "Geral".
+let _flashSessionByMat = {};
 let _chunkPauseShown = false; // Controle para não re-mostrar pausa de chunk
 let _examMode = false; // Encoding Specificity: modo prova sem ajudas
 let _productionCount = 0; // Production Effect: contador para hint de ler em voz alta
@@ -39,31 +43,51 @@ function _stopFlashTimer() {
 }
 
 /**
- * Contabiliza o tempo do card em andamento (se houver) no acumulado da sessão e,
- * se passar do limiar, registra a sessão no backend. Idempotente: zera o
- * acumulado após registrar. Usado ao sair da aba / esconder a página, para não
- * perder o tempo estudado quando o usuário não avaliou o último card.
+ * Fecha o cronômetro do card em andamento e credita o tempo à MATÉRIA do card
+ * (cap 5min/card). Chamado antes de trocar de card, avaliar ou sair. Idempotente.
  */
-function _flushFlashSession() {
-  if (_flashCardStart) {
-    const elapsed = Math.round((Date.now() - _flashCardStart) / 1000);
-    _flashSessionSeconds += Math.min(elapsed, 300); // cap 5min/card
-    _flashCardStart = null;
-  }
-  if (_flashSessionSeconds > 30) {
-    const horas = Math.round(_flashSessionSeconds / 3600 * 100) / 100;
+function _accumulateCardTime() {
+  if (!_flashCardStart) return;
+  const elapsed = Math.round((Date.now() - _flashCardStart) / 1000);
+  const mat = _flashCardMateria || 'Geral';
+  _flashSessionByMat[mat] = (_flashSessionByMat[mat] || 0) + Math.min(elapsed, 300);
+  _flashCardStart = null;
+}
+
+/**
+ * Registra no backend o tempo acumulado POR MATÉRIA como sessões de flashcard,
+ * discriminando a disciplina real (ex.: "Flashcards: Direito Constitucional").
+ * Só registra matérias com > 30s (evita ruído). Zera o que registrar.
+ * @param {object} [opts] { keepalive } para envio durante fechamento da aba.
+ */
+function _registrarSessoesFlash(opts = {}) {
+  const keepalive = !!opts.keepalive;
+  for (const [mat, seg] of Object.entries(_flashSessionByMat)) {
+    if (seg <= 30) continue;
+    const horas = Math.round(seg / 3600 * 100) / 100;
+    const materia = mat === 'Geral' ? 'Flashcards (Revisão)' : `Flashcards: ${mat}`;
     try {
       fetch('/api/sessoes-estudo/registrar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ horas, materia: 'Flashcards (Revisão)', tipo: 'flashcard' }),
-        keepalive: true, // garante envio mesmo se a aba estiver sendo fechada
+        body: JSON.stringify({ horas, materia, tipo: 'flashcard' }),
+        keepalive,
       }).then(() => {
-        emit('sessao:horas', { materia: 'Flashcards (Revisão)', horas, tipo: 'flashcard' });
+        emit('sessao:horas', { materia, horas, tipo: 'flashcard' });
       }).catch(() => {});
     } catch (e) {}
-    _flashSessionSeconds = 0;
+    _flashSessionByMat[mat] = 0;
   }
+}
+
+/**
+ * Contabiliza o tempo do card em andamento (se houver) e registra as sessões
+ * pendentes por matéria. Usado ao sair da aba / esconder a página, para não
+ * perder o tempo estudado quando o usuário não avaliou o último card.
+ */
+function _flushFlashSession() {
+  _accumulateCardTime();
+  _registrarSessoesFlash({ keepalive: true });
 }
 
 /**
@@ -185,7 +209,7 @@ function _resumoTempoCard() {
 // flashcards. A barra de tempo POR CARD (_startFlashTimer), calibrada pela
 // complexidade real do card (texto + FSRS difficulty/lapses), é a métrica da
 // sessão. O tempo estudado é registrado de forma independente via
-// _flashSessionSeconds em _advanceAfterReview (POST /api/sessoes-estudo/registrar,
+// _flashSessionByMat em _advanceAfterReview (POST /api/sessoes-estudo/registrar,
 // tipo 'flashcard'). Isso elimina a dupla contagem e o bug do Pomodoro global
 // que continuava rodando ao sair da aba. O timer por card é encerrado ao trocar
 // de card, ao avaliar acerto/erro, e ao sair da aba (_cleanupFlashTimers).
@@ -447,6 +471,7 @@ function showCurrentFlashcard() {
   if (_examMode) {
     rb.style.display = 'inline-block';
     _flashCardStart = Date.now();
+    _flashCardMateria = card.materia || 'Geral';
     if (!_flashSessionStart) _flashSessionStart = Date.now();
     _startFlashTimer(card.tempo_segundos, card.tempo_detalhe);
     _focusCard();
@@ -506,6 +531,7 @@ function showCurrentFlashcard() {
   if (_flipMode && !_examMode) _ajustarAlturaFlip();
   // Track time per card
   _flashCardStart = Date.now();
+  _flashCardMateria = card.materia || 'Geral';
   if (!_flashSessionStart) _flashSessionStart = Date.now();
   _startFlashTimer(card.tempo_segundos, card.tempo_detalhe);
   _focusCard();
@@ -669,13 +695,8 @@ export async function reviewFlashcard(quality) {
     _lastTempoResumo = _resumoTempoCard();
     _stopFlashTimer();
 
-    // Acumular tempo gasto neste card
-    if (_flashCardStart) {
-      const elapsed = Math.round((Date.now() - _flashCardStart) / 1000);
-      // Cap em 5 min por card (evita tempo inflado se usuário saiu)
-      _flashSessionSeconds += Math.min(elapsed, 300);
-      _flashCardStart = null;
-    }
+    // Acumular tempo gasto neste card, creditado à matéria do card (cap 5min).
+    _accumulateCardTime();
 
     // Metacognition: track confidence vs actual result gap
     const lastMetacog = _metacogHistory.find(m => m.cardId === card.id && !m.quality);
@@ -874,19 +895,11 @@ function _advanceAfterReview() {
     if (_loadStreakBadge) _loadStreakBadge();
     if (_loadMetas) _loadMetas();
 
-    // Registrar sessão de estudo a cada 5 cards ou ao terminar
+    // Registrar sessão de estudo a cada 5 cards ou ao terminar. Registra o tempo
+    // discriminado por matéria real do card (via _flashSessionByMat).
     const isFinished = currentFlashIndex >= flashcardsToday.length;
-    if ((currentFlashIndex % 5 === 0 || isFinished) && _flashSessionSeconds > 30) {
-      const horas = Math.round(_flashSessionSeconds / 3600 * 100) / 100;
-      fetch('/api/sessoes-estudo/registrar', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ horas: horas, materia: 'Flashcards (Revisão)', tipo: 'flashcard' })
-      }).then(() => {
-        // Notifica a UI para atualizar o "tempo de hoje" sem refresh manual.
-        emit('sessao:horas', { materia: 'Flashcards (Revisão)', horas, tipo: 'flashcard' });
-      }).catch(() => {});
-      _flashSessionSeconds = 0; // Reset para próximo bloco
+    if (currentFlashIndex % 5 === 0 || isFinished) {
+      _registrarSessoesFlash();
     }
 }
 
@@ -1398,6 +1411,9 @@ function showSessaoFlashcard() {
   rv.style.display = 'none';
   // Timer regressivo por complexidade (mesmo da revisão SRS): usa tempo_segundos
   // calculado no backend por pergunta+resposta+FSRS. Sem isso caía no fallback.
+  _flashCardStart = Date.now();
+  _flashCardMateria = card.materia || 'Geral';
+  if (!_flashSessionStart) _flashSessionStart = Date.now();
   _startFlashTimer(card.tempo_segundos, card.tempo_detalhe);
   rb.onclick = function() {
     // NÃO para o timer ao revelar: segue até o estudante avaliar em sessaoNext().
@@ -1416,6 +1432,7 @@ function showSessaoFlashcard() {
 
 export async function sessaoNext(quality) {
   _stopFlashTimer();  // recall encerrado só ao confirmar acerto/erro
+  _accumulateCardTime();  // credita o tempo do card à sua matéria
   const card = flashSessao[flashSessaoIndex];
   if (card && card.id) {
     try {
@@ -1441,6 +1458,10 @@ export async function sessaoNext(quality) {
     } catch(e) {}
   }
   flashSessaoIndex++;
+  // Registra o tempo por matéria a cada 5 cards ou ao terminar a sessão.
+  if (flashSessaoIndex % 5 === 0 || flashSessaoIndex >= flashSessao.length) {
+    _registrarSessoesFlash();
+  }
   showSessaoFlashcard();
   if (_loadMetas) _loadMetas();
   if (_loadStreakBadge) _loadStreakBadge();
@@ -2264,7 +2285,7 @@ export async function startFlashByMateria(materia) {
     _flashOriginalTotal = pendentes.length;
     _flashReviewedToday = 0;
     _flashSessionStart = Date.now();
-    _flashSessionSeconds = 0;
+    _flashSessionByMat = {};
     _currentFilterMateria = materia; // Tracking da matéria filtrada
 
     // Navegar para a aba de flashcards

@@ -669,6 +669,38 @@ class TestDashboard:
         # horas_questoes deve ter aumentado ~0.5 com o caderno de erros
         assert data["horas_questoes"] >= base + 0.4
 
+    def test_dashboard_horas_estudo_inclui_flashcard(self, client):
+        """O tempo de flashcards (tipo 'flashcard') deve entrar em horas_estudo,
+        não ficar de fora dos agregados. Antes, só edital/ciclo/timer contavam."""
+        from datetime import date
+
+        from routers.dashboard import _invalidate_dashboard_cache
+
+        _invalidate_dashboard_cache(1)
+        base = client.get("/api/dashboard").json()["horas_estudo"]
+
+        conn = sqlite3.connect(_tmp_db.name, timeout=10)
+        hoje = date.today().isoformat()
+        conn.execute(
+            "INSERT INTO sessoes_estudo (materia, horas, data, tipo, user_id) VALUES ('Flashcards: Direito', 0.5, ?, 'flashcard', 1)",
+            (hoje,),
+        )
+        conn.commit()
+        conn.close()
+
+        _invalidate_dashboard_cache(1)
+        data = client.get("/api/dashboard").json()
+        assert data["horas_estudo"] >= base + 0.4, data["horas_estudo"]
+
+    def test_dashboard_estudo_mais_questoes_fecha_com_total(self, client):
+        """horas_estudo + horas_questoes deve bater com total_horas (agregados não
+        deixam nenhum tipo de fora)."""
+        from routers.dashboard import _invalidate_dashboard_cache
+
+        _invalidate_dashboard_cache(1)
+        d = client.get("/api/dashboard").json()
+        assert abs((d["horas_estudo"] + d["horas_questoes"]) - d["total_horas"]) <= 0.2, d
+
     def test_relatorio_semanal(self, client):
         r = client.get("/api/relatorio-semanal")
         assert r.status_code == 200
