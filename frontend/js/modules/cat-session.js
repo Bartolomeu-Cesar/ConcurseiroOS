@@ -12,6 +12,7 @@
  */
 
 import { showToast } from './toast.js';
+import { confirmModal } from './utils.js';
 
 // ─── State ───────────────────────────────────────────────────
 let _sessionId = null;
@@ -446,6 +447,19 @@ async function _apiResultado(sessionId) {
   return res.json();
 }
 
+// Sessão adaptativa 'ativa' pendente (para retomar após interrupção/logout).
+async function _apiSessaoAtiva() {
+  const res = await fetch('/api/sessao-adaptativa/ativa', { headers: _getHeaders() });
+  if (!res.ok) return { ativa: false };
+  return res.json();
+}
+
+// Finaliza uma sessão ativa (o endpoint de resultado marca como 'finalizada').
+// Usado ao optar por começar uma sessão nova, evitando deixar a antiga órfã.
+async function _apiFinalizarSessao(sessionId) {
+  return fetch(`/api/sessao-adaptativa/${sessionId}/resultado`, { headers: _getHeaders() });
+}
+
 // ─── Timer ───────────────────────────────────────────────────
 function _startTimer() {
   _tempoInicio = Date.now();
@@ -727,6 +741,32 @@ export async function startCatSession(opts = {}) {
   _materia = materia;
   _totalQuestoes = totalQuestoes;
   _progresso = 0;
+
+  // Retomar sessão ativa interrompida (ex.: após logout no meio): em vez de
+  // criar uma nova e deixar a anterior órfã, oferece continuar de onde parou.
+  try {
+    const ativa = await _apiSessaoAtiva();
+    if (ativa && ativa.ativa && ativa.session_id) {
+      const respondidas = ativa.questoes_respondidas || 0;
+      const continuar = respondidas > 0
+        ? await confirmModal(
+            '🔄 Sessão em andamento',
+            `Você tem uma sessão adaptativa com <strong>${respondidas}</strong> questão(ões) já respondida(s).<br><br>Deseja <strong>continuar</strong> de onde parou?`,
+            { confirmText: 'Continuar', cancelText: 'Começar nova', type: 'info', icon: '🔄' })
+        : true; // sessão ativa sem respostas: apenas reaproveita
+      if (continuar) {
+        _sessionId = ativa.session_id;
+        _materia = ativa.materia || materia;
+        _progresso = respondidas;
+        _overlay = _renderOverlay();
+        showToast('Retomando sessão adaptativa…', 'success');
+        await _carregarProxima();
+        return;
+      }
+      // Usuário optou por nova sessão: finaliza a antiga para não ficar órfã.
+      try { await _apiFinalizarSessao(ativa.session_id); } catch (e) {}
+    }
+  } catch (e) { /* sem sessão ativa ou backend indisponível → segue para nova */ }
 
   _overlay = _renderOverlay();
 

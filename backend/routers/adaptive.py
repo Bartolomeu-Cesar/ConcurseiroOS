@@ -19,6 +19,7 @@ from schemas import IniciarAdaptativaRequest, ResponderAdaptativaRequest
 
 from constants import SQL_QUESTAO_COM_GABARITO
 from database import get_db_session
+from utils import today_str, update_streak
 
 router = APIRouter(tags=["Sessão Adaptativa"])
 
@@ -85,6 +86,35 @@ def iniciar_sessao_adaptativa(body: IniciarAdaptativaRequest,
         "session_id": session_id,
         "materia": materia,
         "total_questoes": body.total_questoes,
+    }
+
+
+# ============================================================
+# GET /api/sessao-adaptativa/ativa
+# ============================================================
+
+@router.get("/api/sessao-adaptativa/ativa", summary="Sessão adaptativa ativa (para retomar)",
+            description="Retorna a sessão adaptativa 'ativa' mais recente do usuário, se houver, "
+                        "para que ela possa ser RETOMADA em vez de perdida (ex.: após um logout no meio).")
+def sessao_adaptativa_ativa(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    sessao = conn.execute(
+        """SELECT session_id, materia, theta, questoes_respondidas, acertos, dificuldade_atual, started_at
+           FROM sessao_adaptativa
+           WHERE user_id = ? AND status = 'ativa'
+           ORDER BY id DESC LIMIT 1""",
+        (user_id,),
+    ).fetchone()
+    if not sessao:
+        return {"ativa": False}
+    return {
+        "ativa": True,
+        "session_id": sessao["session_id"],
+        "materia": sessao["materia"] or "",
+        "questoes_respondidas": sessao["questoes_respondidas"],
+        "acertos": sessao["acertos"],
+        "theta": round(sessao["theta"], 3),
+        "dificuldade_atual": sessao["dificuldade_atual"],
+        "started_at": sessao["started_at"],
     }
 
 
@@ -269,6 +299,24 @@ def responder_questao(session_id: str,
            VALUES (?, ?, ?, ?, ?, ?, ?)""",
         (session_id, body.questao_id, acertou, body.tempo_ms, dificuldade_questao, theta_novo, now),
     )
+
+    # Também registrar em questoes_respostas para que a resposta da calibração
+    # (CAT) CONTE como "questão do dia", ALIMENTE o streak e EXCLUA a questão do
+    # Daily Challenge (que sorteia apenas questões não respondidas hoje). Evita
+    # duplicar caso a MESMA questão já tenha sido respondida hoje pelo usuário.
+    ja_hoje = conn.execute(
+        "SELECT 1 FROM questoes_respostas WHERE questao_id = ? AND user_id = ? AND data = ? LIMIT 1",
+        (body.questao_id, user_id, today_str()),
+    ).fetchone()
+    if not ja_hoje:
+        tempo_seg = int(round((body.tempo_ms or 0) / 1000))
+        conn.execute(
+            """INSERT INTO questoes_respostas
+               (questao_id, resposta_usuario, acertou, tempo_segundos, confianca, data, user_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (body.questao_id, resposta_usuario, acertou, tempo_seg, 0, today_str(), user_id),
+        )
+        update_streak(conn, "questoes_resolvidas", user_id=user_id)
 
     # Atualizar sessão
     novas_respondidas = sessao["questoes_respondidas"] + 1

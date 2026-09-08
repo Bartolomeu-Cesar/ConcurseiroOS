@@ -31,6 +31,7 @@ export function isLoggedIn() {
 export function logout() {
   localStorage.removeItem('auth_token');
   localStorage.removeItem('auth_user');
+  localStorage.removeItem('refresh_token');
   updateAuthUI();
 }
 

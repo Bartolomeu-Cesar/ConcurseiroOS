@@ -590,6 +590,7 @@ window.openAddFriend = openAddFriend;
 function doLogout() {
   localStorage.removeItem('auth_token');
   localStorage.removeItem('auth_user');
+  localStorage.removeItem('refresh_token');
   document.getElementById('profile-modal')?.remove();
   window.location.href = '/login.html';
 }

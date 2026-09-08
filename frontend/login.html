@@ -235,6 +235,9 @@
         // Salvar token e dados do usuário
         localStorage.setItem('auth_token', data.token);
         localStorage.setItem('auth_user', JSON.stringify(data.user));
+        // Refresh token: usado pelo auth-interceptor para renovar o access token
+        // (evita logout no meio da sessão quando o access token de 1h expira).
+        if (data.refresh_token) localStorage.setItem('refresh_token', data.refresh_token);
 
         showStep('success');
 
