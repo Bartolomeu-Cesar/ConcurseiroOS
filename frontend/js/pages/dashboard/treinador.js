@@ -2,6 +2,10 @@
 import { getCSSVar, COLORS } from './helpers.js';
 import { toast } from '../../modules/utils.js';
 
+// IDs dos flashcards atualmente em "Risco de Esquecimento", usados para abrir a
+// sessão filtrada (Revisar Todos) exatamente nesses cards.
+let _riscoFlashcardIds = [];
+
 export async function loadTreinador() {
   try {
     const favorito = localStorage.getItem('countdown_favorito') || '';
@@ -81,6 +85,11 @@ export async function loadTreinador() {
       </div>`;
 
     if (intel.forgetting_risk && intel.forgetting_risk.length > 0) {
+      // Guarda os IDs dos flashcards em risco para o "Revisar Todos" abrir
+      // exatamente esses cards (e não a fila genérica de hoje).
+      _riscoFlashcardIds = intel.forgetting_risk
+        .filter(it => it.tipo === 'flashcard')
+        .map(it => it.id);
       html += `<div style="margin-bottom:12px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
           <span style="font-size:0.8rem;color:var(--text-sub);font-weight:600;">⚠️ Risco de Esquecimento (FSRS):</span>
@@ -644,31 +653,33 @@ window.gerarDissertativa = gerarDissertativa;
 window.salvarDissertativa = salvarDissertativa;
 
 // ===== REVISÃO URGENTE (Risco de Esquecimento) =====
-window.iniciarRevisaoUrgente = function() {
-  // Navegar para flashcards e iniciar sessão de revisão SRS
+// A navegação vai de dashboard.html → index.html#flashcards (reload de página).
+// Por isso o handoff é feito via sessionStorage: gravamos os IDs em risco e a
+// página de flashcards (initFlashcards) os lê e abre a sessão filtrada.
+function _abrirRiscoFlashcards(ids) {
+  try { sessionStorage.setItem('flash_start_risco_ids', JSON.stringify(ids)); } catch (e) {}
   window.location.href = '/#flashcards';
-  setTimeout(() => {
-    if (window.iniciarSessaoFlash) window.iniciarSessaoFlash('revisao');
-    else if (window.loadFlashcardsToday) window.loadFlashcardsToday();
-  }, 600);
+}
+
+window.iniciarRevisaoUrgente = function() {
+  // "Revisar Todos": abre EXATAMENTE os flashcards em risco (não a fila de hoje).
+  if (_riscoFlashcardIds && _riscoFlashcardIds.length) {
+    _abrirRiscoFlashcards(_riscoFlashcardIds.slice());
+    return;
+  }
+  // Fallback: sem ids de flashcard (ex.: só tópicos) → revisão SRS genérica.
+  window.location.href = '/#flashcards';
 };
 
 window.revisarItemUrgente = function(tipo, id) {
   if (tipo === 'flashcard') {
-    // Navegar direto para flashcards e iniciar revisão
-    window.location.href = '/#flashcards';
-    setTimeout(() => {
-      if (window.iniciarSessaoFlash) window.iniciarSessaoFlash('revisao');
-      else if (window.loadFlashcardsToday) window.loadFlashcardsToday();
-    }, 600);
+    // Abre a sessão dirigida a ESTE card específico (com os demais em risco na
+    // sequência, para um fluxo contínuo). Sem isso, caía na fila genérica.
+    const ids = [id, ..._riscoFlashcardIds.filter(x => x !== id)];
+    _abrirRiscoFlashcards(ids);
   } else if (tipo === 'sumula') {
-    // Navegar para súmulas
     window.location.href = '/#sumulas';
-    setTimeout(() => {
-      if (window.loadSumulasToday) window.loadSumulasToday();
-    }, 600);
   } else if (tipo === 'edital') {
-    // Navegar para edital
     window.location.href = '/#edital';
   }
 };

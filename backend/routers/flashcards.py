@@ -488,6 +488,48 @@ def get_flashcards_aleatorio(
     return result
 
 
+@router.get("/api/flashcards/por-ids", summary="Flashcards específicos por IDs (ordem preservada)")
+def get_flashcards_por_ids(
+    ids: str = "", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)
+):
+    """Retorna flashcards específicos (por lista de IDs) para uma sessão dirigida.
+
+    Usado pela sessão de 'Risco de Esquecimento (FSRS)': ao clicar em um card em
+    risco (ou 'Revisar Todos'), abrimos exatamente aqueles cards, na ordem pedida,
+    em vez da fila genérica de hoje. Filtra por user_id (multi-tenant) e ignora
+    IDs inexistentes/de outro usuário.
+    """
+    try:
+        id_list = [int(x) for x in (ids or "").split(",") if x.strip().isdigit()]
+    except ValueError:
+        id_list = []
+    if not id_list:
+        return []
+
+    placeholders = ",".join("?" for _ in id_list)
+    rows = conn.execute(
+        f"SELECT id, pergunta, resposta, materia, fsrs_state, "
+        f"COALESCE(difficulty,0) AS difficulty, COALESCE(lapses,0) AS lapses "
+        f"FROM flashcards WHERE user_id = ? AND id IN ({placeholders})",
+        (user_id, *id_list),
+    ).fetchall()
+
+    by_id = {}
+    for r in rows:
+        card = dict(r)
+        _det = detalhar_tempo_flashcard(
+            card.get("pergunta", ""), card.get("resposta", ""), card.get("fsrs_state") or 0,
+            difficulty=card.get("difficulty") or 0, lapses=card.get("lapses") or 0,
+        )
+        card["tempo_segundos"] = _det["tempo_segundos"]
+        card["tempo_detalhe"] = _det
+        card.pop("fsrs_state", None)
+        by_id[card["id"]] = card
+
+    # Preserva a ordem solicitada (a mesma exibida no card de risco).
+    return [by_id[i] for i in id_list if i in by_id]
+
+
 @router.post("/api/flashcards", summary="Criar flashcard", description="Cria um novo flashcard com revisão SRS")
 def create_flashcard(body: FlashcardCreate, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     from plans import enforce_plan_limit

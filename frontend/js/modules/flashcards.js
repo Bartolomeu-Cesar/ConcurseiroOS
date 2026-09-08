@@ -1344,6 +1344,28 @@ export async function customStudy(modo, materia = '') {
   }
 }
 
+/**
+ * Sessão dirigida a flashcards específicos (por IDs) — usada pelo card de
+ * "Risco de Esquecimento (FSRS)". Abre exatamente os cards pedidos, na ordem,
+ * em vez da fila genérica de hoje. `rotulo` aparece no toast.
+ */
+export async function iniciarSessaoFlashPorIds(ids, rotulo = 'Risco de Esquecimento') {
+  const lista = (Array.isArray(ids) ? ids : [ids]).filter(v => v != null);
+  if (!lista.length) { toast('Nenhum card em risco para revisar.', 'info'); return; }
+  try {
+    const cards = await fetch(`/api/flashcards/por-ids?ids=${encodeURIComponent(lista.join(','))}`).then(r => r.json());
+    if (!cards.length) { toast('Cards não encontrados (podem ter sido removidos).', 'warning'); return; }
+    flashSessao = cards;
+    flashSessaoIndex = 0;
+    flashSessaoMode = 'risco';
+    switchTab('tab-flashcards');
+    showSessaoFlashcard();
+    toast(`⚠️ ${rotulo} (${cards.length} card${cards.length === 1 ? '' : 's'})`, 'success');
+  } catch (e) {
+    toast('Erro ao abrir a sessão de risco de esquecimento.', 'error');
+  }
+}
+
 /** Cram por matéria: pede a disciplina e chama customStudy('materia'). */
 export async function customStudyMateria() {
   try {
@@ -2554,7 +2576,18 @@ export function initFlashcards(deps) {
 
   // Verificar se veio do dashboard com matéria para revisão
   const pendingMateria = sessionStorage.getItem('flash_start_materia');
-  if (pendingMateria) {
+  // Verificar se veio do card "Risco de Esquecimento" com IDs específicos.
+  const pendingRiscoRaw = sessionStorage.getItem('flash_start_risco_ids');
+  if (pendingRiscoRaw) {
+    sessionStorage.removeItem('flash_start_risco_ids');
+    let ids = [];
+    try { ids = JSON.parse(pendingRiscoRaw) || []; } catch (e) { ids = []; }
+    switchTab('tab-flashcards');
+    setTimeout(() => {
+      switchTab('tab-flashcards');
+      iniciarSessaoFlashPorIds(ids, 'Risco de Esquecimento');
+    }, 500);
+  } else if (pendingMateria) {
     sessionStorage.removeItem('flash_start_materia');
     // Garantir que a tab está visível e DOM pronto antes de iniciar
     switchTab('tab-flashcards');

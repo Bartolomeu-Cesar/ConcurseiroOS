@@ -225,6 +225,30 @@ class TestFlashcards:
         # Should have at least the one we just created
         assert len(r.json()) >= 1
 
+    def test_flashcards_por_ids_preserva_ordem_e_expoe_tempo(self, client):
+        """/api/flashcards/por-ids retorna os cards pedidos na ORDEM dada, com
+        tempo_segundos/tempo_detalhe, e ignora IDs inexistentes. Usado pela
+        sessão de 'Risco de Esquecimento'."""
+        ids = []
+        for i in range(3):
+            r = client.post("/api/flashcards", json={"pergunta": f"PID {i}?", "resposta": f"R{i}"})
+            ids.append(r.json()["id"])
+
+        # Ordem invertida + um id inexistente (deve ser ignorado).
+        pedido = [ids[2], ids[0], ids[1], 99999999]
+        r = client.get("/api/flashcards/por-ids", params={"ids": ",".join(map(str, pedido))})
+        assert r.status_code == 200
+        cards = r.json()
+        assert [c["id"] for c in cards] == [ids[2], ids[0], ids[1]], "ordem não preservada / id inválido não ignorado"
+        for c in cards:
+            assert "tempo_segundos" in c and isinstance(c["tempo_segundos"], int)
+            assert "tempo_detalhe" in c
+
+    def test_flashcards_por_ids_vazio(self, client):
+        """Sem ids válidos → lista vazia (não erro)."""
+        assert client.get("/api/flashcards/por-ids", params={"ids": ""}).json() == []
+        assert client.get("/api/flashcards/por-ids", params={"ids": "abc,,x"}).json() == []
+
     def test_review_flashcard(self, client):
         # Create a fresh flashcard to review
         r = client.post("/api/flashcards", json={
