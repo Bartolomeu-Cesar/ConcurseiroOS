@@ -11,6 +11,7 @@ from schemas import (
     EditalCreate,
     EditalHoras,
     EditalItemUpdate,
+    EditalLoteCreate,
     EditalPdfLink,
     OkResponse,
     RenomearEditalRequest,
@@ -163,6 +164,42 @@ def create_edital(body: EditalCreate, conn=Depends(get_db_session), user_id: int
     log.info(f"Edital topic created: id={new_id} materia={body.materia}")
     return {"id": new_id, "edital_nome": body.edital_nome, "cargo": body.cargo, "materia": body.materia,
             "topico": body.topico, "status": "Não Iniciado", "horas_estudadas": 0.0}
+
+
+@router.post("/api/edital/lote", summary="Adicionar disciplina em lote",
+             description="Adiciona uma disciplina (matéria) a um cargo já existente, com vários "
+                         "tópicos de uma vez. Se a lista de tópicos vier vazia, cria a disciplina "
+                         "com um tópico placeholder para que ela apareça na árvore.")
+def create_edital_lote(body: EditalLoteCreate, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    edital_nome = sanitize_input(body.edital_nome).strip() or "Geral"
+    cargo = sanitize_input(body.cargo).strip()
+    materia = sanitize_input(body.materia).strip()
+    if not materia:
+        raise HTTPException(status_code=400, detail="Informe a disciplina.")
+
+    # Normaliza a lista de tópicos: sanitiza, remove vazios e duplicatas (preservando ordem).
+    vistos = set()
+    topicos = []
+    for t in (body.topicos or []):
+        tt = sanitize_input(str(t)).strip()
+        if tt and tt.lower() not in vistos:
+            vistos.add(tt.lower())
+            topicos.append(tt)
+    # Disciplina sem tópicos: cria um placeholder para aparecer na árvore.
+    if not topicos:
+        topicos = ["(a definir)"]
+
+    ids = []
+    for topico in topicos:
+        cur = conn.execute(
+            "INSERT INTO edital (edital_nome, cargo, materia, topico, user_id) VALUES (?, ?, ?, ?, ?)",
+            (edital_nome, cargo, materia, topico, user_id),
+        )
+        ids.append(cur.lastrowid)
+    conn.commit()
+    log.info(f"Edital lote: +{len(ids)} tópicos em {materia} ({edital_nome}/{cargo})")
+    return {"ok": True, "edital_nome": edital_nome, "cargo": cargo, "materia": materia,
+            "criados": len(ids), "ids": ids}
 
 
 @router.put("/api/edital/materia/renomear", summary="Renomear matéria",

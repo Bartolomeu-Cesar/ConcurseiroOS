@@ -183,6 +183,7 @@ function renderEditalTree() {
           ${infoHtml}
           <span class="tree-stats">${cargoDone}/${cargoItems.length}</span>
           <div class="tree-bar"><div class="tree-bar-fill" style="width:${cargoPct}%"></div></div>
+          <button class="tree-archive-btn" onclick="event.stopPropagation();adicionarDisciplina('${concurso.replace(/'/g, "\\'")}','${cargo.replace(/'/g, "\\'")}')" title="Adicionar disciplina a este cargo" aria-label="Adicionar disciplina">➕</button>
           <button class="tree-archive-btn" onclick="event.stopPropagation();arquivarCargo('${concurso.replace(/'/g, "\\'")}','${cargo.replace(/'/g, "\\'")}')\" title="Arquivar" aria-label="Arquivar cargo">📦</button>
           <button class="tree-archive-btn tree-excluir-btn" onclick="event.stopPropagation();excluirCargo('${concurso.replace(/'/g, "\\'")}','${cargo.replace(/'/g, "\\'")}')\" title="Excluir permanentemente" aria-label="Excluir cargo">🗑</button>
         </div>
@@ -484,6 +485,58 @@ export async function addEdital() {
   document.getElementById('edital-materia-input').value = '';
   document.getElementById('edital-topico-input').value = '';
   loadEdital();
+}
+
+/** Adiciona uma disciplina (com vários tópicos em lote) a um cargo já existente.
+ *  Concurso e cargo vêm pré-preenchidos (não redigita). Tópicos: um por linha
+ *  (opcional — sem tópicos cria só o cabeçalho da disciplina). */
+export async function adicionarDisciplina(editalNome, cargo) {
+  // Modal custom: campo de disciplina + textarea de tópicos (um por linha).
+  const overlay = document.createElement('div');
+  overlay.id = 'add-disciplina-modal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;animation:fadeIn 0.15s;';
+  overlay.innerHTML = `
+    <div role="dialog" aria-modal="true" aria-labelledby="add-disc-title" style="background:var(--bg-surface,#313244);border-radius:16px;padding:24px;max-width:460px;width:95%;box-shadow:0 8px 32px rgba(0,0,0,0.5);border:1px solid var(--border,#45475a);animation:scaleIn 0.15s;">
+      <h3 id="add-disc-title" style="color:var(--accent);margin:0 0 4px;font-size:1.05rem;">➕ Adicionar disciplina</h3>
+      <div style="font-size:0.78rem;color:var(--text-sub);margin-bottom:14px;">${escapeHtml(editalNome)} • ${escapeHtml(cargo || 'Geral')}</div>
+      <label style="display:block;font-size:0.8rem;color:var(--text-sub);margin-bottom:4px;">Disciplina</label>
+      <input type="text" id="add-disc-materia" placeholder="Ex: Direito Constitucional" aria-label="Nome da disciplina"
+             style="width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.9rem;margin-bottom:12px;font-family:inherit;">
+      <label style="display:block;font-size:0.8rem;color:var(--text-sub);margin-bottom:4px;">Tópicos <span style="opacity:0.7;">(um por linha — opcional)</span></label>
+      <textarea id="add-disc-topicos" rows="7" placeholder="Cole aqui os tópicos, um por linha.&#10;Ex:&#10;Princípios fundamentais&#10;Direitos e garantias&#10;Organização do Estado"
+                style="width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.86rem;resize:vertical;font-family:inherit;"></textarea>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+        <button id="add-disc-cancel" style="background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 16px;cursor:pointer;font-size:0.85rem;">Cancelar</button>
+        <button id="add-disc-ok" style="background:var(--green);color:var(--bg);border:none;border-radius:8px;padding:8px 16px;cursor:pointer;font-weight:600;font-size:0.85rem;">Adicionar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const matInput = document.getElementById('add-disc-materia');
+  matInput.focus();
+
+  const fechar = () => overlay.remove();
+  overlay.onclick = (e) => { if (e.target === overlay) fechar(); };
+  document.getElementById('add-disc-cancel').onclick = fechar;
+
+  document.getElementById('add-disc-ok').onclick = async () => {
+    const materia = matInput.value.trim();
+    if (!materia) { toast('Informe o nome da disciplina.', 'warning'); matInput.focus(); return; }
+    const topicos = document.getElementById('add-disc-topicos').value
+      .split('\n').map(s => s.trim()).filter(Boolean);
+    try {
+      const res = await fetch('/api/edital/lote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ edital_nome: editalNome, cargo: cargo || '', materia, topicos }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast(data.detail || 'Erro ao adicionar disciplina.', 'error'); return; }
+      fechar();
+      const n = data.criados || 0;
+      toast(`Disciplina "${materia}" adicionada (${n} tópico${n === 1 ? '' : 's'})!`, 'success');
+      loadEdital();
+    } catch (e) { toast('Erro de conexão ao adicionar disciplina.', 'error'); }
+  };
 }
 
 /** Edita inline o nome de um tópico do edital (lápis na folha da árvore). */

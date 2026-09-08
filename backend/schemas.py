@@ -45,6 +45,16 @@ class EditalFavoritoSet(BaseModel):
     cargo: str = ""
 
 
+class EditalLoteCreate(BaseModel):
+    """Adiciona uma disciplina (matéria) a um cargo já existente, com vários
+    tópicos de uma vez. Se `topicos` vier vazio, cria a disciplina com um tópico
+    placeholder para que ela apareça na árvore."""
+    edital_nome: str = "Geral"
+    cargo: str = ""
+    materia: str
+    topicos: list[str] = []
+
+
 class EditalItemUpdate(BaseModel):
     """Edita o nome do tópico e/ou a matéria de UM item do edital."""
     materia: str | None = None
