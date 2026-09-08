@@ -44,13 +44,16 @@ export function showQuestaoDia() {
   if (qDiaIdx < questoesDia.length) {
     const _q = questoesDia[qDiaIdx];
     if (_q && _q.id && !_q._embaralhado) {
-      fetch(`/api/questoes/${_q.id}?embaralhar=true`)
+      // Semente ALEATÓRIA por abertura (não-determinística): sem seed, o backend
+      // usa hash(user+questão) e a posição da correta ficava SEMPRE a mesma.
+      const seed = Math.floor(Math.random() * 2147483647);
+      fetch(`/api/questoes/${_q.id}?embaralhar=true&seed=${seed}`)
         .then(r => r.ok ? r.json() : null)
         .then(emb => {
-          questoesDia[qDiaIdx] = emb ? { ...emb, _embaralhado: true } : { ..._q, _embaralhado: true };
+          questoesDia[qDiaIdx] = emb ? { ...emb, _embaralhado: true } : { ..._q, _embaralhado: true, seed };
           showQuestaoDia();
         })
-        .catch(() => { questoesDia[qDiaIdx] = { ..._q, _embaralhado: true }; showQuestaoDia(); });
+        .catch(() => { questoesDia[qDiaIdx] = { ..._q, _embaralhado: true, seed }; showQuestaoDia(); });
       return;
     }
   }
@@ -190,7 +193,7 @@ export async function responderQuestaoDia(letra) {
       </div>`;
   }
   try {
-    const resp = await fetch(`/api/questoes/${q.id}/responder`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ resposta: letra, tempo_segundos: tempoSegundos, embaralhada: !!q.embaralhada }) });
+    const resp = await fetch(`/api/questoes/${q.id}/responder`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ resposta: letra, tempo_segundos: tempoSegundos, embaralhada: !!q.embaralhada, seed: q.seed ?? null }) });
     if (resp.status === 403) {
       const err = await resp.json().catch(() => ({}));
       toast(err.detail || 'Limite de questões do dia atingido. Faça upgrade!', 'warning');
@@ -285,14 +288,33 @@ function _showErrorfulLearningQuestion(q) {
   if (q.alternativa_e) alts.push({ letra: 'E', texto: q.alternativa_e });
 
   const isCE = alts.length <= 2;
+  // Embaralha localmente a ordem das alternativas (>2). Mantém os rótulos A,B,C…
+  // fixos e redistribui os textos; recalcula qual rótulo passou a conter o texto
+  // originalmente correto. Assim a posição da correta varia a cada questão similar
+  // (a correção é client-side neste fluxo, então tudo é feito aqui).
+  let correctLetter = (q.resposta_correta || '').toUpperCase();
+  if (!isCE) {
+    const rotulos = alts.map(a => a.letra);
+    const textoCorreto = (alts.find(a => a.letra === correctLetter) || {}).texto;
+    const textos = alts.map(a => a.texto);
+    for (let i = textos.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [textos[i], textos[j]] = [textos[j], textos[i]];
+    }
+    for (let i = 0; i < alts.length; i++) {
+      alts[i] = { letra: rotulos[i], texto: textos[i] };
+      if (textos[i] === textoCorreto) correctLetter = rotulos[i];
+    }
+  }
+
   let altsHtml;
   if (isCE) {
     altsHtml = `<div style="display:flex;gap:8px;margin-top:8px;">
-      <button class="efl-alt" onclick="answerErrorfulLearning('A','${q.resposta_correta}')" style="flex:1;padding:8px;background:var(--bg-surface);border:2px solid var(--green);border-radius:6px;color:var(--green);cursor:pointer;font-weight:600;">✓ CERTO</button>
-      <button class="efl-alt" onclick="answerErrorfulLearning('B','${q.resposta_correta}')" style="flex:1;padding:8px;background:var(--bg-surface);border:2px solid var(--red);border-radius:6px;color:var(--red);cursor:pointer;font-weight:600;">✗ ERRADO</button>
+      <button class="efl-alt" onclick="answerErrorfulLearning('A','${correctLetter}')" style="flex:1;padding:8px;background:var(--bg-surface);border:2px solid var(--green);border-radius:6px;color:var(--green);cursor:pointer;font-weight:600;">✓ CERTO</button>
+      <button class="efl-alt" onclick="answerErrorfulLearning('B','${correctLetter}')" style="flex:1;padding:8px;background:var(--bg-surface);border:2px solid var(--red);border-radius:6px;color:var(--red);cursor:pointer;font-weight:600;">✗ ERRADO</button>
     </div>`;
   } else {
-    altsHtml = alts.map(a => `<button class="efl-alt" onclick="answerErrorfulLearning('${a.letra}','${q.resposta_correta}')" style="display:block;width:100%;text-align:left;padding:8px 12px;margin-top:4px;background:var(--bg-surface);border:1px solid var(--border);border-radius:6px;color:var(--text);cursor:pointer;font-size:0.8rem;"><strong>${a.letra})</strong> ${a.texto}</button>`).join('');
+    altsHtml = alts.map(a => `<button class="efl-alt" onclick="answerErrorfulLearning('${a.letra}','${correctLetter}')" style="display:block;width:100%;text-align:left;padding:8px 12px;margin-top:4px;background:var(--bg-surface);border:1px solid var(--border);border-radius:6px;color:var(--text);cursor:pointer;font-size:0.8rem;"><strong>${a.letra})</strong> ${escapeHtml(a.texto)}</button>`).join('');
   }
 
   fb.style.display = 'block';
