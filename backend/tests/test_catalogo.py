@@ -599,6 +599,51 @@ class TestMarketplace:
         assert "taxa_pct" in r.json()
         assert 0 <= r.json()["taxa_pct"] <= 90
 
+    def test_editar_preco_gratis_para_pago(self, client):
+        self._criar_vendedor(300, "vend300@test.com", "MktEdit")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(300, "vend300@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "EditPreco", "origem_uid": 0, "ref": "MktEdit", "preco_creditos": 0,
+        }).json()["id"]
+        # Dono altera de grátis (0) para pago (15)
+        r = client.patch(f"/api/catalogo/{item_id}", headers=_h(_token(300, "vend300@test.com")), json={"preco_creditos": 15})
+        assert r.status_code == 200, r.text
+        assert r.json()["preco_creditos"] == 15
+
+    def test_editar_preco_pago_para_gratis(self, client):
+        self._criar_vendedor(301, "vend301@test.com", "MktEdit2")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(301, "vend301@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "EditPreco2", "origem_uid": 0, "ref": "MktEdit2", "preco_creditos": 20,
+        }).json()["id"]
+        r = client.patch(f"/api/catalogo/{item_id}", headers=_h(_token(301, "vend301@test.com")), json={"preco_creditos": 0})
+        assert r.status_code == 200
+        assert r.json()["preco_creditos"] == 0
+
+    def test_editar_nao_dono_403(self, client):
+        self._criar_vendedor(302, "vend302@test.com", "MktEdit3")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(302, "vend302@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "EditPreco3", "origem_uid": 0, "ref": "MktEdit3", "preco_creditos": 5,
+        }).json()["id"]
+        _criar_estudante(303, "est303@test.com")
+        r = client.patch(f"/api/catalogo/{item_id}", headers=_h(_token(303, "est303@test.com")), json={"preco_creditos": 1})
+        assert r.status_code == 403
+
+    def test_editar_preco_negativo_400(self, client):
+        self._criar_vendedor(304, "vend304@test.com", "MktEdit4")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(304, "vend304@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "EditPreco4", "origem_uid": 0, "ref": "MktEdit4", "preco_creditos": 5,
+        }).json()["id"]
+        r = client.patch(f"/api/catalogo/{item_id}", headers=_h(_token(304, "vend304@test.com")), json={"preco_creditos": -3})
+        assert r.status_code == 400
+
+    def test_editar_titulo(self, client):
+        self._criar_vendedor(305, "vend305@test.com", "MktEdit5")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(305, "vend305@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "TituloAntigo", "origem_uid": 0, "ref": "MktEdit5", "preco_creditos": 0,
+        }).json()["id"]
+        r = client.patch(f"/api/catalogo/{item_id}", headers=_h(_token(305, "vend305@test.com")), json={"titulo": "TituloNovo"})
+        assert r.status_code == 200
+        assert r.json()["titulo"] == "TituloNovo"
+
 
 def teardown_module():
     try:

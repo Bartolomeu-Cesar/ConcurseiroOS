@@ -452,6 +452,85 @@ def remover_item(item_id: int, conn=Depends(get_db_session), user_id: int = Depe
     return {"ok": True}
 
 
+class EditarItem(BaseModel):
+    titulo: str | None = None
+    descricao: str | None = None
+    categoria: str | None = None
+    concurso: str | None = None
+    cargo: str | None = None
+    preco_creditos: int | None = None
+
+
+@router.patch("/{item_id}", summary="Editar um material publicado (dono ou admin)")
+def editar_item(
+    item_id: int,
+    body: EditarItem,
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Edita campos de um item já publicado. Permite, entre outros, alterar o
+    preço (grátis→pago ou pago→grátis) posteriormente.
+
+    - Só o dono (curador_uid) ou admin pode editar.
+    - Definir preço > 0 exige poder de venda (premium/vitalício/verificado/admin);
+      caso contrário, retorna 403.
+    - Compras já feitas (catalogo_compras) não são afetadas: quem já adquiriu
+      mantém o acesso e reimporta de graça.
+    """
+    item = conn.execute("SELECT * FROM catalogo_itens WHERE id = ? AND ativo = 1", (item_id,)).fetchone()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado.")
+
+    user = conn.execute("SELECT role FROM users WHERE id = ?", (user_id,)).fetchone()
+    is_admin = bool(user and user["role"] == "admin")
+    if not is_admin and item["curador_uid"] != user_id:
+        raise HTTPException(status_code=403, detail="Você só pode editar seus próprios materiais.")
+
+    campos = []
+    valores = []
+
+    if body.titulo is not None:
+        titulo = body.titulo.strip()
+        if not titulo:
+            raise HTTPException(status_code=400, detail="Título não pode ficar vazio.")
+        campos.append("titulo = ?")
+        valores.append(titulo)
+    if body.descricao is not None:
+        campos.append("descricao = ?")
+        valores.append(body.descricao.strip())
+    if body.categoria is not None:
+        campos.append("categoria = ?")
+        valores.append(body.categoria.strip() or "Geral")
+    if body.concurso is not None:
+        campos.append("concurso = ?")
+        valores.append(body.concurso.strip())
+    if body.cargo is not None:
+        campos.append("cargo = ?")
+        valores.append(body.cargo.strip())
+    if body.preco_creditos is not None:
+        preco = int(body.preco_creditos)
+        if preco < 0:
+            raise HTTPException(status_code=400, detail="Preço não pode ser negativo.")
+        # Colocar preço > 0 exige poder de venda (mesma regra da publicação).
+        if preco > 0:
+            pode, _adm, _ver = _pode_publicar(conn, item["curador_uid"] if is_admin else user_id)
+            if not pode and not is_admin:
+                raise HTTPException(status_code=403, detail="Apenas usuários Premium ou administradores podem definir preço. Faça upgrade!")
+        campos.append("preco_creditos = ?")
+        valores.append(preco)
+
+    if not campos:
+        raise HTTPException(status_code=400, detail="Nenhum campo para atualizar.")
+
+    valores.append(item_id)
+    conn.execute(f"UPDATE catalogo_itens SET {', '.join(campos)} WHERE id = ?", valores)
+    conn.commit()
+    log.info(f"[catalogo] Editado item={item_id} por user={user_id} campos={[c.split(' =')[0] for c in campos]}")
+
+    novo = conn.execute("SELECT preco_creditos, titulo FROM catalogo_itens WHERE id = ?", (item_id,)).fetchone()
+    return {"ok": True, "id": item_id, "preco_creditos": novo["preco_creditos"], "titulo": novo["titulo"]}
+
+
 @router.get("/admin/todos", summary="Listar todos os itens (admin, inclui inativos)")
 def listar_todos_admin(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Lista todos os itens do catálogo (incluindo inativos) para gestão."""

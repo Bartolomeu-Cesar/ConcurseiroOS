@@ -376,9 +376,67 @@ window.abrirMinhasVendas = async function() {
           </div>`;
       }).join('');
     }
+
+    // Seção "Meus materiais publicados" com edição de preço.
+    html += '<div id="meus-materiais-sec" style="margin-top:18px;"><div style="font-size:0.78rem;color:#9399b2;font-weight:600;margin-bottom:6px;">Meus materiais publicados</div><div style="color:#9399b2;font-size:0.8rem;">Carregando…</div></div>';
     alvo.innerHTML = html;
+
+    // Carrega meus materiais (para permitir alterar preço)
+    try {
+      const meus = await fetch('/api/catalogo/meus', { headers: _headers() }).then(r => r.json());
+      const sec = overlay.querySelector('#meus-materiais-sec');
+      const itens = meus.itens || [];
+      let mh = '<div style="font-size:0.78rem;color:#9399b2;font-weight:600;margin-bottom:6px;">Meus materiais publicados</div>';
+      if (!itens.length) {
+        mh += '<div style="color:#9399b2;font-size:0.8rem;">Você ainda não publicou materiais.</div>';
+      } else {
+        mh += itens.map(it => {
+          const precoTxt = (it.preco_creditos || 0) > 0 ? `💎 ${it.preco_creditos}` : 'Grátis';
+          const statusTxt = it.status && it.status !== 'aprovado' ? ` · <span style="color:#f9e2af;">${esc(it.status)}</span>` : '';
+          return `
+            <div style="display:flex;align-items:center;gap:8px;border-bottom:1px solid #45475a;padding:8px 0;">
+              <div style="flex:1;min-width:0;">
+                <div style="color:#cdd6f4;font-size:0.85rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${it.tipo_emoji} ${esc(it.titulo)}</div>
+                <div style="font-size:0.74rem;color:#9399b2;">Preço: ${precoTxt} · ⬇️ ${it.downloads}${statusTxt}</div>
+              </div>
+              <button onclick="alterarPreco(${it.id}, ${it.preco_creditos || 0})" style="flex:0 0 auto;padding:6px 10px;background:#45475a;color:#cdd6f4;border:none;border-radius:6px;cursor:pointer;font-size:0.78rem;">💲 Preço</button>
+            </div>`;
+        }).join('');
+      }
+      if (sec) sec.innerHTML = mh;
+    } catch (e) {
+      const sec = overlay.querySelector('#meus-materiais-sec');
+      if (sec) sec.innerHTML = '<span style="color:#f38ba8;">Erro ao carregar seus materiais.</span>';
+    }
   } catch (e) {
     alvo.innerHTML = '<span style="color:#f38ba8;">Erro ao carregar suas vendas.</span>';
+  }
+};
+
+// Altera o preço de um material publicado (grátis↔pago) via PATCH.
+window.alterarPreco = async function(itemId, precoAtual) {
+  const entrada = await promptModal(
+    'Definir preço em créditos (0 = grátis):',
+    { title: '💲 Alterar preço', defaultValue: String(precoAtual || 0) }
+  );
+  if (entrada === null) return;  // cancelado
+  const novo = parseInt(entrada, 10);
+  if (isNaN(novo) || novo < 0) { showToast('Informe um número válido (0 ou mais).', 'warning'); return; }
+  try {
+    const res = await fetch(`/api/catalogo/${itemId}`, {
+      method: 'PATCH', headers: _headers(true), body: JSON.stringify({ preco_creditos: novo })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(`✅ Preço atualizado: ${data.preco_creditos > 0 ? '💎 ' + data.preco_creditos : 'Grátis'}`, 'success');
+      document.getElementById('vendas-modal')?.remove();
+      abrirMinhasVendas();      // recarrega
+      carregarCatalogo();       // reflete na grade
+    } else {
+      showToast(data.detail || 'Erro ao alterar preço.', 'error');
+    }
+  } catch (e) {
+    showToast('Erro de conexão.', 'error');
   }
 };
 
