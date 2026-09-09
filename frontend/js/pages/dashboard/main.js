@@ -2950,6 +2950,57 @@ setTimeout(loadOverconfidenceAlert, 2400);
 
 
 // ============================================================
+// DETECÇÃO DE CHUTES — % de acertos por sorte, por matéria
+// ============================================================
+async function loadChuteAlert() {
+  const box = document.getElementById('si-techniques-alerts');
+  if (!box) return;
+  try {
+    const data = await fetch('/api/questoes/chutes').then(r => r.ok ? r.json() : null);
+    // Só mostra se há chutes relevantes (evita ruído com poucos dados).
+    if (!data || !data.acertos || data.chutes < 2) return;
+
+    // Matérias com maior taxa de chute (só as que têm chute > 0), top 3.
+    const materias = (data.por_materia || []).filter(m => (m.chutes || 0) > 0).slice(0, 3);
+    if (!materias.length) return;
+
+    const widget = document.createElement('div');
+    widget.id = 'chute-widget';
+    widget.style.cssText = 'background:var(--bg-surface, #313244);border-radius:10px;padding:14px;margin-bottom:10px;border-left:4px solid var(--yellow, #f9e2af);';
+    widget.innerHTML = `
+      <div style="font-size:0.85rem;font-weight:700;color:var(--text);margin-bottom:6px;">🎲 Detecção de Chutes</div>
+      <div style="font-size:0.78rem;color:var(--text-sub);margin-bottom:10px;">
+        ${data.pct_chute_sobre_acertos}% dos seus acertos parecem chute (rápido demais). Acertos por sorte fixam pouco — foque nessas matérias.
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        ${materias.map(m => {
+          const pct = Math.round(m.pct);
+          return `
+            <div style="padding:8px;background:var(--bg, #1e1e2e);border-radius:8px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                <span style="font-size:0.78rem;font-weight:600;color:var(--text);">${escapeHtml(m.materia)}</span>
+                <span style="font-size:0.68rem;color:var(--yellow);">${m.chutes}/${m.acertos} acertos</span>
+              </div>
+              <div style="display:flex;gap:4px;align-items:center;">
+                <div style="flex:1;height:5px;background:var(--border);border-radius:3px;overflow:hidden;">
+                  <div style="height:100%;width:${pct}%;background:var(--yellow, #f9e2af);border-radius:3px;"></div>
+                </div>
+                <span style="font-size:0.65rem;color:var(--text-sub);min-width:34px;text-align:right;">${pct}%</span>
+              </div>
+            </div>`;
+        }).join('')}
+      </div>
+      <div style="font-size:0.68rem;color:var(--text-sub);margin-top:8px;">💡 Revise a teoria dessas matérias e refaça as questões com calma para consolidar de verdade.</div>
+    `;
+    document.getElementById('chute-widget')?.remove();
+    box.appendChild(widget);
+  } catch(e) {}
+}
+
+setTimeout(loadChuteAlert, 2600);
+
+
+// ============================================================
 // PEER TEACHING — Sugestões de tópicos para ensinar
 // ============================================================
 
