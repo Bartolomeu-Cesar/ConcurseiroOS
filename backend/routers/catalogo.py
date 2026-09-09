@@ -126,6 +126,7 @@ def listar_catalogo(
             "categoria": r["categoria"],
             "curador_nome": r["curador_nome"] or "Equipe",
             "curador_verificado": bool(r["curador_verificado"]),
+            "eh_meu": (r["curador_uid"] == user_id) or (r["origem_uid"] == user_id),
             "preco_creditos": r["preco_creditos"] if "preco_creditos" in r.keys() else 0,
             "concurso": (r["concurso"] if "concurso" in r.keys() else "") or "",
             "cargo": (r["cargo"] if "cargo" in r.keys() else "") or "",

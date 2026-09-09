@@ -214,6 +214,26 @@ class TestListar:
         assert r.status_code == 200
         assert all(i["tipo"] == "deck_flashcards" for i in r.json()["itens"])
 
+    def test_eh_meu_marca_dono(self, client):
+        """O dono vê eh_meu=True no próprio item; outro estudante vê False."""
+        _seed_curador(1)
+        token = _admin_token()
+        pub = client.post("/api/catalogo/publicar", headers=_h(token), json={
+            "tipo": "deck_flashcards", "titulo": "Deck do Dono", "origem_uid": 1, "ref": "Direito"
+        })
+        item_id = pub.json()["id"]
+
+        # Dono (admin id=1, também origem) → eh_meu True
+        lst = client.get("/api/catalogo", headers=_h(token)).json()
+        meu = next(i for i in lst["itens"] if i["id"] == item_id)
+        assert meu["eh_meu"] is True
+
+        # Outro estudante → eh_meu False
+        _criar_estudante(52, "est52@test.com")
+        lst2 = client.get("/api/catalogo", headers=_h(_token(52, "est52@test.com"))).json()
+        outro = next(i for i in lst2["itens"] if i["id"] == item_id)
+        assert outro["eh_meu"] is False
+
 
 class TestImportar:
     def test_importar_deck_flashcards(self, client):

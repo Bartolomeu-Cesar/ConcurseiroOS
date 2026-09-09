@@ -64,6 +64,10 @@ async function carregarCatalogo() {
         ? `<div class="cat-cargo" style="font-size:0.72rem;color:#89b4fa;">🎯 ${esc([it.concurso, it.cargo].filter(Boolean).join(' · '))}</div>`
         : '';
       const btnLabel = pago ? `💎 Comprar (${it.preco_creditos})` : '📥 Importar';
+      // Item do próprio usuário: não faz sentido comprar/importar o que ele mesmo publicou.
+      const acaoHtml = it.eh_meu
+        ? `<span style="flex:1;display:flex;align-items:center;justify-content:center;padding:9px;background:#313244;color:#9399b2;border-radius:8px;font-size:0.82rem;font-weight:600;" title="Você publicou este material">✏️ Seu material</span>`
+        : `<button onclick="importarItem(${it.id}, this, ${it.preco_creditos || 0}, ${it.ja_comprado ? 'true' : 'false'})" style="flex:1;">${btnLabel}</button>`;
       return `
       <div class="catalogo-card">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;">
@@ -79,7 +83,7 @@ async function carregarCatalogo() {
           <span>⬇️ ${it.downloads}</span>
         </div>
         <div style="display:flex;gap:6px;">
-          <button onclick="importarItem(${it.id}, this, ${it.preco_creditos || 0}, ${it.ja_comprado ? 'true' : 'false'})" style="flex:1;">${btnLabel}</button>
+          ${acaoHtml}
           <button onclick="abrirAvaliacoes(${it.id}, '${escapeJsString(it.titulo)}')" style="background:#45475a;color:#cdd6f4;flex:0 0 auto;padding:9px 12px;" aria-label="Ver avaliações">⭐</button>
         </div>
       </div>
