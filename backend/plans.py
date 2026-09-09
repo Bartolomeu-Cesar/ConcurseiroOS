@@ -598,6 +598,56 @@ def get_creditos_precos() -> dict:
     return CREDIT_CONFIG["precos"]
 
 
+# Taxa da plataforma sobre vendas no marketplace de pacotes (fração 0..1).
+MARKETPLACE_TAXA_DEFAULT = 0.20  # 20%
+
+
+def get_marketplace_taxa() -> float:
+    """Taxa da plataforma sobre vendas do marketplace (fração 0..1).
+
+    Configurável via app_config['marketplace_taxa_pct'] (percentual inteiro,
+    ex.: "20" = 20%). Default 20%. Sempre limitada ao intervalo [0, 0.9].
+    """
+    raw = get_app_config("marketplace_taxa_pct", "")
+    if raw:
+        try:
+            pct = float(raw) / 100.0
+            return max(0.0, min(0.9, pct))
+        except (ValueError, TypeError):
+            pass
+    return MARKETPLACE_TAXA_DEFAULT
+
+
+def mover_creditos(conn, user_id: int, delta: int, tipo: str, motivo: str = "") -> int:
+    """Movimenta o saldo de créditos de um usuário e registra no histórico.
+
+    Helper canônico: faz o UPDATE de users.creditos_saldo e o INSERT em
+    creditos_historico de forma atômica (dentro da transação do chamador — NÃO
+    faz commit). Retorna o saldo posterior.
+
+    - delta > 0 credita; delta < 0 debita.
+    - NÃO auto-converte créditos em dias de premium (diferente da compra via PIX):
+      créditos movidos por aqui são saldo "puro", gastável em IA/features.
+
+    Levanta HTTPException 400 se o débito deixaria o saldo negativo.
+    """
+    row = conn.execute("SELECT COALESCE(creditos_saldo, 0) FROM users WHERE id = ?", (user_id,)).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+    saldo_anterior = int(row[0] or 0)
+    saldo_posterior = saldo_anterior + int(delta)
+    if saldo_posterior < 0:
+        raise HTTPException(status_code=400, detail="Saldo de créditos insuficiente.")
+
+    conn.execute("UPDATE users SET creditos_saldo = ? WHERE id = ?", (saldo_posterior, user_id))
+    conn.execute("""
+        INSERT INTO creditos_historico (user_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (user_id, tipo, int(delta), saldo_anterior, saldo_posterior, motivo,
+          datetime.now(timezone.utc).isoformat()))
+    return saldo_posterior
+
+
 def is_vitalicio_disponivel() -> dict:
     """Verifica se o plano Vitalício está disponível para compra.
 

@@ -1434,6 +1434,52 @@ def _m87_user_prefs(conn):
     log.info("Migration 87: created user_prefs table")
 
 
+def _m88_marketplace_preco(conn):
+    """Marketplace de pacotes entre estudantes: preço em créditos + vínculo a cargo/edital.
+
+    - catalogo_itens.preco_creditos: preço em créditos inteiros (0 = gratuito, padrão).
+    - catalogo_itens.concurso / cargo: vínculo a um cargo específico de um edital,
+      permitindo busca/filtro ("pacote para o cargo X do concurso Y").
+    Compatível com o comportamento atual: itens existentes ficam gratuitos (0).
+    """
+    for ddl in (
+        "ALTER TABLE catalogo_itens ADD COLUMN preco_creditos INTEGER DEFAULT 0",
+        "ALTER TABLE catalogo_itens ADD COLUMN concurso TEXT DEFAULT ''",
+        "ALTER TABLE catalogo_itens ADD COLUMN cargo TEXT DEFAULT ''",
+    ):
+        try:
+            conn.execute(ddl)
+        except Exception:
+            pass  # coluna já existe
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_catalogo_cargo ON catalogo_itens(concurso, cargo)")
+    log.info("Migration 88: added preco_creditos + concurso/cargo to catalogo_itens")
+
+
+def _m89_catalogo_compras(conn):
+    """Registro de compras do marketplace (idempotência + base para painel de vendas).
+
+    Uma linha por (item, comprador). O UNIQUE garante que reimportar um item já
+    comprado seja gratuito (sem nova cobrança). Guarda a taxa aplicada e quanto o
+    vendedor recebeu para auditoria/relatório.
+    """
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS catalogo_compras (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            item_id INTEGER NOT NULL,
+            comprador_uid INTEGER NOT NULL,
+            vendedor_uid INTEGER NOT NULL,
+            preco_creditos INTEGER NOT NULL DEFAULT 0,
+            taxa_pct REAL NOT NULL DEFAULT 0,
+            creditos_vendedor INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT ''
+        )
+    """)
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_catalogo_compras_unique ON catalogo_compras(item_id, comprador_uid)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_catalogo_compras_vendedor ON catalogo_compras(vendedor_uid)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_catalogo_compras_comprador ON catalogo_compras(comprador_uid)")
+    log.info("Migration 89: created catalogo_compras table")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -1522,6 +1568,8 @@ MIGRATIONS = [
     (85, _m85_closed_book_log),
     (86, _m86_notif_prefs_anti_relaxamento),
     (87, _m87_user_prefs),
+    (88, _m88_marketplace_preco),
+    (89, _m89_catalogo_compras),
 ]
 
 

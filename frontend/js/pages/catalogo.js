@@ -28,11 +28,13 @@ async function carregarCatalogo() {
   const categoria = document.getElementById('filtro-categoria').value;
   const tipo = document.getElementById('filtro-tipo').value;
   const ordenar = document.getElementById('filtro-ordenar')?.value || 'avaliacao';
+  const cargo = document.getElementById('filtro-cargo')?.value.trim() || '';
 
   const params = new URLSearchParams();
   if (busca) params.set('busca', busca);
   if (categoria) params.set('categoria', categoria);
   if (tipo) params.set('tipo', tipo);
+  if (cargo) params.set('cargo', cargo);
   params.set('ordenar', ordenar);
 
   const grid = document.getElementById('catalogo-grid');
@@ -51,10 +53,25 @@ async function carregarCatalogo() {
       return;
     }
 
-    grid.innerHTML = data.itens.map(it => `
+    grid.innerHTML = data.itens.map(it => {
+      const pago = (it.preco_creditos || 0) > 0 && !it.ja_comprado;
+      const precoBadge = (it.preco_creditos || 0) > 0
+        ? (it.ja_comprado
+            ? '<span class="cat-preco" style="color:#a6e3a1;" title="Você já comprou este material">✓ Adquirido</span>'
+            : `<span class="cat-preco" style="color:#f9e2af;" title="Preço em créditos">💎 ${it.preco_creditos}</span>`)
+        : '<span class="cat-preco" style="color:#a6e3a1;">Grátis</span>';
+      const cargoBadge = (it.concurso || it.cargo)
+        ? `<div class="cat-cargo" style="font-size:0.72rem;color:#89b4fa;">🎯 ${esc([it.concurso, it.cargo].filter(Boolean).join(' · '))}</div>`
+        : '';
+      const btnLabel = pago ? `💎 Comprar (${it.preco_creditos})` : '📥 Importar';
+      return `
       <div class="catalogo-card">
-        <span class="cat-tipo">${it.tipo_emoji} ${esc(it.tipo_label)}</span>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;">
+          <span class="cat-tipo">${it.tipo_emoji} ${esc(it.tipo_label)}</span>
+          ${precoBadge}
+        </div>
         <div class="cat-titulo">${esc(it.titulo)}</div>
+        ${cargoBadge}
         <div class="cat-desc">${esc(it.descricao || 'Sem descrição.')}</div>
         <div style="font-size:0.85rem;">${estrelas(it.media_estrelas, it.total_avaliacoes)}</div>
         <div class="cat-meta">
@@ -62,24 +79,48 @@ async function carregarCatalogo() {
           <span>⬇️ ${it.downloads}</span>
         </div>
         <div style="display:flex;gap:6px;">
-          <button onclick="importarItem(${it.id}, this)" style="flex:1;">📥 Importar</button>
+          <button onclick="importarItem(${it.id}, this, ${it.preco_creditos || 0}, ${it.ja_comprado ? 'true' : 'false'})" style="flex:1;">${btnLabel}</button>
           <button onclick="abrirAvaliacoes(${it.id}, '${escapeJsString(it.titulo)}')" style="background:#45475a;color:#cdd6f4;flex:0 0 auto;padding:9px 12px;" aria-label="Ver avaliações">⭐</button>
         </div>
       </div>
-    `).join('');
+    `;
+    }).join('');
   } catch (e) {
     grid.innerHTML = '<div class="empty">⚠️ Erro ao carregar o catálogo.</div>';
   }
 }
 window.aplicarFiltros = carregarCatalogo;
 
-window.importarItem = async function(itemId, btn) {
+window.importarItem = async function(itemId, btn, preco = 0, jaComprado = false) {
   if (!localStorage.getItem('auth_token')) {
     showToast('Faça login para importar materiais.', 'warning');
     setTimeout(() => location.href = '/login.html', 1200);
     return;
   }
-  if (!await confirmModal('Importar material', 'Uma cópia será criada na sua conta e você poderá estudá-la.', { type: 'info', confirmText: 'Importar' })) return;
+
+  const ehCompra = (preco || 0) > 0 && !jaComprado;
+  if (ehCompra) {
+    // Buscar saldo atual para mostrar na confirmação
+    let saldo = null;
+    try {
+      const rc = await fetch('/api/auth/creditos', { headers: _headers() });
+      if (rc.ok) saldo = (await rc.json()).saldo;
+    } catch (e) { /* segue sem saldo */ }
+
+    if (saldo !== null && saldo < preco) {
+      await alertModal(`Este material custa 💎 ${preco} crédito(s), mas você tem apenas 💎 ${saldo}.\n\nCompre créditos para adquiri-lo.`, { type: 'warning', title: 'Saldo insuficiente' });
+      return;
+    }
+    const restante = saldo !== null ? ` Seu saldo passará de 💎 ${saldo} para 💎 ${saldo - preco}.` : '';
+    const ok = await confirmModal(
+      'Comprar material',
+      `Você vai pagar 💎 ${preco} crédito(s) por este material. Uma cópia será criada na sua conta.${restante}`,
+      { type: 'warning', confirmText: `Comprar (💎 ${preco})` }
+    );
+    if (!ok) return;
+  } else if (!await confirmModal('Importar material', 'Uma cópia será criada na sua conta e você poderá estudá-la.', { type: 'info', confirmText: 'Importar' })) {
+    return;
+  }
 
   btn.disabled = true;
   const original = btn.textContent;
@@ -88,8 +129,11 @@ window.importarItem = async function(itemId, btn) {
     const res = await fetch(`/api/catalogo/${itemId}/importar`, { method: 'POST', headers: _headers() });
     const data = await res.json();
     if (res.ok) {
-      showToast(`✅ "${data.titulo}" importado! (${data.importados} item(ns))`, 'success');
-      btn.textContent = '✓ Importado';
+      const msg = data.cobrado
+        ? `✅ "${data.titulo}" comprado! (💎 ${data.preco_creditos} · ${data.importados} item(ns))`
+        : `✅ "${data.titulo}" importado! (${data.importados} item(ns))`;
+      showToast(msg, 'success');
+      btn.textContent = '✓ Concluído';
       setTimeout(carregarCatalogo, 1500);
     } else {
       showToast(data.detail || 'Erro ao importar.', 'error');
@@ -187,7 +231,19 @@ window.abrirPublicar = async function() {
       <label style="font-size:0.75rem;color:#9399b2;">Descrição</label>
       <input id="pub-descricao" placeholder="Breve descrição" aria-label="Descrição do material" style="width:100%;padding:9px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;margin-bottom:10px;">
       <label style="font-size:0.75rem;color:#9399b2;">Categoria</label>
-      <input id="pub-categoria" value="Geral" aria-label="Categoria do material" style="width:100%;padding:9px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;margin-bottom:14px;">
+      <input id="pub-categoria" value="Geral" aria-label="Categoria do material" style="width:100%;padding:9px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;margin-bottom:10px;">
+      <div style="display:flex;gap:8px;">
+        <div style="flex:1;">
+          <label style="font-size:0.75rem;color:#9399b2;">Concurso (opcional)</label>
+          <input id="pub-concurso" placeholder="Ex: PF 2026" aria-label="Concurso" style="width:100%;padding:9px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;margin-bottom:10px;">
+        </div>
+        <div style="flex:1;">
+          <label style="font-size:0.75rem;color:#9399b2;">Cargo (opcional)</label>
+          <input id="pub-cargo" placeholder="Ex: Delegado" aria-label="Cargo" style="width:100%;padding:9px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;margin-bottom:10px;">
+        </div>
+      </div>
+      <label style="font-size:0.75rem;color:#9399b2;">Preço em créditos (0 = grátis)</label>
+      <input id="pub-preco" type="number" min="0" step="1" value="0" aria-label="Preço em créditos" style="width:100%;padding:9px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;margin-bottom:14px;">
       <div id="pub-result" style="font-size:0.78rem;margin-bottom:8px;"></div>
       <div style="display:flex;gap:8px;">
         <button onclick="document.getElementById('pub-modal').remove()" style="flex:1;padding:9px;background:#45475a;color:#cdd6f4;border:none;border-radius:8px;cursor:pointer;">Cancelar</button>
@@ -218,6 +274,9 @@ window.enviarPublicacao = async function() {
   const titulo = document.getElementById('pub-titulo').value.trim();
   const descricao = document.getElementById('pub-descricao').value.trim();
   const categoria = document.getElementById('pub-categoria').value.trim() || 'Geral';
+  const concurso = document.getElementById('pub-concurso')?.value.trim() || '';
+  const cargo = document.getElementById('pub-cargo')?.value.trim() || '';
+  const preco_creditos = Math.max(0, parseInt(document.getElementById('pub-preco')?.value || '0', 10) || 0);
   if (tipo !== 'deck_sumulas' && !ref) { showToast('Selecione o recurso.', 'warning'); return; }
   if (!titulo) { showToast('Informe um título.', 'warning'); return; }
 
@@ -226,7 +285,7 @@ window.enviarPublicacao = async function() {
   try {
     const res = await fetch('/api/catalogo/publicar', {
       method: 'POST', headers: _headers(true),
-      body: JSON.stringify({ tipo, titulo, descricao, categoria, ref })
+      body: JSON.stringify({ tipo, titulo, descricao, categoria, ref, concurso, cargo, preco_creditos })
     });
     const data = await res.json();
     if (res.ok) {

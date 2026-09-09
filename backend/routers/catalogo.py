@@ -49,6 +49,9 @@ class PublicarItem(BaseModel):
     categoria: str = "Geral"
     origem_uid: int = 0      # de qual conta copiar (0 = própria; só admin pode usar outra)
     ref: str = ""            # identificador do recurso (edital_nome, caderno_id, materia, lei_id)
+    preco_creditos: int = 0  # preço em créditos inteiros (0 = gratuito)
+    concurso: str = ""       # vínculo opcional a um concurso/edital
+    cargo: str = ""          # vínculo opcional a um cargo específico
 
 
 # ==================== LISTAGEM PÚBLICA ====================
@@ -58,6 +61,8 @@ def listar_catalogo(
     categoria: str = "",
     tipo: str = "",
     busca: str = "",
+    concurso: str = "",
+    cargo: str = "",
     ordenar: str = "avaliacao",  # avaliacao | downloads | recente
     conn=Depends(get_db_session),
     user_id: int = Depends(get_user_id)
@@ -65,19 +70,27 @@ def listar_catalogo(
     """Lista itens aprovados e ativos do catálogo, com média de estrelas e selo do curador."""
     query = """
         SELECT c.*, u.nome as curador_nome, COALESCE(u.curador_verificado, 0) as curador_verificado,
-               COALESCE(AVG(a.nota), 0) as media_estrelas, COUNT(a.id) as total_avaliacoes
+               COALESCE(AVG(a.nota), 0) as media_estrelas, COUNT(a.id) as total_avaliacoes,
+               MAX(CASE WHEN comp.comprador_uid = ? THEN 1 ELSE 0 END) as ja_comprado
         FROM catalogo_itens c
         LEFT JOIN users u ON c.curador_uid = u.id
         LEFT JOIN catalogo_avaliacoes a ON a.item_id = c.id
+        LEFT JOIN catalogo_compras comp ON comp.item_id = c.id
         WHERE c.ativo = 1 AND COALESCE(c.status, 'aprovado') = 'aprovado'
     """
-    params = []
+    params = [user_id]
     if categoria:
         query += " AND c.categoria = ?"
         params.append(categoria)
     if tipo:
         query += " AND c.tipo = ?"
         params.append(tipo)
+    if concurso:
+        query += " AND c.concurso = ?"
+        params.append(concurso)
+    if cargo:
+        query += " AND c.cargo = ?"
+        params.append(cargo)
     if busca:
         query += " AND (c.titulo LIKE ? OR c.descricao LIKE ?)"
         params.extend([f"%{busca}%", f"%{busca}%"])
@@ -104,6 +117,10 @@ def listar_catalogo(
             "categoria": r["categoria"],
             "curador_nome": r["curador_nome"] or "Equipe",
             "curador_verificado": bool(r["curador_verificado"]),
+            "preco_creditos": r["preco_creditos"] if "preco_creditos" in r.keys() else 0,
+            "concurso": (r["concurso"] if "concurso" in r.keys() else "") or "",
+            "cargo": (r["cargo"] if "cargo" in r.keys() else "") or "",
+            "ja_comprado": bool(r["ja_comprado"]),
             "downloads": r["downloads"],
             "media_estrelas": round(r["media_estrelas"], 1),
             "total_avaliacoes": r["total_avaliacoes"],
@@ -198,7 +215,12 @@ def importar_item(
     conn=Depends(get_db_session),
     user_id: int = Depends(get_user_id)
 ):
-    """Copia o material do catálogo para a conta do estudante logado."""
+    """Copia o material do catálogo para a conta do estudante logado.
+
+    Se o item tiver preço (preco_creditos > 0), cobra créditos do comprador e
+    credita o vendedor (menos a taxa da plataforma) na PRIMEIRA importação. Itens
+    já comprados (registro em catalogo_compras) e itens gratuitos importam sem custo.
+    """
     item = conn.execute(
         "SELECT * FROM catalogo_itens WHERE id = ? AND ativo = 1", (item_id,)
     ).fetchone()
@@ -208,6 +230,49 @@ def importar_item(
     origem_uid = item["origem_uid"]
     if origem_uid == user_id:
         raise HTTPException(status_code=400, detail="Este material já é da sua conta.")
+
+    item_keys = item.keys()
+    preco = int(item["preco_creditos"]) if "preco_creditos" in item_keys and item["preco_creditos"] else 0
+    vendedor_uid = item["curador_uid"]
+
+    # Não pode comprar o próprio material (curador é o vendedor)
+    if preco > 0 and vendedor_uid == user_id:
+        raise HTTPException(status_code=400, detail="Você não pode comprar o seu próprio material.")
+
+    # Idempotência: já comprou antes? Então reimporta de graça.
+    ja_comprou = conn.execute(
+        "SELECT 1 FROM catalogo_compras WHERE item_id = ? AND comprador_uid = ?", (item_id, user_id)
+    ).fetchone() is not None
+
+    cobrar = preco > 0 and not ja_comprou
+
+    if cobrar:
+        from plans import get_marketplace_taxa, mover_creditos
+
+        saldo = conn.execute(
+            "SELECT COALESCE(creditos_saldo, 0) FROM users WHERE id = ?", (user_id,)
+        ).fetchone()[0]
+        if int(saldo or 0) < preco:
+            raise HTTPException(
+                status_code=402,
+                detail=f"Saldo insuficiente. Este material custa {preco} crédito(s) e você tem {int(saldo or 0)}.",
+            )
+
+        taxa = get_marketplace_taxa()
+        creditos_vendedor = int(preco * (1 - taxa))  # floor; o restante fica com a plataforma
+
+        # Débito do comprador e crédito do vendedor (saldo puro, sem auto-premium).
+        mover_creditos(conn, user_id, -preco, "marketplace_compra",
+                       f"Compra do item #{item_id}: {item['titulo']}")
+        if creditos_vendedor > 0:
+            mover_creditos(conn, vendedor_uid, creditos_vendedor, "marketplace_venda",
+                           f"Venda do item #{item_id}: {item['titulo']}")
+
+        conn.execute("""
+            INSERT INTO catalogo_compras (item_id, comprador_uid, vendedor_uid, preco_creditos, taxa_pct, creditos_vendedor, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (item_id, user_id, vendedor_uid, preco, taxa, creditos_vendedor,
+              datetime.now(timezone.utc).isoformat()))
 
     tipo = item["tipo"]
     ref = item["ref"]
@@ -231,8 +296,9 @@ def importar_item(
     conn.execute("UPDATE catalogo_itens SET downloads = downloads + 1 WHERE id = ?", (item_id,))
     conn.commit()
 
-    log.info(f"[catalogo] user={user_id} importou item={item_id} tipo={tipo} ({copiados} registros)")
-    return {"ok": True, "tipo": tipo, "titulo": item["titulo"], "importados": copiados}
+    log.info(f"[catalogo] user={user_id} importou item={item_id} tipo={tipo} ({copiados} registros) cobrado={cobrar}")
+    return {"ok": True, "tipo": tipo, "titulo": item["titulo"], "importados": copiados,
+            "cobrado": bool(cobrar), "preco_creditos": preco if cobrar else 0}
 
 
 # ==================== PUBLICAÇÃO (ADMIN + PREMIUM) ====================
@@ -292,14 +358,21 @@ def publicar_item(
     if not _recurso_existe(conn, body.tipo, origem_uid, body.ref):
         raise HTTPException(status_code=404, detail="Recurso não encontrado na sua conta.")
 
+    # Preço: inteiro >= 0. Só quem pode vender (premium/vitalício/verificado/admin)
+    # pode definir preço > 0; free/guest nem chega aqui (bloqueado acima).
+    preco = int(body.preco_creditos or 0)
+    if preco < 0:
+        raise HTTPException(status_code=400, detail="Preço não pode ser negativo.")
+
     # Status: aprovado se admin ou verificado; pendente caso contrário
     status = "aprovado" if (is_admin or is_verificado) else "pendente"
 
     conn.execute("""
-        INSERT INTO catalogo_itens (tipo, titulo, descricao, categoria, curador_uid, origem_uid, ref, downloads, ativo, status, publicado_em)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?)
+        INSERT INTO catalogo_itens (tipo, titulo, descricao, categoria, curador_uid, origem_uid, ref, downloads, ativo, status, publicado_em, preco_creditos, concurso, cargo)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?, ?, ?, ?)
     """, (body.tipo, body.titulo.strip(), body.descricao.strip(), body.categoria.strip() or "Geral",
-          user_id, origem_uid, str(body.ref), status, datetime.now(timezone.utc).isoformat()))
+          user_id, origem_uid, str(body.ref), status, datetime.now(timezone.utc).isoformat(),
+          preco, body.concurso.strip(), body.cargo.strip()))
     conn.commit()
 
     new_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
@@ -323,8 +396,36 @@ def meus_materiais(conn=Depends(get_db_session), user_id: int = Depends(get_user
             "id": r["id"], "tipo": r["tipo"], "tipo_emoji": info["emoji"], "titulo": r["titulo"],
             "categoria": r["categoria"], "status": r["status"] or "aprovado", "downloads": r["downloads"],
             "media_estrelas": round(r["media_estrelas"], 1), "total_avaliacoes": r["total_avaliacoes"],
+            "preco_creditos": r["preco_creditos"] if "preco_creditos" in r.keys() else 0,
+            "concurso": (r["concurso"] if "concurso" in r.keys() else "") or "",
+            "cargo": (r["cargo"] if "cargo" in r.keys() else "") or "",
         })
     return {"itens": itens}
+
+
+@router.get("/vendas", summary="Painel de vendas do vendedor")
+def minhas_vendas(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Resumo das vendas do usuário logado: total de vendas, créditos recebidos e detalhamento por item."""
+    linhas = conn.execute("""
+        SELECT comp.item_id, comp.preco_creditos, comp.creditos_vendedor, comp.created_at,
+               c.titulo, comp.comprador_uid, u.nome as comprador_nome
+        FROM catalogo_compras comp
+        LEFT JOIN catalogo_itens c ON c.id = comp.item_id
+        LEFT JOIN users u ON u.id = comp.comprador_uid
+        WHERE comp.vendedor_uid = ?
+        ORDER BY comp.created_at DESC
+    """, (user_id,)).fetchall()
+    total_vendas = len(linhas)
+    total_creditos = sum(int(r["creditos_vendedor"] or 0) for r in linhas)
+    vendas = [{
+        "item_id": r["item_id"],
+        "titulo": r["titulo"] or "(removido)",
+        "preco_creditos": r["preco_creditos"],
+        "creditos_recebidos": r["creditos_vendedor"],
+        "comprador_nome": r["comprador_nome"] or "Anônimo",
+        "created_at": r["created_at"],
+    } for r in linhas]
+    return {"total_vendas": total_vendas, "total_creditos_recebidos": total_creditos, "vendas": vendas}
 
 
 @router.delete("/{item_id}", summary="Remover item do catálogo (admin ou dono)")

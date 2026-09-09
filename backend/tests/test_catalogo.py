@@ -447,6 +447,151 @@ class TestModeracao:
         assert r.status_code == 400
 
 
+class TestMarketplace:
+    """Venda de pacotes entre estudantes por créditos internos."""
+
+    def _set_saldo(self, uid, saldo):
+        conn = _conn()
+        conn.execute("UPDATE users SET creditos_saldo = ? WHERE id = ?", (saldo, uid))
+        conn.commit()
+        conn.close()
+
+    def _saldo(self, uid):
+        conn = _conn()
+        row = conn.execute("SELECT COALESCE(creditos_saldo, 0) FROM users WHERE id = ?", (uid,)).fetchone()
+        conn.close()
+        return int(row[0] or 0)
+
+    def _criar_vendedor(self, uid, email, materia):
+        """Cria vendedor premium verificado (publica aprovado) com um deck de questões."""
+        conn = _conn()
+        conn.execute("""
+            INSERT OR IGNORE INTO users (id, nome, username, email, password_hash, plano, role, curador_verificado, creditos_saldo, created_at)
+            VALUES (?, ?, ?, ?, 'hash', 'premium', 'user', 1, 0, '2026-01-01')
+        """, (uid, f"Vend {uid}", f"vend{uid}", email))
+        conn.execute("""
+            INSERT INTO questoes (materia, topico, enunciado, alternativa_a, alternativa_b, alternativa_c, alternativa_d, alternativa_e, resposta_correta, created_at, user_id)
+            VALUES (?, 'T', 'Q?', 'a', 'b', 'c', 'd', '', 'A', '2026-01-01', ?)
+        """, (materia, uid))
+        conn.commit()
+        conn.close()
+
+    def test_compra_debita_comprador_credita_vendedor_com_taxa(self, client):
+        self._criar_vendedor(200, "vend200@test.com", "MktA")
+        pub = client.post("/api/catalogo/publicar", headers=_h(_token(200, "vend200@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "Pacote A", "origem_uid": 0, "ref": "MktA",
+            "preco_creditos": 10,
+        })
+        assert pub.status_code == 200, pub.text
+        item_id = pub.json()["id"]
+
+        _criar_estudante(201, "comp201@test.com")
+        self._set_saldo(201, 50)
+        r = client.post(f"/api/catalogo/{item_id}/importar", headers=_h(_token(201, "comp201@test.com")))
+        assert r.status_code == 200, r.text
+        assert r.json()["cobrado"] is True
+        # Comprador: 50 - 10 = 40
+        assert self._saldo(201) == 40
+        # Vendedor: floor(10 * (1-0.20)) = 8
+        assert self._saldo(200) == 8
+        # Registro de compra criado
+        conn = _conn()
+        n = conn.execute("SELECT COUNT(*) FROM catalogo_compras WHERE item_id = ? AND comprador_uid = 201", (item_id,)).fetchone()[0]
+        conn.close()
+        assert n == 1
+
+    def test_saldo_insuficiente_402_nada_muda(self, client):
+        self._criar_vendedor(210, "vend210@test.com", "MktB")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(210, "vend210@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "Pacote B", "origem_uid": 0, "ref": "MktB", "preco_creditos": 30,
+        }).json()["id"]
+        _criar_estudante(211, "comp211@test.com")
+        self._set_saldo(211, 5)  # insuficiente
+        r = client.post(f"/api/catalogo/{item_id}/importar", headers=_h(_token(211, "comp211@test.com")))
+        assert r.status_code == 402
+        # Nada debitado/creditado
+        assert self._saldo(211) == 5
+        assert self._saldo(210) == 0
+        conn = _conn()
+        n = conn.execute("SELECT COUNT(*) FROM catalogo_compras WHERE item_id = ? AND comprador_uid = 211", (item_id,)).fetchone()[0]
+        nq = conn.execute("SELECT COUNT(*) FROM questoes WHERE user_id = 211").fetchone()[0]
+        conn.close()
+        assert n == 0
+        assert nq == 0  # não copiou nada
+
+    def test_reimportacao_gratis_apos_compra(self, client):
+        self._criar_vendedor(220, "vend220@test.com", "MktC")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(220, "vend220@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "Pacote C", "origem_uid": 0, "ref": "MktC", "preco_creditos": 10,
+        }).json()["id"]
+        _criar_estudante(221, "comp221@test.com")
+        self._set_saldo(221, 20)
+        r1 = client.post(f"/api/catalogo/{item_id}/importar", headers=_h(_token(221, "comp221@test.com")))
+        assert r1.json()["cobrado"] is True
+        assert self._saldo(221) == 10
+        # Reimportar: grátis
+        r2 = client.post(f"/api/catalogo/{item_id}/importar", headers=_h(_token(221, "comp221@test.com")))
+        assert r2.status_code == 200
+        assert r2.json()["cobrado"] is False
+        assert self._saldo(221) == 10  # inalterado
+
+    def test_item_gratis_importa_sem_custo(self, client):
+        self._criar_vendedor(230, "vend230@test.com", "MktD")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(230, "vend230@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "Pacote Grátis", "origem_uid": 0, "ref": "MktD", "preco_creditos": 0,
+        }).json()["id"]
+        _criar_estudante(231, "comp231@test.com")
+        self._set_saldo(231, 5)
+        r = client.post(f"/api/catalogo/{item_id}/importar", headers=_h(_token(231, "comp231@test.com")))
+        assert r.status_code == 200
+        assert r.json()["cobrado"] is False
+        assert self._saldo(231) == 5
+
+    def test_nao_comprar_proprio_material(self, client):
+        self._criar_vendedor(240, "vend240@test.com", "MktE")
+        self._set_saldo(240, 100)
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(240, "vend240@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "Pacote E", "origem_uid": 0, "ref": "MktE", "preco_creditos": 10,
+        }).json()["id"]
+        # O próprio vendedor tenta importar → bloqueado (origem == user já barra em 400)
+        r = client.post(f"/api/catalogo/{item_id}/importar", headers=_h(_token(240, "vend240@test.com")))
+        assert r.status_code == 400
+        assert self._saldo(240) == 100  # nada mudou
+
+    def test_free_nao_publica_pago_403(self, client):
+        _criar_estudante(250, "est250@test.com")  # free
+        r = client.post("/api/catalogo/publicar", headers=_h(_token(250, "est250@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "X", "origem_uid": 0, "ref": "Y", "preco_creditos": 10,
+        })
+        assert r.status_code == 403
+
+    def test_filtro_por_cargo(self, client):
+        self._criar_vendedor(260, "vend260@test.com", "MktF")
+        client.post("/api/catalogo/publicar", headers=_h(_token(260, "vend260@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "Pacote Cargo X", "origem_uid": 0, "ref": "MktF",
+            "preco_creditos": 5, "concurso": "PF 2026", "cargo": "Delegado",
+        })
+        r = client.get("/api/catalogo?cargo=Delegado", headers=_h(_admin_token()))
+        assert r.status_code == 200
+        titulos = [i["titulo"] for i in r.json()["itens"]]
+        assert "Pacote Cargo X" in titulos
+        assert all(i["cargo"] == "Delegado" for i in r.json()["itens"])
+
+    def test_painel_vendas(self, client):
+        self._criar_vendedor(270, "vend270@test.com", "MktG")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(270, "vend270@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "Pacote G", "origem_uid": 0, "ref": "MktG", "preco_creditos": 10,
+        }).json()["id"]
+        _criar_estudante(271, "comp271@test.com")
+        self._set_saldo(271, 20)
+        client.post(f"/api/catalogo/{item_id}/importar", headers=_h(_token(271, "comp271@test.com")))
+        r = client.get("/api/catalogo/vendas", headers=_h(_token(270, "vend270@test.com")))
+        assert r.status_code == 200
+        data = r.json()
+        assert data["total_vendas"] >= 1
+        assert data["total_creditos_recebidos"] >= 8
+
+
 def teardown_module():
     try:
         os.unlink(_tmp_db.name)
