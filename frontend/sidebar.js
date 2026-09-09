@@ -82,6 +82,7 @@
           <li><a href="/#trilha" onclick="goSection('tab-trilha', event)"><span class="nav-icon" aria-hidden="true">🧭</span><span class="nav-label">Trilha</span></a></li>
           <li><a href="/vademecum.html" class="${activeClass('/vademecum')}"><span class="nav-icon" aria-hidden="true">⚖️</span><span class="nav-label">Vade Mecum</span></a></li>
           <li><a href="/catalogo.html" class="${activeClass('/catalogo')}"><span class="nav-icon" aria-hidden="true">📚</span><span class="nav-label">Catálogo</span></a></li>
+          <li><a href="/revisoes.html" class="${activeClass('/revisoes')}"><span class="nav-icon" aria-hidden="true">🗂️</span><span class="nav-label">Cadernos de Revisão</span></a></li>
         </ul>
       </div>
 

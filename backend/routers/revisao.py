@@ -111,6 +111,45 @@ def _agenda_to_dict(row) -> dict:
     }
 
 
+@router.get("/api/revisao-cadernos", summary="Listar todos os cadernos de revisão do usuário")
+def listar_cadernos_revisao(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Agrupa revisao_blocos por pdf_path e retorna os cadernos do usuário.
+
+    Serve para visualizar cadernos que o usuário possui — inclusive os que foram
+    IMPORTADOS/COMPRADOS no catálogo, cujo PDF de origem ele pode não ter. A
+    listagem indica se o PDF existe na conta (tem_pdf) para orientar a UI.
+    """
+    rows = conn.execute(
+        """SELECT pdf_path, COUNT(*) as blocos, MAX(created_at) as ultimo
+           FROM revisao_blocos WHERE user_id = ? AND COALESCE(pdf_path,'') != ''
+           GROUP BY pdf_path ORDER BY ultimo DESC""",
+        (user_id,),
+    ).fetchall()
+    cadernos = []
+    for r in rows:
+        pdf_path = r["pdf_path"]
+        tem_pdf = conn.execute(
+            "SELECT 1 FROM pdf_owner WHERE pdf_path = ? AND owner_id = ? LIMIT 1", (pdf_path, user_id)
+        ).fetchone() is not None if _tabela_existe(conn, "pdf_owner") else False
+        # Agendamento (se houver)
+        ag = conn.execute(
+            "SELECT proxima_revisao FROM revisao_agenda WHERE pdf_path = ? AND user_id = ?", (pdf_path, user_id)
+        ).fetchone()
+        nome = pdf_path.split("/")[-1].replace(".pdf", "").replace("_", " ")
+        cadernos.append({
+            "pdf_path": pdf_path,
+            "nome": nome,
+            "blocos": r["blocos"],
+            "tem_pdf": tem_pdf,
+            "proxima_revisao": ag["proxima_revisao"] if ag else "",
+        })
+    return {"total": len(cadernos), "cadernos": cadernos}
+
+
+def _tabela_existe(conn, nome: str) -> bool:
+    return conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?", (nome,)).fetchone() is not None
+
+
 @router.get("/api/revisao-agenda/hoje", summary="Cadernos de revisão para revisar hoje")
 def agenda_hoje(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Lista cadernos cujo agendamento venceu (proxima_revisao <= hoje).

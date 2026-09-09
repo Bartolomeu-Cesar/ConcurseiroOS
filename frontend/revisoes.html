@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Meus Cadernos de Revisão — ConcurseiroOS</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#1e1e2e">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/main.css">
+  <style>
+    .header { flex-wrap: wrap; gap: 12px; }
+    .header h1 { font-size: 1.5rem; }
+    .cad-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+    .cad-card {
+      background: var(--bg-surface); border: 1px solid var(--border); border-radius: 12px;
+      padding: 18px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; overflow: hidden;
+    }
+    .cad-card:hover { border-color: var(--accent); }
+    .cad-card .cad-nome { font-size: 1rem; font-weight: 700; color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .cad-card .cad-meta { font-size: 0.75rem; color: var(--text-sub, #9399b2); display: flex; justify-content: space-between; }
+    .empty { text-align: center; color: var(--text-sub, #9399b2); padding: 40px 20px; }
+    @media (max-width: 600px) { .cad-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <a href="#page-content" class="skip-link">Pular para conteúdo</a>
+  <div class="header">
+    <h1>🗂️ Meus Cadernos de Revisão</h1>
+    <button class="btn-recalc" onclick="location.href='/catalogo.html'" style="background:#94e2d5;color:#1e1e2e;border:none;border-radius:8px;padding:10px 16px;font-weight:600;cursor:pointer;">📚 Ir ao Catálogo</button>
+  </div>
+
+  <main id="page-content" role="main">
+    <p style="color:var(--text-sub,#9399b2);font-size:0.9rem;margin-bottom:16px;">
+      Seus cadernos de revisão — inclusive os que você <strong>comprou ou importou</strong> do catálogo. Aqui você visualiza os blocos (recortes, resumos e notas) mesmo sem ter o PDF original. 📖
+    </p>
+
+    <div class="cad-grid" id="cadernos-grid">
+      <div class="empty">Carregando…</div>
+    </div>
+
+    <!-- Área de leitura de um caderno (blocos) -->
+    <div id="caderno-leitura" style="display:none;">
+      <button onclick="voltarCadernos()" style="background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 14px;cursor:pointer;margin-bottom:14px;">← Voltar aos cadernos</button>
+      <h2 id="caderno-titulo" style="color:var(--teal,#94e2d5);font-size:1.2rem;margin:0 0 12px;"></h2>
+      <div id="caderno-blocos"></div>
+    </div>
+  </main>
+
+  <script src="/auth-interceptor.js"></script>
+  <script src="/sidebar.js"></script>
+  <script src="/timer-global.js"></script>
+  <script type="module" src="/js/pages/revisoes.js"></script>
+  <script type="module">
+    import { toast } from '/js/modules/toast.js';
+    import { toggleTheme, initTheme } from '/js/modules/theme.js';
+    Object.assign(window, { toast, toggleTheme });
+    initTheme();
+  </script>
+</body>
+</html>

@@ -446,3 +446,31 @@ def test_bloco_sem_tag_retorna_vazio():
         "pdf_path": PDF_PATH, "tipo": "texto", "titulo": "T", "conteudo": "c", "pagina": 1,
     })
     assert client.get(f"/api/revisao/{PDF_PATH}").json()[0]["tag"] == ""
+
+
+def test_listar_cadernos_revisao():
+    """GET /api/revisao-cadernos agrupa blocos por pdf_path (para visualizar comprados)."""
+    _limpar()
+    # Dois cadernos distintos
+    client.post("/api/revisao", json={"pdf_path": "PastaA/Doc1.pdf", "tipo": "texto", "conteudo": "a1", "pagina": 1})
+    client.post("/api/revisao", json={"pdf_path": "PastaA/Doc1.pdf", "tipo": "texto", "conteudo": "a2", "pagina": 2})
+    client.post("/api/revisao", json={"pdf_path": "PastaB/Doc2.pdf", "tipo": "texto", "conteudo": "b1", "pagina": 1})
+
+    r = client.get("/api/revisao-cadernos")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["total"] == 2
+    por_path = {c["pdf_path"]: c for c in data["cadernos"]}
+    assert por_path["PastaA/Doc1.pdf"]["blocos"] == 2
+    assert por_path["PastaB/Doc2.pdf"]["blocos"] == 1
+    # Caderno importado (sem PDF na conta) deve marcar tem_pdf=False
+    assert por_path["PastaB/Doc2.pdf"]["tem_pdf"] is False
+    # Nome amigável derivado do path
+    assert por_path["PastaB/Doc2.pdf"]["nome"] == "Doc2"
+
+
+def test_listar_cadernos_vazio():
+    _limpar()
+    r = client.get("/api/revisao-cadernos")
+    assert r.status_code == 200
+    assert r.json()["total"] == 0
