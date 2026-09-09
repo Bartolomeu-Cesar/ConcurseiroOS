@@ -1007,11 +1007,13 @@ def enviar_broadcast(
 ):
     """Cria um anúncio e (best-effort) envia push aos usuários do segmento.
 
-    body: {titulo, corpo, url (opcional), segmento: todos|free|premium|ativos}
+    body: {titulo, corpo, url (opcional), segmento: todos|free|premium|ativos,
+           expira_em (opcional): "YYYY-MM-DD" ou ISO datetime; ou dias_validade (int)}
+    Se nenhum for informado, o anúncio expira em 7 dias.
     O anúncio fica salvo para exibição in-app; o push é um complemento.
     """
     _require_admin(user_id)
-    from datetime import datetime, timezone
+    from datetime import datetime, timedelta, timezone
 
     titulo = (body.get("titulo") or "").strip()
     corpo = (body.get("corpo") or "").strip()
@@ -1023,14 +1025,40 @@ def enviar_broadcast(
     if segmento not in _SEGMENTOS_VALIDOS:
         raise HTTPException(status_code=400, detail=f"segmento inválido. Opções: {sorted(_SEGMENTOS_VALIDOS)}")
 
+    # Validade: expira_em explícito (data/datetime ISO), ou dias_validade, ou default 7 dias.
+    DIAS_VALIDADE_PADRAO = 7
+    expira_em = ""
+    raw_expira = (str(body.get("expira_em") or "")).strip()
+    if raw_expira:
+        try:
+            # Aceita "YYYY-MM-DD" (fim do dia) ou ISO datetime completo
+            if len(raw_expira) == 10:
+                dt = datetime.fromisoformat(raw_expira).replace(hour=23, minute=59, second=59, tzinfo=timezone.utc)
+            else:
+                dt = datetime.fromisoformat(raw_expira.replace("Z", "+00:00"))
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="expira_em deve ser YYYY-MM-DD ou ISO datetime.") from None
+        expira_em = dt.astimezone(timezone.utc).isoformat()
+    else:
+        dias = body.get("dias_validade", DIAS_VALIDADE_PADRAO)
+        try:
+            dias = int(dias)
+            if dias <= 0:
+                raise ValueError()
+        except (ValueError, TypeError):
+            dias = DIAS_VALIDADE_PADRAO
+        expira_em = (datetime.now(timezone.utc) + timedelta(days=dias)).isoformat()
+
     destinatarios = _resolver_segmento(conn, segmento)
     alcance = len(destinatarios)
 
     now = datetime.now(timezone.utc).isoformat()
     cur = conn.execute(
-        "INSERT INTO broadcasts (admin_id, titulo, corpo, url, segmento, alcance, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (user_id, titulo, corpo, url, segmento, alcance, now)
+        "INSERT INTO broadcasts (admin_id, titulo, corpo, url, segmento, alcance, expira_em, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (user_id, titulo, corpo, url, segmento, alcance, expira_em, now)
     )
     broadcast_id = cur.lastrowid
 
@@ -1065,7 +1093,7 @@ def listar_broadcasts(
     """Lista os anúncios já enviados, mais recentes primeiro."""
     _require_admin(user_id)
     from utils import sql_paginate
-    query = "SELECT id, titulo, corpo, url, segmento, alcance, push_enviados, created_at FROM broadcasts ORDER BY id DESC"
+    query = "SELECT id, titulo, corpo, url, segmento, alcance, push_enviados, expira_em, created_at FROM broadcasts ORDER BY id DESC"
     return sql_paginate(conn, query, (), page=page, limit=limit)
 
 

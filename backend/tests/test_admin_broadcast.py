@@ -153,3 +153,90 @@ def test_broadcast_auditado():
     r = client.get("/api/admin/auditoria?acao=broadcast")
     items = r.json()["items"]
     assert any(it["acao"] == "broadcast.enviar" for it in items)
+
+
+def _get_expira_em(bid):
+    conn = sqlite3.connect(_tmp_db.name, timeout=10)
+    row = conn.execute("SELECT expira_em FROM broadcasts WHERE id = ?", (bid,)).fetchone()
+    conn.close()
+    return row[0] if row else None
+
+
+def test_broadcast_default_7_dias():
+    """Sem informar validade, expira_em ~ agora + 7 dias."""
+    from datetime import datetime, timedelta, timezone
+    app.dependency_overrides[get_user_id] = _override_user_id(1)
+    r = client.post("/api/admin/broadcast", json={"titulo": "Default7", "segmento": "todos"})
+    bid = r.json()["id"]
+    expira = _get_expira_em(bid)
+    assert expira  # não vazio
+    dt = datetime.fromisoformat(expira)
+    esperado = datetime.now(timezone.utc) + timedelta(days=7)
+    # tolerância de 1 dia
+    assert abs((dt - esperado).total_seconds()) < 86400
+
+
+def test_broadcast_dias_validade_customizado():
+    from datetime import datetime, timedelta, timezone
+    app.dependency_overrides[get_user_id] = _override_user_id(1)
+    r = client.post("/api/admin/broadcast", json={"titulo": "Val3", "segmento": "todos", "dias_validade": 3})
+    bid = r.json()["id"]
+    dt = datetime.fromisoformat(_get_expira_em(bid))
+    esperado = datetime.now(timezone.utc) + timedelta(days=3)
+    assert abs((dt - esperado).total_seconds()) < 86400
+
+
+def test_broadcast_expira_em_explicito():
+    app.dependency_overrides[get_user_id] = _override_user_id(1)
+    r = client.post("/api/admin/broadcast", json={"titulo": "DataFixa", "segmento": "todos", "expira_em": "2030-12-31"})
+    assert r.status_code == 200
+    expira = _get_expira_em(r.json()["id"])
+    assert expira.startswith("2030-12-31")
+
+
+def test_broadcast_expira_em_invalido_400():
+    app.dependency_overrides[get_user_id] = _override_user_id(1)
+    r = client.post("/api/admin/broadcast", json={"titulo": "Ruim", "segmento": "todos", "expira_em": "31/12/2030"})
+    assert r.status_code == 400
+
+
+def test_broadcast_expirado_some_do_feed():
+    """Anúncio com expira_em no passado não aparece no feed."""
+    from datetime import datetime, timedelta, timezone
+    app.dependency_overrides[get_user_id] = _override_user_id(1)
+    r = client.post("/api/admin/broadcast", json={"titulo": "JaExpirou", "segmento": "todos"})
+    bid = r.json()["id"]
+    # Forçar expiração no passado
+    passado = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    conn = sqlite3.connect(_tmp_db.name, timeout=10)
+    conn.execute("UPDATE broadcasts SET expira_em = ? WHERE id = ?", (passado, bid))
+    conn.commit()
+    conn.close()
+
+    app.dependency_overrides[get_user_id] = _override_user_id(41)
+    r = client.get("/api/broadcasts/feed")
+    assert not any(a["id"] == bid for a in r.json()["anuncios"])
+
+
+def test_broadcast_sem_expira_em_aparece_no_feed():
+    """Retrocompat: anúncio com expira_em vazio continua aparecendo."""
+    app.dependency_overrides[get_user_id] = _override_user_id(1)
+    r = client.post("/api/admin/broadcast", json={"titulo": "SemExpira", "segmento": "todos"})
+    bid = r.json()["id"]
+    conn = sqlite3.connect(_tmp_db.name, timeout=10)
+    conn.execute("UPDATE broadcasts SET expira_em = '' WHERE id = ?", (bid,))
+    conn.commit()
+    conn.close()
+
+    app.dependency_overrides[get_user_id] = _override_user_id(41)
+    r = client.get("/api/broadcasts/feed")
+    assert any(a["id"] == bid for a in r.json()["anuncios"])
+
+
+def test_historico_inclui_expira_em():
+    app.dependency_overrides[get_user_id] = _override_user_id(1)
+    client.post("/api/admin/broadcast", json={"titulo": "HistExp", "segmento": "todos", "dias_validade": 5})
+    r = client.get("/api/admin/broadcasts")
+    items = r.json()["items"]
+    alvo = next(it for it in items if it["titulo"] == "HistExp")
+    assert alvo.get("expira_em")

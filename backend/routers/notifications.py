@@ -1,7 +1,7 @@
 """Router de Push Notifications para ConcurseiroOS."""
 import json
 import os
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from deps import get_user_id
@@ -1116,13 +1116,15 @@ def _user_matches_segmento(conn, user_id: int, segmento: str) -> bool:
 @router.get("/api/broadcasts/feed", summary="Anúncios do admin para o usuário (não lidos)")
 def broadcasts_feed(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Retorna anúncios recentes direcionados ao usuário que ele ainda não dispensou."""
+    now_iso = datetime.now(timezone.utc).isoformat()
     try:
         rows = conn.execute("""
             SELECT b.id, b.titulo, b.corpo, b.url, b.segmento, b.created_at
             FROM broadcasts b
             WHERE b.id NOT IN (SELECT broadcast_id FROM broadcast_reads WHERE user_id = ?)
+              AND (COALESCE(b.expira_em, '') = '' OR b.expira_em > ?)
             ORDER BY b.id DESC LIMIT 50
-        """, (user_id,)).fetchall()
+        """, (user_id, now_iso)).fetchall()
     except Exception:
         return {"anuncios": []}
     anuncios = []

@@ -249,6 +249,7 @@
             <option value="premium">Apenas Premium</option>
             <option value="ativos">Ativos (7 dias)</option>
           </select>
+          <input type="number" id="bc-validade" min="1" max="365" value="7" title="Dias de validade do anúncio" aria-label="Dias de validade do anúncio" style="width:130px;padding:8px;background:#313244;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;" placeholder="Validade (dias)">
           <button class="btn small" style="background:#cba6f7;color:#1e1e2e;" onclick="enviarBroadcast()">📢 Enviar</button>
         </div>
       </div>
@@ -1098,15 +1099,16 @@
       const corpo = document.getElementById('bc-corpo').value.trim();
       const url = document.getElementById('bc-url').value.trim();
       const segmento = document.getElementById('bc-segmento').value;
+      const dias_validade = parseInt(document.getElementById('bc-validade')?.value || '7', 10) || 7;
       const res = document.getElementById('bc-result');
       if (!titulo) { toast('Informe um título.', 'error'); return; }
       const segLabel = { todos: 'todos os usuários', free: 'usuários Free', premium: 'usuários Premium', ativos: 'usuários ativos' }[segmento];
-      if (!await confirmModal('Enviar anúncio', `Enviar "${esc(titulo)}" para ${segLabel}?`, { confirmText: 'Enviar' })) return;
+      if (!await confirmModal('Enviar anúncio', `Enviar "${esc(titulo)}" para ${segLabel}? Expira em ${dias_validade} dia(s).`, { confirmText: 'Enviar' })) return;
       res.innerHTML = '<span style="color:#9399b2;">Enviando...</span>';
       try {
         const r = await fetch('/api/admin/broadcast', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ titulo, corpo, url, segmento })
+          body: JSON.stringify({ titulo, corpo, url, segmento, dias_validade })
         });
         const d = await r.json();
         if (r.ok && d.ok) {
@@ -1133,10 +1135,18 @@
         const segLabel = { todos: 'Todos', free: 'Free', premium: 'Premium', ativos: 'Ativos' };
         el.innerHTML = items.map(b => {
           const quando = b.created_at ? new Date(b.created_at).toLocaleString('pt-BR') : '';
+          let validade = '';
+          if (b.expira_em) {
+            const exp = new Date(b.expira_em);
+            const expirado = exp < new Date();
+            validade = expirado
+              ? ` · <span style="color:#f38ba8;">expirado</span>`
+              : ` · <span style="color:#a6e3a1;">expira ${exp.toLocaleDateString('pt-BR')}</span>`;
+          }
           return `
             <div style="padding:8px 0;border-bottom:1px solid #313244;">
               <strong style="color:#cdd6f4;">${esc(b.titulo)}</strong>
-              <span style="color:#9399b2;font-size:0.72rem;"> · ${segLabel[b.segmento] || b.segmento} · alcance ${b.alcance} · ${b.push_enviados} push · ${esc(quando)}</span>
+              <span style="color:#9399b2;font-size:0.72rem;"> · ${segLabel[b.segmento] || b.segmento} · alcance ${b.alcance} · ${b.push_enviados} push · ${esc(quando)}${validade}</span>
               ${b.corpo ? `<div style="font-size:0.75rem;color:#6c7086;">${esc(b.corpo)}</div>` : ''}
             </div>`;
         }).join('');

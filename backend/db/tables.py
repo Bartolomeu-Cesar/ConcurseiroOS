@@ -37,6 +37,7 @@ def _create_tables(conn):
             segmento TEXT NOT NULL DEFAULT 'todos',
             push_enviados INTEGER DEFAULT 0,
             alcance INTEGER DEFAULT 0,
+            expira_em TEXT DEFAULT '',
             created_at TEXT NOT NULL
         )
     """)

@@ -1480,6 +1480,20 @@ def _m89_catalogo_compras(conn):
     log.info("Migration 89: created catalogo_compras table")
 
 
+def _m90_broadcast_expira(conn):
+    """Validade dos anúncios/broadcasts.
+
+    Adiciona broadcasts.expira_em (ISO 8601, UTC). Anúncios só aparecem no feed
+    enquanto expira_em > agora. Anúncios antigos (sem valor) ficam com '' e o
+    feed os trata como sem expiração (retrocompatível).
+    """
+    try:
+        conn.execute("ALTER TABLE broadcasts ADD COLUMN expira_em TEXT DEFAULT ''")
+    except Exception:
+        pass  # coluna já existe
+    log.info("Migration 90: added expira_em to broadcasts")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -1570,6 +1584,7 @@ MIGRATIONS = [
     (87, _m87_user_prefs),
     (88, _m88_marketplace_preco),
     (89, _m89_catalogo_compras),
+    (90, _m90_broadcast_expira),
 ]
 
 

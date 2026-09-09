@@ -2285,42 +2285,63 @@ setTimeout(loadSiTechniquesAlerts, 1200);
 })();
 
 // Broadcast/anúncios do admin (feed in-app)
-(async function loadBroadcastFeed() {
-  try {
-    const data = await fetch('/api/broadcasts/feed').then(r => r.ok ? r.json() : null);
-    if (!data || !data.anuncios || data.anuncios.length === 0) return;
+// Broadcast/anúncios do admin — pop-up central (modal), aparece uma vez e some ao dispensar.
+// Polling de ~60s para exibir a já-logados sem recarregar a página.
+(function broadcastPopup() {
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  let _abertoId = null;           // id do anúncio atualmente exibido (evita reabrir no poll)
+  const _dispensadosLocal = new Set(); // ids já dispensados nesta sessão (otimista)
 
-    const target = document.querySelector('.panel-visao .charts') || document.querySelector('.panel-visao');
-    if (!target) return;
+  function montarModal(a) {
+    if (_abertoId != null) return;   // já há um anúncio aberto
+    _abertoId = a.id;
 
-    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-    const anunciosHtml = data.anuncios.map(a => `
-      <div data-bc-id="${a.id}" style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;background:var(--bg-surface);border-radius:10px;border-left:3px solid #cba6f7;">
-        <span style="font-size:1.2rem;">📢</span>
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:0.85rem;font-weight:700;color:var(--text);">${esc(a.titulo)}</div>
-          ${a.corpo ? `<div style="font-size:0.8rem;color:var(--text-sub);margin-top:2px;">${esc(a.corpo)}</div>` : ''}
-          ${a.url ? `<a href="${esc(a.url)}" style="font-size:0.78rem;color:var(--accent);">Saiba mais →</a>` : ''}
+    const overlay = document.createElement('div');
+    overlay.id = 'broadcast-popup';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:100000;display:flex;align-items:center;justify-content:center;padding:16px;';
+    overlay.innerHTML = `
+      <div role="dialog" aria-modal="true" aria-label="Anúncio" style="background:var(--bg-surface,#313244);border-radius:16px;padding:26px 24px;max-width:440px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,0.5);border-top:4px solid #cba6f7;text-align:center;">
+        <div style="font-size:2.2rem;line-height:1;margin-bottom:8px;">📢</div>
+        <h3 style="color:var(--text,#cdd6f4);margin:0 0 8px;font-size:1.15rem;">${esc(a.titulo)}</h3>
+        ${a.corpo ? `<p style="color:var(--text-sub,#9399b2);font-size:0.9rem;margin:0 0 16px;white-space:pre-wrap;">${esc(a.corpo)}</p>` : '<div style="height:8px;"></div>'}
+        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+          ${a.url ? `<a href="${esc(a.url)}" id="bc-cta" style="flex:1;min-width:130px;padding:10px 14px;background:#cba6f7;color:#1e1e2e;border:none;border-radius:8px;font-weight:600;text-decoration:none;">Saiba mais</a>` : ''}
+          <button id="bc-ok" style="flex:1;min-width:130px;padding:10px 14px;background:${a.url ? '#45475a' : '#cba6f7'};color:${a.url ? '#cdd6f4' : '#1e1e2e'};border:none;border-radius:8px;font-weight:600;cursor:pointer;">Entendi</button>
         </div>
-        <button onclick="window.dispensarAnuncio(${a.id})" title="Dispensar" style="background:none;border:none;color:var(--text-sub);font-size:1rem;cursor:pointer;" aria-label="Dispensar anúncio">✕</button>
-      </div>
-    `).join('');
+      </div>`;
+    document.body.appendChild(overlay);
 
-    const container = document.createElement('div');
-    container.id = 'broadcast-feed-inline';
-    container.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin-bottom:16px;';
-    container.innerHTML = anunciosHtml;
-    target.insertBefore(container, target.firstChild);
-  } catch(e) {}
+    const fechar = async () => {
+      _dispensadosLocal.add(a.id);
+      try { await fetch(`/api/broadcasts/${a.id}/dispensar`, { method: 'POST' }); } catch (e) { /* otimista */ }
+      overlay.remove();
+      _abertoId = null;
+    };
+    overlay.querySelector('#bc-ok').onclick = fechar;
+    // Clicar no CTA também dispensa (o link navega em seguida)
+    const cta = overlay.querySelector('#bc-cta');
+    if (cta) cta.addEventListener('click', () => { fechar(); });
+    // ESC fecha
+    overlay.addEventListener('keydown', e => { if (e.key === 'Escape') fechar(); });
+  }
+
+  async function checar() {
+    if (_abertoId != null) return;   // não busca/abre enquanto um está na tela
+    if (!localStorage.getItem('auth_token')) return;
+    try {
+      const data = await fetch('/api/broadcasts/feed').then(r => r.ok ? r.json() : null);
+      if (!data || !data.anuncios || !data.anuncios.length) return;
+      // Mostra o mais antigo ainda não dispensado nesta sessão (ordem de chegada)
+      const pendentes = data.anuncios.filter(a => !_dispensadosLocal.has(a.id));
+      if (!pendentes.length) return;
+      montarModal(pendentes[pendentes.length - 1]);
+    } catch (e) { /* silencioso */ }
+  }
+
+  // Primeira checagem no load + polling a cada 60s
+  checar();
+  setInterval(checar, 60000);
 })();
-
-window.dispensarAnuncio = async function(id) {
-  try { await fetch(`/api/broadcasts/${id}/dispensar`, { method: 'POST' }); } catch(e) {}
-  const el = document.querySelector(`#broadcast-feed-inline [data-bc-id="${id}"]`);
-  if (el) el.remove();
-  const cont = document.getElementById('broadcast-feed-inline');
-  if (cont && !cont.children.length) cont.remove();
-};
 
 // Banner de modo manutenção (feature flag global)
 (async function maintenanceBanner() {
