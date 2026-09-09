@@ -599,7 +599,75 @@ class TestMarketplace:
         conn.close()
         assert n == 1
 
-    def test_nao_comprar_proprio_material(self, client):
+    def test_backfill_aquisicao_orfa_migration92(self, client):
+        """Migration 92 registra aquisição de material já importado antes do
+        registro de compras existir (recurso copiado sem linha em catalogo_compras).
+
+        Simula o cenário legado: o estudante possui o recurso (deck de questões da
+        matéria) mas NÃO tem registro em catalogo_compras. Após rodar a migration,
+        o registro de cortesia é criado e o catálogo passa a marcar ja_comprado.
+        """
+        from db.migrations import _m92_backfill_aquisicoes_orfas
+
+        # Vendedor publica um deck de questões grátis.
+        self._criar_vendedor(500, "vend500@test.com", "MktOrfa")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(500, "vend500@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "Órfã", "origem_uid": 0, "ref": "MktOrfa", "preco_creditos": 0,
+        }).json()["id"]
+
+        # Estudante possui o recurso (matéria 'MktOrfa') mas SEM registro de compra
+        # — reproduz uma importação feita antes do fix.
+        _criar_estudante(501, "comp501@test.com")
+        conn = _conn()
+        conn.execute("""
+            INSERT INTO questoes (materia, topico, enunciado, alternativa_a, alternativa_b, alternativa_c, alternativa_d, alternativa_e, resposta_correta, created_at, user_id)
+            VALUES ('MktOrfa', 'T', 'Q?', 'a', 'b', 'c', 'd', '', 'A', '2026-01-01', 501)
+        """)
+        conn.commit()
+        # Confirma que é órfã (sem registro).
+        assert conn.execute("SELECT COUNT(*) FROM catalogo_compras WHERE item_id=? AND comprador_uid=501", (item_id,)).fetchone()[0] == 0
+
+        # Antes da migration: o catálogo mostra como não adquirido.
+        tok = _token(501, "comp501@test.com")
+        antes = next(i for i in client.get("/api/catalogo", headers=_h(tok)).json()["itens"] if i["id"] == item_id)
+        assert antes["ja_comprado"] is False
+
+        # Roda a migration de backfill.
+        _m92_backfill_aquisicoes_orfas(conn)
+        conn.commit()
+
+        # Registro de cortesia criado (preço 0).
+        reg = conn.execute("SELECT preco_creditos FROM catalogo_compras WHERE item_id=? AND comprador_uid=501", (item_id,)).fetchone()
+        assert reg is not None
+        assert reg["preco_creditos"] == 0
+
+        # Idempotência: rodar de novo não duplica.
+        _m92_backfill_aquisicoes_orfas(conn)
+        conn.commit()
+        assert conn.execute("SELECT COUNT(*) FROM catalogo_compras WHERE item_id=? AND comprador_uid=501", (item_id,)).fetchone()[0] == 1
+        conn.close()
+
+        # Depois: o catálogo marca como adquirido.
+        depois = next(i for i in client.get("/api/catalogo", headers=_h(tok)).json()["itens"] if i["id"] == item_id)
+        assert depois["ja_comprado"] is True
+
+    def test_backfill_nao_marca_dono_nem_origem(self, client):
+        """A migration 92 não deve registrar aquisição para o próprio curador/origem."""
+        from db.migrations import _m92_backfill_aquisicoes_orfas
+
+        self._criar_vendedor(510, "vend510@test.com", "MktDono")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(510, "vend510@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "Dono", "origem_uid": 0, "ref": "MktDono", "preco_creditos": 0,
+        }).json()["id"]
+        conn = _conn()
+        _m92_backfill_aquisicoes_orfas(conn)
+        conn.commit()
+        # O vendedor (curador/origem) possui o recurso mas NÃO deve virar comprador.
+        n = conn.execute("SELECT COUNT(*) FROM catalogo_compras WHERE item_id=? AND comprador_uid=510", (item_id,)).fetchone()[0]
+        conn.close()
+        assert n == 0
+
+
         self._criar_vendedor(240, "vend240@test.com", "MktE")
         self._set_saldo(240, 100)
         item_id = client.post("/api/catalogo/publicar", headers=_h(_token(240, "vend240@test.com")), json={

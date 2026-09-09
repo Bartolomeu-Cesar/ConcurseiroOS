@@ -1520,6 +1520,84 @@ def _m91_resgate_solicitacoes(conn):
     log.info("Migration 91: created resgate_solicitacoes table")
 
 
+def _m92_backfill_aquisicoes_orfas(conn):
+    """Backfill de aquisições órfãs do catálogo (materiais já importados antes do
+    registro de compras existir).
+
+    Contexto: o registro em `catalogo_compras` só passou a ser criado a partir do
+    fix "marcar materiais já adquiridos". Importações anteriores copiaram o recurso
+    para a conta do estudante e incrementaram `downloads`, mas NÃO deixaram registro.
+    Sem esse registro, o catálogo segue exibindo "Importar"/"Comprar" para um
+    material que o estudante já possui.
+
+    Esta migration detecta, para cada item ativo, quais usuários (≠ origem/curador)
+    já possuem o recurso correspondente (via tipo+ref) sem registro de aquisição e
+    insere um registro de CORTESIA (preço 0, sem cobrança retroativa). É idempotente
+    graças ao índice UNIQUE (item_id, comprador_uid).
+    """
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    def possui(tipo: str, ref: str, uid: int) -> bool:
+        ref = ref or ""
+        try:
+            if tipo == "deck_flashcards":
+                return conn.execute("SELECT 1 FROM flashcards WHERE user_id=? AND materia=? LIMIT 1", (uid, ref)).fetchone() is not None
+            if tipo == "deck_questoes":
+                return conn.execute("SELECT 1 FROM questoes WHERE user_id=? AND materia=? LIMIT 1", (uid, ref)).fetchone() is not None
+            if tipo == "revisao":
+                return conn.execute("SELECT 1 FROM revisao_blocos WHERE user_id=? AND pdf_path=? LIMIT 1", (uid, ref)).fetchone() is not None
+            if tipo == "edital":
+                nome = ref.split("::")[0]
+                return conn.execute("SELECT 1 FROM edital WHERE user_id=? AND edital_nome=? LIMIT 1", (uid, nome)).fetchone() is not None
+            if tipo == "caderno":
+                # Sem rastro direto por ref; pula (evita falso positivo).
+                return False
+            if tipo == "vademecum":
+                # ref é o id da lei na conta de ORIGEM; a cópia gera novo id.
+                # Sem rastro confiável por ref → pula.
+                return False
+            if tipo == "deck_sumulas":
+                if ref:
+                    return conn.execute("SELECT 1 FROM sumulas WHERE user_id=? AND tribunal=? LIMIT 1", (uid, ref)).fetchone() is not None
+                return conn.execute("SELECT 1 FROM sumulas WHERE user_id=? LIMIT 1", (uid,)).fetchone() is not None
+        except Exception:
+            return False
+        return False
+
+    try:
+        itens = conn.execute(
+            "SELECT id, tipo, ref, origem_uid, curador_uid FROM catalogo_itens WHERE ativo = 1"
+        ).fetchall()
+    except Exception:
+        log.info("Migration 92: catalogo_itens indisponível — nada a fazer")
+        return
+
+    users = [r[0] for r in conn.execute("SELECT id FROM users WHERE id > 0").fetchall()]
+    inseridos = 0
+    for it in itens:
+        item_id, tipo, ref, origem_uid, curador_uid = it["id"], it["tipo"], it["ref"], it["origem_uid"], it["curador_uid"]
+        for uid in users:
+            if uid == origem_uid or uid == curador_uid:
+                continue
+            if not possui(tipo, ref, uid):
+                continue
+            ja = conn.execute(
+                "SELECT 1 FROM catalogo_compras WHERE item_id=? AND comprador_uid=?", (item_id, uid)
+            ).fetchone()
+            if ja:
+                continue
+            # Registro de cortesia: já possui o material, não cobra retroativo.
+            conn.execute("""
+                INSERT OR IGNORE INTO catalogo_compras
+                    (item_id, comprador_uid, vendedor_uid, preco_creditos, taxa_pct, creditos_vendedor, created_at)
+                VALUES (?, ?, ?, 0, 0, 0, ?)
+            """, (item_id, uid, curador_uid, now))
+            inseridos += 1
+    log.info(f"Migration 92: backfill de {inseridos} aquisição(ões) órfã(s) do catálogo")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -1612,6 +1690,7 @@ MIGRATIONS = [
     (89, _m89_catalogo_compras),
     (90, _m90_broadcast_expira),
     (91, _m91_resgate_solicitacoes),
+    (92, _m92_backfill_aquisicoes_orfas),
 ]
 
 
