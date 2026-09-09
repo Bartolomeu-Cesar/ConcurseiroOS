@@ -1001,6 +1001,169 @@ def _parse_estrategia(texto: str, materia: str = "", banca: str = "") -> list:
     return questoes
 
 
+def _limpar_ruido_pci(texto: str) -> str:
+    """Remove ruído recorrente de PDFs baixados do PCI Concursos / CESPE.
+
+    O extrator de texto arrasta marcas-d'água, URLs e cabeçalhos de página que
+    poluem enunciados e alternativas. São removidos:
+    - Marca-d'água 'pcimarkpci <base64>:<base64>' (uma por página);
+    - URLs 'www.pciconcursos.com.br';
+    - Cabeçalhos de caderno '||373_SSPMA_APC_...||';
+    - Linha institucional 'CESPE | CEBRASPE – ... – Aplicação: AAAA'.
+
+    Idempotente e conservador: só apaga trechos claramente de ruído, preservando
+    enunciados e alternativas.
+    """
+    if not texto:
+        return texto
+    texto = re.sub(r'pcimarkpci\s+[A-Za-z0-9+/=]+:[A-Za-z0-9+/=]+', '', texto)
+    texto = re.sub(r'www\.pciconcursos\.com\.br', '', texto, flags=re.IGNORECASE)
+    texto = re.sub(r'\|\|[^|\n]*\|\|', '', texto)
+    texto = re.sub(r'(?im)^\s*CESPE\s*\|\s*CEBRASPE\b.*$', '', texto)
+    texto = re.sub(r'\n[ \t]*\n(?:[ \t]*\n)+', '\n\n', texto)
+    # Isola marcadores 'QUESTÃO N' colados a um caractere de ruído da página
+    # (ex.: '0QUESTÃO 42', gerado por artefato de extração) inserindo quebra.
+    texto = re.sub(r'(?<=\S)(QUEST[ÃA]O\s+\d+\b)', r'\n\1', texto)
+    return texto
+
+
+def _progressao_alternativas(cand: list, start_idx: int) -> list:
+    """Retorna a progressão contígua A,B,C,D[,E] a partir de cand[start_idx].
+
+    `cand` é uma lista de matches cujo grupo 1 é a letra (A–E). Coleta apenas os
+    candidatos que seguem exatamente a ordem esperada, começando em 'A'.
+    """
+    esperado = ('A', 'B', 'C', 'D', 'E')
+    seq = []
+    exp = 0
+    for c in cand[start_idx:]:
+        if exp < len(esperado) and c.group(1) == esperado[exp]:
+            seq.append(c)
+            exp += 1
+            if exp == len(esperado):
+                break
+    return seq
+
+
+def _parse_cespe_multipla(texto: str, materia: str = "", banca: str = "CESPE") -> list:
+    """Parser para provas CESPE/CEBRASPE de MÚLTIPLA ESCOLHA (A–E).
+
+    Formato típico (ex.: PCI Concursos):
+        QUESTÃO N
+        <enunciado, possivelmente em várias linhas>
+        [Assinale a opção correta.]
+        A <alternativa A>
+        B <alternativa B>
+        ...
+        E <alternativa E>
+
+    O PDF do PCI não traz o gabarito de forma confiável (grade gráfica em página
+    separada), então resposta_correta fica vazia — é preenchida depois por
+    _aplicar_gabarito_* (arquivo/texto separado).
+    """
+    texto = _limpar_ruido_pci(texto)
+    questoes = []
+
+    marcadores = list(re.finditer(r'(?:^|\n)\s*QUEST[ÃA]O\s+(\d+)\b', texto))
+    if not marcadores:
+        return []
+
+    for i, m in enumerate(marcadores):
+        num = int(m.group(1))
+        ini = m.end()
+        fim = marcadores[i + 1].start() if i + 1 < len(marcadores) else len(texto)
+        bloco = texto[ini:fim].strip()
+        if len(bloco) < 20:
+            continue
+
+        # === Ancoragem na melhor progressão A→E ===
+        # Enunciados costumam começar com artigo maiúsculo ("A pontuação...",
+        # "A presença...") cujo "A" inicial poderia ser confundido com a
+        # alternativa A. Em vez de depender de uma frase de comando, coletamos
+        # TODOS os candidatos 'LETRA' em início de linha e escolhemos o ponto de
+        # partida 'A' que gera a sequência contígua A→B→C→D[→E] mais longa. Isso
+        # descarta o "A" do enunciado (que não é seguido de "B, C, D..." logo
+        # abaixo) e ancora nas alternativas reais.
+        #
+        # Aceita 'LETRA <texto>' e 'LETRA' sozinha (alternativas gráficas, comuns
+        # em provas de exatas onde a opção é uma figura).
+        cand = list(re.finditer(r'(?m)^[^\S\n]*([A-E])(?:[^\S\n]+(\S.*))?$', bloco))
+
+        melhor = []
+        for k, c in enumerate(cand):
+            if c.group(1) != 'A':
+                continue
+            seq = _progressao_alternativas(cand, k)
+            # Prefere a sequência mais longa; em empate, a que começa mais tarde
+            # (o "A" do enunciado, se houver, é sempre o mais cedo).
+            if len(seq) > len(melhor) or (
+                len(seq) == len(melhor) and seq and melhor and seq[0].start() > melhor[0].start()
+            ):
+                melhor = seq
+
+        # Precisa de pelo menos 4 alternativas contíguas (A,B,C,D[,E]).
+        if len(melhor) < 4:
+            continue
+
+        alt_starts = [(c.group(1), c.start()) for c in melhor]
+
+        # O enunciado é tudo antes do início da alternativa A.
+        pos_a = alt_starts[0][1]
+        enunciado = bloco[:pos_a].strip()
+
+        # Texto de cada alternativa = do seu início até o início da próxima
+        # alternativa da sequência (ou fim do bloco na última).
+        alts = {'A': '', 'B': '', 'C': '', 'D': '', 'E': ''}
+        for j, (letra, start) in enumerate(alt_starts):
+            end = alt_starts[j + 1][1] if j + 1 < len(alt_starts) else len(bloco)
+            trecho = bloco[start:end]
+            # Remove a letra-rótulo do início ('A ' ou 'A' sozinha) e normaliza.
+            trecho = re.sub(r'^\s*[A-E]\b\s*', '', trecho)
+            # A última alternativa costuma arrastar o próximo texto-base
+            # ("Texto 1A1BBB ...") ou o rótulo "Espaço livre". Corta nesses
+            # marcadores para não poluir a alternativa E.
+            trecho = re.split(r'\bTexto\s+[0-9][A-Z0-9]{2,}\b|Espaço livre', trecho)[0]
+            alts[letra] = re.sub(r'\s+', ' ', trecho).strip()
+
+        enunciado = re.sub(r'\s+', ' ', enunciado).strip()
+        if len(enunciado) < 10:
+            continue
+
+        texto_base, enunciado = _extrair_texto_base(enunciado)
+
+        questoes.append({
+            "numero": num,
+            "materia": materia,
+            "topico": "",
+            "enunciado": enunciado,
+            "texto_base": texto_base,
+            "alternativa_a": alts['A'],
+            "alternativa_b": alts['B'],
+            "alternativa_c": alts['C'],
+            "alternativa_d": alts['D'],
+            "alternativa_e": alts['E'],
+            "resposta_correta": "",
+            "explicacao": "",
+            "dificuldade": "Médio",
+            "banca": banca,
+            "tipo": "multipla_escolha",
+        })
+
+    return questoes
+
+
+def _is_cespe_multipla_format(texto: str) -> bool:
+    """Detecta prova CESPE de MÚLTIPLA ESCOLHA: vários 'QUESTÃO N' seguidos de
+    blocos de alternativas A–E contíguas. Distingue do formato certo/errado
+    (grid de itens numerados sem alternativas)."""
+    n_questoes = len(re.findall(r'(?:^|\n)\s*QUEST[ÃA]O\s+\d+', texto))
+    if n_questoes < 3:
+        return False
+    n_alt_a = len(re.findall(r'(?m)^\s*A\s+\S', texto))
+    n_alt_b = len(re.findall(r'(?m)^\s*B\s+\S', texto))
+    return n_alt_a >= 3 and n_alt_b >= 3
+
+
 def _parse_questoes_texto(texto: str, materia: str = "", banca: str = "") -> list:
     """Analisa texto extraído e separa em questões individuais."""
     if re.search(r'Ano:\s*\d{4}\s*Banca:', texto):
@@ -1010,6 +1173,19 @@ def _parse_questoes_texto(texto: str, materia: str = "", banca: str = "") -> lis
     if _is_estrategia_format(texto):
         questoes = _parse_estrategia(texto, materia=materia, banca=banca)
         return _aplicar_gabarito_no_texto(questoes, texto)
+
+    # CESPE MÚLTIPLA ESCOLHA (QUESTÃO N + alternativas A–E) tem prioridade sobre
+    # o parser certo/errado: o _is_cespe_format também dá True para essas provas
+    # (têm 'cebraspe'/'julgue' no texto), mas o parser CE não entende A–E e
+    # retornaria vazio. NÃO aplicamos gabarito do texto aqui: provas CESPE/PCI de
+    # múltipla escolha não trazem o gabarito no corpo (ele vem em arquivo/texto
+    # separado) e tentar extraí-lo captura falsos positivos (números de linha
+    # "R. 6 e 7", referências). As respostas ficam vazias e são preenchidas por
+    # _aplicar_gabarito_externo / endpoint aplicar-gabarito-texto.
+    if _is_cespe_multipla_format(texto):
+        questoes = _parse_cespe_multipla(texto, materia=materia, banca=banca or "CESPE")
+        if len(questoes) >= 3:
+            return questoes
 
     if _is_cespe_format(texto):
         questoes = _parse_cespe_cebraspe(texto, materia=materia, banca=banca or "CESPE")
@@ -1405,6 +1581,14 @@ async def importar_questoes_pdf(
             raise HTTPException(status_code=400, detail="Não foi possível extrair texto do PDF.")
 
         questoes = _parse_questoes_texto(texto, materia=materia, banca=banca)
+
+        # Fallback: se o dispatcher detectou muito poucas questões, tenta
+        # explicitamente o parser CESPE de múltipla escolha (QUESTÃO N + A–E),
+        # que cobre provas do PCI/CESPE mal roteadas. Mantém o melhor resultado.
+        if len(questoes) < 5:
+            alt = _parse_cespe_multipla(texto, materia=materia, banca=banca or "CESPE")
+            if len(alt) > len(questoes):
+                questoes = alt
 
         if gabarito_externo and questoes:
             _aplicar_gabarito_externo(questoes, gabarito_externo)

@@ -1,0 +1,1126 @@
+pcimarkpci MDAwMDowMDAwOjAwMDA6MDAwMDowMDAwOmZmZmY6YjE2OTpkYmFh:VGh1LCAwMyBTZXAgMjAyNiAyMTowOTo1NyAtMDMwMA==
+www.pciconcursos.com.br
+||373_SSPMA_APC_CG4_01N408156|| CESPE | CEBRASPE – SSP/MA – APC – Aplicação: 2018
+• Nas questões a seguir, marque, para cada uma, a única opção correta, de acordo com o respectivo comando. A ausência de marcação,
+a marcação de duas ou mais opções ou a marcação de opção em discordância com o gabarito oficial definitivo não serão apenadas,
+ou seja, não receberão pontuação negativa. Para as devidas marcações, use a Folha de Respostas, único documento válido para a
+correção das suas respostas.
+• Nas questões que demandarem conhecimentos de informática, a menos que seja explicitamente informado o contrário, considere
+que todos os programas mencionados estão em configuração-padrão, em português, e que não há restrições de proteção,
+de funcionamento e de uso em relação aos programas, arquivos, diretórios, recursos e equipamentos mencionados.
+• Eventuais espaços livres — identificados ou não pela expressão “Espaço livre” — que constarem deste caderno de provas poderão
+ser utilizados para anotações, rascunhos etc.
+CONHECIMENTOS GERAIS
+Texto 1A1AAA
+O ano de 2017 foi o mais seguro da história da1
+aviação comercial, de acordo com a organização holandesa
+Aviation Safety Network (ASN). Foram dez acidentes —
+nenhum deles envolvendo linhas comerciais regulares —, com4
+79 mortos, 44 entre passageiros e tripulantes e outras
+35 pessoas que estavam em terra.
+Em 2016, foram registrados 16 acidentes, com7
+303 vítimas fatais, e o último episódio, com um avião de
+passageiros de maiores proporções: a qu eda do Avro RJ85,
+operado pela empr esa LaMia, próximo de Medellín, na10
+Colômbia. O desastre, que completou um ano no último dia 28
+de novembro, matou 71 pessoas, em sua maior parte atletas do
+time brasileiro da Chapecoense.13
+“Desde 1997 a média de acidentes tem caído de forma
+contínua e persistente”, disse o presidente da ASN, destacando
+os esforços da Organização Internacional da Aviação Civil e da16
+Fundação de Segurança no Voo para melhorar os padrões de
+segurança da indústria de aviação.
+BBC. 2017, o ano mais seguro da história da aviação .
+Internet: <www.bbc.com> (com adaptações).
+QUESTÃO 1
+A pontuação empregada no texto 1A1AAA permaneceria correta se,
+I no primeiro parágrafo, o segundo travessão fosse eliminado.
+II na linha 1, fosse inserida vírgula logo após “2017”.
+III na linha 14, fosse inserida vírgula logo após ‘1997’.
+IV na linha 15, a vírgula logo após ‘persistente’ fosse eliminada.
+Assinale a opção correta.
+A Nenhum item está certo.
+B Apenas o item III está certo.
+C Apenas o item IV está certo.
+D Apenas os itens I e II estão certos.
+E Todos os itens estão certos.
+Texto 1A1BBB
+Se, nos Estados Unidos da América, surgem mais e1
+mais casos de assédio sexual em ambientes profissionais —
+como os que envolvem produtores e atores de cinema —, no
+Brasil, o número de processos desse tipo caiu 7,5% entre 20154
+e 2016.
+Até setembro de 2017, foram registradas 4.040 ações
+judiciais sobre assédio sexual no trabalho, considerando-se só7
+a primeira instância.
+Os números mostram que o tema ainda é tabu por
+aqui, analisa o consultor Renato Santos, que atua auxiliando10
+empresas a criarem canais de denúncia anônima. “As pessoas
+não falam por medo de serem culpabilizadas ou até de
+represálias”.13
+Segundo Santos, os canais de denúncia para coibir
+corrupção nas corporações já recebem queixas de assédio e
+ajudam a identificar eventuais predadores. Para ele,16
+“o anonimato ajuda, já que as pessoas se sentem mais
+protegidas para falar”.
+A lei só tipifica o crime quando há chantagem de um19
+superior sobre um subordinado para tentar obter vantagem
+sexual. Se um colega constrange o outro, em tese, não há
+crime, embora tal comportamento possa dar causa a reparação22
+por dano moral.
+Anna Rangel. Medo de represálias inibe queixas de assédio sexual no
+trabalho. Internet: <www1.folha.uol.com.br> (com adaptações).
+QUESTÃO 2
+As opções a seguir apresentam propostas de reescrita do período
+“Se um colega constrange o outro, em tese, não há crime, embora
+tal comportamento possa dar causa a reparação por dano moral.”
+(R. 21 a 23). Assinale a opção que apresenta proposta de reescrita
+que, além de manter o sentido original da informação, preserva a
+correção gramatical do texto.
+A Caso um colega constrange o outro, em tese, não é crime, mas
+pode gerar reparação por dano moral.
+B Hipoteticamente, à medida que um colega constrange o outro,
+não há crime, logo não pode haver reparação por dano moral. 
+C Teoricamente, se um colega constrange o outro, há vantagem
+sexual, o que pode causar reparação por dano moral.
+D Em tese, embora não seja crime, o fato de um colega
+constranger o outro pode justificar reparação por dano moral.
+E Quando um colega molesta o outro é crime, ou seja, esse ato
+pode ensejar reparação por dano moral.
+www.pciconcursos.com.br
+pcimarkpci MDAwMDowMDAwOjAwMDA6MDAwMDowMDAwOmZmZmY6YjE2OTpkYmFh:VGh1LCAwMyBTZXAgMjAyNiAyMTowOTo1NyAtMDMwMA==
+www.pciconcursos.com.br
+||373_SSPMA_APC_CG4_01N408156|| CESPE | CEBRASPE – SSP/MA – APC – Aplicação: 2018
+QUESTÃO 3
+No texto 1A1BBB, o trecho “4.040 ações judiciais sobre assédio
+sexual no trabalho” (R. 6 e 7) tem a mesma função sintática de
+A ‘mais protegidas para falar’ (R. 17 e 18).
+B “chantagem de um superior sobre um subordinado”
+(R. 19 e 20).
+C “queixas de assédio” (R.15).
+D ‘por medo de serem culpabilizadas’ (R.12).
+E “mais e mais casos de assédio sexual ” (R. 1 e 2).
+QUESTÃO 4
+No texto 1A1BBB, a correção gramatical e o sentido do trecho
+‘O anonimato ajuda, já que as pessoas se sentem mais protegidas
+para falar’ ( R. 17 e 18) seriam preservados caso se substituísse o
+termo “já que” por
+A uma vez que.
+B logo que.
+C a fim de que.
+D ainda que.
+E contanto que.
+QUESTÃO 5
+Com base na Lei n.º 8.508/2006 — Estatuto da Polícia Civil do
+Estado do Maranhão —, cometerá infração de natureza grave o
+servidor que
+A prejudicar investigações mediante a divulgação de assuntos
+policiais.
+B praticar abuso de autoridade ou abuso de poder.
+C ofender os bons costumes com palavras, atos ou gestos.
+D utilizar ou permitir que alguém use objetos apreendidos pela
+polícia.
+E se prevalecer abusivamente da condição de servidor policial.
+QUESTÃO 6
+De acordo com a Lei n.º 6.107/1994, que dispõe sobre o Regime
+Jurídico Único dos Servidores Públicos Civis do Estado do
+Maranhão, a reintegração ocorrerá em decorrência
+A da elevação do servidor de uma cl asse para outra
+imediatamente superior, no mesmo cargo, dentro da mesma
+carreira.
+B da inabilitação do servidor em estágio probatório relativo a
+outro cargo.
+C da investidura do servidor estável em cargo de atribuições
+compatíveis com a limitação que tenha sofrido em sua
+capacidade física ou mental.
+D do retorno à atividade de servidor aposentado por invalidez,
+quando forem declarados insubsistentes os motivos da
+aposentadoria.
+E da reinvestidura do servidor estável no cargo anteriormente
+ocupado, quando invalidada a sua demissão por decisão
+judicial.
+QUESTÃO 7
+Acerca da administração pública, julgue os itens a seguir, com base
+na CF.
+I A vedação de acúmulo remunerado de cargos, empregos ou
+funções públicas não se estende às sociedades de economia
+mista.
+II O prazo de validade do concurso público será de até dois anos,
+podendo-se prorrogá-lo por igual período, enquanto houver
+cadastro de reserva.
+III Havendo compatibilidade de horários, é permitida a
+acumulação remunerada de dois cargos ou empregos privativos
+de profissionais de saúde, com profissões regulamentadas.
+IV O servidor público da administração direta que for afastado
+para o exercício de mandato eletivo não terá esse tempo
+contado para o fim de promoção por merecimento.
+Estão certos apenas os itens
+A I e III.
+B II e IV.
+C III e IV.
+D I, II e III.
+E I, II e IV.
+QUESTÃO 8
+As polícias civis, dirigidas por delegados de polícia de carreira,
+subordinam-se
+A somente ao governador do Distrito Federal e dos territórios.
+B ao governador do Distrito Federal e aos governadores de
+estado e dos territórios.
+C à União e ao governador do Distrito Federal e dos territórios.
+D somente aos governadores de estado.
+E aos governadores de estado e à União.
+QUESTÃO 9
+Túlio ofereceu suborno para André, perito da polícia civil,
+no intuito de que este fizesse afirmação falsa em laudo pericial de
+sua responsabilidade. André aceitou a proposta e elaborou o laudo
+falso, o que foi determinante para a sentença absolutória de Túlio.
+Nessa situação hipotética,
+A André poderá declarar a verdade quando for processado pelo
+crime que cometeu, hipótese em que o fato deixará de ser
+punível.
+B a pena base prevista para Túlio será maior que a de André,
+porque sua conduta é considerada mais grave.
+C penalmente, é irrelevante o fato de a falsa perícia ter sido
+utilizada em processo criminal.
+D os crimes se consumaram no momento do pagamento do
+suborno, ainda que tenha sido efetivado posteriormente
+à elaboração da perícia.
+E Túlio e André responderão pelo mesmo crime, no caso, falso
+testemunho ou falsa perícia, em coautoria.
+www.pciconcursos.com.br
+pcimarkpci MDAwMDowMDAwOjAwMDA6MDAwMDowMDAwOmZmZmY6YjE2OTpkYmFh:VGh1LCAwMyBTZXAgMjAyNiAyMTowOTo1NyAtMDMwMA==
+www.pciconcursos.com.br
+||373_SSPMA_APC_CG4_01N408156|| CESPE | CEBRASPE – SSP/MA – APC – Aplicação: 2018
+QUESTÃO 10
+Mário, ao envolver-se em uma briga, lesionou Júlio.
+Nessa situação hipotética, Mário responderá por lesão corporal de
+natureza grave se tiver
+A provocado em Júlio debilidade permanente de função, como,
+por exemplo, a redução da capacidade mastigatória pela perda
+dentária.
+B ofendido a integridade corporal de Júlio, causando-lhe diversas
+escoriações no corpo.
+C causado a morte de Júlio, ainda que em circunstâncias que
+evidenciem que Mário não queria matá-lo.
+D causado a morte de Júlio em circunstâncias que evidenciem
+que Mário assumiu o risco de produzir o resultado.
+E provocado a incapacitação de Júlio para ocupações habituais,
+como, por exemplo, o trabalho e o estudo, por quinze dias.
+QUESTÃO 11
+A respeito do inquérito policial, assinale a opção correta.
+A O inquérito policial poderá ser iniciado apenas com base em
+denúncia anônima que indique a ocorrência do fato criminoso
+e a sua provável autoria, ainda que sem a verificação prévia da
+procedência das informações.
+B Contra o despacho da autoridade policial que indeferir a
+instauração do inquérito policial a requerimento do ofendido
+caberá reclamação ao Ministério Público. 
+C Sendo o inquérito policial a base da denúncia, o Ministério
+Público não poderá alterar a classificação do crime definida
+pela autoridade policial.
+D O inquérito policial pode ser definido como um procedimento
+administrativo pré-processual destinado à apura ção das
+infrações penais e da sua autoria.
+E Por ser instrumento de informação pré-processual, o inquérito
+policial é imprescindível ao oferecimento da denúncia.
+QUESTÃO 12
+No tocante à ação penal, conforme determina a lei processual,
+assinale a opção correta.
+A Nos crimes de ação privada ou de ação pública condicionada
+à representação do ofendido, se este falecer no curso da lide,
+o juiz terá de nomear substituto processual para prosseguir com
+a ação.
+B Depois de iniciada a ação penal condicionada à representação,
+o processo será extinto se o ofendido, a qualquer tempo,
+desistir do seu prosseguimento.
+C A queixa-crime oferecida pelo ofendido nos crimes de ação
+penal privada não poderá ser aditada pelo Ministério Público,
+que atuará no processo apenas como fiscal da lei.
+D Nos crimes de ação privada, se vários forem os autores da
+ofensa, o ofendido poderá escolher contra quem oferecerá a
+denúncia.
+E A própria vítima do crime, ou seu representante legal, poderá
+propor a ação nos casos de ação pública incondicionada, se o
+Ministério Público não apresentar a denúncia no prazo legal.
+QUESTÃO 13
+Considerando as principais perícias elencadas no Código de
+Processo Penal, assinale a opção correta.
+A O exame de corpo de delito indireto só poderá ser elaborado a
+partir de prova testemunhal.
+B O exame pericial deverá ser feito por dois peritos nomeados
+pelo juiz, caso haja vestígios em caso de crime contra a
+propriedade imaterial sujeito à ação penal privada.
+C O exame de corpo de delito observa limitações temporais,
+devendo ser realizado em dias e horários especialmente
+designados.
+D O exame grafotécnico será válido como prova somente se for
+realizado com padrões comparativos fornecidos de próprio
+punho pelo investigado.
+E O exame de corpo de delito realizado antes do decurso de
+trinta dias da prática do crime, para o reconhecimento da
+gravidade da lesão com vistas ao fundamento de incapacidade
+para as ocupações habituais, é considerado válido.
+QUESTÃO 14
+Com relação a local de crime e a exame pericial, assinale a opção
+correta.
+A O exame pericial de local destina-se, precipuamente, a
+determinar a causa da morte da vítima.
+B A vítima de homicídio, em regra, deve ser individualizada
+ainda no local do crime e antes do exame pericial.
+C Local relacionado abrange o corpo de delito, seu entorno e
+espaços que contenham vestígios materiais do crime.
+D O local do crime é dividido, para efeitos de preservação,
+apenas em local imediato e em local relacionado.
+E Em casos de morte violenta, o exame perinecroscópico deve
+ser realizado pelo perito criminal ainda no local do crime.
+QUESTÃO 15
+Assinale a opção correta acerca das responsabilidades do perito
+oficial e das exigências técnicas e procedimentais inerentes ao
+exercício desse cargo.
+A Os peritos oficiais, em cada laudo elaborado, terão de
+consignar o compromisso de bem e desempenhar fielmente o
+encargo.
+B O laudo pericial, nos termos da legislação processual penal,
+deverá ser elaborado no prazo máximo de trinta dias,
+prorrogável por igual período.
+C A intimação de peritos para o itiva em juízo deverá ser feita
+com antecedência mínima de dez dias em relação à data do
+procedimento judicial.
+D No âmbito da investigação policial, o perito oficial deve se
+subordinar técnica e funcionalmente à autoridade policial que
+presidir o inquérito policial.
+E A elaboração de laudo pericial por profissional sem a devida
+habilitação legal tornará nula a prova somente se ficar
+demonstrada a ocorrência de prejuízo à parte interessada.
+www.pciconcursos.com.br
+pcimarkpci MDAwMDowMDAwOjAwMDA6MDAwMDowMDAwOmZmZmY6YjE2OTpkYmFh:VGh1LCAwMyBTZXAgMjAyNiAyMTowOTo1NyAtMDMwMA==
+www.pciconcursos.com.br
+||373_SSPMA_APC_CG4_01N408156|| CESPE | CEBRASPE – SSP/MA – APC – Aplicação: 2018
+QUESTÃO 16
+Ao utilizar um computador no qual está instalado o sistema
+operacional Windows 8, um usuário efetuou com o mouse u m
+clique duplo no ícone do aplicativo X. Alguns segundos após
+ter sido aberto, o aplicativo apresentou a inform ação de que não
+estava respondendo.
+Nessa situação hipotética, para que o aplicativo X seja encerrado,
+o usuário deverá
+A inicializar o aplicativo Gerenciador de Tarefas , localizar na
+janela deste o aplicativo X, clicar sobre ele com o botão da
+direita e, então, selecionar a opção Finalizar tarefa.
+B pressionar, no teclado, a tecla /c181 para encerrar de forma
+forçada o aplicativo X.
+C efetuar novamente um clique duplo no ícone do aplicativo X
+para abri-lo corretamente, pois esta ação fechará a janela que
+não estava respondendo.
+D inicializar outro aplicativo, por meio de clique duplo, já que,
+ao se abrir um novo aplicativo, a janela de X, que não estava
+respondendo, será finalizada automaticamente.
+E pressionar simultaneamente a tecla do Windows e a tecla /c102,
+para exibir em segundo plano a lista de programas que estão
+travando o sistema e, nela, localizar e encerrar o aplicativo X.
+QUESTÃO 17
+Ao produzir um texto utilizando o programa Microsoft
+Word 2016, um usuário realizou, de modo sucessivo, os seguintes
+procedimentos:
+• selecionou parte do texto e, logo em seguida, acionou o atalho
+formado pelas teclas /c167 e /c120;
+• digitou algumas palavras;
+• acionou o atalho formado pelas teclas /c167 e /c118;
+• digitou mais algumas palavras.
+Caso, a seguir, o usuário pretenda inserir, novamente, por meio do
+atalho formado pelas teclas /c167 e /c118, o texto selecionado no
+início do procedimento descrito,
+A será exibida uma caixa de diálogo contendo a parte do texto
+inicialmente selecionada para a área de transferência.
+B aparecerá uma mensagem de erro, pois o Word 2016 não
+possibilita a execução reiterada de procedimentos.
+C o texto selecionado no primeiro procedimento será inserido a
+partir do ponto em que o cursor estiver posicionado.
+D o documento não sofrerá alteração, pois não há texto na área de
+transferência em virtude de o usuário já ter acionado o atalho
+formado pelas teclas /c167 e /c118 anteriormente.
+E nada ocorrerá, pois o trecho selecionado mediante as teclas
+/c167 e  /c120 já foi usado; nesse caso, o usuário deverá
+selecionar o texto novamente e acionar o atalho formado pelas
+teclas /c167 e /c99.
+QUESTÃO 18
+Na situação hipotética descrita no texto CG4A2AAA, a temperatura
+do corpo da jovem no instante em que os peritos a auferiram pela
+primeira vez era de
+A 16 ºC.
+B 18 ºC.
+C 20 ºC.
+D 25 ºC.
+E 32 ºC.
+QUESTÃO 19
+Considerando-se que 4,2 e 2,8 sejam, respectivamente, os valores
+de log218,5 e log27 e sabendo-se que a temperatura do corpo de
+uma pessoa viva é de 36,5 ºC, é correto afirmar que, de acordo com
+a situação hipotética d escrita no texto CG4A2AAA, a jovem
+faleceu
+A menos de 1 h antes de o transeunte avisar a polícia.
+B entre 1 h e 2 h antes de o transeunte avisar a polícia.
+C mais de 2 h antes de o transeunte avisar a polícia.
+D em algum momento após o transeunte ter avisado a polícia.
+E no instante em que o transeunte avisou a polícia.
+QUESTÃO 20
+Se 8 peritos criminais estivessem disponíveis para atender
+à situação descrita no texto CG4A2AAA, então a quantidade de
+maneiras distintas de se selecionar três desses peritos para a
+realização dos trabalhos de perícia seria igual a
+A 336.
+B 56.
+C 24.
+D 11.
+E 8.
+Espaço Livre
+www.pciconcursos.com.br
+pcimarkpci MDAwMDowMDAwOjAwMDA6MDAwMDowMDAwOmZmZmY6YjE2OTpkYmFh:VGh1LCAwMyBTZXAgMjAyNiAyMTowOTo1NyAtMDMwMA==
+www.pciconcursos.com.br
+||373_SSPMA_APC_005_01N820356|| CESPE | CEBRASPE – SSP/MA – APC – Aplicação: 2018
+CONHECIMENTOS ESPECÍFICOS
+Texto 5A1AAA
+A figura I, a seguir, ilustra uma colisão ocorrida entre um
+carro e uma moto parada. A massa total do carro era de 2.000 kg,
+e o módulo de sua velocidade era igual a Vc. A moto tinha massa
+igual a 120 kg e era pilotada por um motociclista cuja massa era de
+80 kg.
+Figura I
+Imediatamente após a colisão, carro e moto permaneceram
+parados e um quarto da energia cinética do carro foi transferido
+para o motociclista, que foi arremessado de uma altura de 1 m,
+a uma velocidade Vm igual 20 m/s. Após a colisão, o motociclista
+descreveu uma trajetória oblíqua, mostrada na figura II,
+percorrendo na direção horizontal, até atingir o solo, uma distância
+igual a D.
+Figura II
+Sabendo que  considere que 10 m/s 2 seja o
+módulo da aceleração da gravidade e despreze a resistência do ar.
+QUESTÃO 21
+Com base nas informações e nas figuras apresentadas no
+texto 5A1AAA, o módulo da velocidade com que o carro atingiu a
+moto é igual a 
+A 4,0 m/s.
+B 8,0 m/s.
+C 16,0 m/s.
+D 0,8 m/s.
+E 3,2 m/s.
+QUESTÃO 22
+Considerando-se as informações e figuras apresentadas no
+texto 5A1AAA, a distância horizontal D, em m, percorrida pelo
+motociclista arremessado é
+A superior a 40.
+B inferior a 2.
+C superior a 2 e inferior a 5.
+D superior a 5 e inferior a 10.
+E superior a 10 e inferior a 40.
+QUESTÃO 23
+Um material que sofre transição da fase sólida diretamente
+para a fase gasosa quando submetido à temperatura de 20 ºC foi
+inserido, a uma temperatura inicial de 15 ºC, em um ambiente
+fechado mantido à temperatura constante de 25 ºC, conforme
+ilustrado na figura anterior.
+Assinale a opção que representa graficamente o comportamento da
+temperatura, T, em função do calor, Q, absorvido do meio por esse
+material a partir do momento em que foi inserido no ambiente
+descrito.
+A
+B
+C
+D
+E
+www.pciconcursos.com.br
+pcimarkpci MDAwMDowMDAwOjAwMDA6MDAwMDowMDAwOmZmZmY6YjE2OTpkYmFh:VGh1LCAwMyBTZXAgMjAyNiAyMTowOTo1NyAtMDMwMA==
+www.pciconcursos.com.br
+||373_SSPMA_APC_005_01N820356|| CESPE | CEBRASPE – SSP/MA – APC – Aplicação: 2018
+QUESTÃO 24
+Assinale a opção que representa graficamente a relação entre a
+temperatura e a pressão de um gás considerado ideal, em ambiente
+fechado, em condição isocórica.
+A
+B
+C
+D
+E
+Espaço livre
+www.pciconcursos.com.br
+pcimarkpci MDAwMDowMDAwOjAwMDA6MDAwMDowMDAwOmZmZmY6YjE2OTpkYmFh:VGh1LCAwMyBTZXAgMjAyNiAyMTowOTo1NyAtMDMwMA==
+www.pciconcursos.com.br
+||373_SSPMA_APC_005_01N820356|| CESPE | CEBRASPE – SSP/MA – APC – Aplicação: 2018
+Texto 5A1BBB
+A figura anterior ilustra um cilindro metálico de resistência
+igual a 12 Ω, apoiado em dois trilhos iguais, cada um deles com
+comprimento superior a 1 m; resistividade específica ρ de valor
+4×10!4 Ω·m; seção transversal equivalente a 0,0001 m². Os trilhos
+estão conectados a uma fonte de 240 V.
+Considere que o cilindro possa se mover ao longo dos
+trilhos e que, na figura, L seja a distância percorrida pela corrente
+em cada trilho.
+QUESTÃO 25
+Considerando que, na ilustração precedente, F se refere à fonte,
+R a uma resistência constante, e Rv a um reostato, assinale a opção
+que ilustra o circuito correto correspondente à situação descrita no
+texto 5A1BBB.
+A
+B
+C
+D
+E
+QUESTÃO 26
+Com relação ao texto 5A1BBB, considere que a corrente no
+circuito tenha sido medida quando o cilindro estava se movendo ao
+longo dos trilhos e que o gráfico precedente mostre a corrente
+medida, em A, no circuito em relação à distância L, em m.
+Nessa situação, o valor da corrente, em A, medida na posição I, é
+igual a
+A 10.
+B 12.
+C 15.
+D 20. 
+E 5.
+Espaço Livre
+www.pciconcursos.com.br
+pcimarkpci MDAwMDowMDAwOjAwMDA6MDAwMDowMDAwOmZmZmY6YjE2OTpkYmFh:VGh1LCAwMyBTZXAgMjAyNiAyMTowOTo1NyAtMDMwMA==
+www.pciconcursos.com.br
+||373_SSPMA_APC_005_01N820356|| CESPE | CEBRASPE – SSP/MA – APC – Aplicação: 2018
+QUESTÃO 27
+As figuras precedentes ilustram um corpo de massa Mc
+suspenso por um mesmo dinamômetro ideal (representado pela
+mola), em duas situações diversas. Na primeira delas, ao ar livre,
+o dinamômetro indica um valor de 50 N. Na segunda situação,
+a massa Mc está imersa em um tanque com água, e o dinamômetro
+indica um valor de 25 N.
+Nessa situação, considerando-se que 10 m/s² seja a aceleração da
+gravidade e que 1 g/cm³ seja a densidade da água, os valores do
+volume do corpo, em m³, e de sua massa específica, em g/cm³, são,
+respectivamente, iguais a 
+A 2,5 e 20.
+B 2,5 e 2,0.
+C 0,0025 e 20.
+D 0,0025 e 2,0.
+E 0,25 e 20.
+QUESTÃO 28
+Assinale a opção correta no que diz respeito a transformações,
+reações e substâncias químicas. 
+A A transformação da água em gelo é uma transform ação
+química.
+B Em uma reação química, reagentes são transformados em
+produtos.
+C A mudança de cor é prova da ocorrência de uma reação
+química.
+D O petróleo é uma substância química.
+E Em uma transformação química, nem sempre são geradas
+novas substâncias. 
+QUESTÃO 29
+Considerando que as diferentes substâncias são formadas por
+diferentes formas de combinação de átomos dos elementos
+químicos, assinale a opção correta.
+A As moléculas são todas apolares por serem neutras.
+B O modelo atômico de Dalton previa a existência de prótons,
+nêutrons e elétrons.
+C O elemento químico oxigênio é um gás.
+D Os elementos químicos artificiais são posicionados em duas
+linhas na parte inferior da tabela periódica.
+E A ligação iônica é caracterizada pela transferência de elétrons
+entre átomos ou conjunto de átomos diferentes. 
+QUESTÃO 30
+A respeito das funções da química inorgânica e das re ações
+químicas, assinale a opção correta.
+A Óxidos são substâncias caracterizadas pela presença de átomos
+de um elemento eletronegativo.
+B As reações químicas espontâneas são exotérmicas.
+C As reações de neutralização são caracterizadas pela formação
+de soluções neutras.
+D Sais podem produzir soluções aquosas ácidas.
+E Ácidos são substâncias que produzem soluções aquosas com
+pH inferior a 5.
+QUESTÃO 31
+No que se refere a relações ponderais, balanceamento de reações
+químicas e leis dos gases ideais, assinale a opção correta.
+A De acordo com Avogadro, volumes iguais, de quaisquer gases,
+nas mesmas condições, apresentam o mesmo número de
+moléculas, independentemente de suas massas.
+B Atribui-se a Lavoisier a lei das proporções múltiplas.
+C Duas substâncias podem reagir completamente,
+independentemente de suas quantidades. 
+D Em uma reação química, a quantidade de moléculas dos
+reagentes será igual à quantidade de moléculas dos produtos.
+E Para o balanceamento de uma equação, o somatório dos
+coeficientes dos reagentes deve ser igual ao somatório dos
+coeficientes dos produtos.
+QUESTÃO 32
+Assinale a opção correta com relação a soluções, termoquímica e
+cinética química.
+A A termoquímica permite saber se uma reação química vai ser
+rápida ou lenta.
+B A rapidez de uma reação química independe da concentração
+dos reagentes.
+C Uma solução é caracterizada pela dispersão de pequenas
+partículas em um líquido.
+D A concentração em quantidade de matéria por volume é a
+forma mais usual de os químicos expressarem a composição de
+uma solução.
+E De acordo com a Lei de Hess, a variação de entalpia de uma
+reação química independe dos estados inicial e final dessa
+reação.
+www.pciconcursos.com.br
+pcimarkpci MDAwMDowMDAwOjAwMDA6MDAwMDowMDAwOmZmZmY6YjE2OTpkYmFh:VGh1LCAwMyBTZXAgMjAyNiAyMTowOTo1NyAtMDMwMA==
+www.pciconcursos.com.br
+||373_SSPMA_APC_005_01N820356|| CESPE | CEBRASPE – SSP/MA – APC – Aplicação: 2018
+QUESTÃO 33
+A respeito de equilíbrio químico e de eletroquímica, assinale a
+opção correta.
+A O pH da água pura varia com a temperatura.
+B Uma pilha é constituída pela combinação de substâncias que
+são oxidadas e, com isso, geram eletricidade.
+C Eletrólise é um processo natural de geração de energia.
+D Uma reação está em equilíbrio quando não há mais formação
+de produtos.
+E Sempre que são submetidos a aumento de temperatura, os
+sistemas em equilíbrio químico são deslocados para a formação
+de produtos.
+QUESTÃO 34
+Acerca de átomos e substâncias orgânicas, assinale a opção correta.
+A Átomos de carbono sempre fazem ligações simples com
+átomos de hidrogênio. 
+B A reatividade de uma substância orgânica depende do número
+de átomos de carbono de sua molécula, mas independe de
+como esses átomos estão organizados na cadeia.
+C As substâncias orgânicas são necessariamente substâncias
+naturais.
+D Substâncias orgânicas formam soluções neutras,
+independentemente da presença de átomos de oxigênio ou
+nitrogênio em suas moléculas.
+E Os átomos de carbono podem formar uma, duas, três ou quatro
+ligações químicas.
+QUESTÃO 35
+Insetos necrófagos em todos os estágios imaturos de
+desenvolvimento foram coletados de um cadáver e enviados ao
+laboratório forense. Depois da incubação, es ses insetos foram
+identificados como pertencentes à espécie Dermestes maculatus,
+que possui metamorfose completa. O estágio de desenvolvimento
+desses insetos mais adequ ado para estimativa do transcurso do
+tempo post mortem da vítima é o(a)
+A primeiro instar larval.
+B primeiro instar ninfal.
+C ovo.
+D pupa.
+E último instar larval.
+QUESTÃO 36
+O botulismo é uma intoxicação severa e potencialmente letal
+causada por neurotoxinas produzidas por bactérias gram-positivas
+anaeróbicas denominadas Clostridium botulinum . Com relação
+às estruturas celulares dessas bactérias, assinale a opção correta.
+A A membrana citoplasmática é extremamente rígida devido à
+presença de esteróis.
+B As vesículas do retículo endoplasmático rugoso participam da
+formação da membrana plasmática. 
+C As proteínas de ligação no periplasma facilitam o transporte de
+íons pela membrana.
+D A parede celular apresenta membrana externa formada por uma
+segunda bicamada lipídica e polissacarídeos.
+E O peptideoglicano é o componente mais abundante da parede
+celular das referidas bactérias, conferindo-lhe rigidez.
+QUESTÃO 37
+Durante o processo de replicação do DNA, a enzima primase
+sintetiza uma molécula de ácido nucleico que é pareada à
+fita-molde, à qual a DNA polimerase pode ligar o primeiro
+nucleotídio que fará parte da nova fita. A molécula e o ponto de
+ligação desse nucleotídio são
+A RNA iniciador e grupo 5'-fosfato.
+B RNA iniciador e grupo 3'-OH.
+C DNA iniciador e grupo 3'-OH.
+D RNA iniciador e grupo 5'-OH.
+E DNA iniciador e grupo 5'-fosfato.
+QUESTÃO 38
+A presença de células caliciformes é característica distintiva do
+epitélio de revestimento de superfícies mucosas, como as de órgãos
+do trato respiratório e intestinal. Essas células têm como principal
+atividade metabólica a produção de secreção, composta por uma
+mistura de proteínas altamente glicosiladas, chamadas mucinas,
+bem como de proteoglicanos e eletrólitos. Na base dessas células
+pode-se encontrar o compartimento de síntese de componentes
+proteicos, e o ápice é quase totalmente preenchido por vesículas que
+acumulam temporariamente produtos de secr eção. Uma região
+intermediária onde ocorrem o processamento pós-traducional das
+cadeias polipeptídicas e o direcionamento das moléculas
+recém-formadas contém uma organela bastante desenvolvida com
+cisternas dilatadas em associação com as vesículas de secreção.
+Essa organela é denominada
+A lisossomo.
+B hidrogenossomo.
+C complexo de Golgi.
+D retículo endoplasmático rugoso.
+E nucléolo.
+www.pciconcursos.com.br
+pcimarkpci MDAwMDowMDAwOjAwMDA6MDAwMDowMDAwOmZmZmY6YjE2OTpkYmFh:VGh1LCAwMyBTZXAgMjAyNiAyMTowOTo1NyAtMDMwMA==
+www.pciconcursos.com.br
+||373_SSPMA_APC_005_01N820356|| CESPE | CEBRASPE – SSP/MA – APC – Aplicação: 2018
+QUESTÃO 39
+O estoque de ATP de uma célula de tecido animal vivo,
+inicialmente em homeostase, foi subitamente esgotado. Nesse caso,
+um dos efeitos esperados quanto ao transporte de substâncias pela
+membrana citoplasmática dessa célula é a suspensão da atividade
+A da bomba de Na+/K+ e dos canais iônicos com diminuição da
+pressão osmótica no interior da célula.
+B dos canais iônicos com aumento da pressão osmótica no
+interior da célula.
+C dos canais iônicos com diminuição da pressão osmótica no
+interior da célula.
+D da bomba de Na+/K+ com aumento da pressão osmótica no
+interior da célula.
+E da bomba de Na+/K+ com diminuição da pressão osmótica no
+interior da célula.
+QUESTÃO 40
+Uma proteína de 40 aminoácidos sofreu desnaturação após ter sido
+exposta a uma alta concentração de ureia. Em seguida, a ureia foi
+retirada e a proteína retornou ao estado original de conformação
+enovelada, permitindo que as cadeias laterais de leucina e valina se
+agrupassem no interior dessa proteína. A explicação para esse fato
+é que
+A a proteína estava em meio aquoso, e as cadeias laterais dos
+aminoácidos são hidrofóbicas.
+B a retirada da ureia permitiu a recomposição das lig ações
+peptídicas entre os aminoácidos.
+C as cadeias laterais dos aminoácidos formaram ligações iônicas
+com a porção N-terminal da proteína.
+D as ligações duplas entre os carbonos da cadeia principal dos
+aminoácidos promoveram o reenovelamento da proteína.
+E as cadeias laterais desses aminoácidos formaram ligações
+covalentes entre si.
+QUESTÃO 41
+De acordo com a teoria da endossimbiose, há estruturas eucarióticas
+que, em algum momento de sua história filogenética, foram células
+bacterianas de vida livre. A característica de estrutura eucariótica
+que justifica essa teoria é o(s)
+A ribossomos atuarem dentro de compartimentos intracelulares.
+B DNA dos cloroplastos ser circular.
+C flagelo das células eucarióticas realizar rotação de modo
+semelhante ao de procariotos.
+D fato de quase todas as funções das mitocôndrias serem
+codificadas por seu próprio DNA.
+E cromossomos estarem distribuídos em pares.
+0QUESTÃO 42
+De acordo com Max Weber, a m oderna organização racional da
+empresa capitalista foi viabilizada pela contabilidade racional. Esse
+pensamento foi corroborado, na ciência contábil, por Vicenzo Masi,
+que identificou como objeto da contabilidade
+A as contas.
+B a azienda.
+C os réditos.
+D o patrimônio.
+E o lucro.
+QUESTÃO 43
+A respeito do método das partidas dobradas e de seus
+desdobramentos na ciência contábil, julgue os itens seguintes.
+I As aplicações de recursos são representadas por meio de
+débitos em determinadas rubricas contábeis, enquanto as
+origens dos recursos aplicados provocam registro a crédito em
+outras rubricas.
+II A aquisição de bens para comercialização a prazo e com juros
+é um exemplo de partida de segunda fórmula.
+III Em uma venda de mercadoria, ocorre a baixa, a crédito,
+da mercadoria vendida, em contrapartida à correspondente
+conta de receita por venda de mercadorias.
+IV A existência de um conjunto de levantamentos refletindo um
+elemento ou componente formado ou em formação pertencente
+a um patrimônio, expresso geralmente em moeda corrente,
+é inerente ao método das partidas dobradas.
+Estão certos apenas os itens
+A I e II.
+B I e IV.
+C II e III.
+D I, III e IV.
+E II, III e IV.
+Espaço Livre
+www.pciconcursos.com.br
+pcimarkpci MDAwMDowMDAwOjAwMDA6MDAwMDowMDAwOmZmZmY6YjE2OTpkYmFh:VGh1LCAwMyBTZXAgMjAyNiAyMTowOTo1NyAtMDMwMA==
+www.pciconcursos.com.br
+||373_SSPMA_APC_005_01N820356|| CESPE | CEBRASPE – SSP/MA – APC – Aplicação: 2018
+QUESTÃO 44
+A figura precedente representa três tipos de pontos de
+equilíbrio que podem ser calculados a partir de informações
+contábeis e gerenciais e que expressam valores monetários e
+quantidades de vendas diferenciadas.
+Os pontos de equilíbrio P, Q e R, respectivamente, são
+A contábil, econômico e financeiro.
+B contábil, financeiro e econômico.
+C financeiro, contábil e econômico.
+D econômico, financeiro e contábil.
+E econômico, contábil e financeiro.
+QUESTÃO 45
+Julgue os próximos itens, relativos às normas gerais de
+contabilidade pública.
+I O lançamento de uma receita orçamentária é o ato do ente
+público competente verificar a procedência do crédito fiscal e
+a pessoa devedora, inscrevendo o seu débito.
+II Uma operação de crédito é uma receita orçamentária efetiva.
+III A execução de uma despesa orçamentária implica empenho
+dessa despesa, sua liquidação e seu pagamento.
+IV Despesa orçamentária é todo gasto que depende de autorização
+legislativa.
+Estão certos apenas os itens
+A I e II.
+B I e III.
+C II e IV.
+D I, III e IV.
+E II, III e IV.
+QUESTÃO 46
+Determinado estabelecimento comercial, equiparado à
+indústria para fins de IPI, adotou o controle de estoques por meio
+de inventário permanente e verificou, em dado período, as
+transações com mercadorias apresentadas na tabela a seguir.
+informações em reais
+valor das aquisições (constante da nota fiscal) 3.000.000
+IPI incidente sobre compras 300.000
+ICMS incidente sobre compras 540.000
+frete e seguro sobre compras 20.000
+ICMS incidente sobre fretes 2.000
+Considerando-se que os estoques de mer cadorias do
+estabelecimento para revenda às indústrias tenham sido de
+R$ 280.000 no início desse período e de R$ 50.000 no fim,
+é correto afirmar que, nessas condi ções, o custo, em reais, das
+mercadorias vendidas no período foi
+A inferior a 2.500.000.
+B superior a 2.500.000 e inferior a 2.800.000.
+C superior a 2.800.000 e inferior a 3.100.000.
+D superior a 3.100.000 e inferior a 3.400.000.
+E superior a 3.400.000.
+QUESTÃO 47
+Julgue os itens a seguir, relativos à elaboração e apresentação de
+relatórios contábeis diversos.
+I O conjunto completo de demonstrações contábeis das entidades
+comerciais deve ser elaborado de acordo com o regime de
+competência.
+II As demonstrações contábeis das entidades devem ser
+apresentadas ao menos anualmente e de forma comparativa.
+III Realizáveis a longo prazo, investimentos e intangível compõem
+o ativo não circulante.
+Assinale a opção correta.
+A Apenas o item I está certo.
+B Apenas o item II está certo.
+C Apenas os itens I e III estão certos.
+D Apenas os itens II e III estão certos.
+E Todos os itens estão certos.
+www.pciconcursos.com.br
+pcimarkpci MDAwMDowMDAwOjAwMDA6MDAwMDowMDAwOmZmZmY6YjE2OTpkYmFh:VGh1LCAwMyBTZXAgMjAyNiAyMTowOTo1NyAtMDMwMA==
+www.pciconcursos.com.br
+||373_SSPMA_APC_005_01N820356|| CESPE | CEBRASPE – SSP/MA – APC – Aplicação: 2018
+Texto 5A5AAA
+Marlene tem cinquenta e cinco anos de idade e diagnóstico
+de depressão, dado quando ela tinha quinze anos de idade. Ela faz
+acompanhamento psicológico com frequência semanal há dois anos.
+Mesmo em uso de medicação prescrita pelo psiquiatra responsável
+pelo caso, ela tentou suicídio há trinta dias, por ingestão de
+medicamentos. Após vinte dias de internação, ela foi encaminhada
+a uma clínica de saúde mental. Como plano terapêutico, a equipe
+dessa clínica propôs a Marlene psicoterapia individual,
+acompanhamento psiquiátrico, terapia familiar, oficinas de arte e de
+culinária e aulas de ioga.
+A respeito de Marlene, o pai dela afirmou o seguinte para
+a equipe clínica: “Ela sempre foi minha filha problemática. Nunca
+se deu bem na escola. Já tentou se matar inúmeras vezes. Desde
+jovem, era difícil. Chorava sempre e sem nenhum motivo aparente.
+Houve uma época em que ela se cortava. Não tinha amigos nem
+animação para nada. Nunca foi de sair. Sempre ficou no seu quarto
+com suas coisas. Acho mesmo é que Marlene nunca quis viver. Já
+nasceu deprimida. Era um bebê triste. A mãe dela sempre teve
+depressão. Nunca conseguiu cuidar das nossas filhas. Sempre ficou
+tudo por minha conta.”.
+QUESTÃO 48
+Considerando o caso clínico hipotético apresentado no texto
+5A5AAA, o Manual Diagnóstico e Estatístico de Transtornos
+Mentais (DSM-V), a Classificação Internacional das Doenças
+(CID-10) e as abordagens psicológicas, assinale a opção correta.
+A Segundo as contribuições lacanianas, Marlene apresenta uma
+estrutura psicótica devido ao comportamento de cutting,
+iniciado na adolescência.
+B Com base na teoria freudiana, o diagnóstico de depressão de
+Marlene consiste em um fechamento necessário do ego para
+evitar a desintegração psíquica.
+C Haja vista a evolução clínica d escrita, Marlene atende a
+critérios para quadro de transtorno somático.
+D No caso de Marlene, a tentativa de suicídio por si só não serve
+como critério diagnóstico de depressão.
+E De acordo com a abordagem psicológica de Donald Winnicott,
+a capacidade de deprimir-se apresentada por Marlene se refere
+à perda do objeto. 
+QUESTÃO 49
+Com referência ao caso clínico hipotético apr esentado no texto
+5A5AAA, assinale a opção correta à luz do Código de Ética do
+Profissional Psicólogo (CEPP).
+A O plano terapêutico de Marlene deve ser discutido em equipe,
+levando-se em consideração a escuta atenta à paciente, o
+quadro apresentado, a gravidade desse quadro e as
+intervenções que se fizerem necessárias.
+B A proposta terapêutica da clínica de saúde mental limita-se à
+redução de danos e à contenção da angústia de Marlene.
+C Como forma de proteger a intimidade do paciente, o CEPP
+proíbe, sem exceções, a quebra de sigilo no atendimento
+psicológico individual, como no caso de Marlene.
+D Quanto ao manejo clínico e às intervenções realizadas,
+Marlene não poderia ser submetida à terapia familiar e à
+psicoterapia individual concomitantemente.
+E Conforme o CEPP, o profissional psicólogo que atendeu
+previamente Marlene é obrigado a prestar todas as informações
+pertinentes ao caso para os profissionais que a acompanharão
+na clínica de saúde mental.
+QUESTÃO 50
+Considerando as contribuições das escolas psicológicas à psicologia
+do desenvolvimento, assinale a opção correta.
+A Jacques Lacan postula a verwerfung (forclusão) como a defesa
+característica da psicose.
+B A psicanálise não trabalha com a avaliação ou o atendimento
+a bebês, tendo em vista que essa abordagem está fundamentada
+na cura pela fala.
+C A abordagem comportamental compreende o sujeito como
+polo ativo na constituição de seu psiquismo.
+D De acordo com as contribuições lacanianas, o desenvolvimento
+pode ser entendido como um processo de evolução frente aos
+limites.
+E Adler entende a neurose como uma escolha ou um
+posicionamento do sujeito diante da castração.
+QUESTÃO 51
+Com referência a maus-tratos e violência na infância e na
+adolescência, assinale a opção correta.
+A Classifica-se como abuso sexual qualquer contato ou interação
+entre uma criança e alguém em estágio psicossexual
+equiparado ou mais avançado de desenvolvimento.
+B Eventos estressores traumáticos ocorridos na infância
+constituem fatores de risco para o desenvolvimento, pois
+podem provocar prejuízos físicos, sociais, comportamentais,
+cognitivos e emocionais.
+C As categorias básicas de maus-tratos são apenas o abuso físico
+e o abuso sexual.
+D Até o presente, a literatura especializada refuta a existência de
+associação entre maus-tratos e alterações neurobiológicas.
+E Violência contra criança ou adolescente difere de maus-tratos,
+porque a primeira é definida como uma série de ações
+repetitivas e intencionais, enquanto os maus-tratos se referem
+a atos de omissão ou negligência que prejudiquem o
+desenvolvimento saudável do indivíduo.
+Espaço Livre
+www.pciconcursos.com.br
+pcimarkpci MDAwMDowMDAwOjAwMDA6MDAwMDowMDAwOmZmZmY6YjE2OTpkYmFh:VGh1LCAwMyBTZXAgMjAyNiAyMTowOTo1NyAtMDMwMA==
+www.pciconcursos.com.br
+||373_SSPMA_APC_005_01N820356|| CESPE | CEBRASPE – SSP/MA – APC – Aplicação: 2018
+QUESTÃO 52
+Assinale a opção correta, acerca da atuação do psicólogo no âmbito
+da justiça.
+A Em caso de utili zação de bateria de testes na avali ação
+psicológica de crianças, é necessária, para a aplicação deles, a
+apresentação prévia do material aos pais, que deverão autorizar
+seu uso.
+B Cabe ao psicólogo responsável pela perícia psicológica a
+elaboração de um documento, ao final dos trabalhos, com suas
+conclusões sobre o caso, encaminhamentos e decisões.
+C O assistente técnico poderá atuar como perito em um mesmo
+processo, desde que respeite as exigências de conhecimento
+técnico e a expertise da área exigida.
+D No acompanhamento psicológico de uma criança, é
+imprescindível a autorização de ambos os pais, mesmo em caso
+de guarda unilateral.
+E Em caso de suspeita de abuso sexual, o psicólogo perito deverá
+evitar situações que possam provocar revitimizações ou a
+construção de falsas memórias.
+QUESTÃO 53
+Ainda no que se refere à atuação do psicólogo no âmbito judicial,
+assinale a opção correta, à luz do CEPP.
+A O psicólogo deverá atuar com responsabilidade social,
+devendo eximir-se de análises críticas e históricas quanto à
+realidade social e política.
+B É obrigatório que o assistente técnico formalize sua prestação
+de serviço mediante termo de compromisso antes do início dos
+trabalhos.
+C É vedado ao psicólogo perito atuar em equipe
+multiprofissional.
+D O psicólogo assistente técnico deverá estar presente durante os
+atendimentos realizados pelo psicólogo perito, a fim de
+garantir o serviço prestado.
+E É permitido ao psicólogo intervir na prestação de serviços
+psicológicos que estejam sendo realizados por outro
+profissional, em caso de solicitação deste.
+QUESTÃO 54
+No que se refere à previsão do Estatuto da Criança e do
+Adolescente (ECA) quanto à família substituta, assinale a opção
+correta.
+A A adoção é medida revogável em caso de conflito entre
+direitos e interesses do adotando e de outras pessoas.
+B A guarda confere à criança a condição de dependente para
+todos os fins e direitos, inclusive previdenciários.
+C A colocação em família substituta estrangeira configura
+medida protocolar na modalidade de adoção.
+D O deferimento da guarda a terceiros implica o impedimento do
+exercício de visitas pelos pais.
+E A tutela não será deferida, nos termos da lei civil, a pessoa
+com mais de dezesseis anos de idade.
+QUESTÃO 55
+No Brasil, o projeto ético-político profissional do serviço social
+se fundamenta na teoria marxista e, nesse sentido, a prática
+contemporânea do serviço social
+A é polarizada pelos interesses das classes sociais e participa
+tanto do processo de reprodução dos interesses hegemônicos
+quanto das possibilidades de transformação.
+B compreende as relações sociais dos indivíduos no plano de
+suas vivências imediatas, visando alcançar a regularidade,
+as abstrações e as relações invariáveis. 
+C busca a eficiência e a eficácia na intervenção profissional,
+enfrentando a marginalidade e a pobreza em uma perspectiva
+de integração da sociedade.
+D enfrenta a questão social por meio de intervenções que
+priorizam a formação da família e do indivíduo para solucionar
+problemas e atender suas necessidades materiais e sociais. 
+E desenvolve uma ação tecnicista, mediante propostas de
+trabalho voltadas para o aperfeiçoamento de instrumentos e
+técnicas de intervenção na busca de padrões de eficiência. 
+QUESTÃO 56
+No âmbito das práticas do serviço social, o parecer social 
+A expressa o posicionamento do assistente social quanto a um
+objeto de estudo, podendo ser parte final de um laudo ou
+realizado em razão de determinação judicial.
+B deve ser encaminhado ao setor solicitante acompanhado de
+estudo socioeconômico.
+C pode ser realizado por profissional de outra categoria, desde
+que supervisionado por um assistente social.
+D deve omitir a identificação dos sujeitos envolvidos na situação,
+de modo a preservar o sigilo e a identidade deles. 
+E é fruto de um estudo no qual o assistente social utiliza
+instrumentos de coleta de dados para comprovar as
+informações fornecidas pelo usuário.
+Espaço Livre
+www.pciconcursos.com.br
+pcimarkpci MDAwMDowMDAwOjAwMDA6MDAwMDowMDAwOmZmZmY6YjE2OTpkYmFh:VGh1LCAwMyBTZXAgMjAyNiAyMTowOTo1NyAtMDMwMA==
+www.pciconcursos.com.br
+||373_SSPMA_APC_005_01N820356|| CESPE | CEBRASPE – SSP/MA – APC – Aplicação: 2018
+QUESTÃO 57
+Julgue os itens a seguir, com base no Estatuto da Criança e do
+Adolescente.
+I Em situações de confirmação de maus-tratos a criança, a
+autoridade judiciária poderá determinar, como medida cautelar,
+o afastamento do agressor da moradia comum, mesmo que este
+seja um dos pais da criança.
+II Em caso de confirmação de castigo físico ou tratamento cruel,
+os órgãos do Sistema de Garantia de Direitos da Criança e do
+Adolescente devem conferir máxima prioridade ao atendimento
+de crianças na faixa etária da segunda infância.
+III Se um adolescente tiver seus direitos ameaçados ou violados,
+competirá ao Conselho Tutelar, como medida de proteção,
+o afastamento do adolescente do convívio familiar.
+IV A medida de internação de adolescentes em virtude de prática
+de ato infracional só pode ser aplicada em situações de grave
+ameaça ou violência a pessoas. 
+Estão certos apenas os itens
+A I e II.
+B I, II e III.
+C I e IV.
+D II, III e IV.
+E III e IV.
+QUESTÃO 58
+A unidade familiar que se estende para além da presença de pais e
+filhos, sendo composta por parentes próximos com os quais
+a(s) criança(s) ou adolescente(s) mantêm vínculos de afinidade e
+afetividade por meio da convivência, é denominada família
+A nuclear.
+B padrão.
+C monoparental.
+D ampliada.
+E natural.
+QUESTÃO 59
+Na gestão pública democrática, a administração de políticas sociais
+voltada à defesa dos interesses das cl asses subalternas deve ter
+como referência o modelo de
+A administração pública gerencialista, devido ao seu explícito
+alinhamento com os interesses populares, expresso por meio de
+seu poder racional-legal.
+B administração patrimonialista, que considera o aparelho de
+Estado como a extensão da participação direta, combatendo o
+nepotismo e a corrupção.
+C administração pública burocrática, que garante autonomia ao
+administrador na gestão dos recursos humanos, materiais e
+financeiros.
+D planejamento estratégico, que busca ultrapassar a democracia
+representativa, combinando-a com a democracia participativa. 
+E planejamento normativo ou tradicional, cujas técnicas e
+métodos permitem, sozinhos, criar estratégias políticas de
+gestão que atendam aos interesses populares.
+QUESTÃO 60
+No trabalho interdisciplinar com outras categorias profissionais,
+o assistente social
+A pode integrar comissões interdisciplinares de ética em seu local
+de trabalho.
+B desenvolve o relatório contendo a sua opinião técnica em
+conjunto com profissionais de outras áreas. 
+C tem sua identidade, competência e particularidade profissionais
+diluídas em nome de um objetivo comum.
+D contribui para a verticalização das relações de poder entre os
+campos profissionais implicados no trabalho.
+E trabalha isoladamente, limitando a troca de informação a um
+sistema de referência e contrarreferência.
+Espaço Livre
+www.pciconcursos.com.br
+pcimarkpci MDAwMDowMDAwOjAwMDA6MDAwMDowMDAwOmZmZmY6YjE2OTpkYmFh:VGh1LCAwMyBTZXAgMjAyNiAyMTowOTo1NyAtMDMwMA==
+www.pciconcursos.com.br
+||373_SSPMA_APC_DISC_005|| CESPE | CEBRASPE – SSP/MA – APC – Aplicação: 2018
+PROVA DISCURSIVA
+• Nesta prova, faça o que se pede, utilizando, caso deseje, o espaço para rascunho indicado no presente caderno. Em seguida, transcreva
+o texto para a FOLHA DE TEXTO DEFINITIVO DA PROVA DISCURSIVA , no local apropri ado, pois não será avaliado
+fragmento de texto escrito em local indevido.
+• Qualquer fragmento de texto que ultrapassar a extensão máxima de linhas disponibilizadas será desconsiderado.
+•N a  Folha de Texto Definitivo, identifique-se apenas no cab eçalho da primeira página, pois não será avaliado texto que tenha
+qualquer assinatura ou marca identificadora fora do local apropriado.
+• Ao domínio do conteúdo serão atribuídos até 40,00 pontos, dos quais até 2,00 pontos serão atribuídos ao ques ito apresentação
+(legibilidade, respeito às margens e indicação de parágrafos) e estrutura textual (organização das ideias em texto estruturado).
+Moradores de determinado município, situado em região conhecida por ter um solo rico em calcário
+(constituído por CaO), denunciaram que uma indústria produtora de baterias para automóveis vinha
+despejando dejetos industriais, por meio de ligações clandestinas no emissário de esgoto, em uma lagoa
+localizada nos arredores do município. O vazamento estava provocando a morte de peixes e a degradação
+de parte da vegetação que circunda essa lagoa. O Ministério Público contratou uma empresa que, após
+investigações, emitiu laudo atestando que essa indústria havia ignorado as normas de tratamento prévio de
+dejetos, sendo a principal responsável pela poluição e pelo desequilíbrio ambiental. A empresa fez análises
+das amostras de água coletadas no local do efluente da indústria e os resultados evidenciaram temperatura
+da água desse efluente próxima a 50 ºC e pH com valor inferior a 4. 
+Internet: <www.folhadaregiao.com.br> (com adaptações).
+A respeito dessa situação hipotética, discorra sobre os efeitos dos dejetos industriais despejados na lagoa bem como sobre a estratégia para
+minimizar os danos ambientais mencionados no texto. Ao elaborar seu texto, explique 
+1 como a temperatura elevada da água pode estar associada à mortandade dos peixes, levando-se em conta a relação da temperatura
+com a solubilidade de gases. [valor: 12,00 pontos]
+2 as razões de diminuição do pH detectado na água, indicando a classe e as características das substâncias liberadas nos dejetos
+e que estariam relacionadas a esse processo.[valor: 12,00 pontos]
+3 como o carbonato de cálcio presente no solo poderia ser utilizado para minimizar o impacto ambiental causado pela indústria.
+[valor: 14,00 pontos]
+www.pciconcursos.com.br
+pcimarkpci MDAwMDowMDAwOjAwMDA6MDAwMDowMDAwOmZmZmY6YjE2OTpkYmFh:VGh1LCAwMyBTZXAgMjAyNiAyMTowOTo1NyAtMDMwMA==
+www.pciconcursos.com.br
+||373_SSPMA_APC_DISC_005|| CESPE | CEBRASPE – SSP/MA – APC – Aplicação: 2018
+RASCUNHO
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+www.pciconcursos.com.br
