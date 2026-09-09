@@ -147,6 +147,19 @@
         <div id="creditos-precos-list" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px;"></div>
         <button class="btn secondary small" onclick="salvarCreditosPrecos()">💾 Salvar Preços</button>
       </div>
+
+      <!-- Taxa do Marketplace -->
+      <div style="margin-top:16px;">
+        <h3 style="color:#89b4fa;font-size:0.9rem;margin:0 0 8px;">🏷️ Taxa do Marketplace</h3>
+        <p style="font-size:0.72rem;color:#9399b2;margin:0 0 8px;">Percentual retido pela plataforma em <strong>toda venda</strong> de pacotes entre estudantes. O vendedor recebe o restante em créditos.</p>
+        <div style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;">
+          <div style="display:flex;flex-direction:column;gap:2px;">
+            <label style="font-size:0.68rem;color:#9399b2;">Taxa (%)</label>
+            <input type="number" step="1" min="0" max="90" id="mkt-taxa" aria-label="Taxa do marketplace em percentual" style="width:90px;padding:6px;background:#1e1e2e;border:1px solid #45475a;border-radius:4px;color:#cdd6f4;">
+          </div>
+          <button class="btn secondary small" onclick="salvarTaxaMarketplace()">💾 Salvar Taxa</button>
+        </div>
+      </div>
     </div>
 
     <!-- Moderação do Catálogo -->
@@ -628,6 +641,11 @@
             <input type="number" step="0.01" min="0" value="${preco}" data-qtd="${qtd}" class="credito-preco-input" aria-label="Preço para ${qtd} créditos" style="width:80px;padding:6px;background:#1e1e2e;border:1px solid #45475a;border-radius:4px;color:#cdd6f4;">
           </div>
         `).join('');
+
+        // Taxa do Marketplace
+        const mkt = data.marketplace || {};
+        const mktInput = document.getElementById('mkt-taxa');
+        if (mktInput) mktInput.value = mkt.taxa_pct != null ? mkt.taxa_pct : 20;
       } catch(e) {}
     }
 
@@ -662,6 +680,17 @@
         const res = await fetch('/api/admin/monetizacao', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({creditos_precos: precos})});
         const data = await res.json();
         if (res.ok) { toast('✅ Preços dos créditos salvos!', 'success'); loadMonetizacao(); }
+        else toast(data.detail || 'Erro ao salvar.', 'error');
+      } catch(e) { toast('Erro de conexão.', 'error'); }
+    };
+
+    window.salvarTaxaMarketplace = async function() {
+      const taxa = parseFloat(document.getElementById('mkt-taxa').value);
+      if (isNaN(taxa) || taxa < 0 || taxa > 90) { toast('Taxa deve estar entre 0 e 90.', 'warning'); return; }
+      try {
+        const res = await fetch('/api/admin/monetizacao', {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({marketplace_taxa_pct: taxa})});
+        const data = await res.json();
+        if (res.ok) { toast('✅ Taxa do marketplace salva!', 'success'); loadMonetizacao(); }
         else toast(data.detail || 'Erro ao salvar.', 'error');
       } catch(e) { toast('Erro de conexão.', 'error'); }
     };

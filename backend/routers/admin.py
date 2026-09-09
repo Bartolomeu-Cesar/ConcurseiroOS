@@ -1342,7 +1342,13 @@ def metricas_negocio(conn=Depends(get_db_session), user_id: int = Depends(get_us
 def get_monetizacao(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Retorna a configuração atual de monetização (janela vitalício, preços)."""
     _require_admin(user_id)
-    from plans import _get_vitalicio_window, get_creditos_precos, get_vitalicio_preco, is_vitalicio_disponivel
+    from plans import (
+        _get_vitalicio_window,
+        get_creditos_precos,
+        get_marketplace_taxa,
+        get_vitalicio_preco,
+        is_vitalicio_disponivel,
+    )
 
     inicio, fim = _get_vitalicio_window()
     return {
@@ -1354,6 +1360,10 @@ def get_monetizacao(conn=Depends(get_db_session), user_id: int = Depends(get_use
         },
         "creditos": {
             "precos": get_creditos_precos(),
+        },
+        "marketplace": {
+            # Percentual inteiro retido pela plataforma em TODA venda de pacotes
+            "taxa_pct": round(get_marketplace_taxa() * 100, 2),
         },
     }
 
@@ -1370,7 +1380,8 @@ def update_monetizacao(
         vitalicio_venda_inicio: "YYYY-MM-DD" (opcional),
         vitalicio_venda_fim: "YYYY-MM-DD" (opcional),
         vitalicio_preco: float (opcional),
-        creditos_precos: {"1": 4.9, "5": 19.9, ...} (opcional)
+        creditos_precos: {"1": 4.9, "5": 19.9, ...} (opcional),
+        marketplace_taxa_pct: float 0..90 (opcional) — taxa da plataforma em toda venda de pacotes
     }
     """
     _require_admin(user_id)
@@ -1422,6 +1433,17 @@ def update_monetizacao(
             raise HTTPException(status_code=400, detail="creditos_precos: chaves int e valores float") from None
         set_app_config(conn, "creditos_precos", json.dumps(precos))
         updated.append("creditos_precos")
+
+    if "marketplace_taxa_pct" in body:
+        # Taxa da plataforma sobre TODA venda de pacotes (percentual inteiro 0..90).
+        try:
+            taxa = float(body["marketplace_taxa_pct"])
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="marketplace_taxa_pct deve ser um número (percentual).") from None
+        if taxa < 0 or taxa > 90:
+            raise HTTPException(status_code=400, detail="marketplace_taxa_pct deve estar entre 0 e 90.")
+        set_app_config(conn, "marketplace_taxa_pct", str(taxa))
+        updated.append("marketplace_taxa_pct")
 
     if not updated:
         raise HTTPException(status_code=400, detail="Nenhum campo válido para atualizar.")

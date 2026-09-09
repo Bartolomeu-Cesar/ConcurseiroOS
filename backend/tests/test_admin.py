@@ -527,6 +527,31 @@ class TestMonetizacao:
         precos = r2.json()["creditos"]["precos"]
         assert abs(float(precos["1"]) - 5.90) < 0.01
 
+    def test_get_monetizacao_inclui_marketplace(self, client):
+        """GET /api/admin/monetizacao — inclui a taxa do marketplace."""
+        token = _get_admin_token(client)
+        r = client.get("/api/admin/monetizacao", headers=_auth_header(token))
+        assert r.status_code == 200
+        assert "marketplace" in r.json()
+        assert "taxa_pct" in r.json()["marketplace"]
+
+    def test_update_taxa_marketplace(self, client):
+        """PUT taxa do marketplace persiste e é lida por get_marketplace_taxa."""
+        token = _get_admin_token(client)
+        r = client.put("/api/admin/monetizacao", headers=_auth_header(token), json={"marketplace_taxa_pct": 30})
+        assert r.status_code == 200
+        r2 = client.get("/api/admin/monetizacao", headers=_auth_header(token))
+        assert abs(r2.json()["marketplace"]["taxa_pct"] - 30) < 0.01
+        # A função usada na cobrança reflete o novo valor (30% → 0.30)
+        from plans import get_marketplace_taxa
+        assert abs(get_marketplace_taxa() - 0.30) < 0.001
+
+    def test_update_taxa_marketplace_fora_do_intervalo_400(self, client):
+        """PUT taxa > 90 é rejeitada."""
+        token = _get_admin_token(client)
+        r = client.put("/api/admin/monetizacao", headers=_auth_header(token), json={"marketplace_taxa_pct": 150})
+        assert r.status_code == 400
+
     def test_update_janela_invalida_400(self, client):
         """PUT janela com data inválida retorna 400."""
         token = _get_admin_token(client)
