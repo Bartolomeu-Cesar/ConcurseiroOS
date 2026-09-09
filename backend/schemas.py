@@ -445,6 +445,9 @@ class QuestaoRespostaResponse(BaseModel):
     sem_gabarito: bool = False
     mensagem: str | None = None
     alerta: dict | None = None
+    chute: bool = False
+    categoria_resposta: str = ""
+    chute_mensagem: str | None = None
 
 
 class OkResponse(BaseModel):

@@ -631,6 +631,11 @@ async function confirmarResposta() {
   // XP real-time feedback
   showQuestionXp(res.acertou);
 
+  // Detecção de chute: acertou mas rápido demais / baixa confiança → hipercorreção.
+  if (res.chute && res.chute_mensagem) {
+    toast(res.chute_mensagem, 'warning', 6000);
+  }
+
   // Celebração de marco: primeira questão respondida (dispara uma única vez).
   celebrateMilestone('primeira_questao');
 

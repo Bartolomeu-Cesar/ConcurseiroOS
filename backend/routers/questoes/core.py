@@ -111,6 +111,40 @@ _CONFIDENCE_THRESHOLDS = {
 }
 
 
+def _classificar_chute(acertou: int, tempo_seg, confianca, dificuldade: str) -> dict:
+    """Detecta 'chute' ao responder questão, combinando tempo e confiança.
+
+    Sinais:
+    - tempo abaixo do threshold da dificuldade (rápido demais para ler+raciocinar);
+    - confiança declarada baixa (1 = "chutei"), quando disponível (opcional).
+
+    Retorna:
+    - categoria: 'chute_sortudo' | 'acerto_solido' | 'erro' | ''
+    - chute: bool (True quando acertou porém há forte indício de chute)
+    - mensagem: dica de hipercorreção quando for chute sortudo.
+
+    Observação: para questões, hoje o frontend envia principalmente o tempo; a
+    confiança é usada como reforço quando presente. Não altera o scheduling
+    (que já trata chute como Hard); serve para feedback + estatística.
+    """
+    threshold = _CONFIDENCE_THRESHOLDS.get(dificuldade or "Médio", 12)
+    tempo = tempo_seg if isinstance(tempo_seg, (int, float)) else 0
+    rapido_demais = tempo > 0 and tempo < threshold
+    baixa_confianca = confianca is not None and confianca <= 1
+
+    if not acertou:
+        return {"categoria": "erro", "chute": False, "mensagem": ""}
+
+    if rapido_demais or baixa_confianca:
+        motivo = "muito rápido" if rapido_demais else "baixa confiança"
+        return {
+            "categoria": "chute_sortudo",
+            "chute": True,
+            "mensagem": f"🎲 Você acertou, mas parece chute ({motivo}). Acertos por sorte fixam pouco — revise para consolidar.",
+        }
+    return {"categoria": "acerto_solido", "chute": False, "mensagem": ""}
+
+
 def _schedule_question_review(conn, questao_id: int, user_id: int, acertou: int, tempo_seg: int, confianca: int | None):
     """Agenda revisão espaçada para questões usando FSRS.
 
@@ -728,6 +762,14 @@ def responder_questao(
     # `gabarito` já reflete a ordem EXIBIDA (remapeado quando embaralhada; original
     # caso contrário) — o frontend usa para destacar a alternativa correta na tela.
     result = {"acertou": bool(acertou), "resposta_correta": gabarito}
+
+    # Detecção de chute (tempo/confiança) → feedback de hipercorreção ao aluno.
+    chute_info = _classificar_chute(acertou, body.tempo_segundos, body.confianca, questao["dificuldade"] if "dificuldade" in questao.keys() else "Médio")
+    result["chute"] = chute_info["chute"]
+    result["categoria_resposta"] = chute_info["categoria"]
+    if chute_info["mensagem"]:
+        result["chute_mensagem"] = chute_info["mensagem"]
+
     if blocked_alert:
         result["alerta"] = blocked_alert
     return result

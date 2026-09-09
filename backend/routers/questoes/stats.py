@@ -36,6 +36,63 @@ def questoes_sem_gabarito(conn=Depends(get_db_session), user_id: int = Depends(g
     }
 
 
+@router.get("/api/questoes/chutes", summary="Detecção de chutes",
+            description="% de acertos que foram provável chute (rápido demais p/ a dificuldade), geral e por matéria.")
+def questoes_chutes(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Estima quantos ACERTOS foram por chute (tempo abaixo do limiar da dificuldade).
+
+    Usa os mesmos limiares por dificuldade do agendamento (Fácil 8s, Médio 12s,
+    Difícil 18s). Confiança declarada '1' (chutei) também conta. Só respostas com
+    tempo > 0 (respostas sem tempo não têm sinal de chute confiável).
+    """
+    from routers.questoes.core import _CONFIDENCE_THRESHOLDS
+
+    thr_facil = _CONFIDENCE_THRESHOLDS.get("Fácil", 8)
+    thr_medio = _CONFIDENCE_THRESHOLDS.get("Médio", 12)
+    thr_dificil = _CONFIDENCE_THRESHOLDS.get("Difícil", 18)
+
+    chute_expr = f"""
+        CASE WHEN qr.acertou = 1 AND (
+            (qr.tempo_segundos > 0 AND qr.tempo_segundos < CASE q.dificuldade
+                WHEN 'Fácil' THEN {thr_facil}
+                WHEN 'Difícil' THEN {thr_dificil}
+                ELSE {thr_medio} END)
+            OR (qr.confianca IS NOT NULL AND qr.confianca <= 1)
+        ) THEN 1 ELSE 0 END
+    """
+
+    row = conn.execute(f"""
+        SELECT SUM(qr.acertou) as acertos, SUM({chute_expr}) as chutes, COUNT(*) as total
+        FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id
+        WHERE qr.user_id = ?
+    """, (user_id,)).fetchone()
+
+    acertos = row["acertos"] or 0
+    chutes = row["chutes"] or 0
+    total = row["total"] or 0
+    pct = round((chutes / acertos) * 100, 1) if acertos else 0.0
+
+    por_materia = conn.execute(f"""
+        SELECT q.materia, SUM(qr.acertou) as acertos, SUM({chute_expr}) as chutes
+        FROM questoes_respostas qr JOIN questoes q ON q.id = qr.questao_id
+        WHERE qr.user_id = ?
+        GROUP BY q.materia HAVING acertos > 0
+        ORDER BY (CAST(chutes AS FLOAT) / acertos) DESC
+    """, (user_id,)).fetchall()
+
+    return {
+        "total_respostas": total,
+        "acertos": acertos,
+        "chutes": chutes,
+        "pct_chute_sobre_acertos": pct,
+        "por_materia": [
+            {"materia": r["materia"], "acertos": r["acertos"], "chutes": r["chutes"] or 0,
+             "pct": round(((r["chutes"] or 0) / r["acertos"]) * 100, 1) if r["acertos"] else 0.0}
+            for r in por_materia
+        ],
+    }
+
+
 @router.get("/api/questoes/stats/geral", summary="Estatísticas gerais de questões",
             description="Retorna total de questões resolvidas, acertos, percentual e desempenho por matéria.")
 def questoes_stats(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
