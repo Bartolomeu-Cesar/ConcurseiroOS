@@ -243,7 +243,8 @@ window.abrirPublicar = async function() {
         </div>
       </div>
       <label style="font-size:0.75rem;color:#9399b2;">Preço em créditos (0 = grátis)</label>
-      <input id="pub-preco" type="number" min="0" step="1" value="0" aria-label="Preço em créditos" style="width:100%;padding:9px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;margin-bottom:14px;">
+      <input id="pub-preco" type="number" min="0" step="1" value="0" aria-label="Preço em créditos" oninput="atualizarLiquidoVenda()" style="width:100%;padding:9px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;margin-bottom:4px;">
+      <div id="pub-liquido" style="font-size:0.72rem;color:#9399b2;margin-bottom:14px;">Defina um preço para ver quanto você recebe.</div>
       <div id="pub-result" style="font-size:0.78rem;margin-bottom:8px;"></div>
       <div style="display:flex;gap:8px;">
         <button onclick="document.getElementById('pub-modal').remove()" style="flex:1;padding:9px;background:#45475a;color:#cdd6f4;border:none;border-radius:8px;cursor:pointer;">Cancelar</button>
@@ -253,6 +254,28 @@ window.abrirPublicar = async function() {
   document.body.appendChild(overlay);
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
   carregarMeusRefs();
+  // Carrega a taxa da plataforma para mostrar o líquido do vendedor
+  fetch('/api/catalogo/config', { headers: _headers() })
+    .then(r => r.ok ? r.json() : null)
+    .then(cfg => { _marketplaceTaxaPct = (cfg && typeof cfg.taxa_pct === 'number') ? cfg.taxa_pct : 20; atualizarLiquidoVenda(); })
+    .catch(() => { _marketplaceTaxaPct = 20; });
+};
+
+// Taxa da plataforma (%) — carregada ao abrir o modal de publicar.
+let _marketplaceTaxaPct = 20;
+
+window.atualizarLiquidoVenda = function() {
+  const el = document.getElementById('pub-liquido');
+  if (!el) return;
+  const preco = Math.max(0, parseInt(document.getElementById('pub-preco')?.value || '0', 10) || 0);
+  if (preco <= 0) {
+    el.textContent = 'Material gratuito — sem cobrança.';
+    el.style.color = '#a6e3a1';
+    return;
+  }
+  const liquido = Math.floor(preco * (1 - _marketplaceTaxaPct / 100));
+  el.innerHTML = `Você recebe <strong style="color:#a6e3a1;">💎 ${liquido}</strong> por venda (taxa da plataforma: ${_marketplaceTaxaPct}%).`;
+  el.style.color = '#9399b2';
 };
 
 window.carregarMeusRefs = async function() {
@@ -299,6 +322,63 @@ window.enviarPublicacao = async function() {
   } catch (e) {
     showToast('Erro de conexão.', 'error');
     btn.disabled = false; btn.textContent = 'Publicar';
+  }
+};
+
+// ==================== MINHAS VENDAS (VENDEDOR) ====================
+window.abrirMinhasVendas = async function() {
+  if (!localStorage.getItem('auth_token')) { showToast('Faça login para ver suas vendas.', 'warning'); return; }
+
+  const overlay = document.createElement('div');
+  overlay.id = 'vendas-modal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  overlay.innerHTML = `
+    <div style="background:#313244;border-radius:16px;padding:24px;max-width:520px;width:100%;max-height:85vh;overflow-y:auto;">
+      <h3 style="color:#f9e2af;margin:0 0 12px;">💰 Minhas vendas</h3>
+      <div id="vendas-conteudo" style="font-size:0.85rem;color:#9399b2;">Carregando…</div>
+      <div style="display:flex;justify-content:flex-end;margin-top:16px;">
+        <button onclick="document.getElementById('vendas-modal').remove()" style="padding:9px 16px;background:#45475a;color:#cdd6f4;border:none;border-radius:8px;cursor:pointer;">Fechar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  const alvo = overlay.querySelector('#vendas-conteudo');
+  try {
+    const data = await fetch('/api/catalogo/vendas', { headers: _headers() }).then(r => r.json());
+    const total = data.total_vendas || 0;
+    const creditos = data.total_creditos_recebidos || 0;
+
+    let html = `
+      <div style="display:flex;gap:10px;margin-bottom:14px;">
+        <div style="flex:1;background:#1e1e2e;border-radius:10px;padding:12px;text-align:center;">
+          <div style="font-size:1.6rem;font-weight:700;color:#cdd6f4;">${total}</div>
+          <div style="font-size:0.72rem;color:#9399b2;">venda(s)</div>
+        </div>
+        <div style="flex:1;background:#1e1e2e;border-radius:10px;padding:12px;text-align:center;">
+          <div style="font-size:1.6rem;font-weight:700;color:#a6e3a1;">💎 ${creditos}</div>
+          <div style="font-size:0.72rem;color:#9399b2;">créditos recebidos</div>
+        </div>
+      </div>`;
+
+    if (!data.vendas || !data.vendas.length) {
+      html += '<div style="text-align:center;padding:12px;color:#9399b2;">Você ainda não vendeu nenhum material.<br>Publique um pacote com preço para começar! 🚀</div>';
+    } else {
+      html += '<div style="font-size:0.78rem;color:#9399b2;font-weight:600;margin-bottom:6px;">Histórico</div>';
+      html += data.vendas.map(v => {
+        const quando = v.created_at ? new Date(v.created_at).toLocaleString('pt-BR') : '';
+        return `
+          <div style="border-bottom:1px solid #45475a;padding:8px 0;">
+            <div style="color:#cdd6f4;font-size:0.85rem;font-weight:600;">${esc(v.titulo)}</div>
+            <div style="font-size:0.74rem;color:#9399b2;">
+              💎 ${v.creditos_recebidos} recebido(s) (de ${v.preco_creditos}) · comprador: ${esc(v.comprador_nome)} · ${esc(quando)}
+            </div>
+          </div>`;
+      }).join('');
+    }
+    alvo.innerHTML = html;
+  } catch (e) {
+    alvo.innerHTML = '<span style="color:#f38ba8;">Erro ao carregar suas vendas.</span>';
   }
 };
 

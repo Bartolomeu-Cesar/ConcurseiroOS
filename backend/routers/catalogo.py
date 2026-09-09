@@ -56,6 +56,14 @@ class PublicarItem(BaseModel):
 
 # ==================== LISTAGEM PÚBLICA ====================
 
+@router.get("/config", summary="Configuração pública do catálogo (taxa do marketplace)")
+def catalogo_config(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Expõe a taxa da plataforma para o vendedor calcular quanto vai receber."""
+    from plans import get_marketplace_taxa
+    taxa = get_marketplace_taxa()
+    return {"taxa_pct": round(taxa * 100, 2)}
+
+
 @router.get("", summary="Listar itens do catálogo público")
 def listar_catalogo(
     categoria: str = "",

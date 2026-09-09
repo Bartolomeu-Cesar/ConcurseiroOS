@@ -591,6 +591,14 @@ class TestMarketplace:
         assert data["total_vendas"] >= 1
         assert data["total_creditos_recebidos"] >= 8
 
+    def test_config_expoe_taxa(self, client):
+        """GET /api/catalogo/config retorna a taxa do marketplace em %."""
+        _criar_estudante(280, "est280@test.com")
+        r = client.get("/api/catalogo/config", headers=_h(_token(280, "est280@test.com")))
+        assert r.status_code == 200
+        assert "taxa_pct" in r.json()
+        assert 0 <= r.json()["taxa_pct"] <= 90
+
 
 def teardown_module():
     try:
