@@ -167,6 +167,8 @@
       <h2 style="color:#94e2d5;margin:0 0 16px;font-size:1.1rem;">📚 Moderação do Catálogo</h2>
       <h3 style="color:#f9e2af;font-size:0.9rem;margin:0 0 8px;">⏳ Materiais pendentes de aprovação</h3>
       <div id="pendentes-list" style="font-size:0.85rem;color:#9399b2;">Carregando...</div>
+      <h3 style="color:#f9e2af;font-size:0.9rem;margin:16px 0 8px;">💸 Resgates PIX pendentes</h3>
+      <div id="resgates-list" style="font-size:0.85rem;color:#9399b2;">Carregando...</div>
     </div>
 
     <!-- Curadoria de Questões -->
@@ -975,6 +977,44 @@
       } catch(e) { toast('Erro de conexão.', 'error'); }
     };
 
+    async function loadResgates() {
+      const el = document.getElementById('resgates-list');
+      if (!el) return;
+      try {
+        const data = await fetch('/api/admin/resgates?status=pendente').then(r => r.json());
+        const itens = data.resgates || [];
+        if (!itens.length) { el.innerHTML = '<span style="color:#a6e3a1;">✓ Nenhum resgate pendente.</span>'; return; }
+        el.innerHTML = itens.map(r => `
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #313244;">
+            <div style="min-width:0;">
+              <strong style="color:#cdd6f4;">💎 ${r.creditos} créditos</strong>
+              <span style="color:#9399b2;font-size:0.75rem;"> · ${esc(r.user_nome || '?')} (${esc(r.user_email || '')})</span>
+              <div style="font-size:0.74rem;color:#89b4fa;">PIX: ${esc(r.chave_pix || '—')}</div>
+            </div>
+            <div style="display:flex;gap:6px;flex-shrink:0;">
+              <button class="btn small" onclick="resolverResgate(${r.id}, 'concluir')">✓ Paguei</button>
+              <button class="btn small danger" onclick="resolverResgate(${r.id}, 'recusar')">✗ Recusar</button>
+            </div>
+          </div>`).join('');
+      } catch(e) { el.innerHTML = '<span style="color:#f38ba8;">Erro ao carregar resgates.</span>'; }
+    }
+
+    window.resolverResgate = async function(reqId, acao) {
+      const msg = acao === 'concluir'
+        ? 'Confirmar que o PIX foi pago? A solicitação será marcada como concluída.'
+        : 'Recusar o resgate? Os créditos serão estornados ao usuário.';
+      if (!await confirmModal(acao === 'concluir' ? 'Concluir resgate' : 'Recusar resgate', msg, { type: 'warning', confirmText: acao === 'concluir' ? 'Concluir' : 'Recusar' })) return;
+      let obs = '';
+      try {
+        const res = await fetch(`/api/admin/resgates/${reqId}/resolver`, {
+          method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ acao, obs })
+        });
+        const d = await res.json();
+        if (res.ok) { toast(`✅ Resgate ${acao === 'concluir' ? 'concluído' : 'recusado'}.`, 'success'); loadResgates(); }
+        else { toast(d.detail || 'Erro.', 'error'); }
+      } catch(e) { toast('Erro de conexão.', 'error'); }
+    };
+
     // ==================== MÉTRICAS DE NEGÓCIO ====================
     function fmtBRL(v) {
       return 'R$ ' + (v || 0).toFixed(2).replace('.', ',');
@@ -1481,6 +1521,7 @@
     loadUsers();
     loadMonetizacao();
     loadPendentes();
+    loadResgates();
     loadMetricas();
     loadAuditoria();
     loadHealth();

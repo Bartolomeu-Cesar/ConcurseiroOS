@@ -349,9 +349,11 @@ window.abrirMinhasVendas = async function() {
     const data = await fetch('/api/catalogo/vendas', { headers: _headers() }).then(r => r.json());
     const total = data.total_vendas || 0;
     const creditos = data.total_creditos_recebidos || 0;
+    const saldo = data.saldo_creditos || 0;
+    const podePix = !!data.pode_resgatar_pix;
 
     let html = `
-      <div style="display:flex;gap:10px;margin-bottom:14px;">
+      <div style="display:flex;gap:10px;margin-bottom:12px;">
         <div style="flex:1;background:#1e1e2e;border-radius:10px;padding:12px;text-align:center;">
           <div style="font-size:1.6rem;font-weight:700;color:#cdd6f4;">${total}</div>
           <div style="font-size:0.72rem;color:#9399b2;">venda(s)</div>
@@ -360,6 +362,16 @@ window.abrirMinhasVendas = async function() {
           <div style="font-size:1.6rem;font-weight:700;color:#a6e3a1;">💎 ${creditos}</div>
           <div style="font-size:0.72rem;color:#9399b2;">créditos recebidos</div>
         </div>
+      </div>
+      <div style="background:#1e1e2e;border-radius:10px;padding:12px;margin-bottom:14px;">
+        <div style="font-size:0.8rem;color:#cdd6f4;margin-bottom:8px;">Saldo disponível: <strong style="color:#a6e3a1;">💎 ${saldo}</strong></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button onclick="resgatarCreditos('premium', ${saldo})" style="flex:1;min-width:150px;padding:9px;background:#94e2d5;color:#1e1e2e;border:none;border-radius:8px;font-weight:600;cursor:pointer;">⏳ Resgatar como tempo Premium</button>
+          ${podePix
+            ? `<button onclick="resgatarCreditos('pix', ${saldo})" style="flex:1;min-width:150px;padding:9px;background:#f9e2af;color:#1e1e2e;border:none;border-radius:8px;font-weight:600;cursor:pointer;">💸 Resgatar via PIX</button>`
+            : `<button disabled title="Exclusivo para vitalícios" style="flex:1;min-width:150px;padding:9px;background:#45475a;color:#6c7086;border:none;border-radius:8px;font-weight:600;cursor:not-allowed;">💸 PIX (só vitalício)</button>`}
+        </div>
+        <div style="font-size:0.7rem;color:#6c7086;margin-top:6px;">Premium: converte créditos em dias de acesso. PIX: solicitação enviada ao administrador para pagamento.</div>
       </div>`;
 
     if (!data.vendas || !data.vendas.length) {
@@ -435,6 +447,53 @@ window.alterarPreco = async function(itemId, precoAtual) {
       carregarCatalogo();       // reflete na grade
     } else {
       showToast(data.detail || 'Erro ao alterar preço.', 'error');
+    }
+  } catch (e) {
+    showToast('Erro de conexão.', 'error');
+  }
+};
+
+// Resgatar créditos de vendas: 'premium' (converte em dias) ou 'pix' (vitalício).
+window.resgatarCreditos = async function(tipo, saldo) {
+  if ((saldo || 0) < 1) { showToast('Você não tem créditos para resgatar.', 'warning'); return; }
+
+  const qtdStr = await promptModal(
+    `Quantos créditos deseja resgatar? (disponível: ${saldo})`,
+    { title: tipo === 'pix' ? '💸 Resgate via PIX' : '⏳ Resgate em tempo Premium', defaultValue: String(saldo) }
+  );
+  if (qtdStr === null) return;
+  const qtd = parseInt(qtdStr, 10);
+  if (isNaN(qtd) || qtd < 1 || qtd > saldo) { showToast('Quantidade inválida.', 'warning'); return; }
+
+  const payload = { tipo, creditos: qtd };
+
+  if (tipo === 'pix') {
+    const chave = await promptModal('Informe sua chave PIX para receber o pagamento:', { title: '💸 Chave PIX' });
+    if (chave === null) return;
+    if (!chave.trim()) { showToast('Chave PIX obrigatória.', 'warning'); return; }
+    payload.chave_pix = chave.trim();
+    const ok = await confirmModal('Solicitar resgate via PIX',
+      `Você está solicitando o resgate de 💎 ${qtd} crédito(s) via PIX. O administrador entrará em contato para efetuar o pagamento. Os créditos ficam reservados até a conclusão.`,
+      { type: 'warning', confirmText: 'Solicitar' });
+    if (!ok) return;
+  } else {
+    const ok = await confirmModal('Resgatar como tempo Premium',
+      `Converter 💎 ${qtd} crédito(s) em dias de acesso Premium?`,
+      { type: 'info', confirmText: 'Resgatar' });
+    if (!ok) return;
+  }
+
+  try {
+    const res = await fetch('/api/catalogo/resgatar', {
+      method: 'POST', headers: _headers(true), body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (res.ok) {
+      await alertModal(data.mensagem || 'Solicitação registrada!', { type: 'success', title: 'Resgate' });
+      document.getElementById('vendas-modal')?.remove();
+      abrirMinhasVendas();
+    } else {
+      showToast(data.detail || 'Erro ao resgatar.', 'error');
     }
   } catch (e) {
     showToast('Erro de conexão.', 'error');

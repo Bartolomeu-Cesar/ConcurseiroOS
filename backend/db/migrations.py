@@ -1494,6 +1494,32 @@ def _m90_broadcast_expira(conn):
     log.info("Migration 90: added expira_em to broadcasts")
 
 
+def _m91_resgate_solicitacoes(conn):
+    """Solicitações de resgate dos créditos ganhos com vendas no marketplace.
+
+    - tipo 'pix': vitalício solicita troca por dinheiro; admin negocia manualmente.
+    - tipo 'premium': premium converte créditos em dias (resolvido na hora).
+    Os créditos são debitados na criação (reservados) e estornados se recusado.
+    """
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS resgate_solicitacoes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            tipo TEXT NOT NULL,
+            creditos INTEGER NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pendente',
+            chave_pix TEXT DEFAULT '',
+            dias_creditados INTEGER DEFAULT 0,
+            admin_obs TEXT DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT '',
+            resolved_at TEXT DEFAULT ''
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_resgate_user ON resgate_solicitacoes(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_resgate_status ON resgate_solicitacoes(status)")
+    log.info("Migration 91: created resgate_solicitacoes table")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -1585,6 +1611,7 @@ MIGRATIONS = [
     (88, _m88_marketplace_preco),
     (89, _m89_catalogo_compras),
     (90, _m90_broadcast_expira),
+    (91, _m91_resgate_solicitacoes),
 ]
 
 

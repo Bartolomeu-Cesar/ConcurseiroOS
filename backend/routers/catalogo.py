@@ -436,7 +436,138 @@ def minhas_vendas(conn=Depends(get_db_session), user_id: int = Depends(get_user_
         "comprador_nome": r["comprador_nome"] or "Anônimo",
         "created_at": r["created_at"],
     } for r in linhas]
-    return {"total_vendas": total_vendas, "total_creditos_recebidos": total_creditos, "vendas": vendas}
+    # Info do vendedor para a UI de resgate (saldo atual + se pode PIX = vitalício)
+    u = conn.execute("SELECT plano, plano_expira, COALESCE(creditos_saldo,0) as saldo FROM users WHERE id = ?", (user_id,)).fetchone()
+    pode_pix = _eh_vitalicio(u) if u else False
+    saldo = int(u["saldo"]) if u else 0
+    return {
+        "total_vendas": total_vendas,
+        "total_creditos_recebidos": total_creditos,
+        "vendas": vendas,
+        "saldo_creditos": saldo,
+        "pode_resgatar_pix": pode_pix,
+    }
+
+
+def _eh_vitalicio(user_row) -> bool:
+    """True se o usuário é vitalício (ilimitado, ou premium sem expiração/marcado)."""
+    plano = (user_row["plano"] if "plano" in user_row.keys() else "") or ""
+    exp = ((user_row["plano_expira"] if "plano_expira" in user_row.keys() else "") or "").strip().lower()
+    if plano == "ilimitado" or exp in ("vitalicio", "vitalício", "lifetime"):
+        return True
+    return bool(plano == "premium" and not exp)
+
+
+class ResgatarCreditos(BaseModel):
+    tipo: str            # 'pix' (vitalício) | 'premium' (converter em dias)
+    creditos: int
+    chave_pix: str = ""  # obrigatório para tipo 'pix'
+
+
+@router.post("/resgatar", summary="Resgatar créditos de vendas (PIX para vitalício, tempo para premium)")
+def resgatar_creditos(
+    body: ResgatarCreditos,
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Resgata os créditos ganhos com vendas.
+
+    - tipo 'premium': converte créditos em dias de Premium na hora (imediato).
+    - tipo 'pix': cria uma solicitação PENDENTE e notifica o admin para negociar
+      o pagamento via PIX. Disponível apenas para usuários vitalícios.
+    Em ambos os casos os créditos são debitados na solicitação (reservados);
+    um resgate PIX recusado pelo admin estorna os créditos.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from plans import calcular_dias_creditos, mover_creditos
+
+    creditos = int(body.creditos or 0)
+    if creditos < 1:
+        raise HTTPException(status_code=400, detail="Informe ao menos 1 crédito para resgatar.")
+
+    user = conn.execute("SELECT id, nome, plano, plano_expira, COALESCE(creditos_saldo,0) as saldo FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+    if creditos > int(user["saldo"]):
+        raise HTTPException(status_code=400, detail=f"Saldo insuficiente. Você tem {int(user['saldo'])} crédito(s).")
+
+    tipo = (body.tipo or "").strip().lower()
+    now = datetime.now(timezone.utc).isoformat()
+
+    if tipo == "premium":
+        # Converte créditos em dias de Premium imediatamente (estende se já ativo).
+        dias = calcular_dias_creditos(creditos)
+        if dias < 1:
+            raise HTTPException(status_code=400, detail="Créditos insuficientes para 1 dia de acesso.")
+        plano_atual = user["plano"] or "free"
+        exp = (user["plano_expira"] or "")
+        base = datetime.now(timezone.utc)
+        if plano_atual == "premium" and exp and exp.lower() not in ("vitalicio", "vitalício", "lifetime"):
+            try:
+                dt = datetime.fromisoformat(exp)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                if dt > base:
+                    base = dt
+            except (ValueError, TypeError):
+                pass
+        nova_expira = (base + timedelta(days=dias)).isoformat()
+        mover_creditos(conn, user_id, -creditos, "resgate_premium", f"Resgate: {dias} dias de Premium")
+        conn.execute("UPDATE users SET plano = 'premium', plano_expira = ? WHERE id = ?", (nova_expira, user_id))
+        conn.execute("""
+            INSERT INTO resgate_solicitacoes (user_id, tipo, creditos, status, dias_creditados, created_at, resolved_at)
+            VALUES (?, 'premium', ?, 'concluido', ?, ?, ?)
+        """, (user_id, creditos, dias, now, now))
+        conn.commit()
+        log.info(f"[resgate] user={user_id} converteu {creditos} créditos em {dias} dias premium")
+        return {"ok": True, "tipo": "premium", "dias_creditados": dias, "expira": nova_expira,
+                "mensagem": f"✅ {dias} dias de Premium adicionados!"}
+
+    if tipo == "pix":
+        if not _eh_vitalicio(user):
+            raise HTTPException(status_code=403, detail="Resgate por PIX é exclusivo para usuários vitalícios. Você pode resgatar como tempo de Premium.")
+        chave = (body.chave_pix or "").strip()
+        if not chave:
+            raise HTTPException(status_code=400, detail="Informe sua chave PIX para o resgate.")
+        # Debita (reserva) os créditos e cria a solicitação pendente.
+        mover_creditos(conn, user_id, -creditos, "resgate_pix_reserva", f"Resgate PIX solicitado ({creditos} créditos)")
+        cur = conn.execute("""
+            INSERT INTO resgate_solicitacoes (user_id, tipo, creditos, status, chave_pix, created_at)
+            VALUES (?, 'pix', ?, 'pendente', ?, ?)
+        """, (user_id, creditos, chave, now))
+        req_id = cur.lastrowid
+
+        # Notifica os admins (push best-effort) para negociarem o pagamento.
+        try:
+            from routers.notifications import _send_push_to_user
+            admins = conn.execute("SELECT id FROM users WHERE role = 'admin'").fetchall()
+            for a in admins:
+                try:
+                    _send_push_to_user(conn, a["id"], "💸 Novo resgate PIX",
+                                       f"{user['nome'] or 'Usuário'} solicitou resgate de {creditos} créditos via PIX.",
+                                       url="/admin.html", tag="resgate")
+                except Exception:
+                    pass
+        except Exception as e:
+            log.warning(f"[resgate] push admin indisponível: {e}")
+
+        conn.commit()
+        log.info(f"[resgate] user={user_id} solicitou PIX de {creditos} créditos (req={req_id})")
+        return {"ok": True, "tipo": "pix", "id": req_id, "status": "pendente",
+                "mensagem": "✅ Solicitação enviada! O administrador entrará em contato para o pagamento via PIX."}
+
+    raise HTTPException(status_code=400, detail="tipo deve ser 'pix' ou 'premium'.")
+
+
+@router.get("/resgates", summary="Minhas solicitações de resgate")
+def meus_resgates(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Lista as solicitações de resgate do usuário logado."""
+    rows = conn.execute("""
+        SELECT id, tipo, creditos, status, dias_creditados, admin_obs, created_at, resolved_at
+        FROM resgate_solicitacoes WHERE user_id = ? ORDER BY id DESC LIMIT 50
+    """, (user_id,)).fetchall()
+    return {"resgates": [dict(r) for r in rows]}
 
 
 @router.delete("/{item_id}", summary="Remover item do catálogo (admin ou dono)")

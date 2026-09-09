@@ -762,6 +762,105 @@ class TestPublicacaoGranular:
         assert r.status_code == 404
 
 
+class TestResgate:
+    """Resgate de créditos: premium→tempo, vitalício→PIX (com aprovação admin)."""
+
+    def _set_saldo(self, uid, saldo):
+        conn = _conn()
+        conn.execute("UPDATE users SET creditos_saldo = ? WHERE id = ?", (saldo, uid))
+        conn.commit()
+        conn.close()
+
+    def _saldo(self, uid):
+        conn = _conn()
+        row = conn.execute("SELECT COALESCE(creditos_saldo,0) FROM users WHERE id = ?", (uid,)).fetchone()
+        conn.close()
+        return int(row[0] or 0)
+
+    def _criar_premium(self, uid, email):
+        conn = _conn()
+        conn.execute("""
+            INSERT OR IGNORE INTO users (id, nome, username, email, password_hash, plano, plano_expira, role, creditos_saldo, created_at)
+            VALUES (?, ?, ?, ?, 'hash', 'premium', '2027-01-01T00:00:00+00:00', 'user', 0, '2026-01-01')
+        """, (uid, f"Prem {uid}", f"prem{uid}", email))
+        conn.commit()
+        conn.close()
+
+    def _criar_vitalicio(self, uid, email):
+        conn = _conn()
+        conn.execute("""
+            INSERT OR IGNORE INTO users (id, nome, username, email, password_hash, plano, plano_expira, role, creditos_saldo, created_at)
+            VALUES (?, ?, ?, ?, 'hash', 'ilimitado', 'vitalicio', 'user', 0, '2026-01-01')
+        """, (uid, f"Vit {uid}", f"vit{uid}", email))
+        conn.commit()
+        conn.close()
+
+    def test_premium_resgata_como_tempo(self, client):
+        self._criar_premium(500, "res500@test.com")
+        self._set_saldo(500, 10)
+        r = client.post("/api/catalogo/resgatar", headers=_h(_token(500, "res500@test.com")), json={"tipo": "premium", "creditos": 4})
+        assert r.status_code == 200, r.text
+        assert r.json()["tipo"] == "premium"
+        assert r.json()["dias_creditados"] >= 1
+        assert self._saldo(500) == 6  # debitou 4
+
+    def test_vitalicio_solicita_pix_pendente(self, client):
+        self._criar_vitalicio(510, "res510@test.com")
+        self._set_saldo(510, 20)
+        r = client.post("/api/catalogo/resgatar", headers=_h(_token(510, "res510@test.com")), json={"tipo": "pix", "creditos": 15, "chave_pix": "chave@pix.com"})
+        assert r.status_code == 200, r.text
+        assert r.json()["status"] == "pendente"
+        assert self._saldo(510) == 5  # reservou 15
+        # Aparece nas minhas solicitações
+        rr = client.get("/api/catalogo/resgates", headers=_h(_token(510, "res510@test.com")))
+        assert any(x["tipo"] == "pix" and x["status"] == "pendente" for x in rr.json()["resgates"])
+
+    def test_premium_nao_pode_pix(self, client):
+        self._criar_premium(520, "res520@test.com")
+        self._set_saldo(520, 10)
+        r = client.post("/api/catalogo/resgatar", headers=_h(_token(520, "res520@test.com")), json={"tipo": "pix", "creditos": 5, "chave_pix": "x"})
+        assert r.status_code == 403
+
+    def test_pix_sem_chave_400(self, client):
+        self._criar_vitalicio(530, "res530@test.com")
+        self._set_saldo(530, 10)
+        r = client.post("/api/catalogo/resgatar", headers=_h(_token(530, "res530@test.com")), json={"tipo": "pix", "creditos": 5, "chave_pix": ""})
+        assert r.status_code == 400
+
+    def test_saldo_insuficiente_400(self, client):
+        self._criar_premium(540, "res540@test.com")
+        self._set_saldo(540, 2)
+        r = client.post("/api/catalogo/resgatar", headers=_h(_token(540, "res540@test.com")), json={"tipo": "premium", "creditos": 10})
+        assert r.status_code == 400
+        assert self._saldo(540) == 2  # nada debitado
+
+    def test_admin_conclui_resgate(self, client):
+        self._criar_vitalicio(550, "res550@test.com")
+        self._set_saldo(550, 12)
+        req_id = client.post("/api/catalogo/resgatar", headers=_h(_token(550, "res550@test.com")), json={"tipo": "pix", "creditos": 12, "chave_pix": "k"}).json()["id"]
+        # Admin (id 1) conclui
+        r = client.post(f"/api/admin/resgates/{req_id}/resolver", headers=_h(_admin_token()), json={"acao": "concluir"})
+        assert r.status_code == 200, r.text
+        assert self._saldo(550) == 0  # créditos foram pagos (não estornados)
+
+    def test_admin_recusa_estorna(self, client):
+        self._criar_vitalicio(560, "res560@test.com")
+        self._set_saldo(560, 8)
+        req_id = client.post("/api/catalogo/resgatar", headers=_h(_token(560, "res560@test.com")), json={"tipo": "pix", "creditos": 8, "chave_pix": "k"}).json()["id"]
+        assert self._saldo(560) == 0  # reservado
+        r = client.post(f"/api/admin/resgates/{req_id}/resolver", headers=_h(_admin_token()), json={"acao": "recusar"})
+        assert r.status_code == 200
+        assert self._saldo(560) == 8  # estornado
+
+    def test_admin_lista_pendentes(self, client):
+        self._criar_vitalicio(570, "res570@test.com")
+        self._set_saldo(570, 6)
+        client.post("/api/catalogo/resgatar", headers=_h(_token(570, "res570@test.com")), json={"tipo": "pix", "creditos": 6, "chave_pix": "k"})
+        r = client.get("/api/admin/resgates?status=pendente", headers=_h(_admin_token()))
+        assert r.status_code == 200
+        assert any(x["user_id"] == 570 for x in r.json()["resgates"])
+
+
 def teardown_module():
     try:
         os.unlink(_tmp_db.name)

@@ -5,7 +5,7 @@ Apenas user_id=1 (admin) pode acessar estes endpoints.
 from datetime import datetime
 
 from deps import get_user_id
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import Response
 from plans import PLANS
 from schemas import AdminChangePlan, AdminCreateUser, AdminUpdateUser
@@ -1095,6 +1095,93 @@ def listar_broadcasts(
     from utils import sql_paginate
     query = "SELECT id, titulo, corpo, url, segmento, alcance, push_enviados, expira_em, created_at FROM broadcasts ORDER BY id DESC"
     return sql_paginate(conn, query, (), page=page, limit=limit)
+
+
+# ============================================================
+# RESGATES DE CRÉDITOS (MARKETPLACE)
+# ============================================================
+
+@router.get("/resgates", summary="Solicitações de resgate de créditos (admin)")
+def listar_resgates(
+    status: str = "pendente",
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Lista solicitações de resgate. Por padrão as pendentes (PIX aguardando)."""
+    _require_admin(user_id)
+    if status and status != "todos":
+        rows = conn.execute("""
+            SELECT r.*, u.nome as user_nome, u.email as user_email
+            FROM resgate_solicitacoes r LEFT JOIN users u ON u.id = r.user_id
+            WHERE r.status = ? ORDER BY r.id DESC LIMIT 200
+        """, (status,)).fetchall()
+    else:
+        rows = conn.execute("""
+            SELECT r.*, u.nome as user_nome, u.email as user_email
+            FROM resgate_solicitacoes r LEFT JOIN users u ON u.id = r.user_id
+            ORDER BY r.id DESC LIMIT 200
+        """).fetchall()
+    return {"resgates": [dict(r) for r in rows]}
+
+
+@router.post("/resgates/{req_id}/resolver", summary="Concluir ou recusar um resgate PIX (admin)")
+def resolver_resgate(
+    req_id: int,
+    body: dict = Body(...),
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Resolve uma solicitação de resgate PIX pendente.
+
+    body: {acao: "concluir" | "recusar", obs: str}
+    - concluir: marca como pago (o PIX é feito manualmente pelo admin fora do app).
+    - recusar: estorna os créditos reservados ao usuário.
+    """
+    _require_admin(user_id)
+    from datetime import datetime, timezone
+
+    req = conn.execute("SELECT * FROM resgate_solicitacoes WHERE id = ?", (req_id,)).fetchone()
+    if not req:
+        raise HTTPException(status_code=404, detail="Solicitação não encontrada.")
+    if req["status"] != "pendente":
+        raise HTTPException(status_code=400, detail=f"Solicitação já está '{req['status']}'.")
+
+    acao = (body.get("acao") or "").strip().lower()
+    obs = (body.get("obs") or "").strip()
+    now = datetime.now(timezone.utc).isoformat()
+
+    if acao == "concluir":
+        conn.execute("UPDATE resgate_solicitacoes SET status = 'concluido', admin_obs = ?, resolved_at = ? WHERE id = ?",
+                     (obs, now, req_id))
+    elif acao == "recusar":
+        # Estorna os créditos reservados ao usuário.
+        from plans import mover_creditos
+        mover_creditos(conn, req["user_id"], int(req["creditos"]), "resgate_pix_estorno",
+                       f"Estorno de resgate PIX recusado (#{req_id})")
+        conn.execute("UPDATE resgate_solicitacoes SET status = 'recusado', admin_obs = ?, resolved_at = ? WHERE id = ?",
+                     (obs, now, req_id))
+    else:
+        raise HTTPException(status_code=400, detail="acao deve ser 'concluir' ou 'recusar'.")
+
+    _audit(conn, user_id, f"resgate.{acao}", "resgate", req_id,
+           {"user_id": req["user_id"], "creditos": req["creditos"]})
+
+    # Notifica o solicitante (push best-effort).
+    try:
+        from routers.notifications import _send_push_to_user
+        if acao == "concluir":
+            _send_push_to_user(conn, req["user_id"], "💸 Resgate concluído",
+                               f"Seu resgate de {req['creditos']} créditos via PIX foi processado.", tag="resgate")
+        else:
+            _send_push_to_user(conn, req["user_id"], "Resgate não aprovado",
+                               f"Seu resgate PIX foi recusado e os {req['creditos']} créditos foram estornados.", tag="resgate")
+    except Exception:
+        pass
+
+    conn.commit()
+    log.info(f"[resgate] admin={user_id} {acao} resgate #{req_id}")
+    return {"ok": True, "acao": acao, "id": req_id}
+
 
 
 # ============================================================
