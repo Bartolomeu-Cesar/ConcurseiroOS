@@ -567,6 +567,38 @@ class TestMarketplace:
         assert r.json()["cobrado"] is False
         assert self._saldo(231) == 5
 
+    def test_item_gratis_marca_adquirido(self, client):
+        """Importar item grátis marca ja_comprado=True (evita reimportar/duplicar)."""
+        self._criar_vendedor(290, "vend290@test.com", "MktGratis")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(290, "vend290@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "Grátis Marca", "origem_uid": 0, "ref": "MktGratis", "preco_creditos": 0,
+        }).json()["id"]
+        _criar_estudante(291, "comp291@test.com")
+        tok = _token(291, "comp291@test.com")
+        lst = client.get("/api/catalogo", headers=_h(tok)).json()
+        antes = next(i for i in lst["itens"] if i["id"] == item_id)
+        assert antes["ja_comprado"] is False
+        client.post(f"/api/catalogo/{item_id}/importar", headers=_h(tok))
+        lst2 = client.get("/api/catalogo", headers=_h(tok)).json()
+        depois = next(i for i in lst2["itens"] if i["id"] == item_id)
+        assert depois["ja_comprado"] is True
+
+    def test_reimportar_gratis_idempotente(self, client):
+        """Reimportar item grátis já adquirido não erra nem duplica o registro."""
+        self._criar_vendedor(292, "vend292@test.com", "MktGratis2")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(292, "vend292@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "Grátis Idem", "origem_uid": 0, "ref": "MktGratis2", "preco_creditos": 0,
+        }).json()["id"]
+        _criar_estudante(293, "comp293@test.com")
+        tok = _token(293, "comp293@test.com")
+        client.post(f"/api/catalogo/{item_id}/importar", headers=_h(tok))
+        r2 = client.post(f"/api/catalogo/{item_id}/importar", headers=_h(tok))
+        assert r2.status_code == 200
+        conn = _conn()
+        n = conn.execute("SELECT COUNT(*) FROM catalogo_compras WHERE item_id = ? AND comprador_uid = 293", (item_id,)).fetchone()[0]
+        conn.close()
+        assert n == 1
+
     def test_nao_comprar_proprio_material(self, client):
         self._criar_vendedor(240, "vend240@test.com", "MktE")
         self._set_saldo(240, 100)

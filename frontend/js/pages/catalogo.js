@@ -57,17 +57,24 @@ async function carregarCatalogo() {
       const pago = (it.preco_creditos || 0) > 0 && !it.ja_comprado;
       const precoBadge = (it.preco_creditos || 0) > 0
         ? (it.ja_comprado
-            ? '<span class="cat-preco" style="color:#a6e3a1;" title="Você já comprou este material">✓ Adquirido</span>'
+            ? '<span class="cat-preco" style="color:#a6e3a1;" title="Você já adquiriu este material">✓ Adquirido</span>'
             : `<span class="cat-preco" style="color:#f9e2af;" title="Preço em créditos">💎 ${it.preco_creditos}</span>`)
-        : '<span class="cat-preco" style="color:#a6e3a1;">Grátis</span>';
+        : (it.ja_comprado
+            ? '<span class="cat-preco" style="color:#a6e3a1;" title="Você já importou este material">✓ Adquirido</span>'
+            : '<span class="cat-preco" style="color:#a6e3a1;">Grátis</span>');
       const cargoBadge = (it.concurso || it.cargo)
         ? `<div class="cat-cargo" style="font-size:0.72rem;color:#89b4fa;">🎯 ${esc([it.concurso, it.cargo].filter(Boolean).join(' · '))}</div>`
         : '';
       const btnLabel = pago ? `💎 Comprar (${it.preco_creditos})` : '📥 Importar';
-      // Item do próprio usuário: não faz sentido comprar/importar o que ele mesmo publicou.
-      const acaoHtml = it.eh_meu
-        ? `<span style="flex:1;display:flex;align-items:center;justify-content:center;padding:9px;background:#313244;color:#9399b2;border-radius:8px;font-size:0.82rem;font-weight:600;" title="Você publicou este material">✏️ Seu material</span>`
-        : `<button onclick="importarItem(${it.id}, this, ${it.preco_creditos || 0}, ${it.ja_comprado ? 'true' : 'false'})" style="flex:1;">${btnLabel}</button>`;
+      // Prioridade: material próprio > já adquirido > comprar/importar.
+      let acaoHtml;
+      if (it.eh_meu) {
+        acaoHtml = `<span style="flex:1;display:flex;align-items:center;justify-content:center;padding:9px;background:#313244;color:#9399b2;border-radius:8px;font-size:0.82rem;font-weight:600;" title="Você publicou este material">✏️ Seu material</span>`;
+      } else if (it.ja_comprado) {
+        acaoHtml = `<span style="flex:1;display:flex;align-items:center;justify-content:center;padding:9px;background:#313244;color:#a6e3a1;border-radius:8px;font-size:0.82rem;font-weight:600;" title="Este material já está na sua conta">✓ Já na sua conta</span>`;
+      } else {
+        acaoHtml = `<button onclick="importarItem(${it.id}, this, ${it.preco_creditos || 0}, false)" style="flex:1;">${btnLabel}</button>`;
+      }
       return `
       <div class="catalogo-card">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;">

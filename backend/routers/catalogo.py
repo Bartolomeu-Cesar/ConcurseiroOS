@@ -304,6 +304,14 @@ def importar_item(
     else:
         raise HTTPException(status_code=400, detail=f"Tipo de item desconhecido: {tipo}")
 
+    # Registrar aquisição também para itens GRÁTIS (idempotente via UNIQUE), para
+    # que o catálogo marque como "já adquirido" e evite reimportar/duplicar.
+    if not cobrar and not ja_comprou:
+        conn.execute("""
+            INSERT OR IGNORE INTO catalogo_compras (item_id, comprador_uid, vendedor_uid, preco_creditos, taxa_pct, creditos_vendedor, created_at)
+            VALUES (?, ?, ?, 0, 0, 0, ?)
+        """, (item_id, user_id, vendedor_uid, datetime.now(timezone.utc).isoformat()))
+
     # Incrementar contador de downloads
     conn.execute("UPDATE catalogo_itens SET downloads = downloads + 1 WHERE id = ?", (item_id,))
     conn.commit()
