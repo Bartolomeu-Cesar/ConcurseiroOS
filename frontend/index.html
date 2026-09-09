@@ -323,7 +323,10 @@
       <div id="flash-timer" style="margin-bottom:10px;display:none;">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:0.82rem;margin-bottom:4px;">
           <span id="flash-timer-badge" style="font-size:0.7rem;color:var(--text-sub);font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
-          <span id="flash-timer-label" style="color:var(--text-sub);font-weight:600;flex-shrink:0;">⏱ --s</span>
+          <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+            <span id="flash-timer-label" style="color:var(--text-sub);font-weight:600;">⏱ --s</span>
+            <button type="button" id="flash-timer-toggle" onclick="toggleFlashTimer()" title="Pausar/retomar o cronômetro" aria-label="Pausar ou retomar o cronômetro" style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:6px;color:var(--text);cursor:pointer;padding:2px 8px;font-size:0.8rem;line-height:1.4;">⏸</button>
+          </div>
         </div>
         <div style="height:6px;background:var(--bg-elevated);border-radius:3px;overflow:hidden;">
           <div id="flash-timer-fill" style="height:100%;background:var(--blue);border-radius:3px;width:100%;transition:width 1s linear;"></div>

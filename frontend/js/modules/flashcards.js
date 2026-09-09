@@ -31,6 +31,9 @@ let _flashTimerMax = 0;
 let _flashTimerFase = 'regressiva'; // 'regressiva' (previsto) | 'extra' (excedente)
 let _flashTimerExtra = 0;           // segundos além do previsto (fase extra)
 let _flashTimerElapsed = 0;         // segundos totais no card (previsto + extra)
+let _flashTimerPaused = false;      // pause/play do cronômetro (controle do usuário)
+let _flashCardPausedMs = 0;         // tempo total pausado no card atual (ms) — descontado do tempo creditado
+let _flashPauseStartTs = null;      // timestamp em que a pausa começou (null = não pausado)
 let _lastTempoResumo = null;        // resumo de tempo do card ao avaliar acerto/erro
 
 function _stopFlashTimer() {
@@ -43,15 +46,54 @@ function _stopFlashTimer() {
 }
 
 /**
+ * Pausa/retoma o cronômetro do card. Enquanto pausado, o tick não conta e o
+ * tempo parado é descontado do tempo creditado à matéria (_accumulateCardTime).
+ */
+export function toggleFlashTimer() {
+  // Só faz sentido se há um card em andamento com timer ativo.
+  if (!_flashTimerInterval && !_flashTimerPaused) return;
+  _flashTimerPaused = !_flashTimerPaused;
+  const btn = document.getElementById('flash-timer-toggle');
+  const label = document.getElementById('flash-timer-label');
+  if (_flashTimerPaused) {
+    _flashPauseStartTs = Date.now();
+    if (btn) { btn.textContent = '▶'; btn.title = 'Retomar o cronômetro'; }
+    if (label) { label.textContent = '⏸ pausado'; label.style.color = 'var(--text-sub)'; label.style.fontWeight = ''; }
+  } else {
+    if (_flashPauseStartTs != null) {
+      _flashCardPausedMs += Date.now() - _flashPauseStartTs;
+      _flashPauseStartTs = null;
+    }
+    if (btn) { btn.textContent = '⏸'; btn.title = 'Pausar o cronômetro'; }
+    // Restaura o texto do label conforme a fase atual
+    if (label) {
+      if (_flashTimerFase === 'extra') {
+        label.textContent = `⏱ +${_flashTimerExtra}s (tempo extra)`;
+      } else {
+        label.textContent = `⏱ ${_flashTimerSeg}s`;
+      }
+    }
+  }
+}
+
+/**
  * Fecha o cronômetro do card em andamento e credita o tempo à MATÉRIA do card
  * (cap 5min/card). Chamado antes de trocar de card, avaliar ou sair. Idempotente.
  */
 function _accumulateCardTime() {
   if (!_flashCardStart) return;
-  const elapsed = Math.round((Date.now() - _flashCardStart) / 1000);
+  // Se ainda está pausado ao acumular (ex.: avaliou com o timer pausado),
+  // fecha a janela de pausa em aberto para descontá-la corretamente.
+  if (_flashPauseStartTs != null) {
+    _flashCardPausedMs += Date.now() - _flashPauseStartTs;
+    _flashPauseStartTs = null;
+  }
+  const brutoMs = Date.now() - _flashCardStart;
+  const elapsed = Math.round(Math.max(0, brutoMs - _flashCardPausedMs) / 1000);
   const mat = _flashCardMateria || 'Geral';
   _flashSessionByMat[mat] = (_flashSessionByMat[mat] || 0) + Math.min(elapsed, 300);
   _flashCardStart = null;
+  _flashCardPausedMs = 0;
 }
 
 /**
@@ -139,6 +181,9 @@ function _startFlashTimer(segundos, detalhe) {
   _flashTimerFase = 'regressiva';
   _flashTimerExtra = 0;
   _flashTimerElapsed = 0;
+  _flashTimerPaused = false;
+  _flashCardPausedMs = 0;
+  _flashPauseStartTs = null;
 
   const timer = document.getElementById('flash-timer');
   const fill = document.getElementById('flash-timer-fill');
@@ -157,8 +202,11 @@ function _startFlashTimer(segundos, detalhe) {
   label.textContent = `⏱ ${_flashTimerSeg}s`;
   label.style.color = 'var(--text-sub)';
   label.style.fontWeight = '';
+  const toggleBtn = document.getElementById('flash-timer-toggle');
+  if (toggleBtn) { toggleBtn.textContent = '⏸'; toggleBtn.title = 'Pausar o cronômetro'; }
 
   _flashTimerInterval = setInterval(() => {
+    if (_flashTimerPaused) return;  // pausado: não conta o tempo
     _flashTimerElapsed++;
 
     if (_flashTimerFase === 'regressiva') {
@@ -2573,6 +2621,19 @@ function _finishMatchGame() {
   const segs = Math.max(1, Math.floor((Date.now() - _matchState.inicio) / 1000));
   const erros = _matchState.erros;
   const perfeito = erros === 0;
+
+  // Contabiliza o tempo do jogo como sessão de estudo (antes era só visual).
+  try {
+    const horas = Math.round(segs / 3600 * 10000) / 10000;  // preserva jogos curtos
+    fetch('/api/sessoes-estudo/registrar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ horas, materia: 'Flashcards (Jogo de Pares)', tipo: 'flashcard' }),
+    }).then(() => {
+      emit('sessao:horas', { materia: 'Flashcards (Jogo de Pares)', horas, tipo: 'flashcard' });
+    }).catch(() => {});
+  } catch (e) { /* não bloqueia o fim do jogo */ }
+
   area.innerHTML = `
     <div class="match-wrap">
       <div class="flash-empty" style="padding:20px;">
