@@ -645,6 +645,123 @@ class TestMarketplace:
         assert r.json()["titulo"] == "TituloNovo"
 
 
+class TestPublicacaoGranular:
+    """Publicação granular: edital por cargo, súmulas por tribunal e revisões."""
+
+    def _criar_vendedor(self, uid, email):
+        conn = _conn()
+        conn.execute("""
+            INSERT OR IGNORE INTO users (id, nome, username, email, password_hash, plano, role, curador_verificado, creditos_saldo, created_at)
+            VALUES (?, ?, ?, ?, 'hash', 'premium', 'user', 1, 0, '2026-01-01')
+        """, (uid, f"VendG {uid}", f"vendg{uid}", email))
+        conn.commit()
+        conn.close()
+
+    # ---------- Edital por cargo ----------
+    def test_edital_por_cargo(self, client):
+        self._criar_vendedor(400, "vg400@test.com")
+        conn = _conn()
+        # Mesmo edital, dois cargos
+        conn.execute("INSERT INTO edital (edital_nome, cargo, materia, topico, status, user_id) VALUES ('TRF 2026', 'Analista', 'Dir Const', 'T1', 'Concluído', 400)")
+        conn.execute("INSERT INTO edital (edital_nome, cargo, materia, topico, status, user_id) VALUES ('TRF 2026', 'Técnico', 'Dir Adm', 'T2', 'Concluído', 400)")
+        conn.commit()
+        conn.close()
+
+        # Refs devem incluir a opção por cargo
+        r = client.get("/api/catalogo/meus/refs?tipo=edital", headers=_h(_token(400, "vg400@test.com")))
+        assert r.status_code == 200
+        refs = [x["ref"] for x in r.json()["refs"]]
+        assert "TRF 2026" in refs
+        assert "TRF 2026::Analista" in refs
+
+        # Publica só o cargo Analista
+        pub = client.post("/api/catalogo/publicar", headers=_h(_token(400, "vg400@test.com")), json={
+            "tipo": "edital", "titulo": "TRF Analista", "origem_uid": 0, "ref": "TRF 2026::Analista",
+        })
+        assert pub.status_code == 200, pub.text
+        item_id = pub.json()["id"]
+
+        # Importa e confere que só o tópico do cargo Analista veio
+        _criar_estudante(401, "comp401@test.com")
+        r = client.post(f"/api/catalogo/{item_id}/importar", headers=_h(_token(401, "comp401@test.com")))
+        assert r.status_code == 200
+        conn = _conn()
+        cargos = [row[0] for row in conn.execute("SELECT DISTINCT cargo FROM edital WHERE user_id = 401").fetchall()]
+        conn.close()
+        assert cargos == ["Analista"]
+
+    # ---------- Súmulas por tribunal ----------
+    def test_sumulas_por_tribunal(self, client):
+        self._criar_vendedor(410, "vg410@test.com")
+        conn = _conn()
+        conn.execute("INSERT INTO sumulas (tribunal, numero, enunciado, proxima_revisao, user_id) VALUES ('STF', 1, 'E1', '2026-01-01', 410)")
+        conn.execute("INSERT INTO sumulas (tribunal, numero, enunciado, proxima_revisao, user_id) VALUES ('STJ', 2, 'E2', '2026-01-01', 410)")
+        conn.commit()
+        conn.close()
+
+        r = client.get("/api/catalogo/meus/refs?tipo=deck_sumulas", headers=_h(_token(410, "vg410@test.com")))
+        refs = [x["ref"] for x in r.json()["refs"]]
+        assert "" in refs        # todas
+        assert "STF" in refs and "STJ" in refs
+
+        # Publica só STF
+        pub = client.post("/api/catalogo/publicar", headers=_h(_token(410, "vg410@test.com")), json={
+            "tipo": "deck_sumulas", "titulo": "Súmulas STF", "origem_uid": 0, "ref": "STF",
+        })
+        assert pub.status_code == 200, pub.text
+        _criar_estudante(411, "comp411@test.com")
+        client.post(f"/api/catalogo/{pub.json()['id']}/importar", headers=_h(_token(411, "comp411@test.com")))
+        conn = _conn()
+        tribunais = [row[0] for row in conn.execute("SELECT DISTINCT tribunal FROM sumulas WHERE user_id = 411").fetchall()]
+        conn.close()
+        assert tribunais == ["STF"]
+
+    # ---------- Revisões ----------
+    def test_publicar_e_importar_revisao(self, client):
+        self._criar_vendedor(420, "vg420@test.com")
+        conn = _conn()
+        now = datetime.now().isoformat()
+        conn.execute("INSERT INTO revisao_blocos (user_id, pdf_path, tipo, titulo, conteudo, pagina, ordem, created_at) VALUES (420, 'material.pdf', 'texto', 'B1', 'c1', 1, 0, ?)", (now,))
+        conn.execute("INSERT INTO revisao_blocos (user_id, pdf_path, tipo, titulo, conteudo, pagina, ordem, created_at) VALUES (420, 'material.pdf', 'nota', 'B2', 'c2', 2, 1, ?)", (now,))
+        conn.commit()
+        conn.close()
+
+        r = client.get("/api/catalogo/meus/refs?tipo=revisao", headers=_h(_token(420, "vg420@test.com")))
+        refs = [x["ref"] for x in r.json()["refs"]]
+        assert "material.pdf" in refs
+
+        pub = client.post("/api/catalogo/publicar", headers=_h(_token(420, "vg420@test.com")), json={
+            "tipo": "revisao", "titulo": "Caderno Revisão PDF", "origem_uid": 0, "ref": "material.pdf", "preco_creditos": 0,
+        })
+        assert pub.status_code == 200, pub.text
+        item_id = pub.json()["id"]
+
+        _criar_estudante(421, "comp421@test.com")
+        r = client.post(f"/api/catalogo/{item_id}/importar", headers=_h(_token(421, "comp421@test.com")))
+        assert r.status_code == 200
+        assert r.json()["importados"] == 2
+        conn = _conn()
+        n = conn.execute("SELECT COUNT(*) FROM revisao_blocos WHERE user_id = 421 AND pdf_path = 'material.pdf'").fetchone()[0]
+        conn.close()
+        assert n == 2
+
+    def test_revisao_ref_inexistente_404(self, client):
+        self._criar_vendedor(430, "vg430@test.com")
+        r = client.post("/api/catalogo/publicar", headers=_h(_token(430, "vg430@test.com")), json={
+            "tipo": "revisao", "titulo": "X", "origem_uid": 0, "ref": "nao_existe.pdf",
+        })
+        assert r.status_code == 404
+
+    def test_revisao_tipo_valido(self, client):
+        """O tipo 'revisao' é aceito (não cai em 'tipo inválido')."""
+        self._criar_vendedor(440, "vg440@test.com")
+        # Sem recurso → 404 (recurso não encontrado), não 400 (tipo inválido)
+        r = client.post("/api/catalogo/publicar", headers=_h(_token(440, "vg440@test.com")), json={
+            "tipo": "revisao", "titulo": "X", "origem_uid": 0, "ref": "",
+        })
+        assert r.status_code == 404
+
+
 def teardown_module():
     try:
         os.unlink(_tmp_db.name)

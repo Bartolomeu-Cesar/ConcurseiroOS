@@ -33,6 +33,7 @@ TIPOS_VALIDOS = {
     "deck_flashcards": {"label": "Deck de flashcards", "emoji": "🧠"},
     "deck_questoes": {"label": "Pacote de questões", "emoji": "❓"},
     "deck_sumulas": {"label": "Súmulas", "emoji": "⚖️"},
+    "revisao": {"label": "Caderno de Revisão", "emoji": "🗂️"},
 }
 
 
@@ -296,7 +297,9 @@ def importar_item(
     elif tipo == "deck_questoes":
         copiados = _importar_deck(conn, "questoes", origem_uid, user_id, ref)
     elif tipo == "deck_sumulas":
-        copiados = _importar_deck(conn, "sumulas", origem_uid, user_id, "")
+        copiados = _importar_sumulas(conn, origem_uid, user_id, ref)  # ref = tribunal ou '' (todas)
+    elif tipo == "revisao":
+        copiados = _importar_revisao(conn, origem_uid, user_id, ref)  # ref = pdf_path
     else:
         raise HTTPException(status_code=400, detail=f"Tipo de item desconhecido: {tipo}")
 
@@ -551,38 +554,73 @@ def listar_refs(
 ):
     """Lista as opções de 'ref' publicáveis para um tipo/usuário.
 
-    Ex: para tipo=edital retorna os edital_nome; para deck_flashcards retorna
-    as matérias; para vademecum retorna as leis (id + nome).
+    Ex: para tipo=edital retorna os edital_nome e também cada cargo do edital;
+    para deck_sumulas retorna cada tribunal; para revisao retorna cada caderno
+    de revisão (por PDF).
     """
     _require_admin(conn, user_id)
+    return {"refs": _refs_para(conn, tipo, origem_uid)}
+
+
+def _refs_para(conn, tipo: str, uid: int) -> list:
+    """Opções de 'ref' publicáveis para um tipo, na conta de `uid`.
+
+    Convenções de ref:
+    - edital: "edital_nome" (todos os cargos) ou "edital_nome::cargo" (um cargo).
+    - deck_sumulas: "" (todas) ou "tribunal" (ex.: "STF").
+    - revisao: "pdf_path" (um caderno de revisão por PDF).
+    """
     refs = []
     try:
         if tipo == "edital":
             rows = conn.execute(
                 "SELECT edital_nome, COUNT(*) as n FROM edital WHERE user_id = ? GROUP BY edital_nome ORDER BY edital_nome",
-                (origem_uid,)
+                (uid,)
             ).fetchall()
-            refs = [{"ref": r["edital_nome"], "label": f"{r['edital_nome']} ({r['n']} tópicos)"} for r in rows]
+            for r in rows:
+                nome = r["edital_nome"]
+                refs.append({"ref": nome, "label": f"{nome} — todos os cargos ({r['n']} tópicos)"})
+                # Cada cargo específico daquele edital vira uma ref "nome::cargo"
+                cargos = conn.execute(
+                    "SELECT cargo, COUNT(*) as n FROM edital WHERE user_id = ? AND edital_nome = ? AND COALESCE(cargo,'') != '' GROUP BY cargo ORDER BY cargo",
+                    (uid, nome)
+                ).fetchall()
+                for cg in cargos:
+                    refs.append({"ref": f"{nome}::{cg['cargo']}", "label": f"{nome} · {cg['cargo']} ({cg['n']} tópicos)"})
         elif tipo == "caderno":
-            rows = conn.execute("SELECT id, nome FROM cadernos WHERE user_id = ? ORDER BY nome", (origem_uid,)).fetchall()
+            rows = conn.execute("SELECT id, nome FROM cadernos WHERE user_id = ? ORDER BY nome", (uid,)).fetchall()
             refs = [{"ref": str(r["id"]), "label": r["nome"]} for r in rows]
         elif tipo == "vademecum":
-            rows = conn.execute("SELECT id, nome, sigla FROM vademecum_leis WHERE user_id = ? ORDER BY nome", (origem_uid,)).fetchall()
+            rows = conn.execute("SELECT id, nome, sigla FROM vademecum_leis WHERE user_id = ? ORDER BY nome", (uid,)).fetchall()
             refs = [{"ref": str(r["id"]), "label": f"{r['nome']} ({r['sigla']})" if r["sigla"] else r["nome"]} for r in rows]
         elif tipo in ("deck_flashcards", "deck_questoes"):
             tabela = "flashcards" if tipo == "deck_flashcards" else "questoes"
             rows = conn.execute(
                 f"SELECT materia, COUNT(*) as n FROM {tabela} WHERE user_id = ? AND materia != '' GROUP BY materia ORDER BY materia",
-                (origem_uid,)
+                (uid,)
             ).fetchall()
             refs = [{"ref": r["materia"], "label": f"{r['materia']} ({r['n']})"} for r in rows]
         elif tipo == "deck_sumulas":
-            n = conn.execute("SELECT COUNT(*) FROM sumulas WHERE user_id = ?", (origem_uid,)).fetchone()[0]
-            if n > 0:
-                refs = [{"ref": "", "label": f"Todas as súmulas ({n})"}]
+            total = conn.execute("SELECT COUNT(*) FROM sumulas WHERE user_id = ?", (uid,)).fetchone()[0]
+            if total > 0:
+                refs.append({"ref": "", "label": f"Todas as súmulas ({total})"})
+                tribunais = conn.execute(
+                    "SELECT tribunal, COUNT(*) as n FROM sumulas WHERE user_id = ? AND COALESCE(tribunal,'') != '' GROUP BY tribunal ORDER BY tribunal",
+                    (uid,)
+                ).fetchall()
+                for t in tribunais:
+                    refs.append({"ref": t["tribunal"], "label": f"{t['tribunal']} ({t['n']} súmulas)"})
+        elif tipo == "revisao":
+            rows = conn.execute(
+                "SELECT pdf_path, COUNT(*) as n FROM revisao_blocos WHERE user_id = ? AND COALESCE(pdf_path,'') != '' GROUP BY pdf_path ORDER BY pdf_path",
+                (uid,)
+            ).fetchall()
+            for r in rows:
+                nome = (r["pdf_path"] or "").split("/")[-1] or r["pdf_path"]
+                refs.append({"ref": r["pdf_path"], "label": f"{nome} ({r['n']} blocos)"})
     except Exception:
         refs = []
-    return {"refs": refs}
+    return refs
 
 
 @router.get("/meus/refs", summary="Listar refs da própria conta (premium publicando)")
@@ -595,28 +633,7 @@ def listar_meus_refs(
     pode, _, _ = _pode_publicar(conn, user_id)
     if not pode:
         raise HTTPException(status_code=403, detail="Apenas Premium/admin podem publicar.")
-    refs = []
-    try:
-        if tipo == "edital":
-            rows = conn.execute("SELECT edital_nome, COUNT(*) as n FROM edital WHERE user_id = ? GROUP BY edital_nome ORDER BY edital_nome", (user_id,)).fetchall()
-            refs = [{"ref": r["edital_nome"], "label": f"{r['edital_nome']} ({r['n']} tópicos)"} for r in rows]
-        elif tipo == "caderno":
-            rows = conn.execute("SELECT id, nome FROM cadernos WHERE user_id = ? ORDER BY nome", (user_id,)).fetchall()
-            refs = [{"ref": str(r["id"]), "label": r["nome"]} for r in rows]
-        elif tipo == "vademecum":
-            rows = conn.execute("SELECT id, nome, sigla FROM vademecum_leis WHERE user_id = ? ORDER BY nome", (user_id,)).fetchall()
-            refs = [{"ref": str(r["id"]), "label": f"{r['nome']} ({r['sigla']})" if r["sigla"] else r["nome"]} for r in rows]
-        elif tipo in ("deck_flashcards", "deck_questoes"):
-            tabela = "flashcards" if tipo == "deck_flashcards" else "questoes"
-            rows = conn.execute(f"SELECT materia, COUNT(*) as n FROM {tabela} WHERE user_id = ? AND materia != '' GROUP BY materia ORDER BY materia", (user_id,)).fetchall()
-            refs = [{"ref": r["materia"], "label": f"{r['materia']} ({r['n']})"} for r in rows]
-        elif tipo == "deck_sumulas":
-            n = conn.execute("SELECT COUNT(*) FROM sumulas WHERE user_id = ?", (user_id,)).fetchone()[0]
-            if n > 0:
-                refs = [{"ref": "", "label": f"Todas as súmulas ({n})"}]
-    except Exception:
-        refs = []
-    return {"refs": refs}
+    return {"refs": _refs_para(conn, tipo, user_id)}
 
 
 # ==================== MODERAÇÃO (ADMIN) ====================
@@ -692,7 +709,10 @@ def _recurso_existe(conn, tipo: str, origem_uid: int, ref: str) -> bool:
     """Valida se o recurso referenciado existe na conta de origem."""
     try:
         if tipo == "edital":
-            return conn.execute("SELECT 1 FROM edital WHERE user_id = ? AND edital_nome = ? LIMIT 1", (origem_uid, ref)).fetchone() is not None
+            nome, cargo = _split_edital_ref(ref)
+            if cargo:
+                return conn.execute("SELECT 1 FROM edital WHERE user_id = ? AND edital_nome = ? AND cargo = ? LIMIT 1", (origem_uid, nome, cargo)).fetchone() is not None
+            return conn.execute("SELECT 1 FROM edital WHERE user_id = ? AND edital_nome = ? LIMIT 1", (origem_uid, nome)).fetchone() is not None
         if tipo == "caderno":
             return conn.execute("SELECT 1 FROM cadernos WHERE user_id = ? AND id = ? LIMIT 1", (origem_uid, int(ref))).fetchone() is not None
         if tipo == "vademecum":
@@ -702,10 +722,22 @@ def _recurso_existe(conn, tipo: str, origem_uid: int, ref: str) -> bool:
         if tipo == "deck_questoes":
             return conn.execute("SELECT 1 FROM questoes WHERE user_id = ? AND materia = ? LIMIT 1", (origem_uid, ref)).fetchone() is not None
         if tipo == "deck_sumulas":
+            if ref:  # tribunal específico
+                return conn.execute("SELECT 1 FROM sumulas WHERE user_id = ? AND tribunal = ? LIMIT 1", (origem_uid, ref)).fetchone() is not None
             return conn.execute("SELECT 1 FROM sumulas WHERE user_id = ? LIMIT 1", (origem_uid,)).fetchone() is not None
+        if tipo == "revisao":
+            return conn.execute("SELECT 1 FROM revisao_blocos WHERE user_id = ? AND pdf_path = ? LIMIT 1", (origem_uid, ref)).fetchone() is not None
     except (ValueError, TypeError):
         return False
     return False
+
+
+def _split_edital_ref(ref: str):
+    """Separa a ref de edital em (edital_nome, cargo). '::' separa o cargo opcional."""
+    if ref and "::" in ref:
+        nome, _, cargo = ref.partition("::")
+        return nome, cargo
+    return ref, ""
 
 
 def _importar_deck(conn, tabela: str, origem_uid: int, destino_uid: int, materia: str) -> int:
@@ -739,6 +771,63 @@ def _importar_deck(conn, tabela: str, origem_uid: int, destino_uid: int, materia
                 vals.append(row[c])
         conn.execute(f"INSERT INTO {tabela} ({', '.join(insert_cols)}) VALUES ({ph})", vals)
         n += 1
+    return n
+
+
+def _importar_sumulas(conn, origem_uid: int, destino_uid: int, tribunal: str) -> int:
+    """Copia súmulas: todas (tribunal vazio) ou apenas de um tribunal específico."""
+    cols = _tabela_colunas(conn, "sumulas")
+    if "user_id" not in cols:
+        return 0
+    insert_cols = [c for c in cols if c != "id"]
+
+    if tribunal:
+        rows = conn.execute("SELECT * FROM sumulas WHERE user_id = ? AND tribunal = ?", (origem_uid, tribunal)).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM sumulas WHERE user_id = ?", (origem_uid,)).fetchall()
+
+    resets = {
+        "proxima_revisao": today_str(), "intervalo_dias": 1, "easiness_factor": 2.5,
+        "repetitions": 0, "stability": 0, "difficulty": 0, "fsrs_state": 0,
+    }
+    resets = {k: v for k, v in resets.items() if k in insert_cols}
+    ph = ", ".join("?" for _ in insert_cols)
+    n = 0
+    for row in rows:
+        vals = [destino_uid if c == "user_id" else (resets[c] if c in resets else row[c]) for c in insert_cols]
+        conn.execute(f"INSERT INTO sumulas ({', '.join(insert_cols)}) VALUES ({ph})", vals)
+        n += 1
+    return n
+
+
+def _importar_revisao(conn, origem_uid: int, destino_uid: int, pdf_path: str) -> int:
+    """Copia um Caderno de Revisão (revisao_blocos de um pdf_path), resetando
+    o agendamento espaçado do destinatário para começar do zero."""
+    cols = _tabela_colunas(conn, "revisao_blocos")
+    if "user_id" not in cols or not pdf_path:
+        return 0
+    insert_cols = [c for c in cols if c != "id"]
+    rows = conn.execute("SELECT * FROM revisao_blocos WHERE user_id = ? AND pdf_path = ? ORDER BY ordem, id", (origem_uid, pdf_path)).fetchall()
+    if not rows:
+        return 0
+    ph = ", ".join("?" for _ in insert_cols)
+    n = 0
+    for row in rows:
+        vals = [destino_uid if c == "user_id" else row[c] for c in insert_cols]
+        conn.execute(f"INSERT INTO revisao_blocos ({', '.join(insert_cols)}) VALUES ({ph})", vals)
+        n += 1
+    # Semeia a agenda de revisão espaçada do destinatário (começa hoje) se a tabela existir.
+    try:
+        ag_cols = _tabela_colunas(conn, "revisao_agenda")
+        if ag_cols and "user_id" in ag_cols:
+            ja = conn.execute("SELECT 1 FROM revisao_agenda WHERE user_id = ? AND pdf_path = ? LIMIT 1", (destino_uid, pdf_path)).fetchone()
+            if not ja:
+                conn.execute(
+                    "INSERT INTO revisao_agenda (user_id, pdf_path, proxima_revisao, intervalo_dias, revisoes_count, created_at) VALUES (?, ?, ?, 1, 0, ?)",
+                    (destino_uid, pdf_path, today_str(), today_str())
+                )
+    except Exception:
+        pass
     return n
 
 
@@ -823,10 +912,12 @@ def _importar_vademecum(conn, origem_uid: int, destino_uid: int, lei_id_ref: str
     return 1
 
 
-def _importar_edital(conn, origem_uid: int, destino_uid: int, edital_nome: str) -> int:
-    """Copia um edital específico (por nome) + info + resumos + notas, resetando progresso."""
+def _importar_edital(conn, origem_uid: int, destino_uid: int, edital_ref: str) -> int:
+    """Copia um edital (por nome, opcionalmente restrito a um cargo) + info +
+    resumos + notas, resetando progresso. Ref no formato 'nome' ou 'nome::cargo'."""
     from utils import today_str as _today
     now = _today()
+    edital_nome, cargo = _split_edital_ref(edital_ref)
 
     edital_cols = _tabela_colunas(conn, "edital")
     if "user_id" not in edital_cols:
@@ -841,7 +932,10 @@ def _importar_edital(conn, origem_uid: int, destino_uid: int, edital_nome: str) 
     }
     resets = {k: v for k, v in resets.items() if k in insert_cols}
 
-    rows = conn.execute("SELECT * FROM edital WHERE user_id = ? AND edital_nome = ?", (origem_uid, edital_nome)).fetchall()
+    if cargo:
+        rows = conn.execute("SELECT * FROM edital WHERE user_id = ? AND edital_nome = ? AND cargo = ?", (origem_uid, edital_nome, cargo)).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM edital WHERE user_id = ? AND edital_nome = ?", (origem_uid, edital_nome)).fetchall()
     if not rows:
         return 0
 

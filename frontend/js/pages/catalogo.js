@@ -223,6 +223,7 @@ window.abrirPublicar = async function() {
         <option value="deck_flashcards">🧠 Deck de flashcards</option>
         <option value="deck_questoes">❓ Pacote de questões</option>
         <option value="deck_sumulas">⚖️ Súmulas</option>
+        <option value="revisao">🗂️ Caderno de Revisão</option>
       </select>
       <label style="font-size:0.75rem;color:#9399b2;">Recurso</label>
       <select id="pub-ref" aria-label="Recurso a publicar" style="width:100%;padding:9px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;margin-bottom:10px;"><option value="">carregando...</option></select>
