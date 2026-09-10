@@ -599,7 +599,260 @@ class TestMarketplace:
         conn.close()
         assert n == 1
 
-    def test_nao_comprar_proprio_material(self, client):
+    def test_backfill_aquisicao_orfa_migration92(self, client):
+        """Migration 92 registra aquisição de material já importado antes do
+        registro de compras existir (recurso copiado sem linha em catalogo_compras).
+
+        Simula o cenário legado: o estudante possui o recurso (deck de questões da
+        matéria) mas NÃO tem registro em catalogo_compras. Após rodar a migration,
+        o registro de cortesia é criado e o catálogo passa a marcar ja_comprado.
+        """
+        from db.migrations import _m92_backfill_aquisicoes_orfas
+
+        # Vendedor publica um deck de questões grátis.
+        self._criar_vendedor(500, "vend500@test.com", "MktOrfa")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(500, "vend500@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "Órfã", "origem_uid": 0, "ref": "MktOrfa", "preco_creditos": 0,
+        }).json()["id"]
+
+        # Estudante possui o recurso (matéria 'MktOrfa') mas SEM registro de compra
+        # — reproduz uma importação feita antes do fix.
+        _criar_estudante(501, "comp501@test.com")
+        conn = _conn()
+        conn.execute("""
+            INSERT INTO questoes (materia, topico, enunciado, alternativa_a, alternativa_b, alternativa_c, alternativa_d, alternativa_e, resposta_correta, created_at, user_id)
+            VALUES ('MktOrfa', 'T', 'Q?', 'a', 'b', 'c', 'd', '', 'A', '2026-01-01', 501)
+        """)
+        conn.commit()
+        # Confirma que é órfã (sem registro).
+        assert conn.execute("SELECT COUNT(*) FROM catalogo_compras WHERE item_id=? AND comprador_uid=501", (item_id,)).fetchone()[0] == 0
+
+        # Antes da migration: o catálogo mostra como não adquirido.
+        tok = _token(501, "comp501@test.com")
+        antes = next(i for i in client.get("/api/catalogo", headers=_h(tok)).json()["itens"] if i["id"] == item_id)
+        assert antes["ja_comprado"] is False
+
+        # Roda a migration de backfill.
+        _m92_backfill_aquisicoes_orfas(conn)
+        conn.commit()
+
+        # Registro de cortesia criado (preço 0).
+        reg = conn.execute("SELECT preco_creditos FROM catalogo_compras WHERE item_id=? AND comprador_uid=501", (item_id,)).fetchone()
+        assert reg is not None
+        assert reg["preco_creditos"] == 0
+
+        # Idempotência: rodar de novo não duplica.
+        _m92_backfill_aquisicoes_orfas(conn)
+        conn.commit()
+        assert conn.execute("SELECT COUNT(*) FROM catalogo_compras WHERE item_id=? AND comprador_uid=501", (item_id,)).fetchone()[0] == 1
+        conn.close()
+
+        # Depois: o catálogo marca como adquirido.
+        depois = next(i for i in client.get("/api/catalogo", headers=_h(tok)).json()["itens"] if i["id"] == item_id)
+        assert depois["ja_comprado"] is True
+
+    def test_backfill_nao_marca_dono_nem_origem(self, client):
+        """A migration 92 não deve registrar aquisição para o próprio curador/origem."""
+        from db.migrations import _m92_backfill_aquisicoes_orfas
+
+        self._criar_vendedor(510, "vend510@test.com", "MktDono")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(510, "vend510@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "Dono", "origem_uid": 0, "ref": "MktDono", "preco_creditos": 0,
+        }).json()["id"]
+        conn = _conn()
+        _m92_backfill_aquisicoes_orfas(conn)
+        conn.commit()
+        # O vendedor (curador/origem) possui o recurso mas NÃO deve virar comprador.
+        n = conn.execute("SELECT COUNT(*) FROM catalogo_compras WHERE item_id=? AND comprador_uid=510", (item_id,)).fetchone()[0]
+        conn.close()
+        assert n == 0
+
+    # ---------- Concessão / presente (Opção B) ----------
+
+    def test_conceder_libera_gratis_e_marca_adquirido(self, client):
+        """Curador concede acesso: item segue à venda para todos, mas o destinatário
+        importa de graça e vê ja_comprado=True."""
+        self._criar_vendedor(600, "vend600@test.com", "MktPresente")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(600, "vend600@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "Presenteável", "origem_uid": 0, "ref": "MktPresente", "preco_creditos": 30,
+        }).json()["id"]
+        _criar_estudante(601, "dest601@test.com")
+        tok = _token(601, "dest601@test.com")
+        self._set_saldo(601, 0)  # sem saldo: só importa se for cortesia
+
+        # Antes: aparece como não adquirido (pago).
+        antes = next(i for i in client.get("/api/catalogo", headers=_h(tok)).json()["itens"] if i["id"] == item_id)
+        assert antes["ja_comprado"] is False
+
+        # Curador concede por e-mail.
+        r = client.post(f"/api/catalogo/{item_id}/conceder", headers=_h(_token(600, "vend600@test.com")),
+                        json={"email": "dest601@test.com"})
+        assert r.status_code == 200, r.text
+        assert r.json()["ja_tinha"] is False
+
+        # Depois: catálogo marca adquirido e a importação é grátis (saldo 0 continua 0).
+        depois = next(i for i in client.get("/api/catalogo", headers=_h(tok)).json()["itens"] if i["id"] == item_id)
+        assert depois["ja_comprado"] is True
+        imp = client.post(f"/api/catalogo/{item_id}/importar", headers=_h(tok))
+        assert imp.status_code == 200, imp.text
+        assert imp.json()["cobrado"] is False
+        assert self._saldo(601) == 0
+
+        # Item continua público e vendável para OUTROS usuários.
+        _criar_estudante(602, "outro602@test.com")
+        tok2 = _token(602, "outro602@test.com")
+        outro = next(i for i in client.get("/api/catalogo", headers=_h(tok2)).json()["itens"] if i["id"] == item_id)
+        assert outro["ja_comprado"] is False
+
+    def test_conceder_por_username(self, client):
+        self._criar_vendedor(610, "vend610@test.com", "MktUser")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(610, "vend610@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "PorUser", "origem_uid": 0, "ref": "MktUser", "preco_creditos": 10,
+        }).json()["id"]
+        _criar_estudante(611, "dest611@test.com")  # username = est611
+        r = client.post(f"/api/catalogo/{item_id}/conceder", headers=_h(_token(610, "vend610@test.com")),
+                        json={"username": "est611"})
+        assert r.status_code == 200, r.text
+        conn = _conn()
+        row = conn.execute("SELECT origem_aquisicao FROM catalogo_compras WHERE item_id=? AND comprador_uid=611", (item_id,)).fetchone()
+        conn.close()
+        assert row is not None
+        assert row["origem_aquisicao"] == "presente"
+
+    def test_conceder_idempotente(self, client):
+        self._criar_vendedor(620, "vend620@test.com", "MktIdem")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(620, "vend620@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "Idem", "origem_uid": 0, "ref": "MktIdem", "preco_creditos": 5,
+        }).json()["id"]
+        _criar_estudante(621, "dest621@test.com")
+        client.post(f"/api/catalogo/{item_id}/conceder", headers=_h(_token(620, "vend620@test.com")), json={"email": "dest621@test.com"})
+        r2 = client.post(f"/api/catalogo/{item_id}/conceder", headers=_h(_token(620, "vend620@test.com")), json={"email": "dest621@test.com"})
+        assert r2.status_code == 200
+        assert r2.json()["ja_tinha"] is True
+        conn = _conn()
+        n = conn.execute("SELECT COUNT(*) FROM catalogo_compras WHERE item_id=? AND comprador_uid=621", (item_id,)).fetchone()[0]
+        conn.close()
+        assert n == 1
+
+    def test_conceder_nao_dono_403(self, client):
+        self._criar_vendedor(630, "vend630@test.com", "MktNaoDono")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(630, "vend630@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "NaoDono", "origem_uid": 0, "ref": "MktNaoDono", "preco_creditos": 5,
+        }).json()["id"]
+        _criar_estudante(631, "intruso631@test.com")
+        _criar_estudante(632, "vitima632@test.com")
+        r = client.post(f"/api/catalogo/{item_id}/conceder", headers=_h(_token(631, "intruso631@test.com")),
+                        json={"email": "vitima632@test.com"})
+        assert r.status_code == 403
+
+    def test_conceder_destinatario_inexistente_404(self, client):
+        self._criar_vendedor(640, "vend640@test.com", "MktNoDest")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(640, "vend640@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "NoDest", "origem_uid": 0, "ref": "MktNoDest", "preco_creditos": 5,
+        }).json()["id"]
+        r = client.post(f"/api/catalogo/{item_id}/conceder", headers=_h(_token(640, "vend640@test.com")),
+                        json={"email": "naoexiste@nowhere.com"})
+        assert r.status_code == 404
+
+    def test_conceder_sem_identificador_400(self, client):
+        self._criar_vendedor(650, "vend650@test.com", "MktSemId")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(650, "vend650@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "SemId", "origem_uid": 0, "ref": "MktSemId", "preco_creditos": 5,
+        }).json()["id"]
+        r = client.post(f"/api/catalogo/{item_id}/conceder", headers=_h(_token(650, "vend650@test.com")), json={})
+        assert r.status_code == 400
+
+    def test_listar_concessoes_dono_ve_naodono_403(self, client):
+        self._criar_vendedor(660, "vend660@test.com", "MktConc")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(660, "vend660@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "Conc", "origem_uid": 0, "ref": "MktConc", "preco_creditos": 5,
+        }).json()["id"]
+        _criar_estudante(661, "dest661@test.com")
+        client.post(f"/api/catalogo/{item_id}/conceder", headers=_h(_token(660, "vend660@test.com")), json={"email": "dest661@test.com"})
+        # Dono vê a concessão
+        r = client.get(f"/api/catalogo/{item_id}/concessoes", headers=_h(_token(660, "vend660@test.com")))
+        assert r.status_code == 200
+        conc = r.json()["concessoes"]
+        assert any(c["user_id"] == 661 for c in conc)
+        # Não-dono é bloqueado
+        _criar_estudante(662, "estranho662@test.com")
+        r2 = client.get(f"/api/catalogo/{item_id}/concessoes", headers=_h(_token(662, "estranho662@test.com")))
+        assert r2.status_code == 403
+
+    # ---------- Proibir republicar material importado ----------
+
+    def test_nao_republica_material_importado_403(self, client):
+        """Quem importa um deck de outro estudante NÃO pode republicá-lo."""
+        # Autor original publica um deck grátis.
+        self._criar_vendedor(700, "autor700@test.com", "MatImportada")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(700, "autor700@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "Original", "origem_uid": 0, "ref": "MatImportada", "preco_creditos": 0,
+        }).json()["id"]
+
+        # Segundo usuário (premium verificado, logo poderia publicar) IMPORTA o deck.
+        self._criar_vendedor(701, "revend701@test.com", "OutraMateria")  # cria premium verificado
+        imp = client.post(f"/api/catalogo/{item_id}/importar", headers=_h(_token(701, "revend701@test.com")))
+        assert imp.status_code == 200, imp.text
+
+        # Agora o importador tenta REPUBLICAR o mesmo recurso (matéria importada).
+        r = client.post("/api/catalogo/publicar", headers=_h(_token(701, "revend701@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "Revenda", "origem_uid": 0, "ref": "MatImportada", "preco_creditos": 20,
+        })
+        assert r.status_code == 403
+        assert "importado" in r.json()["detail"].lower()
+
+    def test_publica_material_proprio_ok(self, client):
+        """Material de autoria própria (não importado) continua publicável."""
+        self._criar_vendedor(710, "autor710@test.com", "MinhaAutoria")
+        r = client.post("/api/catalogo/publicar", headers=_h(_token(710, "autor710@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "Meu", "origem_uid": 0, "ref": "MinhaAutoria", "preco_creditos": 5,
+        })
+        assert r.status_code == 200, r.text
+        assert r.json()["ok"] is True
+
+    def test_admin_pode_republicar_importado(self, client):
+        """Admin é isento da regra (gestão): pode publicar mesmo recurso importado."""
+        self._criar_vendedor(720, "autor720@test.com", "AdminImport")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(720, "autor720@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "OrigAdmin", "origem_uid": 0, "ref": "AdminImport", "preco_creditos": 0,
+        }).json()["id"]
+        # Admin (id=1) importa e registra proveniência.
+        client.post(f"/api/catalogo/{item_id}/importar", headers=_h(_admin_token()))
+        # Admin publica o mesmo recurso da própria conta → permitido (isento).
+        r = client.post("/api/catalogo/publicar", headers=_h(_admin_token()), json={
+            "tipo": "deck_questoes", "titulo": "AdminRepublica", "origem_uid": 0, "ref": "AdminImport", "preco_creditos": 0,
+        })
+        assert r.status_code == 200, r.text
+
+    def test_backfill_proveniencia_migration94(self, client):
+        """Migration 94 faz backfill da proveniência a partir de catalogo_compras."""
+        from db.migrations import _m94_catalogo_proveniencia
+
+        self._criar_vendedor(730, "autor730@test.com", "BackProv")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(730, "autor730@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "BackProv", "origem_uid": 0, "ref": "BackProv", "preco_creditos": 0,
+        }).json()["id"]
+        _criar_estudante(731, "comp731@test.com")
+        # Simula aquisição legada: registro em catalogo_compras SEM proveniência.
+        conn = _conn()
+        conn.execute("DELETE FROM catalogo_proveniencia WHERE user_id = 731")
+        conn.execute("""
+            INSERT OR IGNORE INTO catalogo_compras (item_id, comprador_uid, vendedor_uid, preco_creditos, taxa_pct, creditos_vendedor, created_at, origem_aquisicao)
+            VALUES (?, 731, 730, 0, 0, 0, '2026-01-01', 'gratis')
+        """, (item_id,))
+        conn.commit()
+        # Roda o backfill.
+        _m94_catalogo_proveniencia(conn)
+        conn.commit()
+        row = conn.execute(
+            "SELECT ref_local FROM catalogo_proveniencia WHERE user_id = 731 AND tipo = 'deck_questoes' AND item_id = ?",
+            (item_id,)
+        ).fetchone()
+        conn.close()
+        assert row is not None
+        assert row["ref_local"] == "BackProv"
+
+
         self._criar_vendedor(240, "vend240@test.com", "MktE")
         self._set_saldo(240, 100)
         item_id = client.post("/api/catalogo/publicar", headers=_h(_token(240, "vend240@test.com")), json={

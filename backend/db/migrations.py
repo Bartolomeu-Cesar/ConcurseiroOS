@@ -1520,6 +1520,161 @@ def _m91_resgate_solicitacoes(conn):
     log.info("Migration 91: created resgate_solicitacoes table")
 
 
+def _m92_backfill_aquisicoes_orfas(conn):
+    """Backfill de aquisições órfãs do catálogo (materiais já importados antes do
+    registro de compras existir).
+
+    Contexto: o registro em `catalogo_compras` só passou a ser criado a partir do
+    fix "marcar materiais já adquiridos". Importações anteriores copiaram o recurso
+    para a conta do estudante e incrementaram `downloads`, mas NÃO deixaram registro.
+    Sem esse registro, o catálogo segue exibindo "Importar"/"Comprar" para um
+    material que o estudante já possui.
+
+    Esta migration detecta, para cada item ativo, quais usuários (≠ origem/curador)
+    já possuem o recurso correspondente (via tipo+ref) sem registro de aquisição e
+    insere um registro de CORTESIA (preço 0, sem cobrança retroativa). É idempotente
+    graças ao índice UNIQUE (item_id, comprador_uid).
+    """
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    def possui(tipo: str, ref: str, uid: int) -> bool:
+        ref = ref or ""
+        try:
+            if tipo == "deck_flashcards":
+                return conn.execute("SELECT 1 FROM flashcards WHERE user_id=? AND materia=? LIMIT 1", (uid, ref)).fetchone() is not None
+            if tipo == "deck_questoes":
+                return conn.execute("SELECT 1 FROM questoes WHERE user_id=? AND materia=? LIMIT 1", (uid, ref)).fetchone() is not None
+            if tipo == "revisao":
+                return conn.execute("SELECT 1 FROM revisao_blocos WHERE user_id=? AND pdf_path=? LIMIT 1", (uid, ref)).fetchone() is not None
+            if tipo == "edital":
+                nome = ref.split("::")[0]
+                return conn.execute("SELECT 1 FROM edital WHERE user_id=? AND edital_nome=? LIMIT 1", (uid, nome)).fetchone() is not None
+            if tipo == "caderno":
+                # Sem rastro direto por ref; pula (evita falso positivo).
+                return False
+            if tipo == "vademecum":
+                # ref é o id da lei na conta de ORIGEM; a cópia gera novo id.
+                # Sem rastro confiável por ref → pula.
+                return False
+            if tipo == "deck_sumulas":
+                if ref:
+                    return conn.execute("SELECT 1 FROM sumulas WHERE user_id=? AND tribunal=? LIMIT 1", (uid, ref)).fetchone() is not None
+                return conn.execute("SELECT 1 FROM sumulas WHERE user_id=? LIMIT 1", (uid,)).fetchone() is not None
+        except Exception:
+            return False
+        return False
+
+    try:
+        itens = conn.execute(
+            "SELECT id, tipo, ref, origem_uid, curador_uid FROM catalogo_itens WHERE ativo = 1"
+        ).fetchall()
+    except Exception:
+        log.info("Migration 92: catalogo_itens indisponível — nada a fazer")
+        return
+
+    users = [r[0] for r in conn.execute("SELECT id FROM users WHERE id > 0").fetchall()]
+    inseridos = 0
+    for it in itens:
+        item_id, tipo, ref, origem_uid, curador_uid = it["id"], it["tipo"], it["ref"], it["origem_uid"], it["curador_uid"]
+        for uid in users:
+            if uid in (origem_uid, curador_uid):
+                continue
+            if not possui(tipo, ref, uid):
+                continue
+            ja = conn.execute(
+                "SELECT 1 FROM catalogo_compras WHERE item_id=? AND comprador_uid=?", (item_id, uid)
+            ).fetchone()
+            if ja:
+                continue
+            # Registro de cortesia: já possui o material, não cobra retroativo.
+            conn.execute("""
+                INSERT OR IGNORE INTO catalogo_compras
+                    (item_id, comprador_uid, vendedor_uid, preco_creditos, taxa_pct, creditos_vendedor, created_at)
+                VALUES (?, ?, ?, 0, 0, 0, ?)
+            """, (item_id, uid, curador_uid, now))
+            inseridos += 1
+    log.info(f"Migration 92: backfill de {inseridos} aquisição(ões) órfã(s) do catálogo")
+
+
+def _m93_catalogo_compras_origem(conn):
+    """Distingue a origem de uma aquisição em catalogo_compras.
+
+    Suporta o recurso de "presente/concessão direta" (Opção B): o curador libera
+    o material a um usuário específico sem cobrança, criando um registro de
+    aquisição. Para auditoria e painel, marcamos como o registro nasceu:
+
+    - 'compra'   → aquisição paga (fluxo normal de importação com preço)
+    - 'gratis'   → importação de item gratuito
+    - 'presente' → concessão direta feita por curador/admin (Opção B)
+    - 'backfill' → registro retroativo criado pela migration 92
+
+    Retrocompatível: registros antigos ficam com 'compra' (default) e a coluna
+    não afeta a lógica de idempotência/cobrança existente.
+    """
+    try:
+        conn.execute("ALTER TABLE catalogo_compras ADD COLUMN origem_aquisicao TEXT DEFAULT 'compra'")
+    except Exception:
+        pass  # coluna já existe
+    log.info("Migration 93: added origem_aquisicao to catalogo_compras")
+
+
+def _m94_catalogo_proveniencia(conn):
+    """Rastreia a proveniência de recursos importados do catálogo.
+
+    Regra de negócio: um estudante NÃO pode (re)publicar no catálogo um material
+    que ele apenas IMPORTOU de outro estudante. Para detectar isso de forma
+    robusta — inclusive para tipos cujo identificador muda na cópia (caderno,
+    vademecum ganham novo id local) — registramos, no momento da importação, o
+    recurso resultante na conta do destinatário.
+
+    Uma linha por (user_id, tipo, ref_local):
+    - ref_local é o identificador que o usuário usaria para (re)publicar aquele
+      recurso na PRÓPRIA conta (edital_nome[::cargo], materia, tribunal, pdf_path,
+      ou o novo id de caderno/lei).
+    - item_id: o item do catálogo de onde veio (auditoria).
+
+    Idempotente via UNIQUE; retrocompatível (tabela nova, sem impacto no legado).
+    """
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS catalogo_proveniencia (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            tipo TEXT NOT NULL,
+            ref_local TEXT NOT NULL DEFAULT '',
+            item_id INTEGER NOT NULL,
+            created_at TEXT NOT NULL DEFAULT ''
+        )
+    """)
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_catalogo_proveniencia_unique ON catalogo_proveniencia(user_id, tipo, ref_local)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_catalogo_proveniencia_user ON catalogo_proveniencia(user_id)")
+
+    # Backfill: aquisições já registradas em catalogo_compras representam materiais
+    # importados. Registramos a proveniência com o ref do item de origem. Para
+    # tipos com ref preservado na cópia (edital, decks, súmulas, revisão) o ref
+    # local coincide com o do item; caderno/vademecum (id muda) ficam com o ref de
+    # origem — melhor esforço retroativo, suficiente para bloquear reuso comum.
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+    inseridos = 0
+    try:
+        compras = conn.execute("""
+            SELECT comp.comprador_uid, comp.item_id, c.tipo, c.ref
+            FROM catalogo_compras comp
+            JOIN catalogo_itens c ON c.id = comp.item_id
+        """).fetchall()
+        for cp in compras:
+            cur = conn.execute("""
+                INSERT OR IGNORE INTO catalogo_proveniencia (user_id, tipo, ref_local, item_id, created_at)
+                VALUES (?, ?, ?, ?, ?)
+            """, (cp["comprador_uid"], cp["tipo"], cp["ref"] or "", cp["item_id"], now))
+            inseridos += cur.rowcount or 0
+    except Exception as e:
+        log.warning(f"Migration 94: backfill de proveniência pulado: {e}")
+    log.info(f"Migration 94: created catalogo_proveniencia table (backfill {inseridos} registro(s))")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -1612,6 +1767,9 @@ MIGRATIONS = [
     (89, _m89_catalogo_compras),
     (90, _m90_broadcast_expira),
     (91, _m91_resgate_solicitacoes),
+    (92, _m92_backfill_aquisicoes_orfas),
+    (93, _m93_catalogo_compras_origem),
+    (94, _m94_catalogo_proveniencia),
 ]
 
 

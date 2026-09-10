@@ -424,6 +424,7 @@ window.abrirMinhasVendas = async function() {
                 <div style="font-size:0.74rem;color:#9399b2;">Preço: ${precoTxt} · ⬇️ ${it.downloads}${statusTxt}</div>
               </div>
               <button onclick="alterarPreco(${it.id}, ${it.preco_creditos || 0})" style="flex:0 0 auto;padding:6px 10px;background:#45475a;color:#cdd6f4;border:none;border-radius:6px;cursor:pointer;font-size:0.78rem;">💲 Preço</button>
+              <button onclick="presentearMaterial(${it.id}, '${escapeJsString(it.titulo)}')" title="Liberar este material para um usuário específico (grátis)" style="flex:0 0 auto;padding:6px 10px;background:#45475a;color:#f5c2e7;border:none;border-radius:6px;cursor:pointer;font-size:0.78rem;">🎁 Presentear</button>
             </div>`;
         }).join('');
       }
@@ -458,6 +459,34 @@ window.alterarPreco = async function(itemId, precoAtual) {
       carregarCatalogo();       // reflete na grade
     } else {
       showToast(data.detail || 'Erro ao alterar preço.', 'error');
+    }
+  } catch (e) {
+    showToast('Erro de conexão.', 'error');
+  }
+};
+
+// Presentear/liberar um material para um usuário específico (grátis), sem tirar
+// da venda pública. Identifica o destinatário por e-mail ou username.
+window.presentearMaterial = async function(itemId, titulo) {
+  const alvo = await promptModal(
+    `Informe o e-mail ou username de quem vai receber "${titulo}" gratuitamente:`,
+    { title: '🎁 Presentear material', placeholder: 'email@exemplo.com ou username' }
+  );
+  if (alvo === null) return;               // cancelado
+  const val = alvo.trim();
+  if (!val) { showToast('Informe um e-mail ou username.', 'warning'); return; }
+
+  // Heurística simples: contém '@' → e-mail; caso contrário → username.
+  const payload = val.includes('@') ? { email: val } : { username: val };
+  try {
+    const res = await fetch(`/api/catalogo/${itemId}/conceder`, {
+      method: 'POST', headers: _headers(true), body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (res.ok) {
+      await alertModal(data.mensagem || 'Material liberado!', { type: 'success', title: '🎁 Presente enviado' });
+    } else {
+      showToast(data.detail || 'Erro ao conceder acesso.', 'error');
     }
   } catch (e) {
     showToast('Erro de conexão.', 'error');

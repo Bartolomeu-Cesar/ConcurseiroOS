@@ -289,27 +289,37 @@ def importar_item(
 
     if tipo == "edital":
         copiados = _importar_edital(conn, origem_uid, user_id, ref)
+        ref_local = ref
     elif tipo == "caderno":
-        copiados = _importar_caderno(conn, origem_uid, user_id, ref)
+        copiados, ref_local = _importar_caderno(conn, origem_uid, user_id, ref)
     elif tipo == "vademecum":
-        copiados = _importar_vademecum(conn, origem_uid, user_id, ref)
+        copiados, ref_local = _importar_vademecum(conn, origem_uid, user_id, ref)
     elif tipo == "deck_flashcards":
         copiados = _importar_deck(conn, "flashcards", origem_uid, user_id, ref)
+        ref_local = ref
     elif tipo == "deck_questoes":
         copiados = _importar_deck(conn, "questoes", origem_uid, user_id, ref)
+        ref_local = ref
     elif tipo == "deck_sumulas":
         copiados = _importar_sumulas(conn, origem_uid, user_id, ref)  # ref = tribunal ou '' (todas)
+        ref_local = ref
     elif tipo == "revisao":
         copiados = _importar_revisao(conn, origem_uid, user_id, ref)  # ref = pdf_path
+        ref_local = ref
     else:
         raise HTTPException(status_code=400, detail=f"Tipo de item desconhecido: {tipo}")
+
+    # Rastrear proveniência: este recurso foi IMPORTADO do catálogo. Serve para
+    # impedir que o estudante (re)publique material que apenas importou de outrem.
+    if copiados:
+        _registrar_proveniencia(conn, user_id, tipo, ref_local, item_id)
 
     # Registrar aquisição também para itens GRÁTIS (idempotente via UNIQUE), para
     # que o catálogo marque como "já adquirido" e evite reimportar/duplicar.
     if not cobrar and not ja_comprou:
         conn.execute("""
-            INSERT OR IGNORE INTO catalogo_compras (item_id, comprador_uid, vendedor_uid, preco_creditos, taxa_pct, creditos_vendedor, created_at)
-            VALUES (?, ?, ?, 0, 0, 0, ?)
+            INSERT OR IGNORE INTO catalogo_compras (item_id, comprador_uid, vendedor_uid, preco_creditos, taxa_pct, creditos_vendedor, created_at, origem_aquisicao)
+            VALUES (?, ?, ?, 0, 0, 0, ?, 'gratis')
         """, (item_id, user_id, vendedor_uid, datetime.now(timezone.utc).isoformat()))
 
     # Incrementar contador de downloads
@@ -377,6 +387,14 @@ def publicar_item(
 
     if not _recurso_existe(conn, body.tipo, origem_uid, body.ref):
         raise HTTPException(status_code=404, detail="Recurso não encontrado na sua conta.")
+
+    # Integridade: ninguém pode (re)publicar material que apenas IMPORTOU de outro
+    # estudante. Admin é isento (gestão). A checagem usa a conta de origem efetiva.
+    if not is_admin and _recurso_foi_importado(conn, origem_uid, body.tipo, str(body.ref)):
+        raise HTTPException(
+            status_code=403,
+            detail="Este material foi importado do catálogo e não pode ser republicado. Publique apenas conteúdo de sua autoria.",
+        )
 
     # Preço: inteiro >= 0. Só quem pode vender (premium/vitalício/verificado/admin)
     # pode definir preço > 0; free/guest nem chega aqui (bloqueado acima).
@@ -674,6 +692,110 @@ def editar_item(
     return {"ok": True, "id": item_id, "preco_creditos": novo["preco_creditos"], "titulo": novo["titulo"]}
 
 
+# ==================== CONCESSÃO / PRESENTE (OPÇÃO B) ====================
+
+class ConcederAcesso(BaseModel):
+    # Identifica o destinatário por e-mail OU username (um dos dois).
+    email: str = ""
+    username: str = ""
+
+
+@router.post("/{item_id}/conceder", summary="Presentear/liberar um material a um usuário específico")
+def conceder_acesso(
+    item_id: int,
+    body: ConcederAcesso,
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Concede acesso GRATUITO a um material para um usuário específico (Opção B).
+
+    O material continua público e vendável para todos; esta concessão apenas
+    libera uma cópia sem custo ao destinatário indicado (um "presente"). Após a
+    concessão, o destinatário vê "✓ Adquirido" no catálogo e importa de graça.
+
+    - Só o dono (curador_uid) ou admin pode conceder.
+    - Idempotente: conceder de novo ao mesmo usuário não duplica nem erra.
+    - Não afeta cobrança: reusa catalogo_compras com preço 0 (origem='presente').
+    """
+    item = conn.execute("SELECT * FROM catalogo_itens WHERE id = ? AND ativo = 1", (item_id,)).fetchone()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado ou indisponível.")
+
+    user = conn.execute("SELECT role FROM users WHERE id = ?", (user_id,)).fetchone()
+    is_admin = bool(user and user["role"] == "admin")
+    if not is_admin and item["curador_uid"] != user_id:
+        raise HTTPException(status_code=403, detail="Você só pode conceder acesso aos seus próprios materiais.")
+
+    email = (body.email or "").strip().lower()
+    username = (body.username or "").strip()
+    if not email and not username:
+        raise HTTPException(status_code=400, detail="Informe o e-mail ou o username do destinatário.")
+
+    if email:
+        destino = conn.execute("SELECT id, nome, email FROM users WHERE LOWER(email) = ?", (email,)).fetchone()
+    else:
+        destino = conn.execute("SELECT id, nome, email FROM users WHERE username = ?", (username,)).fetchone()
+    if not destino:
+        raise HTTPException(status_code=404, detail="Usuário destinatário não encontrado.")
+
+    destino_uid = destino["id"]
+    if destino_uid in (item["origem_uid"], item["curador_uid"]):
+        raise HTTPException(status_code=400, detail="Este material já pertence a esse usuário.")
+
+    ja = conn.execute(
+        "SELECT 1 FROM catalogo_compras WHERE item_id = ? AND comprador_uid = ?", (item_id, destino_uid)
+    ).fetchone()
+    if ja:
+        return {"ok": True, "ja_tinha": True, "destinatario": destino["nome"] or destino["email"],
+                "mensagem": "Esse usuário já tinha acesso a este material."}
+
+    conn.execute("""
+        INSERT OR IGNORE INTO catalogo_compras
+            (item_id, comprador_uid, vendedor_uid, preco_creditos, taxa_pct, creditos_vendedor, created_at, origem_aquisicao)
+        VALUES (?, ?, ?, 0, 0, 0, ?, 'presente')
+    """, (item_id, destino_uid, item["curador_uid"], datetime.now(timezone.utc).isoformat()))
+    conn.commit()
+
+    # Notifica o destinatário (best-effort).
+    try:
+        from routers.notifications import _send_push_to_user
+        _send_push_to_user(conn, destino_uid, "🎁 Você recebeu um material!",
+                           f"'{item['titulo']}' foi liberado para você no catálogo.",
+                           url="/catalogo.html", tag="presente")
+    except Exception as e:
+        log.warning(f"[catalogo] push presente indisponível: {e}")
+
+    log.info(f"[catalogo] user={user_id} concedeu item={item_id} para user={destino_uid} (presente)")
+    return {"ok": True, "ja_tinha": False, "destinatario": destino["nome"] or destino["email"],
+            "mensagem": f"✅ Material liberado para {destino['nome'] or destino['email']}!"}
+
+
+@router.get("/{item_id}/concessoes", summary="Listar concessões (presentes) de um material")
+def listar_concessoes(item_id: int, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Lista os usuários que receberam este material como presente/concessão.
+
+    Só o dono (curador_uid) ou admin pode consultar.
+    """
+    item = conn.execute("SELECT curador_uid FROM catalogo_itens WHERE id = ?", (item_id,)).fetchone()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado.")
+    user = conn.execute("SELECT role FROM users WHERE id = ?", (user_id,)).fetchone()
+    is_admin = bool(user and user["role"] == "admin")
+    if not is_admin and item["curador_uid"] != user_id:
+        raise HTTPException(status_code=403, detail="Você só pode ver concessões dos seus próprios materiais.")
+
+    rows = conn.execute("""
+        SELECT comp.comprador_uid, comp.created_at, u.nome, u.email
+        FROM catalogo_compras comp LEFT JOIN users u ON u.id = comp.comprador_uid
+        WHERE comp.item_id = ? AND comp.origem_aquisicao = 'presente'
+        ORDER BY comp.created_at DESC
+    """, (item_id,)).fetchall()
+    return {"concessoes": [
+        {"user_id": r["comprador_uid"], "nome": r["nome"] or "", "email": r["email"] or "", "created_at": r["created_at"]}
+        for r in rows
+    ]}
+
+
 @router.get("/admin/todos", summary="Listar todos os itens (admin, inclui inativos)")
 def listar_todos_admin(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
     """Lista todos os itens do catálogo (incluindo inativos) para gestão."""
@@ -845,6 +967,34 @@ def _tabela_colunas(conn, tabela: str) -> list:
     return [r[1] for r in conn.execute(f"PRAGMA table_info({tabela})").fetchall()]
 
 
+def _registrar_proveniencia(conn, user_id: int, tipo: str, ref_local: str, item_id: int):
+    """Marca que um recurso na conta do usuário foi IMPORTADO do catálogo.
+
+    Usado para impedir a (re)publicação de material que o estudante apenas
+    importou de outro. Idempotente (UNIQUE user_id+tipo+ref_local). Tolerante a
+    ausência da tabela (bancos antes da migration 94)."""
+    try:
+        conn.execute("""
+            INSERT OR IGNORE INTO catalogo_proveniencia (user_id, tipo, ref_local, item_id, created_at)
+            VALUES (?, ?, ?, ?, ?)
+        """, (user_id, tipo, ref_local or "", item_id, datetime.now(timezone.utc).isoformat()))
+    except Exception as e:
+        log.warning(f"[catalogo] proveniência indisponível (migration 94?): {e}")
+
+
+def _recurso_foi_importado(conn, user_id: int, tipo: str, ref: str) -> bool:
+    """True se o recurso (tipo, ref) na conta do usuário veio de uma importação
+    do catálogo — ou seja, o usuário não é o autor original e não pode publicá-lo."""
+    try:
+        row = conn.execute(
+            "SELECT 1 FROM catalogo_proveniencia WHERE user_id = ? AND tipo = ? AND ref_local = ? LIMIT 1",
+            (user_id, tipo, ref or "")
+        ).fetchone()
+        return row is not None
+    except Exception:
+        return False  # tabela ausente → não bloqueia (retrocompatível)
+
+
 def _recurso_existe(conn, tipo: str, origem_uid: int, ref: str) -> bool:
     """Valida se o recurso referenciado existe na conta de origem."""
     try:
@@ -971,18 +1121,22 @@ def _importar_revisao(conn, origem_uid: int, destino_uid: int, pdf_path: str) ->
     return n
 
 
-def _importar_caderno(conn, origem_uid: int, destino_uid: int, caderno_id_ref: str) -> int:
-    """Copia um caderno específico + suas questões associadas."""
+def _importar_caderno(conn, origem_uid: int, destino_uid: int, caderno_id_ref: str) -> tuple[int, str]:
+    """Copia um caderno específico + suas questões associadas.
+
+    Retorna (copiados, ref_local) onde ref_local é o novo id do caderno na conta
+    de destino (usado para rastrear proveniência). copiados=0 → ref_local=''.
+    """
     from utils import today_str as _today
     now = _today()
     try:
         caderno_id = int(caderno_id_ref)
     except (ValueError, TypeError):
-        return 0
+        return 0, ""
 
     cad = conn.execute("SELECT * FROM cadernos WHERE id = ? AND user_id = ?", (caderno_id, origem_uid)).fetchone()
     if not cad:
-        return 0
+        return 0, ""
 
     cad_cols = _tabela_colunas(conn, "cadernos")
     icols = [c for c in cad_cols if c != "id"]
@@ -993,7 +1147,7 @@ def _importar_caderno(conn, origem_uid: int, destino_uid: int, caderno_id_ref: s
 
     tem_cq = bool(conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='cadernos_questoes'").fetchone())
     if not tem_cq:
-        return 1
+        return 1, str(novo_caderno_id)
 
     q_cols = _tabela_colunas(conn, "questoes")
     q_icols = [c for c in q_cols if c != "id"]
@@ -1009,19 +1163,23 @@ def _importar_caderno(conn, origem_uid: int, destino_uid: int, caderno_id_ref: s
             "INSERT INTO cadernos_questoes (caderno_id, questao_id, ordem, added_at) VALUES (?, ?, ?, ?)",
             (novo_caderno_id, qcur.lastrowid, a["ordem"], now)
         )
-    return 1
+    return 1, str(novo_caderno_id)
 
 
-def _importar_vademecum(conn, origem_uid: int, destino_uid: int, lei_id_ref: str) -> int:
-    """Copia uma lei específica + seus artigos."""
+def _importar_vademecum(conn, origem_uid: int, destino_uid: int, lei_id_ref: str) -> tuple[int, str]:
+    """Copia uma lei específica + seus artigos.
+
+    Retorna (copiados, ref_local) onde ref_local é o novo id da lei na conta de
+    destino (para rastrear proveniência). copiados=0 → ref_local=''.
+    """
     try:
         lei_id = int(lei_id_ref)
     except (ValueError, TypeError):
-        return 0
+        return 0, ""
 
     lei = conn.execute("SELECT * FROM vademecum_leis WHERE id = ? AND user_id = ?", (lei_id, origem_uid)).fetchone()
     if not lei:
-        return 0
+        return 0, ""
 
     lei_cols = _tabela_colunas(conn, "vademecum_leis")
     icols = [c for c in lei_cols if c != "id"]
@@ -1049,7 +1207,7 @@ def _importar_vademecum(conn, origem_uid: int, destino_uid: int, lei_id_ref: str
                 else:
                     avals.append(art[c])
             conn.execute(f"INSERT INTO vademecum_artigos ({', '.join(a_icols)}) VALUES ({aph})", avals)
-    return 1
+    return 1, str(nova_lei_id)
 
 
 def _importar_edital(conn, origem_uid: int, destino_uid: int, edital_ref: str) -> int:
