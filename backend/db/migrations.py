@@ -1620,6 +1620,61 @@ def _m93_catalogo_compras_origem(conn):
     log.info("Migration 93: added origem_aquisicao to catalogo_compras")
 
 
+def _m94_catalogo_proveniencia(conn):
+    """Rastreia a proveniência de recursos importados do catálogo.
+
+    Regra de negócio: um estudante NÃO pode (re)publicar no catálogo um material
+    que ele apenas IMPORTOU de outro estudante. Para detectar isso de forma
+    robusta — inclusive para tipos cujo identificador muda na cópia (caderno,
+    vademecum ganham novo id local) — registramos, no momento da importação, o
+    recurso resultante na conta do destinatário.
+
+    Uma linha por (user_id, tipo, ref_local):
+    - ref_local é o identificador que o usuário usaria para (re)publicar aquele
+      recurso na PRÓPRIA conta (edital_nome[::cargo], materia, tribunal, pdf_path,
+      ou o novo id de caderno/lei).
+    - item_id: o item do catálogo de onde veio (auditoria).
+
+    Idempotente via UNIQUE; retrocompatível (tabela nova, sem impacto no legado).
+    """
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS catalogo_proveniencia (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            tipo TEXT NOT NULL,
+            ref_local TEXT NOT NULL DEFAULT '',
+            item_id INTEGER NOT NULL,
+            created_at TEXT NOT NULL DEFAULT ''
+        )
+    """)
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_catalogo_proveniencia_unique ON catalogo_proveniencia(user_id, tipo, ref_local)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_catalogo_proveniencia_user ON catalogo_proveniencia(user_id)")
+
+    # Backfill: aquisições já registradas em catalogo_compras representam materiais
+    # importados. Registramos a proveniência com o ref do item de origem. Para
+    # tipos com ref preservado na cópia (edital, decks, súmulas, revisão) o ref
+    # local coincide com o do item; caderno/vademecum (id muda) ficam com o ref de
+    # origem — melhor esforço retroativo, suficiente para bloquear reuso comum.
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+    inseridos = 0
+    try:
+        compras = conn.execute("""
+            SELECT comp.comprador_uid, comp.item_id, c.tipo, c.ref
+            FROM catalogo_compras comp
+            JOIN catalogo_itens c ON c.id = comp.item_id
+        """).fetchall()
+        for cp in compras:
+            cur = conn.execute("""
+                INSERT OR IGNORE INTO catalogo_proveniencia (user_id, tipo, ref_local, item_id, created_at)
+                VALUES (?, ?, ?, ?, ?)
+            """, (cp["comprador_uid"], cp["tipo"], cp["ref"] or "", cp["item_id"], now))
+            inseridos += cur.rowcount or 0
+    except Exception as e:
+        log.warning(f"Migration 94: backfill de proveniência pulado: {e}")
+    log.info(f"Migration 94: created catalogo_proveniencia table (backfill {inseridos} registro(s))")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -1714,6 +1769,7 @@ MIGRATIONS = [
     (91, _m91_resgate_solicitacoes),
     (92, _m92_backfill_aquisicoes_orfas),
     (93, _m93_catalogo_compras_origem),
+    (94, _m94_catalogo_proveniencia),
 ]
 
 

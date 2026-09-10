@@ -779,6 +779,79 @@ class TestMarketplace:
         r2 = client.get(f"/api/catalogo/{item_id}/concessoes", headers=_h(_token(662, "estranho662@test.com")))
         assert r2.status_code == 403
 
+    # ---------- Proibir republicar material importado ----------
+
+    def test_nao_republica_material_importado_403(self, client):
+        """Quem importa um deck de outro estudante NÃO pode republicá-lo."""
+        # Autor original publica um deck grátis.
+        self._criar_vendedor(700, "autor700@test.com", "MatImportada")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(700, "autor700@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "Original", "origem_uid": 0, "ref": "MatImportada", "preco_creditos": 0,
+        }).json()["id"]
+
+        # Segundo usuário (premium verificado, logo poderia publicar) IMPORTA o deck.
+        self._criar_vendedor(701, "revend701@test.com", "OutraMateria")  # cria premium verificado
+        imp = client.post(f"/api/catalogo/{item_id}/importar", headers=_h(_token(701, "revend701@test.com")))
+        assert imp.status_code == 200, imp.text
+
+        # Agora o importador tenta REPUBLICAR o mesmo recurso (matéria importada).
+        r = client.post("/api/catalogo/publicar", headers=_h(_token(701, "revend701@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "Revenda", "origem_uid": 0, "ref": "MatImportada", "preco_creditos": 20,
+        })
+        assert r.status_code == 403
+        assert "importado" in r.json()["detail"].lower()
+
+    def test_publica_material_proprio_ok(self, client):
+        """Material de autoria própria (não importado) continua publicável."""
+        self._criar_vendedor(710, "autor710@test.com", "MinhaAutoria")
+        r = client.post("/api/catalogo/publicar", headers=_h(_token(710, "autor710@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "Meu", "origem_uid": 0, "ref": "MinhaAutoria", "preco_creditos": 5,
+        })
+        assert r.status_code == 200, r.text
+        assert r.json()["ok"] is True
+
+    def test_admin_pode_republicar_importado(self, client):
+        """Admin é isento da regra (gestão): pode publicar mesmo recurso importado."""
+        self._criar_vendedor(720, "autor720@test.com", "AdminImport")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(720, "autor720@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "OrigAdmin", "origem_uid": 0, "ref": "AdminImport", "preco_creditos": 0,
+        }).json()["id"]
+        # Admin (id=1) importa e registra proveniência.
+        client.post(f"/api/catalogo/{item_id}/importar", headers=_h(_admin_token()))
+        # Admin publica o mesmo recurso da própria conta → permitido (isento).
+        r = client.post("/api/catalogo/publicar", headers=_h(_admin_token()), json={
+            "tipo": "deck_questoes", "titulo": "AdminRepublica", "origem_uid": 0, "ref": "AdminImport", "preco_creditos": 0,
+        })
+        assert r.status_code == 200, r.text
+
+    def test_backfill_proveniencia_migration94(self, client):
+        """Migration 94 faz backfill da proveniência a partir de catalogo_compras."""
+        from db.migrations import _m94_catalogo_proveniencia
+
+        self._criar_vendedor(730, "autor730@test.com", "BackProv")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(730, "autor730@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "BackProv", "origem_uid": 0, "ref": "BackProv", "preco_creditos": 0,
+        }).json()["id"]
+        _criar_estudante(731, "comp731@test.com")
+        # Simula aquisição legada: registro em catalogo_compras SEM proveniência.
+        conn = _conn()
+        conn.execute("DELETE FROM catalogo_proveniencia WHERE user_id = 731")
+        conn.execute("""
+            INSERT OR IGNORE INTO catalogo_compras (item_id, comprador_uid, vendedor_uid, preco_creditos, taxa_pct, creditos_vendedor, created_at, origem_aquisicao)
+            VALUES (?, 731, 730, 0, 0, 0, '2026-01-01', 'gratis')
+        """, (item_id,))
+        conn.commit()
+        # Roda o backfill.
+        _m94_catalogo_proveniencia(conn)
+        conn.commit()
+        row = conn.execute(
+            "SELECT ref_local FROM catalogo_proveniencia WHERE user_id = 731 AND tipo = 'deck_questoes' AND item_id = ?",
+            (item_id,)
+        ).fetchone()
+        conn.close()
+        assert row is not None
+        assert row["ref_local"] == "BackProv"
+
 
         self._criar_vendedor(240, "vend240@test.com", "MktE")
         self._set_saldo(240, 100)

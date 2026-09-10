@@ -289,20 +289,30 @@ def importar_item(
 
     if tipo == "edital":
         copiados = _importar_edital(conn, origem_uid, user_id, ref)
+        ref_local = ref
     elif tipo == "caderno":
-        copiados = _importar_caderno(conn, origem_uid, user_id, ref)
+        copiados, ref_local = _importar_caderno(conn, origem_uid, user_id, ref)
     elif tipo == "vademecum":
-        copiados = _importar_vademecum(conn, origem_uid, user_id, ref)
+        copiados, ref_local = _importar_vademecum(conn, origem_uid, user_id, ref)
     elif tipo == "deck_flashcards":
         copiados = _importar_deck(conn, "flashcards", origem_uid, user_id, ref)
+        ref_local = ref
     elif tipo == "deck_questoes":
         copiados = _importar_deck(conn, "questoes", origem_uid, user_id, ref)
+        ref_local = ref
     elif tipo == "deck_sumulas":
         copiados = _importar_sumulas(conn, origem_uid, user_id, ref)  # ref = tribunal ou '' (todas)
+        ref_local = ref
     elif tipo == "revisao":
         copiados = _importar_revisao(conn, origem_uid, user_id, ref)  # ref = pdf_path
+        ref_local = ref
     else:
         raise HTTPException(status_code=400, detail=f"Tipo de item desconhecido: {tipo}")
+
+    # Rastrear proveniência: este recurso foi IMPORTADO do catálogo. Serve para
+    # impedir que o estudante (re)publique material que apenas importou de outrem.
+    if copiados:
+        _registrar_proveniencia(conn, user_id, tipo, ref_local, item_id)
 
     # Registrar aquisição também para itens GRÁTIS (idempotente via UNIQUE), para
     # que o catálogo marque como "já adquirido" e evite reimportar/duplicar.
@@ -377,6 +387,14 @@ def publicar_item(
 
     if not _recurso_existe(conn, body.tipo, origem_uid, body.ref):
         raise HTTPException(status_code=404, detail="Recurso não encontrado na sua conta.")
+
+    # Integridade: ninguém pode (re)publicar material que apenas IMPORTOU de outro
+    # estudante. Admin é isento (gestão). A checagem usa a conta de origem efetiva.
+    if not is_admin and _recurso_foi_importado(conn, origem_uid, body.tipo, str(body.ref)):
+        raise HTTPException(
+            status_code=403,
+            detail="Este material foi importado do catálogo e não pode ser republicado. Publique apenas conteúdo de sua autoria.",
+        )
 
     # Preço: inteiro >= 0. Só quem pode vender (premium/vitalício/verificado/admin)
     # pode definir preço > 0; free/guest nem chega aqui (bloqueado acima).
@@ -949,6 +967,34 @@ def _tabela_colunas(conn, tabela: str) -> list:
     return [r[1] for r in conn.execute(f"PRAGMA table_info({tabela})").fetchall()]
 
 
+def _registrar_proveniencia(conn, user_id: int, tipo: str, ref_local: str, item_id: int):
+    """Marca que um recurso na conta do usuário foi IMPORTADO do catálogo.
+
+    Usado para impedir a (re)publicação de material que o estudante apenas
+    importou de outro. Idempotente (UNIQUE user_id+tipo+ref_local). Tolerante a
+    ausência da tabela (bancos antes da migration 94)."""
+    try:
+        conn.execute("""
+            INSERT OR IGNORE INTO catalogo_proveniencia (user_id, tipo, ref_local, item_id, created_at)
+            VALUES (?, ?, ?, ?, ?)
+        """, (user_id, tipo, ref_local or "", item_id, datetime.now(timezone.utc).isoformat()))
+    except Exception as e:
+        log.warning(f"[catalogo] proveniência indisponível (migration 94?): {e}")
+
+
+def _recurso_foi_importado(conn, user_id: int, tipo: str, ref: str) -> bool:
+    """True se o recurso (tipo, ref) na conta do usuário veio de uma importação
+    do catálogo — ou seja, o usuário não é o autor original e não pode publicá-lo."""
+    try:
+        row = conn.execute(
+            "SELECT 1 FROM catalogo_proveniencia WHERE user_id = ? AND tipo = ? AND ref_local = ? LIMIT 1",
+            (user_id, tipo, ref or "")
+        ).fetchone()
+        return row is not None
+    except Exception:
+        return False  # tabela ausente → não bloqueia (retrocompatível)
+
+
 def _recurso_existe(conn, tipo: str, origem_uid: int, ref: str) -> bool:
     """Valida se o recurso referenciado existe na conta de origem."""
     try:
@@ -1075,18 +1121,22 @@ def _importar_revisao(conn, origem_uid: int, destino_uid: int, pdf_path: str) ->
     return n
 
 
-def _importar_caderno(conn, origem_uid: int, destino_uid: int, caderno_id_ref: str) -> int:
-    """Copia um caderno específico + suas questões associadas."""
+def _importar_caderno(conn, origem_uid: int, destino_uid: int, caderno_id_ref: str) -> tuple[int, str]:
+    """Copia um caderno específico + suas questões associadas.
+
+    Retorna (copiados, ref_local) onde ref_local é o novo id do caderno na conta
+    de destino (usado para rastrear proveniência). copiados=0 → ref_local=''.
+    """
     from utils import today_str as _today
     now = _today()
     try:
         caderno_id = int(caderno_id_ref)
     except (ValueError, TypeError):
-        return 0
+        return 0, ""
 
     cad = conn.execute("SELECT * FROM cadernos WHERE id = ? AND user_id = ?", (caderno_id, origem_uid)).fetchone()
     if not cad:
-        return 0
+        return 0, ""
 
     cad_cols = _tabela_colunas(conn, "cadernos")
     icols = [c for c in cad_cols if c != "id"]
@@ -1097,7 +1147,7 @@ def _importar_caderno(conn, origem_uid: int, destino_uid: int, caderno_id_ref: s
 
     tem_cq = bool(conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='cadernos_questoes'").fetchone())
     if not tem_cq:
-        return 1
+        return 1, str(novo_caderno_id)
 
     q_cols = _tabela_colunas(conn, "questoes")
     q_icols = [c for c in q_cols if c != "id"]
@@ -1113,19 +1163,23 @@ def _importar_caderno(conn, origem_uid: int, destino_uid: int, caderno_id_ref: s
             "INSERT INTO cadernos_questoes (caderno_id, questao_id, ordem, added_at) VALUES (?, ?, ?, ?)",
             (novo_caderno_id, qcur.lastrowid, a["ordem"], now)
         )
-    return 1
+    return 1, str(novo_caderno_id)
 
 
-def _importar_vademecum(conn, origem_uid: int, destino_uid: int, lei_id_ref: str) -> int:
-    """Copia uma lei específica + seus artigos."""
+def _importar_vademecum(conn, origem_uid: int, destino_uid: int, lei_id_ref: str) -> tuple[int, str]:
+    """Copia uma lei específica + seus artigos.
+
+    Retorna (copiados, ref_local) onde ref_local é o novo id da lei na conta de
+    destino (para rastrear proveniência). copiados=0 → ref_local=''.
+    """
     try:
         lei_id = int(lei_id_ref)
     except (ValueError, TypeError):
-        return 0
+        return 0, ""
 
     lei = conn.execute("SELECT * FROM vademecum_leis WHERE id = ? AND user_id = ?", (lei_id, origem_uid)).fetchone()
     if not lei:
-        return 0
+        return 0, ""
 
     lei_cols = _tabela_colunas(conn, "vademecum_leis")
     icols = [c for c in lei_cols if c != "id"]
@@ -1153,7 +1207,7 @@ def _importar_vademecum(conn, origem_uid: int, destino_uid: int, lei_id_ref: str
                 else:
                     avals.append(art[c])
             conn.execute(f"INSERT INTO vademecum_artigos ({', '.join(a_icols)}) VALUES ({aph})", avals)
-    return 1
+    return 1, str(nova_lei_id)
 
 
 def _importar_edital(conn, origem_uid: int, destino_uid: int, edital_ref: str) -> int:
