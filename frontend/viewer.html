@@ -181,6 +181,7 @@
         <div class="sc-row"><kbd>Z</kbd><span class="sc-desc">Modo Foco (esconde a interface)</span></div>
         <div class="sc-row"><kbd>G</kbd><span class="sc-desc">Metas da sessão e recall</span></div>
         <div class="sc-row"><kbd>V</kbd><span class="sc-desc">Ler em voz o trecho selecionado (TTS)</span></div>
+        <div class="sc-row"><kbd>J</kbd><span class="sc-desc">Mapa de engajamento por página</span></div>
         <div class="sc-row"><kbd>?</kbd><span class="sc-desc">Este painel de atalhos</span></div>
         <div class="sc-row"><kbd>Esc</kbd><span class="sc-desc">Fechar painel / sair do foco</span></div>
       </div>
@@ -226,6 +227,7 @@
       <button onclick="toggleShortcuts()" id="btn-shortcuts" title="Atalhos de teclado [?]" aria-label="Atalhos de teclado" style="background:var(--bg-elevated);border:none;color:var(--text-sub,#9399b2);border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">⌨️</button>
       <button onclick="abrirMetasSessao()" id="btn-metas" title="Metas da sessão e recall [G]" aria-label="Metas da sessão" style="background:var(--bg-elevated);border:none;color:var(--green,#a6e3a1);border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🎯</button>
       <button onclick="ttsFalarSelecao()" id="btn-tts" title="Ler em voz o trecho selecionado [V]" aria-label="Ler em voz o trecho selecionado" style="background:var(--bg-elevated);border:none;color:var(--sky,#89dceb);border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🔊</button>
+      <button onclick="toggleHeatmapPanel()" id="btn-heatmap" title="Mapa de engajamento por página [J]" aria-label="Mapa de engajamento" style="background:var(--bg-elevated);border:none;color:var(--peach,#fab387);border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🔥</button>
       <span id="reading-speed" title="Velocidade de leitura" style="font-size:0.7rem;color:var(--text-muted);min-width:50px;text-align:center;"></span>
     </div>
     <button id="btn-toggle-panel" onclick="toggleSidePanel()">❓ Questões</button>
@@ -458,6 +460,21 @@
       <button onclick="toggleDestaquesPanel()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:1.1rem;">✕</button>
     </div>
     <div id="destaques-body" style="flex:1;overflow-y:auto;padding:12px;">
+      <div style="color:var(--text-sub);font-size:0.85rem;text-align:center;padding:20px;">Carregando...</div>
+    </div>
+  </div>
+
+  <!-- Painel de Heatmap de engajamento por página -->
+  <div id="heatmap-panel" style="display:none;position:fixed;top:44px;right:0;width:340px;bottom:0;background:var(--bg-surface);border-left:1px solid var(--border);z-index:100;flex-direction:column;overflow:hidden;">
+    <div style="padding:10px 14px;background:var(--bg);display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);">
+      <h3 style="font-size:0.9rem;color:var(--peach,#fab387);flex:1;margin:0;">🔥 Engajamento por página</h3>
+      <button onclick="loadHeatmap()" title="Atualizar" style="background:var(--bg-elevated);border:none;color:var(--text-sub,#9399b2);border-radius:6px;padding:4px 8px;font-size:0.78rem;cursor:pointer;">🔄</button>
+      <button onclick="toggleHeatmapPanel()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:1.1rem;">✕</button>
+    </div>
+    <div style="padding:8px 14px;background:var(--bg);border-bottom:1px solid var(--border);font-size:0.7rem;color:var(--text-sub,#9399b2);line-height:1.5;">
+      As páginas onde você mais estudou (notas, destaques, bookmarks e revisão) ficam mais “quentes”. Clique para ir até a página.
+    </div>
+    <div id="heatmap-body" style="flex:1;overflow-y:auto;padding:12px;">
       <div style="color:var(--text-sub);font-size:0.85rem;text-align:center;padding:20px;">Carregando...</div>
     </div>
   </div>

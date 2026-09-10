@@ -1481,6 +1481,7 @@ const _PAINEIS_DIREITA = {
   bookmarks: { el: 'bookmarks-panel', largura: 340 },
   summary: { el: 'summary-panel', largura: 320 },
   destaques: { el: 'destaques-panel', largura: 340 },
+  heatmap: { el: 'heatmap-panel', largura: 340 },
 };
 let _painelAtivo = null; // 'revisao' | 'bookmarks' | 'summary' | 'questoes' | null
 
@@ -3023,6 +3024,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'z' || e.key === 'Z') toggleFocusMode();
   if (e.key === 'g' || e.key === 'G') abrirMetasSessao();
   if (e.key === 'v' || e.key === 'V') ttsFalarSelecao();
+  if (e.key === 'j' || e.key === 'J') toggleHeatmapPanel();
   if (e.key === 'Escape') {
     // Esc fecha primeiro o overlay de atalhos; depois o modal de metas; senão,
     // sai do Modo Foco.
@@ -3424,6 +3426,80 @@ function fecharRetomada() {
 setTimeout(_mostrarCartaoRetomada, 1200);
 
 
+// ==================== #7 HEATMAP DE ENGAJAMENTO POR PÁGINA ====================
+// Mini-mapa das páginas mais trabalhadas (notas/destaques/bookmarks/revisão),
+// com intensidade por score. Clique numa página → navega até ela.
+function toggleHeatmapPanel() {
+  _togglePainelDireita('heatmap', loadHeatmap);
+}
+
+// Interpola verde→amarelo→vermelho conforme a intensidade (0..1) do score.
+function _heatCor(t) {
+  t = Math.max(0, Math.min(1, t));
+  // 0 = teal frio, 0.5 = amarelo, 1 = vermelho quente.
+  if (t < 0.5) {
+    const k = t / 0.5; // teal → amarelo
+    const r = Math.round(148 + (249 - 148) * k);
+    const g = Math.round(226 + (226 - 226) * k);
+    const b = Math.round(213 + (175 - 213) * k);
+    return `rgb(${r},${g},${b})`;
+  }
+  const k = (t - 0.5) / 0.5; // amarelo → vermelho
+  const r = Math.round(249 + (243 - 249) * k);
+  const g = Math.round(226 + (139 - 226) * k);
+  const b = Math.round(175 + (168 - 175) * k);
+  return `rgb(${r},${g},${b})`;
+}
+
+async function loadHeatmap() {
+  const body = document.getElementById('heatmap-body');
+  if (!body) return;
+  body.innerHTML = '<div style="color:var(--text-sub,#9399b2);font-size:0.85rem;text-align:center;padding:20px;">⏳ Carregando…</div>';
+  let d;
+  try {
+    d = await fetch(`/api/engajamento/${encodePath(path)}`).then(r => r.ok ? r.json() : null);
+  } catch (e) { d = null; }
+  if (!d) { body.innerHTML = '<div style="color:var(--red,#f38ba8);font-size:0.85rem;">Erro ao carregar o mapa.</div>'; return; }
+
+  const itens = d.paginas || [];
+  if (itens.length === 0) {
+    body.innerHTML = `<div style="color:var(--text-sub,#585b70);font-size:0.85rem;text-align:center;padding:24px 12px;line-height:1.6;">
+      Nenhuma atividade ainda.<br><br>Crie notas, destaques, bookmarks ou blocos de revisão para o mapa de calor se formar.</div>`;
+    return;
+  }
+  const maxScore = d.max_score || 1;
+
+  // Legenda + lista de páginas quentes (ordenada por score desc para priorizar).
+  const legenda = `<div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;font-size:0.68rem;color:var(--text-sub,#9399b2);">
+    <span>frio</span>
+    <div style="flex:1;height:8px;border-radius:4px;background:linear-gradient(90deg,${_heatCor(0)},${_heatCor(0.5)},${_heatCor(1)});"></div>
+    <span>quente</span>
+  </div>`;
+
+  const ordenados = [...itens].sort((a, b) => b.score - a.score || a.pagina - b.pagina);
+  const linhas = ordenados.map(p => {
+    const t = p.score / maxScore;
+    const cor = _heatCor(t);
+    const larguraBarra = Math.max(8, Math.round(t * 100));
+    const detalhes = [];
+    if (p.notas) detalhes.push(`📝${p.notas}`);
+    if (p.destaques) detalhes.push(`🖍️${p.destaques}`);
+    if (p.bookmarks) detalhes.push(`🔖${p.bookmarks}`);
+    if (p.revisao) detalhes.push(`📑${p.revisao}`);
+    return `<div onclick="goToPage(${p.pagina})" title="Ir para a página ${p.pagina}" style="display:flex;align-items:center;gap:8px;padding:6px 4px;border-radius:6px;cursor:pointer;" onmouseover="this.style.background='var(--bg,#1e1e2e)'" onmouseout="this.style.background='transparent'">
+      <span style="font-size:0.74rem;color:var(--text,#cdd6f4);min-width:42px;">p.${p.pagina}</span>
+      <div style="flex:1;height:10px;background:var(--bg-elevated,#45475a);border-radius:5px;overflow:hidden;">
+        <div style="width:${larguraBarra}%;height:100%;background:${cor};border-radius:5px;"></div>
+      </div>
+      <span style="font-size:0.66rem;color:var(--text-sub,#9399b2);min-width:70px;text-align:right;">${detalhes.join(' ') || '·'}</span>
+    </div>`;
+  }).join('');
+
+  const resumo = `<div style="font-size:0.72rem;color:var(--text-sub,#9399b2);margin-bottom:8px;">${itens.length} página(s) com atividade${d.total_pages ? ` de ${d.total_pages}` : ''}.</div>`;
+  body.innerHTML = legenda + resumo + linhas;
+}
+
+
 // === Window assignments for HTML onclick/onchange handlers ===
 window.toggleNotePanel = toggleNotePanel;
 window.toggleTimerPause = toggleTimerPause;
@@ -3515,3 +3591,5 @@ window.ttsParar = ttsParar;
 window.ttsSetVoz = ttsSetVoz;
 window.ttsSetRate = ttsSetRate;
 window.fecharRetomada = fecharRetomada;
+window.toggleHeatmapPanel = toggleHeatmapPanel;
+window.loadHeatmap = loadHeatmap;

@@ -255,6 +255,74 @@ def get_progress_resumo(path: str, conn=Depends(get_db_session), user_id: int = 
     }
 
 
+@router.get("/api/engajamento/{path:path}", summary="Engajamento por página (heatmap)")
+def get_engajamento(path: str, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Agrega o material de estudo do usuário POR PÁGINA para o mini-mapa de calor.
+
+    Para cada página com atividade, retorna as contagens (notas, bookmarks,
+    destaques, blocos de revisão) e um `score` ponderado — usado no frontend para
+    a intensidade da cor. Ajuda o estudante a localizar as páginas mais
+    trabalhadas e priorizar a revisão. Respeita a visibilidade (403).
+    """
+    if ".." in path or path.startswith("/"):
+        raise HTTPException(status_code=400, detail="Caminho inválido")
+    if not can_access(conn, user_id, path):
+        raise HTTPException(status_code=403, detail="Sem acesso a este PDF.")
+
+    total_pages = 0
+    row = conn.execute(
+        "SELECT total_pages FROM progress WHERE path = ? AND user_id = ?", (path, user_id)
+    ).fetchone()
+    if row and row[0]:
+        total_pages = row[0]
+
+    # Agrega cada tipo por página. paginas[pag] = {notas, bookmarks, destaques, revisao}
+    paginas: dict[int, dict] = {}
+
+    def _agrega(tabela: str, chave: str):
+        try:
+            rows = conn.execute(
+                f"SELECT pagina, COUNT(*) FROM {tabela} WHERE pdf_path = ? AND user_id = ? GROUP BY pagina",
+                (path, user_id),
+            ).fetchall()
+        except Exception:
+            return
+        for r in rows:
+            pag = int(r[0] or 1)
+            paginas.setdefault(pag, {"notas": 0, "bookmarks": 0, "destaques": 0, "revisao": 0})
+            paginas[pag][chave] = int(r[1] or 0)
+
+    _agrega("notas_pdf", "notas")
+    _agrega("bookmarks_pdf", "bookmarks")
+    _agrega("destaques_pdf", "destaques")
+    _agrega("revisao_blocos", "revisao")
+
+    # Score ponderado: revisão e nota valem mais (indicam estudo ativo) que um
+    # bookmark simples. Apenas relativo — o frontend normaliza para a cor.
+    def _score(c):
+        return c["notas"] * 2 + c["revisao"] * 2 + c["destaques"] * 1 + c["bookmarks"] * 1
+
+    itens = []
+    for pag in sorted(paginas):
+        c = paginas[pag]
+        itens.append({
+            "pagina": pag,
+            "notas": c["notas"],
+            "bookmarks": c["bookmarks"],
+            "destaques": c["destaques"],
+            "revisao": c["revisao"],
+            "score": _score(c),
+        })
+
+    max_score = max((i["score"] for i in itens), default=0)
+    return {
+        "total_pages": total_pages,
+        "max_score": max_score,
+        "paginas": itens,
+        "total_paginas_com_atividade": len(itens),
+    }
+
+
 @router.get("/api/pdf-existe/{path:path}", summary="Verificar se um PDF existe",
             description="Checagem leve de existência de um PDF (sem transferir o arquivo).")
 def pdf_existe(path: str, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
