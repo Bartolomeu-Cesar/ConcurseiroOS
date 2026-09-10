@@ -3022,6 +3022,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'd' || e.key === 'D') cyclePdfTheme();
   if (e.key === 'z' || e.key === 'Z') toggleFocusMode();
   if (e.key === 'g' || e.key === 'G') abrirMetasSessao();
+  if (e.key === 'v' || e.key === 'V') ttsFalarSelecao();
   if (e.key === 'Escape') {
     // Esc fecha primeiro o overlay de atalhos; depois o modal de metas; senão,
     // sai do Modo Foco.
@@ -3206,6 +3207,150 @@ setInterval(() => {
 setTimeout(carregarViewerPrefs, 800);
 
 
+// ==================== TTS — LEITURA EM VOZ (#5) ====================
+// Dual coding (visual + auditivo) e acessibilidade via speechSynthesis nativo
+// (zero dependência). Lê o trecho SELECIONADO no PDF. Voz/velocidade são
+// preferências de DISPOSITIVO (as vozes dependem do SO) → localStorage.
+const TTS_VOZ_KEY = 'viewer_tts_voz';
+const TTS_RATE_KEY = 'viewer_tts_rate';
+const _ttsSuportado = typeof window !== 'undefined' && 'speechSynthesis' in window;
+let _ttsVozes = [];
+let _ttsVozNome = localStorage.getItem(TTS_VOZ_KEY) || '';
+let _ttsRate = parseFloat(localStorage.getItem(TTS_RATE_KEY) || '1') || 1;
+let _ttsUtterance = null;
+
+// Popula o <select> de vozes, priorizando pt-BR. Chamado no load e no evento
+// voiceschanged (algumas engines carregam as vozes de forma assíncrona).
+function _ttsCarregarVozes() {
+  if (!_ttsSuportado) return;
+  _ttsVozes = window.speechSynthesis.getVoices() || [];
+  const sel = document.getElementById('tts-voz');
+  if (!sel) return;
+  // Ordena: pt-BR primeiro, depois pt, depois o resto.
+  const ordenadas = [..._ttsVozes].sort((a, b) => {
+    const score = v => (v.lang || '').toLowerCase().startsWith('pt-br') ? 0
+      : (v.lang || '').toLowerCase().startsWith('pt') ? 1 : 2;
+    return score(a) - score(b);
+  });
+  sel.innerHTML = ordenadas.map(v =>
+    `<option value="${_escHtml(v.name)}"${v.name === _ttsVozNome ? ' selected' : ''}>${_escHtml(v.name)} (${_escHtml(v.lang || '?')})</option>`
+  ).join('') || '<option value="">(sem vozes)</option>';
+  // Se não havia voz salva, escolhe a primeira pt-BR disponível.
+  if (!_ttsVozNome && ordenadas.length) {
+    _ttsVozNome = ordenadas[0].name;
+    sel.value = _ttsVozNome;
+  }
+}
+
+function _ttsVozAtual() {
+  return _ttsVozes.find(v => v.name === _ttsVozNome) || null;
+}
+
+function ttsSetVoz(nome) {
+  _ttsVozNome = nome || '';
+  localStorage.setItem(TTS_VOZ_KEY, _ttsVozNome);
+  // Se estiver lendo, reinicia com a nova voz a partir do texto atual.
+  if (_ttsUtterance && window.speechSynthesis.speaking) {
+    const txt = _ttsUtterance.text;
+    ttsParar();
+    _ttsFalar(txt);
+  }
+}
+
+function ttsSetRate(valor) {
+  _ttsRate = Math.max(0.5, Math.min(2, parseFloat(valor) || 1));
+  localStorage.setItem(TTS_RATE_KEY, String(_ttsRate));
+  const lbl = document.getElementById('tts-rate-val');
+  if (lbl) lbl.textContent = _ttsRate.toFixed(1) + 'x';
+  // Aplica em tempo real reiniciando a fala (a Web Speech API não altera rate
+  // de um utterance em andamento).
+  if (_ttsUtterance && window.speechSynthesis.speaking) {
+    const txt = _ttsUtterance.text;
+    ttsParar();
+    _ttsFalar(txt);
+  }
+}
+
+function _ttsMostrarBarra(mostrar) {
+  const bar = document.getElementById('tts-bar');
+  if (bar) bar.style.display = mostrar ? 'flex' : 'none';
+}
+
+function _ttsAtualizarBotao() {
+  const b = document.getElementById('btn-tts');
+  const toggle = document.getElementById('tts-toggle');
+  const falando = _ttsSuportado && window.speechSynthesis.speaking && !window.speechSynthesis.paused;
+  if (b) {
+    b.style.color = (window.speechSynthesis && window.speechSynthesis.speaking) ? 'var(--bg,#1e1e2e)' : 'var(--sky,#89dceb)';
+    b.style.background = (window.speechSynthesis && window.speechSynthesis.speaking) ? 'var(--sky,#89dceb)' : 'var(--bg-elevated,#45475a)';
+  }
+  if (toggle) toggle.textContent = falando ? '⏸' : '▶';
+}
+
+// Fala um texto (uso interno). Normaliza quebras de linha do PDF.
+function _ttsFalar(texto) {
+  if (!_ttsSuportado || !texto) return;
+  window.speechSynthesis.cancel(); // limpa qualquer fila anterior
+  const limpo = String(texto).replace(/\s*\n\s*/g, ' ').replace(/\s{2,}/g, ' ').trim();
+  const u = new SpeechSynthesisUtterance(limpo);
+  const voz = _ttsVozAtual();
+  if (voz) { u.voice = voz; u.lang = voz.lang; }
+  else u.lang = 'pt-BR';
+  u.rate = _ttsRate;
+  u.onend = () => { _ttsUtterance = null; _ttsMostrarBarra(false); _ttsAtualizarBotao(); };
+  u.onerror = () => { _ttsUtterance = null; _ttsMostrarBarra(false); _ttsAtualizarBotao(); };
+  _ttsUtterance = u;
+  window.speechSynthesis.speak(u);
+  _ttsMostrarBarra(true);
+  _ttsAtualizarBotao();
+}
+
+// Ação principal: lê o trecho SELECIONADO no PDF.
+function ttsFalarSelecao() {
+  if (!_ttsSuportado) { showStudyToast('🔇 Seu navegador não suporta leitura em voz (TTS).'); return; }
+  // Se já está falando, o botão da toolbar funciona como pausar/retomar.
+  if (window.speechSynthesis.speaking) { ttsToggle(); return; }
+  const texto = (typeof _getSelecaoIframe === 'function') ? _getSelecaoIframe() : '';
+  if (!texto) { showStudyToast('🔊 Selecione um trecho de texto no PDF para ouvir.'); return; }
+  _ttsFalar(texto);
+  showStudyToast('🔊 Lendo o trecho selecionado…');
+}
+
+function ttsToggle() {
+  if (!_ttsSuportado || !window.speechSynthesis.speaking) return;
+  if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+  else window.speechSynthesis.pause();
+  _ttsAtualizarBotao();
+}
+
+function ttsParar() {
+  if (!_ttsSuportado) return;
+  window.speechSynthesis.cancel();
+  _ttsUtterance = null;
+  _ttsMostrarBarra(false);
+  _ttsAtualizarBotao();
+}
+
+// Inicialização do TTS: carrega vozes (sincronamente e no voiceschanged) e
+// aplica a velocidade salva no controle.
+if (_ttsSuportado) {
+  _ttsCarregarVozes();
+  window.speechSynthesis.onvoiceschanged = _ttsCarregarVozes;
+  const rateInput = document.getElementById('tts-rate');
+  const rateVal = document.getElementById('tts-rate-val');
+  if (rateInput) rateInput.value = String(_ttsRate);
+  if (rateVal) rateVal.textContent = _ttsRate.toFixed(1) + 'x';
+} else {
+  // Sem suporte: desabilita o botão com aviso.
+  const b = document.getElementById('btn-tts');
+  if (b) { b.style.opacity = '0.4'; b.style.cursor = 'not-allowed'; b.title = 'Leitura em voz indisponível neste navegador'; }
+}
+
+// Para a leitura ao sair da página (evita a voz continuar após navegar).
+window.addEventListener('pagehide', () => { try { ttsParar(); } catch (e) {} });
+window.addEventListener('beforeunload', () => { try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) {} });
+
+
 // === Window assignments for HTML onclick/onchange handlers ===
 window.toggleNotePanel = toggleNotePanel;
 window.toggleTimerPause = toggleTimerPause;
@@ -3291,3 +3436,8 @@ window.toggleShortcuts = toggleShortcuts;
 window.abrirMetasSessao = abrirMetasSessao;
 window.fecharMetasSessao = fecharMetasSessao;
 window.salvarMetasSessao = salvarMetasSessao;
+window.ttsFalarSelecao = ttsFalarSelecao;
+window.ttsToggle = ttsToggle;
+window.ttsParar = ttsParar;
+window.ttsSetVoz = ttsSetVoz;
+window.ttsSetRate = ttsSetRate;

@@ -134,6 +134,20 @@
   <!-- Botão flutuante para sair do Modo Foco -->
   <button id="focus-exit" onclick="toggleFocusMode()" title="Sair do Modo Foco (Esc)">🧘 Sair do foco (Esc)</button>
 
+  <!-- Barra flutuante de controle do TTS (leitura em voz) -->
+  <div id="tts-bar" style="display:none;position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:800;background:var(--bg-surface,#313244);border:1px solid var(--border,#45475a);border-radius:12px;padding:8px 12px;box-shadow:0 6px 24px rgba(0,0,0,0.5);align-items:center;gap:10px;flex-wrap:wrap;max-width:calc(100vw - 24px);">
+    <span style="font-size:0.9rem;">🔊</span>
+    <button id="tts-toggle" onclick="ttsToggle()" title="Pausar/Retomar leitura" style="background:var(--bg-elevated,#45475a);border:none;color:var(--yellow,#f9e2af);border-radius:6px;padding:4px 10px;font-size:0.85rem;cursor:pointer;">⏸</button>
+    <button onclick="ttsParar()" title="Parar leitura" style="background:var(--bg-elevated,#45475a);border:none;color:var(--red,#f38ba8);border-radius:6px;padding:4px 10px;font-size:0.85rem;cursor:pointer;">⏹</button>
+    <label style="font-size:0.72rem;color:var(--text-sub,#9399b2);display:flex;align-items:center;gap:4px;">Voz
+      <select id="tts-voz" onchange="ttsSetVoz(this.value)" aria-label="Voz da leitura" style="background:var(--bg,#1e1e2e);border:1px solid var(--border,#45475a);color:var(--text,#cdd6f4);border-radius:6px;padding:3px 6px;font-size:0.72rem;max-width:160px;cursor:pointer;"></select>
+    </label>
+    <label style="font-size:0.72rem;color:var(--text-sub,#9399b2);display:flex;align-items:center;gap:4px;">Velocidade
+      <input id="tts-rate" type="range" min="0.5" max="2" step="0.1" value="1" oninput="ttsSetRate(this.value)" aria-label="Velocidade da leitura" style="width:90px;cursor:pointer;">
+      <span id="tts-rate-val" style="min-width:26px;text-align:right;">1.0x</span>
+    </label>
+  </div>
+
   <!-- Overlay de atalhos de teclado -->
   <div id="shortcuts-overlay" onclick="if(event.target===this)toggleShortcuts()">
     <div class="sc-card">
@@ -152,6 +166,7 @@
         <div class="sc-row"><kbd>D</kbd><span class="sc-desc">Tema do PDF (claro/sépia/escuro)</span></div>
         <div class="sc-row"><kbd>Z</kbd><span class="sc-desc">Modo Foco (esconde a interface)</span></div>
         <div class="sc-row"><kbd>G</kbd><span class="sc-desc">Metas da sessão e recall</span></div>
+        <div class="sc-row"><kbd>V</kbd><span class="sc-desc">Ler em voz o trecho selecionado (TTS)</span></div>
         <div class="sc-row"><kbd>?</kbd><span class="sc-desc">Este painel de atalhos</span></div>
         <div class="sc-row"><kbd>Esc</kbd><span class="sc-desc">Fechar painel / sair do foco</span></div>
       </div>
@@ -196,6 +211,7 @@
       <button onclick="toggleFocusMode()" id="btn-focus" title="Modo Foco: esconde a interface [Z]" aria-label="Modo Foco" style="background:var(--bg-elevated);border:none;color:var(--mauve,#cba6f7);border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🧘</button>
       <button onclick="toggleShortcuts()" id="btn-shortcuts" title="Atalhos de teclado [?]" aria-label="Atalhos de teclado" style="background:var(--bg-elevated);border:none;color:var(--text-sub,#9399b2);border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">⌨️</button>
       <button onclick="abrirMetasSessao()" id="btn-metas" title="Metas da sessão e recall [G]" aria-label="Metas da sessão" style="background:var(--bg-elevated);border:none;color:var(--green,#a6e3a1);border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🎯</button>
+      <button onclick="ttsFalarSelecao()" id="btn-tts" title="Ler em voz o trecho selecionado [V]" aria-label="Ler em voz o trecho selecionado" style="background:var(--bg-elevated);border:none;color:var(--sky,#89dceb);border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🔊</button>
       <span id="reading-speed" title="Velocidade de leitura" style="font-size:0.7rem;color:var(--text-muted);min-width:50px;text-align:center;"></span>
     </div>
     <button id="btn-toggle-panel" onclick="toggleSidePanel()">❓ Questões</button>
