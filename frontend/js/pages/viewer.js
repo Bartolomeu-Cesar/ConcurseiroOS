@@ -3021,13 +3021,189 @@ document.addEventListener('keydown', e => {
   if (e.key === '?') { e.preventDefault(); toggleShortcuts(); return; }
   if (e.key === 'd' || e.key === 'D') cyclePdfTheme();
   if (e.key === 'z' || e.key === 'Z') toggleFocusMode();
+  if (e.key === 'g' || e.key === 'G') abrirMetasSessao();
   if (e.key === 'Escape') {
-    // Esc fecha primeiro o overlay de atalhos; senão, sai do Modo Foco.
+    // Esc fecha primeiro o overlay de atalhos; depois o modal de metas; senão,
+    // sai do Modo Foco.
     const ov = document.getElementById('shortcuts-overlay');
     if (ov && ov.classList.contains('show')) { ov.classList.remove('show'); return; }
+    const metas = document.getElementById('metas-modal');
+    if (metas && metas.style.display === 'flex') { metas.style.display = 'none'; return; }
     if (_focusMode) toggleFocusMode();
   }
 });
+
+
+// ==================== PACOTE CIENTÍFICO ====================
+// #4 Metas de sessão (páginas/tempo) + #3 Recall automático a cada N páginas.
+// Preferências persistidas no backend (user_prefs) → sincronizam entre estações.
+
+let _viewerPrefs = { meta_paginas: 0, meta_minutos: 0, recall_intervalo: 0 };
+// Página em que a sessão começou (para contar páginas lidas nesta sessão) e a
+// maior página já alcançada (para disparar o recall só ao AVANÇAR — forward).
+let _sessaoPaginaInicial = null;
+let _maiorPaginaSessao = 0;
+let _proximoRecallPagina = 0;   // próxima fronteira de páginas para o recall
+let _metaPaginasCelebrada = false;
+let _metaMinutosCelebrada = false;
+let _recallEmAndamento = false; // evita reabrir enquanto o painel está aberto
+
+async function carregarViewerPrefs() {
+  try {
+    const p = await fetch('/api/config/viewer-prefs').then(r => r.ok ? r.json() : null);
+    if (p) _viewerPrefs = {
+      meta_paginas: p.meta_paginas || 0,
+      meta_minutos: p.meta_minutos || 0,
+      recall_intervalo: p.recall_intervalo || 0,
+    };
+  } catch (e) { /* offline: usa defaults */ }
+  _resetSessaoCientifica();
+  _atualizarMetasUI();
+}
+
+// (Re)inicializa o estado da sessão a partir da página atual conhecida.
+function _resetSessaoCientifica() {
+  const base = currentPage || 1;
+  if (_sessaoPaginaInicial === null) _sessaoPaginaInicial = base;
+  _maiorPaginaSessao = Math.max(_maiorPaginaSessao, base);
+  const N = _viewerPrefs.recall_intervalo;
+  if (N > 0) _proximoRecallPagina = (_sessaoPaginaInicial) + N; // 1ª fronteira
+}
+
+// Páginas efetivamente lidas nesta sessão (avanço a partir do início).
+function _paginasLidasSessao() {
+  if (_sessaoPaginaInicial === null) return 0;
+  return Math.max(0, (_maiorPaginaSessao || currentPage) - _sessaoPaginaInicial);
+}
+
+// Minutos de leitura ATIVA nesta sessão (usa o acumulador do cronômetro).
+function _minutosAtivosSessao() {
+  return _tempoAtivoLeituraMs / 60000;
+}
+
+// Atualiza a barra de metas e checa celebração + recall. Chamada periodicamente
+// e a cada mudança de página; é idempotente e barata.
+function _atualizarMetasUI() {
+  const bar = document.getElementById('metas-bar');
+  const pagWrap = document.getElementById('meta-pag-wrap');
+  const minWrap = document.getElementById('meta-min-wrap');
+  if (!bar) return;
+
+  const temPag = _viewerPrefs.meta_paginas > 0;
+  const temMin = _viewerPrefs.meta_minutos > 0;
+  bar.style.display = (temPag || temMin) ? 'flex' : 'none';
+
+  if (temPag) {
+    const lidas = _paginasLidasSessao();
+    const meta = _viewerPrefs.meta_paginas;
+    const pct = Math.min(100, Math.round((lidas / meta) * 100));
+    document.getElementById('meta-pag-label').textContent = `${lidas}/${meta} pág`;
+    document.getElementById('meta-pag-fill').style.width = pct + '%';
+    pagWrap.style.display = 'flex';
+    if (lidas >= meta && !_metaPaginasCelebrada) {
+      _metaPaginasCelebrada = true;
+      showStudyToast(`🎉 Meta de ${meta} páginas atingida nesta sessão! Excelente ritmo.`);
+    }
+  } else if (pagWrap) { pagWrap.style.display = 'none'; }
+
+  if (temMin) {
+    const mins = _minutosAtivosSessao();
+    const meta = _viewerPrefs.meta_minutos;
+    const pct = Math.min(100, Math.round((mins / meta) * 100));
+    document.getElementById('meta-min-label').textContent = `${Math.floor(mins)}/${meta} min`;
+    document.getElementById('meta-min-fill').style.width = pct + '%';
+    minWrap.style.display = 'flex';
+    if (mins >= meta && !_metaMinutosCelebrada) {
+      _metaMinutosCelebrada = true;
+      showStudyToast(`🎉 Meta de ${meta} min de leitura ativa atingida! Ótimo foco.`);
+    }
+  } else if (minWrap) { minWrap.style.display = 'none'; }
+}
+
+// Verifica se cruzou a fronteira de recall (ao avançar) e dispara o prompt.
+function _checarRecallAutomatico() {
+  const N = _viewerPrefs.recall_intervalo;
+  if (N <= 0 || _recallEmAndamento || _sessaoPaginaInicial === null) return;
+  // Atualiza a maior página alcançada só quando o usuário AVANÇA (forward testing).
+  if (currentPage > _maiorPaginaSessao) _maiorPaginaSessao = currentPage;
+  if (_maiorPaginaSessao >= _proximoRecallPagina) {
+    _dispararRecallAutomatico(N);
+    // Agenda a próxima fronteira à frente da posição atual.
+    while (_proximoRecallPagina <= _maiorPaginaSessao) _proximoRecallPagina += N;
+  }
+}
+
+// Abre o painel de Active Recall existente com um aviso de pre-testing. Reusa
+// toda a infraestrutura de recall (registro como nota) já presente no leitor.
+function _dispararRecallAutomatico(N) {
+  _recallEmAndamento = true;
+  // Abre o painel de Active Recall só se ainda não estiver aberto.
+  if (!recallActive) toggleActiveRecall();
+  showStudyToast(`🎯 Recall (a cada ${N} pág): sem olhar, escreva o que você aprendeu até aqui.`);
+  // Libera novo disparo após alguns segundos, evitando reabrir em sequência.
+  setTimeout(() => { _recallEmAndamento = false; }, 4000);
+}
+
+// --- Modal de configuração ---
+function abrirMetasSessao() {
+  document.getElementById('meta-in-paginas').value = _viewerPrefs.meta_paginas || 0;
+  document.getElementById('meta-in-minutos').value = _viewerPrefs.meta_minutos || 0;
+  document.getElementById('meta-in-recall').value = _viewerPrefs.recall_intervalo || 0;
+  document.getElementById('metas-modal').style.display = 'flex';
+}
+
+function fecharMetasSessao() {
+  document.getElementById('metas-modal').style.display = 'none';
+}
+
+async function salvarMetasSessao() {
+  const clamp = (id, lo, hi) => {
+    const n = parseInt(document.getElementById(id).value, 10);
+    return isNaN(n) ? lo : Math.max(lo, Math.min(hi, n));
+  };
+  const body = {
+    meta_paginas: clamp('meta-in-paginas', 0, 1000),
+    meta_minutos: clamp('meta-in-minutos', 0, 600),
+    recall_intervalo: clamp('meta-in-recall', 0, 100),
+  };
+  try {
+    const res = await fetch('/api/config/viewer-prefs', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) {
+      const d = await res.json();
+      _viewerPrefs = {
+        meta_paginas: d.meta_paginas || 0,
+        meta_minutos: d.meta_minutos || 0,
+        recall_intervalo: d.recall_intervalo || 0,
+      };
+      // Reinicia o estado das metas/recall para valer a partir de agora.
+      _metaPaginasCelebrada = false;
+      _metaMinutosCelebrada = false;
+      _sessaoPaginaInicial = currentPage || 1;
+      _maiorPaginaSessao = _sessaoPaginaInicial;
+      _proximoRecallPagina = _sessaoPaginaInicial + (_viewerPrefs.recall_intervalo || 0);
+      _atualizarMetasUI();
+      fecharMetasSessao();
+      showStudyToast('🎯 Metas salvas!');
+    } else {
+      showStudyToast('⚠️ Erro ao salvar metas.');
+    }
+  } catch (e) {
+    showStudyToast('⚠️ Erro de conexão ao salvar metas.');
+  }
+}
+
+// Loop leve: atualiza a barra e checa recall. Desacoplado de setPage/tick para
+// não alterar a lógica existente (evita regressões no cronômetro/progresso).
+setInterval(() => {
+  if (_viewerPrefs.meta_paginas || _viewerPrefs.meta_minutos) _atualizarMetasUI();
+  _checarRecallAutomatico();
+}, 1000);
+
+// Carrega as preferências ao iniciar (após initProgress conhecer a página).
+setTimeout(carregarViewerPrefs, 800);
 
 
 // === Window assignments for HTML onclick/onchange handlers ===
@@ -3112,3 +3288,6 @@ window.setRevFsBusca = setRevFsBusca;
 window.cyclePdfTheme = cyclePdfTheme;
 window.toggleFocusMode = toggleFocusMode;
 window.toggleShortcuts = toggleShortcuts;
+window.abrirMetasSessao = abrirMetasSessao;
+window.fecharMetasSessao = fecharMetasSessao;
+window.salvarMetasSessao = salvarMetasSessao;

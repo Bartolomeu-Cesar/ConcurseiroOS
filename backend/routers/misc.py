@@ -1,4 +1,5 @@
 """Router de utilidades gerais (health, backup, busca, notificações, etc.)."""
+import json
 import os
 import random
 import time
@@ -630,6 +631,88 @@ def set_edital_favorito(
     conn.commit()
     log.info(f"Edital favorito definido: user={user_id} valor={valor}")
     return {"ok": True, "valor": valor, "edital_nome": edital_nome, "cargo": cargo}
+
+
+# ============================================================
+# Preferências do LEITOR de PDF (metas de sessão + recall a cada N páginas)
+# Persistidas em user_prefs (chave/valor JSON) para sincronizar entre estações.
+# ============================================================
+_PREF_VIEWER = "viewer_prefs"
+
+# Valores padrão + limites de validação (evita persistir lixo vindo do cliente).
+_VIEWER_PREFS_DEFAULTS = {
+    "meta_paginas": 0,       # 0 = sem meta de páginas por sessão
+    "meta_minutos": 0,       # 0 = sem meta de tempo por sessão
+    "recall_intervalo": 0,   # 0 = recall automático desligado; N = a cada N páginas
+}
+_VIEWER_PREFS_LIMITES = {
+    "meta_paginas": (0, 1000),
+    "meta_minutos": (0, 600),
+    "recall_intervalo": (0, 100),
+}
+
+
+def _normalizar_viewer_prefs(raw: dict) -> dict:
+    """Aceita apenas as chaves conhecidas, converte para int e aplica limites.
+
+    Retorna sempre um dict completo (preenchendo defaults) — robusto a JSON
+    corrompido, chaves extras ou tipos inesperados vindos do cliente.
+    """
+    out = dict(_VIEWER_PREFS_DEFAULTS)
+    if isinstance(raw, dict):
+        for k in _VIEWER_PREFS_DEFAULTS:
+            if k in raw:
+                try:
+                    v = int(raw[k])
+                except (ValueError, TypeError):
+                    continue
+                lo, hi = _VIEWER_PREFS_LIMITES[k]
+                out[k] = max(lo, min(hi, v))
+    return out
+
+
+class ViewerPrefsSet(BaseModel):
+    meta_paginas: int | None = None
+    meta_minutos: int | None = None
+    recall_intervalo: int | None = None
+
+
+@router.get("/api/config/viewer-prefs", summary="Preferências do leitor de PDF (metas + recall)")
+def get_viewer_prefs(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Retorna as preferências do leitor do usuário (metas de sessão e intervalo
+    de recall). Sempre devolve o conjunto completo com defaults preenchidos."""
+    row = conn.execute(
+        "SELECT valor FROM user_prefs WHERE user_id = ? AND chave = ?",
+        (user_id, _PREF_VIEWER),
+    ).fetchone()
+    raw = {}
+    if row and row["valor"]:
+        try:
+            raw = json.loads(row["valor"])
+        except (ValueError, TypeError):
+            raw = {}
+    return _normalizar_viewer_prefs(raw)
+
+
+@router.put("/api/config/viewer-prefs", summary="Definir preferências do leitor de PDF")
+def set_viewer_prefs(
+    body: ViewerPrefsSet,
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Atualiza (merge) as preferências do leitor. Campos omitidos (None) mantêm
+    o valor atual; os informados são validados/limitados antes de persistir."""
+    atual = get_viewer_prefs(conn=conn, user_id=user_id)
+    incoming = {k: v for k, v in body.model_dump().items() if v is not None}
+    merged = _normalizar_viewer_prefs({**atual, **incoming})
+    conn.execute(
+        """INSERT INTO user_prefs (user_id, chave, valor, updated_at) VALUES (?, ?, ?, ?)
+           ON CONFLICT(user_id, chave) DO UPDATE SET valor = excluded.valor, updated_at = excluded.updated_at""",
+        (user_id, _PREF_VIEWER, json.dumps(merged), today_str()),
+    )
+    conn.commit()
+    log.info(f"Viewer prefs atualizadas: user={user_id} {merged}")
+    return {"ok": True, **merged}
 
 
 @router.get("/api/conquistas-diarias")
