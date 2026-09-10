@@ -53,6 +53,7 @@ class PublicarItem(BaseModel):
     preco_creditos: int = 0  # preço em créditos inteiros (0 = gratuito)
     concurso: str = ""       # vínculo opcional a um concurso/edital
     cargo: str = ""          # vínculo opcional a um cargo específico
+    disponibilizar: bool = False  # False = guarda PRIVADO (só o autor vê); True = libera já (aprovado/pendente)
 
 
 # ==================== LISTAGEM PÚBLICA ====================
@@ -241,6 +242,16 @@ def importar_item(
     if origem_uid == user_id:
         raise HTTPException(status_code=400, detail="Este material já é da sua conta.")
 
+    # Item PRIVADO só pode ser importado pelo dono (curador), pela origem, ou por
+    # quem recebeu uma concessão/presente (registro em catalogo_compras). Para os
+    # demais, ele é invisível — responde 404 como se não existisse.
+    if (item["status"] or "aprovado") == "privado" and item["curador_uid"] != user_id:
+        tem_acesso = conn.execute(
+            "SELECT 1 FROM catalogo_compras WHERE item_id = ? AND comprador_uid = ?", (item_id, user_id)
+        ).fetchone() is not None
+        if not tem_acesso:
+            raise HTTPException(status_code=404, detail="Item não encontrado ou indisponível.")
+
     item_keys = item.keys()
     preco = int(item["preco_creditos"]) if "preco_creditos" in item_keys and item["preco_creditos"] else 0
     vendedor_uid = item["curador_uid"]
@@ -360,9 +371,13 @@ def publicar_item(
 ):
     """Publica um recurso no catálogo.
 
-    - Admin/curador verificado: publica aprovado (visível na hora).
-    - Premium/vitalício: publica pendente (aguarda moderação do admin).
-    - Free: bloqueado.
+    Por padrão o material nasce PRIVADO (rascunho): só o autor o vê em "Meus
+    materiais" e pode presenteá-lo a usuários específicos. Ele decide quando
+    disponibilizar (via flag `disponibilizar=true` aqui ou pelo endpoint
+    POST /{id}/disponibilizar). Ao disponibilizar:
+    - Admin/curador verificado: fica aprovado (visível na hora).
+    - Premium/vitalício: fica pendente (aguarda moderação do admin).
+    Free: bloqueado (não publica).
     Sempre publica a partir da PRÓPRIA conta (origem_uid = user_id), exceto admin
     que pode publicar de qualquer conta.
     """
@@ -402,8 +417,14 @@ def publicar_item(
     if preco < 0:
         raise HTTPException(status_code=400, detail="Preço não pode ser negativo.")
 
-    # Status: aprovado se admin ou verificado; pendente caso contrário
-    status = "aprovado" if (is_admin or is_verificado) else "pendente"
+    # Status: por padrão o material nasce PRIVADO (rascunho — só o autor vê e pode
+    # presentear). O autor decide quando disponibilizar. Ao disponibilizar (flag ou
+    # endpoint dedicado), aplica-se a regra normal: aprovado (admin/verificado) ou
+    # pendente (premium não-verificado, entra em moderação).
+    if body.disponibilizar:
+        status = "aprovado" if (is_admin or is_verificado) else "pendente"
+    else:
+        status = "privado"
 
     conn.execute("""
         INSERT INTO catalogo_itens (tipo, titulo, descricao, categoria, curador_uid, origem_uid, ref, downloads, ativo, status, publicado_em, preco_creditos, concurso, cargo)
@@ -415,8 +436,70 @@ def publicar_item(
 
     new_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
     log.info(f"[catalogo] Publicado: id={new_id} tipo={body.tipo} status={status} por user={user_id}")
-    return {"ok": True, "id": new_id, "status": status,
-            "mensagem": "Publicado!" if status == "aprovado" else "Enviado para moderação. Será revisado pela equipe."}
+    if status == "privado":
+        mensagem = "Material salvo como privado. Só você o vê — disponibilize quando quiser."
+    elif status == "aprovado":
+        mensagem = "Publicado! Já está visível no catálogo."
+    else:  # pendente
+        mensagem = "Enviado para moderação. Será revisado pela equipe."
+    return {"ok": True, "id": new_id, "status": status, "mensagem": mensagem}
+
+
+@router.post("/{item_id}/disponibilizar", summary="Disponibilizar um material privado no catálogo")
+def disponibilizar_item(item_id: int, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Libera um material PRIVADO para o catálogo (o autor decide quando).
+
+    Aplica a mesma regra da publicação:
+    - Admin/curador verificado → status 'aprovado' (visível na hora).
+    - Premium/vitalício → status 'pendente' (entra em moderação).
+    Só o dono (curador_uid) ou admin pode disponibilizar. Itens já
+    aprovados/pendentes retornam o estado atual sem alterar.
+    """
+    item = conn.execute("SELECT * FROM catalogo_itens WHERE id = ? AND ativo = 1", (item_id,)).fetchone()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado ou indisponível.")
+
+    user = conn.execute("SELECT role FROM users WHERE id = ?", (user_id,)).fetchone()
+    is_admin = bool(user and user["role"] == "admin")
+    if not is_admin and item["curador_uid"] != user_id:
+        raise HTTPException(status_code=403, detail="Você só pode disponibilizar seus próprios materiais.")
+
+    atual = item["status"] or "aprovado"
+    if atual in ("aprovado", "pendente"):
+        return {"ok": True, "status": atual, "mensagem": "Este material já está disponibilizado."}
+
+    # Decide o novo status pela capacidade do DONO (não de quem chama, caso admin).
+    _pode, dono_admin, dono_verificado = _pode_publicar(conn, item["curador_uid"])
+    novo = "aprovado" if (dono_admin or dono_verificado or is_admin) else "pendente"
+    conn.execute("UPDATE catalogo_itens SET status = ? WHERE id = ?", (novo, item_id))
+    conn.commit()
+    log.info(f"[catalogo] Disponibilizado item={item_id} status={novo} por user={user_id}")
+    mensagem = "Material disponibilizado! Já está visível no catálogo." if novo == "aprovado" \
+        else "Material enviado para moderação. Será revisado pela equipe."
+    return {"ok": True, "status": novo, "mensagem": mensagem}
+
+
+@router.post("/{item_id}/tornar-privado", summary="Voltar um material para privado (retira da vitrine)")
+def tornar_privado_item(item_id: int, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Retira um material da vitrine, voltando-o para PRIVADO (rascunho).
+
+    Não apaga o item nem suas avaliações/downloads; apenas deixa de aparecer na
+    listagem pública e na fila de moderação. Quem já adquiriu mantém o acesso.
+    Só o dono (curador_uid) ou admin pode tornar privado.
+    """
+    item = conn.execute("SELECT id, curador_uid FROM catalogo_itens WHERE id = ? AND ativo = 1", (item_id,)).fetchone()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado ou indisponível.")
+
+    user = conn.execute("SELECT role FROM users WHERE id = ?", (user_id,)).fetchone()
+    is_admin = bool(user and user["role"] == "admin")
+    if not is_admin and item["curador_uid"] != user_id:
+        raise HTTPException(status_code=403, detail="Você só pode tornar privados os seus próprios materiais.")
+
+    conn.execute("UPDATE catalogo_itens SET status = 'privado' WHERE id = ?", (item_id,))
+    conn.commit()
+    log.info(f"[catalogo] Tornado privado item={item_id} por user={user_id}")
+    return {"ok": True, "status": "privado", "mensagem": "Material agora está privado (fora da vitrine)."}
 
 
 @router.get("/meus", summary="Meus materiais publicados")

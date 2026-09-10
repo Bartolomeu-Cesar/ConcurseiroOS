@@ -130,6 +130,7 @@ class TestPublicar:
         _seed_curador(1)
         token = _admin_token()
         r = client.post("/api/catalogo/publicar", headers=_h(token), json={
+            "disponibilizar": True,
             "tipo": "edital", "titulo": "Edital PF 2026", "descricao": "Completo",
             "categoria": "Polícia", "origem_uid": 1, "ref": "PF 2026"
         })
@@ -139,6 +140,7 @@ class TestPublicar:
     def test_publicar_recurso_inexistente_404(self, client):
         token = _admin_token()
         r = client.post("/api/catalogo/publicar", headers=_h(token), json={
+            "disponibilizar": True,
             "tipo": "edital", "titulo": "Fantasma", "origem_uid": 1, "ref": "NAO_EXISTE"
         })
         assert r.status_code == 404
@@ -146,6 +148,7 @@ class TestPublicar:
     def test_publicar_tipo_invalido_400(self, client):
         token = _admin_token()
         r = client.post("/api/catalogo/publicar", headers=_h(token), json={
+            "disponibilizar": True,
             "tipo": "xyz", "titulo": "X", "origem_uid": 1, "ref": ""
         })
         assert r.status_code == 400
@@ -154,6 +157,7 @@ class TestPublicar:
         _criar_estudante(50, "est50@test.com")
         token = _token(50, "est50@test.com")
         r = client.post("/api/catalogo/publicar", headers=_h(token), json={
+            "disponibilizar": True,
             "tipo": "edital", "titulo": "X", "origem_uid": 1, "ref": "PF 2026"
         })
         assert r.status_code == 403
@@ -165,6 +169,7 @@ class TestPublicar:
         _seed_curador(1)
         token = _admin_token()
         r = client.post("/api/catalogo/publicar", headers=_h(token), json={
+            "disponibilizar": True,
             "tipo": "deck_flashcards", "titulo": "Deck via Catálogo",
             "categoria": "Geral", "origem_uid": 0, "ref": "Direito"
         })
@@ -176,6 +181,7 @@ class TestPublicar:
         _seed_curador(1)
         token = _admin_token()
         r = client.post("/api/catalogo/publicar", headers=_h(token), json={
+            "disponibilizar": True,
             "tipo": "deck_flashcards", "titulo": "Deck sem origem",
             "categoria": "Geral", "ref": "Direito"
         })
@@ -186,6 +192,7 @@ class TestPublicar:
         _seed_curador(1)
         token = _admin_token()
         r = client.post("/api/catalogo/publicar", headers=_h(token), json={
+            "disponibilizar": True,
             "tipo": "deck_flashcards", "titulo": "X", "origem_uid": 99999, "ref": "Direito"
         })
         assert r.status_code == 404
@@ -196,6 +203,7 @@ class TestListar:
         _seed_curador(1)
         token = _admin_token()
         client.post("/api/catalogo/publicar", headers=_h(token), json={
+            "disponibilizar": True,
             "tipo": "deck_flashcards", "titulo": "Deck Direito", "categoria": "Geral",
             "origem_uid": 1, "ref": "Direito"
         })
@@ -219,6 +227,7 @@ class TestListar:
         _seed_curador(1)
         token = _admin_token()
         pub = client.post("/api/catalogo/publicar", headers=_h(token), json={
+            "disponibilizar": True,
             "tipo": "deck_flashcards", "titulo": "Deck do Dono", "origem_uid": 1, "ref": "Direito"
         })
         item_id = pub.json()["id"]
@@ -240,6 +249,7 @@ class TestImportar:
         _seed_curador(1)
         token = _admin_token()
         pub = client.post("/api/catalogo/publicar", headers=_h(token), json={
+            "disponibilizar": True,
             "tipo": "deck_flashcards", "titulo": "Deck FC", "origem_uid": 1, "ref": "Direito"
         }).json()
         item_id = pub["id"]
@@ -260,6 +270,7 @@ class TestImportar:
         _seed_curador(1)
         token = _admin_token()
         pub = client.post("/api/catalogo/publicar", headers=_h(token), json={
+            "disponibilizar": True,
             "tipo": "deck_questoes", "titulo": "Q Direito", "origem_uid": 1, "ref": "Direito"
         }).json()
         item_id = pub["id"]
@@ -275,6 +286,7 @@ class TestImportar:
         _seed_curador(1)
         token = _admin_token()
         pub = client.post("/api/catalogo/publicar", headers=_h(token), json={
+            "disponibilizar": True,
             "tipo": "edital", "titulo": "Edital PF", "origem_uid": 1, "ref": "PF 2026"
         }).json()
         _criar_estudante(62, "est62@test.com")
@@ -297,6 +309,7 @@ class TestRemover:
         _seed_curador(1)
         token = _admin_token()
         pub = client.post("/api/catalogo/publicar", headers=_h(token), json={
+            "disponibilizar": True,
             "tipo": "deck_sumulas", "titulo": "Súmulas STF", "origem_uid": 1, "ref": ""
         })
         # deck_sumulas requer súmulas — pode retornar 404 se não houver; então criamos uma
@@ -306,6 +319,7 @@ class TestRemover:
             conn.commit()
             conn.close()
             pub = client.post("/api/catalogo/publicar", headers=_h(token), json={
+            "disponibilizar": True,
                 "tipo": "deck_sumulas", "titulo": "Súmulas STF", "origem_uid": 1, "ref": ""
             })
         item_id = pub.json()["id"]
@@ -326,6 +340,7 @@ class TestAvaliacoes:
         _seed_curador(1)
         token = _admin_token()
         return client.post("/api/catalogo/publicar", headers=_h(token), json={
+            "disponibilizar": True,
             "tipo": "deck_flashcards", "titulo": "Deck Aval", "origem_uid": 1, "ref": "Direito"
         }).json()["id"]
 
@@ -388,6 +403,7 @@ class TestPublicacaoPremium:
         self._criar_premium(80, "prem80@test.com")
         tok = _token(80, "prem80@test.com")
         r = client.post("/api/catalogo/publicar", headers=_h(tok), json={
+            "disponibilizar": True,
             "tipo": "deck_flashcards", "titulo": "Meu Deck", "origem_uid": 0, "ref": "MatPrem"
         })
         assert r.status_code == 200
@@ -399,6 +415,7 @@ class TestPublicacaoPremium:
     def test_free_nao_publica_403(self, client):
         _criar_estudante(81, "est81@test.com")  # free
         r = client.post("/api/catalogo/publicar", headers=_h(_token(81, "est81@test.com")), json={
+            "disponibilizar": True,
             "tipo": "deck_flashcards", "titulo": "X", "origem_uid": 0, "ref": "Y"
         })
         assert r.status_code == 403
@@ -409,6 +426,7 @@ class TestPublicacaoPremium:
         client.post("/api/catalogo/curador/82/verificar", headers=_h(_admin_token()), json={"verificado": True})
         tok = _token(82, "prem82@test.com")
         r = client.post("/api/catalogo/publicar", headers=_h(tok), json={
+            "disponibilizar": True,
             "tipo": "deck_flashcards", "titulo": "Deck Verificado", "origem_uid": 0, "ref": "MatPrem"
         })
         assert r.status_code == 200
@@ -418,6 +436,7 @@ class TestPublicacaoPremium:
         self._criar_premium(83, "prem83@test.com")
         tok = _token(83, "prem83@test.com")
         client.post("/api/catalogo/publicar", headers=_h(tok), json={
+            "disponibilizar": True,
             "tipo": "deck_flashcards", "titulo": "Meu Material", "origem_uid": 0, "ref": "MatPrem"
         })
         r = client.get("/api/catalogo/meus", headers=_h(tok))
@@ -445,6 +464,7 @@ class TestModeracao:
         conn.commit()
         conn.close()
         pub = client.post("/api/catalogo/publicar", headers=_h(_token(92, "p92@t.com")), json={
+            "disponibilizar": True,
             "tipo": "deck_questoes", "titulo": "Pendente Q", "origem_uid": 0, "ref": "ModMat"
         }).json()
         item_id = pub["id"]
@@ -461,6 +481,7 @@ class TestModeracao:
     def test_moderar_acao_invalida_400(self, client):
         _seed_curador(1)
         pub = client.post("/api/catalogo/publicar", headers=_h(_admin_token()), json={
+            "disponibilizar": True,
             "tipo": "deck_flashcards", "titulo": "X", "origem_uid": 1, "ref": "Direito"
         }).json()
         r = client.post(f"/api/catalogo/{pub['id']}/moderar", headers=_h(_admin_token()), json={"acao": "xyz"})
@@ -499,6 +520,7 @@ class TestMarketplace:
     def test_compra_debita_comprador_credita_vendedor_com_taxa(self, client):
         self._criar_vendedor(200, "vend200@test.com", "MktA")
         pub = client.post("/api/catalogo/publicar", headers=_h(_token(200, "vend200@test.com")), json={
+            "disponibilizar": True,
             "tipo": "deck_questoes", "titulo": "Pacote A", "origem_uid": 0, "ref": "MktA",
             "preco_creditos": 10,
         })
@@ -523,6 +545,7 @@ class TestMarketplace:
     def test_saldo_insuficiente_402_nada_muda(self, client):
         self._criar_vendedor(210, "vend210@test.com", "MktB")
         item_id = client.post("/api/catalogo/publicar", headers=_h(_token(210, "vend210@test.com")), json={
+            "disponibilizar": True,
             "tipo": "deck_questoes", "titulo": "Pacote B", "origem_uid": 0, "ref": "MktB", "preco_creditos": 30,
         }).json()["id"]
         _criar_estudante(211, "comp211@test.com")
@@ -542,6 +565,7 @@ class TestMarketplace:
     def test_reimportacao_gratis_apos_compra(self, client):
         self._criar_vendedor(220, "vend220@test.com", "MktC")
         item_id = client.post("/api/catalogo/publicar", headers=_h(_token(220, "vend220@test.com")), json={
+            "disponibilizar": True,
             "tipo": "deck_questoes", "titulo": "Pacote C", "origem_uid": 0, "ref": "MktC", "preco_creditos": 10,
         }).json()["id"]
         _criar_estudante(221, "comp221@test.com")
@@ -558,6 +582,7 @@ class TestMarketplace:
     def test_item_gratis_importa_sem_custo(self, client):
         self._criar_vendedor(230, "vend230@test.com", "MktD")
         item_id = client.post("/api/catalogo/publicar", headers=_h(_token(230, "vend230@test.com")), json={
+            "disponibilizar": True,
             "tipo": "deck_questoes", "titulo": "Pacote Grátis", "origem_uid": 0, "ref": "MktD", "preco_creditos": 0,
         }).json()["id"]
         _criar_estudante(231, "comp231@test.com")
@@ -571,6 +596,7 @@ class TestMarketplace:
         """Importar item grátis marca ja_comprado=True (evita reimportar/duplicar)."""
         self._criar_vendedor(290, "vend290@test.com", "MktGratis")
         item_id = client.post("/api/catalogo/publicar", headers=_h(_token(290, "vend290@test.com")), json={
+            "disponibilizar": True,
             "tipo": "deck_questoes", "titulo": "Grátis Marca", "origem_uid": 0, "ref": "MktGratis", "preco_creditos": 0,
         }).json()["id"]
         _criar_estudante(291, "comp291@test.com")
@@ -587,6 +613,7 @@ class TestMarketplace:
         """Reimportar item grátis já adquirido não erra nem duplica o registro."""
         self._criar_vendedor(292, "vend292@test.com", "MktGratis2")
         item_id = client.post("/api/catalogo/publicar", headers=_h(_token(292, "vend292@test.com")), json={
+            "disponibilizar": True,
             "tipo": "deck_questoes", "titulo": "Grátis Idem", "origem_uid": 0, "ref": "MktGratis2", "preco_creditos": 0,
         }).json()["id"]
         _criar_estudante(293, "comp293@test.com")
@@ -612,6 +639,7 @@ class TestMarketplace:
         # Vendedor publica um deck de questões grátis.
         self._criar_vendedor(500, "vend500@test.com", "MktOrfa")
         item_id = client.post("/api/catalogo/publicar", headers=_h(_token(500, "vend500@test.com")), json={
+            "disponibilizar": True,
             "tipo": "deck_questoes", "titulo": "Órfã", "origem_uid": 0, "ref": "MktOrfa", "preco_creditos": 0,
         }).json()["id"]
 
@@ -657,6 +685,7 @@ class TestMarketplace:
 
         self._criar_vendedor(510, "vend510@test.com", "MktDono")
         item_id = client.post("/api/catalogo/publicar", headers=_h(_token(510, "vend510@test.com")), json={
+            "disponibilizar": True,
             "tipo": "deck_questoes", "titulo": "Dono", "origem_uid": 0, "ref": "MktDono", "preco_creditos": 0,
         }).json()["id"]
         conn = _conn()
@@ -674,6 +703,7 @@ class TestMarketplace:
         importa de graça e vê ja_comprado=True."""
         self._criar_vendedor(600, "vend600@test.com", "MktPresente")
         item_id = client.post("/api/catalogo/publicar", headers=_h(_token(600, "vend600@test.com")), json={
+            "disponibilizar": True,
             "tipo": "deck_questoes", "titulo": "Presenteável", "origem_uid": 0, "ref": "MktPresente", "preco_creditos": 30,
         }).json()["id"]
         _criar_estudante(601, "dest601@test.com")
@@ -707,6 +737,7 @@ class TestMarketplace:
     def test_conceder_por_username(self, client):
         self._criar_vendedor(610, "vend610@test.com", "MktUser")
         item_id = client.post("/api/catalogo/publicar", headers=_h(_token(610, "vend610@test.com")), json={
+            "disponibilizar": True,
             "tipo": "deck_questoes", "titulo": "PorUser", "origem_uid": 0, "ref": "MktUser", "preco_creditos": 10,
         }).json()["id"]
         _criar_estudante(611, "dest611@test.com")  # username = est611
@@ -722,6 +753,7 @@ class TestMarketplace:
     def test_conceder_idempotente(self, client):
         self._criar_vendedor(620, "vend620@test.com", "MktIdem")
         item_id = client.post("/api/catalogo/publicar", headers=_h(_token(620, "vend620@test.com")), json={
+            "disponibilizar": True,
             "tipo": "deck_questoes", "titulo": "Idem", "origem_uid": 0, "ref": "MktIdem", "preco_creditos": 5,
         }).json()["id"]
         _criar_estudante(621, "dest621@test.com")
@@ -737,6 +769,7 @@ class TestMarketplace:
     def test_conceder_nao_dono_403(self, client):
         self._criar_vendedor(630, "vend630@test.com", "MktNaoDono")
         item_id = client.post("/api/catalogo/publicar", headers=_h(_token(630, "vend630@test.com")), json={
+            "disponibilizar": True,
             "tipo": "deck_questoes", "titulo": "NaoDono", "origem_uid": 0, "ref": "MktNaoDono", "preco_creditos": 5,
         }).json()["id"]
         _criar_estudante(631, "intruso631@test.com")
@@ -748,6 +781,7 @@ class TestMarketplace:
     def test_conceder_destinatario_inexistente_404(self, client):
         self._criar_vendedor(640, "vend640@test.com", "MktNoDest")
         item_id = client.post("/api/catalogo/publicar", headers=_h(_token(640, "vend640@test.com")), json={
+            "disponibilizar": True,
             "tipo": "deck_questoes", "titulo": "NoDest", "origem_uid": 0, "ref": "MktNoDest", "preco_creditos": 5,
         }).json()["id"]
         r = client.post(f"/api/catalogo/{item_id}/conceder", headers=_h(_token(640, "vend640@test.com")),
@@ -757,6 +791,7 @@ class TestMarketplace:
     def test_conceder_sem_identificador_400(self, client):
         self._criar_vendedor(650, "vend650@test.com", "MktSemId")
         item_id = client.post("/api/catalogo/publicar", headers=_h(_token(650, "vend650@test.com")), json={
+            "disponibilizar": True,
             "tipo": "deck_questoes", "titulo": "SemId", "origem_uid": 0, "ref": "MktSemId", "preco_creditos": 5,
         }).json()["id"]
         r = client.post(f"/api/catalogo/{item_id}/conceder", headers=_h(_token(650, "vend650@test.com")), json={})
@@ -765,6 +800,7 @@ class TestMarketplace:
     def test_listar_concessoes_dono_ve_naodono_403(self, client):
         self._criar_vendedor(660, "vend660@test.com", "MktConc")
         item_id = client.post("/api/catalogo/publicar", headers=_h(_token(660, "vend660@test.com")), json={
+            "disponibilizar": True,
             "tipo": "deck_questoes", "titulo": "Conc", "origem_uid": 0, "ref": "MktConc", "preco_creditos": 5,
         }).json()["id"]
         _criar_estudante(661, "dest661@test.com")
@@ -786,6 +822,7 @@ class TestMarketplace:
         # Autor original publica um deck grátis.
         self._criar_vendedor(700, "autor700@test.com", "MatImportada")
         item_id = client.post("/api/catalogo/publicar", headers=_h(_token(700, "autor700@test.com")), json={
+            "disponibilizar": True,
             "tipo": "deck_questoes", "titulo": "Original", "origem_uid": 0, "ref": "MatImportada", "preco_creditos": 0,
         }).json()["id"]
 
@@ -796,6 +833,7 @@ class TestMarketplace:
 
         # Agora o importador tenta REPUBLICAR o mesmo recurso (matéria importada).
         r = client.post("/api/catalogo/publicar", headers=_h(_token(701, "revend701@test.com")), json={
+            "disponibilizar": True,
             "tipo": "deck_questoes", "titulo": "Revenda", "origem_uid": 0, "ref": "MatImportada", "preco_creditos": 20,
         })
         assert r.status_code == 403
@@ -805,6 +843,7 @@ class TestMarketplace:
         """Material de autoria própria (não importado) continua publicável."""
         self._criar_vendedor(710, "autor710@test.com", "MinhaAutoria")
         r = client.post("/api/catalogo/publicar", headers=_h(_token(710, "autor710@test.com")), json={
+            "disponibilizar": True,
             "tipo": "deck_questoes", "titulo": "Meu", "origem_uid": 0, "ref": "MinhaAutoria", "preco_creditos": 5,
         })
         assert r.status_code == 200, r.text
@@ -814,12 +853,14 @@ class TestMarketplace:
         """Admin é isento da regra (gestão): pode publicar mesmo recurso importado."""
         self._criar_vendedor(720, "autor720@test.com", "AdminImport")
         item_id = client.post("/api/catalogo/publicar", headers=_h(_token(720, "autor720@test.com")), json={
+            "disponibilizar": True,
             "tipo": "deck_questoes", "titulo": "OrigAdmin", "origem_uid": 0, "ref": "AdminImport", "preco_creditos": 0,
         }).json()["id"]
         # Admin (id=1) importa e registra proveniência.
         client.post(f"/api/catalogo/{item_id}/importar", headers=_h(_admin_token()))
         # Admin publica o mesmo recurso da própria conta → permitido (isento).
         r = client.post("/api/catalogo/publicar", headers=_h(_admin_token()), json={
+            "disponibilizar": True,
             "tipo": "deck_questoes", "titulo": "AdminRepublica", "origem_uid": 0, "ref": "AdminImport", "preco_creditos": 0,
         })
         assert r.status_code == 200, r.text
@@ -830,6 +871,7 @@ class TestMarketplace:
 
         self._criar_vendedor(730, "autor730@test.com", "BackProv")
         item_id = client.post("/api/catalogo/publicar", headers=_h(_token(730, "autor730@test.com")), json={
+            "disponibilizar": True,
             "tipo": "deck_questoes", "titulo": "BackProv", "origem_uid": 0, "ref": "BackProv", "preco_creditos": 0,
         }).json()["id"]
         _criar_estudante(731, "comp731@test.com")
@@ -856,6 +898,7 @@ class TestMarketplace:
         self._criar_vendedor(240, "vend240@test.com", "MktE")
         self._set_saldo(240, 100)
         item_id = client.post("/api/catalogo/publicar", headers=_h(_token(240, "vend240@test.com")), json={
+            "disponibilizar": True,
             "tipo": "deck_questoes", "titulo": "Pacote E", "origem_uid": 0, "ref": "MktE", "preco_creditos": 10,
         }).json()["id"]
         # O próprio vendedor tenta importar → bloqueado (origem == user já barra em 400)
@@ -866,6 +909,7 @@ class TestMarketplace:
     def test_free_nao_publica_pago_403(self, client):
         _criar_estudante(250, "est250@test.com")  # free
         r = client.post("/api/catalogo/publicar", headers=_h(_token(250, "est250@test.com")), json={
+            "disponibilizar": True,
             "tipo": "deck_questoes", "titulo": "X", "origem_uid": 0, "ref": "Y", "preco_creditos": 10,
         })
         assert r.status_code == 403
@@ -873,6 +917,7 @@ class TestMarketplace:
     def test_filtro_por_cargo(self, client):
         self._criar_vendedor(260, "vend260@test.com", "MktF")
         client.post("/api/catalogo/publicar", headers=_h(_token(260, "vend260@test.com")), json={
+            "disponibilizar": True,
             "tipo": "deck_questoes", "titulo": "Pacote Cargo X", "origem_uid": 0, "ref": "MktF",
             "preco_creditos": 5, "concurso": "PF 2026", "cargo": "Delegado",
         })
@@ -885,6 +930,7 @@ class TestMarketplace:
     def test_painel_vendas(self, client):
         self._criar_vendedor(270, "vend270@test.com", "MktG")
         item_id = client.post("/api/catalogo/publicar", headers=_h(_token(270, "vend270@test.com")), json={
+            "disponibilizar": True,
             "tipo": "deck_questoes", "titulo": "Pacote G", "origem_uid": 0, "ref": "MktG", "preco_creditos": 10,
         }).json()["id"]
         _criar_estudante(271, "comp271@test.com")
@@ -907,6 +953,7 @@ class TestMarketplace:
     def test_editar_preco_gratis_para_pago(self, client):
         self._criar_vendedor(300, "vend300@test.com", "MktEdit")
         item_id = client.post("/api/catalogo/publicar", headers=_h(_token(300, "vend300@test.com")), json={
+            "disponibilizar": True,
             "tipo": "deck_questoes", "titulo": "EditPreco", "origem_uid": 0, "ref": "MktEdit", "preco_creditos": 0,
         }).json()["id"]
         # Dono altera de grátis (0) para pago (15)
@@ -917,6 +964,7 @@ class TestMarketplace:
     def test_editar_preco_pago_para_gratis(self, client):
         self._criar_vendedor(301, "vend301@test.com", "MktEdit2")
         item_id = client.post("/api/catalogo/publicar", headers=_h(_token(301, "vend301@test.com")), json={
+            "disponibilizar": True,
             "tipo": "deck_questoes", "titulo": "EditPreco2", "origem_uid": 0, "ref": "MktEdit2", "preco_creditos": 20,
         }).json()["id"]
         r = client.patch(f"/api/catalogo/{item_id}", headers=_h(_token(301, "vend301@test.com")), json={"preco_creditos": 0})
@@ -926,6 +974,7 @@ class TestMarketplace:
     def test_editar_nao_dono_403(self, client):
         self._criar_vendedor(302, "vend302@test.com", "MktEdit3")
         item_id = client.post("/api/catalogo/publicar", headers=_h(_token(302, "vend302@test.com")), json={
+            "disponibilizar": True,
             "tipo": "deck_questoes", "titulo": "EditPreco3", "origem_uid": 0, "ref": "MktEdit3", "preco_creditos": 5,
         }).json()["id"]
         _criar_estudante(303, "est303@test.com")
@@ -935,6 +984,7 @@ class TestMarketplace:
     def test_editar_preco_negativo_400(self, client):
         self._criar_vendedor(304, "vend304@test.com", "MktEdit4")
         item_id = client.post("/api/catalogo/publicar", headers=_h(_token(304, "vend304@test.com")), json={
+            "disponibilizar": True,
             "tipo": "deck_questoes", "titulo": "EditPreco4", "origem_uid": 0, "ref": "MktEdit4", "preco_creditos": 5,
         }).json()["id"]
         r = client.patch(f"/api/catalogo/{item_id}", headers=_h(_token(304, "vend304@test.com")), json={"preco_creditos": -3})
@@ -943,6 +993,7 @@ class TestMarketplace:
     def test_editar_titulo(self, client):
         self._criar_vendedor(305, "vend305@test.com", "MktEdit5")
         item_id = client.post("/api/catalogo/publicar", headers=_h(_token(305, "vend305@test.com")), json={
+            "disponibilizar": True,
             "tipo": "deck_questoes", "titulo": "TituloAntigo", "origem_uid": 0, "ref": "MktEdit5", "preco_creditos": 0,
         }).json()["id"]
         r = client.patch(f"/api/catalogo/{item_id}", headers=_h(_token(305, "vend305@test.com")), json={"titulo": "TituloNovo"})
@@ -981,6 +1032,7 @@ class TestPublicacaoGranular:
 
         # Publica só o cargo Analista
         pub = client.post("/api/catalogo/publicar", headers=_h(_token(400, "vg400@test.com")), json={
+            "disponibilizar": True,
             "tipo": "edital", "titulo": "TRF Analista", "origem_uid": 0, "ref": "TRF 2026::Analista",
         })
         assert pub.status_code == 200, pub.text
@@ -1011,6 +1063,7 @@ class TestPublicacaoGranular:
 
         # Publica só STF
         pub = client.post("/api/catalogo/publicar", headers=_h(_token(410, "vg410@test.com")), json={
+            "disponibilizar": True,
             "tipo": "deck_sumulas", "titulo": "Súmulas STF", "origem_uid": 0, "ref": "STF",
         })
         assert pub.status_code == 200, pub.text
@@ -1036,6 +1089,7 @@ class TestPublicacaoGranular:
         assert "material.pdf" in refs
 
         pub = client.post("/api/catalogo/publicar", headers=_h(_token(420, "vg420@test.com")), json={
+            "disponibilizar": True,
             "tipo": "revisao", "titulo": "Caderno Revisão PDF", "origem_uid": 0, "ref": "material.pdf", "preco_creditos": 0,
         })
         assert pub.status_code == 200, pub.text
@@ -1053,6 +1107,7 @@ class TestPublicacaoGranular:
     def test_revisao_ref_inexistente_404(self, client):
         self._criar_vendedor(430, "vg430@test.com")
         r = client.post("/api/catalogo/publicar", headers=_h(_token(430, "vg430@test.com")), json={
+            "disponibilizar": True,
             "tipo": "revisao", "titulo": "X", "origem_uid": 0, "ref": "nao_existe.pdf",
         })
         assert r.status_code == 404
@@ -1062,6 +1117,7 @@ class TestPublicacaoGranular:
         self._criar_vendedor(440, "vg440@test.com")
         # Sem recurso → 404 (recurso não encontrado), não 400 (tipo inválido)
         r = client.post("/api/catalogo/publicar", headers=_h(_token(440, "vg440@test.com")), json={
+            "disponibilizar": True,
             "tipo": "revisao", "titulo": "X", "origem_uid": 0, "ref": "",
         })
         assert r.status_code == 404
@@ -1164,6 +1220,179 @@ class TestResgate:
         r = client.get("/api/admin/resgates?status=pendente", headers=_h(_admin_token()))
         assert r.status_code == 200
         assert any(x["user_id"] == 570 for x in r.json()["resgates"])
+
+
+class TestMaterialPrivado:
+    """Material PRIVADO por padrão: nasce invisível até o autor disponibilizar.
+
+    Regras:
+    - publicar sem `disponibilizar` → status 'privado' (não aparece na vitrine).
+    - dono vê em /meus; terceiros não veem na listagem nem conseguem importar.
+    - POST /{id}/disponibilizar → aprovado (verificado/admin) ou pendente (premium).
+    - POST /{id}/tornar-privado → volta para privado sem perder avaliações/downloads.
+    - presentear (conceder) funciona mesmo com item privado; o presenteado importa.
+    """
+
+    def _criar_vendedor_verificado(self, uid, email, materia):
+        conn = _conn()
+        conn.execute("""
+            INSERT OR IGNORE INTO users (id, nome, username, email, password_hash, plano, role, curador_verificado, creditos_saldo, created_at)
+            VALUES (?, ?, ?, ?, 'hash', 'premium', 'user', 1, 0, '2026-01-01')
+        """, (uid, f"VerVend {uid}", f"vervend{uid}", email))
+        conn.execute("""
+            INSERT INTO questoes (materia, topico, enunciado, alternativa_a, alternativa_b, alternativa_c, alternativa_d, alternativa_e, resposta_correta, created_at, user_id)
+            VALUES (?, 'T', 'Q?', 'a', 'b', 'c', 'd', '', 'A', '2026-01-01', ?)
+        """, (materia, uid))
+        conn.commit()
+        conn.close()
+
+    def _criar_premium(self, uid, email, materia):
+        conn = _conn()
+        conn.execute("""
+            INSERT OR IGNORE INTO users (id, nome, username, email, password_hash, plano, role, created_at)
+            VALUES (?, ?, ?, ?, 'hash', 'premium', 'user', '2026-01-01')
+        """, (uid, f"Prem {uid}", f"prempriv{uid}", email))
+        conn.execute("""
+            INSERT INTO questoes (materia, topico, enunciado, alternativa_a, alternativa_b, alternativa_c, alternativa_d, alternativa_e, resposta_correta, created_at, user_id)
+            VALUES (?, 'T', 'Q?', 'a', 'b', 'c', 'd', '', 'A', '2026-01-01', ?)
+        """, (materia, uid))
+        conn.commit()
+        conn.close()
+
+    def test_publicar_sem_flag_nasce_privado(self, client):
+        self._criar_vendedor_verificado(800, "priv800@test.com", "PrivA")
+        r = client.post("/api/catalogo/publicar", headers=_h(_token(800, "priv800@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "Rascunho A", "origem_uid": 0, "ref": "PrivA",
+        })
+        assert r.status_code == 200, r.text
+        assert r.json()["status"] == "privado"
+
+    def test_privado_nao_aparece_na_vitrine(self, client):
+        self._criar_vendedor_verificado(801, "priv801@test.com", "PrivB")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(801, "priv801@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "Rascunho B", "origem_uid": 0, "ref": "PrivB",
+        }).json()["id"]
+        # Terceiro não vê o item privado
+        _criar_estudante(802, "outro802@test.com")
+        lst = client.get("/api/catalogo", headers=_h(_token(802, "outro802@test.com"))).json()
+        assert item_id not in [i["id"] for i in lst["itens"]]
+
+    def test_privado_aparece_em_meus(self, client):
+        self._criar_vendedor_verificado(803, "priv803@test.com", "PrivC")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(803, "priv803@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "Rascunho C", "origem_uid": 0, "ref": "PrivC",
+        }).json()["id"]
+        meus = client.get("/api/catalogo/meus", headers=_h(_token(803, "priv803@test.com"))).json()
+        alvo = next((i for i in meus["itens"] if i["id"] == item_id), None)
+        assert alvo is not None
+        assert alvo["status"] == "privado"
+
+    def test_terceiro_nao_importa_privado_404(self, client):
+        self._criar_vendedor_verificado(804, "priv804@test.com", "PrivD")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(804, "priv804@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "Rascunho D", "origem_uid": 0, "ref": "PrivD",
+        }).json()["id"]
+        _criar_estudante(805, "outro805@test.com")
+        r = client.post(f"/api/catalogo/{item_id}/importar", headers=_h(_token(805, "outro805@test.com")))
+        assert r.status_code == 404
+
+    def test_disponibilizar_verificado_fica_aprovado(self, client):
+        self._criar_vendedor_verificado(806, "priv806@test.com", "PrivE")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(806, "priv806@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "Rascunho E", "origem_uid": 0, "ref": "PrivE",
+        }).json()["id"]
+        r = client.post(f"/api/catalogo/{item_id}/disponibilizar", headers=_h(_token(806, "priv806@test.com")))
+        assert r.status_code == 200, r.text
+        assert r.json()["status"] == "aprovado"
+        # Agora aparece na vitrine para terceiros
+        _criar_estudante(807, "outro807@test.com")
+        lst = client.get("/api/catalogo", headers=_h(_token(807, "outro807@test.com"))).json()
+        assert item_id in [i["id"] for i in lst["itens"]]
+
+    def test_disponibilizar_premium_fica_pendente(self, client):
+        self._criar_premium(808, "priv808@test.com", "PrivF")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(808, "priv808@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "Rascunho F", "origem_uid": 0, "ref": "PrivF",
+        }).json()["id"]
+        r = client.post(f"/api/catalogo/{item_id}/disponibilizar", headers=_h(_token(808, "priv808@test.com")))
+        assert r.status_code == 200, r.text
+        assert r.json()["status"] == "pendente"
+        # Pendente não aparece na vitrine, mas aparece na fila de moderação
+        pend = client.get("/api/catalogo/admin/pendentes", headers=_h(_admin_token())).json()
+        assert item_id in [i["id"] for i in pend["itens"]]
+
+    def test_tornar_privado_retira_da_vitrine(self, client):
+        self._criar_vendedor_verificado(809, "priv809@test.com", "PrivG")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(809, "priv809@test.com")), json={
+            "disponibilizar": True,
+            "tipo": "deck_questoes", "titulo": "Rascunho G", "origem_uid": 0, "ref": "PrivG",
+        }).json()["id"]
+        # Está visível
+        _criar_estudante(810, "outro810@test.com")
+        lst = client.get("/api/catalogo", headers=_h(_token(810, "outro810@test.com"))).json()
+        assert item_id in [i["id"] for i in lst["itens"]]
+        # Torna privado
+        r = client.post(f"/api/catalogo/{item_id}/tornar-privado", headers=_h(_token(809, "priv809@test.com")))
+        assert r.status_code == 200, r.text
+        assert r.json()["status"] == "privado"
+        # Some da vitrine
+        lst2 = client.get("/api/catalogo", headers=_h(_token(810, "outro810@test.com"))).json()
+        assert item_id not in [i["id"] for i in lst2["itens"]]
+
+    def test_disponibilizar_nao_dono_403(self, client):
+        self._criar_vendedor_verificado(811, "priv811@test.com", "PrivH")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(811, "priv811@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "Rascunho H", "origem_uid": 0, "ref": "PrivH",
+        }).json()["id"]
+        _criar_estudante(812, "intruso812@test.com")
+        r = client.post(f"/api/catalogo/{item_id}/disponibilizar", headers=_h(_token(812, "intruso812@test.com")))
+        assert r.status_code == 403
+
+    def test_tornar_privado_nao_dono_403(self, client):
+        self._criar_vendedor_verificado(813, "priv813@test.com", "PrivI")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(813, "priv813@test.com")), json={
+            "disponibilizar": True,
+            "tipo": "deck_questoes", "titulo": "Rascunho I", "origem_uid": 0, "ref": "PrivI",
+        }).json()["id"]
+        _criar_estudante(814, "intruso814@test.com")
+        r = client.post(f"/api/catalogo/{item_id}/tornar-privado", headers=_h(_token(814, "intruso814@test.com")))
+        assert r.status_code == 403
+
+    def test_disponibilizar_ja_disponivel_idempotente(self, client):
+        self._criar_vendedor_verificado(815, "priv815@test.com", "PrivJ")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(815, "priv815@test.com")), json={
+            "disponibilizar": True,
+            "tipo": "deck_questoes", "titulo": "Rascunho J", "origem_uid": 0, "ref": "PrivJ",
+        }).json()["id"]
+        r = client.post(f"/api/catalogo/{item_id}/disponibilizar", headers=_h(_token(815, "priv815@test.com")))
+        assert r.status_code == 200
+        assert r.json()["status"] == "aprovado"  # já estava aprovado; mantém
+
+    def test_presentear_material_privado_funciona(self, client):
+        """Presentear um item privado libera para o destinatário, que importa de graça,
+        sem tornar o item público."""
+        self._criar_vendedor_verificado(816, "priv816@test.com", "PrivK")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(816, "priv816@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "Rascunho K", "origem_uid": 0, "ref": "PrivK",
+        }).json()["id"]
+        _criar_estudante(817, "dest817@test.com")
+        # Concede (presenteia) mesmo estando privado
+        r = client.post(f"/api/catalogo/{item_id}/conceder", headers=_h(_token(816, "priv816@test.com")),
+                        json={"email": "dest817@test.com"})
+        assert r.status_code == 200, r.text
+        # Destinatário importa de graça (tem concessão), apesar de privado
+        imp = client.post(f"/api/catalogo/{item_id}/importar", headers=_h(_token(817, "dest817@test.com")))
+        assert imp.status_code == 200, imp.text
+        assert imp.json()["cobrado"] is False
+        # Item continua invisível para um TERCEIRO sem concessão
+        _criar_estudante(818, "outro818@test.com")
+        lst = client.get("/api/catalogo", headers=_h(_token(818, "outro818@test.com"))).json()
+        assert item_id not in [i["id"] for i in lst["itens"]]
+
+    def test_disponibilizar_item_inexistente_404(self, client):
+        _criar_estudante(819, "est819@test.com")
+        r = client.post("/api/catalogo/99999/disponibilizar", headers=_h(_token(819, "est819@test.com")))
+        assert r.status_code == 404
 
 
 def teardown_module():

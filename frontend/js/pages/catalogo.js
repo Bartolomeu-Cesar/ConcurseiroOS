@@ -225,7 +225,7 @@ window.abrirPublicar = async function() {
   overlay.innerHTML = `
     <div style="background:#313244;border-radius:16px;padding:24px;max-width:440px;width:100%;">
       <h3 style="color:#94e2d5;margin:0 0 4px;">📤 Publicar meu material</h3>
-      <p style="font-size:0.75rem;color:#9399b2;margin-bottom:12px;">Compartilhe seus materiais com a comunidade. Materiais de usuários passam por moderação antes de aparecer.</p>
+      <p style="font-size:0.75rem;color:#9399b2;margin-bottom:12px;">Seus materiais começam <strong>🔒 privados</strong> (só você os vê). Disponibilize quando quiser — materiais de usuários passam por moderação antes de aparecer publicamente.</p>
       <label style="font-size:0.75rem;color:#9399b2;">Tipo</label>
       <select id="pub-tipo" aria-label="Tipo de material" onchange="carregarMeusRefs()" style="width:100%;padding:9px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;margin-bottom:10px;">
         <option value="edital">📋 Edital verticalizado</option>
@@ -256,11 +256,15 @@ window.abrirPublicar = async function() {
       </div>
       <label style="font-size:0.75rem;color:#9399b2;">Preço em créditos (0 = grátis)</label>
       <input id="pub-preco" type="number" min="0" step="1" value="0" aria-label="Preço em créditos" oninput="atualizarLiquidoVenda()" style="width:100%;padding:9px;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;color:#cdd6f4;margin-bottom:4px;">
-      <div id="pub-liquido" style="font-size:0.72rem;color:#9399b2;margin-bottom:14px;">Defina um preço para ver quanto você recebe.</div>
+      <div id="pub-liquido" style="font-size:0.72rem;color:#9399b2;margin-bottom:10px;">Defina um preço para ver quanto você recebe.</div>
+      <label style="display:flex;align-items:flex-start;gap:8px;font-size:0.78rem;color:#cdd6f4;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;padding:9px;margin-bottom:12px;cursor:pointer;">
+        <input id="pub-disponibilizar" type="checkbox" style="margin-top:2px;">
+        <span>Disponibilizar agora no catálogo<br><span style="font-size:0.72rem;color:#9399b2;">Se desmarcado, o material fica <strong>🔒 privado</strong> (só você o vê) e você pode disponibilizá-lo depois em "Minhas vendas".</span></span>
+      </label>
       <div id="pub-result" style="font-size:0.78rem;margin-bottom:8px;"></div>
       <div style="display:flex;gap:8px;">
         <button onclick="document.getElementById('pub-modal').remove()" style="flex:1;padding:9px;background:#45475a;color:#cdd6f4;border:none;border-radius:8px;cursor:pointer;">Cancelar</button>
-        <button id="pub-enviar" onclick="enviarPublicacao()" style="flex:1;padding:9px;background:#94e2d5;color:#1e1e2e;border:none;border-radius:8px;font-weight:600;cursor:pointer;">Publicar</button>
+        <button id="pub-enviar" onclick="enviarPublicacao()" style="flex:1;padding:9px;background:#94e2d5;color:#1e1e2e;border:none;border-radius:8px;font-weight:600;cursor:pointer;">Salvar</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
@@ -312,6 +316,7 @@ window.enviarPublicacao = async function() {
   const concurso = document.getElementById('pub-concurso')?.value.trim() || '';
   const cargo = document.getElementById('pub-cargo')?.value.trim() || '';
   const preco_creditos = Math.max(0, parseInt(document.getElementById('pub-preco')?.value || '0', 10) || 0);
+  const disponibilizar = !!document.getElementById('pub-disponibilizar')?.checked;
   if (tipo !== 'deck_sumulas' && !ref) { showToast('Selecione o recurso.', 'warning'); return; }
   if (!titulo) { showToast('Informe um título.', 'warning'); return; }
 
@@ -320,20 +325,20 @@ window.enviarPublicacao = async function() {
   try {
     const res = await fetch('/api/catalogo/publicar', {
       method: 'POST', headers: _headers(true),
-      body: JSON.stringify({ tipo, titulo, descricao, categoria, ref, concurso, cargo, preco_creditos })
+      body: JSON.stringify({ tipo, titulo, descricao, categoria, ref, concurso, cargo, preco_creditos, disponibilizar })
     });
     const data = await res.json();
     if (res.ok) {
       document.getElementById('pub-modal').remove();
-      await alertModal(data.mensagem || 'Publicado!', { type: 'success', title: 'Sucesso' });
+      await alertModal(data.mensagem || 'Salvo!', { type: 'success', title: 'Sucesso' });
       carregarCatalogo();
     } else {
       document.getElementById('pub-result').innerHTML = `<span style="color:#f38ba8;">${esc(data.detail || 'Erro.')}</span>`;
-      btn.disabled = false; btn.textContent = 'Publicar';
+      btn.disabled = false; btn.textContent = 'Salvar';
     }
   } catch (e) {
     showToast('Erro de conexão.', 'error');
-    btn.disabled = false; btn.textContent = 'Publicar';
+    btn.disabled = false; btn.textContent = 'Salvar';
   }
 };
 
@@ -416,13 +421,25 @@ window.abrirMinhasVendas = async function() {
       } else {
         mh += itens.map(it => {
           const precoTxt = (it.preco_creditos || 0) > 0 ? `💎 ${it.preco_creditos}` : 'Grátis';
-          const statusTxt = it.status && it.status !== 'aprovado' ? ` · <span style="color:#f9e2af;">${esc(it.status)}</span>` : '';
+          const st = it.status || 'aprovado';
+          let selo = '';
+          if (st === 'privado') selo = ' · <span style="color:#89b4fa;">🔒 Privado</span>';
+          else if (st === 'pendente') selo = ' · <span style="color:#f9e2af;">⏳ Em moderação</span>';
+          else if (st === 'rejeitado') selo = ' · <span style="color:#f38ba8;">✖ Rejeitado</span>';
+          else selo = ' · <span style="color:#a6e3a1;">✓ Disponível</span>';
+          // Botão de transição conforme o status.
+          const btnStatus = st === 'privado'
+            ? `<button onclick="disponibilizarMaterial(${it.id})" title="Tornar este material visível no catálogo" style="flex:0 0 auto;padding:6px 10px;background:#94e2d5;color:#1e1e2e;border:none;border-radius:6px;cursor:pointer;font-size:0.78rem;font-weight:600;">🚀 Disponibilizar</button>`
+            : (st === 'aprovado' || st === 'pendente')
+              ? `<button onclick="tornarPrivadoMaterial(${it.id})" title="Retirar da vitrine e voltar para privado" style="flex:0 0 auto;padding:6px 10px;background:#45475a;color:#89b4fa;border:none;border-radius:6px;cursor:pointer;font-size:0.78rem;">🔒 Tornar privado</button>`
+              : '';
           return `
-            <div style="display:flex;align-items:center;gap:8px;border-bottom:1px solid #45475a;padding:8px 0;">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-bottom:1px solid #45475a;padding:8px 0;">
               <div style="flex:1;min-width:0;">
                 <div style="color:#cdd6f4;font-size:0.85rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${it.tipo_emoji} ${esc(it.titulo)}</div>
-                <div style="font-size:0.74rem;color:#9399b2;">Preço: ${precoTxt} · ⬇️ ${it.downloads}${statusTxt}</div>
+                <div style="font-size:0.74rem;color:#9399b2;">Preço: ${precoTxt} · ⬇️ ${it.downloads}${selo}</div>
               </div>
+              ${btnStatus}
               <button onclick="alterarPreco(${it.id}, ${it.preco_creditos || 0})" style="flex:0 0 auto;padding:6px 10px;background:#45475a;color:#cdd6f4;border:none;border-radius:6px;cursor:pointer;font-size:0.78rem;">💲 Preço</button>
               <button onclick="presentearMaterial(${it.id}, '${escapeJsString(it.titulo)}')" title="Liberar este material para um usuário específico (grátis)" style="flex:0 0 auto;padding:6px 10px;background:#45475a;color:#f5c2e7;border:none;border-radius:6px;cursor:pointer;font-size:0.78rem;">🎁 Presentear</button>
             </div>`;
@@ -487,6 +504,54 @@ window.presentearMaterial = async function(itemId, titulo) {
       await alertModal(data.mensagem || 'Material liberado!', { type: 'success', title: '🎁 Presente enviado' });
     } else {
       showToast(data.detail || 'Erro ao conceder acesso.', 'error');
+    }
+  } catch (e) {
+    showToast('Erro de conexão.', 'error');
+  }
+};
+
+// Disponibilizar um material privado no catálogo (privado → aprovado/pendente).
+window.disponibilizarMaterial = async function(itemId) {
+  const ok = await confirmModal(
+    '🚀 Disponibilizar material',
+    'Tornar este material visível no catálogo? Se você não for curador verificado, ele passará por moderação antes de aparecer publicamente.',
+    { type: 'info', confirmText: 'Disponibilizar', cancelText: 'Cancelar' }
+  );
+  if (!ok) return;
+  try {
+    const res = await fetch(`/api/catalogo/${itemId}/disponibilizar`, { method: 'POST', headers: _headers(true) });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.mensagem || 'Material disponibilizado!', 'success');
+      document.getElementById('vendas-modal')?.remove();
+      abrirMinhasVendas();      // recarrega Meus materiais
+      carregarCatalogo();       // reflete na vitrine
+    } else {
+      showToast(data.detail || 'Erro ao disponibilizar.', 'error');
+    }
+  } catch (e) {
+    showToast('Erro de conexão.', 'error');
+  }
+};
+
+// Retirar um material da vitrine, voltando-o para privado.
+window.tornarPrivadoMaterial = async function(itemId) {
+  const ok = await confirmModal(
+    '🔒 Tornar privado',
+    'Retirar este material da vitrine? Ele deixa de aparecer publicamente, mas não é apagado — avaliações, downloads e quem já adquiriu são preservados.',
+    { type: 'warning', confirmText: 'Tornar privado', cancelText: 'Cancelar' }
+  );
+  if (!ok) return;
+  try {
+    const res = await fetch(`/api/catalogo/${itemId}/tornar-privado`, { method: 'POST', headers: _headers(true) });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.mensagem || 'Material agora está privado.', 'success');
+      document.getElementById('vendas-modal')?.remove();
+      abrirMinhasVendas();
+      carregarCatalogo();
+    } else {
+      showToast(data.detail || 'Erro ao tornar privado.', 'error');
     }
   } catch (e) {
     showToast('Erro de conexão.', 'error');

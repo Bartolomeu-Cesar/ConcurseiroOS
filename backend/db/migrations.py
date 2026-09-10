@@ -1675,6 +1675,24 @@ def _m94_catalogo_proveniencia(conn):
     log.info(f"Migration 94: created catalogo_proveniencia table (backfill {inseridos} registro(s))")
 
 
+def _m95_catalogo_status_privado(conn):
+    """Suporte a materiais PRIVADOS (rascunho controlado pelo autor).
+
+    Não adiciona coluna nova — reutiliza catalogo_itens.status, que passa a
+    aceitar 'privado' além de 'aprovado' | 'pendente' | 'rejeitado'. Materiais
+    publicados a partir de agora nascem 'privado' (só o autor vê e pode
+    presentear) até que ele os disponibilize. Cria um índice por status para as
+    consultas de vitrine (aprovado) e de moderação (pendente).
+
+    Retrocompatível: itens existentes mantêm o status atual (aprovado/pendente).
+    """
+    try:
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_catalogo_status ON catalogo_itens(status, ativo)")
+    except Exception as e:
+        log.warning(f"Migration 95: índice de status pulado: {e}")
+    log.info("Migration 95: índice de status do catálogo (suporte a 'privado')")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -1770,6 +1788,7 @@ MIGRATIONS = [
     (92, _m92_backfill_aquisicoes_orfas),
     (93, _m93_catalogo_compras_origem),
     (94, _m94_catalogo_proveniencia),
+    (95, _m95_catalogo_status_privado),
 ]
 
 
