@@ -667,6 +667,118 @@ class TestMarketplace:
         conn.close()
         assert n == 0
 
+    # ---------- Concessão / presente (Opção B) ----------
+
+    def test_conceder_libera_gratis_e_marca_adquirido(self, client):
+        """Curador concede acesso: item segue à venda para todos, mas o destinatário
+        importa de graça e vê ja_comprado=True."""
+        self._criar_vendedor(600, "vend600@test.com", "MktPresente")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(600, "vend600@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "Presenteável", "origem_uid": 0, "ref": "MktPresente", "preco_creditos": 30,
+        }).json()["id"]
+        _criar_estudante(601, "dest601@test.com")
+        tok = _token(601, "dest601@test.com")
+        self._set_saldo(601, 0)  # sem saldo: só importa se for cortesia
+
+        # Antes: aparece como não adquirido (pago).
+        antes = next(i for i in client.get("/api/catalogo", headers=_h(tok)).json()["itens"] if i["id"] == item_id)
+        assert antes["ja_comprado"] is False
+
+        # Curador concede por e-mail.
+        r = client.post(f"/api/catalogo/{item_id}/conceder", headers=_h(_token(600, "vend600@test.com")),
+                        json={"email": "dest601@test.com"})
+        assert r.status_code == 200, r.text
+        assert r.json()["ja_tinha"] is False
+
+        # Depois: catálogo marca adquirido e a importação é grátis (saldo 0 continua 0).
+        depois = next(i for i in client.get("/api/catalogo", headers=_h(tok)).json()["itens"] if i["id"] == item_id)
+        assert depois["ja_comprado"] is True
+        imp = client.post(f"/api/catalogo/{item_id}/importar", headers=_h(tok))
+        assert imp.status_code == 200, imp.text
+        assert imp.json()["cobrado"] is False
+        assert self._saldo(601) == 0
+
+        # Item continua público e vendável para OUTROS usuários.
+        _criar_estudante(602, "outro602@test.com")
+        tok2 = _token(602, "outro602@test.com")
+        outro = next(i for i in client.get("/api/catalogo", headers=_h(tok2)).json()["itens"] if i["id"] == item_id)
+        assert outro["ja_comprado"] is False
+
+    def test_conceder_por_username(self, client):
+        self._criar_vendedor(610, "vend610@test.com", "MktUser")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(610, "vend610@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "PorUser", "origem_uid": 0, "ref": "MktUser", "preco_creditos": 10,
+        }).json()["id"]
+        _criar_estudante(611, "dest611@test.com")  # username = est611
+        r = client.post(f"/api/catalogo/{item_id}/conceder", headers=_h(_token(610, "vend610@test.com")),
+                        json={"username": "est611"})
+        assert r.status_code == 200, r.text
+        conn = _conn()
+        row = conn.execute("SELECT origem_aquisicao FROM catalogo_compras WHERE item_id=? AND comprador_uid=611", (item_id,)).fetchone()
+        conn.close()
+        assert row is not None
+        assert row["origem_aquisicao"] == "presente"
+
+    def test_conceder_idempotente(self, client):
+        self._criar_vendedor(620, "vend620@test.com", "MktIdem")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(620, "vend620@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "Idem", "origem_uid": 0, "ref": "MktIdem", "preco_creditos": 5,
+        }).json()["id"]
+        _criar_estudante(621, "dest621@test.com")
+        client.post(f"/api/catalogo/{item_id}/conceder", headers=_h(_token(620, "vend620@test.com")), json={"email": "dest621@test.com"})
+        r2 = client.post(f"/api/catalogo/{item_id}/conceder", headers=_h(_token(620, "vend620@test.com")), json={"email": "dest621@test.com"})
+        assert r2.status_code == 200
+        assert r2.json()["ja_tinha"] is True
+        conn = _conn()
+        n = conn.execute("SELECT COUNT(*) FROM catalogo_compras WHERE item_id=? AND comprador_uid=621", (item_id,)).fetchone()[0]
+        conn.close()
+        assert n == 1
+
+    def test_conceder_nao_dono_403(self, client):
+        self._criar_vendedor(630, "vend630@test.com", "MktNaoDono")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(630, "vend630@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "NaoDono", "origem_uid": 0, "ref": "MktNaoDono", "preco_creditos": 5,
+        }).json()["id"]
+        _criar_estudante(631, "intruso631@test.com")
+        _criar_estudante(632, "vitima632@test.com")
+        r = client.post(f"/api/catalogo/{item_id}/conceder", headers=_h(_token(631, "intruso631@test.com")),
+                        json={"email": "vitima632@test.com"})
+        assert r.status_code == 403
+
+    def test_conceder_destinatario_inexistente_404(self, client):
+        self._criar_vendedor(640, "vend640@test.com", "MktNoDest")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(640, "vend640@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "NoDest", "origem_uid": 0, "ref": "MktNoDest", "preco_creditos": 5,
+        }).json()["id"]
+        r = client.post(f"/api/catalogo/{item_id}/conceder", headers=_h(_token(640, "vend640@test.com")),
+                        json={"email": "naoexiste@nowhere.com"})
+        assert r.status_code == 404
+
+    def test_conceder_sem_identificador_400(self, client):
+        self._criar_vendedor(650, "vend650@test.com", "MktSemId")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(650, "vend650@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "SemId", "origem_uid": 0, "ref": "MktSemId", "preco_creditos": 5,
+        }).json()["id"]
+        r = client.post(f"/api/catalogo/{item_id}/conceder", headers=_h(_token(650, "vend650@test.com")), json={})
+        assert r.status_code == 400
+
+    def test_listar_concessoes_dono_ve_naodono_403(self, client):
+        self._criar_vendedor(660, "vend660@test.com", "MktConc")
+        item_id = client.post("/api/catalogo/publicar", headers=_h(_token(660, "vend660@test.com")), json={
+            "tipo": "deck_questoes", "titulo": "Conc", "origem_uid": 0, "ref": "MktConc", "preco_creditos": 5,
+        }).json()["id"]
+        _criar_estudante(661, "dest661@test.com")
+        client.post(f"/api/catalogo/{item_id}/conceder", headers=_h(_token(660, "vend660@test.com")), json={"email": "dest661@test.com"})
+        # Dono vê a concessão
+        r = client.get(f"/api/catalogo/{item_id}/concessoes", headers=_h(_token(660, "vend660@test.com")))
+        assert r.status_code == 200
+        conc = r.json()["concessoes"]
+        assert any(c["user_id"] == 661 for c in conc)
+        # Não-dono é bloqueado
+        _criar_estudante(662, "estranho662@test.com")
+        r2 = client.get(f"/api/catalogo/{item_id}/concessoes", headers=_h(_token(662, "estranho662@test.com")))
+        assert r2.status_code == 403
+
 
         self._criar_vendedor(240, "vend240@test.com", "MktE")
         self._set_saldo(240, 100)

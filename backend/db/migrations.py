@@ -1579,7 +1579,7 @@ def _m92_backfill_aquisicoes_orfas(conn):
     for it in itens:
         item_id, tipo, ref, origem_uid, curador_uid = it["id"], it["tipo"], it["ref"], it["origem_uid"], it["curador_uid"]
         for uid in users:
-            if uid == origem_uid or uid == curador_uid:
+            if uid in (origem_uid, curador_uid):
                 continue
             if not possui(tipo, ref, uid):
                 continue
@@ -1596,6 +1596,28 @@ def _m92_backfill_aquisicoes_orfas(conn):
             """, (item_id, uid, curador_uid, now))
             inseridos += 1
     log.info(f"Migration 92: backfill de {inseridos} aquisição(ões) órfã(s) do catálogo")
+
+
+def _m93_catalogo_compras_origem(conn):
+    """Distingue a origem de uma aquisição em catalogo_compras.
+
+    Suporta o recurso de "presente/concessão direta" (Opção B): o curador libera
+    o material a um usuário específico sem cobrança, criando um registro de
+    aquisição. Para auditoria e painel, marcamos como o registro nasceu:
+
+    - 'compra'   → aquisição paga (fluxo normal de importação com preço)
+    - 'gratis'   → importação de item gratuito
+    - 'presente' → concessão direta feita por curador/admin (Opção B)
+    - 'backfill' → registro retroativo criado pela migration 92
+
+    Retrocompatível: registros antigos ficam com 'compra' (default) e a coluna
+    não afeta a lógica de idempotência/cobrança existente.
+    """
+    try:
+        conn.execute("ALTER TABLE catalogo_compras ADD COLUMN origem_aquisicao TEXT DEFAULT 'compra'")
+    except Exception:
+        pass  # coluna já existe
+    log.info("Migration 93: added origem_aquisicao to catalogo_compras")
 
 
 MIGRATIONS = [
@@ -1691,6 +1713,7 @@ MIGRATIONS = [
     (90, _m90_broadcast_expira),
     (91, _m91_resgate_solicitacoes),
     (92, _m92_backfill_aquisicoes_orfas),
+    (93, _m93_catalogo_compras_origem),
 ]
 
 

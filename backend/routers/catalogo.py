@@ -308,8 +308,8 @@ def importar_item(
     # que o catálogo marque como "já adquirido" e evite reimportar/duplicar.
     if not cobrar and not ja_comprou:
         conn.execute("""
-            INSERT OR IGNORE INTO catalogo_compras (item_id, comprador_uid, vendedor_uid, preco_creditos, taxa_pct, creditos_vendedor, created_at)
-            VALUES (?, ?, ?, 0, 0, 0, ?)
+            INSERT OR IGNORE INTO catalogo_compras (item_id, comprador_uid, vendedor_uid, preco_creditos, taxa_pct, creditos_vendedor, created_at, origem_aquisicao)
+            VALUES (?, ?, ?, 0, 0, 0, ?, 'gratis')
         """, (item_id, user_id, vendedor_uid, datetime.now(timezone.utc).isoformat()))
 
     # Incrementar contador de downloads
@@ -672,6 +672,110 @@ def editar_item(
 
     novo = conn.execute("SELECT preco_creditos, titulo FROM catalogo_itens WHERE id = ?", (item_id,)).fetchone()
     return {"ok": True, "id": item_id, "preco_creditos": novo["preco_creditos"], "titulo": novo["titulo"]}
+
+
+# ==================== CONCESSÃO / PRESENTE (OPÇÃO B) ====================
+
+class ConcederAcesso(BaseModel):
+    # Identifica o destinatário por e-mail OU username (um dos dois).
+    email: str = ""
+    username: str = ""
+
+
+@router.post("/{item_id}/conceder", summary="Presentear/liberar um material a um usuário específico")
+def conceder_acesso(
+    item_id: int,
+    body: ConcederAcesso,
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id)
+):
+    """Concede acesso GRATUITO a um material para um usuário específico (Opção B).
+
+    O material continua público e vendável para todos; esta concessão apenas
+    libera uma cópia sem custo ao destinatário indicado (um "presente"). Após a
+    concessão, o destinatário vê "✓ Adquirido" no catálogo e importa de graça.
+
+    - Só o dono (curador_uid) ou admin pode conceder.
+    - Idempotente: conceder de novo ao mesmo usuário não duplica nem erra.
+    - Não afeta cobrança: reusa catalogo_compras com preço 0 (origem='presente').
+    """
+    item = conn.execute("SELECT * FROM catalogo_itens WHERE id = ? AND ativo = 1", (item_id,)).fetchone()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado ou indisponível.")
+
+    user = conn.execute("SELECT role FROM users WHERE id = ?", (user_id,)).fetchone()
+    is_admin = bool(user and user["role"] == "admin")
+    if not is_admin and item["curador_uid"] != user_id:
+        raise HTTPException(status_code=403, detail="Você só pode conceder acesso aos seus próprios materiais.")
+
+    email = (body.email or "").strip().lower()
+    username = (body.username or "").strip()
+    if not email and not username:
+        raise HTTPException(status_code=400, detail="Informe o e-mail ou o username do destinatário.")
+
+    if email:
+        destino = conn.execute("SELECT id, nome, email FROM users WHERE LOWER(email) = ?", (email,)).fetchone()
+    else:
+        destino = conn.execute("SELECT id, nome, email FROM users WHERE username = ?", (username,)).fetchone()
+    if not destino:
+        raise HTTPException(status_code=404, detail="Usuário destinatário não encontrado.")
+
+    destino_uid = destino["id"]
+    if destino_uid in (item["origem_uid"], item["curador_uid"]):
+        raise HTTPException(status_code=400, detail="Este material já pertence a esse usuário.")
+
+    ja = conn.execute(
+        "SELECT 1 FROM catalogo_compras WHERE item_id = ? AND comprador_uid = ?", (item_id, destino_uid)
+    ).fetchone()
+    if ja:
+        return {"ok": True, "ja_tinha": True, "destinatario": destino["nome"] or destino["email"],
+                "mensagem": "Esse usuário já tinha acesso a este material."}
+
+    conn.execute("""
+        INSERT OR IGNORE INTO catalogo_compras
+            (item_id, comprador_uid, vendedor_uid, preco_creditos, taxa_pct, creditos_vendedor, created_at, origem_aquisicao)
+        VALUES (?, ?, ?, 0, 0, 0, ?, 'presente')
+    """, (item_id, destino_uid, item["curador_uid"], datetime.now(timezone.utc).isoformat()))
+    conn.commit()
+
+    # Notifica o destinatário (best-effort).
+    try:
+        from routers.notifications import _send_push_to_user
+        _send_push_to_user(conn, destino_uid, "🎁 Você recebeu um material!",
+                           f"'{item['titulo']}' foi liberado para você no catálogo.",
+                           url="/catalogo.html", tag="presente")
+    except Exception as e:
+        log.warning(f"[catalogo] push presente indisponível: {e}")
+
+    log.info(f"[catalogo] user={user_id} concedeu item={item_id} para user={destino_uid} (presente)")
+    return {"ok": True, "ja_tinha": False, "destinatario": destino["nome"] or destino["email"],
+            "mensagem": f"✅ Material liberado para {destino['nome'] or destino['email']}!"}
+
+
+@router.get("/{item_id}/concessoes", summary="Listar concessões (presentes) de um material")
+def listar_concessoes(item_id: int, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Lista os usuários que receberam este material como presente/concessão.
+
+    Só o dono (curador_uid) ou admin pode consultar.
+    """
+    item = conn.execute("SELECT curador_uid FROM catalogo_itens WHERE id = ?", (item_id,)).fetchone()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado.")
+    user = conn.execute("SELECT role FROM users WHERE id = ?", (user_id,)).fetchone()
+    is_admin = bool(user and user["role"] == "admin")
+    if not is_admin and item["curador_uid"] != user_id:
+        raise HTTPException(status_code=403, detail="Você só pode ver concessões dos seus próprios materiais.")
+
+    rows = conn.execute("""
+        SELECT comp.comprador_uid, comp.created_at, u.nome, u.email
+        FROM catalogo_compras comp LEFT JOIN users u ON u.id = comp.comprador_uid
+        WHERE comp.item_id = ? AND comp.origem_aquisicao = 'presente'
+        ORDER BY comp.created_at DESC
+    """, (item_id,)).fetchall()
+    return {"concessoes": [
+        {"user_id": r["comprador_uid"], "nome": r["nome"] or "", "email": r["email"] or "", "created_at": r["created_at"]}
+        for r in rows
+    ]}
 
 
 @router.get("/admin/todos", summary="Listar todos os itens (admin, inclui inativos)")
