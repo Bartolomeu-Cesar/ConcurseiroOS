@@ -201,6 +201,60 @@ def get_progress_bulk(conn=Depends(get_db_session), user_id: int = Depends(get_u
     return {r[0]: {"current_page": r[1], "total_pages": r[2]} for r in rows}
 
 
+@router.get("/api/progress-resumo/{path:path}", summary="Resumo da leitura (continuar de onde parou)")
+def get_progress_resumo(path: str, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Resumo para o cartão "Continuar de onde parou" ao abrir um PDF.
+
+    Reúne, numa única chamada: progresso (página atual/total/percentual + última
+    leitura) e as contagens de material de estudo do usuário para este PDF
+    (notas, bookmarks, destaques e blocos de revisão). Reduz o atrito de retomada
+    (encoding specificity) e evita 4-5 requisições ao abrir o leitor.
+
+    Respeita a visibilidade: se o usuário não pode acessar o PDF, retorna 403.
+    """
+    if ".." in path or path.startswith("/"):
+        raise HTTPException(status_code=400, detail="Caminho inválido")
+    if not can_access(conn, user_id, path):
+        raise HTTPException(status_code=403, detail="Sem acesso a este PDF.")
+
+    prog = conn.execute(
+        "SELECT current_page, total_pages, COALESCE(last_read_at, '') FROM progress WHERE path = ? AND user_id = ?",
+        (path, user_id)
+    ).fetchone()
+    current_page = prog[0] if prog else 1
+    total_pages = prog[1] if prog else 0
+    last_read_at = prog[2] if prog else ""
+
+    def _count(sql):
+        try:
+            return conn.execute(sql, (path, user_id)).fetchone()[0]
+        except Exception:
+            return 0
+
+    n_notas = _count("SELECT COUNT(*) FROM notas_pdf WHERE pdf_path = ? AND user_id = ?")
+    n_bookmarks = _count("SELECT COUNT(*) FROM bookmarks_pdf WHERE pdf_path = ? AND user_id = ?")
+    n_destaques = _count("SELECT COUNT(*) FROM destaques_pdf WHERE pdf_path = ? AND user_id = ?")
+    n_revisao = _count("SELECT COUNT(*) FROM revisao_blocos WHERE pdf_path = ? AND user_id = ?")
+
+    pct = round(current_page / total_pages * 100) if total_pages > 0 else 0
+    # "Tem retomada" quando o usuário já avançou além da 1ª página OU já registrou
+    # material — sinal de que há uma sessão anterior para continuar.
+    tem_retomada = (current_page or 1) > 1 or bool(last_read_at) or \
+        (n_notas + n_bookmarks + n_destaques + n_revisao) > 0
+
+    return {
+        "current_page": current_page or 1,
+        "total_pages": total_pages or 0,
+        "progresso_pct": pct,
+        "last_read_at": last_read_at,
+        "n_notas": n_notas,
+        "n_bookmarks": n_bookmarks,
+        "n_destaques": n_destaques,
+        "n_revisao": n_revisao,
+        "tem_retomada": tem_retomada,
+    }
+
+
 @router.get("/api/pdf-existe/{path:path}", summary="Verificar se um PDF existe",
             description="Checagem leve de existência de um PDF (sem transferir o arquivo).")
 def pdf_existe(path: str, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):

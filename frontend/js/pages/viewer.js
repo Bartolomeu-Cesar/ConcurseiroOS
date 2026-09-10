@@ -3351,6 +3351,79 @@ window.addEventListener('pagehide', () => { try { ttsParar(); } catch (e) {} });
 window.addEventListener('beforeunload', () => { try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) {} });
 
 
+// ==================== #6 CONTINUAR DE ONDE PAROU ====================
+// Ao abrir, busca um resumo da leitura (progresso + material) e, se houver uma
+// sessão anterior, mostra um cartão discreto com atalho para retomar a página.
+// Só no modo servidor (PDFs locais não têm progresso/material sincronizado).
+let _retomadaPagina = null;
+
+function _formatarUltimaLeitura(iso) {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    const agora = new Date();
+    const difDias = Math.floor((agora - d) / 86400000);
+    if (difDias <= 0) return 'hoje';
+    if (difDias === 1) return 'ontem';
+    if (difDias < 7) return `há ${difDias} dias`;
+    return d.toLocaleDateString('pt-BR');
+  } catch (e) { return ''; }
+}
+
+async function _mostrarCartaoRetomada() {
+  if (_ehLocal) return; // PDFs locais não têm resumo no servidor
+  let d;
+  try {
+    d = await fetch(`/api/progress-resumo/${encodePath(path)}`).then(r => r.ok ? r.json() : null);
+  } catch (e) { return; }
+  if (!d || !d.tem_retomada) return;
+
+  _retomadaPagina = d.current_page || 1;
+  const partes = [];
+  if (d.total_pages > 0) {
+    partes.push(`Você parou na <strong>página ${d.current_page}</strong> de ${d.total_pages} (${d.progresso_pct}%).`);
+  } else {
+    partes.push(`Você parou na <strong>página ${d.current_page}</strong>.`);
+  }
+  const quando = _formatarUltimaLeitura(d.last_read_at);
+  if (quando) partes.push(`Última leitura: ${quando}.`);
+
+  // Resumo do material acumulado neste PDF (retrieval cues).
+  const mats = [];
+  if (d.n_notas) mats.push(`📝 ${d.n_notas} nota${d.n_notas > 1 ? 's' : ''}`);
+  if (d.n_bookmarks) mats.push(`🔖 ${d.n_bookmarks}`);
+  if (d.n_destaques) mats.push(`🖍️ ${d.n_destaques}`);
+  if (d.n_revisao) mats.push(`📑 ${d.n_revisao}`);
+  if (mats.length) partes.push(`<span style="color:var(--text-sub,#9399b2);">${mats.join(' · ')}</span>`);
+
+  const resumoEl = document.getElementById('retomada-resumo');
+  const btnCont = document.getElementById('retomada-continuar');
+  const card = document.getElementById('retomada-card');
+  if (!resumoEl || !btnCont || !card) return;
+  resumoEl.innerHTML = partes.join('<br>');
+  btnCont.textContent = `Continuar na pág. ${_retomadaPagina}`;
+  btnCont.onclick = () => {
+    if (_retomadaPagina) goToPage(_retomadaPagina);
+    fecharRetomada();
+    showStudyToast(`📖 Retomando na página ${_retomadaPagina}.`);
+  };
+  card.style.display = 'block';
+  // Auto-dispensa após 12s para não poluir a tela se o usuário ignorar.
+  clearTimeout(window._retomadaTimeout);
+  window._retomadaTimeout = setTimeout(fecharRetomada, 12000);
+}
+
+function fecharRetomada() {
+  const card = document.getElementById('retomada-card');
+  if (card) card.style.display = 'none';
+  clearTimeout(window._retomadaTimeout);
+}
+
+// Dispara o cartão após o carregamento inicial assentar (o PDF.js já abre na
+// página salva via #page=; o cartão é um atalho extra + resumo do material).
+setTimeout(_mostrarCartaoRetomada, 1200);
+
+
 // === Window assignments for HTML onclick/onchange handlers ===
 window.toggleNotePanel = toggleNotePanel;
 window.toggleTimerPause = toggleTimerPause;
@@ -3441,3 +3514,4 @@ window.ttsToggle = ttsToggle;
 window.ttsParar = ttsParar;
 window.ttsSetVoz = ttsSetVoz;
 window.ttsSetRate = ttsSetRate;
+window.fecharRetomada = fecharRetomada;
