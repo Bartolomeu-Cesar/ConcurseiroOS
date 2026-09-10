@@ -3025,6 +3025,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'g' || e.key === 'G') abrirMetasSessao();
   if (e.key === 'v' || e.key === 'V') ttsFalarSelecao();
   if (e.key === 'j' || e.key === 'J') toggleHeatmapPanel();
+  if (e.key === 'k' || e.key === 'K') { e.preventDefault(); abrirPaleta(); }
   if (e.key === 'Escape') {
     // Esc fecha primeiro o overlay de atalhos; depois o modal de metas; senão,
     // sai do Modo Foco.
@@ -3500,6 +3501,116 @@ async function loadHeatmap() {
 }
 
 
+// ==================== #8 PALETA DE COMANDOS ====================
+// Overlay com busca sobre todas as ações do leitor (Ctrl/Cmd+K ou K). Executa
+// as funções já existentes — descoberta rápida e uso ágil (útil no mobile).
+const _COMANDOS = [
+  { emoji: '📝', label: 'Notas da página', cat: 'Estudo', key: 'N', run: () => toggleNotePanel() },
+  { emoji: '🔖', label: 'Marcar página (bookmark)', cat: 'Estudo', key: 'B', run: () => addBookmark() },
+  { emoji: '📑', label: 'Meus bookmarks', cat: 'Painéis', key: 'M', run: () => toggleBookmarksPanel() },
+  { emoji: '🧠', label: 'Flashcard rápido', cat: 'Estudo', key: 'F', run: () => quickFlashcard() },
+  { emoji: '🍅', label: 'Pomodoro on/off', cat: 'Foco', key: 'P', run: () => togglePomodoroMode() },
+  { emoji: '⚙️', label: 'Configurar Pomodoro', cat: 'Foco', run: () => abrirConfigPomodoro() },
+  { emoji: '📊', label: 'Resumo da sessão', cat: 'Painéis', key: 'S', run: () => toggleStudySummary() },
+  { emoji: '🔒', label: 'Active Recall', cat: 'Estudo', key: 'R', run: () => toggleActiveRecall() },
+  { emoji: '🤖', label: 'Perguntar à IA sobre a página', cat: 'IA', key: 'A', run: () => askAIAboutPage() },
+  { emoji: '✨', label: 'Gerar com IA (resumo/flashcards/questões)', cat: 'IA', run: () => abrirGerarIA() },
+  { emoji: '📑', label: 'Caderno de Revisão', cat: 'Painéis', key: 'C', run: () => toggleRevisaoPanel() },
+  { emoji: '🖍️', label: 'Meus destaques', cat: 'Painéis', key: 'H', run: () => toggleDestaquesPanel() },
+  { emoji: '❓', label: 'Questões da disciplina', cat: 'Painéis', run: () => toggleSidePanel() },
+  { emoji: '🔥', label: 'Mapa de engajamento (heatmap)', cat: 'Painéis', key: 'J', run: () => toggleHeatmapPanel() },
+  { emoji: '🎯', label: 'Metas da sessão e recall', cat: 'Foco', key: 'G', run: () => abrirMetasSessao() },
+  { emoji: '🔊', label: 'Ler em voz o trecho selecionado (TTS)', cat: 'Acessibilidade', key: 'V', run: () => ttsFalarSelecao() },
+  { emoji: '☀️', label: 'Alternar tema do PDF (claro/sépia/escuro)', cat: 'Conforto', key: 'D', run: () => cyclePdfTheme() },
+  { emoji: '🧘', label: 'Modo Foco (esconde a interface)', cat: 'Conforto', key: 'Z', run: () => toggleFocusMode() },
+  { emoji: '⌨️', label: 'Atalhos de teclado', cat: 'Ajuda', key: '?', run: () => toggleShortcuts() },
+  { emoji: '🏠', label: 'Voltar ao início', cat: 'Navegação', run: () => { onLeave(); location.href = '/'; } },
+];
+let _cmdFiltrados = [];
+let _cmdAtivo = 0;
+
+// Busca tolerante: casa por subsequência (as letras aparecem na ordem) além de
+// substring — permite "pmd" achar "Pomodoro", por exemplo.
+function _cmdCasa(termo, texto) {
+  termo = termo.toLowerCase().trim();
+  texto = texto.toLowerCase();
+  if (!termo) return true;
+  if (texto.includes(termo)) return true;
+  let i = 0;
+  for (const ch of texto) { if (ch === termo[i]) i++; if (i === termo.length) return true; }
+  return false;
+}
+
+function abrirPaleta() {
+  const ov = document.getElementById('cmd-palette');
+  const input = document.getElementById('cmd-input');
+  if (!ov || !input) return;
+  ov.classList.add('show');
+  input.value = '';
+  _renderPaleta('');
+  setTimeout(() => input.focus(), 20);
+}
+
+function fecharPaleta() {
+  const ov = document.getElementById('cmd-palette');
+  if (ov) ov.classList.remove('show');
+}
+
+function _paletaAberta() {
+  const ov = document.getElementById('cmd-palette');
+  return ov && ov.classList.contains('show');
+}
+
+function _renderPaleta(termo) {
+  const list = document.getElementById('cmd-list');
+  const vazio = document.getElementById('cmd-empty');
+  if (!list) return;
+  _cmdFiltrados = _COMANDOS.filter(c => _cmdCasa(termo, c.label + ' ' + c.cat));
+  _cmdAtivo = 0;
+  if (_cmdFiltrados.length === 0) {
+    list.innerHTML = '';
+    if (vazio) vazio.style.display = 'block';
+    return;
+  }
+  if (vazio) vazio.style.display = 'none';
+  list.innerHTML = _cmdFiltrados.map((c, i) => `
+    <div class="cmd-item${i === 0 ? ' active' : ''}" data-idx="${i}" onclick="_execCmd(${i})">
+      <span class="cmd-emoji">${c.emoji}</span>
+      <span class="cmd-label">${_escHtml(c.label)}</span>
+      <span class="cmd-cat">${_escHtml(c.cat)}</span>
+      ${c.key ? `<span class="cmd-key">${_escHtml(c.key)}</span>` : ''}
+    </div>`).join('');
+}
+
+function _cmdRealcarAtivo() {
+  const items = document.querySelectorAll('#cmd-list .cmd-item');
+  items.forEach((el, i) => el.classList.toggle('active', i === _cmdAtivo));
+  const ativo = items[_cmdAtivo];
+  if (ativo) ativo.scrollIntoView({ block: 'nearest' });
+}
+
+function _execCmd(idx) {
+  const cmd = _cmdFiltrados[idx];
+  fecharPaleta();
+  if (cmd && typeof cmd.run === 'function') {
+    try { cmd.run(); } catch (e) { showStudyToast('⚠️ Não foi possível executar o comando.'); }
+  }
+}
+
+// Navegação por teclado dentro da paleta (setas/Enter/Esc). Ligado ao input.
+(function _setupPaletaEventos() {
+  const input = document.getElementById('cmd-input');
+  if (!input) return;
+  input.addEventListener('input', () => _renderPaleta(input.value));
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); _cmdAtivo = Math.min(_cmdAtivo + 1, _cmdFiltrados.length - 1); _cmdRealcarAtivo(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); _cmdAtivo = Math.max(_cmdAtivo - 1, 0); _cmdRealcarAtivo(); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (_cmdFiltrados.length) _execCmd(_cmdAtivo); }
+    else if (e.key === 'Escape') { e.preventDefault(); fecharPaleta(); }
+  });
+})();
+
+
 // === Window assignments for HTML onclick/onchange handlers ===
 window.toggleNotePanel = toggleNotePanel;
 window.toggleTimerPause = toggleTimerPause;
@@ -3593,3 +3704,15 @@ window.ttsSetRate = ttsSetRate;
 window.fecharRetomada = fecharRetomada;
 window.toggleHeatmapPanel = toggleHeatmapPanel;
 window.loadHeatmap = loadHeatmap;
+window.abrirPaleta = abrirPaleta;
+window.fecharPaleta = fecharPaleta;
+window._execCmd = _execCmd;
+
+// Ctrl/Cmd+K abre a paleta de qualquer lugar (inclusive com foco em input),
+// então fica num listener próprio, antes da guarda de input dos demais handlers.
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+    e.preventDefault();
+    if (_paletaAberta()) fecharPaleta(); else abrirPaleta();
+  }
+}, true);
