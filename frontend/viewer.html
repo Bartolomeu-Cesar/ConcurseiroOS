@@ -72,6 +72,53 @@
       z-index: 999; align-items: center; justify-content: center;
     }
     #overlay.show { display: flex; }
+
+    /* ---------- Conforto visual: tema do PDF ---------- */
+    /* Filtros aplicados ao iframe do PDF.js (mesma origem). O sépia usa um leve
+       matiz quente; o escuro inverte + gira o matiz para manter cores fiéis. */
+    #pdf-frame.pdf-theme-sepia { filter: sepia(0.55) contrast(0.95) brightness(0.97); }
+    #pdf-frame.pdf-theme-dark { filter: invert(0.92) hue-rotate(180deg) contrast(0.92) brightness(1.05); }
+    /* Fundo do viewer acompanha o tema escuro para não “piscar” branco nas bordas. */
+    #viewer.pdf-dark-bg { background: #1a1a1a; }
+
+    /* ---------- Modo Foco (Zen) ---------- */
+    /* Esconde a toolbar e escurece o entorno para reduzir distração. O iframe
+       do PDF fica em destaque. Sai com Esc, tecla Z ou o botão flutuante. */
+    body.focus-mode #toolbar { display: none; }
+    body.focus-mode #viewer { box-shadow: 0 0 0 100vmax rgba(0,0,0,0.55); }
+    #focus-exit {
+      display: none; position: fixed; top: 10px; right: 12px; z-index: 700;
+      background: var(--bg-surface,#313244); color: var(--text,#cdd6f4);
+      border: 1px solid var(--border,#45475a); border-radius: 8px;
+      padding: 6px 12px; font-size: 0.8rem; cursor: pointer; opacity: 0.35;
+      transition: opacity 0.2s;
+    }
+    #focus-exit:hover { opacity: 1; }
+    body.focus-mode #focus-exit { display: block; }
+
+    /* ---------- Overlay de atalhos ---------- */
+    #shortcuts-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.72);
+      z-index: 1200; align-items: center; justify-content: center; padding: 16px;
+    }
+    #shortcuts-overlay.show { display: flex; }
+    #shortcuts-overlay .sc-card {
+      background: var(--bg-surface,#313244); border: 1px solid var(--border,#45475a);
+      border-radius: 16px; padding: 22px 26px; max-width: 520px; width: 100%;
+      max-height: 88vh; overflow-y: auto; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+    #shortcuts-overlay h3 { margin: 0 0 14px; color: var(--accent,#cba6f7); font-size: 1.05rem; }
+    #shortcuts-overlay .sc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 20px; }
+    #shortcuts-overlay .sc-row { display: flex; align-items: center; gap: 10px; font-size: 0.84rem; }
+    #shortcuts-overlay kbd {
+      background: var(--bg,#1e1e2e); border: 1px solid var(--border,#45475a);
+      border-bottom-width: 2px; border-radius: 6px; padding: 2px 8px;
+      font-family: monospace; font-size: 0.8rem; color: var(--yellow,#f9e2af);
+      min-width: 20px; text-align: center;
+    }
+    #shortcuts-overlay .sc-desc { color: var(--text,#cdd6f4); }
+    @media (max-width: 520px) { #shortcuts-overlay .sc-grid { grid-template-columns: 1fr; } }
+
   </style>
 </head>
 <body>
@@ -83,6 +130,36 @@
       <button id="btn-overlay-ok" style="background:var(--green);color:var(--bg);border:none;border-radius:8px;padding:8px 24px;font-size:0.95rem;font-weight:700;cursor:pointer;">OK, entendido!</button>
     </div>
   </div>
+
+  <!-- Botão flutuante para sair do Modo Foco -->
+  <button id="focus-exit" onclick="toggleFocusMode()" title="Sair do Modo Foco (Esc)">🧘 Sair do foco (Esc)</button>
+
+  <!-- Overlay de atalhos de teclado -->
+  <div id="shortcuts-overlay" onclick="if(event.target===this)toggleShortcuts()">
+    <div class="sc-card">
+      <h3>⌨️ Atalhos de teclado</h3>
+      <div class="sc-grid">
+        <div class="sc-row"><kbd>N</kbd><span class="sc-desc">Notas da página</span></div>
+        <div class="sc-row"><kbd>B</kbd><span class="sc-desc">Marcar página (bookmark)</span></div>
+        <div class="sc-row"><kbd>M</kbd><span class="sc-desc">Meus bookmarks</span></div>
+        <div class="sc-row"><kbd>F</kbd><span class="sc-desc">Flashcard rápido</span></div>
+        <div class="sc-row"><kbd>P</kbd><span class="sc-desc">Pomodoro on/off</span></div>
+        <div class="sc-row"><kbd>S</kbd><span class="sc-desc">Resumo da sessão</span></div>
+        <div class="sc-row"><kbd>R</kbd><span class="sc-desc">Active Recall</span></div>
+        <div class="sc-row"><kbd>A</kbd><span class="sc-desc">Perguntar à IA</span></div>
+        <div class="sc-row"><kbd>C</kbd><span class="sc-desc">Caderno de Revisão</span></div>
+        <div class="sc-row"><kbd>H</kbd><span class="sc-desc">Meus destaques</span></div>
+        <div class="sc-row"><kbd>D</kbd><span class="sc-desc">Tema do PDF (claro/sépia/escuro)</span></div>
+        <div class="sc-row"><kbd>Z</kbd><span class="sc-desc">Modo Foco (esconde a interface)</span></div>
+        <div class="sc-row"><kbd>?</kbd><span class="sc-desc">Este painel de atalhos</span></div>
+        <div class="sc-row"><kbd>Esc</kbd><span class="sc-desc">Fechar painel / sair do foco</span></div>
+      </div>
+      <div style="margin-top:16px;text-align:right;">
+        <button onclick="toggleShortcuts()" style="background:var(--bg-elevated,#45475a);border:none;color:var(--text,#cdd6f4);border-radius:8px;padding:7px 16px;font-size:0.82rem;cursor:pointer;">Fechar</button>
+      </div>
+    </div>
+  </div>
+
 
   <div id="toolbar">
     <a href="/" id="btn-voltar" style="background:var(--accent);color:var(--bg);border-radius:6px;padding:5px 12px;font-weight:600;font-size:0.82rem;text-decoration:none;">🏠 Início</a>
@@ -114,6 +191,9 @@
         <option value="feynman">🧪 Feynman</option>
         <option value="pomodoro">🍅 Pomodoro</option>
       </select>
+      <button onclick="cyclePdfTheme()" id="btn-pdf-theme" title="Tema do PDF: claro / sépia / escuro [D]" aria-label="Alternar tema do PDF" style="background:var(--bg-elevated);border:none;color:var(--text);border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">☀️</button>
+      <button onclick="toggleFocusMode()" id="btn-focus" title="Modo Foco: esconde a interface [Z]" aria-label="Modo Foco" style="background:var(--bg-elevated);border:none;color:var(--mauve,#cba6f7);border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">🧘</button>
+      <button onclick="toggleShortcuts()" id="btn-shortcuts" title="Atalhos de teclado [?]" aria-label="Atalhos de teclado" style="background:var(--bg-elevated);border:none;color:var(--text-sub,#9399b2);border-radius:6px;padding:4px 8px;font-size:0.85rem;cursor:pointer;">⌨️</button>
       <span id="reading-speed" title="Velocidade de leitura" style="font-size:0.7rem;color:var(--text-muted);min-width:50px;text-align:center;"></span>
     </div>
     <button id="btn-toggle-panel" onclick="toggleSidePanel()">❓ Questões</button>

@@ -2933,6 +2933,103 @@ function initDestaques() {
 }
 
 
+// ==================== PACOTE DE CONFORTO ====================
+
+// --- Feature 1: Tema do PDF (claro / sépia / escuro) ---
+// Aplica um filtro CSS ao iframe do PDF.js (mesma origem). O estado é cíclico e
+// persistido por dispositivo. Reduz fadiga visual em sessões longas / à noite.
+const PDF_THEME_KEY = 'viewer_pdf_theme';
+const _PDF_THEMES = ['claro', 'sepia', 'escuro'];
+const _PDF_THEME_META = {
+  claro: { icon: '☀️', label: 'Claro', toast: '☀️ Tema claro' },
+  sepia: { icon: '📜', label: 'Sépia', toast: '📜 Tema sépia (conforto)' },
+  escuro: { icon: '🌙', label: 'Escuro', toast: '🌙 Tema escuro (noturno)' },
+};
+let _pdfTheme = (function () {
+  const t = localStorage.getItem(PDF_THEME_KEY);
+  return _PDF_THEMES.includes(t) ? t : 'claro';
+})();
+
+function _aplicarPdfTheme() {
+  const frame = document.getElementById('pdf-frame');
+  const viewer = document.getElementById('viewer');
+  const btn = document.getElementById('btn-pdf-theme');
+  if (frame) {
+    frame.classList.remove('pdf-theme-sepia', 'pdf-theme-dark');
+    if (_pdfTheme === 'sepia') frame.classList.add('pdf-theme-sepia');
+    else if (_pdfTheme === 'escuro') frame.classList.add('pdf-theme-dark');
+  }
+  if (viewer) viewer.classList.toggle('pdf-dark-bg', _pdfTheme === 'escuro');
+  if (btn) {
+    const meta = _PDF_THEME_META[_pdfTheme];
+    btn.textContent = meta.icon;
+    btn.title = `Tema do PDF: ${meta.label} — clique para alternar [D]`;
+  }
+}
+
+function cyclePdfTheme() {
+  const idx = _PDF_THEMES.indexOf(_pdfTheme);
+  _pdfTheme = _PDF_THEMES[(idx + 1) % _PDF_THEMES.length];
+  localStorage.setItem(PDF_THEME_KEY, _pdfTheme);
+  _aplicarPdfTheme();
+  showStudyToast(_PDF_THEME_META[_pdfTheme].toast);
+}
+
+// Reaplica o tema quando o iframe (re)carrega, pois trocar o filtro no elemento
+// iframe persiste, mas garantimos o estado visual correto do botão/fundo.
+(function _armarPdfThemePosLoad() {
+  const frame = document.getElementById('pdf-frame');
+  if (frame) frame.addEventListener('load', () => _aplicarPdfTheme());
+  _aplicarPdfTheme(); // estado inicial (botão) mesmo antes do load
+})();
+
+// --- Feature 2: Modo Foco (Zen) ---
+// Esconde a toolbar e escurece o entorno para concentrar a atenção no PDF.
+// Fecha painéis abertos ao entrar, para maximizar a área de leitura.
+let _focusMode = false;
+function toggleFocusMode() {
+  _focusMode = !_focusMode;
+  document.body.classList.toggle('focus-mode', _focusMode);
+  const btn = document.getElementById('btn-focus');
+  if (btn) {
+    btn.style.background = _focusMode ? 'var(--mauve,#cba6f7)' : 'var(--bg-elevated,#45475a)';
+    btn.style.color = _focusMode ? 'var(--bg,#1e1e2e)' : 'var(--mauve,#cba6f7)';
+  }
+  if (_focusMode) {
+    // Fecha painéis do lado direito e o de questões para liberar a tela.
+    try { _fecharPaineisFixed(null); _aplicarPaddingViewer(0); _painelAtivo = null;
+      const sp = document.getElementById('side-panel'); if (sp) sp.classList.remove('open');
+    } catch (e) { /* painéis podem não existir ainda */ }
+    showStudyToast('🧘 Modo Foco ativado — Esc ou Z para sair.');
+  } else {
+    showStudyToast('Modo Foco desativado.');
+  }
+}
+
+// --- Feature 9: Overlay de atalhos ---
+function toggleShortcuts() {
+  const ov = document.getElementById('shortcuts-overlay');
+  if (ov) ov.classList.toggle('show');
+}
+
+// Handler de teclas do pacote de conforto. Segue a mesma guarda dos outros
+// handlers (ignora quando o foco está em input/textarea) para não capturar
+// digitação. Registrado à parte para não colidir com os handlers existentes.
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  // '?' (Shift+/) abre/fecha o painel de atalhos.
+  if (e.key === '?') { e.preventDefault(); toggleShortcuts(); return; }
+  if (e.key === 'd' || e.key === 'D') cyclePdfTheme();
+  if (e.key === 'z' || e.key === 'Z') toggleFocusMode();
+  if (e.key === 'Escape') {
+    // Esc fecha primeiro o overlay de atalhos; senão, sai do Modo Foco.
+    const ov = document.getElementById('shortcuts-overlay');
+    if (ov && ov.classList.contains('show')) { ov.classList.remove('show'); return; }
+    if (_focusMode) toggleFocusMode();
+  }
+});
+
+
 // === Window assignments for HTML onclick/onchange handlers ===
 window.toggleNotePanel = toggleNotePanel;
 window.toggleTimerPause = toggleTimerPause;
@@ -3012,3 +3109,6 @@ window.setRevFsTagFiltro = setRevFsTagFiltro;
 window.capturarSelecaoTexto = capturarSelecaoTexto;
 window.filtrarRevisao = filtrarRevisao;
 window.setRevFsBusca = setRevFsBusca;
+window.cyclePdfTheme = cyclePdfTheme;
+window.toggleFocusMode = toggleFocusMode;
+window.toggleShortcuts = toggleShortcuts;
