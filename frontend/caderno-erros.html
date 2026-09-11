@@ -708,6 +708,20 @@
   <div class="caderno-container" id="page-content" role="main">
     <div class="caderno-header">
       <h1>📕 Caderno de Erros <span class="count-badge" id="total-badge">0</span></h1>
+      <button id="btn-audio-caderno" onclick="toggleAudioCaderno()" title="Ouvir as questões erradas pendentes (ideal para revisar no transporte)"
+        style="margin-left:auto;background:var(--ce-card);color:var(--ce-text);border:1px solid var(--ce-border);border-radius:8px;padding:8px 14px;font-size:0.85rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
+        🎧 Modo Áudio
+      </button>
+    </div>
+
+    <!-- Painel de controle do Modo Áudio (oculto até iniciar) -->
+    <div id="audio-caderno-painel" style="display:none;margin-bottom:16px;padding:14px 16px;background:var(--ce-card);border-radius:12px;border:1px solid var(--ce-border);">
+      <div id="audio-caderno-status" style="font-size:0.9rem;color:var(--ce-text);margin-bottom:10px;">🎧 Preparando…</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button onclick="pauseAudioCaderno()" id="btn-audio-pause" style="background:var(--ce-blue,#89b4fa);color:var(--ce-bg,#1e1e2e);border:none;border-radius:8px;padding:8px 14px;font-weight:600;cursor:pointer;">⏸ Pausar</button>
+        <button onclick="skipAudioCaderno()" style="background:var(--ce-card);color:var(--ce-text);border:1px solid var(--ce-border);border-radius:8px;padding:8px 14px;font-weight:600;cursor:pointer;">⏭ Próxima</button>
+        <button onclick="stopAudioCaderno()" style="background:var(--ce-red,#f38ba8);color:var(--ce-bg,#1e1e2e);border:none;border-radius:8px;padding:8px 14px;font-weight:600;cursor:pointer;">⏹ Encerrar</button>
+      </div>
     </div>
 
     <!-- Progress bar -->

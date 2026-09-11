@@ -532,6 +532,169 @@ async function loadErrorAnalysisStats() {
   }
 }
 
+// ============================================================
+// MODO ÁUDIO — ouvir as questões erradas pendentes (revisão hands-free)
+// Ideal para transporte: lê o enunciado → pausa para pensar → lê a resposta
+// correta. Usa speechSynthesis (Web Speech API, custo zero) + MediaSession
+// (controle por fone bluetooth). Combina com o Successive Relearning: revisar
+// passivamente o que mais importa (os erros) no tempo morto.
+// ============================================================
+let _audioAtivo = false;
+let _audioPausado = false;
+let _audioFila = [];
+let _audioIdx = 0;
+
+function _letraParaTexto(q, letra) {
+  const L = (letra || '').toUpperCase();
+  const isCE = !q.alternativa_c && !q.alternativa_d;
+  if (isCE) return L === 'A' ? 'Certo' : 'Errado';
+  const txt = q[`alternativa_${L.toLowerCase()}`];
+  return txt ? `Alternativa ${L}. ${txt}` : `Alternativa ${L}`;
+}
+
+function _ptVoice() {
+  const voices = window.speechSynthesis.getVoices();
+  return voices.find(v => v.lang && v.lang.startsWith('pt')) || voices[0] || null;
+}
+
+function _fala(texto, rate) {
+  const u = new SpeechSynthesisUtterance(texto);
+  u.lang = 'pt-BR';
+  u.rate = rate || 0.9;
+  const v = _ptVoice();
+  if (v) u.voice = v;
+  return u;
+}
+
+window.toggleAudioCaderno = function() {
+  if (_audioAtivo) { stopAudioCaderno(); return; }
+  startAudioCaderno();
+};
+
+window.startAudioCaderno = function() {
+  if (!('speechSynthesis' in window)) {
+    showToast('Seu navegador não suporta leitura em voz (Text-to-Speech).');
+    return;
+  }
+  // Fila = pendentes de hoje (respeita filtro de matéria selecionado).
+  let pend = (dadosCaderno && dadosCaderno.pendentes_hoje) ? [...dadosCaderno.pendentes_hoje] : [];
+  if (filtroMateria) pend = pend.filter(q => q.materia === filtroMateria);
+  if (pend.length === 0) {
+    showToast('Nenhuma questão pendente para ouvir hoje. 🎉');
+    return;
+  }
+  _audioFila = pend;
+  _audioIdx = 0;
+  _audioAtivo = true;
+  _audioPausado = false;
+
+  const painel = document.getElementById('audio-caderno-painel');
+  if (painel) painel.style.display = 'block';
+  const btn = document.getElementById('btn-audio-caderno');
+  if (btn) btn.innerHTML = '🎧 Ouvindo…';
+
+  if ('mediaSession' in navigator) {
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: 'Caderno de Erros — Revisão por Áudio',
+        artist: `${_audioFila.length} questões erradas`,
+        album: 'ConcurseiroOS',
+      });
+      navigator.mediaSession.setActionHandler('play', () => pauseAudioCaderno());
+      navigator.mediaSession.setActionHandler('pause', () => pauseAudioCaderno());
+      navigator.mediaSession.setActionHandler('nexttrack', () => skipAudioCaderno());
+    } catch (e) { /* MediaSession best-effort */ }
+  }
+
+  showToast(`🎧 Modo Áudio: ${_audioFila.length} questões. Ouça → pense → ouça a resposta.`);
+  _audioPlay();
+};
+
+window.stopAudioCaderno = function() {
+  try { window.speechSynthesis.cancel(); } catch (e) {}
+  _audioAtivo = false;
+  _audioPausado = false;
+  _audioFila = [];
+  const painel = document.getElementById('audio-caderno-painel');
+  if (painel) painel.style.display = 'none';
+  const btn = document.getElementById('btn-audio-caderno');
+  if (btn) btn.innerHTML = '🎧 Modo Áudio';
+  if ('mediaSession' in navigator) {
+    try { navigator.mediaSession.metadata = null; } catch (e) {}
+  }
+};
+
+window.pauseAudioCaderno = function() {
+  const btn = document.getElementById('btn-audio-pause');
+  if (_audioPausado) {
+    window.speechSynthesis.resume();
+    _audioPausado = false;
+    if (btn) btn.innerHTML = '⏸ Pausar';
+  } else {
+    window.speechSynthesis.pause();
+    _audioPausado = true;
+    if (btn) btn.innerHTML = '▶ Retomar';
+  }
+};
+
+window.skipAudioCaderno = function() {
+  try { window.speechSynthesis.cancel(); } catch (e) {}
+  _audioIdx++;
+  if (_audioAtivo && _audioIdx < _audioFila.length) {
+    _audioPlay();
+  } else if (_audioIdx >= _audioFila.length) {
+    _audioConcluir();
+  }
+};
+
+function _audioConcluir() {
+  showToast('🎉 Revisão por áudio concluída!');
+  stopAudioCaderno();
+}
+
+function _audioStatus(texto) {
+  const el = document.getElementById('audio-caderno-status');
+  if (el) el.textContent = texto;
+}
+
+function _audioPlay() {
+  if (!_audioAtivo || _audioIdx >= _audioFila.length) {
+    _audioConcluir();
+    return;
+  }
+  const q = _audioFila[_audioIdx];
+  const synth = window.speechSynthesis;
+  const pos = `${_audioIdx + 1}/${_audioFila.length}`;
+
+  _audioStatus(`🎧 ${pos} — ${q.materia || ''}: ouça e tente lembrar a resposta…`);
+
+  const uttEnun = _fala(`Questão ${_audioIdx + 1}. ${q.materia || ''}. ${q.enunciado || ''}`, 0.9);
+  const respostaTexto = _letraParaTexto(q, q.resposta_correta);
+  const uttResp = _fala(`Resposta correta. ${respostaTexto}`, 0.9);
+
+  uttEnun.onend = () => {
+    if (!_audioAtivo) return;
+    _audioStatus(`🤔 ${pos} — Pense na resposta…`);
+    // Pausa de 6s para recuperação ativa (retrieval) antes da resposta.
+    setTimeout(() => {
+      if (!_audioAtivo) return;
+      _audioStatus(`✅ ${pos} — Resposta correta`);
+      synth.speak(uttResp);
+    }, 6000);
+  };
+
+  uttResp.onend = () => {
+    // Pausa de 2s antes da próxima questão.
+    setTimeout(() => {
+      if (!_audioAtivo) return;
+      _audioIdx++;
+      _audioPlay();
+    }, 2000);
+  };
+
+  synth.speak(uttEnun);
+}
+
 // Init
 fetchCaderno();
 loadErrorAnalysisStats();
