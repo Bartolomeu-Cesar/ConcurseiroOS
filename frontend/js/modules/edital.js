@@ -50,6 +50,7 @@ export async function loadEdital() {
   renderEditalTree();
   loadSpacingAlert();
   loadKnowledgeGraph();
+  loadMapaMental();
 }
 
 async function loadSpacingAlert() {
@@ -1136,4 +1137,140 @@ export async function showKgNodeInfo(topicId) {
 
     showToast(`${data.all_completed ? '✅' : '⚠️'} ${data.total} pré-requisitos${data.all_completed ? ' — todos concluídos!' : ''}`, data.all_completed ? 'success' : 'warning');
   } catch (e) {}
+}
+
+// ============================================================
+// MAPA MENTAL — render SVG nativo (Dual Coding)
+// Renderiza client-side em SVG (leve, offline, sem depender da lib Mermaid
+// de ~2.65MB). O código Mermaid vem da API e pode ser copiado para uso externo.
+// ============================================================
+let _mmMermaid = '';
+
+export async function loadMapaMental() {
+  const panel = document.getElementById('mapa-mental-panel');
+  if (!panel) return;
+
+  // Popular o select de matérias (uma vez) com as que têm mapa disponível.
+  const select = document.getElementById('mm-filtro-materia');
+  if (select && !select.dataset.loaded) {
+    try {
+      const disp = await fetch('/api/edital/mapas-mentais-disponiveis').then(r => r.ok ? r.json() : []);
+      if (!disp.length) { panel.style.display = 'none'; return; }
+      select.innerHTML = '<option value="">Selecione a matéria…</option>'
+        + disp.map(m => `<option value="${escapeHtml(m.materia)}">${escapeHtml(m.materia)} (${m.total_topicos})</option>`).join('');
+      select.dataset.loaded = '1';
+      panel.style.display = 'block';
+    } catch (e) {
+      panel.style.display = 'none';
+      return;
+    }
+  }
+
+  const materia = select?.value || '';
+  const container = document.getElementById('mm-container');
+  const statsEl = document.getElementById('mm-stats');
+  if (!materia) {
+    if (container) container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-sub);font-size:0.85rem;">Selecione uma matéria para ver o mapa mental.</div>';
+    if (statsEl) statsEl.textContent = '';
+    _mmMermaid = '';
+    return;
+  }
+
+  if (container) container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-sub);">Gerando mapa…</div>';
+  try {
+    const data = await fetch(`/api/edital/mapa-mental?materia=${encodeURIComponent(materia)}`).then(r => r.json());
+    _mmMermaid = data.mermaid_mindmap || '';
+    if (statsEl && data.stats) {
+      const s = data.stats;
+      statsEl.textContent = `${s.total} tópicos · ${s.concluidos} concluídos (${s.pct_concluido}%) · ${s.em_andamento} em andamento`;
+    }
+    _renderMapaMentalSVG(data);
+  } catch (e) {
+    if (container) container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--ce-red,#f38ba8);">Erro ao gerar o mapa mental.</div>';
+  }
+}
+
+function _mmStatusColor(status) {
+  if (status === 'Concluído') return '#a6e3a1';
+  if (status === 'Em Andamento') return '#89b4fa';
+  return '#6c7086';
+}
+
+function _renderMapaMentalSVG(data) {
+  const container = document.getElementById('mm-container');
+  if (!container) return;
+  const grupos = data.grupos || [];
+  if (!grupos.length) {
+    container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-sub);">Sem tópicos para exibir.</div>';
+    return;
+  }
+
+  // Layout de árvore horizontal: root à esquerda; grupos empilhados; itens
+  // de cada grupo como folhas. Altura calculada pelo total de itens.
+  const totalItens = grupos.reduce((acc, g) => acc + Math.max(1, g.itens.length), 0);
+  const rowH = 30;
+  const groupGap = 16;
+  const width = Math.max(container.clientWidth || 700, 700);
+  const height = Math.max(360, totalItens * rowH + grupos.length * groupGap + 40);
+
+  const rootX = 130, rootY = height / 2;
+  const groupX = width * 0.42;
+  const itemX = width * 0.68;
+
+  const esc = (s) => escapeHtml(String(s || ''));
+  let svg = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" style="width:100%;height:auto;font-family:inherit;">`;
+
+  // Distribui verticalmente os itens de todos os grupos.
+  let y = 30;
+  const groupPositions = [];
+  const itemPositions = [];
+  grupos.forEach((g) => {
+    const n = Math.max(1, g.itens.length);
+    const gTop = y;
+    const gBottom = y + n * rowH;
+    const gCenter = (gTop + gBottom) / 2;
+    groupPositions.push({ g, x: groupX, y: gCenter });
+    g.itens.forEach((it, j) => {
+      itemPositions.push({ it, groupCenter: gCenter, x: itemX, y: gTop + j * rowH + rowH / 2 });
+    });
+    y = gBottom + groupGap;
+  });
+
+  // Edges root → grupo (curvas suaves)
+  groupPositions.forEach(gp => {
+    svg += `<path d="M ${rootX + 8} ${rootY} C ${(rootX + gp.x) / 2} ${rootY}, ${(rootX + gp.x) / 2} ${gp.y}, ${gp.x - 4} ${gp.y}" stroke="#585b70" stroke-width="1.5" fill="none"/>`;
+  });
+  // Edges grupo → item (usa o centro do grupo pai guardado no item)
+  itemPositions.forEach(ip => {
+    svg += `<path d="M ${groupX + 4} ${ip.groupCenter} C ${(groupX + ip.x) / 2} ${ip.groupCenter}, ${(groupX + ip.x) / 2} ${ip.y}, ${ip.x - 4} ${ip.y}" stroke="#45475a" stroke-width="1" fill="none"/>`;
+  });
+
+  // Root node
+  svg += `<rect x="${rootX - 60}" y="${rootY - 18}" width="120" height="36" rx="18" fill="#cba6f7"/>`;
+  svg += `<text x="${rootX}" y="${rootY + 5}" text-anchor="middle" font-size="13" font-weight="700" fill="#1e1e2e">${esc((data.root || '').slice(0, 16))}</text>`;
+
+  // Group nodes
+  groupPositions.forEach(gp => {
+    const label = esc(gp.g.grupo.slice(0, 22));
+    svg += `<rect x="${gp.x}" y="${gp.y - 13}" width="${Math.min(200, 40 + gp.g.grupo.length * 7)}" height="26" rx="13" fill="#313244" stroke="#585b70"/>`;
+    svg += `<text x="${gp.x + 10}" y="${gp.y + 4}" font-size="11" font-weight="600" fill="#cdd6f4">${label}</text>`;
+  });
+
+  // Item nodes (folhas) com cor por status
+  itemPositions.forEach(ip => {
+    const color = _mmStatusColor(ip.it.status);
+    const label = esc(ip.it.nome.slice(0, 32));
+    svg += `<circle cx="${ip.x}" cy="${ip.y}" r="5" fill="${color}"/>`;
+    svg += `<text x="${ip.x + 12}" y="${ip.y + 4}" font-size="10.5" fill="#bac2de">${label}</text>`;
+  });
+
+  svg += '</svg>';
+  container.innerHTML = svg;
+}
+
+export function copiarMermaid() {
+  if (!_mmMermaid) { toast('Gere um mapa mental primeiro.', 'info'); return; }
+  navigator.clipboard?.writeText(_mmMermaid)
+    .then(() => toast('📋 Código Mermaid copiado! Cole em mermaid.live ou similar.', 'success'))
+    .catch(() => toast('Não foi possível copiar.', 'error'));
 }

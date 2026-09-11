@@ -6,7 +6,7 @@ import { alertModal, promptModal } from './modules/utils.js';
 import { switchTab, initTabs } from './modules/tabs.js';
 import { initShortcuts, goToEditalItem } from './modules/shortcuts.js';
 import { load, exportProgress, importProgress, uploadPdf, initPdfs, toggleOrgMode, criarPastaVirtual, toggleModoLocal, sincronizar } from './modules/pdfs.js';
-import { loadEdital, toggleTree, toggleAllEdital, selectEditalTopic, toggleEditalStatus, deleteEditalItem, addEdital, editarTopico, renomearMateria, adicionarDisciplina, importEditalPdf, arquivarCargo, excluirCargo, arquivarConcurso, excluirConcurso, editarEdital, salvarEdicaoEdital, showArquivados, iniciarQuestoesPosEstudo, iniciarFlashPosEstudo, showSpacingDetails, loadKnowledgeGraph, showKgSuggestions, acceptKgSuggestion, showKgNodeInfo, initEdital } from './modules/edital.js';
+import { loadEdital, toggleTree, toggleAllEdital, selectEditalTopic, toggleEditalStatus, deleteEditalItem, addEdital, editarTopico, renomearMateria, adicionarDisciplina, importEditalPdf, arquivarCargo, excluirCargo, arquivarConcurso, excluirConcurso, editarEdital, salvarEdicaoEdital, showArquivados, iniciarQuestoesPosEstudo, iniciarFlashPosEstudo, showSpacingDetails, loadKnowledgeGraph, showKgSuggestions, acceptKgSuggestion, showKgNodeInfo, loadMapaMental, copiarMermaid, initEdital } from './modules/edital.js';
 import { loadCiclo, cicloTimerToggle, cicloTimerStop, importarCicloDoEdital, addCiclo, deleteCiclo, resetarCiclo, limparCiclo, switchCicloView, initCiclo } from './modules/ciclo.js';
 import { loadTrilha, gerarTrilha, concluirEtapaTrilha, sincronizarTrilhaCalendario, initTrilha } from './modules/trilha.js';
 import { loadFlashcardsToday, revealAnswer, reviewFlashcard, addFlashcard, loadAllFlashcards, toggleFlashGroup, iniciarSessaoFlash, sessaoNext, deleteFlashcard, openFlashEditModal, closeFlashEditModal, saveFlashEdit, initFlashcards, toggleGenerationMode, setFlashConfidence, startBossBattle, bossBattleReview, startAudioMode, stopAudioMode, pauseAudioMode, skipAudioCard, startCommutingMode, stopCommutingMode, loadLeitnerBoxes, startFlashByMateria, skipElaboration, saveElaboration, openBrainDump, submitBrainDump, closeBrainDump, continueAfterChunk, saveMnemonic, skipMnemonic, saveSessionSummary, startExamMode, stopExamMode, dismissHypercorrection, skipMicroBreak, revealNextSegment, clozeInserirLacuna, clozePreview, criarCloze, customStudy, customStudyMateria, undoLastReview, criarImageOcclusion, ioInit, ioUndoMascara, ioLimparMascaras, startMatchGame, matchPick, closeMatchGame, toggleFlashTimer, _cleanupFlashTimers, iniciarSessaoFlashPorIds } from './modules/flashcards.js';
@@ -38,6 +38,7 @@ Object.assign(window, {
   editarEdital, salvarEdicaoEdital, showArquivados,
   iniciarQuestoesPosEstudo, iniciarFlashPosEstudo, showSpacingDetails,
   loadKnowledgeGraph, showKgSuggestions, acceptKgSuggestion, showKgNodeInfo,
+  loadMapaMental, copiarMermaid,
   // Ciclo
   loadCiclo, cicloTimerToggle, cicloTimerStop, importarCicloDoEdital, addCiclo, deleteCiclo, resetarCiclo, limparCiclo, switchCicloView,
   // Trilha

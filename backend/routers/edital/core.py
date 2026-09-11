@@ -696,20 +696,32 @@ def gerar_mapa_mental(
     lines = ["mindmap"]
     lines.append(f"  root(({materia}))")
 
+    # Estrutura para render SVG NATIVO no frontend (evita depender da lib
+    # Mermaid, que tem ~2.65MB — contra a filosofia PWA-leve do projeto). O
+    # código Mermaid segue no retorno para export/cópia.
+    grupos_svg = []
+
     for _grupo_num, items in grupos.items():
         if len(items) == 1:
             # Item solto: direto como filho do root
             item = items[0]
             icon = _status_icon(item["status"])
             lines.append(f"    {icon} {item['nome']}")
+            grupos_svg.append({
+                "grupo": item["nome"][:40],
+                "itens": [{"nome": item["nome"][:50], "status": item["status"], "id": item["id"]}],
+            })
         else:
             # Grupo com subitens
             primeiro = items[0]
             grupo_nome = primeiro["nome"].split(':')[0].split('-')[0].strip()[:40]
             lines.append(f"    {grupo_nome}")
+            itens_svg = []
             for item in items:
                 icon = _status_icon(item["status"])
                 lines.append(f"      {icon} {item['nome'][:50]}")
+                itens_svg.append({"nome": item["nome"][:50], "status": item["status"], "id": item["id"]})
+            grupos_svg.append({"grupo": grupo_nome, "itens": itens_svg})
 
     mermaid_code = "\n".join(lines)
 
@@ -724,7 +736,7 @@ def gerar_mapa_mental(
 
         if status == "Concluído":
             style = f'style {node_id} fill:#a6e3a1,color:#1e1e2e'
-        elif status == "Em andamento":
+        elif status == "Em Andamento":
             style = f'style {node_id} fill:#89b4fa,color:#1e1e2e'
         else:
             style = f'style {node_id} fill:#45475a,color:#cdd6f4'
@@ -734,13 +746,15 @@ def gerar_mapa_mental(
 
     flowchart_code = "\n".join(flow_lines)
 
-    # Stats para contexto
+    # Stats para contexto (status CANÔNICO Title Case)
     total = len(topicos)
     concluidos = sum(1 for t in topicos if t["status"] == "Concluído")
-    em_andamento = sum(1 for t in topicos if t["status"] == "Em andamento")
+    em_andamento = sum(1 for t in topicos if t["status"] == "Em Andamento")
 
     return {
         "materia": materia,
+        "root": materia,
+        "grupos": grupos_svg,
         "mermaid_mindmap": mermaid_code,
         "mermaid_flowchart": flowchart_code,
         "stats": {
@@ -750,22 +764,15 @@ def gerar_mapa_mental(
             "nao_iniciados": total - concluidos - em_andamento,
             "pct_concluido": round(concluidos / total * 100, 1) if total > 0 else 0,
         },
-        "render_url": f"https://mermaid.ink/svg/{_encode_mermaid(mermaid_code)}",
     }
 
 
 def _status_icon(status: str) -> str:
     if status == "Concluído":
         return "✅"
-    elif status == "Em andamento":
+    elif status == "Em Andamento":
         return "🔵"
     return "⬜"
-
-
-def _encode_mermaid(code: str) -> str:
-    """Encode Mermaid code for mermaid.ink URL."""
-    import base64
-    return base64.urlsafe_b64encode(code.encode()).decode()
 
 
 @router.get("/api/edital/mapas-mentais-disponiveis", summary="Listar matérias com mapas mentais disponíveis")
