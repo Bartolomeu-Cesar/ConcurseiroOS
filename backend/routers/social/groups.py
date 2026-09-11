@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sanitize import sanitize_input
 from schemas import AddMemberRequest, ChangeMemberRoleRequest
 
+from constants import XP_PER_FLASHCARD, XP_PER_HOUR, XP_PER_QUESTION
 from database import get_db_session
 from logger import log
 from utils import today_str
@@ -508,19 +509,32 @@ def group_ranking(
             "SELECT xp, streak, level FROM user_gamification WHERE user_id = ?", (uid,)
         ).fetchone()
 
-        # Weekly XP: count XP from activity in the last 7 days
-        weekly = db.execute(
-            """SELECT COALESCE(SUM(json_extract(dados, '$.xp')), 0) as weekly_xp
-               FROM activity_feed
-               WHERE user_id = ? AND created_at >= date('now', '-7 days')""",
+        # Weekly XP: calculado a partir da ATIVIDADE REAL dos últimos 7 dias
+        # (tabela streaks). Antes somava json_extract(dados,'$.xp') do
+        # activity_feed, mas NENHUM writer grava a chave 'xp' ali → o XP semanal
+        # era SEMPRE 0 e o ranking "da semana" ficava todos empatados em 0.
+        # Fórmula alinhada às constantes de XP do projeto (horas/questões/flashcards).
+        semana = db.execute(
+            """SELECT COALESCE(SUM(horas_estudadas), 0) AS horas,
+                      COALESCE(SUM(questoes_resolvidas), 0) AS questoes,
+                      COALESCE(SUM(flashcards_revisados), 0) AS flashcards
+               FROM streaks
+               WHERE user_id = ? AND data >= date('now', '-7 days')""",
             (uid,)
         ).fetchone()
+        xp_semanal = 0
+        if semana:
+            xp_semanal = int(
+                (semana["horas"] or 0) * XP_PER_HOUR
+                + (semana["questoes"] or 0) * XP_PER_QUESTION
+                + (semana["flashcards"] or 0) * XP_PER_FLASHCARD
+            )
 
         ranking.append({
             "user_id": uid,
             "username": user_info["username"] if user_info else "Desconhecido",
             "xp_total": stats["xp"] if stats else 0,
-            "xp_semanal": weekly["weekly_xp"] if weekly else 0,
+            "xp_semanal": xp_semanal,
             "streak": stats["streak"] if stats else 0,
             "level": stats["level"] if stats else 1,
         })

@@ -528,11 +528,11 @@ def error_patterns(
         elif tempo > tempo_normal * 1.5:
             # Muito lento = dificuldade de interpretação
             padroes["interpretacao"].append(erro)
-        elif confianca is not None and confianca >= 4:
-            # Alta confiança mas errou = pegadinha ou exceção
+        elif confianca is not None and confianca >= 3:
+            # Alta confiança (escala 1-3: 3=certeza) mas errou = pegadinha/exceção
             padroes["pegadinha"].append(erro)
-        elif confianca is not None and confianca <= 2:
-            # Baixa confiança = sabe que não sabe (conceito)
+        elif confianca is not None and confianca <= 1:
+            # Baixa confiança (1=chutei) = sabe que não sabe (conceito)
             padroes["conceito"].append(erro)
         else:
             # Caso geral: conceito ou exceção

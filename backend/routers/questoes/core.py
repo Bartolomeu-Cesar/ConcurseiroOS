@@ -183,8 +183,8 @@ def _schedule_question_review(conn, questao_id: int, user_id: int, acertou: int,
             elif confianca is not None and confianca <= 2:
                 # Baixa confiança declarada → Hard
                 rating = RATING_HARD
-            elif confianca is not None and confianca >= 5:
-                # Alta confiança → Easy
+            elif confianca is not None and confianca >= 3:
+                # Alta confiança (escala 1-3: 3=certeza) → Easy
                 rating = RATING_EASY
             else:
                 # Acertou normal → Good

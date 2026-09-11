@@ -225,15 +225,19 @@ def temporal_landmark(conn=Depends(get_db_session), user_id: int = Depends(get_u
         landmarks.append({"tipo": "post_weekend", "emoji": "🚀", "msg": "Energia renovada! Aproveite o momentum."})
 
     # Verificar streak milestone (múltiplos de 7)
+    # O streak atual é CALCULADO por utils.calculate_streak (não é coluna de
+    # nenhuma tabela). Antes o código consultava `user_streaks` (tabela
+    # inexistente) sob try/except → a query falhava silenciosamente e o
+    # milestone de streak NUNCA disparava.
     try:
-        streak_row = conn.execute("SELECT streak_atual FROM user_streaks WHERE user_id = ?", (user_id,)).fetchone()
-        if streak_row:
-            streak = streak_row[0] or 0
-            if streak > 0 and streak % 7 == 0:
-                landmarks.append(
-                    {"tipo": "streak_milestone", "emoji": "🔥", "msg": f"Streak de {streak} dias! Você está imparável."}
-                )
-                boost_multiplier = max(boost_multiplier, 1.4)
+        from utils import calculate_streak
+
+        streak = calculate_streak(conn, user_id=user_id).get("streak_atual", 0) or 0
+        if streak > 0 and streak % 7 == 0:
+            landmarks.append(
+                {"tipo": "streak_milestone", "emoji": "🔥", "msg": f"Streak de {streak} dias! Você está imparável."}
+            )
+            boost_multiplier = max(boost_multiplier, 1.4)
     except Exception:
         pass
 
