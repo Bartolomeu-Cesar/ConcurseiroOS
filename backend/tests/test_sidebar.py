@@ -124,3 +124,52 @@ class TestSidebarData:
         r = client.get("/api/sidebar-data")
         data = r.json()
         assert data["badges"]["sumulas"] >= 1
+
+    def test_badge_caderno_respeita_ciclo_ativo(self, client):
+        """O badge do caderno de erros NÃO deve contar questões pendentes de
+        matérias FORA do ciclo ativo (regra nº 2). Antes, o sidebar contava
+        todas as linhas de erros_revisao e divergia do que a página mostra."""
+        from utils import today_str
+
+        # Cria questões via API (garante colunas obrigatórias/created_at)
+        def _cria(materia):
+            r = client.post("/api/questoes", json={
+                "materia": materia, "topico": "T", "enunciado": "E?",
+                "alternativa_a": "A", "alternativa_b": "B", "alternativa_c": "C",
+                "alternativa_d": "D", "alternativa_e": "", "resposta_correta": "A",
+                "explicacao": "x", "dificuldade": "Médio",
+            })
+            assert r.status_code == 200
+            return r.json()["id"]
+
+        conn = sqlite3.connect(_tmp_db.name, timeout=10)
+        conn.row_factory = sqlite3.Row
+        for t in ("erros_revisao", "ciclo_estudos"):
+            try:
+                conn.execute(f"DELETE FROM {t} WHERE 1=1")
+            except Exception:
+                pass
+        conn.execute("INSERT INTO ciclo_estudos (materia, ativo, user_id) VALUES ('Informática', 1, 1)")
+        conn.execute("INSERT INTO ciclo_estudos (materia, ativo, user_id) VALUES ('Direito Constitucional', 0, 1)")
+        conn.commit()
+        conn.close()
+
+        q_ativa = _cria("Informática")
+        q_inativa = _cria("Direito Constitucional")
+
+        conn = sqlite3.connect(_tmp_db.name, timeout=10)
+        conn.row_factory = sqlite3.Row
+        for qid in (q_ativa, q_inativa):
+            conn.execute(
+                "INSERT INTO erros_revisao (user_id, questao_id, resposta_id, intervalo_atual, "
+                "proxima_revisao, revisoes_count, created_at, fsrs_state, stability, difficulty, reps, last_review) "
+                "VALUES (1, ?, 0, 1, ?, 0, ?, 0, 0, 0, 0, NULL)",
+                (qid, today_str(), today_str()),
+            )
+        conn.commit()
+        conn.close()
+
+        data = client.get("/api/sidebar-data").json()
+        # Só a questão do ciclo ativo conta → badge = 1 (não 2)
+        assert data["badges"]["caderno"] == 1, \
+            "badge do caderno deve contar apenas matérias do ciclo ativo"

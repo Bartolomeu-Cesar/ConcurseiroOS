@@ -78,10 +78,31 @@ def get_sidebar_data(conn=Depends(get_db_session), user_id: int = Depends(get_us
         (hoje, user_id)
     ).fetchone()[0]
 
-    caderno_count = conn.execute(
-        "SELECT COUNT(*) FROM erros_revisao WHERE proxima_revisao <= ? AND user_id = ?",
-        (hoje, user_id)
-    ).fetchone()[0] if _table_exists(conn, "erros_revisao") else 0
+    # Caderno de erros: conta questões PENDENTES de revisão hoje, aplicando o
+    # MESMO filtro de ciclo ativo da página (regra nº 2) — senão o badge conta
+    # questões de matérias fora do ciclo e diverge do que o usuário vê na tela.
+    if _table_exists(conn, "erros_revisao"):
+        from utils import get_materias_ciclo_ativo
+
+        materias_ativas = get_materias_ciclo_ativo(conn, user_id)
+        if materias_ativas is None:
+            # Sem ciclo ativo → fallback: todas as matérias.
+            caderno_count = conn.execute(
+                "SELECT COUNT(*) FROM erros_revisao WHERE proxima_revisao <= ? AND user_id = ?",
+                (hoje, user_id)
+            ).fetchone()[0]
+        else:
+            placeholders = ",".join("?" for _ in materias_ativas)
+            caderno_count = conn.execute(
+                f"""SELECT COUNT(*)
+                    FROM erros_revisao er
+                    JOIN questoes q ON q.id = er.questao_id
+                    WHERE er.proxima_revisao <= ? AND er.user_id = ?
+                      AND q.materia IN ({placeholders})""",
+                (hoje, user_id, *materias_ativas)
+            ).fetchone()[0]
+    else:
+        caderno_count = 0
 
     # --- Sugestão rápida ---
     sugestao = _get_sugestao_rapida(conn, user_id)
