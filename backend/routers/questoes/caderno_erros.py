@@ -238,13 +238,19 @@ def revisar_erro(id: int, body: RevisarErroRequest, conn=Depends(get_db_session)
 
     output = review_card(card, rating, desired_retention=DESIRED_RETENTION, review_date=hoje)
 
-    # Successive Relearning: se acertou e a questão já acumulou revisões
-    # suficientes (reps >= GRADUACAO_REPS_MIN), o conteúdo é considerado DOMINADO
-    # e a entrada GRADUA — sai do caderno de erros (mesma regra de
-    # atualizar_fsrs_ao_responder, usada por desafio/simulado). Antes, revisar
-    # DENTRO do caderno nunca removia a questão, então ela ficava presa mesmo
-    # após vários acertos.
-    graduou = bool(acertou and reps >= GRADUACAO_REPS_MIN)
+    # Successive Relearning com exigência de ALTA FACILIDADE: a questão só é
+    # considerada DOMINADA (e graduada — sai do caderno) quando o acerto foi
+    # confortável, não sofrido. Critério:
+    #   (1) acertou; e
+    #   (2) já acumulou revisões suficientes (reps >= GRADUACAO_REPS_MIN); e
+    #   (3) o acerto teve ALTA FACILIDADE, ou seja:
+    #       - rating >= RATING_GOOD (não "Hard": um acerto difícil NÃO gradua); e
+    #       - a dificuldade FSRS resultante ficou baixa (<= GRADUACAO_DIFFICULTY_MAX),
+    #         confirmando domínio real do conteúdo (difficulty é 1-10, menor = mais fácil).
+    # Assim, acertar "raspando" (Hard) ou com card ainda difícil mantém a questão
+    # em revisão espaçada, em vez de removê-la cedo demais.
+    facil = rating >= RATING_GOOD and output.difficulty <= GRADUACAO_DIFFICULTY_MAX
+    graduou = bool(acertou and reps >= GRADUACAO_REPS_MIN and facil)
 
     if graduou:
         conn.execute(
@@ -317,6 +323,13 @@ def revisar_erro(id: int, body: RevisarErroRequest, conn=Depends(get_db_session)
 # _smart_select_questions (3+ acertos). Successive Relearning: a questão saiu do
 # relearning e atingiu retenção durável.
 GRADUACAO_REPS_MIN = 3
+
+# Teto de dificuldade FSRS (escala 1-10; menor = mais fácil) para considerar o
+# acerto como de ALTA FACILIDADE na graduação. Só grada quando, além de reps
+# suficientes e rating >= Good, a dificuldade resultante ficou <= este valor —
+# ou seja, o conteúdo está realmente confortável, não apenas "acertado". Valor
+# 5.0 = metade da escala: exige que o card esteja no lado "fácil".
+GRADUACAO_DIFFICULTY_MAX = 5.0
 
 
 def atualizar_fsrs_ao_responder(conn, questao_id: int, acertou: bool, user_id: int = 1) -> dict | None:

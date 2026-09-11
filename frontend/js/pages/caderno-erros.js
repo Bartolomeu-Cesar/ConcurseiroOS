@@ -231,7 +231,11 @@ window.selecionarAlternativa = function(questaoId, letraSelecionada, correta, er
     feedback.innerHTML = `
       <div class="revisao-feedback revisao-feedback--ok">
         <span class="revisao-feedback__msg">✅ Correto! Você corrigiu o erro anterior.</span>
-        <button class="revisao-btn revisao-btn--ok" onclick="revisar(${questaoId}, true)">Próxima revisão →</button>
+        <span class="revisao-feedback__detalhe">Como foi lembrar a resposta?</span>
+        <div class="revisao-facilidade">
+          <button class="revisao-btn revisao-btn--dificil" onclick="revisar(${questaoId}, true, 3)" title="Acertei, mas com esforço — continuar revisando">😅 Acertei, mas foi difícil</button>
+          <button class="revisao-btn revisao-btn--ok" onclick="revisar(${questaoId}, true, 4)" title="Lembrei com facilidade — pode dominar e sair do caderno">😎 Fácil, dominei →</button>
+        </div>
       </div>`;
   } else {
     const isCE = container.querySelectorAll('.revisao-alt-btn').length === 2;
@@ -286,16 +290,22 @@ function renderPadroes(padroes) {
   container.innerHTML = html;
 }
 
-window.revisar = async function(questaoId, acertou) {
+window.revisar = async function(questaoId, acertou, facilidade) {
   try {
     // Calcular tempo real gasto nesta questão
     const startTime = _cardTimers[questaoId];
     const tempoSegundos = startTime ? Math.round((Date.now() - startTime) / 1000) : 0;
 
+    // Corpo: envia a facilidade (rating FSRS 3=Good "difícil", 4=Easy "fácil")
+    // quando o usuário acerta e escolhe o nível. Só o acerto FÁCIL (com reps e
+    // dificuldade adequadas) gradua a questão (sai do caderno).
+    const payload = { acertou, tempo_segundos: tempoSegundos };
+    if (acertou && facilidade) payload.facilidade = facilidade;
+
     const res = await fetch(`${API_BASE}/api/questoes/erros/revisar/${questaoId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ acertou, tempo_segundos: tempoSegundos })
+      body: JSON.stringify(payload)
     });
     if (!res.ok) throw new Error('Erro ao registrar revisão');
     const data = await res.json();

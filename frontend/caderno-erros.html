@@ -521,6 +521,25 @@
       transform: translateY(-1px);
     }
 
+    /* Container dos botões de facilidade (acerto difícil vs fácil). */
+    .revisao-facilidade {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+
+    /* "Acertei, mas foi difícil": mantém a questão em revisão (não gradua). */
+    .revisao-btn--dificil {
+      background: var(--ce-border);
+      color: var(--ce-text);
+    }
+
+    .revisao-btn--dificil:hover {
+      opacity: 0.85;
+      transform: translateY(-1px);
+    }
+
     .revisao-btn--errei {
       background: var(--ce-border);
       color: var(--ce-subtext);
