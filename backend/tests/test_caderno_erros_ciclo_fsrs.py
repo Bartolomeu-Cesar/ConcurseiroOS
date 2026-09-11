@@ -261,6 +261,90 @@ class TestDesafioDiarioAtualizaFSRS:
             assert row["reps"] >= 1
 
 
+# ============================================================
+# 4. Graduação via endpoint de revisão dedicada (revisar_erro)
+# ============================================================
+
+class TestGraduacaoViaRevisarEndpoint:
+    def test_revisar_acerto_com_dominio_gradua_e_remove(self, client):
+        """Revisar (acertando) DENTRO do caderno com reps >= limiar deve graduar:
+        a questão sai do caderno e o retorno traz graduou=True."""
+        _reset()
+        from routers.questoes.caderno_erros import GRADUACAO_REPS_MIN
+
+        qid = _criar_questao(client, "Informática")
+        _registrar_erro(qid)
+
+        # Coloca a entrada no limiar de graduação (reps == mínimo) e em estado revisado.
+        conn = _conn()
+        conn.execute(
+            "UPDATE erros_revisao SET reps=?, fsrs_state=2, stability=10, difficulty=5 "
+            "WHERE questao_id=? AND user_id=1",
+            (GRADUACAO_REPS_MIN, qid),
+        )
+        conn.commit()
+        conn.close()
+
+        r = client.post(f"/api/questoes/erros/revisar/{qid}", json={"acertou": True})
+        assert r.status_code == 200
+        assert r.json().get("graduou") is True, "acerto com domínio deve graduar"
+
+        conn = _conn()
+        restante = conn.execute(
+            "SELECT COUNT(*) FROM erros_revisao WHERE questao_id=? AND user_id=1", (qid,)
+        ).fetchone()[0]
+        conn.close()
+        assert restante == 0, "questão dominada deve sair do caderno via endpoint de revisão"
+
+    def test_revisar_acerto_sem_dominio_mantem(self, client):
+        """Revisar acertando com poucas reps NÃO gradua: continua no caderno com
+        proxima_revisao no futuro."""
+        _reset()
+        from utils import today_str
+
+        qid = _criar_questao(client, "Informática")
+        _registrar_erro(qid)  # reps = 0
+
+        r = client.post(f"/api/questoes/erros/revisar/{qid}", json={"acertou": True})
+        assert r.status_code == 200
+        assert r.json().get("graduou") is False
+
+        conn = _conn()
+        row = conn.execute(
+            "SELECT proxima_revisao, reps FROM erros_revisao WHERE questao_id=? AND user_id=1", (qid,)
+        ).fetchone()
+        conn.close()
+        assert row is not None, "questão sem domínio deve permanecer no caderno"
+        assert row["reps"] == 1
+        assert row["proxima_revisao"] > today_str(), "próxima revisão deve ir para o futuro"
+
+    def test_revisar_erro_nao_gradua(self, client):
+        """Errar na revisão nunca gradua, mesmo com reps altas."""
+        _reset()
+        from routers.questoes.caderno_erros import GRADUACAO_REPS_MIN
+
+        qid = _criar_questao(client, "Informática")
+        _registrar_erro(qid)
+        conn = _conn()
+        conn.execute(
+            "UPDATE erros_revisao SET reps=? WHERE questao_id=? AND user_id=1",
+            (GRADUACAO_REPS_MIN + 2, qid),
+        )
+        conn.commit()
+        conn.close()
+
+        r = client.post(f"/api/questoes/erros/revisar/{qid}", json={"acertou": False})
+        assert r.status_code == 200
+        assert r.json().get("graduou") is False
+
+        conn = _conn()
+        restante = conn.execute(
+            "SELECT COUNT(*) FROM erros_revisao WHERE questao_id=? AND user_id=1", (qid,)
+        ).fetchone()[0]
+        conn.close()
+        assert restante == 1, "errar não pode remover a questão do caderno"
+
+
 def teardown_module():
     try:
         os.unlink(_tmp_db.name)

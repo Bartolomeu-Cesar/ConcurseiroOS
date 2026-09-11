@@ -238,24 +238,38 @@ def revisar_erro(id: int, body: RevisarErroRequest, conn=Depends(get_db_session)
 
     output = review_card(card, rating, desired_retention=DESIRED_RETENTION, review_date=hoje)
 
-    conn.execute("""
-        UPDATE erros_revisao
-        SET intervalo_atual = ?, proxima_revisao = ?, revisoes_count = ?, updated_at = ?,
-            stability = ?, difficulty = ?, fsrs_state = ?, reps = ?, last_review = ?
-        WHERE id = ? AND user_id = ?
-    """, (
-        output.interval,
-        output.next_review,
-        revisao["revisoes_count"] + 1,
-        hoje,
-        output.stability,
-        output.difficulty,
-        output.state,
-        reps + 1,
-        hoje,
-        revisao["id"],
-        user_id,
-    ))
+    # Successive Relearning: se acertou e a questão já acumulou revisões
+    # suficientes (reps >= GRADUACAO_REPS_MIN), o conteúdo é considerado DOMINADO
+    # e a entrada GRADUA — sai do caderno de erros (mesma regra de
+    # atualizar_fsrs_ao_responder, usada por desafio/simulado). Antes, revisar
+    # DENTRO do caderno nunca removia a questão, então ela ficava presa mesmo
+    # após vários acertos.
+    graduou = bool(acertou and reps >= GRADUACAO_REPS_MIN)
+
+    if graduou:
+        conn.execute(
+            "DELETE FROM erros_revisao WHERE id = ? AND user_id = ?",
+            (revisao["id"], user_id),
+        )
+    else:
+        conn.execute("""
+            UPDATE erros_revisao
+            SET intervalo_atual = ?, proxima_revisao = ?, revisoes_count = ?, updated_at = ?,
+                stability = ?, difficulty = ?, fsrs_state = ?, reps = ?, last_review = ?
+            WHERE id = ? AND user_id = ?
+        """, (
+            output.interval,
+            output.next_review,
+            revisao["revisoes_count"] + 1,
+            hoje,
+            output.stability,
+            output.difficulty,
+            output.state,
+            reps + 1,
+            hoje,
+            revisao["id"],
+            user_id,
+        ))
 
     # Registrar tempo de revisão (tempo real se enviado, senão ~2min por questão) + atualizar streak
     from utils import update_streak
@@ -287,6 +301,7 @@ def revisar_erro(id: int, body: RevisarErroRequest, conn=Depends(get_db_session)
     return {
         "ok": True,
         "acertou": acertou,
+        "graduou": graduou,
         "novo_intervalo": output.interval,
         "proxima_revisao": output.next_review,
         "revisoes_count": revisao["revisoes_count"] + 1,

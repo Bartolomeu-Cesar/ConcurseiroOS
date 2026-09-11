@@ -308,9 +308,20 @@ window.revisar = async function(questaoId, acertou) {
       card.classList.add('revisao-card--done');
       card.querySelectorAll('button').forEach(b => b.disabled = true);
       // Show result toast
-      const msg = acertou
-        ? `✅ Próxima revisão em ${data.novo_intervalo} dia${data.novo_intervalo > 1 ? 's' : ''}`
-        : `🔄 Voltará amanhã para revisão`;
+      let msg;
+      if (data.graduou) {
+        // Conteúdo dominado (Successive Relearning): a questão saiu do caderno.
+        msg = '🎓 Dominado! Esta questão saiu do caderno de erros.';
+        // Remove o card com uma pequena animação de saída.
+        card.style.transition = 'opacity 0.4s, transform 0.4s';
+        card.style.opacity = '0';
+        card.style.transform = 'scale(0.96)';
+        setTimeout(() => card.remove(), 400);
+      } else {
+        msg = acertou
+          ? `✅ Próxima revisão em ${data.novo_intervalo} dia${data.novo_intervalo > 1 ? 's' : ''}`
+          : `🔄 Voltará amanhã para revisão`;
+      }
       showToast(msg);
     }
 
