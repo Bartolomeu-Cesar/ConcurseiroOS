@@ -2498,6 +2498,58 @@ function _pageDivDoRect(doc, cx, cy) {
   return null;
 }
 
+// Retorna o retângulo de referência de uma página do PDF.js para normalizar
+// coordenadas. Preferimos a .textLayer (onde o texto é realmente posicionado);
+// se ela ainda não existir/tiver tamanho zero, caímos no .canvas e, por fim, na
+// própria .page. Medir contra a .page inteira introduzia offset (borda/margem)
+// que desalinhava os destaques — daí a imprecisão relatada.
+function _refRectDaPagina(pageDiv) {
+  const tl = pageDiv.querySelector('.textLayer');
+  if (tl) {
+    const r = tl.getBoundingClientRect();
+    if (r.width > 0 && r.height > 0) return r;
+  }
+  const cv = pageDiv.querySelector('canvas');
+  if (cv) {
+    const r = cv.getBoundingClientRect();
+    if (r.width > 0 && r.height > 0) return r;
+  }
+  return pageDiv.getBoundingClientRect();
+}
+
+// Coalesce os ClientRects do range em UMA barra por linha. getClientRects()
+// devolve um retângulo por span de texto, o que fragmenta a marcação e gera
+// alturas irregulares (o "fica fino"). Agrupamos por linha (centros verticais
+// próximos), unindo a extensão horizontal e uniformizando topo/altura por
+// linha — resultado visual de um marca-texto contínuo.
+function _coalescerRectsPorLinha(rects) {
+  const arr = Array.from(rects)
+    .filter(r => r.width > 0.5 && r.height > 0.5)
+    .sort((a, b) => a.top - b.top || a.left - b.left);
+  if (arr.length === 0) return [];
+
+  const linhas = [];
+  for (const r of arr) {
+    const cy = r.top + r.height / 2;
+    // Mesma linha se o centro vertical cai dentro da faixa da linha corrente
+    // (tolerância = 60% da altura do rect, cobre pequenas variações de baseline).
+    const linha = linhas.find(l => Math.abs(cy - l.cy) <= Math.max(l.h, r.height) * 0.6);
+    if (linha) {
+      linha.left = Math.min(linha.left, r.left);
+      linha.right = Math.max(linha.right, r.right);
+      linha.top = Math.min(linha.top, r.top);
+      linha.bottom = Math.max(linha.bottom, r.bottom);
+      linha.h = linha.bottom - linha.top;
+      linha.cy = linha.top + linha.h / 2;
+    } else {
+      linhas.push({ left: r.left, right: r.right, top: r.top, bottom: r.bottom, h: r.height, cy });
+    }
+  }
+  return linhas.map(l => ({
+    left: l.left, top: l.top, width: l.right - l.left, height: l.bottom - l.top,
+  }));
+}
+
 // Captura a seleção atual dentro do iframe e monta _selPendente (rects 0-1 por página).
 function _capturarSelecaoDestaque() {
   const doc = _pdfDoc();
@@ -2508,27 +2560,41 @@ function _capturarSelecaoDestaque() {
   if (!texto) return null;
 
   const range = sel.getRangeAt(0);
-  const clientRects = Array.from(range.getClientRects()).filter(r => r.width > 1 && r.height > 1);
-  if (clientRects.length === 0) return null;
+  const brutos = Array.from(range.getClientRects()).filter(r => r.width > 1 && r.height > 1);
+  if (brutos.length === 0) return null;
 
-  let pagina = null, pageDiv = null;
-  const rectsRel = [];
-  for (const cr of clientRects) {
+  // Identifica a página pela posição do PRIMEIRO retângulo (início da seleção).
+  const primeiro = brutos[0];
+  const hit = _pageDivDoRect(doc, primeiro.left + primeiro.width / 2, primeiro.top + primeiro.height / 2);
+  if (!hit) return null;
+  const { pagina, pageDiv } = hit;
+
+  const pr = _refRectDaPagina(pageDiv);
+  if (pr.width <= 0 || pr.height <= 0) return null;
+
+  // Mantém só os retângulos que caem NESTA página (destaque não cruza páginas)
+  // e coalesce por linha antes de normalizar.
+  const daPagina = brutos.filter(cr => {
     const cx = cr.left + cr.width / 2, cy = cr.top + cr.height / 2;
-    const hit = _pageDivDoRect(doc, cx, cy);
-    if (!hit) continue;
-    if (pagina === null) { pagina = hit.pagina; pageDiv = hit.pageDiv; }
-    if (hit.pagina !== pagina) continue; // mantém simples: 1 página por destaque
-    const pr = pageDiv.getBoundingClientRect();
-    if (pr.width <= 0 || pr.height <= 0) continue;
-    rectsRel.push({
-      x: +((cr.left - pr.left) / pr.width).toFixed(4),
-      y: +((cr.top - pr.top) / pr.height).toFixed(4),
-      w: +(cr.width / pr.width).toFixed(4),
-      h: +(cr.height / pr.height).toFixed(4),
-    });
-  }
-  if (pagina === null || rectsRel.length === 0) return null;
+    return cx >= pr.left && cx <= pr.right && cy >= pr.top && cy <= pr.bottom;
+  });
+  const linhas = _coalescerRectsPorLinha(daPagina);
+  if (linhas.length === 0) return null;
+
+  // Padding vertical para cobrir o glifo inteiro (o rect de seleção do PDF.js
+  // costuma ser ~1-2px mais curto que a letra visível). ~12% da altura da linha.
+  const rectsRel = linhas.map(l => {
+    const padY = l.height * 0.12;
+    const top = Math.max(pr.top, l.top - padY);
+    const bottom = Math.min(pr.bottom, l.top + l.height + padY);
+    return {
+      x: +((l.left - pr.left) / pr.width).toFixed(4),
+      y: +((top - pr.top) / pr.height).toFixed(4),
+      w: +(l.width / pr.width).toFixed(4),
+      h: +((bottom - top) / pr.height).toFixed(4),
+    };
+  });
+  if (rectsRel.length === 0) return null;
   return { pagina, rects: rectsRel, texto: texto.slice(0, 5000) };
 }
 
@@ -2609,7 +2675,20 @@ function _renderDestaquesPagina(pagina) {
   if (doList.length === 0) return;
   layer = doc.createElement('div');
   layer.className = 'concurseiro-hl-layer';
-  layer.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:5;';
+  // O layer deve cobrir EXATAMENTE a mesma referência usada na captura
+  // (_refRectDaPagina → textLayer), senão os percentuais desalinham. Calculamos
+  // o offset/tamanho da referência relativo à .page e posicionamos o layer ali.
+  // Fallback (inset:0) se a referência for a própria page.
+  const pageRect = pageDiv.getBoundingClientRect();
+  const refRect = _refRectDaPagina(pageDiv);
+  if (refRect && pageRect.width > 0 && refRect !== pageRect &&
+      (refRect.width !== pageRect.width || refRect.left !== pageRect.left || refRect.top !== pageRect.top)) {
+    const offL = refRect.left - pageRect.left;
+    const offT = refRect.top - pageRect.top;
+    layer.style.cssText = `position:absolute;left:${offL}px;top:${offT}px;width:${refRect.width}px;height:${refRect.height}px;pointer-events:none;z-index:5;`;
+  } else {
+    layer.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:5;';
+  }
   for (const d of doList) {
     let rects = [];
     try { rects = JSON.parse(d.rects || '[]'); } catch (e) { rects = []; }
