@@ -377,6 +377,7 @@ function showQuestao(q) {
       <div class="explicacao-box" id="explicacao-box">
         <strong>Explicação:</strong> ${q.explicacao || 'Sem explicação cadastrada.'}
       </div>
+      <div id="comentarios-box" style="display:none;margin-top:14px;"></div>
     </div>
   `;
 }
@@ -713,6 +714,9 @@ async function confirmarResposta() {
   document.getElementById('explicacao-box').classList.add('show');
   document.getElementById('btn-confirmar').style.display = 'none';
   document.getElementById('btn-proxima').style.display = 'inline-block';
+
+  // Comentários da questão (comunidade + IA) — só após responder.
+  if (currentQuestao && currentQuestao.id) carregarComentarios(currentQuestao.id);
 
   loadStats();
 
@@ -2758,3 +2762,136 @@ function _handleQuestaoKey(e) {
 }
 
 document.addEventListener('keydown', _handleQuestaoKey);
+
+// ============================================================
+// COMENTÁRIOS EM QUESTÕES (comunidade + IA)
+// Elaborative Interrogation: explicar "por quê" consolida o aprendizado.
+// ============================================================
+let _comentariosQid = null;
+
+async function carregarComentarios(qid) {
+  _comentariosQid = qid;
+  const box = document.getElementById('comentarios-box');
+  if (!box) return;
+  box.style.display = 'block';
+  box.innerHTML = '<div style="color:#9399b2;font-size:0.8rem;">Carregando comentários…</div>';
+  try {
+    const lista = await fetch(`/api/questoes/${qid}/comentarios`).then(r => r.ok ? r.json() : []);
+    _renderComentarios(qid, lista);
+  } catch (e) {
+    box.innerHTML = '<div style="color:#f38ba8;font-size:0.8rem;">Erro ao carregar comentários.</div>';
+  }
+}
+window.carregarComentarios = carregarComentarios;
+
+function _comentarioItemHtml(qid, c) {
+  const isIA = c.tipo === 'ia';
+  const autor = isIA
+    ? '<span style="background:#89b4fa;color:#1e1e2e;padding:1px 8px;border-radius:10px;font-size:0.68rem;font-weight:700;">🤖 IA</span>'
+    : '<span style="background:#45475a;color:#cdd6f4;padding:1px 8px;border-radius:10px;font-size:0.68rem;font-weight:600;">👤 Você</span>';
+  const conteudo = escapeHtml(c.conteudo || '').replace(/\n/g, '<br>');
+  const votadoCor = c.voted ? '#a6e3a1' : '#9399b2';
+  const delBtn = c.is_owner
+    ? `<button onclick="deletarComentario(${qid},${c.id})" title="Remover" style="background:none;border:none;color:#f38ba8;cursor:pointer;font-size:0.72rem;margin-left:8px;">🗑 Remover</button>`
+    : '';
+  return `
+    <div style="background:#313244;border-radius:8px;padding:10px 12px;margin-top:8px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+        ${autor}
+        <button onclick="votarComentario(${qid},${c.id})" title="Marcar como útil"
+          style="background:none;border:1px solid ${votadoCor};color:${votadoCor};border-radius:14px;padding:2px 10px;font-size:0.72rem;cursor:pointer;margin-left:auto;">
+          👍 <span id="votos-${c.id}">${c.votos || 0}</span>
+        </button>
+        ${delBtn}
+      </div>
+      <div style="color:#cdd6f4;font-size:0.82rem;line-height:1.5;">${conteudo}</div>
+    </div>`;
+}
+
+function _renderComentarios(qid, lista) {
+  const box = document.getElementById('comentarios-box');
+  if (!box) return;
+  const itens = (lista || []).map(c => _comentarioItemHtml(qid, c)).join('');
+  const temIA = (lista || []).some(c => c.tipo === 'ia');
+  box.innerHTML = `
+    <div style="border-top:1px solid #45475a;padding-top:12px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <strong style="color:#cdd6f4;font-size:0.9rem;">💬 Comentários</strong>
+        <button onclick="gerarComentarioIA(${qid})" ${temIA ? 'disabled' : ''} id="btn-ia-${qid}"
+          style="margin-left:auto;background:${temIA ? '#45475a' : '#89b4fa'};color:${temIA ? '#9399b2' : '#1e1e2e'};border:none;border-radius:6px;padding:4px 12px;font-size:0.75rem;font-weight:600;cursor:${temIA ? 'default' : 'pointer'};">
+          🤖 ${temIA ? 'Explicação da IA gerada' : 'Explicar com IA'}
+        </button>
+      </div>
+      <div id="comentarios-lista">${itens || '<div style="color:#9399b2;font-size:0.8rem;">Seja o primeiro a comentar esta questão.</div>'}</div>
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <input id="novo-comentario" type="text" maxlength="3000" placeholder="Escreva uma explicação ou dica…"
+          style="flex:1;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;padding:8px 10px;color:#cdd6f4;font-size:0.82rem;"
+          onkeydown="if(event.key==='Enter')enviarComentario(${qid})">
+        <button onclick="enviarComentario(${qid})" style="background:#a6e3a1;color:#1e1e2e;border:none;border-radius:8px;padding:8px 14px;font-weight:600;cursor:pointer;font-size:0.82rem;">Enviar</button>
+      </div>
+    </div>`;
+}
+
+async function enviarComentario(qid) {
+  const input = document.getElementById('novo-comentario');
+  const conteudo = (input?.value || '').trim();
+  if (!conteudo) { toast('Escreva algo antes de enviar.', 'warning'); return; }
+  try {
+    const r = await fetch(`/api/questoes/${qid}/comentarios`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ conteudo }),
+    });
+    if (!r.ok) throw new Error('falha');
+    input.value = '';
+    toast('💬 Comentário adicionado!', 'success');
+    carregarComentarios(qid);
+  } catch (e) {
+    toast('Erro ao enviar comentário.', 'error');
+  }
+}
+window.enviarComentario = enviarComentario;
+
+async function votarComentario(qid, cid) {
+  try {
+    const r = await fetch(`/api/questoes/${qid}/comentarios/${cid}/votar`, { method: 'POST' });
+    if (!r.ok) throw new Error('falha');
+    const data = await r.json();
+    const el = document.getElementById(`votos-${cid}`);
+    if (el) el.textContent = data.votos;
+    // Recarrega para refletir a cor do estado votado e reordenar por votos.
+    carregarComentarios(qid);
+  } catch (e) {
+    toast('Erro ao votar.', 'error');
+  }
+}
+window.votarComentario = votarComentario;
+
+async function gerarComentarioIA(qid) {
+  const btn = document.getElementById(`btn-ia-${qid}`);
+  if (btn) { btn.disabled = true; btn.textContent = '🤖 Gerando…'; }
+  try {
+    const r = await fetch(`/api/questoes/${qid}/comentarios/ia`, { method: 'POST' });
+    if (!r.ok) throw new Error('falha');
+    toast('🤖 Explicação da IA gerada!', 'success');
+    carregarComentarios(qid);
+  } catch (e) {
+    toast('Não foi possível gerar a explicação por IA.', 'error');
+    if (btn) { btn.disabled = false; btn.textContent = '🤖 Explicar com IA'; }
+  }
+}
+window.gerarComentarioIA = gerarComentarioIA;
+
+async function deletarComentario(qid, cid) {
+  const ok = await confirmModal('Remover comentário', 'Deseja remover este comentário?', { type: 'danger', confirmText: 'Remover' });
+  if (!ok) return;
+  try {
+    const r = await fetch(`/api/questoes/${qid}/comentarios/${cid}`, { method: 'DELETE' });
+    if (!r.ok) throw new Error('falha');
+    toast('Comentário removido.', 'success');
+    carregarComentarios(qid);
+  } catch (e) {
+    toast('Erro ao remover comentário.', 'error');
+  }
+}
+window.deletarComentario = deletarComentario;

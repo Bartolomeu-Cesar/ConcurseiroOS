@@ -896,9 +896,12 @@ def delete_questao(id: int, conn=Depends(get_db_session), user_id: int = Depends
 # ============================================================
 
 
-@router.get("/api/questoes/{id}/comentarios", summary="Listar comentários de uma questão")
-def listar_comentarios(id: int, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
-    """Retorna comentários/explicações de uma questão."""
+def _ensure_comentarios_tables(conn):
+    """Garante as tabelas de comentários (idempotente).
+
+    O schema canônico vem da migration 97; este helper cobre bancos que ainda
+    não migraram (ex.: testes com DB fresco) sem duplicar lógica.
+    """
     conn.execute("""
         CREATE TABLE IF NOT EXISTS comentarios_questoes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -912,17 +915,48 @@ def listar_comentarios(id: int, conn=Depends(get_db_session), user_id: int = Dep
         )
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_comentarios_questao ON comentarios_questoes(questao_id)")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS comentario_votos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            comentario_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (comentario_id) REFERENCES comentarios_questoes(id)
+        )
+    """)
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_comentario_votos_uniq "
+        "ON comentario_votos(comentario_id, user_id)"
+    )
+
+
+@router.get("/api/questoes/{id}/comentarios", summary="Listar comentários de uma questão")
+def listar_comentarios(id: int, conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    """Retorna comentários/explicações de uma questão.
+
+    Inclui: comentários do próprio usuário e comentários de IA. Cada item traz
+    `voted` (se o usuário atual já votou) e `is_owner` (se pode deletar).
+    """
+    _ensure_comentarios_tables(conn)
 
     rows = conn.execute(
         """
-        SELECT id, conteudo, tipo, votos, created_at
-        FROM comentarios_questoes
-        WHERE questao_id = ? AND (user_id = ? OR tipo = 'ia')
-        ORDER BY votos DESC, created_at DESC
+        SELECT c.id, c.conteudo, c.tipo, c.votos, c.created_at, c.user_id,
+               EXISTS(SELECT 1 FROM comentario_votos v
+                      WHERE v.comentario_id = c.id AND v.user_id = ?) AS voted
+        FROM comentarios_questoes c
+        WHERE c.questao_id = ? AND (c.user_id = ? OR c.tipo = 'ia')
+        ORDER BY c.votos DESC, c.created_at DESC
     """,
-        (id, user_id),
+        (user_id, id, user_id),
     ).fetchall()
-    return [dict(r) for r in rows]
+    result = []
+    for r in rows:
+        d = dict(r)
+        d["voted"] = bool(d.pop("voted"))
+        d["is_owner"] = (d["user_id"] == user_id)
+        result.append(d)
+    return result
 
 
 @router.post("/api/questoes/{id}/comentarios", summary="Adicionar comentário a uma questão")
@@ -935,19 +969,10 @@ def adicionar_comentario(
     """Adiciona comentário/explicação a uma questão."""
     from datetime import datetime
 
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS comentarios_questoes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            questao_id INTEGER NOT NULL,
-            user_id INTEGER NOT NULL,
-            conteudo TEXT NOT NULL,
-            tipo TEXT DEFAULT 'user',
-            votos INTEGER DEFAULT 0,
-            created_at TEXT NOT NULL,
-            FOREIGN KEY (questao_id) REFERENCES questoes(id)
-        )
-    """)
+    _ensure_comentarios_tables(conn)
     conteudo_limpo = sanitize_input(conteudo, max_length=3000)
+    if not conteudo_limpo or not conteudo_limpo.strip():
+        raise HTTPException(status_code=422, detail="Comentário vazio.")
     cur = conn.execute(
         """
         INSERT INTO comentarios_questoes (questao_id, user_id, conteudo, tipo, created_at)
@@ -965,30 +990,25 @@ def gerar_comentario_ia(
     conn=Depends(get_db_session),
     user_id: int = Depends(get_user_id),
 ):
-    """Gera explicação automática da questão via AI Tutor."""
+    """Gera explicação automática da questão via AI Tutor (call_llm_sync).
+
+    Ordem de resolução do conteúdo:
+    1. Se já existe comentário IA para a questão → retorna do cache.
+    2. Tenta o LLM real (AI Tutor). Se indisponível/erro → fallback:
+       2a. usa a `explicacao` cadastrada na questão (se houver); senão
+       2b. um resumo estruturado (template) — nunca falha para o usuário.
+    """
     from datetime import datetime
 
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS comentarios_questoes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            questao_id INTEGER NOT NULL,
-            user_id INTEGER NOT NULL,
-            conteudo TEXT NOT NULL,
-            tipo TEXT DEFAULT 'user',
-            votos INTEGER DEFAULT 0,
-            created_at TEXT NOT NULL,
-            FOREIGN KEY (questao_id) REFERENCES questoes(id)
-        )
-    """)
+    _ensure_comentarios_tables(conn)
 
-    # Verificar se já existe comentário IA para esta questão
+    # 1. Cache: um comentário IA por questão
     existing = conn.execute(
         "SELECT id, conteudo FROM comentarios_questoes WHERE questao_id = ? AND tipo = 'ia' LIMIT 1", (id,)
     ).fetchone()
     if existing:
         return {"id": existing["id"], "conteudo": existing["conteudo"], "cached": True}
 
-    # Buscar dados da questão
     questao = conn.execute(
         """
         SELECT enunciado, alternativa_a, alternativa_b, alternativa_c, alternativa_d,
@@ -1000,27 +1020,60 @@ def gerar_comentario_ia(
     if not questao:
         raise HTTPException(status_code=404, detail="Questão não encontrada")
 
-    # Se já tem explicação cadastrada, usar como comentário IA
-    if questao["explicacao"] and len(questao["explicacao"]) > 20:
-        conteudo = questao["explicacao"]
-    else:
-        # Gerar via prompt (será processado pelo ai_tutor se configurado)
-        alternativas = f"A) {questao['alternativa_a']}\nB) {questao['alternativa_b']}"
-        if questao["alternativa_c"]:
-            alternativas += f"\nC) {questao['alternativa_c']}\nD) {questao['alternativa_d']}"
-            if questao["alternativa_e"]:
-                alternativas += f"\nE) {questao['alternativa_e']}"
+    # Monta o texto das alternativas (2 ou 5).
+    alternativas = f"A) {questao['alternativa_a']}\nB) {questao['alternativa_b']}"
+    if questao["alternativa_c"]:
+        alternativas += f"\nC) {questao['alternativa_c']}\nD) {questao['alternativa_d']}"
+        if questao["alternativa_e"]:
+            alternativas += f"\nE) {questao['alternativa_e']}"
 
-        conteudo = (
-            f"📝 **Resposta correta: {questao['resposta_correta']}**\n\n"
-            f"**Matéria:** {questao['materia']}\n\n"
-            f"**Análise:** Esta questão cobra conhecimento sobre {questao['materia']}. "
-            f"A alternativa {questao['resposta_correta']} está correta porque atende ao que o enunciado pede. "
-            f"As demais alternativas contêm distratores comuns nesse tema.\n\n"
-            f"💡 **Dica:** Revise este tópico no edital e faça mais questões semelhantes."
+    conteudo = None
+    fonte = "template"
+
+    # 2. Tenta o LLM real (AI Tutor). Falha graciosa se não configurado.
+    try:
+        from routers.ai_tutor import call_llm_sync
+
+        prompt = (
+            "Você é um professor de concursos. Explique de forma didática e concisa "
+            "(máx. ~180 palavras) por que a alternativa correta está certa e por que as "
+            "demais são distratores. Use markdown leve.\n\n"
+            f"Matéria: {questao['materia']}\n"
+            f"Enunciado: {questao['enunciado']}\n"
+            f"Alternativas:\n{alternativas}\n"
+            f"Resposta correta: {questao['resposta_correta']}\n"
         )
+        messages = [
+            {"role": "system", "content": "Você explica questões de concurso com precisão e clareza."},
+            {"role": "user", "content": prompt},
+        ]
+        texto, _tokens = call_llm_sync(messages, max_tokens=400)
+        if texto and texto.strip():
+            conteudo = texto.strip()
+            fonte = "llm"
+    except HTTPException:
+        # IA não configurada (503) ou erro do provedor → cai no fallback.
+        conteudo = None
+    except Exception as e:  # noqa: BLE001 — nunca deixar a geração derrubar o endpoint
+        log.warning(f"gerar_comentario_ia: LLM indisponível ({e}); usando fallback")
+        conteudo = None
 
-    # Salvar comentário IA
+    # 2a/2b. Fallback gracioso.
+    if not conteudo:
+        if questao["explicacao"] and len(questao["explicacao"]) > 20:
+            conteudo = questao["explicacao"]
+            fonte = "explicacao"
+        else:
+            conteudo = (
+                f"📝 **Resposta correta: {questao['resposta_correta']}**\n\n"
+                f"**Matéria:** {questao['materia']}\n\n"
+                f"**Análise:** Esta questão cobra conhecimento sobre {questao['materia']}. "
+                f"A alternativa {questao['resposta_correta']} está correta porque atende ao que o enunciado pede. "
+                f"As demais alternativas contêm distratores comuns nesse tema.\n\n"
+                f"💡 **Dica:** Configure uma chave de IA nas configurações para explicações detalhadas por IA. "
+                f"Revise este tópico no edital e faça mais questões semelhantes."
+            )
+
     cur = conn.execute(
         """
         INSERT INTO comentarios_questoes (questao_id, user_id, conteudo, tipo, created_at)
@@ -1030,19 +1083,80 @@ def gerar_comentario_ia(
     )
     conn.commit()
 
-    return {"id": cur.lastrowid, "conteudo": conteudo, "cached": False}
+    return {"id": cur.lastrowid, "conteudo": conteudo, "cached": False, "fonte": fonte}
 
 
-@router.post("/api/questoes/{id}/comentarios/{comentario_id}/votar", summary="Votar em comentário")
+@router.post("/api/questoes/{id}/comentarios/{comentario_id}/votar", summary="Votar em comentário (toggle)")
 def votar_comentario(
     id: int,
     comentario_id: int,
     conn=Depends(get_db_session),
     user_id: int = Depends(get_user_id),
 ):
-    """Incrementa voto num comentário útil."""
-    conn.execute(
-        "UPDATE comentarios_questoes SET votos = votos + 1 WHERE id = ? AND questao_id = ?", (comentario_id, id)
-    )
+    """Voto ÚNICO por usuário (toggle). Registrar/remover em comentario_votos e
+    recalcular o total de votos a partir da contagem real — idempotente e sem
+    inflar (o antigo `votos = votos + 1` permitia voto infinito)."""
+    _ensure_comentarios_tables(conn)
+
+    coment = conn.execute(
+        "SELECT id FROM comentarios_questoes WHERE id = ? AND questao_id = ?", (comentario_id, id)
+    ).fetchone()
+    if not coment:
+        raise HTTPException(status_code=404, detail="Comentário não encontrado")
+
+    ja_votou = conn.execute(
+        "SELECT 1 FROM comentario_votos WHERE comentario_id = ? AND user_id = ?", (comentario_id, user_id)
+    ).fetchone()
+
+    if ja_votou:
+        conn.execute(
+            "DELETE FROM comentario_votos WHERE comentario_id = ? AND user_id = ?", (comentario_id, user_id)
+        )
+        voted = False
+    else:
+        from datetime import datetime
+
+        conn.execute(
+            "INSERT OR IGNORE INTO comentario_votos (comentario_id, user_id, created_at) VALUES (?, ?, ?)",
+            (comentario_id, user_id, datetime.now().isoformat()),
+        )
+        voted = True
+
+    # Recalcula o total real de votos (fonte da verdade = comentario_votos).
+    total = conn.execute(
+        "SELECT COUNT(*) FROM comentario_votos WHERE comentario_id = ?", (comentario_id,)
+    ).fetchone()[0]
+    conn.execute("UPDATE comentarios_questoes SET votos = ? WHERE id = ?", (total, comentario_id))
+    conn.commit()
+    return {"ok": True, "voted": voted, "votos": total}
+
+
+@router.delete("/api/questoes/{id}/comentarios/{comentario_id}", summary="Remover o próprio comentário")
+def deletar_comentario(
+    id: int,
+    comentario_id: int,
+    conn=Depends(get_db_session),
+    user_id: int = Depends(get_user_id),
+):
+    """Remove um comentário do PRÓPRIO usuário (não permite apagar de outros).
+
+    Comentários de IA (tipo='ia') podem ser removidos pelo dono da questão para
+    permitir regeneração. Também limpa os votos associados.
+    """
+    _ensure_comentarios_tables(conn)
+
+    coment = conn.execute(
+        "SELECT id, user_id, tipo FROM comentarios_questoes WHERE id = ? AND questao_id = ?",
+        (comentario_id, id),
+    ).fetchone()
+    if not coment:
+        raise HTTPException(status_code=404, detail="Comentário não encontrado")
+
+    # Só o autor pode remover (comentário de IA fica atrelado ao user que gerou).
+    if coment["user_id"] != user_id:
+        raise HTTPException(status_code=403, detail="Você só pode remover seus próprios comentários.")
+
+    conn.execute("DELETE FROM comentario_votos WHERE comentario_id = ?", (comentario_id,))
+    conn.execute("DELETE FROM comentarios_questoes WHERE id = ? AND user_id = ?", (comentario_id, user_id))
     conn.commit()
     return {"ok": True}

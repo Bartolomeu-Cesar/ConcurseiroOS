@@ -1754,6 +1754,49 @@ def _m96_erros_revisao_uma_por_questao(conn):
     log.info(f"Migration 96: erros_revisao consolidado por questão (removidas {total_removidas} duplicatas)")
 
 
+def _m97_comentarios_questoes(conn):
+    """Cria/normaliza as tabelas de COMENTÁRIOS em questões.
+
+    Feature "comentários em questões" (explicações da comunidade + IA): antes o
+    DDL vivia espalhado em CREATE TABLE IF NOT EXISTS dentro dos endpoints, e o
+    voto era um simples `votos = votos + 1` SEM controle de duplicidade (um
+    usuário podia inflar o voto indefinidamente).
+
+    Esta migration:
+    1. Garante comentarios_questoes (conteúdo, tipo user/ia, votos, autor).
+    2. Cria comentario_votos com UNIQUE (comentario_id, user_id) — um voto por
+       usuário por comentário (idempotente/toggle no endpoint).
+    """
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS comentarios_questoes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            questao_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            conteudo TEXT NOT NULL,
+            tipo TEXT DEFAULT 'user',
+            votos INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (questao_id) REFERENCES questoes(id)
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_comentarios_questao ON comentarios_questoes(questao_id)")
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS comentario_votos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            comentario_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (comentario_id) REFERENCES comentarios_questoes(id)
+        )
+    """)
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_comentario_votos_uniq "
+        "ON comentario_votos(comentario_id, user_id)"
+    )
+    log.info("Migration 97: tabelas de comentários em questões + votos únicos")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -1851,6 +1894,7 @@ MIGRATIONS = [
     (94, _m94_catalogo_proveniencia),
     (95, _m95_catalogo_status_privado),
     (96, _m96_erros_revisao_uma_por_questao),
+    (97, _m97_comentarios_questoes),
 ]
 
 
