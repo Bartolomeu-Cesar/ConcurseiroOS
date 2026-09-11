@@ -569,6 +569,62 @@
   }, 5000); // Delay 5s para não atrapalhar carregamento
 })();
 
+// ==================== AUTO-SUBSCRIBE PUSH (server-side, todas as páginas) ====================
+// Garante que, se o usuário já concedeu permissão de notificação, exista uma
+// push subscription registrada no backend — em QUALQUER página (não só no
+// dashboard). Sem isto, os triggers de push (streak, caderno de erros, etc.)
+// não têm para onde enviar. Silencioso: NÃO pede permissão (o banner do
+// dashboard cuida do opt-in inicial); só age quando permission === 'granted'.
+(function() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return;
+  if (!localStorage.getItem('auth_token') && !navigator.onLine) return;
+  if (Notification.permission !== 'granted') return; // opt-in é feito no dashboard
+
+  function _b64ToUint8(base64String) {
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const raw = window.atob(base64);
+    const out = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; ++i) out[i] = raw.charCodeAt(i);
+    return out;
+  }
+
+  async function ensurePushSubscription() {
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      let sub = await registration.pushManager.getSubscription();
+      if (!sub) {
+        const vapidKey = await fetch('/api/push/vapid-key')
+          .then(r => r.ok ? r.json() : null)
+          .then(d => d && d.vapid_public_key)
+          .catch(() => null);
+        if (!vapidKey) return; // sem chave, não há como registrar
+        sub = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: _b64ToUint8(vapidKey),
+        });
+      }
+      // (Re)registra no backend — idempotente (upsert por endpoint).
+      const headers = { 'Content-Type': 'application/json' };
+      const token = localStorage.getItem('auth_token');
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      await fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(sub.toJSON()),
+      }).catch(() => {});
+    } catch (e) {
+      // Silencioso: push é best-effort, nunca deve quebrar a página.
+    }
+  }
+
+  // Uma vez por sessão para não spammar o backend a cada navegação.
+  if (!sessionStorage.getItem('push_subscribed_session')) {
+    sessionStorage.setItem('push_subscribed_session', '1');
+    setTimeout(ensurePushSubscription, 3000);
+  }
+})();
+
 // ==================== WEEKLY WRAP (Resumo Semanal) ====================
 (function() {
   if (!localStorage.getItem('auth_token')) return;

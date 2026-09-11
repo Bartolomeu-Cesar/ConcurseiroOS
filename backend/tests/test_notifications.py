@@ -204,6 +204,48 @@ class TestTriggerCadernoErros:
         conn.close()
         assert logged == 1, "trigger deve registrar no notification_log"
 
+    def test_auto_check_erros_respeita_ciclo_ativo(self, client):
+        """O alerta inline de erros (auto-check) conta apenas matérias do ciclo
+        ativo — consistente com o badge do sidebar e o push."""
+        from utils import today_str
+
+        def _cria(materia):
+            r = client.post("/api/questoes", json={
+                "materia": materia, "topico": "T", "enunciado": "E?",
+                "alternativa_a": "A", "alternativa_b": "B", "alternativa_c": "C",
+                "alternativa_d": "D", "alternativa_e": "", "resposta_correta": "A",
+                "explicacao": "x", "dificuldade": "Médio",
+            })
+            assert r.status_code == 200
+            return r.json()["id"]
+
+        # 4 erros de matéria ATIVA (> 3 dispara) + 4 de matéria INATIVA (ignorados)
+        ativas = [_cria("Informática") for _ in range(4)]
+        inativas = [_cria("Direito Constitucional") for _ in range(4)]
+
+        conn = self._conn()
+        try:
+            conn.execute("DELETE FROM erros_revisao WHERE 1=1")
+            conn.execute("DELETE FROM ciclo_estudos WHERE 1=1")
+            conn.execute("INSERT INTO ciclo_estudos (materia, ativo, user_id) VALUES ('Informática', 1, 1)")
+            conn.execute("INSERT INTO ciclo_estudos (materia, ativo, user_id) VALUES ('Direito Constitucional', 0, 1)")
+            for qid in ativas + inativas:
+                conn.execute(
+                    "INSERT INTO erros_revisao (user_id, questao_id, resposta_id, intervalo_atual, "
+                    "proxima_revisao, revisoes_count, created_at, fsrs_state, stability, difficulty, reps, last_review) "
+                    "VALUES (1, ?, 0, 1, ?, 0, ?, 0, 0, 0, 0, NULL)",
+                    (qid, today_str(), today_str()),
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+        data = client.get("/api/push/auto-check").json()
+        erros_alertas = [a for a in data["alertas"] if a["tipo"] == "erros"]
+        # Deve haver alerta (4 ativas > 3) e a contagem deve ser 4 (não 8)
+        assert len(erros_alertas) == 1, "deve haver alerta de erros"
+        assert "4 " in erros_alertas[0]["msg"], f"deve contar só as 4 do ciclo ativo: {erros_alertas[0]['msg']}"
+
 
 class TestPushScheduler:
     """Scheduler de background (push_scheduler.py)."""

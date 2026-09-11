@@ -1014,11 +1014,12 @@ def auto_check_triggers(conn=Depends(get_db_session), user_id: int = Depends(get
     if fc and fc["cnt"] > 5:
         alertas.append({"tipo": "flashcards", "icone": "🧠", "msg": f"{fc['cnt']} flashcards pendentes para revisão", "acao": "/#flashcards"})
 
-    # Erros pendentes de revisão
+    # Erros pendentes de revisão (com filtro de CICLO ATIVO — consistente com o
+    # badge do sidebar e o trigger de push do caderno de erros).
     try:
-        erros = conn.execute("SELECT COUNT(*) as cnt FROM erros_revisao WHERE user_id = ? AND proxima_revisao <= ?", (user_id, hoje)).fetchone()
-        if erros and erros["cnt"] > 3:
-            alertas.append({"tipo": "erros", "icone": "📝", "msg": f"{erros['cnt']} questões erradas agendadas para revisão", "acao": "/caderno-erros.html"})
+        n_erros = _contar_erros_pendentes_ciclo(conn, user_id, hoje)
+        if n_erros > 3:
+            alertas.append({"tipo": "erros", "icone": "📝", "msg": f"{n_erros} questões erradas agendadas para revisão", "acao": "/caderno-erros.html"})
     except Exception:
         pass
 
