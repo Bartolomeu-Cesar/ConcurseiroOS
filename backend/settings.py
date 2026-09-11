@@ -170,6 +170,16 @@ class Settings:
     VAPID_PUBLIC_KEY: str = os.environ.get("VAPID_PUBLIC_KEY", "")
     VAPID_SUBJECT: str = os.environ.get("VAPID_SUBJECT", "mailto:admin@concurseiroos.app")
 
+    # Scheduler de triggers de notificação push (background).
+    # PUSH_SCHEDULER_ENABLED: liga/desliga o agendador que chama check-triggers.
+    # PUSH_SCHEDULER_INTERVAL_MINUTES: de quanto em quanto tempo verifica os
+    # gatilhos (padrão 30min — os próprios triggers têm rate-limit por dia/tag e
+    # respeitam quiet hours, então rodar a cada 30min só garante que a janela
+    # horária certa seja pega, sem spammar).
+    PUSH_SCHEDULER_ENABLED: bool = os.environ.get("PUSH_SCHEDULER_ENABLED", "true").lower() == "true"
+    PUSH_SCHEDULER_INTERVAL_MINUTES: int = max(1, int(os.environ.get("PUSH_SCHEDULER_INTERVAL_MINUTES", "30")))
+
+
     # Pagamentos (Mercado Pago)
     MERCADO_PAGO_ACCESS_TOKEN: str = os.environ.get("MERCADO_PAGO_ACCESS_TOKEN", "")
     MERCADO_PAGO_WEBHOOK_SECRET: str = os.environ.get("MERCADO_PAGO_WEBHOOK_SECRET", "")

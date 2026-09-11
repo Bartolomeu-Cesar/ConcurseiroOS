@@ -1,4 +1,6 @@
 import mimetypes
+import mimetypes
+import os
 import time
 
 # Força o MIME type correto para arquivos .mjs e .js (necessário para PDF.js)
@@ -349,6 +351,15 @@ from backup import auto_backup_if_needed, schedule_daily_backup
 
 auto_backup_if_needed(settings.DB_PATH)
 schedule_daily_backup(settings.DB_PATH)
+
+# Scheduler de triggers de notificação push (background).
+# Não inicia durante a suíte de testes (TEST_DB definido) — os testes chamam
+# check-triggers explicitamente e não devem ter um timer abrindo conexões ao DB
+# temporário periodicamente.
+if not os.environ.get("TEST_DB"):
+    from push_scheduler import schedule_trigger_checks
+
+    schedule_trigger_checks(settings.DB_PATH)
 
 # Disponibilizar APP_START_TIME para o router misc
 misc.APP_START_TIME = APP_START_TIME

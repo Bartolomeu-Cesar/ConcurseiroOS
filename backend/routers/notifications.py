@@ -181,10 +181,11 @@ def _ensure_tables(conn):
         CREATE TABLE IF NOT EXISTS notification_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
-            tipo TEXT NOT NULL,
-            titulo TEXT NOT NULL,
-            corpo TEXT NOT NULL,
-            sent_at TEXT NOT NULL
+            tag TEXT NOT NULL,
+            title TEXT DEFAULT '',
+            body TEXT DEFAULT '',
+            sent_at TEXT NOT NULL,
+            success INTEGER DEFAULT 1
         )
     """)
     conn.commit()
@@ -213,19 +214,23 @@ def _is_quiet_hours(conn, user_id: int) -> bool:
 
 
 def _already_sent_today(conn, user_id: int, tipo: str) -> bool:
-    """Verifica se já enviou notificação deste tipo hoje (rate limiting)."""
+    """Verifica se já enviou notificação deste tipo hoje (rate limiting).
+
+    A coluna canônica é `tag` (migração 30). O parâmetro mantém o nome `tipo`
+    por retrocompatibilidade dos chamadores.
+    """
     today = date.today().isoformat()
     row = conn.execute(
-        "SELECT COUNT(*) as cnt FROM notification_log WHERE user_id = ? AND tipo = ? AND sent_at >= ?",
+        "SELECT COUNT(*) as cnt FROM notification_log WHERE user_id = ? AND tag = ? AND sent_at >= ?",
         (user_id, tipo, today)
     ).fetchone()
     return row["cnt"] > 0 if row else False
 
 
 def _log_notification(conn, user_id: int, tipo: str, titulo: str, corpo: str):
-    """Registra notificação enviada no log."""
+    """Registra notificação enviada no log (colunas canônicas tag/title/body)."""
     conn.execute(
-        "INSERT INTO notification_log (user_id, tipo, titulo, corpo, sent_at) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO notification_log (user_id, tag, title, body, sent_at, success) VALUES (?, ?, ?, ?, ?, 1)",
         (user_id, tipo, titulo, corpo, datetime.now().isoformat())
     )
     conn.commit()
@@ -554,16 +559,60 @@ def _detectar_materia_defasada(conn, user_id: int, dias_limite: int = 7) -> dict
     }
 
 
+def _contar_erros_pendentes_ciclo(conn, user_id: int, hoje: str) -> int:
+    """Conta questões do caderno de erros (erros_revisao) com revisão VENCIDA,
+    filtrando por matérias do CICLO ATIVO (regra nº 2 do projeto).
+
+    Espelha a lógica do badge do sidebar para que push e UI sejam consistentes.
+    Sem ciclo ativo → conta todas (fallback). Falha silenciosa → 0.
+    """
+    try:
+        from utils import get_materias_ciclo_ativo
+
+        materias_ativas = get_materias_ciclo_ativo(conn, user_id)
+        if materias_ativas is None:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM erros_revisao WHERE proxima_revisao <= ? AND user_id = ?",
+                (hoje, user_id),
+            ).fetchone()
+            return row[0] if row else 0
+        placeholders = ",".join("?" for _ in materias_ativas)
+        row = conn.execute(
+            f"""SELECT COUNT(*)
+                FROM erros_revisao er
+                JOIN questoes q ON q.id = er.questao_id
+                WHERE er.proxima_revisao <= ? AND er.user_id = ?
+                  AND q.materia IN ({placeholders})""",
+            (hoje, user_id, *materias_ativas),
+        ).fetchone()
+        return row[0] if row else 0
+    except Exception:
+        return 0
+
+
 @router.post("/api/push/check-triggers", summary="Verificar e disparar notificações agendadas")
 def check_triggers(conn=Depends(get_db_session)):
+    """Endpoint HTTP que dispara a verificação de gatilhos de notificação.
+
+    Wrapper fino sobre `run_trigger_checks`, compartilhado com o scheduler de
+    background (push_scheduler.py). Chamável manualmente (admin/cron externo) ou
+    pelo agendador interno.
+    """
+    return run_trigger_checks(conn)
+
+
+def run_trigger_checks(conn) -> dict:
     """Verifica todas as condições de notificação e envia para usuários elegíveis.
 
-    Chamado pelo background scheduler. Verifica:
+    Função pura (recebe uma conexão) para poder ser chamada tanto pelo endpoint
+    HTTP quanto pelo scheduler de background. Verifica:
     - Streak em risco: sem atividade hoje, com urgência escalável (gentle/urgent/critical)
     - Flashcards atrasados: >10 flashcards pendentes
     - Prova se aproximando: data da prova dentro de 30 dias
     - Desafio prestes a expirar: <1 dia restante em desafio ativo
     - Inatividade: sem estudo há 2+ dias
+    - Caderno de erros: questões erradas pendentes de revisão (ciclo ativo)
+    - ... e demais gatilhos anti-relaxamento.
     """
     _ensure_tables(conn)
 
@@ -675,14 +724,18 @@ def check_triggers(conn=Depends(get_db_session)):
 
         # --- 3. EXAM APPROACHING ---
         if exam_enabled and not _already_sent_today(conn, uid, "exam_approaching"):
-            # Check calendario_eventos for upcoming exams
+            # Check calendario_eventos for upcoming exams. A tabela pode não
+            # existir em bancos que nunca usaram o calendário → falha silenciosa.
             threshold = (date.today() + timedelta(days=30)).isoformat()
-            exams = conn.execute(
-                """SELECT titulo, data_inicio, banca FROM calendario_eventos
-                       WHERE user_id = ? AND tipo = 'prova' AND data_inicio >= ? AND data_inicio <= ?
-                       ORDER BY data_inicio ASC LIMIT 1""",
-                (uid, hoje, threshold)
-            ).fetchone()
+            try:
+                exams = conn.execute(
+                    """SELECT titulo, data_inicio, banca FROM calendario_eventos
+                           WHERE user_id = ? AND tipo = 'prova' AND data_inicio >= ? AND data_inicio <= ?
+                           ORDER BY data_inicio ASC LIMIT 1""",
+                    (uid, hoje, threshold)
+                ).fetchone()
+            except Exception:
+                exams = None
 
             if exams:
                 exam_date = exams["data_inicio"][:10]
@@ -702,10 +755,13 @@ def check_triggers(conn=Depends(get_db_session)):
         if challenge_enabled:  # noqa: SIM102 (comentário entre os ifs; fundir reduz clareza)
             if not _already_sent_today(conn, uid, "challenge_expiring"):
                 # Active challenges with <1 day remaining
-                desafios = conn.execute(
-                    "SELECT id, titulo, dias, created_at, progresso, meta FROM desafios WHERE user_id = ? AND finalizado = 0",
-                    (uid,)
-                ).fetchall()
+                try:
+                    desafios = conn.execute(
+                        "SELECT id, titulo, dias, created_at, progresso, meta FROM desafios WHERE user_id = ? AND finalizado = 0",
+                        (uid,)
+                    ).fetchall()
+                except Exception:
+                    desafios = []
 
                 for desafio in desafios:
                     try:
@@ -922,6 +978,24 @@ def check_triggers(conn=Depends(get_db_session)):
                     if sent > 0:
                         _log_notification(conn, uid, "balance_alert", defasagem["title"], defasagem["body"])
                         results["balance_alert"] = results.get("balance_alert", 0) + 1
+
+        # --- 14. CADERNO DE ERROS: questões erradas pendentes de revisão ---
+        # Errar e revisar (Successive Relearning) é onde o aprendizado mais rende.
+        # Alerta quando há questões no caderno de erros com revisão VENCIDA,
+        # aplicando o filtro de CICLO ATIVO (regra nº 2: nunca sugerir matéria de
+        # concurso inativo). Reusa a preferência de "revisões" (edital_review).
+        if edital_review_enabled and now.hour >= 17:  # noqa: SIM102
+            if not _already_sent_today(conn, uid, "caderno_erros"):
+                n_erros = _contar_erros_pendentes_ciclo(conn, uid, hoje)
+                if n_erros >= 3:
+                    msg = (
+                        f"Você tem {n_erros} questão(ões) errada(s) aguardando revisão no caderno de erros. "
+                        "Revisar o próprio erro é o que mais fixa (Successive Relearning) — 10 min rendem muito!"
+                    )
+                    sent = _send_push_to_user(conn, uid, "📝 Caderno de erros", msg, "/caderno-erros.html", "caderno_erros")
+                    if sent > 0:
+                        _log_notification(conn, uid, "caderno_erros", "📝 Caderno de erros", msg)
+                        results["caderno_erros"] = results.get("caderno_erros", 0) + 1
 
     return {"ok": True, "notifications_sent": results}
 
