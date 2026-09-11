@@ -381,99 +381,100 @@ class TestGraduacaoViaRevisarEndpoint:
 
 
 # ============================================================
-# 5. Múltiplas linhas por questão + refresh (bug: reaparecia no mesmo dia)
+# 5. Uma questão = uma única entrada no caderno (mesmo errada N vezes)
 # ============================================================
 
-class TestRevisaoNaoReapareceNoMesmoDia:
-    def _registrar_erro_extra(self, qid, data="2026-09-08"):
-        """Insere OUTRA resposta errada + entrada em erros_revisao ANTIGA
-        (proxima_revisao no passado), simulando erros em contextos diferentes."""
+class TestUmaEntradaPorQuestao:
+    def _registrar_erro_extra(self, qid, resposta="C", data="2026-09-08"):
+        """Registra OUTRA resposta ERRADA da MESMA questão (em outro momento),
+        SEM inserir em erros_revisao — quem consolida é o GET /caderno.
+        Simula o estudante errando a mesma questão em contextos diferentes."""
         conn = _conn()
-        cur = conn.execute(
-            "INSERT INTO questoes_respostas (questao_id, resposta_usuario, acertou, tempo_segundos, data, user_id) "
-            "VALUES (?, 'C', 0, 40, ?, 1)",
-            (qid, data),
-        )
-        resposta_id = cur.lastrowid
         conn.execute(
-            "INSERT INTO erros_revisao (user_id, questao_id, resposta_id, intervalo_atual, proxima_revisao, "
-            "revisoes_count, created_at, fsrs_state, stability, difficulty, reps, last_review) "
-            "VALUES (1, ?, ?, 1, ?, 0, ?, 0, 0, 0, 0, NULL)",
-            (qid, resposta_id, data, data),
+            "INSERT INTO questoes_respostas (questao_id, resposta_usuario, acertou, tempo_segundos, data, user_id) "
+            "VALUES (?, ?, 0, 40, ?, 1)",
+            (qid, resposta, data),
         )
         conn.commit()
         conn.close()
-        return resposta_id
 
-    def test_revisar_avanca_todas_as_linhas_da_questao(self, client):
-        """Questão com VÁRIAS linhas em erros_revisao: ao revisar (não graduar),
-        TODAS as linhas devem avançar proxima_revisao para o futuro, senão a
-        questão reaparece como pendente no refresh."""
+    def test_questao_errada_varias_vezes_aparece_uma_unica_vez(self, client):
+        """Questão errada em 3 momentos diferentes deve aparecer UMA vez só
+        no caderno (pendentes_hoje e como linha em erros_revisao)."""
+        _reset()
+        qid = _criar_questao(client, "Informática")
+        _registrar_erro(qid)                       # erro 1 (cria entrada)
+        self._registrar_erro_extra(qid, "C", "2026-09-09")  # erro 2 (mesma questão)
+        self._registrar_erro_extra(qid, "D", "2026-09-10")  # erro 3 (mesma questão)
+
+        data = client.get("/api/questoes/erros/caderno").json()
+        ids_pendentes = [q["id"] for q in data["pendentes_hoje"]]
+        assert ids_pendentes.count(qid) == 1, "questão deve aparecer UMA única vez em pendentes_hoje"
+
+        # E deve existir apenas UMA linha em erros_revisao para a questão
+        conn = _conn()
+        n = conn.execute(
+            "SELECT COUNT(*) FROM erros_revisao WHERE questao_id=? AND user_id=1", (qid,)
+        ).fetchone()[0]
+        conn.close()
+        assert n == 1, "uma questão = uma única entrada em erros_revisao"
+
+    def test_erro_novo_apos_revisao_zera_o_prazo(self, client):
+        """Se o estudante revisou (prazo no futuro, last_review no passado) e
+        depois ERRA a mesma questão num momento POSTERIOR, o prazo é ZERADO:
+        volta a ser pendente hoje, na MESMA entrada (sem criar outra)."""
         _reset()
         from utils import today_str
 
         qid = _criar_questao(client, "Informática")
-        _registrar_erro(qid)              # linha 1 (hoje)
-        self._registrar_erro_extra(qid)   # linha 2 (antiga, passado)
-        self._registrar_erro_extra(qid, "2026-09-07")  # linha 3 (antiga)
+        _registrar_erro(qid)
+        client.get("/api/questoes/erros/caderno")  # cria a entrada
+
+        # Simula uma revisão feita ONTEM que empurrou o prazo para o futuro.
+        conn = _conn()
+        conn.execute(
+            "UPDATE erros_revisao SET proxima_revisao='2026-12-01', reps=2, fsrs_state=2, "
+            "stability=15, difficulty=4, last_review='2026-09-10' WHERE questao_id=? AND user_id=1",
+            (qid,),
+        )
+        conn.commit()
+        conn.close()
+
+        # Estudante erra a MESMA questão HOJE (posterior à última revisão de ontem)
+        self._registrar_erro_extra(qid, "B", today_str())
+
+        # Nova listagem: o erro recente ZERA o prazo → volta a ser pendente hoje
+        data = client.get("/api/questoes/erros/caderno").json()
+        ids_pendentes = [q["id"] for q in data["pendentes_hoje"]]
+        assert qid in ids_pendentes, "erro novo após revisão deve zerar o prazo (pendente hoje)"
 
         conn = _conn()
-        n_linhas = conn.execute(
-            "SELECT COUNT(*) FROM erros_revisao WHERE questao_id=? AND user_id=1", (qid,)
-        ).fetchone()[0]
+        row = conn.execute(
+            "SELECT proxima_revisao, reps, (SELECT COUNT(*) FROM erros_revisao WHERE questao_id=? AND user_id=1) as n "
+            "FROM erros_revisao WHERE questao_id=? AND user_id=1", (qid, qid)
+        ).fetchone()
         conn.close()
-        assert n_linhas == 3, "pré-condição: 3 linhas para a mesma questão"
+        assert row["n"] == 1, "continua sendo UMA única entrada"
+        assert row["proxima_revisao"] <= today_str(), "prazo zerado (pendente hoje)"
+        assert row["reps"] == 0, "reset do agendamento zera reps"
 
-        # Revisa uma vez (acerto difícil → não gradua)
+    def test_revisar_nao_reaparece_no_refresh(self, client):
+        """Após revisar (não graduar), novo GET NÃO traz a questão como
+        pendente — mesmo tendo sido errada várias vezes antes."""
+        _reset()
+        qid = _criar_questao(client, "Informática")
+        _registrar_erro(qid)
+        self._registrar_erro_extra(qid, "C", "2026-09-09")
+        self._registrar_erro_extra(qid, "D", "2026-09-10")
+        client.get("/api/questoes/erros/caderno")  # consolida
+
         r = client.post(f"/api/questoes/erros/revisar/{qid}", json={"acertou": True, "facilidade": 3})
         assert r.status_code == 200
         assert r.json().get("graduou") is False
 
-        # TODAS as linhas devem ter proxima_revisao no futuro
-        conn = _conn()
-        rows = conn.execute(
-            "SELECT proxima_revisao FROM erros_revisao WHERE questao_id=? AND user_id=1", (qid,)
-        ).fetchall()
-        conn.close()
-        assert len(rows) == 3, "revisão não graduada mantém as linhas"
-        for row in rows:
-            assert row["proxima_revisao"] > today_str(), \
-                f"linha ficou no passado ({row['proxima_revisao']}) → reapareceria no refresh"
-
-    def test_questao_revisada_nao_aparece_como_pendente_apos_refresh(self, client):
-        """Simula o refresh: após revisar, novo GET /caderno NÃO deve trazer a
-        questão como pendente (mesmo tendo linhas antigas no passado)."""
-        _reset()
-        qid = _criar_questao(client, "Informática")
-        _registrar_erro(qid)
-        self._registrar_erro_extra(qid)
-        self._registrar_erro_extra(qid, "2026-09-06")
-
-        # Antes: é pendente
-        data = client.get("/api/questoes/erros/caderno").json()
-        assert qid in [q["id"] for q in data["pendentes_hoje"]], "deve começar pendente"
-
-        # Revisa (não gradua)
-        r = client.post(f"/api/questoes/erros/revisar/{qid}", json={"acertou": True, "facilidade": 3})
-        assert r.status_code == 200
-
-        # Refresh: NÃO deve mais aparecer como pendente hoje
         data2 = client.get("/api/questoes/erros/caderno").json()
         ids_pendentes = [q["id"] for q in data2["pendentes_hoje"]]
         assert qid not in ids_pendentes, "questão revisada hoje NÃO pode reaparecer no refresh"
-
-    def test_pendentes_sem_duplicar_por_questao(self, client):
-        """Uma questão com múltiplas respostas erradas pendentes deve aparecer
-        uma ÚNICA vez em pendentes_hoje (dedupe por questao_id)."""
-        _reset()
-        qid = _criar_questao(client, "Informática")
-        _registrar_erro(qid)
-        self._registrar_erro_extra(qid, "2026-09-09")
-        self._registrar_erro_extra(qid, "2026-09-08")
-
-        data = client.get("/api/questoes/erros/caderno").json()
-        ids_pendentes = [q["id"] for q in data["pendentes_hoje"]]
-        assert ids_pendentes.count(qid) == 1, "questão não pode aparecer duplicada em pendentes_hoje"
 
 
 def teardown_module():

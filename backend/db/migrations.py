@@ -1693,6 +1693,67 @@ def _m95_catalogo_status_privado(conn):
     log.info("Migration 95: índice de status do catálogo (suporte a 'privado')")
 
 
+def _m96_erros_revisao_uma_por_questao(conn):
+    """Consolida erros_revisao para UMA linha por (user_id, questao_id).
+
+    Antes, a chave lógica era (questao_id, resposta_id): cada vez que a mesma
+    questão era errada em contexto diferente gerava uma NOVA linha. Isso fazia a
+    questão aparecer VÁRIAS vezes no caderno de erros e, com atualizações
+    parciais, reaparecer como pendente após revisão.
+
+    Regra de negócio correta: a questão é a unidade de revisão. Uma única linha
+    por questão. Errar de novo apenas ZERA o prazo (reset do agendamento) — não
+    cria outra entrada.
+
+    Esta migration:
+    1. Para cada (user_id, questao_id) com múltiplas linhas, mantém a MAIS
+       AVANÇADA (maior reps; empate → maior proxima_revisao; empate → maior id) e
+       remove as demais. Assim o progresso de revisão real é preservado.
+    2. Cria índice UNIQUE (user_id, questao_id) para impedir duplicatas futuras.
+
+    Idempotente: se já houver 1 linha por questão, nada muda.
+    """
+    # 1. Consolidação: identifica a linha "vencedora" por (user_id, questao_id)
+    grupos = conn.execute("""
+        SELECT user_id, questao_id, COUNT(*) AS n
+        FROM erros_revisao
+        GROUP BY user_id, questao_id
+        HAVING COUNT(*) > 1
+    """).fetchall()
+
+    total_removidas = 0
+    for g in grupos:
+        uid = g["user_id"] if not isinstance(g, tuple) else g[0]
+        qid = g["questao_id"] if not isinstance(g, tuple) else g[1]
+        linhas = conn.execute("""
+            SELECT id, reps, proxima_revisao
+            FROM erros_revisao
+            WHERE user_id = ? AND questao_id = ?
+            ORDER BY COALESCE(reps, 0) DESC, proxima_revisao DESC, id DESC
+        """, (uid, qid)).fetchall()
+        # a primeira é a vencedora; remove o resto
+        vencedora_id = linhas[0]["id"]
+        for l in linhas[1:]:
+            conn.execute("DELETE FROM erros_revisao WHERE id = ?", (l["id"],))
+            total_removidas += 1
+        # normaliza: garante que a vencedora não fica com resposta_id órfão
+        # relevante (mantemos o valor existente — resposta_id vira apenas
+        # referência histórica, não mais discriminador).
+        _ = vencedora_id
+
+    # 2. Índice único para impedir novas duplicatas
+    try:
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_erros_revisao_uniq_questao "
+            "ON erros_revisao(user_id, questao_id)"
+        )
+    except Exception as e:
+        # Se ainda houver duplicata inesperada, loga mas não derruba o startup.
+        log.warning(f"Migration 96: índice único não criado ({e}); duplicatas remanescentes?")
+
+    log.info(f"Migration 96: erros_revisao consolidado por questão (removidas {total_removidas} duplicatas)")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -1789,6 +1850,7 @@ MIGRATIONS = [
     (93, _m93_catalogo_compras_origem),
     (94, _m94_catalogo_proveniencia),
     (95, _m95_catalogo_status_privado),
+    (96, _m96_erros_revisao_uma_por_questao),
 ]
 
 

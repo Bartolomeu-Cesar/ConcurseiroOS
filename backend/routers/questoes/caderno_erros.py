@@ -59,35 +59,66 @@ def caderno_erros(conn=Depends(get_db_session), user_id: int = Depends(get_user_
         erros = [e for e in erros if e["materia"] in _ativas]
 
     existing_revisoes = conn.execute(
-        "SELECT questao_id, resposta_id FROM erros_revisao WHERE user_id = ?", (user_id,)
+        "SELECT questao_id, last_review, created_at FROM erros_revisao WHERE user_id = ?", (user_id,)
     ).fetchall()
-    existing_set = {(r[0], r[1]) for r in existing_revisoes}
+    # Uma entrada por QUESTÃO (não por resposta). Guardamos a referência de
+    # quando a entrada foi vista pela última vez para decidir reset de prazo.
+    existing_por_questao = {
+        r["questao_id"]: {"last_review": r["last_review"], "created_at": r["created_at"]}
+        for r in existing_revisoes
+    }
 
+    # Agrupa os erros por questão, guardando o erro MAIS RECENTE (maior data) e a
+    # resposta_id correspondente (referência histórica).
+    erros_por_questao = {}
     for erro in erros:
-        key = (erro["id"], erro["resposta_id"])
-        if key not in existing_set:
-            try:
-                data_erro = datetime.strptime(erro["data"], "%Y-%m-%d")
-            except (ValueError, TypeError):
-                data_erro = datetime.now()
+        qid = erro["id"]
+        prev = erros_por_questao.get(qid)
+        if prev is None or (erro["data"] or "") >= (prev["data"] or ""):
+            erros_por_questao[qid] = erro
+
+    for qid, erro in erros_por_questao.items():
+        try:
+            data_erro = datetime.strptime(erro["data"], "%Y-%m-%d")
+        except (ValueError, TypeError):
+            data_erro = datetime.now()
+
+        if qid not in existing_por_questao:
+            # Nova questão no caderno: agenda para o dia seguinte ao erro.
             proxima = (data_erro + timedelta(days=1)).strftime("%Y-%m-%d")
             conn.execute("""
                 INSERT INTO erros_revisao (user_id, questao_id, resposta_id, intervalo_atual, proxima_revisao,
                     revisoes_count, created_at, fsrs_state, stability, difficulty, reps, last_review)
                 VALUES (?, ?, ?, 1, ?, 0, ?, ?, 0, 0, 0, NULL)
-            """, (user_id, erro["id"], erro["resposta_id"], proxima, hoje, STATE_NEW))
-            existing_set.add(key)
+            """, (user_id, qid, erro["resposta_id"], proxima, hoje, STATE_NEW))
+            existing_por_questao[qid] = {"last_review": None, "created_at": hoje}
+        else:
+            # Questão JÁ está no caderno. Se o estudante errou de novo DEPOIS da
+            # última revisão registrada, ZERA o prazo (volta a ser pendente hoje)
+            # sem criar outra linha — o erro recente indica que o conteúdo não
+            # está dominado e precisa voltar ao topo da fila.
+            info = existing_por_questao[qid]
+            referencia = info.get("last_review") or info.get("created_at") or ""
+            erro_str = erro["data"] or ""
+            if referencia and erro_str > referencia:
+                conn.execute("""
+                    UPDATE erros_revisao
+                    SET proxima_revisao = ?, intervalo_atual = 1, fsrs_state = ?,
+                        stability = 0, difficulty = 0, reps = 0, last_review = NULL,
+                        updated_at = ?
+                    WHERE user_id = ? AND questao_id = ?
+                """, (hoje, STATE_NEW, hoje, user_id, qid))
     conn.commit()
 
     revisoes_map = {}
     revisoes_rows = conn.execute(
-        """SELECT questao_id, resposta_id, intervalo_atual, proxima_revisao, revisoes_count,
+        """SELECT questao_id, intervalo_atual, proxima_revisao, revisoes_count,
                   stability, difficulty, fsrs_state, reps, last_review
            FROM erros_revisao WHERE user_id = ?""",
         (user_id,)
     ).fetchall()
     for r in revisoes_rows:
-        revisoes_map[(r["questao_id"], r["resposta_id"])] = {
+        revisoes_map[r["questao_id"]] = {
             "intervalo_atual": r["intervalo_atual"],
             "proxima_revisao": r["proxima_revisao"],
             "revisoes_count": r["revisoes_count"],
@@ -98,28 +129,34 @@ def caderno_erros(conn=Depends(get_db_session), user_id: int = Depends(get_user_
             "last_review": r["last_review"],
         }
 
-    # Consolidação por QUESTÃO: uma questão pode ter várias linhas (uma por
-    # resposta_id). A pendência de revisão é por questão, então usamos a
-    # próxima_revisao MAIS DISTANTE entre as linhas — se qualquer entrada já foi
-    # empurrada para o futuro (revisada), a questão inteira não é pendente hoje.
-    # Isso também cobre dados legados em que só uma das linhas foi atualizada.
-    proxima_por_questao = {}
-    for (qid_r, _resp), rev in revisoes_map.items():
-        pr = rev.get("proxima_revisao") or hoje
-        if qid_r not in proxima_por_questao or pr > proxima_por_questao[qid_r]:
-            proxima_por_questao[qid_r] = pr
-
     pendentes_hoje = []
-    pendentes_seen = set()  # dedupe por questao_id: 1 questão = 1 card de revisão
     todos_erros = []
     por_materia = {}
     padroes_raw = {}
 
     hoje_date = datetime.strptime(hoje, "%Y-%m-%d")
 
+    # --- Padrões de erro: analisam TODAS as respostas erradas (uma questão pode
+    # ter marcado alternativas erradas diferentes ao longo do tempo). ---
     for erro in erros:
+        padrao_key = f"{erro['materia']}|{erro['topico']}|{erro['resposta_usuario']}"
+        if padrao_key not in padroes_raw:
+            padroes_raw[padrao_key] = {
+                "padrao": f"{erro['materia']} - {erro['topico'] or 'Geral'}: sempre marca '{erro['resposta_usuario']}'",
+                "materia": erro["materia"],
+                "topico": erro["topico"] or "Geral",
+                "resposta_errada": erro["resposta_usuario"],
+                "count": 0,
+                "questoes": []
+            }
+        padroes_raw[padrao_key]["count"] += 1
+        if erro["id"] not in padroes_raw[padrao_key]["questoes"] and len(padroes_raw[padrao_key]["questoes"]) < 5:
+            padroes_raw[padrao_key]["questoes"].append(erro["id"])
+
+    # --- Caderno de erros: UMA entrada por QUESTÃO (unidade de revisão). ---
+    for qid, erro in erros_por_questao.items():
         item = dict(erro)
-        rev = revisoes_map.get((erro["id"], erro["resposta_id"]), {})
+        rev = revisoes_map.get(qid, {})
         item["proxima_revisao"] = rev.get("proxima_revisao", hoje)
         item["intervalo_atual"] = rev.get("intervalo_atual", 1)
         item["revisoes_count"] = rev.get("revisoes_count", 0)
@@ -141,26 +178,7 @@ def caderno_erros(conn=Depends(get_db_session), user_id: int = Depends(get_user_
         mat = erro["materia"] or "Sem matéria"
         por_materia[mat] = por_materia.get(mat, 0) + 1
 
-        padrao_key = f"{erro['materia']}|{erro['topico']}|{erro['resposta_usuario']}"
-        if padrao_key not in padroes_raw:
-            padroes_raw[padrao_key] = {
-                "padrao": f"{erro['materia']} - {erro['topico'] or 'Geral'}: sempre marca '{erro['resposta_usuario']}'",
-                "materia": erro["materia"],
-                "topico": erro["topico"] or "Geral",
-                "resposta_errada": erro["resposta_usuario"],
-                "count": 0,
-                "questoes": []
-            }
-        padroes_raw[padrao_key]["count"] += 1
-        if len(padroes_raw[padrao_key]["questoes"]) < 5:
-            padroes_raw[padrao_key]["questoes"].append(erro["id"])
-
-        # Pendência decidida pela próxima revisão CONSOLIDADA da questão (MAX
-        # entre suas linhas), não pela linha individual — evita reaparecer no
-        # refresh quando já foi revisada hoje.
-        proxima_consolidada = proxima_por_questao.get(erro["id"], item["proxima_revisao"])
-        if proxima_consolidada <= hoje and erro["id"] not in pendentes_seen:
-            pendentes_seen.add(erro["id"])
+        if item["proxima_revisao"] <= hoje:
             pendentes_hoje.append(item)
 
     # Ordenação inteligente
