@@ -98,7 +98,19 @@ def caderno_erros(conn=Depends(get_db_session), user_id: int = Depends(get_user_
             "last_review": r["last_review"],
         }
 
+    # Consolidação por QUESTÃO: uma questão pode ter várias linhas (uma por
+    # resposta_id). A pendência de revisão é por questão, então usamos a
+    # próxima_revisao MAIS DISTANTE entre as linhas — se qualquer entrada já foi
+    # empurrada para o futuro (revisada), a questão inteira não é pendente hoje.
+    # Isso também cobre dados legados em que só uma das linhas foi atualizada.
+    proxima_por_questao = {}
+    for (qid_r, _resp), rev in revisoes_map.items():
+        pr = rev.get("proxima_revisao") or hoje
+        if qid_r not in proxima_por_questao or pr > proxima_por_questao[qid_r]:
+            proxima_por_questao[qid_r] = pr
+
     pendentes_hoje = []
+    pendentes_seen = set()  # dedupe por questao_id: 1 questão = 1 card de revisão
     todos_erros = []
     por_materia = {}
     padroes_raw = {}
@@ -143,7 +155,12 @@ def caderno_erros(conn=Depends(get_db_session), user_id: int = Depends(get_user_
         if len(padroes_raw[padrao_key]["questoes"]) < 5:
             padroes_raw[padrao_key]["questoes"].append(erro["id"])
 
-        if item["proxima_revisao"] <= hoje:
+        # Pendência decidida pela próxima revisão CONSOLIDADA da questão (MAX
+        # entre suas linhas), não pela linha individual — evita reaparecer no
+        # refresh quando já foi revisada hoje.
+        proxima_consolidada = proxima_por_questao.get(erro["id"], item["proxima_revisao"])
+        if proxima_consolidada <= hoje and erro["id"] not in pendentes_seen:
+            pendentes_seen.add(erro["id"])
             pendentes_hoje.append(item)
 
     # Ordenação inteligente
@@ -252,28 +269,32 @@ def revisar_erro(id: int, body: RevisarErroRequest, conn=Depends(get_db_session)
     facil = rating >= RATING_GOOD and output.difficulty <= GRADUACAO_DIFFICULTY_MAX
     graduou = bool(acertou and reps >= GRADUACAO_REPS_MIN and facil)
 
+    # IMPORTANTE: uma questão pode ter VÁRIAS linhas em erros_revisao (uma por
+    # resposta_id — cada vez que foi errada em contexto diferente). A revisão é
+    # por QUESTÃO, então o efeito (graduar ou avançar o agendamento) deve valer
+    # para TODAS as linhas daquele questao_id. Caso contrário, entradas antigas
+    # ficam com proxima_revisao no passado e a questão reaparece como pendente
+    # ao dar refresh, mesmo já tendo sido revisada hoje.
     if graduou:
         conn.execute(
-            "DELETE FROM erros_revisao WHERE id = ? AND user_id = ?",
-            (revisao["id"], user_id),
+            "DELETE FROM erros_revisao WHERE questao_id = ? AND user_id = ?",
+            (id, user_id),
         )
     else:
         conn.execute("""
             UPDATE erros_revisao
-            SET intervalo_atual = ?, proxima_revisao = ?, revisoes_count = ?, updated_at = ?,
-                stability = ?, difficulty = ?, fsrs_state = ?, reps = ?, last_review = ?
-            WHERE id = ? AND user_id = ?
+            SET intervalo_atual = ?, proxima_revisao = ?, revisoes_count = revisoes_count + 1, updated_at = ?,
+                stability = ?, difficulty = ?, fsrs_state = ?, reps = reps + 1, last_review = ?
+            WHERE questao_id = ? AND user_id = ?
         """, (
             output.interval,
             output.next_review,
-            revisao["revisoes_count"] + 1,
             hoje,
             output.stability,
             output.difficulty,
             output.state,
-            reps + 1,
             hoje,
-            revisao["id"],
+            id,
             user_id,
         ))
 
@@ -385,6 +406,7 @@ def atualizar_fsrs_ao_responder(conn, questao_id: int, acertou: bool, user_id: i
     output = review_card(card, rating, desired_retention=DESIRED_RETENTION, review_date=hoje)
 
     # Graduação: acertou e já tem revisões suficientes → sai do caderno de erros.
+    # Afeta TODAS as linhas do questao_id (ver nota em revisar_erro).
     if acertou and reps_atual >= GRADUACAO_REPS_MIN:
         conn.execute(
             "DELETE FROM erros_revisao WHERE questao_id = ? AND user_id = ?",
@@ -398,20 +420,18 @@ def atualizar_fsrs_ao_responder(conn, questao_id: int, acertou: bool, user_id: i
 
     conn.execute("""
         UPDATE erros_revisao
-        SET intervalo_atual = ?, proxima_revisao = ?, revisoes_count = ?, updated_at = ?,
-            stability = ?, difficulty = ?, fsrs_state = ?, reps = ?, last_review = ?
-        WHERE id = ? AND user_id = ?
+        SET intervalo_atual = ?, proxima_revisao = ?, revisoes_count = revisoes_count + 1, updated_at = ?,
+            stability = ?, difficulty = ?, fsrs_state = ?, reps = reps + 1, last_review = ?
+        WHERE questao_id = ? AND user_id = ?
     """, (
         output.interval,
         output.next_review,
-        revisao["revisoes_count"] + 1,
         hoje,
         output.stability,
         output.difficulty,
         output.state,
-        reps_atual + 1,
         hoje,
-        revisao["id"],
+        questao_id,
         user_id,
     ))
     return {
