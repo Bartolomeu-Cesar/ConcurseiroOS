@@ -356,10 +356,13 @@ def optimal_study_order(
         t = topicos_map[tid]
         score = 0
 
-        # Status: não iniciado > em andamento > concluído
-        if t["status"] == "Não iniciado":
+        # Status: não iniciado > em andamento > concluído.
+        # IMPORTANTE: usar os valores CANÔNICOS (Title Case), iguais aos gravados
+        # pelo edital (cycle = ["Não Iniciado", "Em Andamento", "Concluído"]).
+        # Antes usava minúsculas e o scoring de status NUNCA aplicava.
+        if t["status"] == "Não Iniciado":
             score += 30
-        elif t["status"] == "Em andamento":
+        elif t["status"] == "Em Andamento":
             score += 20
         elif t["status"] == "Concluído":
             score += 0
@@ -406,9 +409,9 @@ def optimal_study_order(
         if desbloqueios > 0:
             razoes.append(f"Desbloqueia {desbloqueios} tópico(s) ao concluir")
 
-        if t["status"] == "Não iniciado":
+        if t["status"] == "Não Iniciado":
             razoes.append("Ainda não iniciado")
-        elif t["status"] == "Em andamento":
+        elif t["status"] == "Em Andamento":
             razoes.append("Em andamento — continue")
 
         ordem.append({
