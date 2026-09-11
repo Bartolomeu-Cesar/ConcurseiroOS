@@ -254,7 +254,107 @@ window.selecionarAlternativa = function(questaoId, letraSelecionada, correta, er
         </div>
         <button class="revisao-btn revisao-btn--errei" onclick="revisar(${questaoId}, false)">Entendi, avançar →</button>
       </div>`;
+
+    // Errorful Learning (Kornell 2009): após errar, oferece teste imediato de
+    // uma questão similar do mesmo conceito — consolida a correção e reduz a
+    // repetição do erro. Busca em background e injeta um bloco no feedback.
+    _oferecerQuestaoSimilar(questaoId);
   }
+};
+
+// ============================================================
+// ERRORFUL LEARNING — questão similar após errar no caderno de erros
+// Evidência: Kornell et al. (2009), Potts & Shanks (2014)
+// ============================================================
+async function _oferecerQuestaoSimilar(questaoId) {
+  // Recupera matéria/tópico da questão errada a partir dos dados carregados.
+  const q = _findQuestaoNoCaderno(questaoId);
+  if (!q || !q.materia) return;
+  try {
+    const url = `/api/questoes/similar?materia=${encodeURIComponent(q.materia)}`
+      + `&excluir_id=${questaoId}&topico=${encodeURIComponent(q.topico || '')}`;
+    const similar = await fetch(url).then(r => r.ok ? r.json() : null);
+    if (similar && similar.id) {
+      _renderErrorfulCaderno(questaoId, similar);
+    }
+  } catch (e) { /* silencioso: recurso complementar */ }
+}
+
+function _findQuestaoNoCaderno(id) {
+  if (!dadosCaderno) return null;
+  const pools = [dadosCaderno.pendentes_hoje || []];
+  for (const pool of pools) {
+    const found = pool.find(x => x.id === id);
+    if (found) return found;
+  }
+  return null;
+}
+
+function _renderErrorfulCaderno(questaoId, q) {
+  const feedback = document.getElementById(`feedback-${questaoId}`);
+  if (!feedback) return;
+
+  const alts = [];
+  for (const letra of ['a', 'b', 'c', 'd', 'e']) {
+    const texto = q[`alternativa_${letra}`];
+    if (texto) alts.push({ letra: letra.toUpperCase(), texto });
+  }
+  const isCE = alts.length <= 2;
+  let correctLetter = (q.resposta_correta || '').toUpperCase();
+
+  // Embaralha a posição da correta (>2 alternativas), mantendo rótulos fixos.
+  if (!isCE) {
+    const rotulos = alts.map(a => a.letra);
+    const textoCorreto = (alts.find(a => a.letra === correctLetter) || {}).texto;
+    const textos = alts.map(a => a.texto);
+    for (let i = textos.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [textos[i], textos[j]] = [textos[j], textos[i]];
+    }
+    for (let i = 0; i < alts.length; i++) {
+      alts[i] = { letra: rotulos[i], texto: textos[i] };
+      if (textos[i] === textoCorreto) correctLetter = rotulos[i];
+    }
+  }
+
+  let altsHtml;
+  if (isCE) {
+    altsHtml = `<div style="display:flex;gap:8px;margin-top:8px;">
+      <button class="efl-alt-${questaoId}" onclick="answerErrorfulCaderno(${questaoId},'A','${correctLetter}')" style="flex:1;padding:8px;background:var(--ce-card);border:2px solid var(--ce-green,#a6e3a1);border-radius:6px;color:var(--ce-green,#a6e3a1);cursor:pointer;font-weight:600;">✓ CERTO</button>
+      <button class="efl-alt-${questaoId}" onclick="answerErrorfulCaderno(${questaoId},'B','${correctLetter}')" style="flex:1;padding:8px;background:var(--ce-card);border:2px solid var(--ce-red,#f38ba8);border-radius:6px;color:var(--ce-red,#f38ba8);cursor:pointer;font-weight:600;">✗ ERRADO</button>
+    </div>`;
+  } else {
+    altsHtml = alts.map(a => `<button class="efl-alt-${questaoId}" onclick="answerErrorfulCaderno(${questaoId},'${a.letra}','${correctLetter}')" style="display:block;width:100%;text-align:left;padding:8px 12px;margin-top:4px;background:var(--ce-card);border:1px solid var(--ce-border);border-radius:6px;color:var(--ce-text);cursor:pointer;font-size:0.8rem;"><strong>${a.letra})</strong> ${escapeAttr(a.texto)}</button>`).join('');
+  }
+
+  const block = document.createElement('div');
+  block.id = `efl-${questaoId}`;
+  block.style.cssText = 'margin-top:10px;padding:12px;background:rgba(137,180,250,0.08);border:1px solid rgba(137,180,250,0.25);border-radius:8px;';
+  block.innerHTML = `
+    <div style="margin-bottom:8px;">
+      <span style="font-size:0.72rem;background:var(--ce-blue,#89b4fa);color:var(--ce-bg,#1e1e2e);padding:2px 8px;border-radius:4px;font-weight:600;">⚡ Errorful Learning</span>
+      <span style="font-size:0.68rem;color:var(--ce-subtext,#a6adc8);margin-left:6px;">Teste imediato do mesmo conceito — consolida a correção</span>
+    </div>
+    <div style="font-size:0.82rem;color:var(--ce-text);margin-bottom:6px;">${escapeAttr(q.enunciado || '')}</div>
+    ${altsHtml}`;
+  feedback.appendChild(block);
+}
+
+window.answerErrorfulCaderno = function(questaoId, resposta, correta) {
+  const acertou = resposta.toUpperCase() === correta.toUpperCase();
+  const block = document.getElementById(`efl-${questaoId}`);
+  if (block) {
+    block.querySelectorAll(`.efl-alt-${questaoId}`).forEach(btn => {
+      btn.disabled = true; btn.style.cursor = 'default'; btn.style.opacity = '0.7';
+    });
+    const msg = document.createElement('div');
+    msg.style.cssText = `margin-top:8px;font-weight:600;color:${acertou ? 'var(--ce-green,#a6e3a1)' : 'var(--ce-red,#f38ba8)'};font-size:0.82rem;`;
+    msg.textContent = acertou
+      ? '✅ Correto! O conceito está consolidado.'
+      : `❌ Errou de novo. Correta: ${correta}. Reforce esse tópico!`;
+    block.appendChild(msg);
+  }
+  showToast(acertou ? '⚡ Conceito consolidado!' : '⚠️ Reforce esse tópico.');
 };
 
 function renderPadroes(padroes) {
