@@ -4,18 +4,18 @@
 
 1. **Pull ao iniciar sessão**: Sempre fazer `git pull` no repositório antes de iniciar qualquer trabalho. Garantir que o código local está sincronizado com o remoto.
 2. **SW Version**: Sempre incrementar `CACHE_VERSION` no `frontend/sw.js` ao alterar qualquer JS listado em `PRECACHE_URLS`.
-2. **Filtro Ciclo Ativo**: Queries de recomendação/treinador/study-intelligence devem filtrar por `ciclo_estudos WHERE ativo = 1` — nunca mostrar matérias de concursos inativos.
-3. **Testes antes de push**: Sempre rodar `python3 -m pytest tests/ -q` e confirmar que TODOS os testes passam antes de commit. Nunca fazer push com testes falhando.
-4. **window.funcao**: Em ES modules, toda função usada em `onclick` inline deve ser exposta com `window.funcao = funcao`.
-5. **Streak tolerante**: `calculate_streak()` em `utils.py` deve começar de ontem se hoje não tem atividade (dia em andamento).
-6. **Auth Depends**: Todo endpoint novo precisa de `user_id: int = Depends(get_user_id)` e `conn = Depends(get_db_session)`.
-7. **Commit + Push IMEDIATO**: Toda alteração validada (testes passando) DEVE ser commitada e pushada imediatamente. Nunca acumular alterações sem commit. Usar conventional commits (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`). O fluxo é: implementar → testar → commit → push. Sem exceções.
-8. **Criar testes para toda alteração**: Toda feature nova ou bug fix DEVE ter teste correspondente. Se não existe teste para o código alterado, criar um. Objetivo: nunca diminuir a cobertura.
-9. **Não quebrar funcionalidades existentes**: Antes de refatorar ou alterar um módulo, verificar TODOS os imports e chamadores. Manter backward compatibility (re-exportar funções movidas, preservar assinaturas). Se um endpoint muda formato de retorno, garantir que o frontend consome corretamente.
-10. **Testar regressão**: Após qualquer fix, rodar os testes do módulo afetado E os testes que dependem dele. Se um teste falha que antes passava = regressão — corrigir antes de continuar.
-11. **Técnicas Científicas de Estudo**: Sempre que analisar, alterar ou implantar recursos novos, aplicar as técnicas científicas de estudo baseadas em evidência para melhorar a experiência do candidato. Técnicas implementadas: Spaced Practice (FSRS), Retrieval Practice, Interleaving, Pre-testing, Desirable Difficulty, Successive Relearning, Expanding Retrieval, Elaborative Interrogation, Serial Position Effect, Lag Effect (Exam-Aware), Chunking, Keyword Mnemonic, Free Recall (Brain Dump), Dual Coding, Contextual Variation, Self-Explanation, Concrete Examples, Errorful Learning, Distributed Summary, Encoding Specificity (Modo Prova), Hypercorrection Effect, Forward Testing Effect, Micro-Breaks Cognitivos, Testing Boundaries, Temporal Landmarks (Fresh Start), Production Effect, Spacing Gap Optimization, Expressive Writing, Cognitive Load Segmenting. Toda feature de estudo deve considerar qual técnica se aplica e integrá-la ao fluxo.
-12. **Commit IMEDIATO de dados reais no `progress.db` (IMUTÁVEL)**: Sempre que dados reais forem inseridos na base (leis/vademecum, simulados, questões, flashcards, edital, sessões, config etc. — qualquer coisa fora de testes), fazer IMEDIATAMENTE um commit dedicado `chore: atualizar progress.db (<descrição>)` e push, para que o dado fique salvo nos objetos do git e um `git checkout`/reset acidental NÃO o apague. Corolário obrigatório: NUNCA executar `git checkout -- backend/progress.db` (ou `git restore`/`reset --hard` que o afete) sem ANTES (a) inspecionar as contagens das tabelas de dados reais versus o HEAD e (b) CONFIRMAR com o usuário que o diff é espúrio de teste. Na dúvida, commitar o `.db` primeiro — jamais descartar. Esta regra é imutável.
-13. **Idioma das respostas: Português do Brasil (SEMPRE)**: Toda comunicação com o usuário — respostas no chat, explicações, resumos, mensagens de commit, comentários voltados ao usuário e qualquer texto exibido a ele — DEVE ser em Português do Brasil (pt-BR). O usuário não fala outro idioma. Termos técnicos consagrados (nomes de funções, comandos, bibliotecas, siglas) podem permanecer no original, mas a explicação ao redor é sempre em pt-BR. Nunca responder em inglês ou outro idioma.
+3. **Filtro Ciclo Ativo**: Queries de recomendação/treinador/study-intelligence devem filtrar por `ciclo_estudos WHERE ativo = 1` — nunca mostrar matérias de concursos inativos.
+4. **Testes antes de push**: Sempre rodar `python3 -m pytest tests/ -q` e confirmar que TODOS os testes passam antes de commit. Nunca fazer push com testes falhando.
+5. **window.funcao**: Em ES modules, toda função usada em `onclick` inline deve ser exposta com `window.funcao = funcao`.
+6. **Streak tolerante**: `calculate_streak()` em `utils.py` deve começar de ontem se hoje não tem atividade (dia em andamento).
+7. **Auth Depends**: Todo endpoint novo precisa de `user_id: int = Depends(get_user_id)` e `conn = Depends(get_db_session)`.
+8. **Commit + Push IMEDIATO**: Toda alteração validada (testes passando) DEVE ser commitada e pushada imediatamente. Nunca acumular alterações sem commit. Usar conventional commits (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`). O fluxo é: implementar → testar → commit → push. Sem exceções.
+9. **Criar testes para toda alteração**: Toda feature nova ou bug fix DEVE ter teste correspondente. Se não existe teste para o código alterado, criar um. Objetivo: nunca diminuir a cobertura.
+10. **Não quebrar funcionalidades existentes**: Antes de refatorar ou alterar um módulo, verificar TODOS os imports e chamadores. Manter backward compatibility (re-exportar funções movidas, preservar assinaturas). Se um endpoint muda formato de retorno, garantir que o frontend consome corretamente.
+11. **Testar regressão**: Após qualquer fix, rodar os testes do módulo afetado E os testes que dependem dele. Se um teste falha que antes passava = regressão — corrigir antes de continuar.
+12. **Técnicas Científicas de Estudo**: Sempre que analisar, alterar ou implantar recursos novos, aplicar as técnicas científicas de estudo baseadas em evidência para melhorar a experiência do candidato. Técnicas implementadas: Spaced Practice (FSRS), Retrieval Practice, Interleaving, Pre-testing, Desirable Difficulty, Successive Relearning, Expanding Retrieval, Elaborative Interrogation, Serial Position Effect, Lag Effect (Exam-Aware), Chunking, Keyword Mnemonic, Free Recall (Brain Dump), Dual Coding, Contextual Variation, Self-Explanation, Concrete Examples, Errorful Learning, Distributed Summary, Encoding Specificity (Modo Prova), Hypercorrection Effect, Forward Testing Effect, Micro-Breaks Cognitivos, Testing Boundaries, Temporal Landmarks (Fresh Start), Production Effect, Spacing Gap Optimization, Expressive Writing, Cognitive Load Segmenting. Toda feature de estudo deve considerar qual técnica se aplica e integrá-la ao fluxo.
+13. **Commit IMEDIATO de dados reais no `progress.db` (IMUTÁVEL)**: Sempre que dados reais forem inseridos na base (leis/vademecum, simulados, questões, flashcards, edital, sessões, config etc. — qualquer coisa fora de testes), fazer IMEDIATAMENTE um commit dedicado `chore: atualizar progress.db (<descrição>)` e push, para que o dado fique salvo nos objetos do git e um `git checkout`/reset acidental NÃO o apague. Corolário obrigatório: NUNCA executar `git checkout -- backend/progress.db` (ou `git restore`/`reset --hard` que o afete) sem ANTES (a) inspecionar as contagens das tabelas de dados reais versus o HEAD e (b) CONFIRMAR com o usuário que o diff é espúrio de teste. Na dúvida, commitar o `.db` primeiro — jamais descartar. Esta regra é imutável.
+14. **Idioma das respostas: Português do Brasil (SEMPRE)**: Toda comunicação com o usuário — respostas no chat, explicações, resumos, mensagens de commit, comentários voltados ao usuário e qualquer texto exibido a ele — DEVE ser em Português do Brasil (pt-BR). O usuário não fala outro idioma. Termos técnicos consagrados (nomes de funções, comandos, bibliotecas, siglas) podem permanecer no original, mas a explicação ao redor é sempre em pt-BR. Nunca responder em inglês ou outro idioma.
 
 ## Padrões de Código
 
@@ -24,6 +24,40 @@
 - Packages: Se router > 300 linhas, dividir em package com `__init__.py` que exporta `router`.
 - Ordem de rotas em packages: rotas específicas ANTES de rotas com `/{id}` (evita conflito de path).
 - `edital/__init__.py`: re-exporta `_update_single_mastery` para manter imports existentes.
+
+## Valores Canônicos (SEMPRE usar EXATAMENTE assim)
+
+Comparar com valor diferente do canônico é a família de bug nº 1 do projeto:
+a comparação NUNCA casa, a lógica morre em silêncio (sem erro) e nenhum teste
+pega porque a feature "funciona" (só não faz nada). Referência única:
+
+- **Status do edital** (`edital.status`, ciclo em `edital/core.py`): `'Não Iniciado'`, `'Em Andamento'`, `'Concluído'` — **Title Case, com acento**. NUNCA `'concluido'`, `'em andamento'`, `'Nao Iniciado'`. Writers/leitores canônicos usam exatamente estes.
+- **Escala de confiança** (`questoes_respostas.confianca`, schema em `schemas.py`): **1-3** (1=chutei, 2=acho que sei, 3=certeza). Comparar com `>= 4` ou `>= 5` NUNCA casa. Alta confiança = `>= 3`; baixa = `<= 1`.
+- **Status de simulado** (`simulados.status`): `'finalizado'` (gravado em `simulados.py`). `'pendente'` é o default.
+- **Streak atual**: NÃO é coluna de nenhuma tabela. É CALCULADO por `utils.calculate_streak(conn, user_id=...)` que retorna `{"streak_atual": int, ...}`. A tabela `streaks` só tem `data, horas_estudadas, questoes_resolvidas, flashcards_revisados, user_id`. NÃO existe tabela `user_streaks`.
+- **Plano do usuário** (`users.plano`): coluna é `plano` (NÃO `plan`). Valores: `guest`/`free`/`premium`/`ilimitado`/`vitalicio`.
+- **Colunas de questão** (`questoes`): `alternativa_a..e` e `resposta_correta`. NÃO existe `alternativas` (JSON) nem `resposta` — monte a lista de alternativas em Python (ver `generation.py`/`simulados.py`).
+- **Constantes de XP** (`constants.py`): `XP_PER_HOUR=100`, `XP_PER_QUESTION=10`, `XP_PER_CORRECT=5`, `XP_PER_FLASHCARD=5`, `XP_PER_TOPIC=25`, `XP_PER_SIMULADO=50`. (Ligas têm escala PRÓPRIA em `leagues/helpers.py` — não confundir.)
+
+## Padrões de Bug Recorrentes (checklist ao revisar/escrever queries)
+
+Auditoria de cobertura (set/2026) encontrou 12 bugs latentes "silenciosos".
+Todos seguiam um destes padrões. Verifique SEMPRE:
+
+1. **Comparação com valor não-canônico** → ver seção acima. Ex.: `status = 'concluido'` (morto), `confianca >= 4` (morto), `plano == 'ilimitado'` lendo coluna `plan` inexistente.
+2. **Tabela/coluna inexistente sob `try/except: pass`** → o `except` engole o `OperationalError` e a lógica morre sem sinal. Ao ver `SELECT` dentro de `try/except`, CONFIRME que a coluna/tabela existe no schema (`PRAGMA table_info`). Se o `try/except` existe só para "defesa", ele mascara erro de schema — prefira não engolir ou logar.
+3. **`json_extract(dados, '$.chave')` de chave que nenhum writer grava** → retorna sempre NULL/0. Confirme que ALGUM `INSERT` grava a chave no JSON antes de somá-la/ordená-la.
+4. **`.get()` em `sqlite3.Row`** → `sqlite3.Row` NÃO tem `.get()` (levanta AttributeError). Use `row["col"] if "col" in row.keys() else default`, ou `row["col"] or default` se a coluna existe.
+5. **Guard de idempotência com escopo errado** → ex.: checar "já processado nesta semana" quando deveria ser "nesta liga/entidade". Guard amplo demais pula processamento legítimo.
+6. **Parse de data/número sem `try/except`** em campo de texto livre → `date(int(...))` com data malformada levanta ValueError e derruba o endpoint (500). Sempre validar/proteger o parse com fallback.
+7. **Divisão sem guarda** → `a / b` sem `if b > 0`.
+8. **Código morto** → `if False`, condições impossíveis, ramos inalcançáveis.
+9. **Recomendação sem filtro de ciclo ativo** → ver regra "Filtro Ciclo Ativo".
+
+Como caçar em massa: `grep` pelos valores errados conhecidos, ex.:
+`grep -rn "== 'Em andamento'\|== 'concluido'\|>= 4\|>= 5\|SELECT plan \|\.get(" backend/routers/`.
+Ao suspeitar de tabela/coluna, confirme no schema real ANTES de "corrigir" —
+a correção óbvia às vezes está errada (ex.: `streak_atual` não é coluna).
 
 ## Gotchas
 

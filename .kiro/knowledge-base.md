@@ -1649,3 +1649,63 @@ exige ilustrador/designer humano, fora do alcance de código.
 geométricos desenhados do zero, código e textos autorais. Dependências usam licenças
 permissivas já presentes (Catppuccin MIT, Chart.js MIT, PDF.js Apache). Nenhuma arte,
 mascote, ícone ou fonte proprietária de terceiros foi copiada.
+
+
+---
+
+## SESSÃO set/2026 — Entrega de features "meio-prontas" + Auditoria de cobertura (12 bugs latentes)
+
+Sessão focada em (a) fechar features que existiam no backend mas não estavam
+entregues (sem frontend/testes, com bugs) e (b) auditar sistematicamente os
+módulos de baixa cobertura em busca de bugs latentes. A suíte foi de 1392 →
+1450 testes.
+
+### Features entregues/corrigidas
+- **Caderno de erros — uma entrada por questão**: `erros_revisao` usava chave
+  `(questao_id, resposta_id)`, duplicando a questão e fazendo-a reaparecer no
+  refresh. Migração 96 consolida por `(user_id, questao_id)` + índice único;
+  errar de novo apenas ZERA o prazo (não cria linha nova).
+- **Badge do caderno no sidebar**: passou a respeitar o filtro de ciclo ativo
+  (antes contava matérias de concursos inativos).
+- **Triggers de notificação push + scheduler**: os 14 triggers existiam mas nada
+  os disparava. Criado `push_scheduler.py` (threading.Timer daemon). Corrigido
+  bug do `notification_log` (código usava `tipo/titulo/corpo`, migração 30 criou
+  `tag/title/body` → triggers quebravam no banco real). Auto-subscribe universal
+  no `sidebar.js`.
+- **Errorful Learning no caderno**: questão similar após errar (Kornell 2009).
+- **Modo áudio no caderno**: revisão hands-free via Web Speech API + MediaSession.
+- **Comentários em questões**: voto único (tabela `comentario_votos` UNIQUE),
+  IA real via `call_llm_sync` com fallback, DELETE do próprio. Migração 97.
+- **Knowledge Graph**: corrigido scoring de status (Title Case) + suíte de testes.
+- **Mapas mentais**: render SVG NATIVO (não Mermaid.js de 2.65MB — filosofia
+  PWA-leve); corrigido status Title Case; removido `render_url` do mermaid.ink
+  (encoding inválido).
+
+### Auditoria de cobertura — 12 bugs latentes "silenciosos" corrigidos
+Rodada 1 (4 bugs): `mastery.error_patterns` (confianca>=4 morto),
+`questoes.core` scheduling (confianca>=5 morto), `intentions.temporal_landmark`
+(tabela `user_streaks` inexistente), `social.groups` ranking (xp_semanal via
+chave JSON que ninguém grava → sempre 0).
+
+Rodada 2 (8 bugs): `studyroom.gamification` Boss Fight (colunas
+`alternativas`/`resposta` inexistentes sob try/except mudo → feature TOTALMENTE
+quebrada, sempre 404/500), `studyroom.discussion` (idem), `studyroom.metacognition`
+(`.get()` em sqlite3.Row → 500), `ai_tutor._get_user_plan` (coluna `plan` → plano
+'ilimitado' virava 'free'), `leagues.helpers` (status `'concluido'` → XP de
+tópicos nunca creditado), `leagues.endpoints` (guard de idempotência por semana
+pulava ligas extras), `analytics.core` (parse de data de prova sem try/except →
+500), `analytics.advanced` (código morto `if False`).
+
+**Padrão dominante:** comparação com valor que o resto do código nunca produz
+(status minúsculo, escala de confiança 1-3, chave JSON ausente, coluna/tabela
+inexistente) — muitas vezes mascarado por `try/except: pass`. Ver a seção
+"Valores Canônicos" e "Padrões de Bug Recorrentes" no SKILL.md, criadas nesta
+sessão para prevenir recorrência.
+
+**Falsos positivos investigados e descartados** (por que confirmar antes de
+corrigir importa): `simulados status='finalizado'` (correto), precedência
+`and/or` nos badges de streaks (correto), `pagamentos.py`/`auth.py` (sem bugs).
+
+**Nota de ambiente (WSL):** o servidor não sobe com o `progress.db` em `/mnt/c`
+(disk I/O error do SQLite WAL sobre o mount do Windows). Rodar com DB em
+filesystem Linux nativo (`~/` ou `/tmp`) ou via Docker. Não afeta produção.
