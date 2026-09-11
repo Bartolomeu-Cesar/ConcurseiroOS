@@ -189,7 +189,7 @@ def raio_x_edital(edital_nome: str = "", cargo: str = "", conn=Depends(get_db_se
     return {
         "total_questoes": total_questoes,
         "fonte_peso": "edital" if usar_edital else "questoes",
-        "edital_nome": edital_nome or (edital_materias[0]["materia"] if False else ""),
+        "edital_nome": edital_nome,
         "total_topicos_edital": total_topicos_edital,
         "materias": materias,
     }

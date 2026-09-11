@@ -47,22 +47,21 @@ def start_discussion(
     # Se questao_id fornecido, buscar da base
     if questao_id:
         questao = conn.execute("""
-            SELECT id, enunciado, alternativas, resposta, materia
+            SELECT id, enunciado, alternativa_a, alternativa_b, alternativa_c,
+                   alternativa_d, alternativa_e, resposta_correta, materia
             FROM questoes WHERE id = ?
         """, (questao_id,)).fetchone()
         if not questao:
             raise HTTPException(status_code=404, detail="Questão não encontrada")
 
         final_enunciado = questao["enunciado"]
-        alt = questao["alternativas"]
-        if isinstance(alt, str):
-            try:
-                final_alternativas = json.loads(alt)
-            except (json.JSONDecodeError, TypeError):
-                final_alternativas = []
-        else:
-            final_alternativas = alt or []
-        final_resposta = questao["resposta"]
+        # Colunas reais: alternativa_a..e (a tabela não tem 'alternativas'/'resposta').
+        final_alternativas = []
+        for letra in ("a", "b", "c", "d", "e"):
+            txt = questao[f"alternativa_{letra}"]
+            if txt:
+                final_alternativas.append({"letra": letra.upper(), "texto": txt})
+        final_resposta = questao["resposta_correta"]
         final_materia = questao["materia"] or ""
         final_questao_id = questao["id"]
     else:

@@ -353,7 +353,7 @@ def get_session_summary(
     questoes_resolvidas = questoes_resolvidas[0] if questoes_resolvidas else 0
 
     # Meta da sessão
-    meta = participant["meta"] if participant.get("meta") else ""
+    meta = participant["meta"] if "meta" in participant.keys() and participant["meta"] else ""
     meta_cumprida = bool(meta and tempo_total > 0)  # Simplificado; ideally check specific goal
 
     # XP estimado
@@ -398,7 +398,7 @@ def get_session_summary(
             "tempo_focado_seg": tempo_total,
             "tempo_focado_min": round(tempo_total / 60, 1),
             "ciclos_completados": ciclos_completados,
-            "ciclos_total": room.get("ciclos_total") or 4,
+            "ciclos_total": (room["ciclos_total"] if "ciclos_total" in room.keys() else None) or 4,
         },
         "progresso": {
             "flashcards_revisados": flashcards_revisados,

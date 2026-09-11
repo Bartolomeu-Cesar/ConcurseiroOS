@@ -629,7 +629,7 @@ def _get_user_plan(db, user_id: int) -> str:
     """Get user plan. Returns 'free' or 'ilimitado'."""
     try:
         row = db.execute(
-            "SELECT plan FROM users WHERE id = ?", (user_id,)
+            "SELECT plano FROM users WHERE id = ?", (user_id,)
         ).fetchone()
         if row:
             return row[0] if row[0] else "free"

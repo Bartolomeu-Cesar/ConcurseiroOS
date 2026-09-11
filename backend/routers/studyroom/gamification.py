@@ -167,29 +167,27 @@ def start_challenge(
     if tempo_limite_min < 1 or tempo_limite_min > 120:
         raise HTTPException(status_code=400, detail="Tempo limite deve ser entre 1 e 120 minutos")
 
-    # Buscar questões da tabela questoes
-    try:
-        questoes = conn.execute("""
-            SELECT id, enunciado, alternativas, resposta, materia
-            FROM questoes
-            WHERE materia LIKE ? AND user_id = ?
-            ORDER BY RANDOM()
-            LIMIT ?
-        """, (f"%{materia}%", user_id, quantidade)).fetchall()
-    except Exception:
-        questoes = []
+    # Buscar questões da tabela questoes (colunas reais: alternativa_a..e,
+    # resposta_correta — a tabela NÃO tem 'alternativas'/'resposta').
+    questoes = conn.execute("""
+        SELECT id, enunciado, alternativa_a, alternativa_b, alternativa_c,
+               alternativa_d, alternativa_e, resposta_correta, materia
+        FROM questoes
+        WHERE materia LIKE ? AND user_id = ?
+        ORDER BY RANDOM()
+        LIMIT ?
+    """, (f"%{materia}%", user_id, quantidade)).fetchall()
 
     if not questoes:
         raise HTTPException(status_code=404, detail=f"Nenhuma questão encontrada para a matéria '{materia}'")
 
     questoes_list = []
     for q in questoes:
-        alternativas = q["alternativas"]
-        if isinstance(alternativas, str):
-            try:
-                alternativas = json.loads(alternativas)
-            except (json.JSONDecodeError, TypeError):
-                alternativas = []
+        alternativas = []
+        for letra in ("a", "b", "c", "d", "e"):
+            txt = q[f"alternativa_{letra}"]
+            if txt:
+                alternativas.append({"letra": letra.upper(), "texto": txt})
         questoes_list.append({
             "id": q["id"],
             "enunciado": q["enunciado"],
@@ -241,15 +239,15 @@ def answer_challenge(
     if not challenge:
         raise HTTPException(status_code=404, detail="Desafio não encontrado ou já finalizado")
 
-    # Verificar resposta correta
+    # Verificar resposta correta (coluna real: resposta_correta)
     questao = conn.execute("""
-        SELECT id, resposta FROM questoes WHERE id = ?
+        SELECT id, resposta_correta FROM questoes WHERE id = ?
     """, (questao_id,)).fetchone()
 
     if not questao:
         raise HTTPException(status_code=404, detail="Questão não encontrada")
 
-    resposta_correta = questao["resposta"].strip().upper() if questao["resposta"] else ""
+    resposta_correta = questao["resposta_correta"].strip().upper() if questao["resposta_correta"] else ""
     resposta_usuario = resposta.strip().upper()
     acertou = resposta_usuario == resposta_correta
 

@@ -286,7 +286,7 @@ def calculate_user_weekly_xp(db, user_id: int, week_start: str, week_end: str) -
     try:
         topicos = db.execute(
             """SELECT COUNT(*) FROM edital
-            WHERE user_id = ? AND status = 'concluido'
+            WHERE user_id = ? AND status = 'Concluído'
             AND date(mastery_updated_at) >= ? AND date(mastery_updated_at) <= ?""",
             (user_id, week_start, week_end)
         ).fetchone()

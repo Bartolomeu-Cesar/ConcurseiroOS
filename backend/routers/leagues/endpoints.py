@@ -236,11 +236,20 @@ def processar_semana(
         l_week_end = league[3]
         tier_idx = TIERS.index(tier) if tier in TIERS else 0
 
-        # Check if already processed
+        # Idempotência POR LIGA (não por semana): o guard antigo checava se
+        # existia QUALQUER histórico na semana → ao processar a 1ª liga da
+        # semana, todas as outras ligas do mesmo período eram puladas e seus
+        # membros nunca eram promovidos/rebaixados. league_history não tem
+        # league_id, então verificamos se algum MEMBRO REAL desta liga já tem
+        # histórico nesta semana (ligas distintas têm membros distintos).
         already_processed = db.execute(
             """SELECT COUNT(*) FROM league_history
-               WHERE user_id > 0 AND week_start = ? AND week_end = ?""",
-            (l_week_start, l_week_end)
+               WHERE week_start = ? AND week_end = ?
+                 AND user_id IN (
+                     SELECT user_id FROM league_members
+                     WHERE league_id = ? AND user_id > 0
+                 )""",
+            (l_week_start, l_week_end, league_id)
         ).fetchone()
         if already_processed and already_processed[0] > 0:
             continue

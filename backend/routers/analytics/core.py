@@ -476,13 +476,21 @@ def plano_automatico(edital_nome: str = "", cargo: str = "", horas_dia: float = 
 
     dias_ate_prova = 90
     if prova and prova[0]:
-        parts = re.match(r'(\d+)[/\-](\d+)[/\-](\d+)', prova[0])
-        if parts:
-            if len(parts.group(3)) == 4:
-                d = date(int(parts.group(3)), int(parts.group(2)), int(parts.group(1)))
-            else:
-                d = date(int(parts.group(1)), int(parts.group(2)), int(parts.group(3)))
-            dias_ate_prova = max(1, (d - date.today()).days)
+        # Parse robusto: aceita dd/mm/yyyy, yyyy-mm-dd; datas malformadas ou
+        # inválidas caem no fallback (90 dias) em vez de derrubar o endpoint (500).
+        try:
+            texto = prova[0].strip()
+            d = None
+            m1 = re.match(r'^(\d{4})-(\d{1,2})-(\d{1,2})$', texto)          # yyyy-mm-dd
+            m2 = re.match(r'^(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})$', texto)  # dd/mm/yyyy
+            if m1:
+                d = date(int(m1.group(1)), int(m1.group(2)), int(m1.group(3)))
+            elif m2:
+                d = date(int(m2.group(3)), int(m2.group(2)), int(m2.group(1)))
+            if d:
+                dias_ate_prova = max(1, (d - date.today()).days)
+        except (ValueError, TypeError):
+            dias_ate_prova = 90
 
     total_horas_disponiveis = dias_ate_prova * horas_dia
     total_topicos_restantes = sum(m[1] - (m[2] or 0) for m in materias)
