@@ -29,18 +29,25 @@ router = APIRouter(prefix="", tags=["Flashcards"])
 )
 def list_flashcards(
     materia: str = "",
+    topico: str = "",
     page: int | None = Query(None),
     limit: int = 50,
     conn=Depends(get_db_session),
     user_id: int = Depends(get_user_id),
 ):
+    cols = (
+        "id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, "
+        "repetitions, materia, COALESCE(topico,'') AS topico, stability, fsrs_state"
+    )
+    query = f"SELECT {cols} FROM flashcards WHERE user_id = ?"
+    params = [user_id]
     if materia:
-        query = "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia, stability, fsrs_state FROM flashcards WHERE materia = ? AND user_id = ?"
-        params = (materia, user_id)
-    else:
-        query = "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia, stability, fsrs_state FROM flashcards WHERE user_id = ?"
-        params = (user_id,)
-    return sql_paginate(conn, query, params, page, limit)
+        query += " AND materia = ?"
+        params.append(materia)
+    if topico:
+        query += " AND COALESCE(topico,'') = ?"
+        params.append(topico)
+    return sql_paginate(conn, query, tuple(params), page, limit)
 
 
 @router.get("/api/flashcards/materias", summary="Listar matérias dos flashcards")
@@ -52,9 +59,33 @@ def list_flashcards_materias(conn=Depends(get_db_session), user_id: int = Depend
     return [{"materia": r[0] or "Sem matéria", "total": r[1]} for r in rows]
 
 
+@router.get(
+    "/api/flashcards/topicos",
+    summary="Listar assuntos/tópicos dos flashcards",
+    description="Lista os assuntos (tópicos) com contagem, para o filtro por assunto "
+    "(ex.: Crase, Sistemas Operacionais, Redes). Filtra por matéria se informada. "
+    "Ignora flashcards sem assunto.",
+)
+def list_flashcards_topicos(
+    materia: str = "", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)
+):
+    query = (
+        "SELECT COALESCE(topico,'') AS topico, materia, COUNT(*) AS total FROM flashcards "
+        "WHERE user_id = ? AND COALESCE(topico,'') != ''"
+    )
+    params = [user_id]
+    if materia:
+        query += " AND materia = ?"
+        params.append(materia)
+    query += " GROUP BY topico, materia ORDER BY total DESC"
+    rows = conn.execute(query, tuple(params)).fetchall()
+    return [{"topico": r["topico"], "materia": r["materia"] or "Sem matéria", "total": r["total"]} for r in rows]
+
+
 @router.get("/api/flashcards/today")
 def get_flashcards_today(
     materia: str = "",
+    topico: str = "",
     max_novos: int | None = Query(
         None,
         description="Máximo de flashcards novos por dia. Se omitido, usa o mix "
@@ -83,16 +114,23 @@ def get_flashcards_today(
     """
     from study_ordering import order_items_intelligently
 
+    _cols = (
+        "id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, "
+        "repetitions, materia, COALESCE(topico,'') AS topico, fsrs_state, "
+        "COALESCE(difficulty,0) AS difficulty, COALESCE(is_leech,0) AS is_leech, "
+        "COALESCE(lapses,0) AS lapses, COALESCE(card_tipo,'normal') AS card_tipo, "
+        "COALESCE(imagem_data,'') AS imagem_data, COALESCE(oclusoes,'') AS oclusoes, "
+        "COALESCE(oclusao_index,-1) AS oclusao_index, note_id"
+    )
+    _where = "proxima_revisao <= ? AND user_id = ? AND COALESCE(suspenso, 0) = 0"
+    _params = [today_str(), user_id]
     if materia:
-        rows = conn.execute(
-            "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia, fsrs_state, COALESCE(difficulty,0) AS difficulty, COALESCE(is_leech,0) AS is_leech, COALESCE(lapses,0) AS lapses, COALESCE(card_tipo,'normal') AS card_tipo, COALESCE(imagem_data,'') AS imagem_data, COALESCE(oclusoes,'') AS oclusoes, COALESCE(oclusao_index,-1) AS oclusao_index, note_id FROM flashcards WHERE proxima_revisao <= ? AND materia = ? AND user_id = ? AND COALESCE(suspenso, 0) = 0",
-            (today_str(), materia, user_id),
-        ).fetchall()
-    else:
-        rows = conn.execute(
-            "SELECT id, pergunta, resposta, proxima_revisao, intervalo_dias, easiness_factor, repetitions, materia, fsrs_state, COALESCE(difficulty,0) AS difficulty, COALESCE(is_leech,0) AS is_leech, COALESCE(lapses,0) AS lapses, COALESCE(card_tipo,'normal') AS card_tipo, COALESCE(imagem_data,'') AS imagem_data, COALESCE(oclusoes,'') AS oclusoes, COALESCE(oclusao_index,-1) AS oclusao_index, note_id FROM flashcards WHERE proxima_revisao <= ? AND user_id = ? AND COALESCE(suspenso, 0) = 0",
-            (today_str(), user_id),
-        ).fetchall()
+        _where += " AND materia = ?"
+        _params.append(materia)
+    if topico:
+        _where += " AND COALESCE(topico,'') = ?"
+        _params.append(topico)
+    rows = conn.execute(f"SELECT {_cols} FROM flashcards WHERE {_where}", tuple(_params)).fetchall()
     items = [dict(r) for r in rows]
 
     if not items:
@@ -571,12 +609,13 @@ def create_flashcard(body: FlashcardCreate, conn=Depends(get_db_session), user_i
     pergunta = sanitize_input(body.pergunta, max_length=2000)
     resposta = sanitize_input(body.resposta, max_length=5000)
     materia = sanitize_input(getattr(body, "materia", ""))
+    topico = sanitize_input(getattr(body, "topico", ""))
     reverso = bool(getattr(body, "reverso", False))
 
     # Card principal. Se houver reverso, ele é o lado 'frente' (P->R); senão 'normal'.
     cur = conn.execute(
-        "INSERT INTO flashcards (pergunta, resposta, proxima_revisao, materia, user_id, card_tipo) VALUES (?, ?, ?, ?, ?, ?)",
-        (pergunta, resposta, today_str(), materia, user_id, "frente" if reverso else "normal"),
+        "INSERT INTO flashcards (pergunta, resposta, proxima_revisao, materia, topico, user_id, card_tipo) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (pergunta, resposta, today_str(), materia, topico, user_id, "frente" if reverso else "normal"),
     )
     new_id = cur.lastrowid
     # note_id agrupa os cards da mesma nota (o próprio id do primeiro card).
@@ -586,8 +625,8 @@ def create_flashcard(body: FlashcardCreate, conn=Depends(get_db_session), user_i
     if reverso:
         # Card reverso (R->P): pergunta e resposta invertidas, mesmo note_id.
         cur2 = conn.execute(
-            "INSERT INTO flashcards (pergunta, resposta, proxima_revisao, materia, user_id, card_tipo, note_id) VALUES (?, ?, ?, ?, ?, 'verso', ?)",
-            (resposta, pergunta, today_str(), materia, user_id, new_id),
+            "INSERT INTO flashcards (pergunta, resposta, proxima_revisao, materia, topico, user_id, card_tipo, note_id) VALUES (?, ?, ?, ?, ?, ?, 'verso', ?)",
+            (resposta, pergunta, today_str(), materia, topico, user_id, new_id),
         )
         criados.append(cur2.lastrowid)
 
@@ -1263,6 +1302,9 @@ def update_flashcard(id: int, body: FlashcardUpdate, conn=Depends(get_db_session
     if body.materia is not None:
         updates.append("materia = ?")
         params.append(sanitize_input(body.materia))
+    if body.topico is not None:
+        updates.append("topico = ?")
+        params.append(sanitize_input(body.topico))
     if not updates:
         raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
     params.append(id)

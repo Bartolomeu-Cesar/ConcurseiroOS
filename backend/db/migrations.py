@@ -1823,6 +1823,20 @@ def _m98_study_mix_config(conn):
             pass  # coluna já existe
 
 
+def _m99_flashcards_topico(conn):
+    """Assunto/tópico do flashcard (ex.: 'Crase', 'Sistemas Operacionais', 'Redes').
+
+    Permite organizar e filtrar flashcards por assunto dentro da matéria — igual
+    às questões, que já têm `topico`. Vazio = sem assunto (comportamento anterior).
+    """
+    try:
+        conn.execute("ALTER TABLE flashcards ADD COLUMN topico TEXT DEFAULT ''")
+        log.info("Migration 99: added column topico to flashcards")
+    except Exception:
+        pass  # coluna já existe
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_flashcards_topico ON flashcards(user_id, materia, topico)")
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -1922,6 +1936,7 @@ MIGRATIONS = [
     (96, _m96_erros_revisao_uma_por_questao),
     (97, _m97_comentarios_questoes),
     (98, _m98_study_mix_config),
+    (99, _m99_flashcards_topico),
 ]
 
 

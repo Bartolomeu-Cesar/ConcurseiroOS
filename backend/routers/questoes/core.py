@@ -396,6 +396,29 @@ def list_questoes_materias(conn=Depends(get_db_session), user_id: int = Depends(
 
 
 @router.get(
+    "/api/questoes/topicos",
+    summary="Listar assuntos/tópicos das questões",
+    description="Lista os assuntos (tópicos) com contagem, para o filtro por assunto "
+    "(ex.: Crase, Sistemas Operacionais, Redes). Filtra por matéria se informada. "
+    "Ignora questões sem assunto.",
+)
+def list_questoes_topicos(
+    materia: str = "", conn=Depends(get_db_session), user_id: int = Depends(get_user_id)
+):
+    query = (
+        "SELECT COALESCE(topico,'') AS topico, materia, COUNT(*) AS total FROM questoes "
+        "WHERE user_id = ? AND COALESCE(topico,'') != ''"
+    )
+    params = [user_id]
+    if materia:
+        query += " AND materia = ?"
+        params.append(materia)
+    query += " GROUP BY topico, materia ORDER BY total DESC"
+    rows = conn.execute(query, tuple(params)).fetchall()
+    return [{"topico": r["topico"], "materia": r["materia"] or "Sem matéria", "total": r["total"]} for r in rows]
+
+
+@router.get(
     "/api/questoes/respondidas-hoje",
     summary="IDs das questões respondidas hoje",
     description="Retorna IDs de questões já respondidas hoje (para evitar repetição no mesmo dia).",

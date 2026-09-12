@@ -100,6 +100,7 @@ class FlashcardCreate(BaseModel):
     pergunta: str
     resposta: str
     materia: str = ""
+    topico: str = ""  # assunto dentro da matéria (ex.: 'Crase', 'Redes')
     reverso: bool = False  # se True, cria também o card invertido (R->P)
 
 
@@ -107,6 +108,8 @@ class FlashcardUpdate(BaseModel):
     pergunta: str | None = None
     resposta: str | None = None
     materia: str | None = None
+    topico: str | None = None
+
 
 
 class FlashcardReview(BaseModel):
