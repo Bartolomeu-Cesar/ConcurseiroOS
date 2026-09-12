@@ -55,7 +55,12 @@ def list_flashcards_materias(conn=Depends(get_db_session), user_id: int = Depend
 @router.get("/api/flashcards/today")
 def get_flashcards_today(
     materia: str = "",
-    max_novos: int = Query(20, description="Máximo de flashcards novos por dia (padrão 20, como Anki)"),
+    max_novos: int | None = Query(
+        None,
+        description="Máximo de flashcards novos por dia. Se omitido, usa o mix "
+        "adaptativo (study_mix) que decide a proporção novo:revisão pela fase "
+        "da prova e pelo backlog de revisão.",
+    ),
     conn=Depends(get_db_session),
     user_id: int = Depends(get_user_id),
 ):
@@ -65,11 +70,16 @@ def get_flashcards_today(
     1. Relearning (fsrs_state=3) — cards que foram esquecidos recentemente
     2. Learning (fsrs_state=1) — cards em fase inicial de aprendizado
     3. Review (fsrs_state=2) — cards maduros que venceram o intervalo
-    4. New (fsrs_state=0) — cards nunca vistos (limitados a max_novos/dia)
+    4. New (fsrs_state=0) — cards nunca vistos
 
     Dentro de cada grupo, aplica interleaving por matéria para maximizar retenção.
-    Limita novos cards (repetitions=0) a max_novos por dia (padrão 20).
-    Reviews (cards já revisados antes) não têm limite.
+
+    Limite de NOVOS por dia: se `max_novos` for informado, respeita esse teto
+    (compatibilidade). Caso contrário, delega ao módulo `study_mix`, que calcula
+    a proporção novo:revisão ADAPTATIVA — longe da prova prioriza novos
+    (cobertura), perto prioriza revisão (consolidação), e o backlog de revisão
+    vencida reduz/zera os novos para evitar acúmulo de dívida. Reviews não têm
+    limite (a revisão vencida sempre aparece).
     """
     from study_ordering import order_items_intelligently
 
@@ -94,11 +104,30 @@ def get_flashcards_today(
     review = [c for c in items if (c.get("fsrs_state") or 0) == 2]  # Maduros vencidos
     new_cards = [c for c in items if (c.get("fsrs_state") or 0) == 0]  # Novos
 
-    # Limitar novos cards por dia (como Anki: padrão 20)
-    novos_limitados = new_cards[:max_novos]
+    # Revisão vencida (sempre entra por inteiro): relearning + learning + review.
+    revisao_cards = relearning + learning + review
+
+    # Quantos NOVOS incluir hoje:
+    # - Se o cliente passou max_novos explicitamente, respeita (compat/override).
+    # - Senão, usa o mix adaptativo (fase da prova + backlog de revisão).
+    if max_novos is not None:
+        limite_novos = max(0, int(max_novos))
+    else:
+        import study_mix
+
+        mix = study_mix.mix_for_flashcards(conn, user_id)
+        # A carga do mix inclui revisão + novos. A revisão vencida tem prioridade
+        # e não é truncada; o mix define o TETO de novos para o dia. Descontamos
+        # a revisão já devida da carga para achar quantos novos ainda cabem.
+        limite_novos = max(0, mix.carga - len(revisao_cards))
+        # Nunca menor que o piso da própria proporção de novos calculada
+        # (ex.: fase de expansão garante um mínimo de avanço mesmo com revisão).
+        limite_novos = max(limite_novos, mix.novos if len(revisao_cards) < mix.carga else 0)
+
+    novos_limitados = new_cards[:limite_novos]
 
     # Combinar na ordem de prioridade FSRS
-    combined = relearning + learning + review + novos_limitados
+    combined = revisao_cards + novos_limitados
 
     result = order_items_intelligently(
         combined,

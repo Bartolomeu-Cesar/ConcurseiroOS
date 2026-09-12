@@ -212,7 +212,10 @@ def _create_tables(conn):
             meta_horas REAL DEFAULT 3.0,
             meta_questoes INTEGER DEFAULT 30,
             meta_flashcards INTEGER DEFAULT 10,
-            meta_paginas INTEGER DEFAULT 20
+            meta_paginas INTEGER DEFAULT 20,
+            mix_carga_diaria INTEGER DEFAULT 0,
+            mix_pct_novos INTEGER DEFAULT 0,
+            mix_auto_prova INTEGER DEFAULT 1
         )
     """)
 

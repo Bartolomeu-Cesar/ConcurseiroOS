@@ -228,7 +228,13 @@ def _smart_select_questions(
     pool_fracas = [r[0] for r in fracas]
 
     # === Montar seleção com prioridade ===
-    # Distribuição: 30% erradas recentes, 30% nunca vistas, 20% erradas antigas, 20% fracas
+    # Proporção NOVO vs. REVISÃO agora é ADAPTATIVA (módulo study_mix):
+    #   - NOVO   = "nunca respondidas" (pool_nunca) — Pre-testing / cobertura.
+    #   - REVISÃO = erradas recentes + erradas antigas + fracas — consolidação.
+    # A fatia de novos varia com a fase da prova (longe->mais novo, perto->mais
+    # revisão) e é reduzida/zerada quando o backlog de revisão está alto.
+    # Dentro da fatia de revisão, mantemos a subdivisão histórica (recentes têm
+    # prioridade sobre antigas e fracas — Successive Relearning > Spacing).
     selected_ids = []
     seen = set()
 
@@ -241,10 +247,16 @@ def _smart_select_questions(
                 added += 1
         return added
 
-    qtd_erradas_rec = max(1, int(qtd * 0.30))
-    qtd_nunca = max(1, int(qtd * 0.30))
-    qtd_erradas_ant = max(1, int(qtd * 0.20))
-    qtd_fracas = max(1, int(qtd * 0.20))
+    import study_mix
+
+    _mix = study_mix.mix_for_questoes(conn, user_id, carga_override=qtd, materias=materias)
+    qtd_nunca = _mix.novos                       # fatia de NOVOS (nunca vistas)
+    qtd_revisao_total = _mix.revisao             # fatia de REVISÃO
+    # Subdividir a revisão: ~43% recentes, ~29% antigas, ~28% fracas
+    # (equivale à antiga 30/20/20 renormalizada para dentro da revisão).
+    qtd_erradas_rec = max(1, int(round(qtd_revisao_total * 0.43))) if qtd_revisao_total else 0
+    qtd_erradas_ant = max(1, int(round(qtd_revisao_total * 0.29))) if qtd_revisao_total else 0
+    qtd_fracas = max(0, qtd_revisao_total - qtd_erradas_rec - qtd_erradas_ant)
 
     _add_from_pool(pool_erradas_recentes, qtd_erradas_rec)
     _add_from_pool(pool_nunca, qtd_nunca)

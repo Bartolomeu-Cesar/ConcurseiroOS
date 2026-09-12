@@ -303,6 +303,107 @@ def set_meta_override(body: dict = Body(...), conn=Depends(get_db_session), user
 
 
 # ============================================================
+# #3.1 CONFIG DA DISTRIBUIÇÃO ADAPTATIVA NOVO vs. REVISÃO (study_mix)
+# ============================================================
+
+
+@router.get(
+    "/api/estudo/mix",
+    summary="Config e prévia da distribuição novo vs. revisão",
+    description="Retorna a config do usuário (carga diária, % novos fixo, auto por prova) "
+    "e uma PRÉVIA do mix efetivo de hoje para flashcards e questões (quantos novos vs. "
+    "revisão, zona da fase e motivo).",
+)
+def get_mix_config(conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    import study_mix
+
+    # Config persistida (tolerante a schema antigo)
+    carga = pct = 0
+    auto = 1
+    try:
+        row = conn.execute(
+            "SELECT mix_carga_diaria, mix_pct_novos, mix_auto_prova FROM metas_config WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+        if row:
+            keys = row.keys()
+            carga = row["mix_carga_diaria"] if "mix_carga_diaria" in keys else 0
+            pct = row["mix_pct_novos"] if "mix_pct_novos" in keys else 0
+            auto = row["mix_auto_prova"] if "mix_auto_prova" in keys else 1
+    except Exception:
+        pass  # colunas ainda não migradas
+
+    return {
+        "config": {
+            "carga_diaria": int(carga or 0),        # 0 = automático (default)
+            "pct_novos": int(pct or 0),             # 0 = automático pela fase
+            "auto_prova": bool(auto if auto is not None else 1),
+            "default_carga": study_mix.DEFAULT_CARGA_DIARIA,
+        },
+        "preview": {
+            "flashcards": study_mix.mix_for_flashcards(conn, user_id).as_dict(),
+            "questoes": study_mix.mix_for_questoes(conn, user_id).as_dict(),
+        },
+    }
+
+
+@router.post(
+    "/api/estudo/mix",
+    summary="Salvar config da distribuição novo vs. revisão",
+    description="Body: {carga_diaria, pct_novos, auto_prova}. carga_diaria=0 usa o default "
+    "automático; pct_novos=0 deixa a proporção automática pela fase da prova; auto_prova "
+    "liga/desliga o ajuste por dias até a prova.",
+)
+def set_mix_config(body: dict = Body(...), conn=Depends(get_db_session), user_id: int = Depends(get_user_id)):
+    import study_mix
+    from fastapi import HTTPException
+
+    def _int(v, default=0):
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return default
+
+    carga = _int(body.get("carga_diaria", 0))
+    pct = _int(body.get("pct_novos", 0))
+    auto = 1 if bool(body.get("auto_prova", True)) else 0
+
+    # Validação: carga 0 (auto) ou dentro dos limites; pct 0..100.
+    if carga != 0 and not (study_mix.MIN_CARGA_DIARIA <= carga <= study_mix.MAX_CARGA_DIARIA):
+        raise HTTPException(
+            status_code=400,
+            detail=f"carga_diaria deve ser 0 (automático) ou entre "
+            f"{study_mix.MIN_CARGA_DIARIA} e {study_mix.MAX_CARGA_DIARIA}",
+        )
+    if not (0 <= pct <= 100):
+        raise HTTPException(status_code=400, detail="pct_novos deve estar entre 0 e 100")
+
+    # Garante linha de config
+    existing = conn.execute("SELECT id FROM metas_config WHERE user_id = ?", (user_id,)).fetchone()
+    if not existing:
+        conn.execute(
+            "INSERT INTO metas_config (meta_horas, meta_questoes, meta_flashcards, meta_paginas, user_id) "
+            "VALUES (3.0, 30, 10, 20, ?)",
+            (user_id,),
+        )
+
+    conn.execute(
+        "UPDATE metas_config SET mix_carga_diaria = ?, mix_pct_novos = ?, mix_auto_prova = ? WHERE user_id = ?",
+        (carga, pct, auto, user_id),
+    )
+    conn.commit()
+
+    return {
+        "ok": True,
+        "config": {"carga_diaria": carga, "pct_novos": pct, "auto_prova": bool(auto)},
+        "preview": {
+            "flashcards": study_mix.mix_for_flashcards(conn, user_id).as_dict(),
+            "questoes": study_mix.mix_for_questoes(conn, user_id).as_dict(),
+        },
+    }
+
+
+# ============================================================
 # #4 DETECÇÃO DE PLATÔ E MUDANÇA DE ESTRATÉGIA
 # ============================================================
 

@@ -1797,6 +1797,32 @@ def _m97_comentarios_questoes(conn):
     log.info("Migration 97: tabelas de comentários em questões + votos únicos")
 
 
+def _m98_study_mix_config(conn):
+    """Config da distribuição adaptativa NOVO vs. REVISÃO (módulo study_mix).
+
+    Colunas em metas_config (por usuário):
+    - mix_carga_diaria: total de itens-alvo por dia por modalidade. 0 = default
+      automático (study_mix.DEFAULT_CARGA_DIARIA).
+    - mix_pct_novos: proporção FIXA de novos em % inteiro (0..100). 0 = automático
+      pela fase (dias até a prova).
+    - mix_auto_prova: 1 = ajustar a fase automaticamente por dias_ate_prova
+      (longe -> mais novo; perto -> mais revisão); 0 = ignorar a prova.
+
+    Retrocompatível: colunas novas com default neutro (0/0/1) => comportamento
+    automático, sem exigir configuração do usuário.
+    """
+    for col, ddl in (
+        ("mix_carga_diaria", "ALTER TABLE metas_config ADD COLUMN mix_carga_diaria INTEGER DEFAULT 0"),
+        ("mix_pct_novos", "ALTER TABLE metas_config ADD COLUMN mix_pct_novos INTEGER DEFAULT 0"),
+        ("mix_auto_prova", "ALTER TABLE metas_config ADD COLUMN mix_auto_prova INTEGER DEFAULT 1"),
+    ):
+        try:
+            conn.execute(ddl)
+            log.info(f"Migration 98: added column {col} to metas_config")
+        except Exception:
+            pass  # coluna já existe
+
+
 MIGRATIONS = [
     (1, _m01_edital_nome),
     (2, _m02_edital_cargo),
@@ -1895,6 +1921,7 @@ MIGRATIONS = [
     (95, _m95_catalogo_status_privado),
     (96, _m96_erros_revisao_uma_por_questao),
     (97, _m97_comentarios_questoes),
+    (98, _m98_study_mix_config),
 ]
 
 
